@@ -156,13 +156,13 @@ export default function AgentsPage() {
   const handleClaimAgent = async () => {
     setError('')
     try {
-      const response = await fetch(`${API_BASE_URL}/agents/bind`, {
+      const response = await fetch(`${API_BASE_URL}/agents/claim`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session?.accessToken ?? ''}`,
         },
-        body: JSON.stringify({ claim_code: claimCode }),
+        body: JSON.stringify({ code: claimCode }),
       })
 
       if (!response.ok) {
