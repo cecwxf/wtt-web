@@ -1,37 +1,223 @@
 'use client'
 
-import { useAuth } from '@/lib/auth-context'
+import { useSession, signOut } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
+import { Send } from 'lucide-react'
 import { wttApi, Topic, Message } from '@/lib/api/wtt-client'
-import Link from 'next/link'
+import { WttShell } from '@/components/ui/wtt-shell'
+
+interface Agent {
+  id: string
+  agent_id: string
+  display_name: string
+  is_primary: boolean
+  api_key?: string
+}
+
+interface TopicMessage {
+  id: string
+  senderId: string
+  content: string
+  timestamp: string
+  semanticType: string
+}
+
+type MessageFilter = 'all' | 'mine' | 'others'
+
+function normalizeAgents(raw: unknown): Agent[] {
+  if (!raw) return []
+  const rows = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { agents?: unknown[] }).agents)
+      ? (raw as { agents: unknown[] }).agents
+      : []
+
+  return rows.map((item, index) => {
+    const data = item as Record<string, unknown>
+    const agentId = String(data.agent_id ?? '')
+    return {
+      id: String(data.id ?? data.agent_id ?? `agent-${index}`),
+      agent_id: agentId,
+      display_name: String(data.display_name ?? agentId),
+      is_primary: Boolean(data.is_primary),
+      api_key: typeof data.api_key === 'string' ? data.api_key : undefined,
+    }
+  })
+}
+
+function normalizeMessages(raw: unknown): TopicMessage[] {
+  const rows = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { messages?: unknown[] }).messages)
+      ? (raw as { messages: unknown[] }).messages
+      : []
+
+  return rows.map((row, index) => {
+    const data = row as Record<string, unknown>
+    return {
+      id: String(data.message_id ?? data.id ?? `msg-${index}`),
+      senderId: String(data.sender_id ?? 'unknown'),
+      content: String(data.content ?? ''),
+      timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
+      semanticType: String(data.semantic_type ?? ''),
+    }
+  })
+}
+
+function formatTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--:--'
+
+  const now = new Date()
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+
+  if (sameDay) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
+  return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
+}
+
+function formatDateGroup(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unknown Date'
+
+  const now = new Date()
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+
+  if (isToday) return 'Today'
+
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate()
+
+  if (isYesterday) return 'Yesterday'
+
+  return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
+}
 
 export default function TopicDetailPage() {
-  const { agentId, logout } = useAuth()
+  const { data: session, status } = useSession()
   const router = useRouter()
   const params = useParams()
   const topicId = params.id as string
 
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState('')
   const [messageContent, setMessageContent] = useState('')
   const [sending, setSending] = useState(false)
+  const [messageFilter, setMessageFilter] = useState<MessageFilter>('all')
+  const [messageSearch, setMessageSearch] = useState('')
 
   useEffect(() => {
-    if (!agentId) {
+    if (status === 'unauthenticated') {
       router.push('/login')
+      return
     }
-  }, [agentId, router])
+
+    if (status !== 'authenticated') {
+      return
+    }
+
+    const loadAgents = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/agents/my`, {
+          headers: {
+            Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          },
+        })
+
+        if (!response.ok) return
+
+        const data = await response.json()
+        const list = normalizeAgents(data)
+        setAgents(list)
+
+        const primary = list.find((a) => a.is_primary)
+        const fallback = primary ?? list[0]
+
+        if (fallback) {
+          setSelectedAgentId(fallback.agent_id)
+          if (fallback.api_key) {
+            wttApi.setToken(fallback.api_key)
+          }
+        }
+      } catch {
+        // Keep page resilient if agent API is temporarily unavailable.
+      }
+    }
+
+    loadAgents()
+  }, [status, router, session?.accessToken])
+
+  useEffect(() => {
+    const selected = agents.find((agent) => agent.agent_id === selectedAgentId)
+    if (selected?.api_key) {
+      wttApi.setToken(selected.api_key)
+    }
+  }, [agents, selectedAgentId])
 
   const { data: topic, error: topicError } = useSWR<Topic>(
-    agentId && topicId ? `topic-${topicId}` : null,
+    selectedAgentId && topicId ? ['topic', selectedAgentId, topicId] : null,
     () => wttApi.getTopic(topicId)
   )
 
-  const { data: messages, error: messagesError, mutate } = useSWR<Message[]>(
-    agentId && topicId ? `messages-${topicId}` : null,
+  const { data: messagesRaw, error: messagesError, mutate } = useSWR<Message[]>(
+    selectedAgentId && topicId ? ['topic-messages', selectedAgentId, topicId] : null,
     () => wttApi.getTopicMessages(topicId, 100),
     { refreshInterval: 5000 }
   )
+
+  const { data: subscribedTopicsRaw } = useSWR(selectedAgentId ? ['subscribed', selectedAgentId] : null, () =>
+    wttApi.getSubscribedTopics()
+  )
+
+  const messages = useMemo(() => normalizeMessages(messagesRaw), [messagesRaw])
+  const subscribedTopics = Array.isArray(subscribedTopicsRaw) ? (subscribedTopicsRaw as Topic[]) : []
+
+  const filteredMessages = useMemo(() => {
+    const keyword = messageSearch.trim().toLowerCase()
+
+    return messages
+      .filter((message) => {
+        if (messageFilter === 'mine' && message.senderId !== selectedAgentId) return false
+        if (messageFilter === 'others' && message.senderId === selectedAgentId) return false
+
+        if (!keyword) return true
+        return (
+          message.content.toLowerCase().includes(keyword) ||
+          message.senderId.toLowerCase().includes(keyword) ||
+          message.semanticType.toLowerCase().includes(keyword)
+        )
+      })
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  }, [messages, messageFilter, messageSearch, selectedAgentId])
+
+  const groupedMessages = useMemo(() => {
+    const groups: Array<{ label: string; rows: TopicMessage[] }> = []
+    filteredMessages.forEach((message) => {
+      const label = formatDateGroup(message.timestamp)
+      const last = groups[groups.length - 1]
+      if (!last || last.label !== label) {
+        groups.push({ label, rows: [message] })
+      } else {
+        last.rows.push(message)
+      }
+    })
+    return groups
+  }, [filteredMessages])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,7 +240,7 @@ export default function TopicDetailPage() {
   }
 
   const handleLeave = async () => {
-    if (!confirm('Are you sure you want to leave this topic?')) return
+    if (!confirm('Leave this topic?')) return
 
     try {
       await wttApi.leaveTopic(topicId)
@@ -64,112 +250,149 @@ export default function TopicDetailPage() {
     }
   }
 
-  if (!agentId) return null
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0e1621]">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#2ea6ff]" />
+      </div>
+    )
+  }
+
+  if (status === 'unauthenticated') return null
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/inbox" className="text-2xl font-bold">WTT</Link>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{agentId}</span>
+    <WttShell
+      activeNav="inbox"
+      pageTitle={topic?.name ?? 'Topic'}
+      pageSubtitle={topic?.description ?? 'Topic conversation'}
+      agents={agents}
+      selectedAgentId={selectedAgentId}
+      onAgentChange={setSelectedAgentId}
+      onLogout={() => signOut({ callbackUrl: '/login' })}
+      subscribedTopics={subscribedTopics.map((item) => ({ topic_id: item.topic_id, name: item.name }))}
+      rightPanel={
+        <div className="flex h-full flex-col">
+          <div className="border-b border-white/10 px-4 py-4">
+            <h3 className="text-sm font-semibold">Topic Detail</h3>
+          </div>
+
+          <div className="space-y-4 p-4 text-sm">
+            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
+              <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Type</p>
+              <p className="mt-1 text-[#e8edf2]">{topic?.topic_type ?? 'unknown'}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
+              <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Join Method</p>
+              <p className="mt-1 text-[#e8edf2]">{topic?.join_method ?? 'unknown'}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
+              <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Messages</p>
+              <p className="mt-1 text-[#e8edf2]">{filteredMessages.length}</p>
+            </div>
+
             <button
-              onClick={logout}
-              className="px-4 py-2 text-sm bg-gray-200 rounded hover:bg-gray-300"
+              onClick={handleLeave}
+              className="w-full rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-200 transition hover:bg-red-500/20"
             >
-              Logout
+              Leave Topic
             </button>
           </div>
         </div>
-      </nav>
+      }
+    >
+      {topicError && <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">Failed to load topic.</div>}
+      {messagesError && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">Failed to load messages.</div>
+      )}
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        {topicError && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-4">
-            Failed to load topic
-          </div>
-        )}
-
-        {topic && (
-          <div className="bg-white rounded-lg shadow mb-6">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h1 className="text-2xl font-bold mb-2">{topic.name}</h1>
-                  <p className="text-gray-600 mb-3">{topic.description}</p>
-                  <div className="flex gap-2">
-                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                      {topic.topic_type}
-                    </span>
-                    <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">
-                      {topic.join_method}
-                    </span>
-                  </div>
-                </div>
+      <section className="flex h-[calc(100vh-220px)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#17212b]">
+        <div className="border-b border-white/10 px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input
+              value={messageSearch}
+              onChange={(e) => setMessageSearch(e.target.value)}
+              placeholder="Search messages..."
+              className="w-full rounded-full border border-white/10 bg-[#1c2733] px-4 py-2 text-xs text-[#e8edf2] placeholder:text-[#4a5a6a] outline-none focus:border-[#2ea6ff] sm:w-64"
+            />
+            <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#1c2733] p-1">
+              {(
+                [
+                  { key: 'all', label: `All ${messages.length}` },
+                  { key: 'mine', label: `Mine ${messages.filter((m) => m.senderId === selectedAgentId).length}` },
+                  { key: 'others', label: `Others ${messages.filter((m) => m.senderId !== selectedAgentId).length}` },
+                ] as Array<{ key: MessageFilter; label: string }>
+              ).map((tab) => (
                 <button
-                  onClick={handleLeave}
-                  className="px-4 py-2 text-sm bg-red-100 text-red-600 rounded hover:bg-red-200"
+                  key={tab.key}
+                  onClick={() => setMessageFilter(tab.key)}
+                  className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${
+                    messageFilter === tab.key ? 'bg-[#242f3d] text-[#2ea6ff]' : 'text-[#7d8e9e] hover:text-[#e8edf2]'
+                  }`}
                 >
-                  Leave Topic
+                  {tab.label}
                 </button>
-              </div>
+              ))}
             </div>
-
-            <div className="p-6">
-              <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input
-                  type="text"
-                  value={messageContent}
-                  onChange={(e) => setMessageContent(e.target.value)}
-                  placeholder="Type a message..."
-                  className="flex-1 px-4 py-2 border rounded-lg"
-                />
-                <button
-                  type="submit"
-                  disabled={sending || !messageContent.trim()}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {sending ? 'Sending...' : 'Send'}
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-4 border-b">
-            <h2 className="font-semibold">Messages</h2>
-          </div>
-
-          <div className="divide-y max-h-[600px] overflow-y-auto">
-            {messagesError && (
-              <div className="p-4 text-red-600">Failed to load messages</div>
-            )}
-
-            {!messages && !messagesError && (
-              <div className="p-8 text-center text-gray-500">Loading...</div>
-            )}
-
-            {messages && messages.length === 0 && (
-              <div className="p-8 text-center text-gray-500">
-                No messages yet. Be the first to post!
-              </div>
-            )}
-
-            {messages?.map((message) => (
-              <div key={message.message_id} className="p-4 hover:bg-gray-50">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-medium">{message.sender_id}</span>
-                  <span className="text-xs text-gray-500">
-                    {new Date(message.timestamp).toLocaleString()}
-                  </span>
-                </div>
-                <p className="text-gray-800">{message.content}</p>
-              </div>
-            ))}
           </div>
         </div>
-      </div>
-    </div>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
+          {filteredMessages.length === 0 && (
+            <p className="pt-10 text-center text-sm text-[#7d8e9e]">No messages for this filter.</p>
+          )}
+
+          {groupedMessages.map((group) => (
+            <div key={group.label} className="mb-4">
+              <div className="mb-3 flex items-center gap-3">
+                <div className="h-px flex-1 bg-white/10" />
+                <span className="rounded-full bg-[#1c2733] px-3 py-1 text-[11px] text-[#6f8396]">{group.label}</span>
+                <div className="h-px flex-1 bg-white/10" />
+              </div>
+
+              <div className="space-y-2">
+                {group.rows.map((message) => {
+                  const mine = selectedAgentId && message.senderId === selectedAgentId
+
+                  return (
+                    <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 ${
+                          mine ? 'bg-[#2b5278] text-white' : 'border border-white/10 bg-[#1c2733] text-[#d7e4ef]'
+                        } ${mine ? 'rounded-tr-md' : 'rounded-tl-md'}`}
+                      >
+                        {!mine && <p className="mb-1 text-xs font-semibold text-[#2ea6ff]">{message.senderId}</p>}
+                        <p>{message.content || '(empty message)'}</p>
+                        <div className={`mt-2 text-[10px] ${mine ? 'text-white/65' : 'text-[#6f8396]'}`}>
+                          {formatTime(message.timestamp)}
+                          {message.semanticType ? ` · ${message.semanticType}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <form onSubmit={handleSendMessage} className="flex items-end gap-2 border-t border-white/10 bg-[#17212b] p-3 sm:p-4">
+          <textarea
+            value={messageContent}
+            onChange={(e) => setMessageContent(e.target.value)}
+            placeholder="Message this topic..."
+            rows={1}
+            className="max-h-28 min-h-10 flex-1 resize-none rounded-full border border-white/10 bg-[#1c2733] px-4 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+          />
+          <button
+            type="submit"
+            disabled={sending || !messageContent.trim()}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2ea6ff] text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Send"
+          >
+            {sending ? '...' : <Send className="h-4 w-4" />}
+          </button>
+        </form>
+      </section>
+    </WttShell>
   )
 }

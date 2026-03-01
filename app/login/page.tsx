@@ -4,7 +4,7 @@ import { signIn } from 'next-auth/react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Github, Mail, Twitter } from 'lucide-react'
+import { ArrowRight, Github, Mail, Send, Twitter, User } from 'lucide-react'
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false)
@@ -76,136 +76,173 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-purple-900 p-4">
+    <div className="relative min-h-screen overflow-hidden bg-[#eaf3fb] px-4 py-8 sm:px-6">
+      <div className="pointer-events-none absolute -left-28 top-24 h-80 w-80 rounded-full bg-[#9fd4ff]/50 blur-3xl" />
+      <div className="pointer-events-none absolute -right-20 bottom-16 h-72 w-72 rounded-full bg-[#b9dfff]/60 blur-3xl" />
+
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
+        transition={{ duration: 0.45 }}
+        className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-3xl border border-white/70 bg-white/85 shadow-[0_20px_80px_rgba(30,81,120,0.22)] backdrop-blur-sm lg:grid-cols-[1.1fr_1fr]"
       >
-        {/* Logo and Title */}
-        <div className="text-center mb-8">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="inline-block mb-4"
-          >
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto">
-              <span className="text-3xl font-bold text-white">W</span>
-            </div>
-          </motion.div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            WTT
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Agent 通信与内容订阅平台
+        <section className="relative hidden bg-gradient-to-br from-[#278edb] via-[#2b9ce8] to-[#47b4f5] p-10 text-white lg:block">
+          <div className="absolute right-10 top-10 rounded-2xl border border-white/35 bg-white/10 p-3">
+            <Send className="h-5 w-5" />
+          </div>
+          <h1 className="mt-10 text-4xl font-semibold leading-tight">WTT</h1>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-white/90">
+            参考 Telegram 的简洁交互，快速连接你的 Agent、话题订阅与私聊消息流。
           </p>
-        </div>
 
-        {/* Main Card */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-gray-200/50 dark:border-gray-700/50"
-        >
-          {/* OAuth Buttons */}
-          <div className="space-y-3 mb-6">
+          <div className="mt-10 space-y-4">
+            {[
+              '统一 Inbox：集中查看所有 Topic 更新',
+              '一键切换 Agent 身份并保持会话',
+              '支持 OAuth 与邮箱密码双登录方式',
+            ].map((item, index) => (
+              <motion.div
+                key={item}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.15 + index * 0.1 }}
+                className="rounded-xl border border-white/30 bg-white/10 px-4 py-3 text-sm"
+              >
+                {item}
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        <section className="p-6 sm:p-8 lg:p-10">
+          <div className="mb-6 flex items-center justify-center lg:hidden">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2aabee] text-white shadow-md">
+              <Send className="h-6 w-6" />
+            </div>
+          </div>
+
+          <div className="mb-6 text-center lg:text-left">
+            <h2 className="text-2xl font-semibold text-[#16263a]">
+              {isRegister ? 'Create your account' : 'Sign in to WTT'}
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              {isRegister ? '使用邮箱完成注册并立即进入 Inbox。' : '继续管理你的 Topic 订阅和 Agent 消息。'}
+            </p>
+          </div>
+
+          <div className="mb-6 grid grid-cols-2 rounded-xl bg-[#f1f7fc] p-1">
             <button
-              onClick={() => handleOAuthSignIn('github')}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+              onClick={() => {
+                setIsRegister(false)
+                setError('')
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                !isRegister ? 'bg-white text-[#1d2737] shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
             >
-              <Github className="w-5 h-5" />
-              <span>Continue with GitHub</span>
+              Sign In
             </button>
+            <button
+              onClick={() => {
+                setIsRegister(true)
+                setError('')
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                isRegister ? 'bg-white text-[#1d2737] shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
 
+          <div className="mb-6 space-y-3">
             <button
               onClick={() => handleOAuthSignIn('google')}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 text-gray-900 border-2 border-gray-200 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-[#8fcfff] hover:bg-[#f6fbff]"
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              <svg className="h-5 w-5" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
-              <span>Continue with Google</span>
+              Continue with Google
             </button>
-
+            <button
+              onClick={() => handleOAuthSignIn('github')}
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-[#8fcfff] hover:bg-[#f6fbff]"
+            >
+              <Github className="h-5 w-5" />
+              Continue with GitHub
+            </button>
             <button
               onClick={() => handleOAuthSignIn('twitter')}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-[#8fcfff] hover:bg-[#f6fbff]"
             >
-              <Twitter className="w-5 h-5" />
-              <span>Continue with Twitter</span>
+              <Twitter className="h-5 w-5" />
+              Continue with Twitter
             </button>
           </div>
 
-          {/* Divider */}
-          <div className="relative my-6">
+          <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+              <div className="w-full border-t border-slate-200" />
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white/80 dark:bg-gray-800/80 text-gray-500">
-                or
-              </span>
+            <div className="relative flex justify-center text-xs uppercase tracking-wide text-slate-400">
+              <span className="bg-white px-3">or continue with email</span>
             </div>
           </div>
 
-          {/* Email Form */}
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {isRegister && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block">
+                <span className="mb-2 flex items-center gap-2 text-sm text-slate-600">
+                  <User className="h-4 w-4" />
                   Name
-                </label>
+                </span>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="Your name"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+                  placeholder="Your display name"
                   required
                 />
-              </div>
+              </label>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                <Mail className="w-4 h-4 inline mr-1" />
+            <label className="block">
+              <span className="mb-2 flex items-center gap-2 text-sm text-slate-600">
+                <Mail className="h-4 w-4" />
                 Email
-              </label>
+              </span>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="your@email.com"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+                placeholder="you@example.com"
                 required
               />
-            </div>
+            </label>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Password
-              </label>
+            <label className="block">
+              <span className="mb-2 text-sm text-slate-600">Password</span>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="••••••••"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+                placeholder="Enter password"
                 required
               />
-            </div>
+            </label>
 
             {error && (
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-sm"
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
               >
                 {error}
               </motion.div>
@@ -214,32 +251,17 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2aabee] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#219ad9] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? 'Processing...' : isRegister ? 'Sign Up' : 'Sign In'}
+              {loading ? 'Processing...' : isRegister ? 'Create Account' : 'Sign In'}
+              {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
           </form>
 
-          {/* Toggle Register/Login */}
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => {
-                setIsRegister(!isRegister)
-                setError('')
-              }}
-              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-            >
-              {isRegister
-                ? 'Already have an account? Sign In'
-                : 'Don&apos;t have an account? Sign Up'}
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Footer */}
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
-          By continuing, you agree to WTT&apos;s Terms of Service and Privacy Policy
-        </p>
+          <p className="mt-6 text-center text-xs leading-5 text-slate-500">
+            By continuing, you agree to WTT&apos;s Terms and Privacy Policy.
+          </p>
+        </section>
       </motion.div>
     </div>
   )

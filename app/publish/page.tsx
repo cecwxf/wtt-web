@@ -2,9 +2,10 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { wttApi } from '@/lib/api/wtt-client'
-import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Shield, Sparkles, Users } from 'lucide-react'
+import { wttApi, Topic } from '@/lib/api/wtt-client'
+import { WttShell } from '@/components/ui/wtt-shell'
 
 interface Agent {
   id: string
@@ -14,59 +15,136 @@ interface Agent {
   api_key?: string
 }
 
+type Step = 1 | 2 | 3
+
+type TopicType = 'broadcast' | 'discussion' | 'collaborative'
+type Visibility = 'public' | 'private'
+type JoinMethod = 'open' | 'invite_only'
+
+function normalizeAgents(raw: unknown): Agent[] {
+  if (!raw) return []
+  const rows = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { agents?: unknown[] }).agents)
+      ? (raw as { agents: unknown[] }).agents
+      : []
+
+  return rows.map((item, index) => {
+    const data = item as Record<string, unknown>
+    const agentId = String(data.agent_id ?? '')
+    return {
+      id: String(data.id ?? data.agent_id ?? `agent-${index}`),
+      agent_id: agentId,
+      display_name: String(data.display_name ?? agentId),
+      is_primary: Boolean(data.is_primary),
+      api_key: typeof data.api_key === 'string' ? data.api_key : undefined,
+    }
+  })
+}
+
+const STEP_TITLES: Record<Step, string> = {
+  1: 'Basic Info',
+  2: 'Access Rules',
+  3: 'Review & Create',
+}
+
 export default function PublishPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
+  const [selectedAgentId, setSelectedAgentId] = useState('')
   const [topicName, setTopicName] = useState('')
   const [topicDescription, setTopicDescription] = useState('')
-  const [topicType, setTopicType] = useState('broadcast')
-  const [visibility, setVisibility] = useState('public')
-  const [joinMethod, setJoinMethod] = useState('open')
+  const [topicType, setTopicType] = useState<TopicType>('broadcast')
+  const [visibility, setVisibility] = useState<Visibility>('public')
+  const [joinMethod, setJoinMethod] = useState<JoinMethod>('open')
+  const [step, setStep] = useState<Step>(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [subscribedTopics, setSubscribedTopics] = useState<Topic[]>([])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
-    } else if (status === 'authenticated') {
-      fetchAgents()
+      return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, router])
 
-  const fetchAgents = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/agents/my`, {
-        headers: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          'Authorization': `Bearer ${(session as any)?.accessToken}`,
-        },
-      })
+    if (status !== 'authenticated') {
+      return
+    }
 
-      if (response.ok) {
+    const loadAgents = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/agents/my`, {
+          headers: {
+            Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          },
+        })
+
+        if (!response.ok) return
+
         const data = await response.json()
-        const agentList = data.agents || []
-        setAgents(agentList)
+        const list = normalizeAgents(data)
+        setAgents(list)
 
-        // Select primary agent by default
-        const primaryAgent = agentList.find((a: Agent) => a.is_primary)
-        if (primaryAgent) {
-          setSelectedAgentId(primaryAgent.agent_id)
-        } else if (agentList.length > 0) {
-          setSelectedAgentId(agentList[0].agent_id)
+        const primary = list.find((a) => a.is_primary)
+        const fallback = primary ?? list[0]
+
+        if (fallback) {
+          setSelectedAgentId(fallback.agent_id)
+          if (fallback.api_key) {
+            wttApi.setToken(fallback.api_key)
+          }
         }
+      } catch {
+        // Keep page resilient if agent API is temporarily unavailable.
       }
-    } catch {
-      // Error handled silently
     }
+
+    const loadSubscribed = async () => {
+      try {
+        const topics = await wttApi.getSubscribedTopics()
+        if (Array.isArray(topics)) setSubscribedTopics(topics)
+      } catch {
+        setSubscribedTopics([])
+      }
+    }
+
+    loadAgents()
+    loadSubscribed()
+  }, [status, router, session?.accessToken])
+
+  useEffect(() => {
+    const selected = agents.find((agent) => agent.agent_id === selectedAgentId)
+    if (selected?.api_key) {
+      wttApi.setToken(selected.api_key)
+    }
+  }, [agents, selectedAgentId])
+
+  const selectedAgent = useMemo(
+    () => agents.find((agent) => agent.agent_id === selectedAgentId),
+    [agents, selectedAgentId]
+  )
+
+  const canStep1 = Boolean(selectedAgentId && topicName.trim() && topicDescription.trim())
+
+  const handleNext = () => {
+    setError('')
+    if (step === 1 && !canStep1) {
+      setError('Step 1 incomplete: select agent, topic name, and description.')
+      return
+    }
+    setStep((prev) => (prev < 3 ? ((prev + 1) as Step) : prev))
   }
 
-  const handleCreateTopic = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handlePrev = () => {
+    setError('')
+    setStep((prev) => (prev > 1 ? ((prev - 1) as Step) : prev))
+  }
+
+  const handleCreateTopic = async () => {
     setError('')
     setSuccess('')
     setLoading(true)
@@ -78,14 +156,10 @@ export default function PublishPage() {
     }
 
     try {
-      // Get API key for selected agent
-      const selectedAgent = agents.find(a => a.agent_id === selectedAgentId)
-      if (!selectedAgent?.api_key) {
-        throw new Error('Selected agent has no API key')
+      const selected = agents.find((agent) => agent.agent_id === selectedAgentId)
+      if (selected?.api_key) {
+        wttApi.setToken(selected.api_key)
       }
-
-      // Set token for the selected agent
-      wttApi.setToken(selectedAgent.api_key)
 
       const topic = await wttApi.createTopic({
         name: topicName,
@@ -95,13 +169,11 @@ export default function PublishPage() {
         join_method: joinMethod,
       })
 
-      setSuccess(`Topic "${topic.name}" created successfully!`)
-      setTopicName('')
-      setTopicDescription('')
+      setSuccess(`Topic "${topic.name}" created successfully`)
 
       setTimeout(() => {
         router.push(`/topics/${topic.topic_id}`)
-      }, 1500)
+      }, 1000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create topic')
     } finally {
@@ -111,8 +183,8 @@ export default function PublishPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex min-h-screen items-center justify-center bg-[#0e1621]">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#2ea6ff]" />
       </div>
     )
   }
@@ -120,138 +192,244 @@ export default function PublishPage() {
   if (status === 'unauthenticated') return null
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/inbox" className="text-2xl font-bold">WTT</Link>
-          <div className="flex items-center gap-4">
-            <Link href="/agents" className="text-sm text-blue-600 hover:text-blue-700">
-              Agents
-            </Link>
+    <WttShell
+      activeNav="publish"
+      pageTitle="Create Topic"
+      pageSubtitle="Wizard mode aligned with v2: configure once, preview before publish"
+      agents={agents}
+      selectedAgentId={selectedAgentId}
+      onAgentChange={setSelectedAgentId}
+      onLogout={() => signOut({ callbackUrl: '/login' })}
+      subscribedTopics={subscribedTopics.map((topic) => ({ topic_id: topic.topic_id, name: topic.name }))}
+    >
+      <section className="mx-auto max-w-6xl rounded-2xl border border-white/10 bg-[#17212b] p-4 shadow-[0_8px_36px_rgba(0,0,0,0.28)] sm:p-6">
+        <div className="mb-5 grid grid-cols-3 gap-2 rounded-xl bg-[#1c2733] p-1.5">
+          {([1, 2, 3] as Step[]).map((n) => (
             <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className="px-4 py-2 text-sm bg-gray-200 rounded hover:bg-gray-300"
+              key={n}
+              type="button"
+              onClick={() => {
+                if (n <= step || canStep1) setStep(n)
+              }}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition sm:text-sm ${
+                step === n ? 'bg-[#242f3d] text-[#2ea6ff]' : 'text-[#7d8e9e] hover:text-[#e8edf2]'
+              }`}
             >
-              Logout
+              {n}. {STEP_TITLES[n]}
             </button>
-          </div>
+          ))}
         </div>
-      </nav>
 
-      <div className="max-w-3xl mx-auto px-4 py-6">
-        <h1 className="text-3xl font-bold mb-6">Create Topic</h1>
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4 sm:p-5">
+            {step === 1 && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold">Step 1 · Basic Info</h2>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <form onSubmit={handleCreateTopic} className="space-y-4">
-            {/* Agent Selector */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Publish As</label>
-              <select
-                value={selectedAgentId}
-                onChange={(e) => setSelectedAgentId(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
-                required
-              >
-                <option value="">Select an agent...</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.agent_id}>
-                    {agent.display_name} ({agent.agent_id})
-                    {agent.is_primary ? ' - Primary' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <label className="block">
+                  <span className="mb-2 block text-sm text-[#a5b3c2]">Publish As</span>
+                  <select
+                    value={selectedAgentId}
+                    onChange={(e) => setSelectedAgentId(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-[#17212b] px-3 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    required
+                  >
+                    <option value="">Select agent...</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.agent_id}>
+                        {agent.display_name}
+                        {agent.is_primary ? ' (Primary)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Topic Name</label>
-              <input
-                type="text"
-                value={topicName}
-                onChange={(e) => setTopicName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
-                required
-              />
-            </div>
+                <label className="block">
+                  <span className="mb-2 block text-sm text-[#a5b3c2]">Topic Name</span>
+                  <input
+                    type="text"
+                    value={topicName}
+                    onChange={(e) => setTopicName(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-[#17212b] px-3 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    placeholder="e.g. Daily AI Digest"
+                    required
+                  />
+                </label>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Description</label>
-              <textarea
-                value={topicDescription}
-                onChange={(e) => setTopicDescription(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
-                rows={3}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Topic Type</label>
-              <select
-                value={topicType}
-                onChange={(e) => setTopicType(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
-              >
-                <option value="broadcast">Broadcast (1 publisher, N subscribers)</option>
-                <option value="discussion">Discussion (N publishers, N subscribers)</option>
-                <option value="collaborative">Collaborative (Role-based)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Visibility</label>
-              <select
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
-              >
-                <option value="public">Public (appears in list)</option>
-                <option value="private">Private (invite only)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Join Method</label>
-              <select
-                value={joinMethod}
-                onChange={(e) => setJoinMethod(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
-              >
-                <option value="open">Open (anyone can join)</option>
-                <option value="invite_only">Invite Only</option>
-              </select>
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 text-red-600 rounded-md text-sm">
-                {error}
+                <label className="block">
+                  <span className="mb-2 block text-sm text-[#a5b3c2]">Description</span>
+                  <textarea
+                    value={topicDescription}
+                    onChange={(e) => setTopicDescription(e.target.value)}
+                    rows={5}
+                    className="w-full rounded-xl border border-white/10 bg-[#17212b] px-3 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    placeholder="Describe content cadence, quality bar, and audience..."
+                    required
+                  />
+                </label>
               </div>
             )}
 
+            {step === 2 && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold">Step 2 · Access Rules</h2>
+
+                <div>
+                  <p className="mb-2 text-sm text-[#a5b3c2]">Topic Type</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {(
+                      [
+                        { key: 'broadcast', label: 'Broadcast', desc: 'One-way publishing channel', icon: Sparkles },
+                        { key: 'discussion', label: 'Discussion', desc: 'Members can reply', icon: Users },
+                        { key: 'collaborative', label: 'Collaborative', desc: 'Role-based collaboration', icon: Shield },
+                      ] as Array<{
+                        key: TopicType
+                        label: string
+                        desc: string
+                        icon: typeof Sparkles
+                      }>
+                    ).map((item) => {
+                      const Icon = item.icon
+                      const active = topicType === item.key
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => setTopicType(item.key)}
+                          className={`rounded-xl border px-3 py-3 text-left transition ${
+                            active
+                              ? 'border-[#2ea6ff66] bg-[#2ea6ff14]'
+                              : 'border-white/10 bg-[#17212b] hover:border-white/20'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Icon className="h-4 w-4 text-[#2ea6ff]" />
+                            <p className="text-sm font-semibold">{item.label}</p>
+                          </div>
+                          <p className="mt-1 text-xs text-[#7d8e9e]">{item.desc}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-sm text-[#a5b3c2]">Visibility</span>
+                    <select
+                      value={visibility}
+                      onChange={(e) => setVisibility(e.target.value as Visibility)}
+                      className="w-full rounded-xl border border-white/10 bg-[#17212b] px-3 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    >
+                      <option value="public">Public</option>
+                      <option value="private">Private</option>
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm text-[#a5b3c2]">Join Method</span>
+                    <select
+                      value={joinMethod}
+                      onChange={(e) => setJoinMethod(e.target.value as JoinMethod)}
+                      className="w-full rounded-xl border border-white/10 bg-[#17212b] px-3 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    >
+                      <option value="open">Open</option>
+                      <option value="invite_only">Invite Only</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold">Step 3 · Review & Create</h2>
+
+                <div className="space-y-2 rounded-xl border border-white/10 bg-[#17212b] p-4 text-sm">
+                  <ReviewRow label="Publisher" value={selectedAgent?.display_name ?? 'Not selected'} />
+                  <ReviewRow label="Topic Name" value={topicName || 'Untitled'} />
+                  <ReviewRow label="Type" value={topicType} />
+                  <ReviewRow label="Visibility" value={visibility} />
+                  <ReviewRow label="Join Method" value={joinMethod} />
+                  <ReviewRow label="Description" value={topicDescription || '(empty)'} multiline />
+                </div>
+
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                  Configuration looks valid. Click &quot;Create Topic&quot; to publish immediately.
+                </div>
+              </div>
+            )}
+
+            {error && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
             {success && (
-              <div className="p-3 bg-green-50 text-green-600 rounded-md text-sm">
+              <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
                 {success}
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="mt-5 flex gap-2">
               <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                type="button"
+                onClick={handlePrev}
+                disabled={step === 1 || loading}
+                className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-[#17212b] px-4 py-2.5 text-sm text-[#a5b3c2] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading ? 'Creating...' : 'Create Topic'}
+                <ChevronLeft className="h-4 w-4" />
+                Back
               </button>
-              <Link
-                href="/inbox"
-                className="px-6 py-2 bg-gray-200 rounded-md hover:bg-gray-300 text-center"
-              >
-                Cancel
-              </Link>
+
+              {step < 3 ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={loading}
+                  className="ml-auto inline-flex items-center gap-1 rounded-xl bg-[#2ea6ff] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleCreateTopic}
+                  disabled={loading}
+                  className="ml-auto inline-flex items-center gap-2 rounded-xl bg-[#2ea6ff] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? 'Creating...' : 'Create Topic'}
+                  {!loading && <CheckCircle2 className="h-4 w-4" />}
+                </button>
+              )}
             </div>
-          </form>
+          </div>
+
+          <aside className="rounded-xl border border-white/10 bg-[#1c2733] p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-[#e8edf2]">Live Preview</h3>
+            <p className="mt-1 text-xs text-[#7d8e9e]">This panel updates while editing the wizard.</p>
+
+            <div className="mt-4 rounded-xl border border-[#2ea6ff44] bg-[#2ea6ff10] p-4">
+              <p className="text-sm font-semibold">{topicName || 'Untitled Topic'}</p>
+              <p className="mt-2 text-sm text-[#c0d0de]">{topicDescription || 'No description provided.'}</p>
+
+              <div className="mt-4 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wide">
+                <span className="rounded border border-[#2ea6ff55] bg-[#2ea6ff18] px-2 py-1 text-[#2ea6ff]">{topicType}</span>
+                <span className="rounded border border-[#00d4aa55] bg-[#00d4aa18] px-2 py-1 text-[#00d4aa]">{visibility}</span>
+                <span className="rounded border border-[#fbbf2455] bg-[#fbbf2418] px-2 py-1 text-[#fbbf24]">{joinMethod}</span>
+              </div>
+
+              <p className="mt-4 text-xs text-[#8ea2b5]">Publishing as: {selectedAgent?.display_name ?? 'Not selected'}</p>
+            </div>
+          </aside>
         </div>
-      </div>
-    </div>
+      </section>
+    </WttShell>
   )
 }
 
+function ReviewRow({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
+  return (
+    <div className="flex gap-3 border-b border-white/10 pb-2 last:border-b-0 last:pb-0">
+      <span className="w-28 shrink-0 text-xs uppercase tracking-wide text-[#6f8396]">{label}</span>
+      <span className={`text-sm text-[#e8edf2] ${multiline ? 'whitespace-pre-wrap' : ''}`}>{value}</span>
+    </div>
+  )
+}
