@@ -8,6 +8,7 @@ import { WttShell } from '@/components/ui/wtt-shell'
 import { wttApi, Topic } from '@/lib/api/wtt-client'
 
 export const dynamic = 'force-dynamic'
+const API_BASE_URL = process.env.NEXT_PUBLIC_WTT_API_URL || 'http://170.106.109.4:8000'
 
 interface Agent {
   id: string
@@ -64,7 +65,7 @@ export default function AgentsPage() {
 
   const fetchAgents = useCallback(async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/agents/my`, {
+      const response = await fetch(`${API_BASE_URL}/agents/my`, {
         headers: {
           Authorization: `Bearer ${session?.accessToken ?? ''}`,
         },
@@ -155,7 +156,7 @@ export default function AgentsPage() {
   const handleClaimAgent = async () => {
     setError('')
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/agents/bind`, {
+      const response = await fetch(`${API_BASE_URL}/agents/bind`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -181,7 +182,7 @@ export default function AgentsPage() {
   const handleAddAgent = async () => {
     setError('')
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/agents/add`, {
+      const response = await fetch(`${API_BASE_URL}/agents/add`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
