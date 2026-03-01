@@ -1,15 +1,25 @@
 'use client'
 
-import { useAuth } from '@/lib/auth-context'
+import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { wttApi } from '@/lib/api/wtt-client'
 import Link from 'next/link'
 
+interface Agent {
+  id: string
+  agent_id: string
+  display_name: string
+  is_primary: boolean
+  api_key?: string
+}
+
 export default function PublishPage() {
-  const { agentId, logout } = useAuth()
+  const { data: session, status } = useSession()
   const router = useRouter()
 
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
   const [topicName, setTopicName] = useState('')
   const [topicDescription, setTopicDescription] = useState('')
   const [topicType, setTopicType] = useState('broadcast')
@@ -20,10 +30,40 @@ export default function PublishPage() {
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
-    if (!agentId) {
+    if (status === 'unauthenticated') {
       router.push('/login')
+    } else if (status === 'authenticated') {
+      fetchAgents()
     }
-  }, [agentId, router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, router])
+
+  const fetchAgents = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/agents/my`, {
+        headers: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          'Authorization': `Bearer ${(session as any)?.accessToken}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const agentList = data.agents || []
+        setAgents(agentList)
+
+        // Select primary agent by default
+        const primaryAgent = agentList.find((a: Agent) => a.is_primary)
+        if (primaryAgent) {
+          setSelectedAgentId(primaryAgent.agent_id)
+        } else if (agentList.length > 0) {
+          setSelectedAgentId(agentList[0].agent_id)
+        }
+      }
+    } catch {
+      // Error handled silently
+    }
+  }
 
   const handleCreateTopic = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,7 +71,22 @@ export default function PublishPage() {
     setSuccess('')
     setLoading(true)
 
+    if (!selectedAgentId) {
+      setError('Please select an agent')
+      setLoading(false)
+      return
+    }
+
     try {
+      // Get API key for selected agent
+      const selectedAgent = agents.find(a => a.agent_id === selectedAgentId)
+      if (!selectedAgent?.api_key) {
+        throw new Error('Selected agent has no API key')
+      }
+
+      // Set token for the selected agent
+      wttApi.setToken(selectedAgent.api_key)
+
       const topic = await wttApi.createTopic({
         name: topicName,
         description: topicDescription,
@@ -54,7 +109,15 @@ export default function PublishPage() {
     }
   }
 
-  if (!agentId) return null
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  if (status === 'unauthenticated') return null
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -62,9 +125,11 @@ export default function PublishPage() {
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <Link href="/inbox" className="text-2xl font-bold">WTT</Link>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{agentId}</span>
+            <Link href="/agents" className="text-sm text-blue-600 hover:text-blue-700">
+              Agents
+            </Link>
             <button
-              onClick={logout}
+              onClick={() => signOut({ callbackUrl: '/login' })}
               className="px-4 py-2 text-sm bg-gray-200 rounded hover:bg-gray-300"
             >
               Logout
@@ -78,6 +143,25 @@ export default function PublishPage() {
 
         <div className="bg-white rounded-lg shadow p-6">
           <form onSubmit={handleCreateTopic} className="space-y-4">
+            {/* Agent Selector */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Publish As</label>
+              <select
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md"
+                required
+              >
+                <option value="">Select an agent...</option>
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.agent_id}>
+                    {agent.display_name} ({agent.agent_id})
+                    {agent.is_primary ? ' - Primary' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-1">Topic Name</label>
               <input
@@ -170,3 +254,4 @@ export default function PublishPage() {
     </div>
   )
 }
+
