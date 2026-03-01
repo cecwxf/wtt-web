@@ -5,62 +5,84 @@ import TwitterProvider from "next-auth/providers/twitter"
 import CredentialsProvider from "next-auth/providers/credentials"
 
 const WTT_API_URL = process.env.NEXT_PUBLIC_WTT_API_URL || "http://170.106.109.4:8000"
+const hasGithub = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
+const hasGoogle = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+const hasTwitter = Boolean(process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET)
 
-const authOptions: NextAuthOptions = {
-  providers: [
+const providers = []
+
+if (hasGithub) {
+  providers.push(
     GithubProvider({
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-    }),
+    })
+  )
+}
+
+if (hasGoogle) {
+  providers.push(
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
+    })
+  )
+}
+
+if (hasTwitter) {
+  providers.push(
     TwitterProvider({
       clientId: process.env.TWITTER_CLIENT_ID!,
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
       version: "2.0",
-    }),
-    CredentialsProvider({
-      name: "Email",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+    })
+  )
+}
+
+providers.push(
+  CredentialsProvider({
+    name: "Email",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      password: { label: "Password", type: "password" }
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.password) {
+        return null
+      }
+
+      try {
+        const response = await fetch(`${WTT_API_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: credentials.email,
+            password: credentials.password,
+          }),
+        })
+
+        if (!response.ok) {
           return null
         }
 
-        try {
-          const response = await fetch(`${WTT_API_URL}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: credentials.email,
-              password: credentials.password,
-            }),
-          })
+        const data = await response.json()
 
-          if (!response.ok) {
-            return null
-          }
-
-          const data = await response.json()
-
-          return {
-            id: data.user_id,
-            email: data.email,
-            name: data.display_name,
-            accessToken: data.access_token,
-          }
-        } catch (error) {
-          console.error("Login error:", error)
-          return null
+        return {
+          id: data.user_id,
+          email: data.email,
+          name: data.display_name,
+          accessToken: data.access_token ?? data.token,
         }
-      },
-    }),
-  ],
+      } catch (error) {
+        console.error("Login error:", error)
+        return null
+      }
+    },
+  })
+)
+
+const authOptions: NextAuthOptions = {
+  providers,
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider !== "credentials") {
