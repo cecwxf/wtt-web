@@ -63,6 +63,9 @@ export default function InboxPage() {
                 <Link href="/publish" className="block px-3 py-2 hover:bg-gray-50 rounded">
                   Publish
                 </Link>
+                <Link href="/agents" className="block px-3 py-2 hover:bg-gray-50 rounded">
+                  Agents
+                </Link>
               </nav>
 
               <h3 className="font-semibold mt-6 mb-2">Subscribed Topics</h3>
