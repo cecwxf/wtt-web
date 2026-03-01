@@ -23,12 +23,15 @@ interface InboxMessage {
   topicId: string
   topicName: string
   senderId: string
+  receivedByAgent: string
   content: string
   semanticType: string
   timestamp: string
 }
 
 interface ConversationItem {
+  key: string
+  receivedByAgent: string
   topicId: string
   topicName: string
   lastMessage: string
@@ -78,6 +81,7 @@ function normalizeFeed(raw: unknown): InboxMessage[] {
       topicId,
       topicName: String(data.topic_name ?? (topicId.slice(0, 8) || 'Unknown Topic')),
       senderId: String(data.sender_id ?? 'unknown'),
+      receivedByAgent: String(data.received_by_agent ?? 'unknown'),
       content: String(data.content ?? ''),
       semanticType: String(data.semantic_type ?? ''),
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
@@ -234,16 +238,19 @@ export default function InboxPage() {
     const map = new Map<string, ConversationItem>()
 
     messages.forEach((message) => {
-      const existing = map.get(message.topicId)
+      const convKey = `${message.receivedByAgent}::${message.topicId}`
+      const existing = map.get(convKey)
       const isNewer = !existing || new Date(message.timestamp).getTime() > new Date(existing.lastTimestamp).getTime()
 
       if (!existing) {
-        map.set(message.topicId, {
+        map.set(convKey, {
+          key: convKey,
+          receivedByAgent: message.receivedByAgent,
           topicId: message.topicId,
           topicName: message.topicName,
           lastMessage: message.content,
           lastTimestamp: message.timestamp,
-          unread: message.senderId === selectedAgentId ? 0 : 1,
+          unread: message.senderId === message.receivedByAgent ? 0 : 1,
           messageCount: 1,
           kind: conversationKind(message.topicId, message.topicName),
         })
@@ -251,7 +258,7 @@ export default function InboxPage() {
       }
 
       existing.messageCount += 1
-      if (message.senderId !== selectedAgentId) existing.unread += 1
+      if (message.senderId !== message.receivedByAgent) existing.unread += 1
 
       if (isNewer) {
         existing.lastMessage = message.content
@@ -264,12 +271,15 @@ export default function InboxPage() {
     return Array.from(map.values()).sort(
       (a, b) => new Date(b.lastTimestamp).getTime() - new Date(a.lastTimestamp).getTime()
     )
-  }, [messages, selectedAgentId])
+  }, [messages])
 
   const filteredConversations = useMemo(() => {
+    const scoped = selectedAgentId
+      ? conversations.filter((conv) => conv.receivedByAgent === selectedAgentId)
+      : conversations
     const keyword = searchTerm.trim().toLowerCase()
 
-    return conversations.filter((conv) => {
+    return scoped.filter((conv) => {
       if (activeTab === 'topic' && conv.kind !== 'topic') return false
       if (activeTab === 'p2p' && conv.kind !== 'p2p') return false
       if (activeTab === 'unread' && conv.unread === 0) return false
@@ -281,11 +291,19 @@ export default function InboxPage() {
         conv.topicId.toLowerCase().includes(keyword)
       )
     })
-  }, [conversations, searchTerm, activeTab])
+  }, [conversations, searchTerm, activeTab, selectedAgentId])
 
   const subscribedTopics = useMemo(
-    () => conversations.map((conv) => ({ topic_id: conv.topicId, name: conv.topicName })),
-    [conversations]
+    () =>
+      conversations
+        .filter((conv) => conv.receivedByAgent === selectedAgentId)
+        .map((conv) => ({ topic_id: conv.topicId, name: conv.topicName })),
+    [conversations, selectedAgentId]
+  )
+
+  const scopedConversations = useMemo(
+    () => (selectedAgentId ? conversations.filter((conv) => conv.receivedByAgent === selectedAgentId) : conversations),
+    [conversations, selectedAgentId]
   )
 
   useEffect(() => {
@@ -294,19 +312,24 @@ export default function InboxPage() {
       return
     }
 
-    const exists = filteredConversations.some((item) => item.topicId === activeTopicId)
+    const exists = filteredConversations.some((item) => item.key === activeTopicId)
     if (!exists) {
-      setActiveTopicId(filteredConversations[0].topicId)
+      setActiveTopicId(filteredConversations[0].key)
     }
   }, [filteredConversations, activeTopicId])
 
-  const activeConversation = filteredConversations.find((item) => item.topicId === activeTopicId)
+  const activeConversation = filteredConversations.find((item) => item.key === activeTopicId)
 
   const activeMessages = useMemo(() => {
     return messages
-      .filter((message) => message.topicId === activeTopicId)
+      .filter(
+        (message) =>
+          activeConversation &&
+          message.topicId === activeConversation.topicId &&
+          message.receivedByAgent === activeConversation.receivedByAgent
+      )
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-  }, [messages, activeTopicId])
+  }, [messages, activeConversation])
 
   const groupedMessages = useMemo(() => {
     const buckets: Array<{ label: string; rows: InboxMessage[] }> = []
@@ -325,11 +348,11 @@ export default function InboxPage() {
   }, [activeMessages])
 
   const handleSend = async () => {
-    if (!draft.trim() || !activeTopicId) return
+    if (!draft.trim() || !activeConversation) return
 
     setSending(true)
     try {
-      await wttApi.publishMessage(activeTopicId, {
+      await wttApi.publishMessage(activeConversation.topicId, {
         content: draft,
         content_type: 'text',
         semantic_type: 'post',
@@ -401,16 +424,16 @@ export default function InboxPage() {
             <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-[#1c2733] p-1">
               {(
                 [
-                  { key: 'all', label: `All ${conversations.length}` },
+                  { key: 'all', label: `All ${scopedConversations.length}` },
                   {
                     key: 'topic',
-                    label: `Topic ${conversations.filter((c) => c.kind === 'topic').length}`,
+                    label: `Topic ${scopedConversations.filter((c) => c.kind === 'topic').length}`,
                   },
                   {
                     key: 'p2p',
-                    label: `P2P ${conversations.filter((c) => c.kind === 'p2p').length}`,
+                    label: `P2P ${scopedConversations.filter((c) => c.kind === 'p2p').length}`,
                   },
-                  { key: 'unread', label: `Unread ${conversations.filter((c) => c.unread > 0).length}` },
+                  { key: 'unread', label: `Unread ${scopedConversations.filter((c) => c.unread > 0).length}` },
                 ] as Array<{ key: ConversationTab; label: string }>
               ).map((tab) => (
                 <button
@@ -432,11 +455,11 @@ export default function InboxPage() {
             )}
 
             {filteredConversations.map((conv) => {
-              const active = conv.topicId === activeTopicId
+              const active = conv.key === activeTopicId
               return (
                 <button
-                  key={conv.topicId}
-                  onClick={() => setActiveTopicId(conv.topicId)}
+                  key={conv.key}
+                  onClick={() => setActiveTopicId(conv.key)}
                   className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
                     active ? 'bg-[#1c2733]' : 'hover:bg-[#1c2733]'
                   }`}
