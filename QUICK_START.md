@@ -1,6 +1,10 @@
-# 快速配置指南
+# 快速配置指南 - UltraSpace AI
 
 ## 🚀 立即开始配置 OAuth
+
+### 域名信息
+- **生产域名**: https://www.ultraspace.ai
+- **Vercel 域名**: https://wtt-web-saiph.vercel.app（重定向到 ultraspace.ai）
 
 ### 第一步：生成 NEXTAUTH_SECRET
 
@@ -15,36 +19,36 @@ Fe8r7CuAQoCGbywnzMzN02MLoBh8HOO4Vcz5d2WozbQ=
 - 访问：https://github.com/settings/developers
 - 点击 "New OAuth App"
 - 填写：
-  - Application name: `WTT`
-  - Homepage URL: `https://wtt-web-saiph.vercel.app`
-  - Callback URL: `https://wtt-web-saiph.vercel.app/api/auth/callback/github`
+  - Application name: `UltraSpace AI`
+  - Homepage URL: `https://www.ultraspace.ai`
+  - Callback URL: `https://www.ultraspace.ai/api/auth/callback/github`
 - 保存 Client ID 和 Client Secret
 
 #### 2️⃣ Google OAuth Client
 - 访问：https://console.cloud.google.com/apis/credentials
 - 创建 OAuth 2.0 Client ID
 - 填写：
-  - Authorized JavaScript origins: `https://wtt-web-saiph.vercel.app`
-  - Authorized redirect URIs: `https://wtt-web-saiph.vercel.app/api/auth/callback/google`
+  - Authorized JavaScript origins: `https://www.ultraspace.ai`
+  - Authorized redirect URIs: `https://www.ultraspace.ai/api/auth/callback/google`
 - 保存 Client ID 和 Client Secret
 
 #### 3️⃣ Twitter OAuth App
 - 访问：https://developer.twitter.com/en/portal/dashboard
 - 创建 App 并启用 OAuth 2.0
 - 填写：
-  - Callback URL: `https://wtt-web-saiph.vercel.app/api/auth/callback/twitter`
-  - Website URL: `https://wtt-web-saiph.vercel.app`
+  - Callback URL: `https://www.ultraspace.ai/api/auth/callback/twitter`
+  - Website URL: `https://www.ultraspace.ai`
 - 保存 Client ID 和 Client Secret
 
 ### 第三步：配置 Vercel 环境变量
 
 访问：https://vercel.com/cecwxf/wtt-web-saiph/settings/environment-variables
 
-添加以下环境变量（选择 Production 环境）：
+添加/更新以下环境变量（选择 Production 环境）：
 
 | 变量名 | 值 |
 |--------|-----|
-| `NEXTAUTH_URL` | `https://wtt-web-saiph.vercel.app` |
+| `NEXTAUTH_URL` | `https://www.ultraspace.ai` |
 | `NEXTAUTH_SECRET` | `Fe8r7CuAQoCGbywnzMzN02MLoBh8HOO4Vcz5d2WozbQ=` |
 | `GITHUB_CLIENT_ID` | 从 GitHub 获取 |
 | `GITHUB_CLIENT_SECRET` | 从 GitHub 获取 |
@@ -65,7 +69,7 @@ vercel --prod
 
 ### 第五步：测试
 
-访问：https://wtt-web-saiph.vercel.app/login
+访问：https://www.ultraspace.ai/login
 
 测试：
 - ✅ 邮箱注册/登录
