@@ -61,6 +61,8 @@ function normalizeAgents(raw: unknown): Agent[] {
 }
 
 function normalizeFeed(raw: unknown): InboxMessage[] {
+  if (!raw || typeof raw !== 'object') return []
+
   const rows = Array.isArray(raw)
     ? raw
     : Array.isArray((raw as { messages?: unknown[] }).messages)

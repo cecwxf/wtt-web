@@ -48,6 +48,8 @@ function normalizeAgents(raw: unknown): Agent[] {
 }
 
 function normalizeMessages(raw: unknown): TopicMessage[] {
+  if (!raw || typeof raw !== 'object') return []
+
   const rows = Array.isArray(raw)
     ? raw
     : Array.isArray((raw as { messages?: unknown[] }).messages)
