@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { Send } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
-import { wttApi, Topic } from '@/lib/api/wtt-client'
+import { wttApi } from '@/lib/api/wtt-client'
 import { WttShell } from '@/components/ui/wtt-shell'
 
 
@@ -146,6 +146,7 @@ function conversationKind(topicId: string, topicName: string): 'topic' | 'p2p' |
 export default function InboxPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const accessToken = session?.accessToken as string | undefined
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [activeTopicId, setActiveTopicId] = useState('')
@@ -206,16 +207,28 @@ export default function InboxPage() {
     data: feedRaw,
     error,
     mutate,
-  } = useSWR(selectedAgentId ? ['feed', selectedAgentId] : null, () => wttApi.getFeed(100), {
-    refreshInterval: 5000,
-  })
+  } = useSWR(
+    selectedAgentId && accessToken ? ['feed', selectedAgentId, accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/feed?limit=100`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
 
-  const { data: topicsRaw } = useSWR(selectedAgentId ? ['subscribed', selectedAgentId] : null, () =>
-    wttApi.getSubscribedTopics()
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
+        throw new Error(payload.detail ?? `HTTP ${response.status}`)
+      }
+
+      return response.json()
+    },
+    {
+      refreshInterval: 5000,
+    }
   )
 
   const messages = useMemo(() => normalizeFeed(feedRaw), [feedRaw])
-  const subscribedTopics = Array.isArray(topicsRaw) ? (topicsRaw as Topic[]) : []
 
   const conversations = useMemo<ConversationItem[]>(() => {
     const map = new Map<string, ConversationItem>()
@@ -269,6 +282,11 @@ export default function InboxPage() {
       )
     })
   }, [conversations, searchTerm, activeTab])
+
+  const subscribedTopics = useMemo(
+    () => conversations.map((conv) => ({ topic_id: conv.topicId, name: conv.topicName })),
+    [conversations]
+  )
 
   useEffect(() => {
     if (!filteredConversations.length) {
@@ -344,7 +362,7 @@ export default function InboxPage() {
       selectedAgentId={selectedAgentId}
       onAgentChange={setSelectedAgentId}
       onLogout={() => signOut({ callbackUrl: '/login' })}
-      subscribedTopics={subscribedTopics.map((topic) => ({ topic_id: topic.topic_id, name: topic.name }))}
+      subscribedTopics={subscribedTopics}
       rightPanel={
         <div className="flex h-full flex-col">
           <div className="border-b border-white/10 px-4 py-4">
