@@ -66,11 +66,17 @@ const authOptions: NextAuthOptions = {
       if (account?.provider !== "credentials") {
         // OAuth 登录，调用后端 OAuth 回调
         try {
+          const oauthToken = account?.access_token ?? account?.id_token
+          if (!oauthToken) {
+            console.error("OAuth callback error: missing oauth token from provider")
+            return false
+          }
+
           const response = await fetch(`${WTT_API_URL}/auth/oauth/callback`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              code: account?.access_token,
+              code: oauthToken,
               provider: account?.provider,
             }),
           })
@@ -79,6 +85,10 @@ const authOptions: NextAuthOptions = {
             const data = await response.json()
             user.accessToken = data.access_token
             user.id = data.user?.id ?? data.user_id ?? user.id
+          } else {
+            const err = await response.text()
+            console.error("OAuth callback error:", err)
+            return false
           }
         } catch (error) {
           console.error("OAuth callback error:", error)
