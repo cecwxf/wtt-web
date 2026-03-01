@@ -4,7 +4,10 @@ import GoogleProvider from "next-auth/providers/google"
 import TwitterProvider from "next-auth/providers/twitter"
 import CredentialsProvider from "next-auth/providers/credentials"
 
-const WTT_API_URL = process.env.NEXT_PUBLIC_WTT_API_URL || "http://170.106.109.4:8000"
+const WTT_API_URL =
+  process.env.WTT_API_URL ||
+  process.env.NEXT_PUBLIC_WTT_API_URL ||
+  'http://170.106.109.4:8000'
 
 const authOptions: NextAuthOptions = {
   providers: [

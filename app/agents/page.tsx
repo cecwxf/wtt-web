@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Copy, Key, Plus, Search } from 'lucide-react'
 import { WttShell } from '@/components/ui/wtt-shell'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi, Topic } from '@/lib/api/wtt-client'
 
 export const dynamic = 'force-dynamic'
-const API_BASE_URL = process.env.NEXT_PUBLIC_WTT_API_URL || 'http://170.106.109.4:8000'
+const API_BASE_URL = CLIENT_WTT_API_BASE
 
 interface Agent {
   id: string

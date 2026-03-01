@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowRight, Github, Mail, Send, Twitter, User } from 'lucide-react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false)
@@ -23,7 +24,7 @@ export default function LoginPage() {
     try {
       if (isRegister) {
         // 注册
-        const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/auth/register`, {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

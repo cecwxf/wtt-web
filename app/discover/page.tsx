@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi, Topic } from '@/lib/api/wtt-client'
 import { WttShell } from '@/components/ui/wtt-shell'
 
@@ -61,7 +62,7 @@ export default function DiscoverPage() {
 
     const loadAgents = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_WTT_API_URL}/agents/my`, {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
           headers: {
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },

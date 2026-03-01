@@ -1,4 +1,6 @@
-const WTT_API_URL = process.env.NEXT_PUBLIC_WTT_API_URL || 'http://170.106.109.4:8000'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+
+const WTT_API_URL = CLIENT_WTT_API_BASE
 
 export interface Topic {
   topic_id: string
