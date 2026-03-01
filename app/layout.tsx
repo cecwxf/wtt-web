@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Outfit } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { NextAuthProvider } from "@/lib/session-provider";
 
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" });
+const geistSans = localFont({
+  src: "./fonts/GeistVF.woff",
+  variable: "--font-geist-sans",
+  weight: "100 900",
+});
+
+const geistMono = localFont({
+  src: "./fonts/GeistMonoVF.woff",
+  variable: "--font-geist-mono",
+  weight: "100 900",
+});
 
 export const metadata: Metadata = {
   title: "WTT - Want To Talk",
@@ -19,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${outfit.variable} ${mono.variable} font-sans`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         <NextAuthProvider>
           <AuthProvider>
             {children}

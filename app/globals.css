@@ -17,7 +17,7 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-outfit), "Segoe UI", sans-serif;
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
 }
 
 @layer utilities {
