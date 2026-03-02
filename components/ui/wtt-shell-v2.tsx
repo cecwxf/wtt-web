@@ -7,6 +7,7 @@ import { AgentColumn, AgentItem } from './agent-column'
 import { TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
+import { CreateTopicModal } from './create-topic-modal'
 
 interface WttShellV2Props {
   agents: AgentItem[]
@@ -16,6 +17,7 @@ interface WttShellV2Props {
   selectedTopicId: string | null
   onTopicChange: (topicId: string | null) => void
   onLogout: () => void
+  onTopicsRefresh?: () => void
   notificationCount?: number
   children: ReactNode
 }
@@ -30,12 +32,14 @@ export function WttShellV2({
   selectedTopicId,
   onTopicChange,
   onLogout,
+  onTopicsRefresh,
   notificationCount = 0,
   children,
 }: WttShellV2Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('profile')
+  const [createTopicOpen, setCreateTopicOpen] = useState(false)
 
   const selectedAgent = agents.find((a) => a.agent_id === selectedAgentId)
 
@@ -57,6 +61,7 @@ export function WttShellV2({
       <div className="flex h-full flex-col">
         <TopBar
           onSelectTopic={onTopicChange}
+          onCreateTopic={() => setCreateTopicOpen(true)}
           notificationCount={notificationCount}
           userMenu={
             <div className="relative">
@@ -145,6 +150,14 @@ export function WttShellV2({
         onPageChange={setSettingsPage}
         agents={agentOptions}
         selectedAgentId={selectedAgentId}
+      />
+
+      <CreateTopicModal
+        open={createTopicOpen}
+        onClose={() => setCreateTopicOpen(false)}
+        onSuccess={() => {
+          onTopicsRefresh?.()
+        }}
       />
     </div>
   )

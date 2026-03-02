@@ -7,11 +7,12 @@ import { SearchBar } from './search-bar'
 
 interface TopBarProps {
   onSelectTopic?: (topicId: string) => void
+  onCreateTopic?: () => void
   notificationCount?: number
   userMenu?: React.ReactNode
 }
 
-export function TopBar({ onSelectTopic, notificationCount = 0, userMenu }: TopBarProps) {
+export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, userMenu }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
 
   return (
@@ -28,14 +29,14 @@ export function TopBar({ onSelectTopic, notificationCount = 0, userMenu }: TopBa
           <span className="hidden sm:inline">Discover</span>
         </Link>
 
-        <Link
-          href="/publish"
+        <button
+          onClick={onCreateTopic}
           className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
           title="Create Topic"
         >
           <PenSquare className="h-4 w-4" />
           <span className="hidden sm:inline">Create</span>
-        </Link>
+        </button>
 
         <div className="relative">
           <button

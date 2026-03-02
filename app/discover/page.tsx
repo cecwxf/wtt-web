@@ -8,7 +8,9 @@ import Link from 'next/link'
 import { Search } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi, Topic } from '@/lib/api/wtt-client'
-import { WttShell } from '@/components/ui/wtt-shell'
+import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
+import { AgentItem } from '@/components/ui/agent-column'
+import { TopicItem } from '@/components/ui/topic-column'
 
 interface Agent {
   id: string
@@ -49,6 +51,7 @@ export default function DiscoverPage() {
   const [joinFilter, setJoinFilter] = useState<'all' | 'open' | 'invite_only'>('all')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -102,11 +105,29 @@ export default function DiscoverPage() {
     wttApi.listTopics()
   )
 
-  const { data: subscribedTopicsRaw } = useSWR(selectedAgentId ? ['subscribed', selectedAgentId] : null, () =>
-    wttApi.getSubscribedTopics()
+  const { data: subscribedTopicsRaw, mutate: mutateTopics } = useSWR(
+    selectedAgentId ? ['subscribed', selectedAgentId] : null,
+    () => wttApi.getSubscribedTopics()
   )
 
   const subscribedTopics = Array.isArray(subscribedTopicsRaw) ? (subscribedTopicsRaw as Topic[]) : []
+
+  const agentItems = useMemo<AgentItem[]>(() => {
+    return agents.map((agent) => ({
+      agent_id: agent.agent_id,
+      display_name: agent.display_name,
+      unread_count: 0,
+    }))
+  }, [agents])
+
+  const topicItems = useMemo<TopicItem[]>(() => {
+    return subscribedTopics.map((topic) => ({
+      topic_id: topic.topic_id,
+      name: topic.name,
+      topic_type: topic.topic_type as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
+      unread_count: 0,
+    }))
+  }, [subscribedTopics])
 
   const displayTopics = useMemo(() => {
     const rows = searchResults ?? topics ?? []
@@ -156,15 +177,16 @@ export default function DiscoverPage() {
   if (status === 'unauthenticated') return null
 
   return (
-    <WttShell
-      activeNav="discover"
-      pageTitle="Discover Topics"
-      pageSubtitle="Browse public channels and join in one click"
-      agents={agents}
+    <WttShellV2
+      agents={agentItems}
       selectedAgentId={selectedAgentId}
       onAgentChange={setSelectedAgentId}
+      topics={topicItems}
+      selectedTopicId={selectedTopicId}
+      onTopicChange={setSelectedTopicId}
       onLogout={() => signOut({ callbackUrl: '/login' })}
-      subscribedTopics={subscribedTopics.map((topic) => ({ topic_id: topic.topic_id, name: topic.name }))}
+      onTopicsRefresh={() => mutateTopics()}
+      notificationCount={0}
     >
       <section className="mb-4 rounded-2xl border border-white/10 bg-[#17212b] p-4 sm:p-5">
         <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
@@ -283,6 +305,6 @@ export default function DiscoverPage() {
           </article>
         ))}
       </section>
-    </WttShell>
+    </WttShellV2>
   )
 }

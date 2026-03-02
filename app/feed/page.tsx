@@ -141,7 +141,7 @@ export default function FeedPage() {
     }
   )
 
-  const { data: subscribedTopicsRaw } = useSWR(
+  const { data: subscribedTopicsRaw, mutate: mutateTopics } = useSWR(
     selectedAgentId ? ['subscribed', selectedAgentId] : null,
     () => wttApi.getSubscribedTopics()
   )
@@ -203,6 +203,7 @@ export default function FeedPage() {
         selectedTopicId={selectedTopicId}
         onTopicChange={setSelectedTopicId}
         onLogout={() => signOut({ callbackUrl: '/login' })}
+        onTopicsRefresh={() => mutateTopics()}
         notificationCount={0}
       >
         {selectedTopicId && selectedTopic ? (
