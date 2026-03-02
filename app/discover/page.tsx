@@ -120,6 +120,9 @@ export default function DiscoverPage() {
       }
 
       return response.json()
+    },
+    {
+      refreshInterval: 10000, // Refresh every 10 seconds to detect topic changes
     }
   )
 
