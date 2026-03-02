@@ -7,11 +7,9 @@ import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
-import { FeedView } from '@/components/ui/feed-view'
-import { MessageCardData } from '@/components/ui/message-card'
+import { ChatView, ChatMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
-import { ComposeModal } from '@/components/ui/compose-modal'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 
 interface Agent {
@@ -43,7 +41,7 @@ function normalizeAgents(raw: unknown): Agent[] {
   })
 }
 
-function normalizeFeed(raw: unknown): MessageCardData[] {
+function normalizeFeed(raw: unknown): ChatMessage[] {
   if (!raw || typeof raw !== 'object') return []
 
   const rows = Array.isArray(raw)
@@ -56,8 +54,6 @@ function normalizeFeed(raw: unknown): MessageCardData[] {
     const data = row as Record<string, unknown>
     return {
       message_id: String(data.message_id ?? data.id ?? `msg-${index}`),
-      topic_id: String(data.topic_id ?? ''),
-      topic_name: String(data.topic_name ?? 'Unknown Topic'),
       sender_id: String(data.sender_id ?? 'unknown'),
       sender_type: (data.sender_type === 'human' ? 'human' : 'agent') as 'human' | 'agent',
       content: String(data.content ?? ''),
@@ -73,7 +69,6 @@ export default function FeedPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
-  const [composeOpen, setComposeOpen] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -124,9 +119,11 @@ export default function FeedPage() {
   }, [agents, selectedAgentId])
 
   const { data: feedRaw, error, mutate } = useSWR(
-    selectedAgentId && session?.accessToken ? ['feed', selectedAgentId, session.accessToken] : null,
+    selectedAgentId && session?.accessToken && selectedTopicId
+      ? ['topic-messages', selectedTopicId, session.accessToken]
+      : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/feed?limit=100`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100`, {
         headers: {
           Authorization: `Bearer ${session?.accessToken}`,
         },
@@ -170,15 +167,19 @@ export default function FeedPage() {
     }))
   }, [agents])
 
-  const filteredMessages = useMemo(() => {
-    let filtered = messages
+  const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
 
-    if (selectedTopicId) {
-      filtered = filtered.filter((msg) => msg.topic_id === selectedTopicId)
-    }
+  const handleSendMessage = async (content: string) => {
+    if (!selectedTopicId) return
 
-    return filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-  }, [messages, selectedTopicId])
+    await wttApi.publishMessage(selectedTopicId, {
+      content,
+      content_type: 'text',
+      semantic_type: 'post',
+    })
+
+    mutate()
+  }
 
   if (status === 'loading') {
     return (
@@ -192,10 +193,7 @@ export default function FeedPage() {
 
   return (
     <>
-      <KeyboardShortcuts
-        onCompose={() => setComposeOpen(true)}
-        onDiscover={() => router.push('/discover')}
-      />
+      <KeyboardShortcuts onDiscover={() => router.push('/discover')} />
 
       <WttShellV2
         agents={agentItems}
@@ -207,19 +205,22 @@ export default function FeedPage() {
         onLogout={() => signOut({ callbackUrl: '/login' })}
         notificationCount={0}
       >
-        <FeedView
-          messages={filteredMessages}
-          loading={!feedRaw && !error}
-          onCompose={() => setComposeOpen(true)}
-        />
-
-        <ComposeModal
-          open={composeOpen}
-          onClose={() => setComposeOpen(false)}
-          topics={topics}
-          defaultTopicId={selectedTopicId || undefined}
-          onSuccess={() => mutate()}
-        />
+        {selectedTopicId && selectedTopic ? (
+          <ChatView
+            topicName={selectedTopic.name}
+            messages={messages}
+            currentAgentId={selectedAgentId}
+            onSendMessage={handleSendMessage}
+            loading={!feedRaw && !error}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center">
+              <p className="text-lg text-[#7d8e9e]">Select a topic to start chatting</p>
+              <p className="mt-2 text-sm text-[#7d8e9e]">Choose a topic from the left sidebar</p>
+            </div>
+          </div>
+        )}
       </WttShellV2>
     </>
   )
