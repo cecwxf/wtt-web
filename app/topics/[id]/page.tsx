@@ -272,7 +272,7 @@ export default function TopicDetailPage() {
       selectedAgentId={selectedAgentId}
       onAgentChange={setSelectedAgentId}
       onLogout={() => signOut({ callbackUrl: '/login' })}
-      subscribedTopics={subscribedTopics.map((item) => ({ topic_id: item.topic_id, name: item.name }))}
+      subscribedTopics={subscribedTopics.map((item) => ({ topic_id: item.id, name: item.name }))}
       rightPanel={
         <div className="flex h-full flex-col">
           <div className="border-b border-white/10 px-4 py-4">
@@ -282,7 +282,7 @@ export default function TopicDetailPage() {
           <div className="space-y-4 p-4 text-sm">
             <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
               <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Type</p>
-              <p className="mt-1 text-[#e8edf2]">{topic?.topic_type ?? 'unknown'}</p>
+              <p className="mt-1 text-[#e8edf2]">{topic?.type ?? 'unknown'}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
               <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Join Method</p>
