@@ -144,7 +144,7 @@ export default function FeedPage() {
   const { data: subscribedTopicsRaw, mutate: mutateTopics } = useSWR(
     selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/subscribed`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/subscribed?agent_id=${selectedAgentId}`, {
         headers: {
           Authorization: `Bearer ${session?.accessToken}`,
         },
