@@ -4,7 +4,7 @@ import { signIn } from 'next-auth/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowRight, Github, Send, Smartphone, Twitter, User } from 'lucide-react'
+import { ArrowRight, Github, Smartphone, Twitter, User } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 const COUNTRY_OPTIONS = [
@@ -149,8 +149,8 @@ export default function LoginPage() {
         transition={{ duration: 0.35 }}
         className="relative mx-auto w-full max-w-[430px] rounded-[28px] border border-[#d6e2ee] bg-white px-6 pb-7 pt-8 shadow-[0_24px_70px_rgba(26,66,99,0.2)] sm:px-8"
       >
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-b from-[#54b3f5] to-[#2aabee] text-white shadow-[0_14px_28px_rgba(42,171,238,0.35)]">
-          <Send className="h-9 w-9" />
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[#7cc6f5] bg-gradient-to-b from-[#e6f5ff] to-[#ccecff] text-[#1f84c5] shadow-[0_14px_28px_rgba(42,171,238,0.22)]">
+          <span className="text-xl font-semibold tracking-[0.12em]">WTT</span>
         </div>
 
         <div className="mb-7 text-center">
