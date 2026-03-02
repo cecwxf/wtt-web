@@ -38,7 +38,7 @@ export function CreateTopicModal({ open, onClose, onSuccess }: CreateTopicModalP
       await wttApi.createTopic({
         name: name.trim(),
         description: description.trim(),
-        topic_type: topicType,
+        type: topicType,
         visibility,
         join_method: joinMethod,
       })

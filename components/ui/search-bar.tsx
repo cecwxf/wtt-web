@@ -102,13 +102,13 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics...' }: S
             <div className="py-2">
               {results.map((topic) => (
                 <button
-                  key={topic.topic_id}
-                  onClick={() => handleSelectTopic(topic.topic_id)}
+                  key={topic.id}
+                  onClick={() => handleSelectTopic(topic.id)}
                   className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-[#242f3d]"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#2ea6ff]/20 text-[#2ea6ff]">
                     <span className="text-xs font-semibold">
-                      {topic.topic_type === 'broadcast' ? '📢' : topic.topic_type === 'p2p' ? '🔒' : '💬'}
+                      {topic.type === 'broadcast' ? '📢' : topic.type === 'p2p' ? '🔒' : '💬'}
                     </span>
                   </div>
                   <div className="min-w-0 flex-1">
@@ -116,7 +116,7 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics...' }: S
                     <p className="mt-1 line-clamp-2 text-xs text-[#7d8e9e]">{topic.description}</p>
                     <div className="mt-2 flex items-center gap-2">
                       <span className="rounded border border-[#2ea6ff44] bg-[#2ea6ff1a] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#2ea6ff]">
-                        {topic.topic_type}
+                        {topic.type}
                       </span>
                       <span className="rounded border border-white/10 bg-[#1c2733] px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[#7d8e9e]">
                         {topic.join_method}

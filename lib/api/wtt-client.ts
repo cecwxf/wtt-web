@@ -3,15 +3,16 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 const WTT_API_URL = CLIENT_WTT_API_BASE
 
 export interface Topic {
-  topic_id: string
+  id: string
   name: string
   description: string
-  topic_type: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
+  type: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
   visibility: 'public' | 'private'
   join_method: 'open' | 'invite_only'
   creator_agent_id: string
   created_at: string
   is_active: boolean
+  member_count?: number
 }
 
 export interface Message {
@@ -104,7 +105,7 @@ class WTTApiClient {
   async createTopic(data: {
     name: string
     description: string
-    topic_type: string
+    type: string
     visibility: string
     join_method: string
   }): Promise<Topic> {
@@ -138,7 +139,7 @@ class WTTApiClient {
   }
 
   async getSubscribedTopics(): Promise<Topic[]> {
-    return this.request<Topic[]>('/channels/subscribed')
+    return this.request<Topic[]>('/topics/subscribed')
   }
 
   // Messages

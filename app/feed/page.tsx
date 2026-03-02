@@ -151,10 +151,10 @@ export default function FeedPage() {
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
 
-    return subscribedTopicsRaw.map((topic: { topic_id: string; name: string; topic_type?: string }) => ({
-      topic_id: topic.topic_id,
+    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string }) => ({
+      topic_id: topic.id,
       name: topic.name,
-      topic_type: (topic.topic_type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
+      topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
       unread_count: 0,
     }))
   }, [subscribedTopicsRaw])

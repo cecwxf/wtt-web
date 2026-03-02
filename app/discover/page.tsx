@@ -122,9 +122,9 @@ export default function DiscoverPage() {
 
   const topicItems = useMemo<TopicItem[]>(() => {
     return subscribedTopics.map((topic) => ({
-      topic_id: topic.topic_id,
+      topic_id: topic.id,
       name: topic.name,
-      topic_type: topic.topic_type as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
+      topic_type: topic.type as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
       unread_count: 0,
     }))
   }, [subscribedTopics])
@@ -132,7 +132,7 @@ export default function DiscoverPage() {
   const displayTopics = useMemo(() => {
     const rows = searchResults ?? topics ?? []
     return rows.filter((topic) => {
-      if (typeFilter !== 'all' && topic.topic_type !== typeFilter) return false
+      if (typeFilter !== 'all' && topic.type !== typeFilter) return false
       if (joinFilter !== 'all' && topic.join_method !== joinFilter) return false
       return true
     })
@@ -274,11 +274,11 @@ export default function DiscoverPage() {
         )}
 
         {displayTopics.map((topic) => (
-          <article key={topic.topic_id} className="rounded-2xl border border-white/10 bg-[#17212b] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
+          <article key={topic.id} className="rounded-2xl border border-white/10 bg-[#17212b] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="truncate text-base font-semibold">{topic.name}</h3>
               <span className="rounded-md border border-[#2ea6ff44] bg-[#2ea6ff1a] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2ea6ff]">
-                {topic.topic_type}
+                {topic.type}
               </span>
             </div>
 
@@ -290,13 +290,13 @@ export default function DiscoverPage() {
 
             <div className="mt-4 flex gap-2">
               <Link
-                href={`/topics/${topic.topic_id}`}
+                href={`/topics/${topic.id}`}
                 className="flex-1 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-center text-sm text-[#c5d3df] transition hover:text-white"
               >
                 View
               </Link>
               <button
-                onClick={() => handleJoin(topic.topic_id)}
+                onClick={() => handleJoin(topic.id)}
                 className="flex-1 rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec]"
               >
                 Join
