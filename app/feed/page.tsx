@@ -142,8 +142,21 @@ export default function FeedPage() {
   )
 
   const { data: subscribedTopicsRaw, mutate: mutateTopics } = useSWR(
-    selectedAgentId ? ['subscribed', selectedAgentId] : null,
-    () => wttApi.getSubscribedTopics()
+    selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/subscribed`, {
+        headers: {
+          Authorization: `Bearer ${session?.accessToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
+        throw new Error(payload.detail ?? `HTTP ${response.status}`)
+      }
+
+      return response.json()
+    }
   )
 
   const messages = useMemo(() => normalizeFeed(feedRaw), [feedRaw])
