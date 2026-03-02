@@ -25,13 +25,13 @@ const authOptions: NextAuthOptions = {
       version: "2.0",
     }),
     CredentialsProvider({
-      name: "Email",
+      name: "Phone",
       credentials: {
-        email: { label: "Email", type: "email" },
+        identifier: { label: "Phone / Email", type: "text" },
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.identifier || !credentials?.password) {
           return null
         }
 
@@ -40,7 +40,7 @@ const authOptions: NextAuthOptions = {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              email: credentials.email,
+              identifier: credentials.identifier,
               password: credentials.password,
             }),
           })
@@ -53,7 +53,7 @@ const authOptions: NextAuthOptions = {
 
           return {
             id: data.user_id,
-            email: data.email,
+            email: data.email ?? null,
             name: data.display_name,
             accessToken: data.access_token ?? data.token,
           }
