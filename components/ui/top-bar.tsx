@@ -18,7 +18,7 @@ export function TopBar({ onSelectTopic, notificationCount = 0, userMenu }: TopBa
     <header className="flex h-[60px] items-center gap-4 border-b border-white/10 bg-[#17212b] px-4">
       <SearchBar onSelectTopic={onSelectTopic} />
 
-      <div className="flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-2">
         <Link
           href="/discover"
           className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
