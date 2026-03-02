@@ -11,6 +11,8 @@ import { FeedView } from '@/components/ui/feed-view'
 import { MessageCardData } from '@/components/ui/message-card'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
+import { ComposeModal } from '@/components/ui/compose-modal'
+import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 
 interface Agent {
   id: string
@@ -71,6 +73,7 @@ export default function FeedPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
+  const [composeOpen, setComposeOpen] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -120,7 +123,7 @@ export default function FeedPage() {
     }
   }, [agents, selectedAgentId])
 
-  const { data: feedRaw, error } = useSWR(
+  const { data: feedRaw, error, mutate } = useSWR(
     selectedAgentId && session?.accessToken ? ['feed', selectedAgentId, session.accessToken] : null,
     async () => {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/feed?limit=100`, {
@@ -188,17 +191,36 @@ export default function FeedPage() {
   if (status === 'unauthenticated') return null
 
   return (
-    <WttShellV2
-      agents={agentItems}
-      selectedAgentId={selectedAgentId}
-      onAgentChange={setSelectedAgentId}
-      topics={topics}
-      selectedTopicId={selectedTopicId}
-      onTopicChange={setSelectedTopicId}
-      onLogout={() => signOut({ callbackUrl: '/login' })}
-      notificationCount={0}
-    >
-      <FeedView messages={filteredMessages} loading={!feedRaw && !error} />
-    </WttShellV2>
+    <>
+      <KeyboardShortcuts
+        onCompose={() => setComposeOpen(true)}
+        onDiscover={() => router.push('/discover')}
+      />
+
+      <WttShellV2
+        agents={agentItems}
+        selectedAgentId={selectedAgentId}
+        onAgentChange={setSelectedAgentId}
+        topics={topics}
+        selectedTopicId={selectedTopicId}
+        onTopicChange={setSelectedTopicId}
+        onLogout={() => signOut({ callbackUrl: '/login' })}
+        notificationCount={0}
+      >
+        <FeedView
+          messages={filteredMessages}
+          loading={!feedRaw && !error}
+          onCompose={() => setComposeOpen(true)}
+        />
+
+        <ComposeModal
+          open={composeOpen}
+          onClose={() => setComposeOpen(false)}
+          topics={topics}
+          defaultTopicId={selectedTopicId || undefined}
+          onSuccess={() => mutate()}
+        />
+      </WttShellV2>
+    </>
   )
 }

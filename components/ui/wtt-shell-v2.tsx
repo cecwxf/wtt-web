@@ -15,7 +15,6 @@ interface WttShellV2Props {
   topics: TopicItem[]
   selectedTopicId: string | null
   onTopicChange: (topicId: string | null) => void
-  onSearch?: (query: string) => void
   onLogout: () => void
   notificationCount?: number
   children: ReactNode
@@ -30,7 +29,6 @@ export function WttShellV2({
   topics,
   selectedTopicId,
   onTopicChange,
-  onSearch,
   onLogout,
   notificationCount = 0,
   children,
@@ -58,7 +56,7 @@ export function WttShellV2({
     <div className="h-screen bg-[#0e1621] text-[#e8edf2]">
       <div className="flex h-full flex-col">
         <TopBar
-          onSearch={onSearch}
+          onSelectTopic={onTopicChange}
           notificationCount={notificationCount}
           userMenu={
             <div className="relative">

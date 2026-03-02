@@ -1,38 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, Compass, PenSquare, Search } from 'lucide-react'
+import { Bell, Compass, PenSquare } from 'lucide-react'
 import { useState } from 'react'
+import { SearchBar } from './search-bar'
 
 interface TopBarProps {
-  onSearch?: (query: string) => void
+  onSelectTopic?: (topicId: string) => void
   notificationCount?: number
   userMenu?: React.ReactNode
 }
 
-export function TopBar({ onSearch, notificationCount = 0, userMenu }: TopBarProps) {
-  const [searchQuery, setSearchQuery] = useState('')
+export function TopBar({ onSelectTopic, notificationCount = 0, userMenu }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (onSearch && searchQuery.trim()) {
-      onSearch(searchQuery.trim())
-    }
-  }
 
   return (
     <header className="flex h-[60px] items-center gap-4 border-b border-white/10 bg-[#17212b] px-4">
-      <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4a5a6a]" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search topics..."
-          className="w-full rounded-full border border-white/10 bg-[#1c2733] px-10 py-2 text-sm text-[#e8edf2] placeholder:text-[#4a5a6a] outline-none focus:border-[#2ea6ff]"
-        />
-      </form>
+      <SearchBar onSelectTopic={onSelectTopic} />
 
       <div className="flex items-center gap-2">
         <Link
