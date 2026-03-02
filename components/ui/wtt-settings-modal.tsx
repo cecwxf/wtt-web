@@ -1,8 +1,9 @@
 'use client'
 
-import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { Bot, Bell, Brush, KeyRound, Lock, RefreshCw, User, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 type SettingsPage = 'profile' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
@@ -20,6 +21,7 @@ interface WttSettingsModalProps {
   onPageChange: (page: SettingsPage) => void
   agents: AgentOption[]
   selectedAgentId: string
+  onBindingChanged?: () => void
 }
 
 const PAGE_ITEMS: Array<{ key: SettingsPage; label: string; icon: typeof User }> = [
@@ -40,7 +42,9 @@ export function WttSettingsModal({
   onPageChange,
   agents,
   selectedAgentId,
+  onBindingChanged,
 }: WttSettingsModalProps) {
+  const { data: session } = useSession()
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.agent_id === selectedAgentId),
     [agents, selectedAgentId]
@@ -49,6 +53,52 @@ export function WttSettingsModal({
   const [agentAlert, setAgentAlert] = useState(true)
   const [soundOn, setSoundOn] = useState(false)
   const [pollSeconds, setPollSeconds] = useState(5)
+  const [claimCode, setClaimCode] = useState('')
+  const [claiming, setClaiming] = useState(false)
+  const [claimError, setClaimError] = useState('')
+  const [claimSuccess, setClaimSuccess] = useState('')
+
+  const handleClaim = async () => {
+    const code = claimCode.trim()
+    if (!code) {
+      setClaimError('Please enter claim code')
+      return
+    }
+
+    const token = session?.accessToken as string | undefined
+    if (!token) {
+      setClaimError('Session expired, please login again')
+      return
+    }
+
+    setClaiming(true)
+    setClaimError('')
+    setClaimSuccess('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/claim`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setClaimError(data.detail ?? 'Failed to claim agent')
+        return
+      }
+
+      setClaimCode('')
+      setClaimSuccess('Agent claimed successfully')
+      onBindingChanged?.()
+    } catch {
+      setClaimError('Network error')
+    } finally {
+      setClaiming(false)
+    }
+  }
 
   if (!open) return null
 
@@ -143,13 +193,26 @@ export function WttSettingsModal({
             <div className="space-y-3">
               <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
                 <p className="text-sm font-semibold text-[#e8edf2]">OpenClaw 绑定</p>
-                <p className="mt-1 text-sm text-[#7d8e9e]">通过 Claim Code 或直接添加 Agent ID。</p>
-                <Link
-                  href="/agents"
-                  className="mt-3 inline-flex rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec]"
-                >
-                  打开 Agent 管理
-                </Link>
+                <p className="mt-1 text-sm text-[#7d8e9e]">输入 Agent 端生成的 Claim Code 直接绑定。</p>
+
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={claimCode}
+                    onChange={(e) => setClaimCode(e.target.value)}
+                    placeholder="WTT-CLAIM-XXXXXX"
+                    className="w-full rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                  />
+                  <button
+                    onClick={handleClaim}
+                    disabled={claiming || !claimCode.trim()}
+                    className="rounded-lg bg-[#2ea6ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {claiming ? 'Claiming...' : 'Claim'}
+                  </button>
+                </div>
+
+                {claimError && <p className="mt-2 text-sm text-red-300">{claimError}</p>}
+                {claimSuccess && <p className="mt-2 text-sm text-emerald-300">{claimSuccess}</p>}
               </div>
               <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
                 <p className="text-sm font-semibold text-[#e8edf2]">绑定状态</p>

@@ -18,6 +18,7 @@ interface WttShellV2Props {
   onTopicChange: (topicId: string | null) => void
   onLogout: () => void
   onTopicsRefresh?: () => void
+  onBindingChanged?: () => void
   notificationCount?: number
   children: ReactNode
 }
@@ -33,6 +34,7 @@ export function WttShellV2({
   onTopicChange,
   onLogout,
   onTopicsRefresh,
+  onBindingChanged,
   notificationCount = 0,
   children,
 }: WttShellV2Props) {
@@ -150,6 +152,7 @@ export function WttShellV2({
         onPageChange={setSettingsPage}
         agents={agentOptions}
         selectedAgentId={selectedAgentId}
+        onBindingChanged={onBindingChanged}
       />
 
       <CreateTopicModal

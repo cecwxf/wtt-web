@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
@@ -70,6 +70,36 @@ export default function FeedPage() {
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
 
+  const loadAgents = useCallback(async () => {
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
+        headers: {
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+      })
+
+      if (!response.ok) return
+
+      const data = await response.json()
+      const list = normalizeAgents(data)
+      setAgents(list)
+
+      const primary = list.find((a) => a.is_primary)
+      const fallback = primary ?? list[0]
+
+      if (fallback) {
+        setSelectedAgentId((prev) =>
+          prev && list.some((a) => a.agent_id === prev) ? prev : fallback.agent_id
+        )
+        if (fallback.api_key) {
+          wttApi.setToken(fallback.api_key)
+        }
+      }
+    } catch {
+      // Keep page resilient
+    }
+  }, [session?.accessToken])
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
@@ -80,36 +110,8 @@ export default function FeedPage() {
       return
     }
 
-    const loadAgents = async () => {
-      try {
-        const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
-          headers: {
-            Authorization: `Bearer ${session?.accessToken ?? ''}`,
-          },
-        })
-
-        if (!response.ok) return
-
-        const data = await response.json()
-        const list = normalizeAgents(data)
-        setAgents(list)
-
-        const primary = list.find((a) => a.is_primary)
-        const fallback = primary ?? list[0]
-
-        if (fallback) {
-          setSelectedAgentId(fallback.agent_id)
-          if (fallback.api_key) {
-            wttApi.setToken(fallback.api_key)
-          }
-        }
-      } catch {
-        // Keep page resilient
-      }
-    }
-
     loadAgents()
-  }, [status, router, session?.accessToken])
+  }, [status, router, loadAgents])
 
   useEffect(() => {
     const selected = agents.find((agent) => agent.agent_id === selectedAgentId)
@@ -220,6 +222,7 @@ export default function FeedPage() {
         onTopicChange={setSelectedTopicId}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
+        onBindingChanged={loadAgents}
         notificationCount={0}
       >
         {selectedTopicId && selectedTopic ? (
