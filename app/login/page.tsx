@@ -47,7 +47,7 @@ export default function LoginPage() {
         })
 
         if (result?.ok) {
-          router.push('/inbox')
+          router.push('/feed')
         } else {
           setError('Login failed after registration')
         }
@@ -60,7 +60,7 @@ export default function LoginPage() {
         })
 
         if (result?.ok) {
-          router.push('/inbox')
+          router.push('/feed')
         } else {
           setError('Invalid email or password')
         }
@@ -73,7 +73,7 @@ export default function LoginPage() {
   }
 
   const handleOAuthSignIn = (provider: string) => {
-    signIn(provider, { callbackUrl: '/inbox' })
+    signIn(provider, { callbackUrl: '/feed' })
   }
 
   return (
