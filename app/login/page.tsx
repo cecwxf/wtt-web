@@ -1,7 +1,7 @@
 'use client'
 
 import { signIn } from 'next-auth/react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowRight, Github, Send, Smartphone, Twitter, User } from 'lucide-react'
@@ -13,51 +13,24 @@ const COUNTRY_OPTIONS = [
   { code: 'MX', name: 'Mexico', dial: '52' },
   { code: 'BR', name: 'Brazil', dial: '55' },
   { code: 'AR', name: 'Argentina', dial: '54' },
-  { code: 'CL', name: 'Chile', dial: '56' },
-  { code: 'CO', name: 'Colombia', dial: '57' },
-  { code: 'PE', name: 'Peru', dial: '51' },
   { code: 'GB', name: 'United Kingdom', dial: '44' },
-  { code: 'IE', name: 'Ireland', dial: '353' },
   { code: 'FR', name: 'France', dial: '33' },
   { code: 'DE', name: 'Germany', dial: '49' },
   { code: 'IT', name: 'Italy', dial: '39' },
   { code: 'ES', name: 'Spain', dial: '34' },
-  { code: 'PT', name: 'Portugal', dial: '351' },
-  { code: 'NL', name: 'Netherlands', dial: '31' },
-  { code: 'BE', name: 'Belgium', dial: '32' },
-  { code: 'CH', name: 'Switzerland', dial: '41' },
-  { code: 'AT', name: 'Austria', dial: '43' },
-  { code: 'SE', name: 'Sweden', dial: '46' },
-  { code: 'NO', name: 'Norway', dial: '47' },
-  { code: 'DK', name: 'Denmark', dial: '45' },
-  { code: 'FI', name: 'Finland', dial: '358' },
-  { code: 'PL', name: 'Poland', dial: '48' },
-  { code: 'CZ', name: 'Czech Republic', dial: '420' },
-  { code: 'HU', name: 'Hungary', dial: '36' },
-  { code: 'RO', name: 'Romania', dial: '40' },
-  { code: 'GR', name: 'Greece', dial: '30' },
   { code: 'TR', name: 'Turkey', dial: '90' },
   { code: 'RU', name: 'Russia', dial: '7' },
-  { code: 'UA', name: 'Ukraine', dial: '380' },
   { code: 'IL', name: 'Israel', dial: '972' },
-  { code: 'SA', name: 'Saudi Arabia', dial: '966' },
   { code: 'AE', name: 'United Arab Emirates', dial: '971' },
-  { code: 'QA', name: 'Qatar', dial: '974' },
-  { code: 'KW', name: 'Kuwait', dial: '965' },
+  { code: 'SA', name: 'Saudi Arabia', dial: '966' },
   { code: 'EG', name: 'Egypt', dial: '20' },
-  { code: 'MA', name: 'Morocco', dial: '212' },
   { code: 'ZA', name: 'South Africa', dial: '27' },
   { code: 'NG', name: 'Nigeria', dial: '234' },
-  { code: 'KE', name: 'Kenya', dial: '254' },
-  { code: 'ET', name: 'Ethiopia', dial: '251' },
   { code: 'IN', name: 'India', dial: '91' },
   { code: 'PK', name: 'Pakistan', dial: '92' },
   { code: 'BD', name: 'Bangladesh', dial: '880' },
-  { code: 'LK', name: 'Sri Lanka', dial: '94' },
-  { code: 'NP', name: 'Nepal', dial: '977' },
   { code: 'CN', name: 'China', dial: '86' },
   { code: 'HK', name: 'Hong Kong', dial: '852' },
-  { code: 'MO', name: 'Macau', dial: '853' },
   { code: 'TW', name: 'Taiwan', dial: '886' },
   { code: 'JP', name: 'Japan', dial: '81' },
   { code: 'KR', name: 'South Korea', dial: '82' },
@@ -72,79 +45,91 @@ const COUNTRY_OPTIONS = [
 ] as const
 
 export default function LoginPage() {
-  const [isRegister, setIsRegister] = useState(false)
   const [countryDial, setCountryDial] = useState('86')
   const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
+  const [code, setCode] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [codeSent, setCodeSent] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sendingCode, setSendingCode] = useState(false)
   const router = useRouter()
 
-  const normalizePhone = (value: string) => value.replace(/\D/g, '')
-  const isValidPhone = (value: string) => /^\+[1-9]\d{6,14}$/.test(normalizePhone(value))
-  const buildInternationalPhone = (dial: string, localNumber: string) => {
-    const localDigits = normalizePhone(localNumber).replace(/^0+/, '')
-    return `+${dial}${localDigits}`
-  }
+  const localPhone = phone.replace(/\D/g, '')
+  const e164Phone = useMemo(() => {
+    const local = localPhone.replace(/^0+/, '')
+    return `+${countryDial}${local}`
+  }, [countryDial, localPhone])
+  const phoneValid = /^\+[1-9]\d{6,14}$/.test(e164Phone)
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = setInterval(() => setCooldown((v) => (v > 0 ? v - 1 : 0)), 1000)
+    return () => clearInterval(timer)
+  }, [cooldown])
+
+  const sendCode = async () => {
     setError('')
-    const normalizedPhone = buildInternationalPhone(countryDial, phone)
-    if (!isValidPhone(normalizedPhone)) {
+    if (!phoneValid) {
       setError('Please enter a valid phone number')
       return
     }
 
-    setLoading(true)
-
+    setSendingCode(true)
     try {
-      if (isRegister) {
-        // 注册
-        const response = await fetch(`${CLIENT_WTT_API_BASE}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: normalizedPhone,
-            password,
-            display_name: name,
-          }),
-        })
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/auth/phone/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: e164Phone }),
+      })
 
-        if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.detail || 'Registration failed')
-        }
-
-        // 注册成功后自动登录
-        const result = await signIn('credentials', {
-          identifier: normalizedPhone,
-          password,
-          redirect: false,
-        })
-
-        if (result?.ok) {
-          router.push('/feed')
-        } else {
-          setError('Login failed after registration')
-        }
-      } else {
-        // 登录
-        const result = await signIn('credentials', {
-          identifier: normalizedPhone,
-          password,
-          redirect: false,
-        })
-
-        if (result?.ok) {
-          router.push('/feed')
-        } else {
-          setError('Invalid phone or password')
-        }
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setError(data.detail ?? 'Failed to send code')
+        return
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed')
+
+      setCodeSent(true)
+      setCooldown(60)
+      if (typeof data.debug_code === 'string' && data.debug_code) {
+        setCode(data.debug_code)
+      }
+    } catch {
+      setError('Network error while sending code')
+    } finally {
+      setSendingCode(false)
+    }
+  }
+
+  const handlePhoneSignIn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (!phoneValid) {
+      setError('Please enter a valid phone number')
+      return
+    }
+    if (!code || code.length < 4) {
+      setError('Please enter verification code')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const result = await signIn('credentials', {
+        identifier: e164Phone,
+        code: code.trim(),
+        displayName: displayName.trim(),
+        redirect: false,
+      })
+
+      if (result?.ok) {
+        router.push('/feed')
+      } else {
+        setError('Invalid or expired verification code')
+      }
+    } catch {
+      setError('Authentication failed')
     } finally {
       setLoading(false)
     }
@@ -171,31 +156,6 @@ export default function LoginPage() {
         <div className="mb-7 text-center">
           <h1 className="text-[32px] font-semibold leading-tight text-[#233849]">Want To Talk</h1>
           <p className="mt-1 text-sm font-medium tracking-[0.12em] text-[#6f8396]">Link The Agent World</p>
-        </div>
-
-        <div className="mb-6 grid grid-cols-2 rounded-xl bg-[#edf3f8] p-1">
-          <button
-            onClick={() => {
-              setIsRegister(false)
-              setError('')
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              !isRegister ? 'bg-white text-[#1e3a53] shadow-sm' : 'text-[#7390a6] hover:text-[#2a4a63]'
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => {
-              setIsRegister(true)
-              setError('')
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              isRegister ? 'bg-white text-[#1e3a53] shadow-sm' : 'text-[#7390a6] hover:text-[#2a4a63]'
-            }`}
-          >
-            Create Account
-          </button>
         </div>
 
         <div className="mb-5 space-y-2.5">
@@ -236,29 +196,26 @@ export default function LoginPage() {
           <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-[#90a2b3]">or</p>
         </div>
 
-        <form onSubmit={handleEmailAuth} className="space-y-3.5">
-          {isRegister && (
-            <label className="block">
-              <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-[#6f8396]">
-                <User className="h-3.5 w-3.5" />
-                Name
-              </span>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm text-[#1e3447] outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
-                placeholder="Your display name"
-                required
-              />
-            </label>
-          )}
+        <form onSubmit={handlePhoneSignIn} className="space-y-3.5">
+          <label className="block">
+            <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-[#6f8396]">
+              <User className="h-3.5 w-3.5" />
+              Display Name (Optional)
+            </span>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm text-[#1e3447] outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+              placeholder="Your name"
+            />
+          </label>
 
           <label className="block">
             <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-[#6f8396]">
               <Smartphone className="h-3.5 w-3.5" />
-                Phone Number
-              </span>
+              Phone Number
+            </span>
             <div className="flex items-center gap-2">
               <select
                 value={countryDial}
@@ -282,17 +239,19 @@ export default function LoginPage() {
             </div>
           </label>
 
-          <label className="block">
-            <span className="mb-1.5 text-xs font-medium text-[#6f8396]">Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm text-[#1e3447] outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
-              placeholder="Enter password"
-              required
-            />
-          </label>
+          {codeSent && (
+            <label className="block">
+              <span className="mb-1.5 text-xs font-medium text-[#6f8396]">Verification Code</span>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm text-[#1e3447] outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+                placeholder="6-digit code"
+                required
+              />
+            </label>
+          )}
 
           {error && (
             <motion.div
@@ -304,14 +263,36 @@ export default function LoginPage() {
             </motion.div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2aabee] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#209ad8] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? 'Processing...' : isRegister ? 'Create Account' : 'Sign In'}
-            {!loading && <ArrowRight className="h-4 w-4" />}
-          </button>
+          {!codeSent ? (
+            <button
+              type="button"
+              onClick={sendCode}
+              disabled={sendingCode || cooldown > 0}
+              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2aabee] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#209ad8] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {sendingCode ? 'Sending...' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Send Code'}
+              {!sendingCode && cooldown <= 0 && <ArrowRight className="h-4 w-4" />}
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2aabee] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#209ad8] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? 'Signing in...' : 'Sign In with Code'}
+                {!loading && <ArrowRight className="h-4 w-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={sendCode}
+                disabled={sendingCode || cooldown > 0}
+                className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm font-medium text-[#3c5770] transition hover:border-[#9fcdf2] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
+              </button>
+            </div>
+          )}
         </form>
       </motion.main>
     </div>

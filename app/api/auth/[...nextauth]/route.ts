@@ -25,25 +25,39 @@ const authOptions: NextAuthOptions = {
       version: "2.0",
     }),
     CredentialsProvider({
-      name: "Phone",
+      name: "Phone OTP",
       credentials: {
-        identifier: { label: "Phone / Email", type: "text" },
-        password: { label: "Password", type: "password" }
+        identifier: { label: "Phone", type: "text" },
+        code: { label: "Code", type: "text" },
+        displayName: { label: "Display Name", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.identifier || !credentials?.password) {
+        if (!credentials?.identifier) {
           return null
         }
 
         try {
-          const response = await fetch(`${WTT_API_URL}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              identifier: credentials.identifier,
-              password: credentials.password,
-            }),
-          })
+          const useCodeFlow = Boolean(credentials.code)
+          const response = await fetch(
+            useCodeFlow ? `${WTT_API_URL}/auth/phone/login` : `${WTT_API_URL}/auth/login`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(
+                useCodeFlow
+                  ? {
+                      phone: credentials.identifier,
+                      code: credentials.code,
+                      display_name: credentials.displayName,
+                    }
+                  : {
+                      identifier: credentials.identifier,
+                      password: credentials.password,
+                    }
+              ),
+            }
+          )
 
           if (!response.ok) {
             return null
