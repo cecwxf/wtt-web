@@ -11,6 +11,7 @@ import { wttApi, Topic } from '@/lib/api/wtt-client'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
+import { normalizeAndFilterAgents } from '@/lib/agents'
 
 interface Agent {
   id: string
@@ -20,35 +21,14 @@ interface Agent {
   api_key?: string
 }
 
-function normalizeAgents(raw: unknown): Agent[] {
-  if (!raw) return []
-  const rows = Array.isArray(raw)
-    ? raw
-    : Array.isArray((raw as { agents?: unknown[] }).agents)
-      ? (raw as { agents: unknown[] }).agents
-      : []
-
-  return rows.map((item, index) => {
-    const data = item as Record<string, unknown>
-    const agentId = String(data.agent_id ?? '')
-    return {
-      id: String(data.id ?? data.agent_id ?? `agent-${index}`),
-      agent_id: agentId,
-      display_name: String(data.display_name ?? agentId),
-      is_primary: Boolean(data.is_primary),
-      api_key: typeof data.api_key === 'string' ? data.api_key : undefined,
-    }
-  })
-}
-
 export default function DiscoverPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Topic[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
-  const [typeFilter, setTypeFilter] = useState<'all' | 'broadcast' | 'discussion' | 'collaborative'>('all')
-  const [joinFilter, setJoinFilter] = useState<'all' | 'open' | 'invite_only'>('all')
+  const [typeFilter] = useState<'all' | 'broadcast' | 'discussion' | 'collaborative'>('all')
+  const [joinFilter] = useState<'all' | 'open' | 'invite_only'>('all')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
@@ -74,11 +54,10 @@ export default function DiscoverPage() {
         if (!response.ok) return
 
         const data = await response.json()
-        const list = normalizeAgents(data)
+        const list = normalizeAndFilterAgents(data)
         setAgents(list)
 
-        const primary = list.find((a) => a.is_primary)
-        const fallback = primary ?? list[0]
+        const fallback = list[0]
 
         if (fallback) {
           setSelectedAgentId(fallback.agent_id)
@@ -87,7 +66,7 @@ export default function DiscoverPage() {
           }
         }
       } catch {
-        // Keep page resilient if agent API is temporarily unavailable.
+        // resilient
       }
     }
 
@@ -121,9 +100,7 @@ export default function DiscoverPage() {
 
       return response.json()
     },
-    {
-      refreshInterval: 10000, // Refresh every 10 seconds to detect topic changes
-    }
+    { refreshInterval: 10000 }
   )
 
   const subscribedTopics = Array.isArray(subscribedTopicsRaw) ? (subscribedTopicsRaw as Topic[]) : []
@@ -142,6 +119,7 @@ export default function DiscoverPage() {
       name: topic.name,
       topic_type: topic.type as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
       unread_count: 0,
+      can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
     }))
   }, [subscribedTopics])
 
@@ -173,12 +151,13 @@ export default function DiscoverPage() {
     }
   }
 
-  const handleJoin = async (topicId: string) => {
+  const handleSubscribe = async (topicId: string) => {
     try {
-      await wttApi.joinTopic(topicId)
-      alert('Joined successfully')
+      await wttApi.joinTopic(topicId, selectedAgentId)
+      await mutateTopics()
+      alert('Subscribed successfully')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to join')
+      alert(err instanceof Error ? err.message : 'Failed to subscribe')
     }
   }
 
@@ -235,51 +214,6 @@ export default function DiscoverPage() {
             </button>
           )}
         </form>
-
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="grid grid-cols-4 gap-1 rounded-lg bg-[#1c2733] p-1">
-            {(
-              [
-                { key: 'all', label: 'All' },
-                { key: 'broadcast', label: 'Broadcast' },
-                { key: 'discussion', label: 'Discussion' },
-                { key: 'collaborative', label: 'Collab' },
-              ] as Array<{ key: 'all' | 'broadcast' | 'discussion' | 'collaborative'; label: string }>
-            ).map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setTypeFilter(tab.key)}
-                className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${
-                  typeFilter === tab.key ? 'bg-[#242f3d] text-[#2ea6ff]' : 'text-[#7d8e9e] hover:text-[#e8edf2]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#1c2733] p-1">
-            {(
-              [
-                { key: 'all', label: 'All Join' },
-                { key: 'open', label: 'Open' },
-                { key: 'invite_only', label: 'Invite' },
-              ] as Array<{ key: 'all' | 'open' | 'invite_only'; label: string }>
-            ).map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setJoinFilter(tab.key)}
-                className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${
-                  joinFilter === tab.key ? 'bg-[#242f3d] text-[#2ea6ff]' : 'text-[#7d8e9e] hover:text-[#e8edf2]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -312,10 +246,10 @@ export default function DiscoverPage() {
                 View
               </Link>
               <button
-                onClick={() => handleJoin(topic.id)}
+                onClick={() => handleSubscribe(topic.id)}
                 className="flex-1 rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec]"
               >
-                Join
+                Subscribe
               </button>
             </div>
           </article>

@@ -13,6 +13,7 @@ export interface Topic {
   created_at: string
   is_active: boolean
   member_count?: number
+  my_role?: 'owner' | 'admin' | 'member' | 'observer'
 }
 
 export interface Message {
@@ -47,10 +48,7 @@ class WTTApiClient {
     this.token = token
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -84,13 +82,10 @@ class WTTApiClient {
   }
 
   async login(agentId: string, password: string) {
-    return this.request<{ access_token: string; token_type: string }>(
-      '/auth/login',
-      {
-        method: 'POST',
-        body: JSON.stringify({ agent_id: agentId, password }),
-      }
-    )
+    return this.request<{ access_token: string; token_type: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: agentId, password }),
+    })
   }
 
   // Topics
@@ -108,6 +103,7 @@ class WTTApiClient {
     type: string
     visibility: string
     join_method: string
+    creator_agent_id?: string
   }): Promise<Topic> {
     return this.request<Topic>('/topics/', {
       method: 'POST',
@@ -115,8 +111,9 @@ class WTTApiClient {
     })
   }
 
-  async deleteTopic(topicId: string): Promise<void> {
-    return this.request(`/topics/${topicId}`, {
+  async deleteTopic(topicId: string, agentId?: string): Promise<void> {
+    const query = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''
+    return this.request(`/topics/${topicId}${query}`, {
       method: 'DELETE',
     })
   }
@@ -126,16 +123,24 @@ class WTTApiClient {
   }
 
   // Channels (Subscriptions)
-  async joinTopic(topicId: string): Promise<void> {
-    return this.request(`/channels/${topicId}/join`, {
-      method: 'POST',
-    })
+  async joinTopic(topicId: string, agentId?: string): Promise<void> {
+    if (agentId) {
+      return this.request(`/topics/${topicId}/join?agent_id=${encodeURIComponent(agentId)}`, {
+        method: 'POST',
+      })
+    }
+    // fallback legacy
+    return this.request(`/channels/${topicId}/join`, { method: 'POST' })
   }
 
-  async leaveTopic(topicId: string): Promise<void> {
-    return this.request(`/channels/${topicId}/leave`, {
-      method: 'POST',
-    })
+  async leaveTopic(topicId: string, agentId?: string): Promise<void> {
+    if (agentId) {
+      return this.request(`/topics/${topicId}/leave?agent_id=${encodeURIComponent(agentId)}`, {
+        method: 'POST',
+      })
+    }
+    // fallback legacy
+    return this.request(`/channels/${topicId}/leave`, { method: 'POST' })
   }
 
   async getSubscribedTopics(): Promise<Topic[]> {
@@ -143,12 +148,15 @@ class WTTApiClient {
   }
 
   // Messages
-  async publishMessage(topicId: string, data: {
-    content: string
-    content_type?: string
-    semantic_type?: string
-    reply_to?: string
-  }): Promise<Message> {
+  async publishMessage(
+    topicId: string,
+    data: {
+      content: string
+      content_type?: string
+      semantic_type?: string
+      reply_to?: string
+    }
+  ): Promise<Message> {
     return this.request<Message>(`/topics/${topicId}/messages`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -159,8 +167,16 @@ class WTTApiClient {
     return this.request<Message[]>('/messages/poll')
   }
 
-  async getTopicMessages(topicId: string, limit: number = 50): Promise<Message[]> {
-    return this.request<Message[]>(`/topics/${topicId}/messages?limit=${limit}`)
+  async getTopicMessages(
+    topicId: string,
+    limit: number = 50,
+    options?: { before?: string; offset?: number }
+  ): Promise<Message[]> {
+    const params = new URLSearchParams()
+    params.set('limit', String(limit))
+    if (options?.before) params.set('before', options.before)
+    if (typeof options?.offset === 'number') params.set('offset', String(options.offset))
+    return this.request<Message[]>(`/topics/${topicId}/messages?${params.toString()}`)
   }
 
   // P2P
@@ -179,6 +195,19 @@ class WTTApiClient {
   // Agents
   async getAgent(agentId: string): Promise<Agent> {
     return this.request<Agent>(`/agents/${agentId}`)
+  }
+
+  async renameAgent(agentId: string, displayName: string): Promise<void> {
+    await this.request(`/agents/${encodeURIComponent(agentId)}/set-name`, {
+      method: 'POST',
+      body: JSON.stringify({ display_name: displayName }),
+    })
+  }
+
+  async unclaimAgent(agentId: string): Promise<void> {
+    await this.request(`/agents/${encodeURIComponent(agentId)}`, {
+      method: 'DELETE',
+    })
   }
 }
 

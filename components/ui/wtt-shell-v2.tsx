@@ -19,6 +19,10 @@ interface WttShellV2Props {
   onLogout: () => void
   onTopicsRefresh?: () => void
   onBindingChanged?: () => void
+  onRenameAgent?: (agentId: string, currentName: string) => void
+  onUnclaimAgent?: (agentId: string) => void
+  onLeaveTopic?: (topicId: string) => void
+  onDeleteTopic?: (topicId: string) => void
   notificationCount?: number
   children: ReactNode
 }
@@ -35,6 +39,10 @@ export function WttShellV2({
   onLogout,
   onTopicsRefresh,
   onBindingChanged,
+  onRenameAgent,
+  onUnclaimAgent,
+  onLeaveTopic,
+  onDeleteTopic,
   notificationCount = 0,
   children,
 }: WttShellV2Props) {
@@ -62,7 +70,7 @@ export function WttShellV2({
     <div className="h-screen bg-[#0e1621] text-[#e8edf2]">
       <div className="flex h-full flex-col">
         <TopBar
-          onSelectTopic={onTopicChange}
+          onSelectTopic={(topicId) => onTopicChange(topicId)}
           onCreateTopic={() => setCreateTopicOpen(true)}
           notificationCount={notificationCount}
           userMenu={
@@ -119,12 +127,16 @@ export function WttShellV2({
               agents={agents}
               selectedAgentId={selectedAgentId}
               onSelectAgent={onAgentChange}
+              onRenameAgent={onRenameAgent}
+              onUnclaimAgent={onUnclaimAgent}
             />
 
             <TopicColumn
               topics={topics}
               selectedTopicId={selectedTopicId}
               onSelectTopic={onTopicChange}
+              onLeaveTopic={onLeaveTopic}
+              onDeleteTopic={onDeleteTopic}
               agentName={selectedAgent?.display_name}
             />
           </div>
@@ -158,6 +170,7 @@ export function WttShellV2({
       <CreateTopicModal
         open={createTopicOpen}
         onClose={() => setCreateTopicOpen(false)}
+        creatorAgentId={selectedAgentId}
         onSuccess={() => {
           onTopicsRefresh?.()
         }}

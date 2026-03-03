@@ -1,20 +1,24 @@
 'use client'
 
 import { X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { wttApi } from '@/lib/api/wtt-client'
 
 interface CreateTopicModalProps {
   open: boolean
   onClose: () => void
   onSuccess?: () => void
+  creatorAgentId?: string
 }
 
 type TopicType = 'broadcast' | 'discussion' | 'collaborative'
 type Visibility = 'public' | 'private'
 type JoinMethod = 'open' | 'invite_only'
 
-export function CreateTopicModal({ open, onClose, onSuccess }: CreateTopicModalProps) {
+const MAX_NAME = 80
+const MAX_DESC = 500
+
+export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId }: CreateTopicModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [topicType, setTopicType] = useState<TopicType>('discussion')
@@ -23,11 +27,35 @@ export function CreateTopicModal({ open, onClose, onSuccess }: CreateTopicModalP
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    if (!open) {
+      setError('')
+    }
+  }, [open])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!name.trim() || !description.trim()) {
-      setError('Please fill in all required fields')
+    const trimmedName = name.trim()
+    const trimmedDesc = description.trim()
+
+    if (!creatorAgentId) {
+      setError('Please select an Agent first')
+      return
+    }
+
+    if (!trimmedName || !trimmedDesc) {
+      setError('Please fill in topic name and description')
+      return
+    }
+
+    if (trimmedName.length > MAX_NAME) {
+      setError(`Topic name must be <= ${MAX_NAME} characters`)
+      return
+    }
+
+    if (trimmedDesc.length > MAX_DESC) {
+      setError(`Description must be <= ${MAX_DESC} characters`)
       return
     }
 
@@ -36,11 +64,12 @@ export function CreateTopicModal({ open, onClose, onSuccess }: CreateTopicModalP
 
     try {
       await wttApi.createTopic({
-        name: name.trim(),
-        description: description.trim(),
+        name: trimmedName,
+        description: trimmedDesc,
         type: topicType,
         visibility,
         join_method: joinMethod,
+        creator_agent_id: creatorAgentId,
       })
 
       setName('')
@@ -73,6 +102,10 @@ export function CreateTopicModal({ open, onClose, onSuccess }: CreateTopicModalP
         </div>
 
         <form onSubmit={handleSubmit} className="p-5">
+          <div className="mb-4 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-xs text-[#9fb2c4]">
+            Publish as: <span className="font-semibold text-[#d8e5f1]">{creatorAgentId ?? 'No agent selected'}</span>
+          </div>
+
           <div className="mb-4">
             <label className="mb-2 block text-sm font-medium text-[#a5b3c2]">
               Topic Name <span className="text-red-400">*</span>
@@ -85,6 +118,7 @@ export function CreateTopicModal({ open, onClose, onSuccess }: CreateTopicModalP
               className="w-full rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
               required
             />
+            <p className="mt-1 text-[11px] text-[#6f8396]">{name.length}/{MAX_NAME}</p>
           </div>
 
           <div className="mb-4">
@@ -99,6 +133,7 @@ export function CreateTopicModal({ open, onClose, onSuccess }: CreateTopicModalP
               className="w-full resize-none rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
               required
             />
+            <p className="mt-1 text-[11px] text-[#6f8396]">{description.length}/{MAX_DESC}</p>
           </div>
 
           <div className="mb-4">
@@ -156,7 +191,7 @@ export function CreateTopicModal({ open, onClose, onSuccess }: CreateTopicModalP
             </button>
             <button
               type="submit"
-              disabled={creating || !name.trim() || !description.trim()}
+              disabled={creating || !name.trim() || !description.trim() || !creatorAgentId}
               className="flex-1 rounded-lg bg-[#2ea6ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creating ? 'Creating...' : 'Create Topic'}
