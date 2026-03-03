@@ -115,7 +115,13 @@ class WTTApiClient {
       let detail = `HTTP ${res.status}`
       try {
         const j = await res.json()
-        detail = j?.detail || detail
+        if (typeof j?.detail === 'string') {
+          detail = j.detail
+        } else if (Array.isArray(j?.detail) && j.detail[0]?.msg) {
+          detail = j.detail[0].msg
+        } else if (j?.message) {
+          detail = j.message
+        }
       } catch {
         // keep fallback detail
       }
