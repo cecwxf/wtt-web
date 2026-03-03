@@ -85,7 +85,16 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
       onSuccess?.()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create topic')
+      const raw = err instanceof Error ? err.message : 'Failed to create topic'
+      let friendly = raw
+      if (raw.includes('String should have at least')) {
+        friendly = 'Topic name is too short (at least 1 non-space character).'
+      } else if (raw.includes('name') && raw.includes('too_short')) {
+        friendly = 'Topic name is too short.'
+      } else if (raw.includes('description') && raw.includes('too_short')) {
+        friendly = 'Description is too short.'
+      }
+      setError(friendly)
     } finally {
       setCreating(false)
     }
