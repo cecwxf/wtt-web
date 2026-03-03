@@ -1,6 +1,7 @@
 'use client'
 
 import { useSession, signOut } from 'next-auth/react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
@@ -29,6 +30,8 @@ export default function AgentsPage() {
   const [publishContent, setPublishContent] = useState('manager publish message')
   const [peerAgentId, setPeerAgentId] = useState('')
   const [p2pContent, setP2pContent] = useState('manager p2p message')
+  const [lastPublishTopicId, setLastPublishTopicId] = useState('')
+  const [lastP2PTopicId, setLastP2PTopicId] = useState('')
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -135,6 +138,7 @@ export default function AgentsPage() {
       return
     }
     const j = await r.json()
+    setLastPublishTopicId(j.topic_id || publishTopicId)
     alert(`Proxy publish success: ${j.message_id}`)
   }
 
@@ -159,6 +163,7 @@ export default function AgentsPage() {
       return
     }
     const j = await r.json()
+    setLastP2PTopicId(j.p2p_topic_id || '')
     alert(`Proxy P2P success: ${j.message_id}`)
   }
 
@@ -245,6 +250,11 @@ export default function AgentsPage() {
           <button onClick={managerPublishAs} className="mt-3 rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold">
             Publish As Target
           </button>
+          {lastPublishTopicId && (
+            <p className="mt-2 text-xs text-[#8fb7d8]">
+              Last publish topic: <Link className="text-[#2ea6ff] underline" href={`/topics/${lastPublishTopicId}`}>open</Link>
+            </p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-[#17212b] p-4">
@@ -269,6 +279,11 @@ export default function AgentsPage() {
           <button onClick={managerP2PAs} className="mt-3 rounded-lg bg-[#00b98f] px-3 py-2 text-sm font-semibold">
             Send P2P As Target
           </button>
+          {lastP2PTopicId && (
+            <p className="mt-2 text-xs text-[#8fd8c4]">
+              Last P2P topic: <Link className="text-[#00b98f] underline" href={`/topics/${lastP2PTopicId}`}>open</Link>
+            </p>
+          )}
         </div>
       </div>
     </WttShellV2>
