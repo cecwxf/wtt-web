@@ -124,6 +124,8 @@ export default function TopicDetailPage() {
   const [urlDescEdit, setUrlDescEdit] = useState('')
   const [recallPreview, setRecallPreview] = useState('')
   const [exporting, setExporting] = useState(false)
+  const [exportStatus, setExportStatus] = useState('')
+  const [lastExportUrl, setLastExportUrl] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -400,9 +402,14 @@ export default function TopicDetailPage() {
 
   const exportTopic = async (format: 'md' | 'pdf' | 'docx') => {
     setExporting(true)
+    setExportStatus(`Exporting ${format.toUpperCase()}...`)
     try {
       const u = `${CLIENT_WTT_API_BASE}/export/topic/${topicId}?format=${format}`
+      setLastExportUrl(u)
       window.open(u, '_blank', 'noopener,noreferrer')
+      setExportStatus(`Export ${format.toUpperCase()} started`)
+    } catch {
+      setExportStatus(`Export ${format.toUpperCase()} failed`)
     } finally {
       setExporting(false)
     }
@@ -410,6 +417,7 @@ export default function TopicDetailPage() {
 
   const runRecallExport = async () => {
     setExporting(true)
+    setExportStatus('Running recall export...')
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/memory/recall/export`, {
         method: 'POST',
@@ -417,13 +425,14 @@ export default function TopicDetailPage() {
         body: JSON.stringify({ topic_id: topicId, mode: 'distilled', target_path: 'memory/recall-memory.md', limit: 200 }),
       })
       if (!r.ok) {
-        alert(`Recall export failed: ${await r.text()}`)
+        setExportStatus(`Recall failed: ${await r.text()}`)
         return
       }
       const rr = await fetch(`${CLIENT_WTT_API_BASE}/memory/recall/read?target_path=memory/recall-memory.md&tail_lines=80`)
       if (rr.ok) {
         setRecallPreview(await rr.text())
       }
+      setExportStatus('Recall exported to memory.md')
     } finally {
       setExporting(false)
     }
@@ -569,6 +578,12 @@ export default function TopicDetailPage() {
               <button onClick={runRecallExport} disabled={exporting} className="mt-2 w-full rounded bg-[#2ea6ff33] px-2 py-1.5 text-[11px] text-[#d5ebff]">
                 {exporting ? 'Working...' : 'Recall to memory.md'}
               </button>
+              {exportStatus && <p className="mt-2 text-[11px] text-[#9fd6ff]">{exportStatus}</p>}
+              {lastExportUrl && (
+                <a className="mt-1 inline-block text-[11px] text-[#8fb7d8] underline" href={lastExportUrl} target="_blank" rel="noreferrer">
+                  Re-open last export download
+                </a>
+              )}
               {recallPreview && (
                 <pre className="mt-2 max-h-40 overflow-auto rounded border border-white/10 bg-[#111a24] p-2 text-[10px] text-[#9fb2c4] whitespace-pre-wrap">{recallPreview}</pre>
               )}
