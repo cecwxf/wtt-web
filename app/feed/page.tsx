@@ -11,6 +11,7 @@ import { ChatView, ChatMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
+import { normalizeAndFilterAgents } from '@/lib/agents'
 
 interface Agent {
   id: string
@@ -18,27 +19,6 @@ interface Agent {
   display_name: string
   is_primary: boolean
   api_key?: string
-}
-
-function normalizeAgents(raw: unknown): Agent[] {
-  if (!raw) return []
-  const rows = Array.isArray(raw)
-    ? raw
-    : Array.isArray((raw as { agents?: unknown[] }).agents)
-      ? (raw as { agents: unknown[] }).agents
-      : []
-
-  return rows.map((item, index) => {
-    const data = item as Record<string, unknown>
-    const agentId = String(data.agent_id ?? '')
-    return {
-      id: String(data.id ?? data.agent_id ?? `agent-${index}`),
-      agent_id: agentId,
-      display_name: String(data.display_name ?? agentId),
-      is_primary: Boolean(data.is_primary),
-      api_key: typeof data.api_key === 'string' ? data.api_key : undefined,
-    }
-  })
 }
 
 function normalizeFeed(raw: unknown): ChatMessage[] {
@@ -69,6 +49,9 @@ export default function FeedPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
+  const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
+  const [hasOlder, setHasOlder] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
 
   const loadAgents = useCallback(async () => {
     try {
@@ -81,16 +64,13 @@ export default function FeedPage() {
       if (!response.ok) return
 
       const data = await response.json()
-      const list = normalizeAgents(data)
+      const list = normalizeAndFilterAgents(data)
       setAgents(list)
 
-      const primary = list.find((a) => a.is_primary)
-      const fallback = primary ?? list[0]
+      const fallback = list[0]
 
       if (fallback) {
-        setSelectedAgentId((prev) =>
-          prev && list.some((a) => a.agent_id === prev) ? prev : fallback.agent_id
-        )
+        setSelectedAgentId((prev) => (prev && list.some((a) => a.agent_id === prev) ? prev : fallback.agent_id))
         if (fallback.api_key) {
           wttApi.setToken(fallback.api_key)
         }
@@ -121,9 +101,7 @@ export default function FeedPage() {
   }, [agents, selectedAgentId])
 
   const { data: feedRaw, error, mutate } = useSWR(
-    selectedAgentId && session?.accessToken && selectedTopicId
-      ? ['topic-messages', selectedTopicId, session.accessToken]
-      : null,
+    selectedAgentId && session?.accessToken && selectedTopicId ? ['topic-messages', selectedTopicId, session.accessToken] : null,
     async () => {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100`, {
         headers: {
@@ -143,6 +121,39 @@ export default function FeedPage() {
     }
   )
 
+  useEffect(() => {
+    const normalized = normalizeFeed(feedRaw)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    setAllMessages(normalized)
+    setHasOlder(normalized.length >= 100)
+  }, [feedRaw, selectedTopicId])
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!selectedTopicId || loadingOlder || allMessages.length === 0) return
+    setLoadingOlder(true)
+    try {
+      const oldest = allMessages[0]
+      const older = await wttApi.getTopicMessages(selectedTopicId, 100, {
+        before: oldest.timestamp,
+      })
+
+      const normalizedOlder = normalizeFeed(older)
+      if (normalizedOlder.length === 0) {
+        setHasOlder(false)
+      } else {
+        const merged = [...normalizedOlder, ...allMessages]
+        const dedup = Array.from(new Map(merged.map((m) => [m.message_id, m])).values())
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        setAllMessages(dedup)
+        setHasOlder(normalizedOlder.length >= 100)
+      }
+    } catch {
+      setHasOlder(false)
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [selectedTopicId, loadingOlder, allMessages])
+
   const { data: subscribedTopicsRaw, mutate: mutateTopics } = useSWR(
     selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
     async () => {
@@ -160,20 +171,19 @@ export default function FeedPage() {
       return response.json()
     },
     {
-      refreshInterval: 10000, // Refresh every 10 seconds to detect topic changes
+      refreshInterval: 10000,
     }
   )
-
-  const messages = useMemo(() => normalizeFeed(feedRaw), [feedRaw])
 
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
 
-    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string }) => ({
+    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string }) => ({
       topic_id: topic.id,
       name: topic.name,
       topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
       unread_count: 0,
+      can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
     }))
   }, [subscribedTopicsRaw])
 
@@ -188,7 +198,7 @@ export default function FeedPage() {
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
 
   const handleSendMessage = async (content: string) => {
-    if (!selectedTopicId) return
+    if (!selectedTopicId || !selectedAgentId) return
 
     await wttApi.publishMessage(selectedTopicId, {
       content,
@@ -197,6 +207,50 @@ export default function FeedPage() {
     })
 
     mutate()
+  }
+
+  const handleRenameAgent = async (agentId: string, currentName: string) => {
+    const next = prompt('New agent name', currentName)
+    if (!next || next.trim() === currentName) return
+    try {
+      await wttApi.renameAgent(agentId, next.trim())
+      await loadAgents()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Rename failed')
+    }
+  }
+
+  const handleUnclaimAgent = async (agentId: string) => {
+    if (!confirm(`Unclaim agent ${agentId}?`)) return
+    try {
+      await wttApi.unclaimAgent(agentId)
+      await loadAgents()
+      await mutateTopics()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Unclaim failed')
+    }
+  }
+
+  const handleLeaveTopic = async (topicId: string) => {
+    if (!confirm('Leave this topic?')) return
+    try {
+      await wttApi.leaveTopic(topicId, selectedAgentId)
+      if (selectedTopicId === topicId) setSelectedTopicId(null)
+      await mutateTopics()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Leave topic failed')
+    }
+  }
+
+  const handleDeleteTopic = async (topicId: string) => {
+    if (!confirm('Delete this topic? (soft delete)')) return
+    try {
+      await wttApi.deleteTopic(topicId, selectedAgentId)
+      if (selectedTopicId === topicId) setSelectedTopicId(null)
+      await mutateTopics()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete topic failed')
+    }
   }
 
   if (status === 'loading') {
@@ -220,6 +274,10 @@ export default function FeedPage() {
         topics={topics}
         selectedTopicId={selectedTopicId}
         onTopicChange={setSelectedTopicId}
+        onRenameAgent={handleRenameAgent}
+        onUnclaimAgent={handleUnclaimAgent}
+        onLeaveTopic={handleLeaveTopic}
+        onDeleteTopic={handleDeleteTopic}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
         onBindingChanged={loadAgents}
@@ -228,9 +286,11 @@ export default function FeedPage() {
         {selectedTopicId && selectedTopic ? (
           <ChatView
             topicName={selectedTopic.name}
-            messages={messages}
+            messages={allMessages}
             currentAgentId={selectedAgentId}
             onSendMessage={handleSendMessage}
+            onLoadOlder={loadOlderMessages}
+            hasOlder={hasOlder && !loadingOlder}
             loading={!feedRaw && !error}
           />
         ) : (

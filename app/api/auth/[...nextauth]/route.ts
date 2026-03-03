@@ -9,6 +9,10 @@ const WTT_API_URL =
   process.env.NEXT_PUBLIC_WTT_API_URL ||
   'http://170.106.109.4:8000'
 
+const ENABLE_TEST_LOGIN = process.env.ENABLE_TEST_LOGIN === 'true'
+const TEST_ADMIN_IDENTIFIER = process.env.TEST_ADMIN_IDENTIFIER || 'test-admin'
+const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-admin-pass'
+
 const authOptions: NextAuthOptions = {
   providers: [
     GithubProvider({
@@ -35,6 +39,19 @@ const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.identifier) {
           return null
+        }
+
+        if (
+          ENABLE_TEST_LOGIN &&
+          credentials.identifier === TEST_ADMIN_IDENTIFIER &&
+          credentials.password === TEST_ADMIN_PASSWORD
+        ) {
+          return {
+            id: 'test-admin',
+            email: 'test-admin@local',
+            name: 'Test Admin',
+            accessToken: `test-admin-token-${Date.now()}`,
+          }
         }
 
         try {

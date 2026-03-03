@@ -55,6 +55,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
   const router = useRouter()
+  const enableTestLogin = process.env.NEXT_PUBLIC_ENABLE_TEST_LOGIN === 'true'
+  const testIdentifier = process.env.NEXT_PUBLIC_TEST_ADMIN_IDENTIFIER || 'test-admin'
+  const testPassword = process.env.NEXT_PUBLIC_TEST_ADMIN_PASSWORD || 'test-admin-pass'
 
   const localPhone = phone.replace(/\D/g, '')
   const e164Phone = useMemo(() => {
@@ -92,9 +95,7 @@ export default function LoginPage() {
 
       setCodeSent(true)
       setCooldown(60)
-      if (typeof data.debug_code === 'string' && data.debug_code) {
-        setCode(data.debug_code)
-      }
+      // Never auto-fill debug code in UI.
     } catch {
       setError('Network error while sending code')
     } finally {
@@ -139,9 +140,38 @@ export default function LoginPage() {
     signIn(provider, { callbackUrl: '/feed' })
   }
 
+  const handleTestAdminLogin = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await signIn('credentials', {
+        identifier: testIdentifier,
+        password: testPassword,
+        redirect: false,
+      })
+      if (result?.ok) {
+        router.push('/feed')
+      } else {
+        setError('Test admin login failed')
+      }
+    } catch {
+      setError('Test admin login failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#dbe7f1] px-4 py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,#ffffffd9_0%,transparent_42%),radial-gradient(circle_at_88%_90%,#c9e6ff_0%,transparent_46%)]" />
+    <div className="relative min-h-screen overflow-hidden bg-[#0a1524] px-4 py-10">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_25%,#2ea6ff44_0%,transparent_35%),radial-gradient(circle_at_80%_70%,#00d4aa33_0%,transparent_35%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#79b9ff_0.8px,transparent_0.8px)] [background-size:26px_26px]" />
+      <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-30" viewBox="0 0 1440 900" fill="none" aria-hidden>
+        <path d="M120 160L360 240L560 180L820 300L1040 220L1320 330" stroke="#77c1ff" strokeWidth="1.2" />
+        <path d="M100 520L300 460L520 560L760 500L980 620L1260 560" stroke="#65e0c0" strokeWidth="1.2" />
+        <circle cx="360" cy="240" r="4" fill="#9dd2ff" />
+        <circle cx="820" cy="300" r="4" fill="#9dd2ff" />
+        <circle cx="980" cy="620" r="4" fill="#82e6cd" />
+      </svg>
 
       <motion.main
         initial={{ opacity: 0, y: 18 }}
@@ -159,6 +189,14 @@ export default function LoginPage() {
         </div>
 
         <div className="mb-5 space-y-2.5">
+          {enableTestLogin && (
+            <button
+              onClick={handleTestAdminLogin}
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/20"
+            >
+              Quick Login (Test Admin)
+            </button>
+          )}
           <button
             onClick={() => handleOAuthSignIn('google')}
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#d7e5f2] bg-[#f8fbfe] px-4 py-2.5 text-sm font-medium text-[#2a3e51] transition hover:border-[#9fcdf2] hover:bg-[#f1f8fe]"
