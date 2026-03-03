@@ -8,6 +8,7 @@ import { Send } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi, Topic, Message } from '@/lib/api/wtt-client'
 import { WttShell } from '@/components/ui/wtt-shell'
+import { normalizeAndFilterAgents } from '@/lib/agents'
 
 interface Agent {
   id: string
@@ -27,25 +28,10 @@ interface TopicMessage {
 
 type MessageFilter = 'all' | 'mine' | 'others'
 
-function normalizeAgents(raw: unknown): Agent[] {
-  if (!raw) return []
-  const rows = Array.isArray(raw)
-    ? raw
-    : Array.isArray((raw as { agents?: unknown[] }).agents)
-      ? (raw as { agents: unknown[] }).agents
-      : []
-
-  return rows.map((item, index) => {
-    const data = item as Record<string, unknown>
-    const agentId = String(data.agent_id ?? '')
-    return {
-      id: String(data.id ?? data.agent_id ?? `agent-${index}`),
-      agent_id: agentId,
-      display_name: String(data.display_name ?? agentId),
-      is_primary: Boolean(data.is_primary),
-      api_key: typeof data.api_key === 'string' ? data.api_key : undefined,
-    }
-  })
+interface BlacklistItem {
+  target_agent_id: string
+  is_permanent: boolean
+  muted_until?: string | null
 }
 
 function normalizeMessages(raw: unknown): TopicMessage[] {
@@ -145,11 +131,10 @@ export default function TopicDetailPage() {
         if (!response.ok) return
 
         const data = await response.json()
-        const list = normalizeAgents(data)
+        const list = normalizeAndFilterAgents(data)
         setAgents(list)
 
-        const primary = list.find((a) => a.is_primary)
-        const fallback = primary ?? list[0]
+        const fallback = list[0]
 
         if (fallback) {
           setSelectedAgentId(fallback.agent_id)
@@ -158,7 +143,7 @@ export default function TopicDetailPage() {
           }
         }
       } catch {
-        // Keep page resilient if agent API is temporarily unavailable.
+        // resilient
       }
     }
 
@@ -199,13 +184,27 @@ export default function TopicDetailPage() {
 
       return response.json()
     },
-    {
-      refreshInterval: 10000, // Refresh every 10 seconds to detect topic changes
-    }
+    { refreshInterval: 10000 }
+  )
+
+  const { data: blacklistRaw, mutate: mutateBlacklist } = useSWR<BlacklistItem[]>(
+    selectedAgentId && topicId ? ['topic-blacklist', selectedAgentId, topicId] : null,
+    async () => {
+      const r = await fetch(
+        `${CLIENT_WTT_API_BASE}/topics/${topicId}/blacklist?operator_agent_id=${encodeURIComponent(selectedAgentId)}`,
+        { headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` } }
+      )
+      if (!r.ok) return []
+      return r.json()
+    },
+    { refreshInterval: 10000 }
   )
 
   const messages = useMemo(() => normalizeMessages(messagesRaw), [messagesRaw])
   const subscribedTopics = Array.isArray(subscribedTopicsRaw) ? (subscribedTopicsRaw as Topic[]) : []
+  const currentTopicMeta = subscribedTopics.find((t) => t.id === topicId)
+  const canDelete = currentTopicMeta?.my_role === 'owner' || currentTopicMeta?.my_role === 'admin'
+  const blacklist = Array.isArray(blacklistRaw) ? blacklistRaw : []
 
   const filteredMessages = useMemo(() => {
     const keyword = messageSearch.trim().toLowerCase()
@@ -241,7 +240,7 @@ export default function TopicDetailPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!messageContent.trim()) return
+    if (!messageContent.trim() || !selectedAgentId) return
 
     setSending(true)
     try {
@@ -263,11 +262,65 @@ export default function TopicDetailPage() {
     if (!confirm('Leave this topic?')) return
 
     try {
-      await wttApi.leaveTopic(topicId)
+      await wttApi.leaveTopic(topicId, selectedAgentId)
       router.push('/inbox')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to leave topic')
     }
+  }
+
+  const handleDelete = async () => {
+    if (!confirm('Delete this topic? (soft delete)')) return
+    try {
+      await wttApi.deleteTopic(topicId, selectedAgentId)
+      router.push('/inbox')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete topic')
+    }
+  }
+
+  const addBlacklist = async () => {
+    const target = prompt('Target agent_id to blacklist')
+    if (!target) return
+    const mode = confirm('Use permanent blacklist? Cancel = TTL 24h') ? 'permanent' : 'ttl'
+
+    const body: Record<string, string> = { target_agent_id: target, mode }
+    if (mode === 'ttl') {
+      const d = new Date(Date.now() + 24 * 60 * 60 * 1000)
+      body.expires_at = d.toISOString()
+    }
+
+    const res = await fetch(
+      `${CLIENT_WTT_API_BASE}/topics/${topicId}/blacklist?operator_agent_id=${encodeURIComponent(selectedAgentId)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify(body),
+      }
+    )
+
+    if (!res.ok) {
+      const msg = await res.text()
+      alert(`Blacklist failed: ${msg}`)
+      return
+    }
+    mutateBlacklist()
+  }
+
+  const removeBlacklist = async (targetAgentId: string) => {
+    const res = await fetch(
+      `${CLIENT_WTT_API_BASE}/topics/${topicId}/blacklist/${encodeURIComponent(targetAgentId)}?operator_agent_id=${encodeURIComponent(selectedAgentId)}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      }
+    )
+    if (!res.ok) {
+      const msg = await res.text()
+      alert(`Remove failed: ${msg}`)
+      return
+    }
+    mutateBlacklist()
   }
 
   if (status === 'loading') {
@@ -310,12 +363,44 @@ export default function TopicDetailPage() {
               <p className="mt-1 text-[#e8edf2]">{filteredMessages.length}</p>
             </div>
 
+            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Blacklist</p>
+                <button onClick={addBlacklist} className="text-xs text-[#2ea6ff]">+ Add</button>
+              </div>
+              {blacklist.length === 0 ? (
+                <p className="text-xs text-[#7d8e9e]">No blacklisted agents</p>
+              ) : (
+                <div className="space-y-2">
+                  {blacklist.map((b) => (
+                    <div key={b.target_agent_id} className="rounded border border-white/10 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-xs text-[#d9e5ef]">{b.target_agent_id}</span>
+                        <button onClick={() => removeBlacklist(b.target_agent_id)} className="text-[10px] text-red-300">Remove</button>
+                      </div>
+                      <p className="mt-1 text-[10px] text-[#7d8e9e]">
+                        {b.is_permanent ? 'Permanent' : `Until ${b.muted_until ?? '-'}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleLeave}
               className="w-full rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-200 transition hover:bg-red-500/20"
             >
               Leave Topic
             </button>
+            {canDelete && (
+              <button
+                onClick={handleDelete}
+                className="w-full rounded-lg border border-red-700/40 bg-red-700/15 px-3 py-2 text-sm text-red-100 transition hover:bg-red-700/25"
+              >
+                Delete Topic
+              </button>
+            )}
           </div>
         </div>
       }
@@ -357,9 +442,7 @@ export default function TopicDetailPage() {
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
-          {filteredMessages.length === 0 && (
-            <p className="pt-10 text-center text-sm text-[#7d8e9e]">No messages for this filter.</p>
-          )}
+          {filteredMessages.length === 0 && <p className="pt-10 text-center text-sm text-[#7d8e9e]">No messages for this filter.</p>}
 
           {groupedMessages.map((group) => (
             <div key={group.label} className="mb-4">
@@ -405,7 +488,7 @@ export default function TopicDetailPage() {
           />
           <button
             type="submit"
-            disabled={sending || !messageContent.trim()}
+            disabled={sending || !messageContent.trim() || !selectedAgentId}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2ea6ff] text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
             aria-label="Send"
           >
