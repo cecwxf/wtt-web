@@ -103,7 +103,10 @@ export default function DiscoverPage() {
     { refreshInterval: 10000 }
   )
 
-  const subscribedTopics = Array.isArray(subscribedTopicsRaw) ? (subscribedTopicsRaw as Topic[]) : []
+  const subscribedTopics = useMemo(
+    () => (Array.isArray(subscribedTopicsRaw) ? (subscribedTopicsRaw as Topic[]) : []),
+    [subscribedTopicsRaw]
+  )
 
   const agentItems = useMemo<AgentItem[]>(() => {
     return agents.map((agent) => ({
