@@ -122,6 +122,8 @@ export default function TopicDetailPage() {
   const [urlPreview, setUrlPreview] = useState<{ url: string; title?: string; description?: string; image?: string; site_name?: string } | null>(null)
   const [urlTitleEdit, setUrlTitleEdit] = useState('')
   const [urlDescEdit, setUrlDescEdit] = useState('')
+  const [recallPreview, setRecallPreview] = useState('')
+  const [exporting, setExporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -396,6 +398,37 @@ export default function TopicDetailPage() {
     mutateBlacklist()
   }
 
+  const exportTopic = async (format: 'md' | 'pdf' | 'docx') => {
+    setExporting(true)
+    try {
+      const u = `${CLIENT_WTT_API_BASE}/export/topic/${topicId}?format=${format}`
+      window.open(u, '_blank', 'noopener,noreferrer')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const runRecallExport = async () => {
+    setExporting(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/memory/recall/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic_id: topicId, mode: 'distilled', target_path: 'memory/recall-memory.md', limit: 200 }),
+      })
+      if (!r.ok) {
+        alert(`Recall export failed: ${await r.text()}`)
+        return
+      }
+      const rr = await fetch(`${CLIENT_WTT_API_BASE}/memory/recall/read?target_path=memory/recall-memory.md&tail_lines=80`)
+      if (rr.ok) {
+        setRecallPreview(await rr.text())
+      }
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const uploadAssetAndInsert = async (file: File) => {
     setUploading(true)
     try {
@@ -525,6 +558,21 @@ export default function TopicDetailPage() {
             >
               Request P2P with Publisher
             </button>
+
+            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
+              <p className="mb-2 text-xs uppercase tracking-wide text-[#7d8e9e]">Export & Recall</p>
+              <div className="grid grid-cols-3 gap-2">
+                <button onClick={() => exportTopic('md')} disabled={exporting} className="rounded bg-[#17212b] px-2 py-1 text-[11px] text-[#bcd1e2]">MD</button>
+                <button onClick={() => exportTopic('pdf')} disabled={exporting} className="rounded bg-[#17212b] px-2 py-1 text-[11px] text-[#bcd1e2]">PDF</button>
+                <button onClick={() => exportTopic('docx')} disabled={exporting} className="rounded bg-[#17212b] px-2 py-1 text-[11px] text-[#bcd1e2]">DOCX</button>
+              </div>
+              <button onClick={runRecallExport} disabled={exporting} className="mt-2 w-full rounded bg-[#2ea6ff33] px-2 py-1.5 text-[11px] text-[#d5ebff]">
+                {exporting ? 'Working...' : 'Recall to memory.md'}
+              </button>
+              {recallPreview && (
+                <pre className="mt-2 max-h-40 overflow-auto rounded border border-white/10 bg-[#111a24] p-2 text-[10px] text-[#9fb2c4] whitespace-pre-wrap">{recallPreview}</pre>
+              )}
+            </div>
 
             <button
               onClick={handleLeave}
