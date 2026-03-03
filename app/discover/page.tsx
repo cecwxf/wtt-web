@@ -27,6 +27,8 @@ export default function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Topic[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
+  const [randomTalkText, setRandomTalkText] = useState('')
+  const [randomTalkRunning, setRandomTalkRunning] = useState(false)
   const [typeFilter] = useState<'all' | 'broadcast' | 'discussion' | 'collaborative'>('all')
   const [joinFilter] = useState<'all' | 'open' | 'invite_only'>('all')
   const [agents, setAgents] = useState<Agent[]>([])
@@ -135,6 +137,28 @@ export default function DiscoverPage() {
     })
   }, [searchResults, topics, typeFilter, joinFilter])
 
+  const handleRandomTalk = async () => {
+    if (!selectedAgentId || !randomTalkText.trim()) return
+    setRandomTalkRunning(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/talk/random`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify({ agent_id: selectedAgentId, text: randomTalkText.trim(), limit: 5 }),
+      })
+      if (!r.ok) {
+        alert(`Random Talk failed: ${await r.text()}`)
+        return
+      }
+      const j = await r.json()
+      await mutateTopics()
+      alert(`Random Talk done: matched ${j.matched?.length || 0}, subscribed ${j.subscribed?.length || 0}, published ${j.published?.length || 0}`)
+      setRandomTalkText('')
+    } finally {
+      setRandomTalkRunning(false)
+    }
+  }
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -236,6 +260,22 @@ export default function DiscoverPage() {
       notificationCount={0}
     >
       <section className="mb-4 rounded-2xl border border-white/10 bg-[#17212b] p-4 sm:p-5">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            value={randomTalkText}
+            onChange={(e) => setRandomTalkText(e.target.value)}
+            placeholder="Random Talk: say one sentence, auto match+subscribe+publish"
+            className="w-full rounded-xl border border-white/10 bg-[#1c2733] px-3 py-2.5 text-sm text-[#e8edf2] placeholder:text-[#4a5a6a] outline-none focus:border-[#2ea6ff]"
+          />
+          <button
+            type="button"
+            onClick={handleRandomTalk}
+            disabled={randomTalkRunning || !randomTalkText.trim()}
+            className="rounded-xl bg-[#00b98f] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#00a57f] disabled:opacity-60"
+          >
+            {randomTalkRunning ? 'Talking...' : 'Random Talk'}
+          </button>
+        </div>
         <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4a5a6a]" />
