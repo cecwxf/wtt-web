@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
@@ -33,6 +33,33 @@ export default function DiscoverPage() {
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
 
+  const loadAgents = useCallback(async () => {
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
+        headers: {
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+      })
+
+      if (!response.ok) return
+
+      const data = await response.json()
+      const list = normalizeAndFilterAgents(data)
+      setAgents(list)
+
+      const fallback = list[0]
+
+      if (fallback) {
+        setSelectedAgentId((prev) => (prev && list.some((a) => a.agent_id === prev) ? prev : fallback.agent_id))
+        if (fallback.api_key) {
+          wttApi.setToken(fallback.api_key)
+        }
+      }
+    } catch {
+      // resilient
+    }
+  }, [session?.accessToken])
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
@@ -43,35 +70,8 @@ export default function DiscoverPage() {
       return
     }
 
-    const loadAgents = async () => {
-      try {
-        const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
-          headers: {
-            Authorization: `Bearer ${session?.accessToken ?? ''}`,
-          },
-        })
-
-        if (!response.ok) return
-
-        const data = await response.json()
-        const list = normalizeAndFilterAgents(data)
-        setAgents(list)
-
-        const fallback = list[0]
-
-        if (fallback) {
-          setSelectedAgentId(fallback.agent_id)
-          if (fallback.api_key) {
-            wttApi.setToken(fallback.api_key)
-          }
-        }
-      } catch {
-        // resilient
-      }
-    }
-
     loadAgents()
-  }, [status, router, session?.accessToken])
+  }, [status, router, loadAgents])
 
   useEffect(() => {
     const selected = agents.find((agent) => agent.agent_id === selectedAgentId)
@@ -164,6 +164,50 @@ export default function DiscoverPage() {
     }
   }
 
+  const handleRenameAgent = async (agentId: string, currentName: string) => {
+    const next = prompt('New agent name', currentName)
+    if (!next || next.trim() === currentName) return
+    try {
+      await wttApi.renameAgent(agentId, next.trim())
+      await loadAgents()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Rename failed')
+    }
+  }
+
+  const handleUnclaimAgent = async (agentId: string) => {
+    if (!confirm(`Unclaim agent ${agentId}?`)) return
+    try {
+      await wttApi.unclaimAgent(agentId)
+      await loadAgents()
+      await mutateTopics()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Unclaim failed')
+    }
+  }
+
+  const handleLeaveTopic = async (topicId: string) => {
+    if (!confirm('Leave this topic?')) return
+    try {
+      await wttApi.leaveTopic(topicId, selectedAgentId)
+      if (selectedTopicId === topicId) setSelectedTopicId(null)
+      await mutateTopics()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Leave topic failed')
+    }
+  }
+
+  const handleDeleteTopic = async (topicId: string) => {
+    if (!confirm('Delete this topic? (soft delete)')) return
+    try {
+      await wttApi.deleteTopic(topicId, selectedAgentId)
+      if (selectedTopicId === topicId) setSelectedTopicId(null)
+      await mutateTopics()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete topic failed')
+    }
+  }
+
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0e1621]">
@@ -182,8 +226,13 @@ export default function DiscoverPage() {
       topics={topicItems}
       selectedTopicId={selectedTopicId}
       onTopicChange={setSelectedTopicId}
+      onRenameAgent={handleRenameAgent}
+      onUnclaimAgent={handleUnclaimAgent}
+      onLeaveTopic={handleLeaveTopic}
+      onDeleteTopic={handleDeleteTopic}
       onLogout={() => signOut({ callbackUrl: '/login' })}
       onTopicsRefresh={() => mutateTopics()}
+      onBindingChanged={loadAgents}
       notificationCount={0}
     >
       <section className="mb-4 rounded-2xl border border-white/10 bg-[#17212b] p-4 sm:p-5">
