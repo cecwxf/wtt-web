@@ -34,6 +34,15 @@ interface BlacklistItem {
   muted_until?: string | null
 }
 
+interface P2PRequestItem {
+  id: string
+  subscriber_agent_id: string
+  target_agent_id: string
+  status: 'pending' | 'approved' | 'rejected'
+  note?: string
+  created_at?: string
+}
+
 function normalizeMessages(raw: unknown): TopicMessage[] {
   if (!raw || typeof raw !== 'object') return []
 
@@ -200,11 +209,25 @@ export default function TopicDetailPage() {
     { refreshInterval: 10000 }
   )
 
+  const { data: p2pRequestsRaw, mutate: mutateP2PRequests } = useSWR<P2PRequestItem[]>(
+    selectedAgentId && topicId ? ['topic-p2p-requests', selectedAgentId, topicId] : null,
+    async () => {
+      const r = await fetch(
+        `${CLIENT_WTT_API_BASE}/topics/${topicId}/p2p-request?agent_id=${encodeURIComponent(selectedAgentId)}`,
+        { headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` } }
+      )
+      if (!r.ok) return []
+      return r.json()
+    },
+    { refreshInterval: 10000 }
+  )
+
   const messages = useMemo(() => normalizeMessages(messagesRaw), [messagesRaw])
   const subscribedTopics = Array.isArray(subscribedTopicsRaw) ? (subscribedTopicsRaw as Topic[]) : []
   const currentTopicMeta = subscribedTopics.find((t) => t.id === topicId)
   const canDelete = currentTopicMeta?.my_role === 'owner' || currentTopicMeta?.my_role === 'admin'
   const blacklist = Array.isArray(blacklistRaw) ? blacklistRaw : []
+  const p2pRequests = Array.isArray(p2pRequestsRaw) ? p2pRequestsRaw : []
 
   const filteredMessages = useMemo(() => {
     const keyword = messageSearch.trim().toLowerCase()
@@ -292,7 +315,34 @@ export default function TopicDetailPage() {
       alert(`P2P request failed: ${msg}`)
       return
     }
+    mutateP2PRequests()
     alert('P2P request sent')
+  }
+
+  const approveP2PRequest = async (requestId: string) => {
+    const res = await fetch(
+      `${CLIENT_WTT_API_BASE}/topics/${topicId}/p2p-request/${requestId}/approve?operator_agent_id=${encodeURIComponent(selectedAgentId)}`,
+      { method: 'POST', headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` } }
+    )
+    if (!res.ok) {
+      const msg = await res.text()
+      alert(`Approve failed: ${msg}`)
+      return
+    }
+    mutateP2PRequests()
+  }
+
+  const rejectP2PRequest = async (requestId: string) => {
+    const res = await fetch(
+      `${CLIENT_WTT_API_BASE}/topics/${topicId}/p2p-request/${requestId}/reject?operator_agent_id=${encodeURIComponent(selectedAgentId)}`,
+      { method: 'POST', headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` } }
+    )
+    if (!res.ok) {
+      const msg = await res.text()
+      alert(`Reject failed: ${msg}`)
+      return
+    }
+    mutateP2PRequests()
   }
 
   const addBlacklist = async () => {
@@ -399,6 +449,30 @@ export default function TopicDetailPage() {
                       <p className="mt-1 text-[10px] text-[#7d8e9e]">
                         {b.is_permanent ? 'Permanent' : `Until ${b.muted_until ?? '-'}`}
                       </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">P2P Requests</p>
+              </div>
+              {p2pRequests.length === 0 ? (
+                <p className="text-xs text-[#7d8e9e]">No requests</p>
+              ) : (
+                <div className="space-y-2">
+                  {p2pRequests.map((r) => (
+                    <div key={r.id} className="rounded border border-white/10 p-2">
+                      <p className="truncate text-xs text-[#d9e5ef]">{r.subscriber_agent_id} → {r.target_agent_id}</p>
+                      <p className="mt-1 text-[10px] text-[#7d8e9e]">{r.status}{r.note ? ` · ${r.note}` : ''}</p>
+                      {r.status === 'pending' && (
+                        <div className="mt-2 flex gap-2">
+                          <button onClick={() => approveP2PRequest(r.id)} className="rounded bg-emerald-600/20 px-2 py-1 text-[10px] text-emerald-200">Approve</button>
+                          <button onClick={() => rejectP2PRequest(r.id)} className="rounded bg-red-600/20 px-2 py-1 text-[10px] text-red-200">Reject</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
