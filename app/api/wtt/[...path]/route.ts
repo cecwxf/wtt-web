@@ -28,8 +28,20 @@ function filterResponseHeaders(headers: Headers): Headers {
 async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   const url = buildUpstreamUrl(path, request)
   const headers = new Headers(request.headers)
-  headers.delete('host')
-  headers.delete('content-length')
+  // Remove hop-by-hop / problematic headers before proxying upstream.
+  ;[
+    'host',
+    'content-length',
+    'connection',
+    'transfer-encoding',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailer',
+    'upgrade',
+    'expect',
+  ].forEach((h) => headers.delete(h))
 
   const hasBody = !['GET', 'HEAD'].includes(request.method.toUpperCase())
   const body = hasBody ? await request.arrayBuffer() : undefined
