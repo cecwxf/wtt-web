@@ -40,7 +40,8 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
       method: request.method,
       headers,
       body,
-      redirect: 'manual',
+      // Follow upstream redirects server-side to avoid leaking http redirects to browser.
+      redirect: 'follow',
       cache: 'no-store',
     })
   } catch (error) {
