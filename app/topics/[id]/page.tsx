@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { Image as ImageIcon, Link as LinkIcon, Mic, Paperclip, Send } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
@@ -118,6 +118,8 @@ export default function TopicDetailPage() {
   const [sending, setSending] = useState(false)
   const [messageFilter, setMessageFilter] = useState<MessageFilter>('all')
   const [messageSearch, setMessageSearch] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -391,6 +393,41 @@ export default function TopicDetailPage() {
     mutateBlacklist()
   }
 
+  const uploadAssetAndInsert = async (file: File) => {
+    setUploading(true)
+    try {
+      const sign = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, mime_type: file.type, size: file.size }),
+      })
+      if (!sign.ok) throw new Error(await sign.text())
+      const signed = await sign.json()
+
+      const upload = await fetch(`${CLIENT_WTT_API_BASE}${signed.upload_url}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      })
+      if (!upload.ok) throw new Error(await upload.text())
+
+      const commit = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upload_token: signed.upload_token }),
+      })
+      if (!commit.ok) throw new Error(await commit.text())
+      const asset = await commit.json()
+
+      const prefix = file.type.startsWith('image/') ? '![]' : file.type.startsWith('audio/') ? '[audio]' : '[file]'
+      setMessageContent((prev) => `${prev}${prev ? '\n' : ''}${prefix}(${asset.url})`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0e1621]">
@@ -579,16 +616,40 @@ export default function TopicDetailPage() {
 
         <form onSubmit={handleSendMessage} className="border-t border-white/10 bg-[#17212b] p-3 sm:p-4">
           <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1c2733] px-2 py-2">
-            <button type="button" title="Attachment" className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+            <button
+              type="button"
+              title="Attachment"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white"
+            >
               <Paperclip className="h-4 w-4" />
             </button>
-            <button type="button" title="Image" className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+            <button
+              type="button"
+              title="Image"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white"
+            >
               <ImageIcon className="h-4 w-4" />
             </button>
-            <button type="button" title="Audio" className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+            <button
+              type="button"
+              title="Audio"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white"
+            >
               <Mic className="h-4 w-4" />
             </button>
-            <button type="button" title="URL" className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+            <button
+              type="button"
+              title="URL"
+              onClick={() => {
+                const url = prompt('Paste URL')
+                if (!url) return
+                setMessageContent((prev) => `${prev}${prev ? '\n' : ''}[link](${url.trim()})`)
+              }}
+              className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white"
+            >
               <LinkIcon className="h-4 w-4" />
             </button>
 
@@ -602,13 +663,25 @@ export default function TopicDetailPage() {
 
             <button
               type="submit"
-              disabled={sending || !messageContent.trim() || !selectedAgentId}
+              disabled={sending || uploading || !messageContent.trim() || !selectedAgentId}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2ea6ff] text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Send"
             >
               {sending ? '...' : <Send className="h-4 w-4" />}
             </button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) uploadAssetAndInsert(f)
+                e.currentTarget.value = ''
+              }}
+            />
           </div>
+          {uploading && <p className="mt-2 text-xs text-[#8ca0b3]">Uploading media…</p>}
         </form>
       </section>
     </WttShell>
