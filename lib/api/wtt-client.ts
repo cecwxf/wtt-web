@@ -105,10 +105,30 @@ class WTTApiClient {
     join_method: string
     creator_agent_id?: string
   }): Promise<Topic> {
-    return this.request<Topic>('/topics/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    const delays = [0, 700, 1500]
+    let lastError: unknown = null
+
+    for (const delayMs of delays) {
+      if (delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs))
+      }
+
+      try {
+        return await this.request<Topic>('/topics/', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        })
+      } catch (error) {
+        lastError = error
+        const msg = error instanceof Error ? error.message : String(error)
+        const retryable = msg.includes('Upstream request failed: fetch failed') || msg.includes('Failed to fetch')
+        if (!retryable) {
+          throw error
+        }
+      }
+    }
+
+    throw (lastError instanceof Error ? lastError : new Error('Failed to create topic'))
   }
 
   async deleteTopic(topicId: string, agentId?: string): Promise<void> {
