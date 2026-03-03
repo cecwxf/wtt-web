@@ -49,6 +49,8 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [codeSent, setCodeSent] = useState(false)
   const [cooldown, setCooldown] = useState(0)
   const [error, setError] = useState('')
@@ -100,6 +102,32 @@ export default function LoginPage() {
       setError('Network error while sending code')
     } finally {
       setSendingCode(false)
+    }
+  }
+
+  const handleEmailSignIn = async () => {
+    setError('')
+    if (!email.trim() || !password) {
+      setError('Please enter email and password')
+      return
+    }
+    setLoading(true)
+    try {
+      const result = await signIn('credentials', {
+        identifier: email.trim(),
+        password,
+        redirect: false,
+      })
+
+      if (result?.ok) {
+        router.push('/feed')
+      } else {
+        setError('Invalid email or password')
+      }
+    } catch {
+      setError('Authentication failed')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -232,6 +260,32 @@ export default function LoginPage() {
             <div className="w-full border-t border-[#e2ebf3]" />
           </div>
           <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-[#90a2b3]">or</p>
+        </div>
+
+        <div className="mb-4 space-y-2 rounded-xl border border-[#d7e5f2] bg-[#f8fbfe] p-3">
+          <p className="text-xs font-semibold tracking-[0.1em] text-[#6f8396]">EMAIL LOGIN (TEST)</p>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-lg border border-[#d7e5f2] bg-white px-3 py-2 text-sm text-[#1e3447] outline-none focus:border-[#2aabee]"
+            placeholder="testadmin@example.com"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-lg border border-[#d7e5f2] bg-white px-3 py-2 text-sm text-[#1e3447] outline-none focus:border-[#2aabee]"
+            placeholder="password"
+          />
+          <button
+            type="button"
+            onClick={handleEmailSignIn}
+            disabled={loading}
+            className="w-full rounded-lg bg-[#20364a] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1a2d3e] disabled:opacity-60"
+          >
+            {loading ? 'Signing in...' : 'Sign In with Email'}
+          </button>
         </div>
 
         <form onSubmit={handlePhoneSignIn} className="space-y-3.5">

@@ -69,7 +69,7 @@ const authOptions: NextAuthOptions = {
                       display_name: credentials.displayName,
                     }
                   : {
-                      identifier: credentials.identifier,
+                      email: credentials.identifier,
                       password: credentials.password,
                     }
               ),
