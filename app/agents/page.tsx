@@ -25,6 +25,10 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [targetAgentId, setTargetAgentId] = useState('')
+  const [publishTopicId, setPublishTopicId] = useState('')
+  const [publishContent, setPublishContent] = useState('manager publish message')
+  const [peerAgentId, setPeerAgentId] = useState('')
+  const [p2pContent, setP2pContent] = useState('manager p2p message')
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -44,6 +48,7 @@ export default function AgentsPage() {
       if (list.length > 0) {
         setSelectedAgentId((p) => p || list[0].agent_id)
         setTargetAgentId((p) => p || (list[1]?.agent_id || list[0].agent_id))
+        setPeerAgentId((p) => p || (list[2]?.agent_id || list[0].agent_id))
       }
     })()
   }, [status, router, session?.accessToken])
@@ -59,6 +64,22 @@ export default function AgentsPage() {
   )
 
   const delegations = Array.isArray(delegationsRaw) ? delegationsRaw : []
+
+  const { data: targetTopicsRaw } = useSWR(
+    targetAgentId && session?.accessToken ? ['target-topics', targetAgentId, session.accessToken] : null,
+    async () => {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/subscribed?agent_id=${encodeURIComponent(targetAgentId)}`, {
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      })
+      if (!r.ok) return []
+      return r.json()
+    },
+    { refreshInterval: 10000 },
+  )
+
+  const targetTopics = Array.isArray(targetTopicsRaw)
+    ? (targetTopicsRaw as Array<{ id: string; name: string }>).map((t) => ({ id: t.id, name: t.name }))
+    : []
 
   const topics = useMemo(() => [], [])
 
@@ -91,6 +112,54 @@ export default function AgentsPage() {
       return
     }
     mutate()
+  }
+
+  const managerPublishAs = async () => {
+    if (!selectedAgentId || !targetAgentId || !publishTopicId || !publishContent.trim()) {
+      alert('Please select manager/target/topic and fill content')
+      return
+    }
+
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/manager/publish-as`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        manager_agent_id: selectedAgentId,
+        target_agent_id: targetAgentId,
+        topic_id: publishTopicId,
+        content: publishContent,
+      }),
+    })
+    if (!r.ok) {
+      alert(`Proxy publish failed: ${await r.text()}`)
+      return
+    }
+    const j = await r.json()
+    alert(`Proxy publish success: ${j.message_id}`)
+  }
+
+  const managerP2PAs = async () => {
+    if (!selectedAgentId || !targetAgentId || !peerAgentId || !p2pContent.trim()) {
+      alert('Please select manager/target/peer and fill content')
+      return
+    }
+
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/manager/p2p-as`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        manager_agent_id: selectedAgentId,
+        target_agent_id: targetAgentId,
+        peer_agent_id: peerAgentId,
+        content: p2pContent,
+      }),
+    })
+    if (!r.ok) {
+      alert(`Proxy P2P failed: ${await r.text()}`)
+      return
+    }
+    const j = await r.json()
+    alert(`Proxy P2P success: ${j.message_id}`)
   }
 
   if (status === 'loading') return <div className="p-8">Loading...</div>
@@ -151,6 +220,55 @@ export default function AgentsPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-[#17212b] p-4">
+          <h3 className="mb-3 text-sm font-semibold text-[#cfe0ef]">Manager Proxy Publish (as target agent)</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <select
+              value={publishTopicId}
+              onChange={(e) => setPublishTopicId(e.target.value)}
+              className="rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm"
+            >
+              <option value="">Select topic</option>
+              {targetTopics.map((t) => (
+                <option key={t.id} value={t.id}>{t.name} ({t.id.slice(0, 8)}...)</option>
+              ))}
+            </select>
+            <input
+              value={publishContent}
+              onChange={(e) => setPublishContent(e.target.value)}
+              className="rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm"
+              placeholder="message content"
+            />
+          </div>
+          <button onClick={managerPublishAs} className="mt-3 rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold">
+            Publish As Target
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-[#17212b] p-4">
+          <h3 className="mb-3 text-sm font-semibold text-[#cfe0ef]">Manager Proxy P2P (as target agent)</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <select
+              value={peerAgentId}
+              onChange={(e) => setPeerAgentId(e.target.value)}
+              className="rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm"
+            >
+              {agents.map((a) => (
+                <option key={a.agent_id} value={a.agent_id}>{a.display_name} ({a.agent_id})</option>
+              ))}
+            </select>
+            <input
+              value={p2pContent}
+              onChange={(e) => setP2pContent(e.target.value)}
+              className="rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm"
+              placeholder="p2p content"
+            />
+          </div>
+          <button onClick={managerP2PAs} className="mt-3 rounded-lg bg-[#00b98f] px-3 py-2 text-sm font-semibold">
+            Send P2P As Target
+          </button>
         </div>
       </div>
     </WttShellV2>
