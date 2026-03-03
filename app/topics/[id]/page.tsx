@@ -26,6 +26,14 @@ interface TopicMessage {
   semanticType: string
 }
 
+interface ParsedRich {
+  kind: 'plain' | 'link' | 'preview'
+  text?: string
+  url?: string
+  title?: string
+  desc?: string
+}
+
 type MessageFilter = 'all' | 'mine' | 'others'
 
 interface BlacklistItem {
@@ -79,6 +87,23 @@ function formatTime(value: string): string {
   }
 
   return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
+}
+
+function parseRichContent(content: string): ParsedRich {
+  const c = (content || '').trim()
+  const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
+  if (linkMatch) {
+    return { kind: 'link', url: linkMatch[1] }
+  }
+
+  if (c.startsWith('[preview]')) {
+    const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
+    const desc = (c.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
+    const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
+    return { kind: 'preview', title, desc, url }
+  }
+
+  return { kind: 'plain', text: content }
 }
 
 function formatDateGroup(value: string): string {
@@ -666,7 +691,30 @@ export default function TopicDetailPage() {
                         } ${mine ? 'rounded-tr-md' : 'rounded-tl-md'}`}
                       >
                         {!mine && <p className="mb-1 text-xs font-semibold text-[#2ea6ff]">{message.senderId}</p>}
-                        <p>{message.content || '(empty message)'}</p>
+                        {(() => {
+                          const parsed = parseRichContent(message.content || '')
+                          if (parsed.kind === 'link' && parsed.url) {
+                            return (
+                              <a href={parsed.url} target="_blank" rel="noreferrer" className="text-[#8fd6ff] underline break-all">
+                                {parsed.url}
+                              </a>
+                            )
+                          }
+                          if (parsed.kind === 'preview') {
+                            return (
+                              <div className="rounded-lg border border-white/15 bg-[#0f1b27] p-2">
+                                <p className="text-xs font-semibold text-[#dce8f3]">{parsed.title || 'Link Preview'}</p>
+                                {parsed.desc && <p className="mt-1 text-xs text-[#9fb2c4]">{parsed.desc}</p>}
+                                {parsed.url && (
+                                  <a href={parsed.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-[#8fd6ff] underline break-all">
+                                    {parsed.url}
+                                  </a>
+                                )}
+                              </div>
+                            )
+                          }
+                          return <p>{parsed.text || '(empty message)'}</p>
+                        })()}
                         <div className={`mt-2 text-[10px] ${mine ? 'text-white/65' : 'text-[#6f8396]'}`}>
                           {formatTime(message.timestamp)}
                           {message.semanticType ? ` · ${message.semanticType}` : ''}
