@@ -120,6 +120,8 @@ export default function TopicDetailPage() {
   const [messageSearch, setMessageSearch] = useState('')
   const [uploading, setUploading] = useState(false)
   const [urlPreview, setUrlPreview] = useState<{ url: string; title?: string; description?: string; image?: string; site_name?: string } | null>(null)
+  const [urlTitleEdit, setUrlTitleEdit] = useState('')
+  const [urlDescEdit, setUrlDescEdit] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -657,11 +659,17 @@ export default function TopicDetailPage() {
                   if (r.ok) {
                     const j = await r.json()
                     setUrlPreview(j)
+                    setUrlTitleEdit(j.title || '')
+                    setUrlDescEdit(j.description || '')
                   } else {
                     setUrlPreview({ url: v })
+                    setUrlTitleEdit('')
+                    setUrlDescEdit('')
                   }
                 } catch {
                   setUrlPreview({ url: v })
+                  setUrlTitleEdit('')
+                  setUrlDescEdit('')
                 }
                 setMessageContent((prev) => `${prev}${prev ? '\n' : ''}[link](${v})`)
               }}
@@ -701,9 +709,32 @@ export default function TopicDetailPage() {
 
           {urlPreview && (
             <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-3">
-              <p className="text-xs text-[#7d8e9e]">URL Preview</p>
-              <p className="mt-1 text-sm font-semibold text-[#dce8f3]">{urlPreview.title || urlPreview.url}</p>
-              {urlPreview.description && <p className="mt-1 text-xs text-[#9fb2c4] line-clamp-2">{urlPreview.description}</p>}
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs text-[#7d8e9e]">URL Preview</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const block = `\n[preview]\nTitle: ${urlTitleEdit || urlPreview.title || ''}\nDesc: ${urlDescEdit || urlPreview.description || ''}\nURL: ${urlPreview.url}`
+                    setMessageContent((prev) => `${prev}${block}`)
+                  }}
+                  className="rounded-md border border-white/10 bg-[#17212b] px-2 py-1 text-[10px] text-[#9fd6ff]"
+                >
+                  Insert Rich Card
+                </button>
+              </div>
+              <input
+                value={urlTitleEdit}
+                onChange={(e) => setUrlTitleEdit(e.target.value)}
+                placeholder={urlPreview.title || 'Title'}
+                className="w-full rounded-md border border-white/10 bg-[#111a24] px-2 py-1.5 text-xs text-[#dce8f3] outline-none"
+              />
+              <textarea
+                value={urlDescEdit}
+                onChange={(e) => setUrlDescEdit(e.target.value)}
+                placeholder={urlPreview.description || 'Description'}
+                rows={2}
+                className="mt-2 w-full resize-none rounded-md border border-white/10 bg-[#111a24] px-2 py-1.5 text-xs text-[#9fb2c4] outline-none"
+              />
               <p className="mt-1 text-[11px] text-[#6f8396]">{urlPreview.site_name || new URL(urlPreview.url).hostname}</p>
             </div>
           )}
