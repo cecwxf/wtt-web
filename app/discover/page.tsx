@@ -29,6 +29,8 @@ export default function DiscoverPage() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [randomTalkText, setRandomTalkText] = useState('')
   const [randomTalkRunning, setRandomTalkRunning] = useState(false)
+  const [randomTalkPreview, setRandomTalkPreview] = useState<Array<{ id: string; name: string }>>([])
+  const [randomTalkSelected, setRandomTalkSelected] = useState<string[]>([])
   const [typeFilter] = useState<'all' | 'broadcast' | 'discussion' | 'collaborative'>('all')
   const [joinFilter] = useState<'all' | 'open' | 'invite_only'>('all')
   const [agents, setAgents] = useState<Agent[]>([])
@@ -137,22 +139,71 @@ export default function DiscoverPage() {
     })
   }, [searchResults, topics, typeFilter, joinFilter])
 
-  const handleRandomTalk = async () => {
+  const handleRandomTalkPreview = async () => {
     if (!selectedAgentId || !randomTalkText.trim()) return
     setRandomTalkRunning(true)
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/talk/random`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-        body: JSON.stringify({ agent_id: selectedAgentId, text: randomTalkText.trim(), limit: 5 }),
+        body: JSON.stringify({
+          agent_id: selectedAgentId,
+          text: randomTalkText.trim(),
+          limit: 8,
+          auto_subscribe: false,
+          auto_publish: false,
+        }),
       })
       if (!r.ok) {
-        alert(`Random Talk failed: ${await r.text()}`)
+        alert(`Random Talk preview failed: ${await r.text()}`)
         return
       }
       const j = await r.json()
+      const matched = Array.isArray(j.matched) ? j.matched : []
+      setRandomTalkPreview(matched)
+      setRandomTalkSelected(matched.map((m: { id: string }) => m.id))
+      if (matched.length === 0) {
+        alert('No similar topics found')
+      }
+    } finally {
+      setRandomTalkRunning(false)
+    }
+  }
+
+  const handleExecuteRandomTalk = async () => {
+    if (!selectedAgentId || !randomTalkText.trim() || randomTalkSelected.length === 0) {
+      alert('请选择至少一个 Topic')
+      return
+    }
+
+    setRandomTalkRunning(true)
+    try {
+      let subscribed = 0
+      let published = 0
+      for (const topicId of randomTalkSelected) {
+        try {
+          await wttApi.joinTopic(topicId, selectedAgentId)
+          subscribed += 1
+        } catch {
+          // ignore already-joined or invite-only failures
+        }
+
+        try {
+          await wttApi.publishMessage(topicId, {
+            content: randomTalkText.trim(),
+            content_type: 'text',
+            semantic_type: 'post',
+          })
+          published += 1
+        } catch {
+          // ignore publish failure per-topic
+        }
+      }
+
       await mutateTopics()
-      alert(`Random Talk done: matched ${j.matched?.length || 0}, subscribed ${j.subscribed?.length || 0}, published ${j.published?.length || 0}`)
+      alert(`Random Talk executed: selected ${randomTalkSelected.length}, subscribed ${subscribed}, published ${published}`)
+      setRandomTalkPreview([])
+      setRandomTalkSelected([])
       setRandomTalkText('')
     } finally {
       setRandomTalkRunning(false)
@@ -269,13 +320,60 @@ export default function DiscoverPage() {
           />
           <button
             type="button"
-            onClick={handleRandomTalk}
+            onClick={handleRandomTalkPreview}
             disabled={randomTalkRunning || !randomTalkText.trim()}
             className="rounded-xl bg-[#00b98f] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#00a57f] disabled:opacity-60"
           >
-            {randomTalkRunning ? 'Talking...' : 'Random Talk'}
+            {randomTalkRunning ? 'Matching...' : 'Random Talk Match'}
           </button>
         </div>
+
+        {randomTalkPreview.length > 0 && (
+          <div className="mb-3 rounded-xl border border-white/10 bg-[#1c2733] p-3">
+            <p className="mb-2 text-xs uppercase tracking-wide text-[#7d8e9e]">Matched Topics (select to execute)</p>
+            <div className="space-y-1">
+              {randomTalkPreview.map((t) => (
+                <label key={t.id} className="flex items-center gap-2 text-sm text-[#d2e0ec]">
+                  <input
+                    type="checkbox"
+                    checked={randomTalkSelected.includes(t.id)}
+                    onChange={(e) => {
+                      setRandomTalkSelected((prev) =>
+                        e.target.checked ? [...prev, t.id] : prev.filter((x) => x !== t.id)
+                      )
+                    }}
+                  />
+                  <span>{t.name}</span>
+                  <span className="text-xs text-[#6f8396]">({t.id.slice(0, 8)}...)</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={handleExecuteRandomTalk}
+                disabled={randomTalkRunning || randomTalkSelected.length === 0}
+                className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                Execute on Selected ({randomTalkSelected.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRandomTalkSelected(randomTalkPreview.map((x) => x.id))}
+                className="rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#a5b3c2]"
+              >
+                Select All
+              </button>
+              <button
+                type="button"
+                onClick={() => setRandomTalkSelected([])}
+                className="rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#a5b3c2]"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4a5a6a]" />
