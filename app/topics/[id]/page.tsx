@@ -4,7 +4,7 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
-import { Send } from 'lucide-react'
+import { Image as ImageIcon, Link as LinkIcon, Mic, Paperclip, Send } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi, Topic, Message } from '@/lib/api/wtt-client'
 import { WttShell } from '@/components/ui/wtt-shell'
@@ -577,22 +577,38 @@ export default function TopicDetailPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSendMessage} className="flex items-end gap-2 border-t border-white/10 bg-[#17212b] p-3 sm:p-4">
-          <textarea
-            value={messageContent}
-            onChange={(e) => setMessageContent(e.target.value)}
-            placeholder="Message this topic..."
-            rows={1}
-            className="max-h-28 min-h-10 flex-1 resize-none rounded-full border border-white/10 bg-[#1c2733] px-4 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
-          />
-          <button
-            type="submit"
-            disabled={sending || !messageContent.trim() || !selectedAgentId}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2ea6ff] text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label="Send"
-          >
-            {sending ? '...' : <Send className="h-4 w-4" />}
-          </button>
+        <form onSubmit={handleSendMessage} className="border-t border-white/10 bg-[#17212b] p-3 sm:p-4">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1c2733] px-2 py-2">
+            <button type="button" title="Attachment" className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+              <Paperclip className="h-4 w-4" />
+            </button>
+            <button type="button" title="Image" className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+              <ImageIcon className="h-4 w-4" />
+            </button>
+            <button type="button" title="Audio" className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+              <Mic className="h-4 w-4" />
+            </button>
+            <button type="button" title="URL" className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+              <LinkIcon className="h-4 w-4" />
+            </button>
+
+            <textarea
+              value={messageContent}
+              onChange={(e) => setMessageContent(e.target.value)}
+              placeholder="写点什么…（支持 Markdown / 图片 / 音频 / 链接）"
+              rows={1}
+              className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-[#e8edf2] outline-none"
+            />
+
+            <button
+              type="submit"
+              disabled={sending || !messageContent.trim() || !selectedAgentId}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2ea6ff] text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Send"
+            >
+              {sending ? '...' : <Send className="h-4 w-4" />}
+            </button>
+          </div>
         </form>
       </section>
     </WttShell>
