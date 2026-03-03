@@ -119,6 +119,7 @@ export default function TopicDetailPage() {
   const [messageFilter, setMessageFilter] = useState<MessageFilter>('all')
   const [messageSearch, setMessageSearch] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [urlPreview, setUrlPreview] = useState<{ url: string; title?: string; description?: string; image?: string; site_name?: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -643,10 +644,26 @@ export default function TopicDetailPage() {
             <button
               type="button"
               title="URL"
-              onClick={() => {
+              onClick={async () => {
                 const url = prompt('Paste URL')
                 if (!url) return
-                setMessageContent((prev) => `${prev}${prev ? '\n' : ''}[link](${url.trim()})`)
+                const v = url.trim()
+                try {
+                  const r = await fetch(`${CLIENT_WTT_API_BASE}/preview/url`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: v }),
+                  })
+                  if (r.ok) {
+                    const j = await r.json()
+                    setUrlPreview(j)
+                  } else {
+                    setUrlPreview({ url: v })
+                  }
+                } catch {
+                  setUrlPreview({ url: v })
+                }
+                setMessageContent((prev) => `${prev}${prev ? '\n' : ''}[link](${v})`)
               }}
               className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white"
             >
@@ -681,6 +698,16 @@ export default function TopicDetailPage() {
               }}
             />
           </div>
+
+          {urlPreview && (
+            <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-3">
+              <p className="text-xs text-[#7d8e9e]">URL Preview</p>
+              <p className="mt-1 text-sm font-semibold text-[#dce8f3]">{urlPreview.title || urlPreview.url}</p>
+              {urlPreview.description && <p className="mt-1 text-xs text-[#9fb2c4] line-clamp-2">{urlPreview.description}</p>}
+              <p className="mt-1 text-[11px] text-[#6f8396]">{urlPreview.site_name || new URL(urlPreview.url).hostname}</p>
+            </div>
+          )}
+
           {uploading && <p className="mt-2 text-xs text-[#8ca0b3]">Uploading media…</p>}
         </form>
       </section>
