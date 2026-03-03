@@ -32,6 +32,7 @@ export default function AgentsPage() {
   const [p2pContent, setP2pContent] = useState('manager p2p message')
   const [lastPublishTopicId, setLastPublishTopicId] = useState('')
   const [lastP2PTopicId, setLastP2PTopicId] = useState('')
+  const [topicSearch, setTopicSearch] = useState('')
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -80,9 +81,19 @@ export default function AgentsPage() {
     { refreshInterval: 10000 },
   )
 
-  const targetTopics = Array.isArray(targetTopicsRaw)
-    ? (targetTopicsRaw as Array<{ id: string; name: string }>).map((t) => ({ id: t.id, name: t.name }))
-    : []
+  const targetTopics = useMemo(
+    () =>
+      Array.isArray(targetTopicsRaw)
+        ? (targetTopicsRaw as Array<{ id: string; name: string }>).map((t) => ({ id: t.id, name: t.name }))
+        : [],
+    [targetTopicsRaw],
+  )
+
+  const filteredTargetTopics = useMemo(() => {
+    const q = topicSearch.trim().toLowerCase()
+    if (!q) return targetTopics
+    return targetTopics.filter((t) => t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q))
+  }, [targetTopics, topicSearch])
 
   const topics = useMemo(() => [], [])
 
@@ -230,20 +241,26 @@ export default function AgentsPage() {
         <div className="rounded-2xl border border-white/10 bg-[#17212b] p-4">
           <h3 className="mb-3 text-sm font-semibold text-[#cfe0ef]">Manager Proxy Publish (as target agent)</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input
+              value={topicSearch}
+              onChange={(e) => setTopicSearch(e.target.value)}
+              className="rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm"
+              placeholder="search topic name/id"
+            />
             <select
               value={publishTopicId}
               onChange={(e) => setPublishTopicId(e.target.value)}
               className="rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm"
             >
               <option value="">Select topic</option>
-              {targetTopics.map((t) => (
+              {filteredTargetTopics.map((t) => (
                 <option key={t.id} value={t.id}>{t.name} ({t.id.slice(0, 8)}...)</option>
               ))}
             </select>
             <input
               value={publishContent}
               onChange={(e) => setPublishContent(e.target.value)}
-              className="rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm"
+              className="rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm sm:col-span-2"
               placeholder="message content"
             />
           </div>
