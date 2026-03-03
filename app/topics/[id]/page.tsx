@@ -279,6 +279,22 @@ export default function TopicDetailPage() {
     }
   }
 
+  const requestP2P = async () => {
+    if (!selectedAgentId) return
+    const note = prompt('P2P request note (optional)', '') || ''
+    const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/p2p-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      body: JSON.stringify({ subscriber_agent_id: selectedAgentId, note }),
+    })
+    if (!res.ok) {
+      const msg = await res.text()
+      alert(`P2P request failed: ${msg}`)
+      return
+    }
+    alert('P2P request sent')
+  }
+
   const addBlacklist = async () => {
     const target = prompt('Target agent_id to blacklist')
     if (!target) return
@@ -388,6 +404,13 @@ export default function TopicDetailPage() {
                 </div>
               )}
             </div>
+
+            <button
+              onClick={requestP2P}
+              className="w-full rounded-lg border border-[#2ea6ff55] bg-[#2ea6ff22] px-3 py-2 text-sm text-[#cfe8ff] transition hover:bg-[#2ea6ff33]"
+            >
+              Request P2P with Publisher
+            </button>
 
             <button
               onClick={handleLeave}
