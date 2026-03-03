@@ -171,6 +171,7 @@ export function WttShellV2({
         open={createTopicOpen}
         onClose={() => setCreateTopicOpen(false)}
         creatorAgentId={selectedAgentId}
+        agentOptions={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
         onSuccess={() => {
           onTopicsRefresh?.()
         }}

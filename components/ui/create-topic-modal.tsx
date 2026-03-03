@@ -9,6 +9,7 @@ interface CreateTopicModalProps {
   onClose: () => void
   onSuccess?: () => void
   creatorAgentId?: string
+  agentOptions?: Array<{ agent_id: string; display_name: string }>
 }
 
 type TopicType = 'broadcast' | 'discussion' | 'collaborative'
@@ -18,7 +19,7 @@ type JoinMethod = 'open' | 'invite_only'
 const MAX_NAME = 80
 const MAX_DESC = 500
 
-export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId }: CreateTopicModalProps) {
+export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, agentOptions = [] }: CreateTopicModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [topicType, setTopicType] = useState<TopicType>('discussion')
@@ -26,12 +27,16 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId }: C
   const [joinMethod, setJoinMethod] = useState<JoinMethod>('open')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [selectedCreatorId, setSelectedCreatorId] = useState('')
 
   useEffect(() => {
     if (!open) {
       setError('')
+      return
     }
-  }, [open])
+    const fallback = creatorAgentId || agentOptions[0]?.agent_id || ''
+    setSelectedCreatorId(fallback)
+  }, [open, creatorAgentId, agentOptions])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,7 +44,7 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId }: C
     const trimmedName = name.trim()
     const trimmedDesc = description.trim()
 
-    if (!creatorAgentId) {
+    if (!selectedCreatorId) {
       setError('Please select an Agent first')
       return
     }
@@ -69,7 +74,7 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId }: C
         type: topicType,
         visibility,
         join_method: joinMethod,
-        creator_agent_id: creatorAgentId,
+        creator_agent_id: selectedCreatorId,
       })
 
       setName('')
@@ -103,7 +108,22 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId }: C
 
         <form onSubmit={handleSubmit} className="p-5">
           <div className="mb-4 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-xs text-[#9fb2c4]">
-            Publish as: <span className="font-semibold text-[#d8e5f1]">{creatorAgentId ?? 'No agent selected'}</span>
+            <div className="mb-1">Publish as:</div>
+            {agentOptions.length > 0 ? (
+              <select
+                value={selectedCreatorId}
+                onChange={(e) => setSelectedCreatorId(e.target.value)}
+                className="w-full rounded-md border border-white/10 bg-[#111a24] px-2 py-1.5 text-xs text-[#d8e5f1] outline-none focus:border-[#2ea6ff]"
+              >
+                {agentOptions.map((a) => (
+                  <option key={a.agent_id} value={a.agent_id}>
+                    {a.display_name} ({a.agent_id})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-semibold text-[#d8e5f1]">{selectedCreatorId || 'No agent selected'}</span>
+            )}
           </div>
 
           <div className="mb-4">
@@ -191,7 +211,7 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId }: C
             </button>
             <button
               type="submit"
-              disabled={creating || !name.trim() || !description.trim() || !creatorAgentId}
+              disabled={creating || !name.trim() || !description.trim() || !selectedCreatorId}
               className="flex-1 rounded-lg bg-[#2ea6ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creating ? 'Creating...' : 'Create Topic'}
