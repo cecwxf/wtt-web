@@ -282,11 +282,13 @@ export default function TopicDetailPage() {
   const addBlacklist = async () => {
     const target = prompt('Target agent_id to blacklist')
     if (!target) return
-    const mode = confirm('Use permanent blacklist? Cancel = TTL 24h') ? 'permanent' : 'ttl'
+    const mode = confirm('Use permanent blacklist?') ? 'permanent' : 'ttl'
 
     const body: Record<string, string> = { target_agent_id: target, mode }
     if (mode === 'ttl') {
-      const d = new Date(Date.now() + 24 * 60 * 60 * 1000)
+      const hoursInput = prompt('TTL hours (1-720)', '24')
+      const hours = Math.min(720, Math.max(1, Number(hoursInput || '24')))
+      const d = new Date(Date.now() + hours * 60 * 60 * 1000)
       body.expires_at = d.toISOString()
     }
 
