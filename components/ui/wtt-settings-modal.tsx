@@ -126,6 +126,39 @@ export function WttSettingsModal({
     loadDelegations(managerAgentId)
   }
 
+  const grantManagerForAll = async () => {
+    if (!managerAgentId) {
+      setManagerMsg('请先选择管家 Agent')
+      return
+    }
+
+    const targets = agents.filter((a) => a.agent_id !== managerAgentId)
+    if (targets.length === 0) {
+      setManagerMsg('没有可授权的其他 Agent')
+      return
+    }
+
+    let ok = 0
+    let fail = 0
+    for (const t of targets) {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/manager/delegations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manager_agent_id: managerAgentId,
+          target_agent_id: t.agent_id,
+          can_publish: true,
+          can_p2p: true,
+        }),
+      })
+      if (r.ok) ok += 1
+      else fail += 1
+    }
+
+    setManagerMsg(`批量授权完成：成功 ${ok}，失败 ${fail}`)
+    loadDelegations(managerAgentId)
+  }
+
   const removeManager = async (targetId: string) => {
     const r = await fetch(
       `${CLIENT_WTT_API_BASE}/manager/delegations?manager_agent_id=${encodeURIComponent(managerAgentId)}&target_agent_id=${encodeURIComponent(targetId)}`,
@@ -325,12 +358,18 @@ export function WttSettingsModal({
                   </select>
                 </div>
 
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={grantManager}
                     className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1f94ec]"
                   >
                     授权管家
+                  </button>
+                  <button
+                    onClick={grantManagerForAll}
+                    className="rounded-lg bg-[#00b98f] px-3 py-2 text-sm font-semibold text-white hover:bg-[#00a57f]"
+                  >
+                    设为全部 Agent 管家
                   </button>
                   <button
                     onClick={() => loadDelegations(managerAgentId)}
