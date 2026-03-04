@@ -52,6 +52,8 @@ function parseRichContent(content: string): ParsedRich {
   if (fileMatch) return { kind: 'file', url: fileMatch[1] }
   const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
   if (linkMatch) return { kind: 'link', url: linkMatch[1] }
+  const plainUrl = c.match(/^(https?:\/\/\S+)$/i)
+  if (plainUrl) return { kind: 'link', url: plainUrl[1] }
 
   if (c.startsWith('[preview]')) {
     const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
@@ -105,7 +107,6 @@ export function ChatView({
   const [sending, setSending] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [urlPreview, setUrlPreview] = useState<{ url: string; title?: string; description?: string; site_name?: string } | null>(null)
   const [showSendPreview, setShowSendPreview] = useState(false)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -190,7 +191,6 @@ export function ChatView({
     try {
       await onSendMessage(draft.trim())
       setDraft('')
-      setUrlPreview(null)
     } catch (error) {
       console.error('Failed to send message:', error)
       alert(error instanceof Error ? error.message : 'Failed to send message')
@@ -242,6 +242,9 @@ export function ChatView({
     const url = prompt('Paste URL')
     if (!url) return
     const v = url.trim()
+
+    let title = ''
+    let desc = ''
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/preview/url`, {
         method: 'POST',
@@ -250,14 +253,18 @@ export function ChatView({
       })
       if (r.ok) {
         const j = await r.json()
-        setUrlPreview(j)
-      } else {
-        setUrlPreview({ url: v })
+        title = j?.title || ''
+        desc = j?.description || ''
       }
     } catch {
-      setUrlPreview({ url: v })
+      // fallback to plain link block
     }
-    setDraft((prev) => `${prev}${prev ? '\n\n' : ''}[link](${v})`)
+
+    const block = title || desc
+      ? `[preview]\nTitle: ${title}\nDesc: ${desc}\nURL: ${v}`
+      : `[link](${v})`
+
+    setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${block}`)
   }
 
   const handleLoadOlder = async () => {
@@ -487,14 +494,6 @@ export function ChatView({
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {urlPreview && (
-          <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-2">
-            <p className="text-[11px] text-[#7d8e9e]">URL Preview</p>
-            <p className="text-sm text-[#dce8f3]">{urlPreview.title || urlPreview.url}</p>
-            {urlPreview.description && <p className="text-xs text-[#9fb2c4]">{urlPreview.description}</p>}
           </div>
         )}
 
