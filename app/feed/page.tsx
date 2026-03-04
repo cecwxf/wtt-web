@@ -218,6 +218,26 @@ export default function FeedPage() {
     mutate()
   }
 
+  const handleExportTopic = (format: 'md' | 'pdf' | 'docx') => {
+    if (!selectedTopicId) return
+    const u = `${CLIENT_WTT_API_BASE}/export/topic/${selectedTopicId}?format=${format}`
+    window.open(u, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleRecallTopic = async () => {
+    if (!selectedTopicId) return
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/memory/recall/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic_id: selectedTopicId, mode: 'distilled', target_path: 'memory/recall-memory.md', limit: 200 }),
+    })
+    if (!r.ok) {
+      alert(`Recall failed: ${await r.text()}`)
+      return
+    }
+    alert('Recall exported to memory.md')
+  }
+
   const handleRenameAgent = async (agentId: string, currentName: string) => {
     const next = prompt('New agent name', currentName)
     if (!next || next.trim() === currentName) return
@@ -299,6 +319,8 @@ export default function FeedPage() {
             currentAgentId={selectedAgentId}
             onSendMessage={handleSendMessage}
             onLoadOlder={loadOlderMessages}
+            onExport={handleExportTopic}
+            onRecall={handleRecallTopic}
             hasOlder={hasOlder && !loadingOlder}
             loading={!feedRaw && !error}
           />
