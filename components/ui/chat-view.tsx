@@ -49,6 +49,11 @@ interface UrlPreview {
   site_name?: string
 }
 
+interface CachedPreview {
+  data: UrlPreview
+  fetchedAt: number
+}
+
 function parseRichContent(content: string): ParsedRich {
   const c = (content || '').trim()
   const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
@@ -116,7 +121,7 @@ export function ChatView({
   const [uploading, setUploading] = useState(false)
   const [showSendPreview, setShowSendPreview] = useState(false)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
-  const [previewCache, setPreviewCache] = useState<Record<string, UrlPreview>>({})
+  const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -124,9 +129,19 @@ export function ChatView({
     try {
       const raw = localStorage.getItem('wtt_preview_cache_v1')
       if (!raw) return
-      const parsed = JSON.parse(raw) as Record<string, UrlPreview>
+      const parsed = JSON.parse(raw) as Record<string, CachedPreview | UrlPreview>
       if (parsed && typeof parsed === 'object') {
-        setPreviewCache(parsed)
+        const normalized: Record<string, CachedPreview> = {}
+        for (const [url, item] of Object.entries(parsed)) {
+          if (!item || typeof item !== 'object') continue
+          const maybeCached = item as CachedPreview
+          if (typeof maybeCached.fetchedAt === 'number' && maybeCached.data) {
+            normalized[url] = maybeCached
+          } else {
+            normalized[url] = { data: item as UrlPreview, fetchedAt: Date.now() }
+          }
+        }
+        setPreviewCache(normalized)
       }
     } catch {
       // ignore cache parse errors
@@ -321,11 +336,15 @@ export function ChatView({
   }
 
   useEffect(() => {
+    const TTL_MS = 24 * 60 * 60 * 1000
+    const now = Date.now()
     const urls = new Set<string>()
     for (const m of messages) {
       const parsed = parseRichContent(m.content || '')
-      if (parsed.kind === 'link' && parsed.url && !previewCache[parsed.url]) {
-        urls.add(parsed.url)
+      if (parsed.kind === 'link' && parsed.url) {
+        const cached = previewCache[parsed.url]
+        const isFresh = cached && now - cached.fetchedAt < TTL_MS
+        if (!isFresh) urls.add(parsed.url)
       }
     }
     if (urls.size === 0) return
@@ -342,7 +361,7 @@ export function ChatView({
           if (!r.ok) continue
           const j = await r.json()
           if (!cancelled) {
-            setPreviewCache((prev) => ({ ...prev, [url]: j }))
+            setPreviewCache((prev) => ({ ...prev, [url]: { data: j, fetchedAt: Date.now() } }))
           }
         } catch {
           // ignore preview fetch failures
@@ -450,7 +469,7 @@ export function ChatView({
                           )
                         }
                         if (parsed.kind === 'link') {
-                          const pv = parsed.url ? previewCache[parsed.url] : undefined
+                          const pv = parsed.url ? previewCache[parsed.url]?.data : undefined
                           if (pv && (pv.title || pv.description)) {
                             return (
                               <div className="rounded-lg border border-white/15 bg-[#0f1b27] p-2">
