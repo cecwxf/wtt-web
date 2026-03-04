@@ -55,6 +55,11 @@ interface CachedPreview {
   fetchedAt: number
 }
 
+function extractFirstUrl(content: string): string | null {
+  const m = (content || '').match(/https?:\/\/\S+/i)
+  return m ? m[0] : null
+}
+
 function parseRichContent(content: string): ParsedRich {
   const c = (content || '').trim()
   const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
@@ -347,10 +352,11 @@ export function ChatView({
     const urls = new Set<string>()
     for (const m of messages) {
       const parsed = parseRichContent(m.content || '')
-      if (parsed.kind === 'link' && parsed.url) {
-        const cached = previewCache[parsed.url]
+      const candidateUrl = parsed.kind === 'link' ? parsed.url : extractFirstUrl(m.content || '')
+      if (candidateUrl) {
+        const cached = previewCache[candidateUrl]
         const isFresh = cached && now - cached.fetchedAt < TTL_MS
-        if (!isFresh) urls.add(parsed.url)
+        if (!isFresh) urls.add(candidateUrl)
       }
     }
     if (urls.size === 0) return
@@ -518,7 +524,28 @@ export function ChatView({
                             </div>
                           )
                         }
-                        return <p className="whitespace-pre-wrap break-words">{parsed.text}</p>
+                        const inlineUrl = extractFirstUrl(parsed.text || '')
+                        const inlinePv = inlineUrl ? previewCache[inlineUrl]?.data : undefined
+                        return (
+                          <div>
+                            <p className="whitespace-pre-wrap break-words">{parsed.text}</p>
+                            {inlineUrl && inlinePv && (inlinePv.title || inlinePv.description || inlinePv.image) && (
+                              <div className="mt-2 rounded-lg border border-white/15 bg-[#0f1b27] p-2">
+                                {inlinePv.image && (
+                                  <a href={inlineUrl} target="_blank" rel="noreferrer" className="mb-2 block">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={inlinePv.image} alt={inlinePv.title || 'preview'} className="max-h-52 w-full rounded-md border border-white/10 object-cover" />
+                                  </a>
+                                )}
+                                <p className="text-xs font-semibold text-[#dce8f3]">{inlinePv.title || inlineUrl}</p>
+                                {inlinePv.description && <p className="mt-1 text-xs text-[#9fb2c4]">{inlinePv.description}</p>}
+                                <a href={inlineUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-[#8fd6ff] underline break-all">
+                                  {inlineUrl}
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )
                       })()}
                       <div className={`mt-2 text-[10px] ${isMine ? 'text-white/65' : 'text-[#6f8396]'}`}>
                         {formatTime(message.timestamp)}
