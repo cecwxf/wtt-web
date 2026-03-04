@@ -368,6 +368,15 @@ export default function TopicDetailPage() {
     setMessageContent(blocksToDraft(next))
   }
 
+  const updatePreviewBlock = (idx: number, field: 'title' | 'desc' | 'url', value: string) => {
+    const arr = draftToBlocks(messageContent)
+    if (idx < 0 || idx >= arr.length) return
+    if (arr[idx].type !== 'preview') return
+    const next = [...arr]
+    next[idx] = { ...next[idx], [field]: value }
+    setMessageContent(blocksToDraft(next))
+  }
+
   const groupedMessages = useMemo(() => {
     const groups: Array<{ label: string; rows: TopicMessage[] }> = []
     filteredMessages.forEach((message) => {
@@ -996,6 +1005,28 @@ export default function TopicDetailPage() {
                         <button type="button" onClick={() => removeDraftBlock(i)} className="rounded border border-red-500/30 px-1 text-[10px] text-red-300">×</button>
                       </div>
                     </div>
+                    {b.type === 'preview' && (
+                      <div className="mt-2 grid grid-cols-1 gap-1">
+                        <input
+                          value={b.title || ''}
+                          onChange={(e) => updatePreviewBlock(i, 'title', e.target.value)}
+                          placeholder="Preview title"
+                          className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#dce8f3] outline-none"
+                        />
+                        <input
+                          value={b.desc || ''}
+                          onChange={(e) => updatePreviewBlock(i, 'desc', e.target.value)}
+                          placeholder="Preview description"
+                          className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#9fb2c4] outline-none"
+                        />
+                        <input
+                          value={b.url || ''}
+                          onChange={(e) => updatePreviewBlock(i, 'url', e.target.value)}
+                          placeholder="Preview URL"
+                          className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#8fd6ff] outline-none"
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
