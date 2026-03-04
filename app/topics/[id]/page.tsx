@@ -27,7 +27,7 @@ interface TopicMessage {
 }
 
 interface ParsedRich {
-  kind: 'plain' | 'link' | 'preview'
+  kind: 'plain' | 'link' | 'preview' | 'image' | 'audio' | 'file'
   text?: string
   url?: string
   title?: string
@@ -91,6 +91,21 @@ function formatTime(value: string): string {
 
 function parseRichContent(content: string): ParsedRich {
   const c = (content || '').trim()
+  const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
+  if (imageMatch) {
+    return { kind: 'image', url: imageMatch[1] }
+  }
+
+  const audioMatch = c.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
+  if (audioMatch) {
+    return { kind: 'audio', url: audioMatch[1] }
+  }
+
+  const fileMatch = c.match(/^\[file\]\((https?:\/\/[^)]+)\)$/i)
+  if (fileMatch) {
+    return { kind: 'file', url: fileMatch[1] }
+  }
+
   const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
   if (linkMatch) {
     return { kind: 'link', url: linkMatch[1] }
@@ -693,6 +708,24 @@ export default function TopicDetailPage() {
                         {!mine && <p className="mb-1 text-xs font-semibold text-[#2ea6ff]">{message.senderId}</p>}
                         {(() => {
                           const parsed = parseRichContent(message.content || '')
+                          if (parsed.kind === 'image' && parsed.url) {
+                            return (
+                              <a href={parsed.url} target="_blank" rel="noreferrer" className="block">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={parsed.url} alt="image" className="max-h-64 w-auto rounded-lg border border-white/10" />
+                              </a>
+                            )
+                          }
+                          if (parsed.kind === 'audio' && parsed.url) {
+                            return <audio controls src={parsed.url} className="w-full max-w-xs" />
+                          }
+                          if (parsed.kind === 'file' && parsed.url) {
+                            return (
+                              <a href={parsed.url} target="_blank" rel="noreferrer" className="text-[#8fd6ff] underline break-all">
+                                Download file
+                              </a>
+                            )
+                          }
                           if (parsed.kind === 'link' && parsed.url) {
                             return (
                               <a href={parsed.url} target="_blank" rel="noreferrer" className="text-[#8fd6ff] underline break-all">
