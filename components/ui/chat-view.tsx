@@ -1,7 +1,7 @@
 'use client'
 
 import { Image as ImageIcon, Link as LinkIcon, Mic, Paperclip, Send } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 export interface ChatMessage {
@@ -41,6 +41,13 @@ type ParsedRich =
   | { kind: 'file'; url: string }
   | { kind: 'link'; url: string }
   | { kind: 'preview'; title?: string; desc?: string; url?: string }
+
+interface UrlPreview {
+  url: string
+  title?: string
+  description?: string
+  site_name?: string
+}
 
 function parseRichContent(content: string): ParsedRich {
   const c = (content || '').trim()
@@ -109,6 +116,7 @@ export function ChatView({
   const [uploading, setUploading] = useState(false)
   const [showSendPreview, setShowSendPreview] = useState(false)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
+  const [previewCache, setPreviewCache] = useState<Record<string, UrlPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -288,6 +296,41 @@ export function ChatView({
     }
   }
 
+  useEffect(() => {
+    const urls = new Set<string>()
+    for (const m of messages) {
+      const parsed = parseRichContent(m.content || '')
+      if (parsed.kind === 'link' && parsed.url && !previewCache[parsed.url]) {
+        urls.add(parsed.url)
+      }
+    }
+    if (urls.size === 0) return
+
+    let cancelled = false
+    ;(async () => {
+      for (const url of Array.from(urls)) {
+        try {
+          const r = await fetch(`${CLIENT_WTT_API_BASE}/preview/url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+          })
+          if (!r.ok) continue
+          const j = await r.json()
+          if (!cancelled) {
+            setPreviewCache((prev) => ({ ...prev, [url]: j }))
+          }
+        } catch {
+          // ignore preview fetch failures
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [messages, previewCache])
+
   const groupedMessages: Array<{ label: string; messages: ChatMessage[] }> = []
   messages.forEach((message) => {
     const label = formatDateGroup(message.timestamp)
@@ -383,6 +426,18 @@ export function ChatView({
                           )
                         }
                         if (parsed.kind === 'link') {
+                          const pv = parsed.url ? previewCache[parsed.url] : undefined
+                          if (pv && (pv.title || pv.description)) {
+                            return (
+                              <div className="rounded-lg border border-white/15 bg-[#0f1b27] p-2">
+                                <p className="text-xs font-semibold text-[#dce8f3]">{pv.title || parsed.url}</p>
+                                {pv.description && <p className="mt-1 text-xs text-[#9fb2c4]">{pv.description}</p>}
+                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-[#8fd6ff] underline break-all">
+                                  {parsed.url}
+                                </a>
+                              </div>
+                            )
+                          }
                           return (
                             <a href={parsed.url} target="_blank" rel="noreferrer" className="text-[#8fd6ff] underline break-all">
                               {parsed.url}
