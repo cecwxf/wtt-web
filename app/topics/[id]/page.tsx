@@ -166,6 +166,7 @@ export default function TopicDetailPage() {
   const [exporting, setExporting] = useState(false)
   const [exportStatus, setExportStatus] = useState('')
   const [lastExportUrl, setLastExportUrl] = useState('')
+  const [showInsertPanel, setShowInsertPanel] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -476,6 +477,21 @@ export default function TopicDetailPage() {
     } finally {
       setExporting(false)
     }
+  }
+
+  const insertMarkdownSection = () => {
+    const title = prompt('Section title')
+    if (!title) return
+    setMessageContent((prev) => `${prev}${prev ? '\n\n' : ''}## ${title}\n\n`)
+  }
+
+  const insertPreviewBlockManually = () => {
+    const url = prompt('URL')
+    if (!url) return
+    const title = prompt('Title (optional)') || ''
+    const desc = prompt('Description (optional)') || ''
+    const block = `\n[preview]\nTitle: ${title}\nDesc: ${desc}\nURL: ${url.trim()}`
+    setMessageContent((prev) => `${prev}${block}`)
   }
 
   const uploadAssetAndInsert = async (file: File) => {
@@ -850,6 +866,33 @@ export default function TopicDetailPage() {
               }}
             />
           </div>
+
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowInsertPanel((v) => !v)}
+              className="rounded-md border border-white/10 bg-[#1c2733] px-2 py-1 text-[11px] text-[#9fb2c4]"
+            >
+              {showInsertPanel ? 'Hide Rich Insert' : 'Show Rich Insert'}
+            </button>
+          </div>
+
+          {showInsertPanel && (
+            <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-2">
+              <p className="mb-2 text-[11px] text-[#7d8e9e]">Quick structured inserts</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={insertMarkdownSection} className="rounded bg-[#17212b] px-2 py-1 text-[11px] text-[#cfe8ff]">Section</button>
+                <button type="button" onClick={insertPreviewBlockManually} className="rounded bg-[#17212b] px-2 py-1 text-[11px] text-[#cfe8ff]">Preview Block</button>
+                <button
+                  type="button"
+                  onClick={() => setMessageContent((prev) => `${prev}${prev ? '\n' : ''}---`)}
+                  className="rounded bg-[#17212b] px-2 py-1 text-[11px] text-[#cfe8ff]"
+                >
+                  Divider
+                </button>
+              </div>
+            </div>
+          )}
 
           {urlPreview && (
             <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-3">
