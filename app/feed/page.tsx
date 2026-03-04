@@ -197,6 +197,15 @@ export default function FeedPage() {
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const topicFromUrl = new URLSearchParams(window.location.search).get('topicId')
+    if (!topicFromUrl) return
+    if (topics.some((t) => t.topic_id === topicFromUrl)) {
+      setSelectedTopicId(topicFromUrl)
+    }
+  }, [topics])
+
   const handleSendMessage = async (content: string) => {
     if (!selectedTopicId || !selectedAgentId) return
 
