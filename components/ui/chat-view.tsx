@@ -1,7 +1,8 @@
 'use client'
 
-import { Send } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { Image as ImageIcon, Link as LinkIcon, Mic, Paperclip, Send } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 export interface ChatMessage {
   message_id: string
@@ -74,7 +75,27 @@ export function ChatView({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [urlPreview, setUrlPreview] = useState<{ url: string; title?: string; description?: string; site_name?: string } | null>(null)
+  const [showSendPreview, setShowSendPreview] = useState(false)
+  const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const scrollRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const draftBlocksPreview = useMemo(() => {
+    return draft
+      .split(/\n\n+/)
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .map((x) => {
+        if (/^!\[\]\(https?:\/\//i.test(x)) return { type: 'image', value: x }
+        if (/^\[audio\]\(https?:\/\//i.test(x)) return { type: 'audio', value: x }
+        if (/^\[file\]\(https?:\/\//i.test(x)) return { type: 'file', value: x }
+        if (/^\[link\]\(https?:\/\//i.test(x)) return { type: 'link', value: x }
+        if (/^\[preview\]/i.test(x)) return { type: 'preview', value: x }
+        return { type: 'markdown', value: x }
+      })
+  }, [draft])
 
   const handleSend = async () => {
     if (!draft.trim()) return
@@ -83,12 +104,74 @@ export function ChatView({
     try {
       await onSendMessage(draft.trim())
       setDraft('')
+      setUrlPreview(null)
     } catch (error) {
       console.error('Failed to send message:', error)
       alert(error instanceof Error ? error.message : 'Failed to send message')
     } finally {
       setSending(false)
     }
+  }
+
+  const uploadAssetAndInsert = async (file: File) => {
+    setUploading(true)
+    try {
+      const sign = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, mime_type: file.type, size: file.size }),
+      })
+      if (!sign.ok) throw new Error(await sign.text())
+      const signed = await sign.json()
+
+      const upload = await fetch(`${CLIENT_WTT_API_BASE}${signed.upload_url}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      })
+      if (!upload.ok) throw new Error(await upload.text())
+
+      const commit = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upload_token: signed.upload_token }),
+      })
+      if (!commit.ok) throw new Error(await commit.text())
+      const asset = await commit.json()
+
+      const isImage = file.type.startsWith('image/')
+      const isAudio = file.type.startsWith('audio/')
+      const kind: 'image' | 'audio' | 'file' = isImage ? 'image' : isAudio ? 'audio' : 'file'
+      const token = isImage ? `![](${asset.url})` : isAudio ? `[audio](${asset.url})` : `[file](${asset.url})`
+      setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
+      setRecentAssets((prev) => [{ url: asset.url, kind }, ...prev].slice(0, 8))
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const insertUrlWithPreview = async () => {
+    const url = prompt('Paste URL')
+    if (!url) return
+    const v = url.trim()
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/preview/url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: v }),
+      })
+      if (r.ok) {
+        const j = await r.json()
+        setUrlPreview(j)
+      } else {
+        setUrlPreview({ url: v })
+      }
+    } catch {
+      setUrlPreview({ url: v })
+    }
+    setDraft((prev) => `${prev}${prev ? '\n\n' : ''}[link](${v})`)
   }
 
   const handleLoadOlder = async () => {
@@ -201,25 +284,91 @@ export function ChatView({
       </div>
 
       <div className="border-t border-white/10 bg-[#17212b] p-3 sm:p-4">
-        <div className="flex items-end gap-2">
+        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1c2733] px-2 py-2">
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+            <Paperclip className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+            <ImageIcon className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+            <Mic className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={insertUrlWithPreview} className="rounded-lg p-2 text-[#8ca0b3] hover:bg-[#243140] hover:text-white">
+            <LinkIcon className="h-4 w-4" />
+          </button>
+
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={`Message ${topicName}...`}
             rows={1}
-            className="max-h-28 min-h-10 flex-1 resize-none rounded-full border border-white/10 bg-[#1c2733] px-4 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+            className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-[#e8edf2] outline-none"
           />
           <button
             onClick={handleSend}
-            disabled={sending || !draft.trim() || !currentAgentId}
+            disabled={sending || uploading || !draft.trim() || !currentAgentId}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2ea6ff] text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
             aria-label="Send"
           >
             {sending ? '...' : <Send className="h-4 w-4" />}
           </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) uploadAssetAndInsert(f)
+              e.currentTarget.value = ''
+            }}
+          />
         </div>
-        <p className="mt-2 text-xs text-[#7d8e9e]">Press Enter to send, Shift+Enter for new line</p>
+
+        <div className="mt-2 flex items-center gap-2">
+          <button type="button" onClick={() => setShowSendPreview((v) => !v)} className="rounded-md border border-white/10 bg-[#1c2733] px-2 py-1 text-[11px] text-[#9fb2c4]">
+            {showSendPreview ? 'Hide Send Preview' : 'Show Send Preview'}
+          </button>
+        </div>
+
+        {showSendPreview && draftBlocksPreview.length > 0 && (
+          <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-2">
+            <p className="mb-2 text-[11px] text-[#7d8e9e]">Send preview ({draftBlocksPreview.length} blocks)</p>
+            <div className="max-h-36 overflow-auto space-y-1">
+              {draftBlocksPreview.map((b, i) => (
+                <div key={`pv-${i}`} className="rounded border border-white/10 bg-[#111a24] px-2 py-1 text-[11px] text-[#cbd8e4]">
+                  <span className="mr-1 text-[#8fb7d8]">[{b.type}]</span>
+                  {b.value}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {urlPreview && (
+          <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-2">
+            <p className="text-[11px] text-[#7d8e9e]">URL Preview</p>
+            <p className="text-sm text-[#dce8f3]">{urlPreview.title || urlPreview.url}</p>
+            {urlPreview.description && <p className="text-xs text-[#9fb2c4]">{urlPreview.description}</p>}
+          </div>
+        )}
+
+        {recentAssets.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {recentAssets.map((a, i) => {
+              const token = a.kind === 'image' ? `![](${a.url})` : a.kind === 'audio' ? `[audio](${a.url})` : `[file](${a.url})`
+              return (
+                <button key={`${a.url}-${i}`} type="button" onClick={() => setDraft((p) => `${p}${p ? '\n\n' : ''}${token}`)} className="rounded border border-white/10 bg-[#1c2733] px-2 py-1 text-[10px] text-[#9fd6ff]">
+                  Insert {a.kind}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {(uploading || loadingOlder) && <p className="mt-2 text-xs text-[#7d8e9e]">{uploading ? 'Uploading media…' : 'Loading history…'}</p>}
       </div>
     </div>
   )
