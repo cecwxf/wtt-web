@@ -34,6 +34,35 @@ function formatTime(timestamp: string): string {
   }
 }
 
+type ParsedRich =
+  | { kind: 'plain'; text: string }
+  | { kind: 'image'; url: string }
+  | { kind: 'audio'; url: string }
+  | { kind: 'file'; url: string }
+  | { kind: 'link'; url: string }
+  | { kind: 'preview'; title?: string; desc?: string; url?: string }
+
+function parseRichContent(content: string): ParsedRich {
+  const c = (content || '').trim()
+  const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
+  if (imageMatch) return { kind: 'image', url: imageMatch[1] }
+  const audioMatch = c.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
+  if (audioMatch) return { kind: 'audio', url: audioMatch[1] }
+  const fileMatch = c.match(/^\[file\]\((https?:\/\/[^)]+)\)$/i)
+  if (fileMatch) return { kind: 'file', url: fileMatch[1] }
+  const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
+  if (linkMatch) return { kind: 'link', url: linkMatch[1] }
+
+  if (c.startsWith('[preview]')) {
+    const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
+    const desc = (c.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
+    const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
+    return { kind: 'preview', title, desc, url }
+  }
+
+  return { kind: 'plain', text: content }
+}
+
 function formatDateGroup(timestamp: string): string {
   try {
     const date = new Date(timestamp)
@@ -269,7 +298,48 @@ export function ChatView({
                       } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'}`}
                     >
                       {!isMine && <p className="mb-1 text-xs font-semibold text-[#2ea6ff]">{message.sender_id}</p>}
-                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                      {(() => {
+                        const parsed = parseRichContent(message.content || '')
+                        if (parsed.kind === 'image') {
+                          return (
+                            <a href={parsed.url} target="_blank" rel="noreferrer" className="block">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={parsed.url} alt="image" className="max-h-64 w-auto rounded-lg border border-white/10" />
+                            </a>
+                          )
+                        }
+                        if (parsed.kind === 'audio') {
+                          return <audio controls src={parsed.url} className="w-full max-w-xs" />
+                        }
+                        if (parsed.kind === 'file') {
+                          return (
+                            <a href={parsed.url} target="_blank" rel="noreferrer" className="text-[#8fd6ff] underline break-all">
+                              Download file
+                            </a>
+                          )
+                        }
+                        if (parsed.kind === 'link') {
+                          return (
+                            <a href={parsed.url} target="_blank" rel="noreferrer" className="text-[#8fd6ff] underline break-all">
+                              {parsed.url}
+                            </a>
+                          )
+                        }
+                        if (parsed.kind === 'preview') {
+                          return (
+                            <div className="rounded-lg border border-white/15 bg-[#0f1b27] p-2">
+                              <p className="text-xs font-semibold text-[#dce8f3]">{parsed.title || 'Link Preview'}</p>
+                              {parsed.desc && <p className="mt-1 text-xs text-[#9fb2c4]">{parsed.desc}</p>}
+                              {parsed.url && (
+                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-[#8fd6ff] underline break-all">
+                                  {parsed.url}
+                                </a>
+                              )}
+                            </div>
+                          )
+                        }
+                        return <p className="whitespace-pre-wrap break-words">{parsed.text}</p>
+                      })()}
                       <div className={`mt-2 text-[10px] ${isMine ? 'text-white/65' : 'text-[#6f8396]'}`}>
                         {formatTime(message.timestamp)}
                         {message.semantic_type && ` · ${message.semantic_type}`}
