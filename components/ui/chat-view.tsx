@@ -1,7 +1,7 @@
 'use client'
 
 import { Image as ImageIcon, Link as LinkIcon, Mic, Paperclip, Send } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 export interface ChatMessage {
@@ -111,20 +111,77 @@ export function ChatView({
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const draftBlocksPreview = useMemo(() => {
-    return draft
+  type DraftBlock = {
+    type: 'image' | 'audio' | 'file' | 'link' | 'preview' | 'markdown'
+    value: string
+    title?: string
+    desc?: string
+    url?: string
+  }
+
+  const parseDraftBlocks = useCallback((text: string): DraftBlock[] => {
+    return text
       .split(/\n\n+/)
       .map((x) => x.trim())
       .filter(Boolean)
       .map((x) => {
-        if (/^!\[\]\(https?:\/\//i.test(x)) return { type: 'image', value: x }
-        if (/^\[audio\]\(https?:\/\//i.test(x)) return { type: 'audio', value: x }
-        if (/^\[file\]\(https?:\/\//i.test(x)) return { type: 'file', value: x }
-        if (/^\[link\]\(https?:\/\//i.test(x)) return { type: 'link', value: x }
-        if (/^\[preview\]/i.test(x)) return { type: 'preview', value: x }
+        const image = x.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
+        if (image) return { type: 'image', value: x, url: image[1] }
+        const audio = x.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
+        if (audio) return { type: 'audio', value: x, url: audio[1] }
+        const file = x.match(/^\[file\]\((https?:\/\/[^)]+)\)$/i)
+        if (file) return { type: 'file', value: x, url: file[1] }
+        const link = x.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
+        if (link) return { type: 'link', value: x, url: link[1] }
+        if (/^\[preview\]/i.test(x)) {
+          const title = (x.match(/Title:\s*(.*)/i)?.[1] || '').trim()
+          const desc = (x.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
+          const url = (x.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
+          return { type: 'preview', value: x, title, desc, url }
+        }
         return { type: 'markdown', value: x }
       })
-  }, [draft])
+  }, [])
+
+  const blocksToDraft = (blocks: DraftBlock[]) => {
+    return blocks
+      .map((b) => {
+        if (b.type === 'preview') {
+          return `[preview]\nTitle: ${b.title || ''}\nDesc: ${b.desc || ''}\nURL: ${b.url || ''}`
+        }
+        return b.value
+      })
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
+  const draftBlocksPreview = useMemo(() => parseDraftBlocks(draft), [draft, parseDraftBlocks])
+
+  const moveDraftBlock = (idx: number, dir: -1 | 1) => {
+    const blocks = parseDraftBlocks(draft)
+    const to = idx + dir
+    if (to < 0 || to >= blocks.length) return
+    const next = [...blocks]
+    ;[next[idx], next[to]] = [next[to], next[idx]]
+    setDraft(blocksToDraft(next))
+  }
+
+  const removeDraftBlock = (idx: number) => {
+    const blocks = parseDraftBlocks(draft)
+    if (idx < 0 || idx >= blocks.length) return
+    const next = [...blocks.slice(0, idx), ...blocks.slice(idx + 1)]
+    setDraft(blocksToDraft(next))
+  }
+
+  const updatePreviewBlock = (idx: number, field: 'title' | 'desc' | 'url', value: string) => {
+    const blocks = parseDraftBlocks(draft)
+    if (idx < 0 || idx >= blocks.length) return
+    const b = blocks[idx]
+    if (b.type !== 'preview') return
+    const next = [...blocks]
+    next[idx] = { ...b, [field]: value }
+    setDraft(blocksToDraft(next))
+  }
 
   const handleSend = async () => {
     if (!draft.trim()) return
@@ -406,11 +463,27 @@ export function ChatView({
         {showSendPreview && draftBlocksPreview.length > 0 && (
           <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-2">
             <p className="mb-2 text-[11px] text-[#7d8e9e]">Send preview ({draftBlocksPreview.length} blocks)</p>
-            <div className="max-h-36 overflow-auto space-y-1">
+            <div className="max-h-44 overflow-auto space-y-1">
               {draftBlocksPreview.map((b, i) => (
                 <div key={`pv-${i}`} className="rounded border border-white/10 bg-[#111a24] px-2 py-1 text-[11px] text-[#cbd8e4]">
-                  <span className="mr-1 text-[#8fb7d8]">[{b.type}]</span>
-                  {b.value}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="mr-1 text-[#8fb7d8]">[{b.type}]</span>
+                      <span className="truncate">{b.value}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => moveDraftBlock(i, -1)} className="rounded border border-white/10 px-1 text-[10px] text-[#9fb2c4]">↑</button>
+                      <button type="button" onClick={() => moveDraftBlock(i, 1)} className="rounded border border-white/10 px-1 text-[10px] text-[#9fb2c4]">↓</button>
+                      <button type="button" onClick={() => removeDraftBlock(i)} className="rounded border border-red-500/30 px-1 text-[10px] text-red-300">×</button>
+                    </div>
+                  </div>
+                  {b.type === 'preview' && (
+                    <div className="mt-2 grid grid-cols-1 gap-1">
+                      <input value={b.title || ''} onChange={(e) => updatePreviewBlock(i, 'title', e.target.value)} placeholder="Preview title" className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#dce8f3] outline-none" />
+                      <input value={b.desc || ''} onChange={(e) => updatePreviewBlock(i, 'desc', e.target.value)} placeholder="Preview description" className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#9fb2c4] outline-none" />
+                      <input value={b.url || ''} onChange={(e) => updatePreviewBlock(i, 'url', e.target.value)} placeholder="Preview URL" className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#8fd6ff] outline-none" />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
