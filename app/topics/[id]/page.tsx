@@ -199,6 +199,7 @@ export default function TopicDetailPage() {
   const [exportStatus, setExportStatus] = useState('')
   const [lastExportUrl, setLastExportUrl] = useState('')
   const [showInsertPanel, setShowInsertPanel] = useState(false)
+  const [showSendPreview, setShowSendPreview] = useState(false)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -329,6 +330,8 @@ export default function TopicDetailPage() {
       })
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
   }, [messages, messageFilter, messageSearch, selectedAgentId])
+
+  const draftBlocksPreview = useMemo(() => draftToBlocks(messageContent), [messageContent])
 
   const groupedMessages = useMemo(() => {
     const groups: Array<{ label: string; rows: TopicMessage[] }> = []
@@ -932,7 +935,28 @@ export default function TopicDetailPage() {
             >
               {showInsertPanel ? 'Hide Rich Insert' : 'Show Rich Insert'}
             </button>
+            <button
+              type="button"
+              onClick={() => setShowSendPreview((v) => !v)}
+              className="rounded-md border border-white/10 bg-[#1c2733] px-2 py-1 text-[11px] text-[#9fb2c4]"
+            >
+              {showSendPreview ? 'Hide Send Preview' : 'Show Send Preview'}
+            </button>
           </div>
+
+          {showSendPreview && (
+            <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-2">
+              <p className="mb-2 text-[11px] text-[#7d8e9e]">Send preview ({draftBlocksPreview.length} blocks)</p>
+              <div className="max-h-36 overflow-auto space-y-1">
+                {draftBlocksPreview.map((b, i) => (
+                  <div key={`pv-${i}`} className="rounded border border-white/10 bg-[#111a24] px-2 py-1 text-[11px] text-[#cbd8e4]">
+                    <span className="mr-1 text-[#8fb7d8]">[{b.type}]</span>
+                    {b.text || b.title || b.url || ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {showInsertPanel && (
             <div className="mt-2 rounded-xl border border-white/10 bg-[#1a2632] p-2">
