@@ -120,6 +120,30 @@ export function ChatView({
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('wtt_preview_cache_v1')
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Record<string, UrlPreview>
+      if (parsed && typeof parsed === 'object') {
+        setPreviewCache(parsed)
+      }
+    } catch {
+      // ignore cache parse errors
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      const entries = Object.entries(previewCache)
+      // cap size to avoid unbounded growth
+      const sliced = entries.slice(Math.max(0, entries.length - 200))
+      localStorage.setItem('wtt_preview_cache_v1', JSON.stringify(Object.fromEntries(sliced)))
+    } catch {
+      // ignore storage errors
+    }
+  }, [previewCache])
+
   type DraftBlock = {
     type: 'image' | 'audio' | 'file' | 'link' | 'preview' | 'markdown'
     value: string
