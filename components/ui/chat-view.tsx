@@ -18,6 +18,8 @@ interface ChatViewProps {
   currentAgentId: string
   onSendMessage: (content: string) => Promise<void>
   onLoadOlder?: () => Promise<void>
+  onExport?: (format: 'md' | 'pdf' | 'docx') => void
+  onRecall?: () => Promise<void>
   hasOlder?: boolean
   loading?: boolean
 }
@@ -64,6 +66,8 @@ export function ChatView({
   currentAgentId,
   onSendMessage,
   onLoadOlder,
+  onExport,
+  onRecall,
   hasOlder = false,
   loading,
 }: ChatViewProps) {
@@ -122,8 +126,18 @@ export function ChatView({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-white/10 px-5 py-4">
-        <h2 className="truncate text-lg font-semibold">{topicName}</h2>
-        <p className="mt-1 text-xs text-[#7d8e9e]">{messages.length} messages loaded</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="truncate text-lg font-semibold">{topicName}</h2>
+            <p className="mt-1 text-xs text-[#7d8e9e]">{messages.length} messages loaded</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => onExport?.('md')} className="rounded border border-white/10 px-2 py-1 text-[11px] text-[#a5b3c2]">MD</button>
+            <button onClick={() => onExport?.('pdf')} className="rounded border border-white/10 px-2 py-1 text-[11px] text-[#a5b3c2]">PDF</button>
+            <button onClick={() => onExport?.('docx')} className="rounded border border-white/10 px-2 py-1 text-[11px] text-[#a5b3c2]">DOCX</button>
+            <button onClick={() => onRecall?.()} className="rounded border border-[#2ea6ff44] bg-[#2ea6ff14] px-2 py-1 text-[11px] text-[#9fd6ff]">Recall</button>
+          </div>
+        </div>
       </div>
 
       <div
