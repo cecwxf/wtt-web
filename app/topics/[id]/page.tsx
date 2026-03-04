@@ -167,6 +167,7 @@ export default function TopicDetailPage() {
   const [exportStatus, setExportStatus] = useState('')
   const [lastExportUrl, setLastExportUrl] = useState('')
   const [showInsertPanel, setShowInsertPanel] = useState(false)
+  const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -520,8 +521,12 @@ export default function TopicDetailPage() {
       if (!commit.ok) throw new Error(await commit.text())
       const asset = await commit.json()
 
-      const prefix = file.type.startsWith('image/') ? '![]' : file.type.startsWith('audio/') ? '[audio]' : '[file]'
+      const isImage = file.type.startsWith('image/')
+      const isAudio = file.type.startsWith('audio/')
+      const kind: 'image' | 'audio' | 'file' = isImage ? 'image' : isAudio ? 'audio' : 'file'
+      const prefix = isImage ? '![]' : isAudio ? '[audio]' : '[file]'
       setMessageContent((prev) => `${prev}${prev ? '\n' : ''}${prefix}(${asset.url})`)
+      setRecentAssets((prev) => [{ url: asset.url, kind }, ...prev].slice(0, 8))
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Upload failed')
     } finally {
@@ -891,6 +896,27 @@ export default function TopicDetailPage() {
                   Divider
                 </button>
               </div>
+
+              {recentAssets.length > 0 && (
+                <div className="mt-2">
+                  <p className="mb-1 text-[11px] text-[#7d8e9e]">Recent assets</p>
+                  <div className="flex flex-wrap gap-2">
+                    {recentAssets.map((a, idx) => {
+                      const token = a.kind === 'image' ? `![](${a.url})` : a.kind === 'audio' ? `[audio](${a.url})` : `[file](${a.url})`
+                      return (
+                        <button
+                          key={`${a.url}-${idx}`}
+                          type="button"
+                          onClick={() => setMessageContent((prev) => `${prev}${prev ? '\n' : ''}${token}`)}
+                          className="rounded border border-white/10 bg-[#111a24] px-2 py-1 text-[10px] text-[#9fd6ff]"
+                        >
+                          Insert {a.kind}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
