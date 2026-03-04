@@ -40,12 +40,13 @@ type ParsedRich =
   | { kind: 'audio'; url: string }
   | { kind: 'file'; url: string }
   | { kind: 'link'; url: string }
-  | { kind: 'preview'; title?: string; desc?: string; url?: string }
+  | { kind: 'preview'; title?: string; desc?: string; url?: string; image?: string }
 
 interface UrlPreview {
   url: string
   title?: string
   description?: string
+  image?: string
   site_name?: string
 }
 
@@ -71,7 +72,8 @@ function parseRichContent(content: string): ParsedRich {
     const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
     const desc = (c.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
     const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-    return { kind: 'preview', title, desc, url }
+    const image = (c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
+    return { kind: 'preview', title, desc, url, image }
   }
 
   return { kind: 'plain', text: content }
@@ -165,6 +167,7 @@ export function ChatView({
     title?: string
     desc?: string
     url?: string
+    image?: string
   }
 
   const parseDraftBlocks = useCallback((text: string): DraftBlock[] => {
@@ -185,7 +188,8 @@ export function ChatView({
           const title = (x.match(/Title:\s*(.*)/i)?.[1] || '').trim()
           const desc = (x.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
           const url = (x.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-          return { type: 'preview', value: x, title, desc, url }
+          const image = (x.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
+          return { type: 'preview', value: x, title, desc, url, image }
         }
         return { type: 'markdown', value: x }
       })
@@ -195,7 +199,7 @@ export function ChatView({
     return blocks
       .map((b) => {
         if (b.type === 'preview') {
-          return `[preview]\nTitle: ${b.title || ''}\nDesc: ${b.desc || ''}\nURL: ${b.url || ''}`
+          return `[preview]\nTitle: ${b.title || ''}\nDesc: ${b.desc || ''}\nURL: ${b.url || ''}\nImage: ${b.image || ''}`
         }
         return b.value
       })
@@ -221,7 +225,7 @@ export function ChatView({
     setDraft(blocksToDraft(next))
   }
 
-  const updatePreviewBlock = (idx: number, field: 'title' | 'desc' | 'url', value: string) => {
+  const updatePreviewBlock = (idx: number, field: 'title' | 'desc' | 'url' | 'image', value: string) => {
     const blocks = parseDraftBlocks(draft)
     if (idx < 0 || idx >= blocks.length) return
     const b = blocks[idx]
@@ -292,6 +296,7 @@ export function ChatView({
 
     let title = ''
     let desc = ''
+    let image = ''
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/preview/url`, {
         method: 'POST',
@@ -302,13 +307,14 @@ export function ChatView({
         const j = await r.json()
         title = j?.title || ''
         desc = j?.description || ''
+        image = j?.image || ''
       }
     } catch {
       // fallback to plain link block
     }
 
-    const block = title || desc
-      ? `[preview]\nTitle: ${title}\nDesc: ${desc}\nURL: ${v}`
+    const block = title || desc || image
+      ? `[preview]\nTitle: ${title}\nDesc: ${desc}\nURL: ${v}\nImage: ${image}`
       : `[link](${v})`
 
     setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${block}`)
@@ -470,9 +476,15 @@ export function ChatView({
                         }
                         if (parsed.kind === 'link') {
                           const pv = parsed.url ? previewCache[parsed.url]?.data : undefined
-                          if (pv && (pv.title || pv.description)) {
+                          if (pv && (pv.title || pv.description || pv.image)) {
                             return (
                               <div className="rounded-lg border border-white/15 bg-[#0f1b27] p-2">
+                                {pv.image && (
+                                  <a href={parsed.url} target="_blank" rel="noreferrer" className="mb-2 block">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={pv.image} alt={pv.title || 'preview'} className="max-h-52 w-full rounded-md border border-white/10 object-cover" />
+                                  </a>
+                                )}
                                 <p className="text-xs font-semibold text-[#dce8f3]">{pv.title || parsed.url}</p>
                                 {pv.description && <p className="mt-1 text-xs text-[#9fb2c4]">{pv.description}</p>}
                                 <a href={parsed.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-[#8fd6ff] underline break-all">
@@ -490,6 +502,12 @@ export function ChatView({
                         if (parsed.kind === 'preview') {
                           return (
                             <div className="rounded-lg border border-white/15 bg-[#0f1b27] p-2">
+                              {parsed.image && (
+                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mb-2 block">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={parsed.image} alt={parsed.title || 'preview'} className="max-h-52 w-full rounded-md border border-white/10 object-cover" />
+                                </a>
+                              )}
                               <p className="text-xs font-semibold text-[#dce8f3]">{parsed.title || 'Link Preview'}</p>
                               {parsed.desc && <p className="mt-1 text-xs text-[#9fb2c4]">{parsed.desc}</p>}
                               {parsed.url && (
@@ -587,6 +605,7 @@ export function ChatView({
                       <input value={b.title || ''} onChange={(e) => updatePreviewBlock(i, 'title', e.target.value)} placeholder="Preview title" className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#dce8f3] outline-none" />
                       <input value={b.desc || ''} onChange={(e) => updatePreviewBlock(i, 'desc', e.target.value)} placeholder="Preview description" className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#9fb2c4] outline-none" />
                       <input value={b.url || ''} onChange={(e) => updatePreviewBlock(i, 'url', e.target.value)} placeholder="Preview URL" className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#8fd6ff] outline-none" />
+                      <input value={b.image || ''} onChange={(e) => updatePreviewBlock(i, 'image', e.target.value)} placeholder="Preview image URL" className="rounded border border-white/10 bg-[#0b1420] px-2 py-1 text-[10px] text-[#9fd6ff] outline-none" />
                     </div>
                   )}
                 </div>
