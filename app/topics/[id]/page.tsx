@@ -34,6 +34,14 @@ interface ParsedRich {
   desc?: string
 }
 
+interface RichBlockInput {
+  type: 'markdown' | 'text' | 'image' | 'audio' | 'file' | 'link' | 'preview'
+  text?: string
+  url?: string
+  title?: string
+  desc?: string
+}
+
 type MessageFilter = 'all' | 'mine' | 'others'
 
 interface BlacklistItem {
@@ -119,6 +127,30 @@ function parseRichContent(content: string): ParsedRich {
   }
 
   return { kind: 'plain', text: content }
+}
+
+function draftToBlocks(draft: string): RichBlockInput[] {
+  const chunks = draft
+    .split(/\n\n+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+
+  const blocks: RichBlockInput[] = []
+
+  for (const c of chunks) {
+    const parsed = parseRichContent(c)
+    if (parsed.kind === 'image' && parsed.url) blocks.push({ type: 'image', url: parsed.url })
+    else if (parsed.kind === 'audio' && parsed.url) blocks.push({ type: 'audio', url: parsed.url })
+    else if (parsed.kind === 'file' && parsed.url) blocks.push({ type: 'file', url: parsed.url })
+    else if (parsed.kind === 'link' && parsed.url) blocks.push({ type: 'link', url: parsed.url })
+    else if (parsed.kind === 'preview') {
+      blocks.push({ type: 'preview', title: parsed.title, desc: parsed.desc, url: parsed.url })
+    } else {
+      blocks.push({ type: 'markdown', text: c })
+    }
+  }
+
+  return blocks.length ? blocks : [{ type: 'markdown', text: draft }]
 }
 
 function formatDateGroup(value: string): string {
@@ -318,12 +350,32 @@ export default function TopicDetailPage() {
 
     setSending(true)
     try {
-      await wttApi.publishMessage(topicId, {
-        content: messageContent,
-        content_type: 'text',
-        semantic_type: 'post',
+      const blocks = draftToBlocks(messageContent)
+      const richRes = await fetch(`${CLIENT_WTT_API_BASE}/rich/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic_id: topicId,
+          agent_id: selectedAgentId,
+          title: '',
+          blocks,
+          ai_refine: true,
+        }),
       })
+
+      if (!richRes.ok) {
+        // fallback to legacy plain publish
+        await wttApi.publishMessage(topicId, {
+          content: messageContent,
+          content_type: 'text',
+          semantic_type: 'post',
+        })
+      }
+
       setMessageContent('')
+      setUrlPreview(null)
+      setUrlTitleEdit('')
+      setUrlDescEdit('')
       mutate()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to send message')
