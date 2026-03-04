@@ -129,6 +129,23 @@ function parseRichContent(content: string): ParsedRich {
   return { kind: 'plain', text: content }
 }
 
+function blocksToDraft(blocks: RichBlockInput[]): string {
+  return blocks
+    .map((b) => {
+      if (b.type === 'markdown' || b.type === 'text') return b.text || ''
+      if (b.type === 'image' && b.url) return `![](${b.url})`
+      if (b.type === 'audio' && b.url) return `[audio](${b.url})`
+      if (b.type === 'file' && b.url) return `[file](${b.url})`
+      if (b.type === 'link' && b.url) return `[link](${b.url})`
+      if (b.type === 'preview') {
+        return `\n[preview]\nTitle: ${b.title || ''}\nDesc: ${b.desc || ''}\nURL: ${b.url || ''}`
+      }
+      return ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 function draftToBlocks(draft: string): RichBlockInput[] {
   const chunks = draft
     .split(/\n\n+/)
@@ -332,6 +349,24 @@ export default function TopicDetailPage() {
   }, [messages, messageFilter, messageSearch, selectedAgentId])
 
   const draftBlocksPreview = useMemo(() => draftToBlocks(messageContent), [messageContent])
+
+  const removeDraftBlock = (idx: number) => {
+    const arr = draftToBlocks(messageContent)
+    if (idx < 0 || idx >= arr.length) return
+    const next = [...arr.slice(0, idx), ...arr.slice(idx + 1)]
+    setMessageContent(blocksToDraft(next))
+  }
+
+  const moveDraftBlock = (idx: number, dir: -1 | 1) => {
+    const arr = draftToBlocks(messageContent)
+    const to = idx + dir
+    if (idx < 0 || idx >= arr.length || to < 0 || to >= arr.length) return
+    const next = [...arr]
+    const tmp = next[idx]
+    next[idx] = next[to]
+    next[to] = tmp
+    setMessageContent(blocksToDraft(next))
+  }
 
   const groupedMessages = useMemo(() => {
     const groups: Array<{ label: string; rows: TopicMessage[] }> = []
@@ -950,8 +985,17 @@ export default function TopicDetailPage() {
               <div className="max-h-36 overflow-auto space-y-1">
                 {draftBlocksPreview.map((b, i) => (
                   <div key={`pv-${i}`} className="rounded border border-white/10 bg-[#111a24] px-2 py-1 text-[11px] text-[#cbd8e4]">
-                    <span className="mr-1 text-[#8fb7d8]">[{b.type}]</span>
-                    {b.text || b.title || b.url || ''}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="mr-1 text-[#8fb7d8]">[{b.type}]</span>
+                        <span className="truncate">{b.text || b.title || b.url || ''}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => moveDraftBlock(i, -1)} className="rounded border border-white/10 px-1 text-[10px] text-[#9fb2c4]">↑</button>
+                        <button type="button" onClick={() => moveDraftBlock(i, 1)} className="rounded border border-white/10 px-1 text-[10px] text-[#9fb2c4]">↓</button>
+                        <button type="button" onClick={() => removeDraftBlock(i)} className="rounded border border-red-500/30 px-1 text-[10px] text-red-300">×</button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
