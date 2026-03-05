@@ -380,7 +380,16 @@ export default function TasksGraphPage() {
                   const y2 = to.y + NODE_H / 2
                   return (
                     <g key={`${e.task_id}-${e.depends_on_task_id}`}>
-                      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#4d6a85" strokeWidth="2" markerEnd="url(#arrow)" />
+                      <line
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="#4d6a85"
+                        strokeWidth="2"
+                        markerEnd="url(#arrow)"
+                        className={nodes.find((n) => n.id === e.depends_on_task_id)?.status === 'doing' ? 'edge-flow' : ''}
+                      />
                       <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} fill="#8ca0b3" fontSize="10">
                         {e.mode || 'p2p'}
                       </text>
@@ -420,7 +429,7 @@ export default function TasksGraphPage() {
                       setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
                     }}
                     onClick={() => setSelectedTaskId(n.id)}
-                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} ${selectedTaskIds.includes(n.id) ? 'ring-2 ring-[#2ea6ff]/60' : ''} bg-[#111a25] shadow-sm`}
+                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} ${n.status === 'doing' ? 'node-doing' : ''} ${n.status === 'review' ? 'node-review' : ''} ${n.status === 'blocked' ? 'node-blocked' : ''} ${selectedTaskIds.includes(n.id) ? 'ring-2 ring-[#2ea6ff]/60' : ''} bg-[#111a25] shadow-sm`}
                     style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H }}
                   >
                     <p className="line-clamp-1 text-sm font-medium">{n.title}</p>
@@ -493,6 +502,41 @@ export default function TasksGraphPage() {
           </aside>
         </div>
       </div>
+      <style jsx>{`
+        .edge-flow {
+          stroke-dasharray: 8 6;
+          animation: edgeFlow 1.2s linear infinite;
+        }
+        .node-doing {
+          animation: nodePulse 1.6s ease-in-out infinite;
+          box-shadow: 0 0 0 0 rgba(46, 166, 255, 0.35);
+        }
+        .node-review {
+          animation: nodeReview 1.9s ease-in-out infinite;
+        }
+        .node-blocked {
+          animation: nodeBlocked 0.28s linear 0s 2;
+        }
+        @keyframes edgeFlow {
+          from { stroke-dashoffset: 0; }
+          to { stroke-dashoffset: -28; }
+        }
+        @keyframes nodePulse {
+          0% { box-shadow: 0 0 0 0 rgba(46, 166, 255, 0.35); }
+          70% { box-shadow: 0 0 0 10px rgba(46, 166, 255, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(46, 166, 255, 0); }
+        }
+        @keyframes nodeReview {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.12); }
+        }
+        @keyframes nodeBlocked {
+          0% { transform: translateX(0); }
+          25% { transform: translateX(-1px); }
+          75% { transform: translateX(1px); }
+          100% { transform: translateX(0); }
+        }
+      `}</style>
     </WttShellV2>
   )
 }
