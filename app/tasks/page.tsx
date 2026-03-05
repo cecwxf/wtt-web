@@ -198,6 +198,22 @@ export default function TasksPage() {
     mutateTasks()
   }
 
+  const runCurrent = async () => {
+    if (!selectedTask) return
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.accessToken ?? ''}`,
+      },
+      body: JSON.stringify({
+        trigger_agent_id: selectedAgentId || 'task-runner',
+        runner_agent_id: selectedTask.owner_agent_id || selectedAgentId || 'openclaw_mcp_test_agent',
+      }),
+    })
+    mutateTasks()
+  }
+
   const reviewCurrent = async (action: 'approve' | 'reject' | 'block') => {
     if (!selectedTask) return
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/review`, {
@@ -299,6 +315,10 @@ export default function TasksPage() {
                     Open in Feed
                   </button>
                 )}
+
+                <div className="border-t border-white/10 pt-2">
+                  <button onClick={runCurrent} className="rounded-md border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff]">Run Task</button>
+                </div>
 
                 <div className="grid grid-cols-1 gap-2 border-t border-white/10 pt-2">
                   <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Task description" className="min-h-16 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
