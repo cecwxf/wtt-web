@@ -14,6 +14,7 @@ interface TaskNode {
   status: 'todo' | 'doing' | 'review' | 'done' | 'blocked'
   owner_agent_id?: string
   runner_agent_id?: string
+  topic_id?: string
 }
 
 interface TaskEdge {
@@ -79,6 +80,36 @@ export default function TasksGraphPage() {
   const nodes: TaskNode[] = useMemo(() => (Array.isArray(data?.nodes) ? data.nodes : []), [data])
   const edges: TaskEdge[] = useMemo(() => (Array.isArray(data?.edges) ? data.edges : []), [data])
   const selected = useMemo(() => nodes.find((n) => n.id === selectedTaskId) || null, [nodes, selectedTaskId])
+
+  const { data: selectedTimelineRaw } = useSWR(
+    selected?.topic_id && session?.accessToken ? ['graph-timeline', selected.topic_id, session.accessToken] : null,
+    async () => {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selected?.topic_id}/messages?limit=30`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!r.ok) return []
+      return r.json()
+    },
+    { refreshInterval: 5000 }
+  )
+
+  const selectedTimeline = useMemo(() => {
+    const rows = Array.isArray(selectedTimelineRaw)
+      ? selectedTimelineRaw
+      : Array.isArray((selectedTimelineRaw as { messages?: unknown[] })?.messages)
+        ? ((selectedTimelineRaw as { messages: unknown[] }).messages || [])
+        : []
+    return rows
+      .map((x) => x as Record<string, unknown>)
+      .map((x) => ({
+        id: String(x.id || x.message_id || ''),
+        sender: String(x.sender_id || 'unknown'),
+        content: String(x.content || ''),
+      }))
+      .filter((x) => x.content.includes('[TASK_'))
+      .slice(-8)
+      .reverse()
+  }, [selectedTimelineRaw])
 
   useEffect(() => {
     try {
@@ -352,7 +383,32 @@ export default function TasksGraphPage() {
                     {edges.filter((e) => e.task_id === selected.id).length === 0 && <p className="text-[11px] text-[#8ca0b3]">none</p>}
                   </div>
                 </div>
+
+                <div className="rounded border border-white/10 bg-[#111a25] p-2">
+                  <p className="mb-1 text-[11px] text-[#8ca0b3]">Outbound Links</p>
+                  <div className="space-y-1">
+                    {edges.filter((e) => e.depends_on_task_id === selected.id).map((e) => (
+                      <p key={`out-${e.task_id}-${e.depends_on_task_id}`} className="text-[11px]">
+                        to {e.task_id.slice(0, 8)} · {e.mode || 'p2p'}
+                      </p>
+                    ))}
+                    {edges.filter((e) => e.depends_on_task_id === selected.id).length === 0 && <p className="text-[11px] text-[#8ca0b3]">none</p>}
+                  </div>
+                </div>
+
+                <div className="rounded border border-white/10 bg-[#111a25] p-2">
+                  <p className="mb-1 text-[11px] text-[#8ca0b3]">Execution Log</p>
+                  <div className="max-h-40 space-y-1 overflow-auto">
+                    {selectedTimeline.length > 0 ? selectedTimeline.map((m) => (
+                      <p key={m.id || `${m.sender}-${m.content.slice(0, 10)}`} className="text-[11px] text-[#d7e4f0]">
+                        <span className="text-[#8ca0b3]">{m.sender}:</span> {m.content.slice(0, 140)}
+                      </p>
+                    )) : <p className="text-[11px] text-[#8ca0b3]">No TASK log yet</p>}
+                  </div>
+                </div>
+
                 <button className="rounded border border-white/10 bg-[#1d2a3a] px-2 py-1 text-xs" onClick={() => router.push('/tasks')}>Open in Tasks Board</button>
+                {selected.topic_id && <button className="rounded border border-white/10 bg-[#1d2a3a] px-2 py-1 text-xs" onClick={() => router.push(`/feed?topicId=${selected.topic_id}`)}>Open Topic Feed</button>}
               </div>
             ) : (
               <p className="text-xs text-[#8ca0b3]">Select a node</p>
