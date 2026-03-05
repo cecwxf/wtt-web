@@ -26,6 +26,11 @@ interface TaskItem {
   owner_agent_id?: string
   topic_id?: string
   acceptance?: string
+  exec_mode?: string
+  due_at?: string
+  estimate_hours?: number
+  dependencies?: string
+  notes?: string
   updated_at?: string
 }
 
@@ -37,6 +42,7 @@ export default function TasksPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
+  const [taskDraft, setTaskDraft] = useState<Partial<TaskItem>>({})
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -81,6 +87,14 @@ export default function TasksPage() {
   )
 
   const tasks: TaskItem[] = useMemo(() => (Array.isArray(tasksRaw) ? tasksRaw : []), [tasksRaw])
+
+  useEffect(() => {
+    if (selectedTask) {
+      const fresh = tasks.find((t) => t.id === selectedTask.id) || selectedTask
+      setSelectedTask(fresh)
+      setTaskDraft(fresh)
+    }
+  }, [tasks, selectedTask])
 
   const grouped = useMemo(() => {
     const map: Record<string, TaskItem[]> = { todo: [], doing: [], review: [], blocked: [] }
@@ -159,6 +173,27 @@ export default function TasksPage() {
     mutateTasks()
   }
 
+  const saveTaskDetails = async () => {
+    if (!selectedTask) return
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.accessToken ?? ''}`,
+      },
+      body: JSON.stringify({
+        description: taskDraft.description || null,
+        acceptance: taskDraft.acceptance || null,
+        exec_mode: taskDraft.exec_mode || null,
+        due_at: taskDraft.due_at || null,
+        estimate_hours: taskDraft.estimate_hours ?? null,
+        dependencies: taskDraft.dependencies || null,
+        notes: taskDraft.notes || null,
+      }),
+    })
+    mutateTasks()
+  }
+
   return (
     <WttShellV2
       agents={agentItems}
@@ -190,7 +225,10 @@ export default function TasksPage() {
                   {grouped[col].map((task) => (
                     <button
                       key={task.id}
-                      onClick={() => setSelectedTask(task)}
+                      onClick={() => {
+                        setSelectedTask(task)
+                        setTaskDraft(task)
+                      }}
                       className="w-full rounded-lg border border-white/10 bg-[#111a25] p-2 text-left hover:border-[#2ea6ff]/60"
                     >
                       <p className="text-sm font-medium leading-5">{task.title}</p>
@@ -213,9 +251,7 @@ export default function TasksPage() {
             {selectedTask ? (
               <div className="space-y-2 text-sm">
                 <p className="font-semibold">{selectedTask.title}</p>
-                <p className="text-xs text-[#8ca0b3]">{selectedTask.description || 'No description'}</p>
-                <p className="text-xs">Priority: {selectedTask.priority}</p>
-                <p className="text-xs">Status: {selectedTask.status}</p>
+                <p className="text-xs">Priority: {selectedTask.priority} · Status: {selectedTask.status}</p>
                 <p className="text-xs">Owner: {selectedTask.owner_agent_id || 'unassigned'}</p>
                 {selectedTask.topic_id && (
                   <button
@@ -225,6 +261,20 @@ export default function TasksPage() {
                     Open in Feed
                   </button>
                 )}
+
+                <div className="grid grid-cols-1 gap-2 border-t border-white/10 pt-2">
+                  <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Task description" className="min-h-16 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                  <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="Acceptance criteria" className="min-h-14 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="Exec mode" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.due_at || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, due_at: e.target.value }))} placeholder="Due at (ISO)" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: Number(e.target.value || 0) }))} placeholder="Estimate hours" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} placeholder="Dependencies" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                  </div>
+                  <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Notes" className="min-h-12 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                  <button onClick={saveTaskDetails} className="rounded-md border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff]">Save Details</button>
+                </div>
+
                 <div className="border-t border-white/10 pt-2">
                   <p className="mb-1 text-xs text-[#8ca0b3]">Assign</p>
                   <div className="flex flex-wrap gap-1">
