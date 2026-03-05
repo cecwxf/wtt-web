@@ -36,6 +36,7 @@ export default function TasksGraphPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [depFromId, setDepFromId] = useState('')
   const [depToId, setDepToId] = useState('')
@@ -109,15 +110,19 @@ export default function TasksGraphPage() {
     })
   }, [nodes])
 
-  const runPipeline = async () => {
+  const runPipeline = async (taskIds?: string[]) => {
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipeline/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-      body: JSON.stringify({ trigger_agent_id: selectedAgentId || 'pipeline-runner' }),
+      body: JSON.stringify({ trigger_agent_id: selectedAgentId || 'pipeline-runner', task_ids: taskIds && taskIds.length > 0 ? taskIds : undefined }),
     })
     const j = await r.json()
     alert(`Pipeline started: ${j.count || 0} tasks`)
     mutate()
+  }
+
+  const toggleSelectTask = (taskId: string) => {
+    setSelectedTaskIds((prev) => (prev.includes(taskId) ? prev.filter((x) => x !== taskId) : [...prev, taskId]))
   }
 
   const addDependency = async () => {
@@ -217,7 +222,8 @@ export default function TasksGraphPage() {
               {nodes.map((n) => <option key={`to-${n.id}`} value={n.id}>{n.title}</option>)}
             </select>
             <button onClick={addDependency} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">Add Edge</button>
-            <button onClick={runPipeline} className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm text-white">Run Pipeline</button>
+            <button onClick={() => runPipeline(selectedTaskIds)} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">Run Selected ({selectedTaskIds.length})</button>
+            <button onClick={() => runPipeline()} className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm text-white">Run Pipeline</button>
           </div>
         </div>
 
@@ -226,10 +232,13 @@ export default function TasksGraphPage() {
             <p className="mb-2 text-sm font-semibold">Task Library</p>
             <div className="space-y-2 overflow-auto">
               {nodes.map((n) => (
-                <button key={n.id} onClick={() => setSelectedTaskId(n.id)} className={`w-full rounded-lg border p-2 text-left ${statusColor(n.status)} bg-[#111a25]`}>
-                  <p className="text-sm">{n.title}</p>
+                <div key={n.id} className={`w-full rounded-lg border p-2 text-left ${statusColor(n.status)} bg-[#111a25]`}>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <button onClick={() => setSelectedTaskId(n.id)} className="truncate text-left text-sm hover:text-[#9fd6ff]">{n.title}</button>
+                    <input type="checkbox" checked={selectedTaskIds.includes(n.id)} onChange={() => toggleSelectTask(n.id)} />
+                  </div>
                   <p className="text-[10px] text-[#8ca0b3]">{n.status} · {n.owner_agent_id || '-'}</p>
-                </button>
+                </div>
               ))}
             </div>
           </aside>
@@ -312,7 +321,7 @@ export default function TasksGraphPage() {
                       setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
                     }}
                     onClick={() => setSelectedTaskId(n.id)}
-                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} bg-[#111a25] shadow-sm`}
+                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} ${selectedTaskIds.includes(n.id) ? 'ring-2 ring-[#2ea6ff]/60' : ''} bg-[#111a25] shadow-sm`}
                     style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H }}
                   >
                     <p className="line-clamp-1 text-sm font-medium">{n.title}</p>
