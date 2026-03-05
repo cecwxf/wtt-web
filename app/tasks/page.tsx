@@ -108,12 +108,19 @@ export default function TasksPage() {
         : []
     return rows
       .map((x) => x as Record<string, unknown>)
-      .map((x) => ({
-        id: String(x.id || x.message_id || ''),
-        sender: String(x.sender_id || 'unknown'),
-        content: String(x.content || ''),
-        created_at: String(x.created_at || x.timestamp || ''),
-      }))
+      .map((x) => {
+        const content = String(x.content || '')
+        let kind: 'reasoned' | 'review' | 'normal' = 'normal'
+        if (content.includes('[AUTO-REASONED]')) kind = 'reasoned'
+        else if (content.includes('[TASK_REVIEW]')) kind = 'review'
+        return {
+          id: String(x.id || x.message_id || ''),
+          sender: String(x.sender_id || 'unknown'),
+          content,
+          created_at: String(x.created_at || x.timestamp || ''),
+          kind,
+        }
+      })
       .filter((x) => x.content)
       .slice(-8)
       .reverse()
@@ -330,10 +337,21 @@ export default function TasksPage() {
                   <div className="max-h-40 space-y-1 overflow-auto rounded border border-white/10 bg-[#0f1824] p-2">
                     {timeline.length > 0 ? (
                       timeline.map((item) => (
-                        <div key={item.id || `${item.sender}-${item.created_at}`} className="rounded border border-white/10 bg-[#111b28] p-1.5">
-                          <p className="text-[10px] text-[#8ca0b3]">{item.sender} · {item.created_at?.replace('T', ' ').slice(0, 19)}</p>
+                        <button
+                          key={item.id || `${item.sender}-${item.created_at}`}
+                          onClick={() => selectedTask?.topic_id && router.push(`/feed?topicId=${selectedTask.topic_id}`)}
+                          className="w-full rounded border border-white/10 bg-[#111b28] p-1.5 text-left hover:border-[#2ea6ff]/60"
+                        >
+                          <p className="flex items-center gap-1 text-[10px] text-[#8ca0b3]">
+                            <span>{item.sender}</span>
+                            <span>·</span>
+                            <span>{item.created_at?.replace('T', ' ').slice(0, 19)}</span>
+                            <span className={`ml-auto rounded px-1 ${item.kind === 'reasoned' ? 'bg-[#214361] text-[#9fd6ff]' : item.kind === 'review' ? 'bg-[#3f3320] text-[#ffd792]' : 'bg-[#2a2f37] text-[#c3ced9]'}`}>
+                              {item.kind === 'reasoned' ? 'AUTO' : item.kind === 'review' ? 'REVIEW' : 'MSG'}
+                            </span>
+                          </p>
                           <p className="mt-0.5 line-clamp-2 text-[11px] text-[#d8e5f2]">{item.content}</p>
-                        </div>
+                        </button>
                       ))
                     ) : (
                       <p className="text-[11px] text-[#7d8e9e]">No timeline yet</p>
