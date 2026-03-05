@@ -49,6 +49,7 @@ export default function TasksGraphPage() {
   const [pan, setPan] = useState<Pos>({ x: 0, y: 0 })
   const [panning, setPanning] = useState(false)
   const [panStart, setPanStart] = useState<Pos>({ x: 0, y: 0 })
+  const [newTaskTitle, setNewTaskTitle] = useState('')
   const canvasRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -171,6 +172,34 @@ export default function TasksGraphPage() {
     await mutate()
   }
 
+  const createTaskAt = async (x: number, y: number) => {
+    const title = (newTaskTitle || prompt('New task title') || '').trim()
+    if (!title) return
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      body: JSON.stringify({
+        title,
+        task_type: 'feature',
+        priority: 'P2',
+        status: 'todo',
+        owner_agent_id: selectedAgentId || undefined,
+        runner_agent_id: selectedAgentId || undefined,
+        created_by: selectedAgentId || 'user',
+      }),
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`Create task failed: ${t || r.status}`)
+      return
+    }
+    const j = await r.json()
+    setPositions((prev) => ({ ...prev, [j.id]: { x, y } }))
+    setNewTaskTitle('')
+    await mutate()
+    setSelectedTaskId(j.id)
+  }
+
   const removeDependency = async (taskId: string, dependsOnTaskId: string) => {
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/dependencies/${dependsOnTaskId}`, {
       method: 'DELETE',
@@ -244,6 +273,7 @@ export default function TasksGraphPage() {
             <button onClick={autoLayout} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">Auto Layout</button>
             <button onClick={() => setZoom((z) => Math.min(2, Number((z + 0.1).toFixed(2))))} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-2 py-2 text-xs">+</button>
             <button onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-2 py-2 text-xs">-</button>
+            <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="New node title" className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
             <select value={depFromId} onChange={(e) => setDepFromId(e.target.value)} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
               <option value="">From task</option>
               {nodes.map((n) => <option key={`from-${n.id}`} value={n.id}>{n.title}</option>)}
@@ -289,6 +319,14 @@ export default function TasksGraphPage() {
               if ((e.target as HTMLElement).closest('button')) return
               setPanning(true)
               setPanStart({ x: e.clientX, y: e.clientY })
+            }}
+            onDoubleClick={(e) => {
+              if (!canvasRef.current) return
+              if ((e.target as HTMLElement).closest('button')) return
+              const rect = canvasRef.current.getBoundingClientRect()
+              const x = (e.clientX - rect.left - pan.x) / zoom
+              const y = (e.clientY - rect.top - pan.y) / zoom
+              createTaskAt(Math.max(0, x - NODE_W / 2), Math.max(0, y - NODE_H / 2))
             }}
             className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0f1824]"
           >
