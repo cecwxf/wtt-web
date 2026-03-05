@@ -88,6 +88,37 @@ export default function TasksPage() {
 
   const tasks: TaskItem[] = useMemo(() => (Array.isArray(tasksRaw) ? tasksRaw : []), [tasksRaw])
 
+  const { data: timelineRaw } = useSWR(
+    selectedTask?.topic_id && session?.accessToken ? ['task-timeline', selectedTask.topic_id, session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask?.topic_id}/messages?limit=20`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!response.ok) return []
+      return response.json()
+    },
+    { refreshInterval: 5000 }
+  )
+
+  const timeline = useMemo(() => {
+    const rows = Array.isArray(timelineRaw)
+      ? timelineRaw
+      : Array.isArray((timelineRaw as { messages?: unknown[] })?.messages)
+        ? ((timelineRaw as { messages: unknown[] }).messages || [])
+        : []
+    return rows
+      .map((x) => x as Record<string, unknown>)
+      .map((x) => ({
+        id: String(x.id || x.message_id || ''),
+        sender: String(x.sender_id || 'unknown'),
+        content: String(x.content || ''),
+        created_at: String(x.created_at || x.timestamp || ''),
+      }))
+      .filter((x) => x.content)
+      .slice(-8)
+      .reverse()
+  }, [timelineRaw])
+
   useEffect(() => {
     if (selectedTask) {
       const fresh = tasks.find((t) => t.id === selectedTask.id) || selectedTask
@@ -291,6 +322,22 @@ export default function TasksPage() {
                     <button onClick={() => reviewCurrent('approve')} className="rounded border border-green-500/40 px-2 py-1 text-xs text-green-300">Approve</button>
                     <button onClick={() => reviewCurrent('reject')} className="rounded border border-yellow-500/40 px-2 py-1 text-xs text-yellow-300">Reject</button>
                     <button onClick={() => reviewCurrent('block')} className="rounded border border-red-500/40 px-2 py-1 text-xs text-red-300">Block</button>
+                  </div>
+                </div>
+
+                <div className="border-t border-white/10 pt-2">
+                  <p className="mb-1 text-xs text-[#8ca0b3]">Execution Timeline</p>
+                  <div className="max-h-40 space-y-1 overflow-auto rounded border border-white/10 bg-[#0f1824] p-2">
+                    {timeline.length > 0 ? (
+                      timeline.map((item) => (
+                        <div key={item.id || `${item.sender}-${item.created_at}`} className="rounded border border-white/10 bg-[#111b28] p-1.5">
+                          <p className="text-[10px] text-[#8ca0b3]">{item.sender} · {item.created_at?.replace('T', ' ').slice(0, 19)}</p>
+                          <p className="mt-0.5 line-clamp-2 text-[11px] text-[#d8e5f2]">{item.content}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-[11px] text-[#7d8e9e]">No timeline yet</p>
+                    )}
                   </div>
                 </div>
               </div>
