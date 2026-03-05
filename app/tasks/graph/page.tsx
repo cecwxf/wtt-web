@@ -43,6 +43,10 @@ export default function TasksGraphPage() {
   const [positions, setPositions] = useState<Record<string, Pos>>({})
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState<Pos>({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState<Pos>({ x: 0, y: 0 })
+  const [panning, setPanning] = useState(false)
+  const [panStart, setPanStart] = useState<Pos>({ x: 0, y: 0 })
   const canvasRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -131,6 +135,19 @@ export default function TasksGraphPage() {
     await mutate()
   }
 
+  const removeDependency = async (taskId: string, dependsOnTaskId: string) => {
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/dependencies/${dependsOnTaskId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`Remove dependency failed: ${t || r.status}`)
+      return
+    }
+    await mutate()
+  }
+
   const autoLayout = () => {
     const next: Record<string, Pos> = {}
     nodes.forEach((n, i) => {
@@ -138,6 +155,8 @@ export default function TasksGraphPage() {
       const row = Math.floor(i / 3)
       next[n.id] = { x: 30 + col * 300, y: 30 + row * 140 }
     })
+    setPan({ x: 0, y: 0 })
+    setZoom(1)
     setPositions(next)
   }
 
@@ -150,10 +169,20 @@ export default function TasksGraphPage() {
   }
 
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!draggingId || !canvasRef.current) return
+    if (!canvasRef.current) return
+
+    if (panning) {
+      const dx = e.clientX - panStart.x
+      const dy = e.clientY - panStart.y
+      setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+      setPanStart({ x: e.clientX, y: e.clientY })
+      return
+    }
+
+    if (!draggingId) return
     const rect = canvasRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left - dragOffset.x
-    const y = e.clientY - rect.top - dragOffset.y
+    const x = (e.clientX - rect.left - pan.x) / zoom - dragOffset.x
+    const y = (e.clientY - rect.top - pan.y) / zoom - dragOffset.y
     setPositions((prev) => ({ ...prev, [draggingId]: { x: Math.max(0, x), y: Math.max(0, y) } }))
   }
 
@@ -177,6 +206,8 @@ export default function TasksGraphPage() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={autoLayout} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">Auto Layout</button>
+            <button onClick={() => setZoom((z) => Math.min(2, Number((z + 0.1).toFixed(2))))} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-2 py-2 text-xs">+</button>
+            <button onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-2 py-2 text-xs">-</button>
             <select value={depFromId} onChange={(e) => setDepFromId(e.target.value)} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
               <option value="">From task</option>
               {nodes.map((n) => <option key={`from-${n.id}`} value={n.id}>{n.title}</option>)}
@@ -206,51 +237,91 @@ export default function TasksGraphPage() {
           <main
             ref={canvasRef}
             onMouseMove={onMouseMove}
-            onMouseUp={() => setDraggingId(null)}
-            onMouseLeave={() => setDraggingId(null)}
+            onMouseUp={() => {
+              setDraggingId(null)
+              setPanning(false)
+            }}
+            onMouseLeave={() => {
+              setDraggingId(null)
+              setPanning(false)
+            }}
+            onMouseDown={(e) => {
+              if ((e.target as HTMLElement).closest('button')) return
+              setPanning(true)
+              setPanStart({ x: e.clientX, y: e.clientY })
+            }}
             className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0f1824]"
           >
-            <svg className="pointer-events-none absolute inset-0 h-full w-full">
+            <div
+              className="absolute inset-0"
+              style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}
+            >
+              <svg className="absolute inset-0 h-full w-full">
+                <defs>
+                  <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L8,4 L0,8 z" fill="#4d6a85" />
+                  </marker>
+                </defs>
+                {edges.map((e) => {
+                  const from = positions[e.depends_on_task_id]
+                  const to = positions[e.task_id]
+                  if (!from || !to) return null
+                  const x1 = from.x + NODE_W
+                  const y1 = from.y + NODE_H / 2
+                  const x2 = to.x
+                  const y2 = to.y + NODE_H / 2
+                  return (
+                    <g key={`${e.task_id}-${e.depends_on_task_id}`}>
+                      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#4d6a85" strokeWidth="2" markerEnd="url(#arrow)" />
+                      <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} fill="#8ca0b3" fontSize="10">
+                        {e.mode || 'p2p'}
+                      </text>
+                    </g>
+                  )
+                })}
+              </svg>
+
               {edges.map((e) => {
                 const from = positions[e.depends_on_task_id]
                 const to = positions[e.task_id]
                 if (!from || !to) return null
-                const x1 = from.x + NODE_W
-                const y1 = from.y + NODE_H / 2
-                const x2 = to.x
-                const y2 = to.y + NODE_H / 2
+                const x = (from.x + NODE_W + to.x) / 2 - 11
+                const y = (from.y + NODE_H / 2 + to.y + NODE_H / 2) / 2 + 2
                 return (
-                  <g key={`${e.task_id}-${e.depends_on_task_id}`}>
-                    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#4d6a85" strokeWidth="2" />
-                    <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} fill="#8ca0b3" fontSize="10">
-                      {e.mode || 'p2p'}
-                    </text>
-                  </g>
+                  <button
+                    key={`del-${e.task_id}-${e.depends_on_task_id}`}
+                    onClick={() => removeDependency(e.task_id, e.depends_on_task_id)}
+                    className="absolute rounded border border-red-500/40 bg-[#2a1618] px-1 text-[10px] text-red-300"
+                    style={{ left: x, top: y }}
+                    title="Remove edge"
+                  >
+                    ×
+                  </button>
                 )
               })}
-            </svg>
 
-            {nodes.map((n) => {
-              const p = positions[n.id] || { x: 30, y: 30 }
-              return (
-                <button
-                  key={n.id}
-                  onMouseDown={(e) => {
-                    setSelectedTaskId(n.id)
-                    const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
-                    setDraggingId(n.id)
-                    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-                  }}
-                  onClick={() => setSelectedTaskId(n.id)}
-                  className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} bg-[#111a25] shadow-sm`}
-                  style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H }}
-                >
-                  <p className="line-clamp-1 text-sm font-medium">{n.title}</p>
-                  <p className="mt-1 text-[10px] text-[#8ca0b3]">{n.status} · runner: {n.runner_agent_id || '-'}</p>
-                  <p className="text-[10px] text-[#8ca0b3]">{n.id.slice(0, 8)}</p>
-                </button>
-              )
-            })}
+              {nodes.map((n) => {
+                const p = positions[n.id] || { x: 30, y: 30 }
+                return (
+                  <button
+                    key={n.id}
+                    onMouseDown={(e) => {
+                      setSelectedTaskId(n.id)
+                      const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
+                      setDraggingId(n.id)
+                      setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
+                    }}
+                    onClick={() => setSelectedTaskId(n.id)}
+                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} bg-[#111a25] shadow-sm`}
+                    style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H }}
+                  >
+                    <p className="line-clamp-1 text-sm font-medium">{n.title}</p>
+                    <p className="mt-1 text-[10px] text-[#8ca0b3]">{n.status} · runner: {n.runner_agent_id || '-'}</p>
+                    <p className="text-[10px] text-[#8ca0b3]">{n.id.slice(0, 8)}</p>
+                  </button>
+                )
+              })}
+            </div>
           </main>
 
           <aside className="rounded-xl border border-white/10 bg-[#16202c] p-3">
