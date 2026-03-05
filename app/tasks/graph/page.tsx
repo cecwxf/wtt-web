@@ -50,6 +50,7 @@ export default function TasksGraphPage() {
   const [panning, setPanning] = useState(false)
   const [panStart, setPanStart] = useState<Pos>({ x: 0, y: 0 })
   const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [taskDraft, setTaskDraft] = useState<Partial<TaskNode & { description?: string; priority?: string; exec_mode?: string; acceptance?: string; notes?: string }>>({})
   const canvasRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -81,6 +82,10 @@ export default function TasksGraphPage() {
   const nodes: TaskNode[] = useMemo(() => (Array.isArray(data?.nodes) ? data.nodes : []), [data])
   const edges: TaskEdge[] = useMemo(() => (Array.isArray(data?.edges) ? data.edges : []), [data])
   const selected = useMemo(() => nodes.find((n) => n.id === selectedTaskId) || null, [nodes, selectedTaskId])
+
+  useEffect(() => {
+    if (selected) setTaskDraft(selected)
+  }, [selected])
 
   const { data: selectedTimelineRaw } = useSWR(
     selected?.topic_id && session?.accessToken ? ['graph-timeline', selected.topic_id, session.accessToken] : null,
@@ -198,6 +203,31 @@ export default function TasksGraphPage() {
     setNewTaskTitle('')
     await mutate()
     setSelectedTaskId(j.id)
+  }
+
+  const saveTaskDetail = async () => {
+    if (!selected) return
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selected.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      body: JSON.stringify({
+        title: taskDraft.title,
+        status: taskDraft.status,
+        owner_agent_id: taskDraft.owner_agent_id,
+        runner_agent_id: taskDraft.runner_agent_id,
+        description: taskDraft.description,
+        acceptance: taskDraft.acceptance,
+        notes: taskDraft.notes,
+        exec_mode: taskDraft.exec_mode,
+      }),
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`Save failed: ${t || r.status}`)
+      return
+    }
+    await mutate()
+    alert('Task updated')
   }
 
   const removeDependency = async (taskId: string, dependsOnTaskId: string) => {
@@ -406,10 +436,19 @@ export default function TasksGraphPage() {
             <p className="mb-2 text-sm font-semibold">Node Detail</p>
             {selected ? (
               <div className="space-y-2 text-sm">
-                <p className="font-semibold">{selected.title}</p>
-                <p className="text-xs">status: {selected.status}</p>
-                <p className="text-xs">owner: {selected.owner_agent_id || '-'}</p>
-                <p className="text-xs">runner: {selected.runner_agent_id || '-'}</p>
+                <input value={taskDraft.title || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} className="w-full rounded border border-white/10 bg-[#111a25] px-2 py-1 text-sm font-semibold" />
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={taskDraft.status || selected.status} onChange={(e) => setTaskDraft((d) => ({ ...d, status: e.target.value as TaskNode['status'] }))} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
+                    <option value="todo">todo</option><option value="doing">doing</option><option value="review">review</option><option value="done">done</option><option value="blocked">blocked</option>
+                  </select>
+                  <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="exec_mode" className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
+                  <input value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} placeholder="owner agent" className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
+                  <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} placeholder="runner agent" className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
+                </div>
+                <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="description" className="min-h-14 w-full rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
+                <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="acceptance" className="min-h-12 w-full rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
+                <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="notes" className="min-h-10 w-full rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
+                <button onClick={saveTaskDetail} className="rounded border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff]">Save Task</button>
                 <div className="rounded border border-white/10 bg-[#111a25] p-2">
                   <p className="mb-1 text-[11px] text-[#8ca0b3]">Inbound Dependencies</p>
                   <div className="space-y-1">
