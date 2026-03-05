@@ -44,6 +44,7 @@ export default function TasksPage() {
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   const [taskDraft, setTaskDraft] = useState<Partial<TaskItem>>({})
+  const [runningTaskId, setRunningTaskId] = useState<string | null>(null)
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -143,6 +144,14 @@ export default function TasksPage() {
     return map
   }, [tasks])
 
+  const statusProgress = (status: TaskItem['status']) => {
+    if (status === 'todo') return 5
+    if (status === 'doing') return 55
+    if (status === 'review') return 90
+    if (status === 'done') return 100
+    return 0
+  }
+
   const topics = useMemo(() => {
     if (!Array.isArray(subscribedTopicsRaw)) return []
     return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string }) => ({
@@ -203,18 +212,31 @@ export default function TasksPage() {
 
   const runCurrent = async () => {
     if (!selectedTask) return
-    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.accessToken ?? ''}`,
-      },
-      body: JSON.stringify({
-        trigger_agent_id: selectedAgentId || 'task-runner',
-        runner_agent_id: selectedTask.owner_agent_id || selectedAgentId || 'openclaw_mcp_test_agent',
-      }),
-    })
-    mutateTasks()
+    setRunningTaskId(selectedTask.id)
+    try {
+      const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+        body: JSON.stringify({
+          trigger_agent_id: selectedAgentId || 'task-runner',
+          runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId || 'openclaw_mcp_test_agent',
+        }),
+      })
+      if (!resp.ok) {
+        const txt = await resp.text()
+        alert(`Run Task failed: ${txt || resp.status}`)
+        return
+      }
+      await mutateTasks()
+      alert('Run Task dispatched')
+    } catch (e) {
+      alert(`Run Task failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+    } finally {
+      setRunningTaskId(null)
+    }
   }
 
   const reviewCurrent = async (action: 'approve' | 'reject' | 'block') => {
@@ -291,6 +313,9 @@ export default function TasksPage() {
                     >
                       <p className="text-sm font-medium leading-5">{task.title}</p>
                       <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
+                      <div className="mt-1 h-1.5 w-full rounded bg-[#26384a]">
+                        <div className="h-1.5 rounded bg-[#2ea6ff]" style={{ width: `${statusProgress(task.status)}%` }} />
+                      </div>
                       <div className="mt-2 flex gap-1">
                         {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Todo</span>}
                         {col !== 'doing' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'doing') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Doing</span>}
@@ -322,7 +347,13 @@ export default function TasksPage() {
                 )}
 
                 <div className="border-t border-white/10 pt-2">
-                  <button onClick={runCurrent} className="rounded-md border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff]">Run Task</button>
+                  <button
+                    onClick={runCurrent}
+                    disabled={runningTaskId === selectedTask.id}
+                    className="rounded-md border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {runningTaskId === selectedTask.id ? 'Running...' : 'Run Task'}
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 gap-2 border-t border-white/10 pt-2">
