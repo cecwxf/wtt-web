@@ -59,7 +59,7 @@ export default function TasksGraphPage() {
   const selected = useMemo(() => nodes.find((n) => n.id === selectedTaskId) || null, [nodes, selectedTaskId])
 
   const runPipeline = async () => {
-    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipeline/run`, {
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipeline/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({ trigger_agent_id: selectedAgentId || 'pipeline-runner' }),
