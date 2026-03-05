@@ -24,6 +24,7 @@ interface TaskItem {
   priority: 'P0' | 'P1' | 'P2' | 'P3'
   status: 'todo' | 'doing' | 'review' | 'done' | 'blocked'
   owner_agent_id?: string
+  runner_agent_id?: string
   topic_id?: string
   acceptance?: string
   exec_mode?: string
@@ -171,6 +172,8 @@ export default function TasksPage() {
         priority: 'P1',
         status: 'todo',
         task_type: 'feature',
+        owner_agent_id: selectedAgentId || undefined,
+        runner_agent_id: selectedAgentId || undefined,
         created_by: selectedAgentId || 'user',
       }),
     })
@@ -238,6 +241,7 @@ export default function TasksPage() {
       body: JSON.stringify({
         description: taskDraft.description || null,
         acceptance: taskDraft.acceptance || null,
+        runner_agent_id: taskDraft.runner_agent_id || null,
         exec_mode: taskDraft.exec_mode || null,
         due_at: taskDraft.due_at || null,
         estimate_hours: taskDraft.estimate_hours ?? null,
@@ -286,7 +290,7 @@ export default function TasksPage() {
                       className="w-full rounded-lg border border-white/10 bg-[#111a25] p-2 text-left hover:border-[#2ea6ff]/60"
                     >
                       <p className="text-sm font-medium leading-5">{task.title}</p>
-                      <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · {task.owner_agent_id || 'unassigned'}</p>
+                      <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
                       <div className="mt-2 flex gap-1">
                         {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Todo</span>}
                         {col !== 'doing' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'doing') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Doing</span>}
@@ -307,6 +311,7 @@ export default function TasksPage() {
                 <p className="font-semibold">{selectedTask.title}</p>
                 <p className="text-xs">Priority: {selectedTask.priority} · Status: {selectedTask.status}</p>
                 <p className="text-xs">Owner: {selectedTask.owner_agent_id || 'unassigned'}</p>
+                <p className="text-xs">Runner: {selectedTask.runner_agent_id || '-'}</p>
                 {selectedTask.topic_id && (
                   <button
                     className="mt-1 rounded-md border border-white/10 bg-[#1d2a3a] px-2 py-1 text-xs"
@@ -324,10 +329,11 @@ export default function TasksPage() {
                   <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Task description" className="min-h-16 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
                   <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="Acceptance criteria" className="min-h-14 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
                   <div className="grid grid-cols-2 gap-2">
+                    <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} placeholder="Runner agent" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
                     <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="Exec mode" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
                     <input value={taskDraft.due_at || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, due_at: e.target.value }))} placeholder="Due at (ISO)" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
                     <input value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: Number(e.target.value || 0) }))} placeholder="Estimate hours" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} placeholder="Dependencies" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} placeholder="Dependencies" className="col-span-2 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
                   </div>
                   <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Notes" className="min-h-12 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
                   <button onClick={saveTaskDetails} className="rounded-md border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff]">Save Details</button>
