@@ -1,0 +1,255 @@
+'use client'
+
+import { useSession, signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import useSWR from 'swr'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
+import { normalizeAndFilterAgents } from '@/lib/agents'
+
+interface Agent {
+  id: string
+  agent_id: string
+  display_name: string
+  is_primary: boolean
+  api_key?: string
+}
+
+interface TaskItem {
+  id: string
+  title: string
+  description?: string
+  task_type: string
+  priority: 'P0' | 'P1' | 'P2' | 'P3'
+  status: 'todo' | 'doing' | 'review' | 'done' | 'blocked'
+  owner_agent_id?: string
+  topic_id?: string
+  acceptance?: string
+  updated_at?: string
+}
+
+const columns: Array<TaskItem['status']> = ['todo', 'doing', 'review', 'blocked']
+
+export default function TasksPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
+
+  const loadAgents = useCallback(async () => {
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
+      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    })
+    if (!response.ok) return
+    const data = await response.json()
+    const list = normalizeAndFilterAgents(data)
+    setAgents(list)
+    if (!selectedAgentId && list[0]) setSelectedAgentId(list[0].agent_id)
+  }, [session?.accessToken, selectedAgentId])
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login')
+      return
+    }
+    if (status === 'authenticated') loadAgents()
+  }, [status, router, loadAgents])
+
+  const { data: subscribedTopicsRaw } = useSWR(
+    selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/subscribed?agent_id=${selectedAgentId}`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!response.ok) return []
+      return response.json()
+    }
+  )
+
+  const { data: tasksRaw, mutate: mutateTasks } = useSWR(
+    session?.accessToken ? ['tasks', session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!response.ok) throw new Error('Failed to load tasks')
+      return response.json()
+    },
+    { refreshInterval: 5000 }
+  )
+
+  const tasks: TaskItem[] = useMemo(() => (Array.isArray(tasksRaw) ? tasksRaw : []), [tasksRaw])
+
+  const grouped = useMemo(() => {
+    const map: Record<string, TaskItem[]> = { todo: [], doing: [], review: [], blocked: [] }
+    for (const t of tasks) {
+      if (t.status in map) map[t.status].push(t)
+    }
+    return map
+  }, [tasks])
+
+  const topics = useMemo(() => {
+    if (!Array.isArray(subscribedTopicsRaw)) return []
+    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string }) => ({
+      topic_id: topic.id,
+      name: topic.name,
+      topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
+      unread_count: 0,
+      can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
+    }))
+  }, [subscribedTopicsRaw])
+
+  const agentItems = useMemo(() => {
+    return agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name, unread_count: 0 }))
+  }, [agents])
+
+  const createTask = async () => {
+    const title = prompt('Task title')?.trim()
+    if (!title) return
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.accessToken ?? ''}`,
+      },
+      body: JSON.stringify({
+        title,
+        priority: 'P1',
+        status: 'todo',
+        task_type: 'feature',
+        created_by: selectedAgentId || 'user',
+      }),
+    })
+    mutateTasks()
+  }
+
+  const moveStatus = async (task: TaskItem, status: TaskItem['status']) => {
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.accessToken ?? ''}`,
+      },
+      body: JSON.stringify({ status }),
+    })
+    mutateTasks()
+  }
+
+  const assignCurrent = async (agentId: string) => {
+    if (!selectedTask) return
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/assign?agent_id=${encodeURIComponent(agentId)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    })
+    mutateTasks()
+  }
+
+  const reviewCurrent = async (action: 'approve' | 'reject' | 'block') => {
+    if (!selectedTask) return
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/review`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.accessToken ?? ''}`,
+      },
+      body: JSON.stringify({ action, reviewer: selectedAgentId || 'reviewer' }),
+    })
+    mutateTasks()
+  }
+
+  return (
+    <WttShellV2
+      agents={agentItems}
+      selectedAgentId={selectedAgentId}
+      onAgentChange={setSelectedAgentId}
+      topics={topics}
+      selectedTopicId={null}
+      onTopicChange={(topicId) => router.push(topicId ? `/feed?topicId=${topicId}` : '/feed')}
+      onLogout={() => signOut({ callbackUrl: '/login' })}
+    >
+      <div className="h-full p-4 text-[#e8edf2]">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Tasks</h1>
+            <p className="text-xs text-[#8ca0b3]">Trigger · Assign · Review</p>
+          </div>
+          <button onClick={createTask} className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm text-white">+ New Task</button>
+        </div>
+
+        <div className="grid h-[calc(100%-52px)] grid-cols-[1fr_320px] gap-3">
+          <div className="grid grid-cols-4 gap-3">
+            {columns.map((col) => (
+              <div key={col} className="rounded-xl border border-white/10 bg-[#16202c] p-2">
+                <div className="mb-2 flex items-center justify-between text-sm font-semibold capitalize">
+                  <span>{col}</span>
+                  <span className="text-xs text-[#8ca0b3]">{grouped[col].length}</span>
+                </div>
+                <div className="space-y-2">
+                  {grouped[col].map((task) => (
+                    <button
+                      key={task.id}
+                      onClick={() => setSelectedTask(task)}
+                      className="w-full rounded-lg border border-white/10 bg-[#111a25] p-2 text-left hover:border-[#2ea6ff]/60"
+                    >
+                      <p className="text-sm font-medium leading-5">{task.title}</p>
+                      <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · {task.owner_agent_id || 'unassigned'}</p>
+                      <div className="mt-2 flex gap-1">
+                        {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Todo</span>}
+                        {col !== 'doing' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'doing') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Doing</span>}
+                        {col !== 'review' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'review') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Review</span>}
+                        {col !== 'blocked' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'blocked') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Blocked</span>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <aside className="rounded-xl border border-white/10 bg-[#16202c] p-3">
+            <h2 className="mb-2 text-sm font-semibold">Task Detail</h2>
+            {selectedTask ? (
+              <div className="space-y-2 text-sm">
+                <p className="font-semibold">{selectedTask.title}</p>
+                <p className="text-xs text-[#8ca0b3]">{selectedTask.description || 'No description'}</p>
+                <p className="text-xs">Priority: {selectedTask.priority}</p>
+                <p className="text-xs">Status: {selectedTask.status}</p>
+                <p className="text-xs">Owner: {selectedTask.owner_agent_id || 'unassigned'}</p>
+                {selectedTask.topic_id && (
+                  <button
+                    className="mt-1 rounded-md border border-white/10 bg-[#1d2a3a] px-2 py-1 text-xs"
+                    onClick={() => router.push(`/feed?topicId=${selectedTask.topic_id}`)}
+                  >
+                    Open in Feed
+                  </button>
+                )}
+                <div className="border-t border-white/10 pt-2">
+                  <p className="mb-1 text-xs text-[#8ca0b3]">Assign</p>
+                  <div className="flex flex-wrap gap-1">
+                    {agents.slice(0, 6).map((a) => (
+                      <button key={a.agent_id} onClick={() => assignCurrent(a.agent_id)} className="rounded border border-white/10 px-2 py-1 text-[10px]">
+                        {a.display_name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t border-white/10 pt-2">
+                  <p className="mb-1 text-xs text-[#8ca0b3]">Review</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => reviewCurrent('approve')} className="rounded border border-green-500/40 px-2 py-1 text-xs text-green-300">Approve</button>
+                    <button onClick={() => reviewCurrent('reject')} className="rounded border border-yellow-500/40 px-2 py-1 text-xs text-yellow-300">Reject</button>
+                    <button onClick={() => reviewCurrent('block')} className="rounded border border-red-500/40 px-2 py-1 text-xs text-red-300">Block</button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-[#8ca0b3]">Select a task card to review details.</p>
+            )}
+          </aside>
+        </div>
+      </div>
+    </WttShellV2>
+  )
+}
