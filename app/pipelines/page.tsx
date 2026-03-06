@@ -13,6 +13,13 @@ interface Pipeline {
   name: string
   description?: string
   created_at?: string
+  stats?: {
+    todo?: number
+    doing?: number
+    review?: number
+    done?: number
+    blocked?: number
+  }
 }
 
 export default function PipelinesPage() {
@@ -124,6 +131,13 @@ export default function PipelinesPage() {
                 <button onClick={() => router.push(`/tasks/graph?pipeline=${encodeURIComponent(p.id)}`)} className="text-left">
                   <p className="text-sm font-semibold">{p.name}</p>
                   <p className="mt-1 text-xs text-[#8ca0b3]">{p.description || 'No description'} · {p.id}</p>
+                  <div className="mt-2 flex flex-wrap gap-1 text-[10px]">
+                    <span className="rounded border border-white/10 px-1.5 py-0.5 text-[#a9b9c8]">todo {p.stats?.todo ?? 0}</span>
+                    <span className="rounded border border-blue-500/40 px-1.5 py-0.5 text-[#9fd6ff]">doing {p.stats?.doing ?? 0}</span>
+                    <span className="rounded border border-yellow-500/40 px-1.5 py-0.5 text-[#ffd792]">review {p.stats?.review ?? 0}</span>
+                    <span className="rounded border border-green-500/40 px-1.5 py-0.5 text-[#9fe0ba]">done {p.stats?.done ?? 0}</span>
+                    <span className="rounded border border-red-500/40 px-1.5 py-0.5 text-[#ffb0b0]">blocked {p.stats?.blocked ?? 0}</span>
+                  </div>
                 </button>
                 <div className="flex gap-1">
                   {p.id !== 'default' && (
