@@ -290,6 +290,22 @@ export default function TasksPage() {
     mutateTasks()
   }
 
+  const taskCardTone = (status: TaskItem['status']) => {
+    if (status === 'doing') return 'border-[#2ea6ff]/50 bg-[#102033]'
+    if (status === 'review') return 'border-yellow-500/40 bg-[#2a2416]'
+    if (status === 'done') return 'border-green-500/40 bg-[#13281f]'
+    if (status === 'blocked') return 'border-red-500/40 bg-[#2a1718]'
+    return 'border-white/10 bg-[#111a25]'
+  }
+
+  const progressBarTone = (status: TaskItem['status']) => {
+    if (status === 'done') return 'bg-green-400'
+    if (status === 'review') return 'bg-yellow-400 animate-pulse'
+    if (status === 'blocked') return 'bg-red-400'
+    if (status === 'doing') return 'task-progress-flow bg-[#2ea6ff]'
+    return 'bg-[#2ea6ff]'
+  }
+
   return (
     <WttShellV2
       agents={agentItems}
@@ -325,12 +341,12 @@ export default function TasksPage() {
                         setSelectedTask(task)
                         setTaskDraft(task)
                       }}
-                      className="w-full rounded-lg border border-white/10 bg-[#111a25] p-2 text-left hover:border-[#2ea6ff]/60"
+                      className={`w-full rounded-lg border p-2 text-left hover:border-[#2ea6ff]/60 ${taskCardTone(task.status)}`}
                     >
                       <p className="text-sm font-medium leading-5">{task.title}</p>
                       <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
                       <div className="mt-1 h-1.5 w-full rounded bg-[#26384a]">
-                        <div className="h-1.5 rounded bg-[#2ea6ff]" style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
+                        <div className={`h-1.5 rounded ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
                       </div>
                       <div className="mt-2 flex gap-1">
                         {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Todo</span>}
@@ -438,6 +454,17 @@ export default function TasksPage() {
           </aside>
         </div>
       </div>
+      <style jsx>{`
+        .task-progress-flow {
+          background-image: linear-gradient(90deg, rgba(46,166,255,0.65) 0%, rgba(120,205,255,1) 50%, rgba(46,166,255,0.65) 100%);
+          background-size: 180% 100%;
+          animation: progressFlow 1.2s linear infinite;
+        }
+        @keyframes progressFlow {
+          from { background-position: 100% 0; }
+          to { background-position: 0 0; }
+        }
+      `}</style>
     </WttShellV2>
   )
 }
