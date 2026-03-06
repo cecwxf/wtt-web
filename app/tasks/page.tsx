@@ -36,7 +36,6 @@ interface TaskItem {
 }
 
 const columns: Array<TaskItem['status']> = ['todo', 'doing', 'review', 'done', 'blocked']
-const DEFAULT_RUNNER_AGENT = process.env.NEXT_PUBLIC_WTT_DEFAULT_RUNNER_AGENT || 'openclaw_mcp_test_agent'
 
 export default function TasksPage() {
   const { data: session, status } = useSession()
@@ -200,7 +199,7 @@ export default function TasksPage() {
         status: 'todo',
         task_type: 'feature',
         owner_agent_id: selectedAgentId || undefined,
-        runner_agent_id: DEFAULT_RUNNER_AGENT,
+        runner_agent_id: selectedAgentId || undefined,
         created_by: selectedAgentId || 'user',
       }),
     })
@@ -240,7 +239,7 @@ export default function TasksPage() {
         },
         body: JSON.stringify({
           trigger_agent_id: selectedAgentId || 'task-runner',
-          runner_agent_id: selectedTask.runner_agent_id || DEFAULT_RUNNER_AGENT,
+          runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId,
         }),
       })
       if (!resp.ok) {
