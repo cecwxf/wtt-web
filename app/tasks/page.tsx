@@ -80,6 +80,7 @@ export default function TasksPage() {
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   const [taskDraft, setTaskDraft] = useState<Partial<TaskItem>>({})
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null)
+  const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -100,7 +101,7 @@ export default function TasksPage() {
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
 
-  const { data: subscribedTopicsRaw } = useSWR(
+  const { data: subscribedTopicsRaw, mutate: mutateSubscribedTopics } = useSWR(
     selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
     async () => {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/subscribed?agent_id=${selectedAgentId}`, {
@@ -182,6 +183,22 @@ export default function TasksPage() {
       setTaskDraft(fresh)
     }
   }, [tasks, selectedTask])
+
+  useEffect(() => {
+    if (!taskContextMenu) return
+    const onClose = () => setTaskContextMenu(null)
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setTaskContextMenu(null)
+    }
+    window.addEventListener('click', onClose)
+    window.addEventListener('contextmenu', onClose)
+    window.addEventListener('keydown', onEsc)
+    return () => {
+      window.removeEventListener('click', onClose)
+      window.removeEventListener('contextmenu', onClose)
+      window.removeEventListener('keydown', onEsc)
+    }
+  }, [taskContextMenu])
 
   const grouped = useMemo(() => {
     const map: Record<string, TaskItem[]> = { todo: [], doing: [], review: [], done: [], blocked: [] }
@@ -303,6 +320,34 @@ export default function TasksPage() {
       body: JSON.stringify({ status }),
     })
     mutateTasks()
+  }
+
+  const cancelTask = async (task: TaskItem) => {
+    const ok = window.confirm(`确认取消任务「${task.title}」吗？取消后任务和关联 Topic 都会消失。`)
+    if (!ok) return
+
+    const response = await fetch(
+      `${CLIENT_WTT_API_BASE}/tasks/${task.id}?agent_id=${encodeURIComponent(selectedAgentId || 'reviewer')}&delete_topic=true`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      }
+    )
+
+    if (!response.ok) {
+      const txt = await response.text()
+      alert(`Cancel Task failed: ${txt || response.status}`)
+      return
+    }
+
+    if (selectedTask?.id === task.id) {
+      setSelectedTask(null)
+      setTaskDraft({})
+    }
+
+    setTaskContextMenu(null)
+    await mutateTasks()
+    await mutateSubscribedTopics()
   }
 
   const assignCurrent = async (agentId: string) => {
@@ -436,6 +481,10 @@ export default function TasksPage() {
                       onClick={() => {
                         setSelectedTask(task)
                         setTaskDraft(task)
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setTaskContextMenu({ x: e.clientX, y: e.clientY, task })
                       }}
                       className={`w-full rounded-lg border p-2 text-left hover:border-[#2ea6ff]/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''}`}
                     >
@@ -581,6 +630,22 @@ export default function TasksPage() {
           </aside>
         </div>
       </div>
+
+      {taskContextMenu && (
+        <div
+          className="fixed z-50 min-w-36 rounded-lg border border-white/15 bg-[#0f1824] p-1 shadow-2xl"
+          style={{ left: taskContextMenu.x, top: taskContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-[#ffb4b4] hover:bg-[#2a1718]"
+            onClick={() => cancelTask(taskContextMenu.task)}
+          >
+            取消任务（删除Topic）
+          </button>
+        </div>
+      )}
+
       <style jsx>{`
         .task-progress-flow {
           background-image: linear-gradient(90deg, rgba(46,166,255,0.65) 0%, rgba(120,205,255,1) 50%, rgba(46,166,255,0.65) 100%);
