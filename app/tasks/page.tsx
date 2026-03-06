@@ -186,7 +186,10 @@ export default function TasksPage() {
           durationMs,
         }
       })
-      .filter((x): x is { id: string; title: string; status: TaskItem['status']; durationMs: number } => Boolean(x) && x.durationMs > 0)
+      .filter((x): x is { id: string; title: string; status: TaskItem['status']; durationMs: number } => {
+        if (!x) return false
+        return x.durationMs > 0
+      })
       .sort((a, b) => b.durationMs - a.durationMs)
       .slice(0, 8)
 
