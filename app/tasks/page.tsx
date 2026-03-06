@@ -258,13 +258,21 @@ export default function TasksPage() {
 
   const reviewCurrent = async (action: 'approve' | 'reject' | 'block') => {
     if (!selectedTask) return
+
+    let comment = ''
+    if (action === 'reject') {
+      const input = window.prompt('请输入 Reject 意见（会回传给 Agent 重新执行）：', '')
+      if (input === null) return
+      comment = input.trim()
+    }
+
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/review`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.accessToken ?? ''}`,
       },
-      body: JSON.stringify({ action, reviewer: selectedAgentId || 'reviewer' }),
+      body: JSON.stringify({ action, reviewer: selectedAgentId || 'reviewer', comment }),
     })
     mutateTasks()
   }
