@@ -194,6 +194,7 @@ export default function TasksPage() {
       },
       body: JSON.stringify({
         title,
+        task_mode: 'single',
         priority: 'P1',
         status: 'todo',
         task_type: 'feature',
