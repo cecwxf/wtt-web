@@ -60,6 +60,44 @@ function extractFirstUrl(content: string): string | null {
   return m ? m[0] : null
 }
 
+type ParsedTask = {
+  isTask: boolean
+  kind?: 'run' | 'status' | 'summary' | 'blocked' | 'asset' | 'review' | 'other'
+  taskId?: string
+  sessionId?: string
+  runner?: string
+  executor?: string
+  progress?: string
+  body?: string
+  assetUrl?: string
+  assetPath?: string
+}
+
+function parseTaskContent(content: string): ParsedTask {
+  const c = (content || '').replace(/\\n/g, '\n')
+  if (!c.includes('[TASK_')) return { isTask: false }
+
+  const pick = (re: RegExp) => (c.match(re)?.[1] || '').trim()
+  const taskId = pick(/task_id=([^\s\n]+)/)
+  const sessionId = pick(/session_id=([^\s\n]+)/)
+  const runner = pick(/runner=([^\s\n]+)/)
+  const executor = pick(/executor=([^\s\n]+)/)
+  const progress = pick(/progress=(\d+)%/)
+  const assetUrl = pick(/\nurl=(https?:\/\/\S+)/)
+  const assetPath = pick(/\npath=([^\n]+)/)
+  const body = c.includes('\n') ? c.split('\n').slice(1).join('\n').trim() : ''
+
+  let kind: ParsedTask['kind'] = 'other'
+  if (c.includes('[TASK_RUN]')) kind = 'run'
+  else if (c.includes('[TASK_STATUS]')) kind = 'status'
+  else if (c.includes('[TASK_SUMMARY]')) kind = 'summary'
+  else if (c.includes('[TASK_BLOCKED]')) kind = 'blocked'
+  else if (c.includes('[TASK_ASSET]')) kind = 'asset'
+  else if (c.includes('[TASK_REVIEW]')) kind = 'review'
+
+  return { isTask: true, kind, taskId, sessionId, runner, executor, progress, body, assetUrl, assetPath }
+}
+
 function parseRichContent(content: string): ParsedRich {
   const c = (content || '').trim()
   const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
@@ -461,6 +499,51 @@ export function ChatView({
                     >
                       {!isMine && <p className="mb-1 text-xs font-semibold text-[#2ea6ff]">{message.sender_id}</p>}
                       {(() => {
+                        const task = parseTaskContent(message.content || '')
+                        if (task.isTask) {
+                          const titleMap: Record<string, string> = {
+                            run: 'Task Meta',
+                            status: 'Task Progress',
+                            summary: 'Task Result',
+                            blocked: 'Task Blocked',
+                            asset: 'Task Asset',
+                            review: 'Task Review',
+                            other: 'Task Update',
+                          }
+                          return (
+                            <div className="space-y-2 text-xs">
+                              <div className="rounded-lg border border-white/15 bg-[#0f1b27] p-2">
+                                <p className="mb-1 font-semibold text-[#9fd6ff]">{titleMap[task.kind || 'other']}</p>
+                                <p>task_id: {task.taskId || '-'}</p>
+                                <p>session: {task.sessionId || '-'}</p>
+                                <p>runner/executor: {(task.runner || '-') + '/' + (task.executor || '-')}</p>
+                              </div>
+                              {task.kind === 'status' && (
+                                <div className="rounded-lg border border-white/10 bg-[#111a24] p-2">
+                                  <p className="font-semibold text-[#bfe7ff]">进度 {task.progress ? `${task.progress}%` : ''}</p>
+                                  <p className="mt-1 whitespace-pre-wrap break-words">{task.body || '执行中'}</p>
+                                </div>
+                              )}
+                              {(task.kind === 'summary' || task.kind === 'blocked' || task.kind === 'review') && (
+                                <div className="rounded-lg border border-white/10 bg-[#111a24] p-2">
+                                  <p className="font-semibold text-[#bfe7ff]">结果</p>
+                                  <p className="mt-1 whitespace-pre-wrap break-words">{task.body || '-'}</p>
+                                </div>
+                              )}
+                              {task.kind === 'asset' && (
+                                <div className="rounded-lg border border-white/10 bg-[#111a24] p-2">
+                                  <p className="font-semibold text-[#bfe7ff]">产物</p>
+                                  {task.assetUrl ? (
+                                    <a href={task.assetUrl} target="_blank" rel="noreferrer" className="text-[#8fd6ff] underline break-all">{task.assetUrl}</a>
+                                  ) : (
+                                    <p className="break-all">{task.assetPath || task.body || '-'}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
+
                         const parsed = parseRichContent(message.content || '')
                         if (parsed.kind === 'image') {
                           return (
