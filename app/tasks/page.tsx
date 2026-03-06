@@ -350,6 +350,40 @@ export default function TasksPage() {
     await mutateSubscribedTopics()
   }
 
+  const leaveTopicFromSidebar = async (topicId: string) => {
+    if (!confirm('Leave this topic?')) return
+
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    })
+
+    if (!response.ok) {
+      const txt = await response.text()
+      alert(`Leave topic failed: ${txt || response.status}`)
+      return
+    }
+
+    await mutateSubscribedTopics()
+  }
+
+  const deleteTopicFromSidebar = async (topicId: string) => {
+    if (!confirm('Delete this topic? (soft delete)')) return
+
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    })
+
+    if (!response.ok) {
+      const txt = await response.text()
+      alert(`Delete topic failed: ${txt || response.status}`)
+      return
+    }
+
+    await mutateSubscribedTopics()
+  }
+
   const assignCurrent = async (agentId: string) => {
     if (!selectedTask) return
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/assign?agent_id=${encodeURIComponent(agentId)}`, {
@@ -455,6 +489,9 @@ export default function TasksPage() {
       topics={topics}
       selectedTopicId={null}
       onTopicChange={(topicId) => router.push(topicId ? `/feed?topicId=${topicId}` : '/feed')}
+      onLeaveTopic={leaveTopicFromSidebar}
+      onDeleteTopic={deleteTopicFromSidebar}
+      onTopicsRefresh={() => mutateSubscribedTopics()}
       onLogout={() => signOut({ callbackUrl: '/login' })}
     >
       <div className="h-full p-4 text-[#e8edf2]">
