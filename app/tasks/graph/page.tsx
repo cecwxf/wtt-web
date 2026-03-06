@@ -32,7 +32,6 @@ interface Pos {
 
 const NODE_W = 240
 const NODE_H = 90
-const DEFAULT_RUNNER_AGENT = process.env.NEXT_PUBLIC_WTT_DEFAULT_RUNNER_AGENT || 'openclaw_mcp_test_agent'
 
 export default function TasksGraphPage() {
   const { data: session, status } = useSession()
@@ -253,7 +252,7 @@ export default function TasksGraphPage() {
         priority: 'P2',
         status: 'todo',
         owner_agent_id: selectedAgentId || undefined,
-        runner_agent_id: DEFAULT_RUNNER_AGENT,
+        runner_agent_id: selectedAgentId || undefined,
         created_by: selectedAgentId || 'user',
       }),
     })
