@@ -102,6 +102,53 @@ const stringifyTaskPlanToNotes = (existingNotes: string | undefined, plan: TaskP
   return base ? `${base}\n\n${blob}` : blob
 }
 
+const buildPlanByAgentHeuristic = (task: TaskItem): TaskPlan => {
+  const title = (task.title || '').trim()
+  const desc = (task.description || '').trim()
+  const goal = desc || title || '完成任务交付'
+
+  const seed = `${title} ${desc}`.toLowerCase()
+  const phases: TaskPlanPhase[] = [
+    {
+      id: 'p1',
+      title: '需求澄清与方案设计',
+      subtasks: [
+        { id: 'p1s1', title: '明确目标与验收标准' },
+        { id: 'p1s2', title: '拆分阶段与风险点' },
+      ],
+    },
+    {
+      id: 'p2',
+      title: '实现与联调',
+      subtasks: [
+        { id: 'p2s1', title: '完成核心功能实现' },
+        { id: 'p2s2', title: '完成联调与回归验证' },
+      ],
+    },
+    {
+      id: 'p3',
+      title: '结果交付',
+      subtasks: [
+        { id: 'p3s1', title: '整理结果与变更说明' },
+        { id: 'p3s2', title: '提交评审并等待反馈' },
+      ],
+    },
+  ]
+
+  if (seed.includes('ui') || seed.includes('页面') || seed.includes('侧栏') || seed.includes('交互')) {
+    phases[1] = {
+      id: 'p2',
+      title: '页面实现与交互联调',
+      subtasks: [
+        { id: 'p2s1', title: '完成页面结构与组件改造' },
+        { id: 'p2s2', title: '完成交互行为与状态联调' },
+      ],
+    }
+  }
+
+  return { goal, phases }
+}
+
 const fallbackProgressByStatus = (status: TaskItem['status']) => {
   if (status === 'done') return 100
   if (status === 'review') return 90
@@ -120,7 +167,6 @@ export default function TasksPage() {
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null)
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
-  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [nowTs, setNowTs] = useState(Date.now())
 
   const loadAgents = useCallback(async () => {
@@ -249,12 +295,6 @@ export default function TasksPage() {
     const taskSet = new Set(tasks.map((t) => t.id))
     setSelectedTaskIds((prev) => prev.filter((id) => taskSet.has(id)))
   }, [tasks])
-
-  useEffect(() => {
-    const rows = Array.isArray(subscribedTopicsRaw) ? subscribedTopicsRaw : []
-    const topicSet = new Set(rows.map((t: { id: string }) => t.id))
-    setSelectedTopicIds((prev) => prev.filter((id) => topicSet.has(id)))
-  }, [subscribedTopicsRaw])
 
   useEffect(() => {
     if (!taskContextMenu) return
@@ -501,41 +541,6 @@ export default function TasksPage() {
     alert(`批量取消完成：成功 ${ok} / ${results.length}`)
   }
 
-  const bulkLeaveTopics = async () => {
-    if (!selectedTopicIds.length) return alert('请先勾选Topic')
-    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
-    const results = await Promise.allSettled(
-      selectedTopicIds.map((id) =>
-        fetch(`${CLIENT_WTT_API_BASE}/topics/${id}/leave?agent_id=${encodeURIComponent(selectedAgentId)}`, {
-          method: 'POST',
-          headers,
-        })
-      )
-    )
-    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
-    setSelectedTopicIds([])
-    await mutateSubscribedTopics()
-    alert(`批量Leave完成：成功 ${ok} / ${results.length}`)
-  }
-
-  const bulkDeleteTopics = async () => {
-    if (!selectedTopicIds.length) return alert('请先勾选Topic')
-    if (!confirm(`确认删除已勾选 ${selectedTopicIds.length} 个Topic？`)) return
-    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
-    const results = await Promise.allSettled(
-      selectedTopicIds.map((id) =>
-        fetch(`${CLIENT_WTT_API_BASE}/topics/${id}?agent_id=${encodeURIComponent(selectedAgentId)}`, {
-          method: 'DELETE',
-          headers,
-        })
-      )
-    )
-    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
-    setSelectedTopicIds([])
-    await mutateSubscribedTopics()
-    alert(`批量Delete完成：成功 ${ok} / ${results.length}`)
-  }
-
   const leaveTopicFromSidebar = async (topicId: string) => {
     if (!confirm('Leave this topic?')) return
 
@@ -582,32 +587,39 @@ export default function TasksPage() {
   const runCurrent = async () => {
     if (!selectedTask) return
 
-    // 执行前先进入任务规划：确认目标 + 阶段 + 子任务
+    // 执行前先进入任务规划：默认由 agent 自动生成（可手工覆盖）
     let plan = parseTaskPlanFromNotes(selectedTask.notes)
     if (!plan) {
-      const goal = window.prompt('任务目标（Goal）是什么？', selectedTask.title || '')?.trim()
-      if (!goal) return
-      const phasesText = window.prompt('请输入阶段与子任务（每行一个阶段，格式：阶段名: 子任务1, 子任务2）', '阶段1: 子任务A, 子任务B\n阶段2: 子任务C')?.trim()
-      if (!phasesText) return
-      const phases = phasesText
-        .split('\n')
-        .map((line, idx) => {
-          const [name, subs] = line.split(':')
-          const subtasks = (subs || '')
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .map((s, j) => ({ id: `p${idx + 1}s${j + 1}`, title: s }))
-          return { id: `p${idx + 1}`, title: (name || `阶段${idx + 1}`).trim(), subtasks }
-        })
-        .filter((p) => p.subtasks.length > 0)
+      const autoPlan = buildPlanByAgentHeuristic(selectedTask)
+      const useAuto = window.confirm('未发现任务规划。是否使用 Agent 自动规划并继续执行？\n(确定=自动规划，取消=手工输入)')
 
-      if (!phases.length) {
-        alert('至少要有1个阶段且包含子任务')
-        return
+      if (useAuto) {
+        plan = autoPlan
+      } else {
+        const goal = window.prompt('任务目标（Goal）是什么？', selectedTask.title || '')?.trim()
+        if (!goal) return
+        const phasesText = window.prompt('请输入阶段与子任务（每行一个阶段，格式：阶段名: 子任务1, 子任务2）', '阶段1: 子任务A, 子任务B\n阶段2: 子任务C')?.trim()
+        if (!phasesText) return
+        const phases = phasesText
+          .split('\n')
+          .map((line, idx) => {
+            const [name, subs] = line.split(':')
+            const subtasks = (subs || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+              .map((s, j) => ({ id: `p${idx + 1}s${j + 1}`, title: s }))
+            return { id: `p${idx + 1}`, title: (name || `阶段${idx + 1}`).trim(), subtasks }
+          })
+          .filter((p) => p.subtasks.length > 0)
+
+        if (!phases.length) {
+          alert('至少要有1个阶段且包含子任务')
+          return
+        }
+        plan = { goal, phases }
       }
 
-      plan = { goal, phases }
       const notes = stringifyTaskPlanToNotes(selectedTask.notes, plan)
       await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
         method: 'PATCH',
@@ -830,33 +842,6 @@ export default function TasksPage() {
               ) : (
                 <p className="mt-1 text-[11px] text-[#7d8e9e]">暂无可统计的执行时长</p>
               )}
-            </div>
-
-            <div className="mb-3 rounded-lg border border-white/10 bg-[#111b28] p-2">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold text-[#cfe4f8]">Topic 多选操作</p>
-                <div className="flex gap-1">
-                  <button onClick={bulkLeaveTopics} className="rounded border border-white/15 px-2 py-0.5 text-[10px]">批量Leave</button>
-                  <button onClick={bulkDeleteTopics} className="rounded border border-red-500/40 px-2 py-0.5 text-[10px] text-red-300">批量Delete</button>
-                </div>
-              </div>
-              <div className="max-h-24 space-y-1 overflow-auto pr-1 text-[11px]">
-                {topics.length > 0 ? topics.map((tp) => (
-                  <label key={tp.topic_id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedTopicIds.includes(tp.topic_id)}
-                      onChange={(e) => {
-                        const checked = e.target.checked
-                        setSelectedTopicIds((prev) =>
-                          checked ? Array.from(new Set([...prev, tp.topic_id])) : prev.filter((id) => id !== tp.topic_id)
-                        )
-                      }}
-                    />
-                    <span className="truncate" title={tp.name}>{tp.name}</span>
-                  </label>
-                )) : <p className="text-[#7d8e9e]">暂无Topic</p>}
-              </div>
             </div>
 
             <h2 className="mb-2 text-sm font-semibold">Task Detail</h2>
