@@ -35,7 +35,7 @@ interface TaskItem {
   updated_at?: string
 }
 
-const columns: Array<TaskItem['status']> = ['todo', 'doing', 'review', 'blocked']
+const columns: Array<TaskItem['status']> = ['todo', 'doing', 'review', 'done', 'blocked']
 
 export default function TasksPage() {
   const { data: session, status } = useSession()
@@ -137,20 +137,36 @@ export default function TasksPage() {
   }, [tasks, selectedTask])
 
   const grouped = useMemo(() => {
-    const map: Record<string, TaskItem[]> = { todo: [], doing: [], review: [], blocked: [] }
+    const map: Record<string, TaskItem[]> = { todo: [], doing: [], review: [], done: [], blocked: [] }
     for (const t of tasks) {
       if (t.status in map) map[t.status].push(t)
     }
     return map
   }, [tasks])
 
-  const statusProgress = (status: TaskItem['status']) => {
-    if (status === 'todo') return 5
-    if (status === 'doing') return 55
-    if (status === 'review') return 90
-    if (status === 'done') return 100
-    return 0
-  }
+  const taskProgressMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const t of tasks) {
+      map[t.id] = t.status === 'done' ? 100 : t.status === 'blocked' ? 0 : t.status === 'review' ? 95 : t.status === 'todo' ? 0 : 10
+    }
+
+    const rows = Array.isArray(timelineRaw)
+      ? timelineRaw
+      : Array.isArray((timelineRaw as { messages?: unknown[] })?.messages)
+        ? ((timelineRaw as { messages: unknown[] }).messages || [])
+        : []
+
+    for (const x of rows as Array<Record<string, unknown>>) {
+      const content = String(x.content || '')
+      const taskId = (content.match(/task_id=([0-9a-fA-F-]{8,})/) || [])[1]
+      const p = Number((content.match(/progress=(\d+)%/) || [])[1])
+      if (taskId && Number.isFinite(p)) {
+        map[taskId] = Math.max(map[taskId] || 0, p)
+      }
+    }
+
+    return map
+  }, [tasks, timelineRaw])
 
   const topics = useMemo(() => {
     if (!Array.isArray(subscribedTopicsRaw)) return []
@@ -294,7 +310,7 @@ export default function TasksPage() {
         </div>
 
         <div className="grid h-[calc(100%-52px)] grid-cols-[1fr_320px] gap-3">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-5 gap-3">
             {columns.map((col) => (
               <div key={col} className="rounded-xl border border-white/10 bg-[#16202c] p-2">
                 <div className="mb-2 flex items-center justify-between text-sm font-semibold capitalize">
@@ -314,7 +330,7 @@ export default function TasksPage() {
                       <p className="text-sm font-medium leading-5">{task.title}</p>
                       <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
                       <div className="mt-1 h-1.5 w-full rounded bg-[#26384a]">
-                        <div className="h-1.5 rounded bg-[#2ea6ff]" style={{ width: `${statusProgress(task.status)}%` }} />
+                        <div className="h-1.5 rounded bg-[#2ea6ff]" style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
                       </div>
                       <div className="mt-2 flex gap-1">
                         {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Todo</span>}
