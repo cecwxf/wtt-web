@@ -82,6 +82,14 @@ export default function TasksGraphPage() {
   const pipelines = useMemo(() => (Array.isArray(pipelinesRaw) ? pipelinesRaw : []), [pipelinesRaw])
 
   useEffect(() => {
+    let q = ''
+    if (typeof window !== 'undefined') {
+      q = new URLSearchParams(window.location.search).get('pipeline') || ''
+    }
+    if (q) {
+      setSelectedPipelineId(q)
+      return
+    }
     if (!pipelines.length) return
     if (!selectedPipelineId || !pipelines.find((p: { id: string }) => p.id === selectedPipelineId)) {
       setSelectedPipelineId(pipelines[0].id)
