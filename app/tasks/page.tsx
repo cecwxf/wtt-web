@@ -117,6 +117,18 @@ export default function TasksPage() {
 
   const tasks: TaskItem[] = useMemo(() => (Array.isArray(tasksRaw) ? tasksRaw : []), [tasksRaw])
 
+  const { data: progressRaw } = useSWR(
+    session?.accessToken ? ['tasks-progress', session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/progress`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!response.ok) return {}
+      return response.json()
+    },
+    { refreshInterval: 5000 }
+  )
+
   const { data: timelineRaw } = useSWR(
     selectedTask?.topic_id && session?.accessToken ? ['task-timeline', selectedTask.topic_id, session.accessToken] : null,
     async () => {
@@ -217,23 +229,16 @@ export default function TasksPage() {
       map[t.id] = t.status === 'done' ? 100 : t.status === 'blocked' ? 0 : t.status === 'review' ? 95 : t.status === 'todo' ? 0 : 10
     }
 
-    const rows = Array.isArray(timelineRaw)
-      ? timelineRaw
-      : Array.isArray((timelineRaw as { messages?: unknown[] })?.messages)
-        ? ((timelineRaw as { messages: unknown[] }).messages || [])
-        : []
-
-    for (const x of rows as Array<Record<string, unknown>>) {
-      const content = String(x.content || '')
-      const taskId = (content.match(/task_id=([0-9a-fA-F-]{8,})/) || [])[1]
-      const p = Number((content.match(/progress=(\d+)%/) || [])[1])
-      if (taskId && Number.isFinite(p)) {
-        map[taskId] = Math.max(map[taskId] || 0, p)
+    if (progressRaw && typeof progressRaw === 'object') {
+      for (const [taskId, value] of Object.entries(progressRaw as Record<string, unknown>)) {
+        const p = Number(value)
+        if (!Number.isFinite(p)) continue
+        map[taskId] = Math.max(map[taskId] || 0, Math.min(100, Math.max(0, p)))
       }
     }
 
     return map
-  }, [tasks, timelineRaw])
+  }, [tasks, progressRaw])
 
   const topics = useMemo(() => {
     if (!Array.isArray(subscribedTopicsRaw)) return []
@@ -417,7 +422,7 @@ export default function TasksPage() {
                         setSelectedTask(task)
                         setTaskDraft(task)
                       }}
-                      className={`w-full rounded-lg border p-2 text-left hover:border-[#2ea6ff]/60 ${taskCardTone(task.status)}`}
+                      className={`w-full rounded-lg border p-2 text-left hover:border-[#2ea6ff]/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''}`}
                     >
                       <p className="text-sm font-medium leading-5">{task.title}</p>
                       <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
@@ -570,6 +575,20 @@ export default function TasksPage() {
         @keyframes progressFlow {
           from { background-position: 100% 0; }
           to { background-position: 0 0; }
+        }
+        .task-card-glow {
+          animation: taskCardGlow 1.6s ease-in-out infinite;
+        }
+        .task-card-pulse {
+          animation: taskCardPulse 1.4s ease-in-out infinite;
+        }
+        @keyframes taskCardGlow {
+          0%, 100% { box-shadow: 0 0 0 rgba(46,166,255,0.0); }
+          50% { box-shadow: 0 0 0.75rem rgba(46,166,255,0.35); }
+        }
+        @keyframes taskCardPulse {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-1px); }
         }
       `}</style>
     </WttShellV2>
