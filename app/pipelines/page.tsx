@@ -12,6 +12,7 @@ interface Pipeline {
   id: string
   name: string
   description?: string
+  auto_review?: boolean
   created_at?: string
   stats?: {
     todo?: number
@@ -71,6 +72,20 @@ export default function PipelinesPage() {
     const j = await r.json()
     await mutate()
     router.push(`/tasks/graph?pipeline=${encodeURIComponent(j.id)}`)
+  }
+
+  const toggleAutoReview = async (p: Pipeline) => {
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines/${p.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      body: JSON.stringify({ auto_review: !(p.auto_review ?? true) }),
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`Toggle auto-review failed: ${t || r.status}`)
+      return
+    }
+    await mutate()
   }
 
   const renamePipeline = async (p: Pipeline) => {
@@ -140,6 +155,9 @@ export default function PipelinesPage() {
                   </div>
                 </button>
                 <div className="flex gap-1">
+                  <button onClick={() => toggleAutoReview(p)} className="rounded border border-white/10 px-2 py-1 text-[10px] text-[#a5b3c2]">
+                    AutoReview: {p.auto_review ?? true ? 'ON' : 'OFF'}
+                  </button>
                   {p.id !== 'default' && (
                     <>
                       <button onClick={() => renamePipeline(p)} className="rounded border border-white/10 px-2 py-1 text-[10px] text-[#a5b3c2]">Rename</button>
