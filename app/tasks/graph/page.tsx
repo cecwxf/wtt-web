@@ -50,6 +50,7 @@ export default function TasksGraphPage() {
   const [panning, setPanning] = useState(false)
   const [panStart, setPanStart] = useState<Pos>({ x: 0, y: 0 })
   const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [selectedPipelineId, setSelectedPipelineId] = useState('default')
   const [taskDraft, setTaskDraft] = useState<Partial<TaskNode & { description?: string; priority?: string; exec_mode?: string; acceptance?: string; notes?: string }>>({})
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -69,10 +70,29 @@ export default function TasksGraphPage() {
     load()
   }, [session?.accessToken, selectedAgentId])
 
-  const { data, mutate } = useSWR(
-    session?.accessToken ? ['tasks-graph', session.accessToken] : null,
+  const { data: pipelinesRaw, mutate: mutatePipelines } = useSWR(
+    session?.accessToken ? ['pipelines', session.accessToken] : null,
     async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/graph`, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines`, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
+      if (!r.ok) return []
+      return r.json()
+    }
+  )
+
+  const pipelines = useMemo(() => (Array.isArray(pipelinesRaw) ? pipelinesRaw : []), [pipelinesRaw])
+
+  useEffect(() => {
+    if (!pipelines.length) return
+    if (!selectedPipelineId || !pipelines.find((p: { id: string }) => p.id === selectedPipelineId)) {
+      setSelectedPipelineId(pipelines[0].id)
+    }
+  }, [pipelines, selectedPipelineId])
+
+  const { data, mutate } = useSWR(
+    session?.accessToken ? ['tasks-graph', session.accessToken, selectedPipelineId] : null,
+    async () => {
+      const q = selectedPipelineId ? `?pipeline_id=${encodeURIComponent(selectedPipelineId)}` : ''
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/graph${q}`, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
       if (!r.ok) throw new Error('failed to load graph')
       return r.json()
     },
@@ -151,7 +171,11 @@ export default function TasksGraphPage() {
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipeline/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-      body: JSON.stringify({ trigger_agent_id: selectedAgentId || 'pipeline-runner', task_ids: taskIds && taskIds.length > 0 ? taskIds : undefined }),
+      body: JSON.stringify({
+        trigger_agent_id: selectedAgentId || 'pipeline-runner',
+        pipeline_id: selectedPipelineId || undefined,
+        task_ids: taskIds && taskIds.length > 0 ? taskIds : undefined,
+      }),
     })
     const j = await r.json()
     alert(`Pipeline started: ${j.count || 0} tasks`)
@@ -160,6 +184,24 @@ export default function TasksGraphPage() {
 
   const toggleSelectTask = (taskId: string) => {
     setSelectedTaskIds((prev) => (prev.includes(taskId) ? prev.filter((x) => x !== taskId) : [...prev, taskId]))
+  }
+
+  const createPipeline = async () => {
+    const name = prompt('Pipeline name')?.trim()
+    if (!name) return
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      body: JSON.stringify({ name }),
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`Create pipeline failed: ${t || r.status}`)
+      return
+    }
+    const j = await r.json()
+    await mutatePipelines()
+    setSelectedPipelineId(j.id)
   }
 
   const addDependency = async () => {
@@ -185,6 +227,7 @@ export default function TasksGraphPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({
         title,
+        pipeline_id: selectedPipelineId || 'default',
         task_type: 'feature',
         priority: 'P2',
         status: 'todo',
@@ -300,6 +343,11 @@ export default function TasksGraphPage() {
             <p className="text-xs text-[#8ca0b3]">DAG view for task dependencies</p>
           </div>
           <div className="flex items-center gap-2">
+            <select value={selectedPipelineId} onChange={(e) => setSelectedPipelineId(e.target.value)} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
+              {pipelines.map((p: { id: string; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {pipelines.length === 0 && <option value="default">Default Pipeline</option>}
+            </select>
+            <button onClick={createPipeline} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">+ Pipeline</button>
             <button onClick={autoLayout} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">Auto Layout</button>
             <button onClick={() => setZoom((z) => Math.min(2, Number((z + 0.1).toFixed(2))))} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-2 py-2 text-xs">+</button>
             <button onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-2 py-2 text-xs">-</button>
