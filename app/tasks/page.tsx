@@ -32,10 +32,37 @@ interface TaskItem {
   estimate_hours?: number
   dependencies?: string
   notes?: string
+  created_at?: string
+  started_at?: string
+  completed_at?: string
   updated_at?: string
 }
 
 const columns: Array<TaskItem['status']> = ['todo', 'doing', 'review', 'done', 'blocked']
+const pieColors = ['#2ea6ff', '#52d1a8', '#ffd166', '#f78c6b', '#c792ea', '#7fd1f5', '#f5b4e6', '#9be564']
+
+const toMs = (value?: string) => {
+  if (!value) return null
+  const ms = new Date(value).getTime()
+  return Number.isFinite(ms) ? ms : null
+}
+
+const formatDuration = (ms: number) => {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(totalSec / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60)
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
+
+const arcPath = (cx: number, cy: number, r: number, start: number, end: number) => {
+  const x1 = cx + r * Math.cos(start)
+  const y1 = cy + r * Math.sin(start)
+  const x2 = cx + r * Math.cos(end)
+  const y2 = cy + r * Math.sin(end)
+  const largeArc = end - start > Math.PI ? 1 : 0
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
+}
 
 export default function TasksPage() {
   const { data: session, status } = useSession()
@@ -142,6 +169,43 @@ export default function TasksPage() {
       if (t.status in map) map[t.status].push(t)
     }
     return map
+  }, [tasks])
+
+  const taskDurationSummary = useMemo(() => {
+    const now = Date.now()
+    const rows = tasks
+      .map((task) => {
+        const start = toMs(task.started_at) ?? toMs(task.created_at) ?? toMs(task.updated_at)
+        if (!start) return null
+        const end = toMs(task.completed_at) ?? (task.status === 'done' ? toMs(task.updated_at) : null) ?? now
+        const durationMs = Math.max(0, end - start)
+        return {
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          durationMs,
+        }
+      })
+      .filter((x): x is { id: string; title: string; status: TaskItem['status']; durationMs: number } => Boolean(x) && x.durationMs > 0)
+      .sort((a, b) => b.durationMs - a.durationMs)
+      .slice(0, 8)
+
+    const totalMs = rows.reduce((sum, item) => sum + item.durationMs, 0)
+    let startAngle = -Math.PI / 2
+    const slices = rows.map((item, index) => {
+      const ratio = totalMs > 0 ? item.durationMs / totalMs : 0
+      const endAngle = startAngle + ratio * Math.PI * 2
+      const slice = {
+        ...item,
+        color: pieColors[index % pieColors.length],
+        ratio,
+        path: arcPath(60, 60, 52, startAngle, endAngle),
+      }
+      startAngle = endAngle
+      return slice
+    })
+
+    return { totalMs, slices }
   }, [tasks])
 
   const taskProgressMap = useMemo(() => {
@@ -371,6 +435,37 @@ export default function TasksPage() {
           </div>
 
           <aside className="rounded-xl border border-white/10 bg-[#16202c] p-3">
+            <div className="mb-3 rounded-lg border border-white/10 bg-[#111b28] p-2">
+              <p className="text-xs font-semibold text-[#cfe4f8]">Task执行时间饼图（Top 8）</p>
+              {taskDurationSummary.slices.length > 0 ? (
+                <>
+                  <div className="mt-2 flex items-center gap-3">
+                    <svg viewBox="0 0 120 120" className="h-28 w-28 shrink-0">
+                      <circle cx="60" cy="60" r="52" fill="#1f2c3a" />
+                      {taskDurationSummary.slices.map((slice) => (
+                        <path key={slice.id} d={slice.path} fill={slice.color} />
+                      ))}
+                      <circle cx="60" cy="60" r="25" fill="#0f1824" />
+                      <text x="60" y="57" textAnchor="middle" className="fill-[#dbe9f7] text-[8px]">总耗时</text>
+                      <text x="60" y="67" textAnchor="middle" className="fill-[#dbe9f7] text-[9px] font-semibold">{formatDuration(taskDurationSummary.totalMs)}</text>
+                    </svg>
+                    <div className="max-h-28 flex-1 space-y-1 overflow-auto pr-1">
+                      {taskDurationSummary.slices.map((slice) => (
+                        <div key={slice.id} className="flex items-center gap-1 text-[10px] text-[#b9cadc]">
+                          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: slice.color }} />
+                          <span className="truncate" title={slice.title}>{slice.title}</span>
+                          <span className="ml-auto shrink-0 text-[#d6e8fa]">{formatDuration(slice.durationMs)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mt-1 text-[10px] text-[#8ca0b3]">按任务执行时长占比统计（进行中任务按当前时间持续累计）</p>
+                </>
+              ) : (
+                <p className="mt-1 text-[11px] text-[#7d8e9e]">暂无可统计的执行时长</p>
+              )}
+            </div>
+
             <h2 className="mb-2 text-sm font-semibold">Task Detail</h2>
             {selectedTask ? (
               <div className="space-y-2 text-sm">
