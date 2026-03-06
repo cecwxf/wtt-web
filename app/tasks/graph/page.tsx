@@ -139,16 +139,20 @@ export default function TasksGraphPage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('wtt_tasks_graph_positions_v1')
-      if (raw) setPositions(JSON.parse(raw))
-    } catch {}
-  }, [])
+      const key = `wtt_tasks_graph_positions_v1:${selectedPipelineId || 'default'}`
+      const raw = localStorage.getItem(key)
+      setPositions(raw ? JSON.parse(raw) : {})
+    } catch {
+      setPositions({})
+    }
+  }, [selectedPipelineId])
 
   useEffect(() => {
     try {
-      localStorage.setItem('wtt_tasks_graph_positions_v1', JSON.stringify(positions))
+      const key = `wtt_tasks_graph_positions_v1:${selectedPipelineId || 'default'}`
+      localStorage.setItem(key, JSON.stringify(positions))
     } catch {}
-  }, [positions])
+  }, [positions, selectedPipelineId])
 
   useEffect(() => {
     if (!nodes.length) return
