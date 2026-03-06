@@ -64,6 +64,14 @@ const arcPath = (cx: number, cy: number, r: number, start: number, end: number) 
   return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
 }
 
+const fallbackProgressByStatus = (status: TaskItem['status']) => {
+  if (status === 'done') return 100
+  if (status === 'review') return 90
+  if (status === 'doing') return 12
+  if (status === 'blocked') return 0
+  return 0
+}
+
 export default function TasksPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -225,15 +233,22 @@ export default function TasksPage() {
 
   const taskProgressMap = useMemo(() => {
     const map: Record<string, number> = {}
-    for (const t of tasks) {
-      map[t.id] = t.status === 'done' ? 100 : t.status === 'blocked' ? 0 : t.status === 'review' ? 95 : t.status === 'todo' ? 0 : 10
-    }
 
     if (progressRaw && typeof progressRaw === 'object') {
       for (const [taskId, value] of Object.entries(progressRaw as Record<string, unknown>)) {
         const p = Number(value)
         if (!Number.isFinite(p)) continue
-        map[taskId] = Math.max(map[taskId] || 0, Math.min(100, Math.max(0, p)))
+        map[taskId] = Math.min(100, Math.max(0, p))
+      }
+    }
+
+    for (const task of tasks) {
+      if (task.status === 'done') {
+        map[task.id] = 100
+        continue
+      }
+      if (map[task.id] === undefined) {
+        map[task.id] = fallbackProgressByStatus(task.status)
       }
     }
 
@@ -427,7 +442,7 @@ export default function TasksPage() {
                       <p className="text-sm font-medium leading-5">{task.title}</p>
                       <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
                       <div className="mt-1 h-1.5 w-full rounded bg-[#26384a]">
-                        <div className={`h-1.5 rounded ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
+                        <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
                       </div>
                       <div className="mt-2 flex gap-1">
                         {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Todo</span>}
@@ -442,7 +457,7 @@ export default function TasksPage() {
             ))}
           </div>
 
-          <aside className="rounded-xl border border-white/10 bg-[#16202c] p-3">
+          <aside className={`rounded-xl border border-white/10 bg-[#16202c] p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
             <div className="mb-3 rounded-lg border border-white/10 bg-[#111b28] p-2">
               <p className="text-xs font-semibold text-[#cfe4f8]">Task执行时间饼图（Top 8）</p>
               {taskDurationSummary.slices.length > 0 ? (
@@ -582,6 +597,12 @@ export default function TasksPage() {
         .task-card-pulse {
           animation: taskCardPulse 1.4s ease-in-out infinite;
         }
+        .task-panel-flow {
+          animation: taskPanelFlow 2.2s ease-in-out infinite;
+        }
+        .task-panel-review {
+          animation: taskPanelReviewPulse 1.8s ease-in-out infinite;
+        }
         @keyframes taskCardGlow {
           0%, 100% { box-shadow: 0 0 0 rgba(46,166,255,0.0); }
           50% { box-shadow: 0 0 0.75rem rgba(46,166,255,0.35); }
@@ -589,6 +610,14 @@ export default function TasksPage() {
         @keyframes taskCardPulse {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-1px); }
+        }
+        @keyframes taskPanelFlow {
+          0%, 100% { box-shadow: inset 0 0 0 1px rgba(46,166,255,0.16), 0 0 0 rgba(46,166,255,0); }
+          50% { box-shadow: inset 0 0 0 1px rgba(46,166,255,0.38), 0 0 0.9rem rgba(46,166,255,0.22); }
+        }
+        @keyframes taskPanelReviewPulse {
+          0%, 100% { box-shadow: inset 0 0 0 1px rgba(255,209,102,0.18), 0 0 0 rgba(255,209,102,0); }
+          50% { box-shadow: inset 0 0 0 1px rgba(255,209,102,0.45), 0 0 0.9rem rgba(255,209,102,0.18); }
         }
       `}</style>
     </WttShellV2>
