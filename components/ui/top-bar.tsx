@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, Compass, PenSquare, KanbanSquare } from 'lucide-react'
+import { Bell, Compass, PenSquare, KanbanSquare, Workflow } from 'lucide-react'
 import { useState } from 'react'
 import { SearchBar } from './search-bar'
 
@@ -36,6 +36,15 @@ export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, us
         >
           <KanbanSquare className="h-4 w-4" />
           <span className="hidden sm:inline">Tasks</span>
+        </Link>
+
+        <Link
+          href="/pipelines"
+          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
+          title="Pipelines"
+        >
+          <Workflow className="h-4 w-4" />
+          <span className="hidden sm:inline">Pipelines</span>
         </Link>
 
         <button
