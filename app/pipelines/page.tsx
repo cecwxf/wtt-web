@@ -66,6 +66,38 @@ export default function PipelinesPage() {
     router.push(`/tasks/graph?pipeline=${encodeURIComponent(j.id)}`)
   }
 
+  const renamePipeline = async (p: Pipeline) => {
+    if (p.id === 'default') return
+    const name = prompt('New pipeline name', p.name)?.trim()
+    if (!name || name === p.name) return
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines/${p.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      body: JSON.stringify({ name }),
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`Rename failed: ${t || r.status}`)
+      return
+    }
+    await mutate()
+  }
+
+  const deletePipeline = async (p: Pipeline) => {
+    if (p.id === 'default') return
+    if (!confirm(`Delete pipeline \"${p.name}\"? Tasks will move to default.`)) return
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines/${p.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`Delete failed: ${t || r.status}`)
+      return
+    }
+    await mutate()
+  }
+
   return (
     <WttShellV2
       agents={agents.map((a) => ({ ...a, unread_count: 0 }))}
@@ -87,10 +119,22 @@ export default function PipelinesPage() {
 
         <div className="grid grid-cols-1 gap-2">
           {pipelines.map((p) => (
-            <button key={p.id} onClick={() => router.push(`/tasks/graph?pipeline=${encodeURIComponent(p.id)}`)} className="rounded-lg border border-white/10 bg-[#16202c] p-3 text-left hover:border-[#2ea6ff]/60">
-              <p className="text-sm font-semibold">{p.name}</p>
-              <p className="mt-1 text-xs text-[#8ca0b3]">{p.description || 'No description'} · {p.id}</p>
-            </button>
+            <div key={p.id} className="rounded-lg border border-white/10 bg-[#16202c] p-3 hover:border-[#2ea6ff]/60">
+              <div className="flex items-start justify-between gap-2">
+                <button onClick={() => router.push(`/tasks/graph?pipeline=${encodeURIComponent(p.id)}`)} className="text-left">
+                  <p className="text-sm font-semibold">{p.name}</p>
+                  <p className="mt-1 text-xs text-[#8ca0b3]">{p.description || 'No description'} · {p.id}</p>
+                </button>
+                <div className="flex gap-1">
+                  {p.id !== 'default' && (
+                    <>
+                      <button onClick={() => renamePipeline(p)} className="rounded border border-white/10 px-2 py-1 text-[10px] text-[#a5b3c2]">Rename</button>
+                      <button onClick={() => deletePipeline(p)} className="rounded border border-red-500/30 px-2 py-1 text-[10px] text-red-300">Delete</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           ))}
           {pipelines.length === 0 && <p className="text-sm text-[#8ca0b3]">No pipelines yet.</p>}
         </div>
