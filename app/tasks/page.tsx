@@ -16,6 +16,22 @@ interface Agent {
   api_key?: string
 }
 
+interface TaskPlanSubtask {
+  id: string
+  title: string
+}
+
+interface TaskPlanPhase {
+  id: string
+  title: string
+  subtasks: TaskPlanSubtask[]
+}
+
+interface TaskPlan {
+  goal: string
+  phases: TaskPlanPhase[]
+}
+
 interface TaskItem {
   id: string
   title: string
@@ -62,6 +78,28 @@ const arcPath = (cx: number, cy: number, r: number, start: number, end: number) 
   const y2 = cy + r * Math.sin(end)
   const largeArc = end - start > Math.PI ? 1 : 0
   return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
+}
+
+const PLAN_PREFIX = 'WTT_PLAN_JSON:'
+
+const parseTaskPlanFromNotes = (notes?: string): TaskPlan | null => {
+  if (!notes) return null
+  const idx = notes.indexOf(PLAN_PREFIX)
+  if (idx < 0) return null
+  const raw = notes.slice(idx + PLAN_PREFIX.length).trim()
+  try {
+    const obj = JSON.parse(raw) as TaskPlan
+    if (!obj?.goal || !Array.isArray(obj?.phases)) return null
+    return obj
+  } catch {
+    return null
+  }
+}
+
+const stringifyTaskPlanToNotes = (existingNotes: string | undefined, plan: TaskPlan) => {
+  const base = (existingNotes || '').split(PLAN_PREFIX)[0].trim()
+  const blob = `${PLAN_PREFIX}${JSON.stringify(plan)}`
+  return base ? `${base}\n\n${blob}` : blob
 }
 
 const fallbackProgressByStatus = (status: TaskItem['status']) => {
@@ -183,6 +221,21 @@ export default function TasksPage() {
       .slice(-8)
       .reverse()
   }, [timelineRaw])
+
+  const selectedTaskPlan = useMemo(() => parseTaskPlanFromNotes(selectedTask?.notes), [selectedTask?.notes])
+
+  const selectedTaskSubtaskState = useMemo(() => {
+    const stepLines = timeline
+      .map((t) => t.content)
+      .flatMap((c) => c.split('\n'))
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith('step='))
+      .map((s) => s.slice(5).trim())
+
+    const doneSet = new Set(stepLines)
+    const onGoing = stepLines.length > 0 ? stepLines[stepLines.length - 1] : ''
+    return { doneSet, onGoing }
+  }, [timeline])
 
   useEffect(() => {
     if (selectedTask) {
@@ -528,6 +581,45 @@ export default function TasksPage() {
 
   const runCurrent = async () => {
     if (!selectedTask) return
+
+    // 执行前先进入任务规划：确认目标 + 阶段 + 子任务
+    let plan = parseTaskPlanFromNotes(selectedTask.notes)
+    if (!plan) {
+      const goal = window.prompt('任务目标（Goal）是什么？', selectedTask.title || '')?.trim()
+      if (!goal) return
+      const phasesText = window.prompt('请输入阶段与子任务（每行一个阶段，格式：阶段名: 子任务1, 子任务2）', '阶段1: 子任务A, 子任务B\n阶段2: 子任务C')?.trim()
+      if (!phasesText) return
+      const phases = phasesText
+        .split('\n')
+        .map((line, idx) => {
+          const [name, subs] = line.split(':')
+          const subtasks = (subs || '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map((s, j) => ({ id: `p${idx + 1}s${j + 1}`, title: s }))
+          return { id: `p${idx + 1}`, title: (name || `阶段${idx + 1}`).trim(), subtasks }
+        })
+        .filter((p) => p.subtasks.length > 0)
+
+      if (!phases.length) {
+        alert('至少要有1个阶段且包含子任务')
+        return
+      }
+
+      plan = { goal, phases }
+      const notes = stringifyTaskPlanToNotes(selectedTask.notes, plan)
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+        body: JSON.stringify({ notes }),
+      })
+      await mutateTasks()
+    }
+
     setRunningTaskId(selectedTask.id)
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
@@ -774,6 +866,42 @@ export default function TasksPage() {
                 <p className="text-xs">Priority: {selectedTask.priority} · Status: {selectedTask.status}</p>
                 <p className="text-xs">Owner: {selectedTask.owner_agent_id || 'unassigned'}</p>
                 <p className="text-xs">Runner: {selectedTask.runner_agent_id || '-'}</p>
+
+                <div className="rounded border border-white/10 bg-[#0f1824] p-2 text-xs">
+                  <p className="mb-1 font-semibold text-[#cfe4f8]">任务规划</p>
+                  {selectedTaskPlan ? (
+                    <>
+                      <p className="mb-2 text-[#d8e5f2]">🎯 目标：{selectedTaskPlan.goal}</p>
+                      <div className="space-y-2">
+                        {selectedTaskPlan.phases.map((phase, i) => (
+                          <div key={phase.id} className="rounded border border-white/10 bg-[#111b28] p-2">
+                            <p className="mb-1 text-[#9fd6ff]">阶段{i + 1} · {phase.title}</p>
+                            <div className="space-y-1">
+                              {phase.subtasks.map((st) => {
+                                const state = selectedTaskSubtaskState.doneSet.has(st.title)
+                                  ? 'done'
+                                  : selectedTaskSubtaskState.onGoing && selectedTaskSubtaskState.onGoing.includes(st.title)
+                                    ? 'ongoing'
+                                    : 'todo'
+                                return (
+                                  <p key={st.id} className="flex items-center gap-1">
+                                    <span className={state === 'done' ? 'text-green-300' : state === 'ongoing' ? 'text-yellow-300' : 'text-[#8ca0b3]'}>
+                                      {state === 'done' ? '✅ Done' : state === 'ongoing' ? '🟡 On Going' : '⚪ ToDo'}
+                                    </span>
+                                    <span className="text-[#d8e5f2]">{st.title}</span>
+                                  </p>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[#8ca0b3]">未规划。点击 Run Task 时会先进入任务规划。</p>
+                  )}
+                </div>
+
                 {selectedTask.topic_id && (
                   <button
                     className="mt-1 rounded-md border border-white/10 bg-[#1d2a3a] px-2 py-1 text-xs"
