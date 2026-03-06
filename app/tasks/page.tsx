@@ -83,6 +83,7 @@ export default function TasksPage() {
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
+  const [nowTs, setNowTs] = useState(Date.now())
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -102,6 +103,11 @@ export default function TasksPage() {
     }
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 5000)
+    return () => clearInterval(timer)
+  }, [])
 
   const { data: subscribedTopicsRaw, mutate: mutateSubscribedTopics } = useSWR(
     selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
@@ -608,6 +614,15 @@ export default function TasksPage() {
     return 'bg-[#2ea6ff]'
   }
 
+  const taskTickerText = (task: TaskItem) => {
+    const progress = Math.round(taskProgressMap[task.id] ?? 0)
+    const statusText = task.status.toUpperCase()
+    const start = toMs(task.started_at) ?? toMs(task.created_at)
+    const elapsed = start ? formatDuration(Math.max(0, nowTs - start)) : '--'
+    const updated = task.updated_at ? task.updated_at.replace('T', ' ').slice(0, 16) : '--'
+    return `状态 ${statusText} · 进度 ${progress}% · 已运行 ${elapsed} · 最近更新 ${updated}`
+  }
+
   return (
     <WttShellV2
       agents={agentItems}
@@ -674,6 +689,11 @@ export default function TasksPage() {
                       <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
                       <div className="mt-1 h-1.5 w-full rounded bg-[#26384a]">
                         <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
+                      </div>
+                      <div className="mt-1 overflow-hidden rounded border border-white/10 bg-[#0f1824] px-1 py-0.5">
+                        <div className={`whitespace-nowrap text-[10px] text-[#9ab3c9] ${task.status === 'doing' ? 'task-ticker-scroll' : ''}`}>
+                          {taskTickerText(task)}
+                        </div>
                       </div>
                       <div className="mt-2 flex gap-1">
                         {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Todo</span>}
@@ -877,6 +897,11 @@ export default function TasksPage() {
         .task-panel-review {
           animation: taskPanelReviewPulse 1.8s ease-in-out infinite;
         }
+        .task-ticker-scroll {
+          display: inline-block;
+          min-width: 120%;
+          animation: taskTickerScroll 10s linear infinite;
+        }
         @keyframes taskCardGlow {
           0%, 100% { box-shadow: 0 0 0 rgba(46,166,255,0.0); }
           50% { box-shadow: 0 0 0.75rem rgba(46,166,255,0.35); }
@@ -892,6 +917,10 @@ export default function TasksPage() {
         @keyframes taskPanelReviewPulse {
           0%, 100% { box-shadow: inset 0 0 0 1px rgba(255,209,102,0.18), 0 0 0 rgba(255,209,102,0); }
           50% { box-shadow: inset 0 0 0 1px rgba(255,209,102,0.45), 0 0 0.9rem rgba(255,209,102,0.18); }
+        }
+        @keyframes taskTickerScroll {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-45%); }
         }
       `}</style>
     </WttShellV2>
