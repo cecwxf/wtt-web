@@ -51,6 +51,7 @@ export default function TasksGraphPage() {
   const [panStart, setPanStart] = useState<Pos>({ x: 0, y: 0 })
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [selectedPipelineId, setSelectedPipelineId] = useState('default')
+  const [connectFromId, setConnectFromId] = useState<string | null>(null)
   const [taskDraft, setTaskDraft] = useState<Partial<TaskNode & { description?: string; priority?: string; exec_mode?: string; acceptance?: string; notes?: string }>>({})
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -216,19 +217,25 @@ export default function TasksGraphPage() {
     setSelectedPipelineId(j.id)
   }
 
-  const addDependency = async () => {
-    if (!depFromId || !depToId) return
-    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${depToId}/dependencies`, {
+  const addDependencyByIds = async (fromId: string, toId: string) => {
+    if (!fromId || !toId || fromId === toId) return false
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${toId}/dependencies`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-      body: JSON.stringify({ depends_on_task_id: depFromId, mode: 'p2p', required: true }),
+      body: JSON.stringify({ depends_on_task_id: fromId, mode: 'p2p', required: true }),
     })
     if (!r.ok) {
       const t = await r.text()
       alert(`Add dependency failed: ${t || r.status}`)
-      return
+      return false
     }
     await mutate()
+    return true
+  }
+
+  const addDependency = async () => {
+    if (!depFromId || !depToId) return
+    await addDependencyByIds(depFromId, depToId)
   }
 
   const createTaskAt = async (x: number, y: number) => {
@@ -318,6 +325,19 @@ export default function TasksGraphPage() {
     return 'border-white/20'
   }
 
+  const onNodeClick = async (e: React.MouseEvent<HTMLButtonElement>, nodeId: string) => {
+    if (e.shiftKey) {
+      if (!connectFromId) {
+        setConnectFromId(nodeId)
+      } else {
+        await addDependencyByIds(connectFromId, nodeId)
+        setConnectFromId(null)
+      }
+      return
+    }
+    setSelectedTaskId(nodeId)
+  }
+
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!canvasRef.current) return
 
@@ -352,7 +372,7 @@ export default function TasksGraphPage() {
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-bold">Tasks Graph</h1>
-            <p className="text-xs text-[#8ca0b3]">DAG view for task dependencies</p>
+            <p className="text-xs text-[#8ca0b3]">DAG view for task dependencies · Shift+Click two nodes to connect</p>
           </div>
           <div className="flex items-center gap-2">
             <select value={selectedPipelineId} onChange={(e) => setSelectedPipelineId(e.target.value)} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
@@ -488,8 +508,8 @@ export default function TasksGraphPage() {
                       setDraggingId(n.id)
                       setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
                     }}
-                    onClick={() => setSelectedTaskId(n.id)}
-                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} ${n.status === 'doing' ? 'node-doing' : ''} ${n.status === 'review' ? 'node-review' : ''} ${n.status === 'blocked' ? 'node-blocked' : ''} ${selectedTaskIds.includes(n.id) ? 'ring-2 ring-[#2ea6ff]/60' : ''} bg-[#111a25] shadow-sm`}
+                    onClick={(e) => onNodeClick(e, n.id)}
+                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} ${n.status === 'doing' ? 'node-doing' : ''} ${n.status === 'review' ? 'node-review' : ''} ${n.status === 'blocked' ? 'node-blocked' : ''} ${selectedTaskIds.includes(n.id) ? 'ring-2 ring-[#2ea6ff]/60' : ''} ${connectFromId === n.id ? 'ring-2 ring-yellow-400/80' : ''} bg-[#111a25] shadow-sm`}
                     style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H }}
                   >
                     <p className="line-clamp-1 text-sm font-medium">{n.title}</p>
