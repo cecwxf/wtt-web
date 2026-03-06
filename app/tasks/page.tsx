@@ -350,6 +350,42 @@ export default function TasksPage() {
     await mutateSubscribedTopics()
   }
 
+  const invalidateAllTasks = async () => {
+    if (!tasks.length) {
+      alert('当前没有可取消的任务')
+      return
+    }
+
+    const ok = window.confirm(`确认将当前全部 ${tasks.length} 个任务标记为无效并取消吗？\n操作后任务会从所有栏消失，关联 Topic 也会删除。`)
+    if (!ok) return
+
+    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+    const results = await Promise.allSettled(
+      tasks.map((t) =>
+        fetch(
+          `${CLIENT_WTT_API_BASE}/tasks/${t.id}?agent_id=${encodeURIComponent(selectedAgentId || 'reviewer')}&delete_topic=true`,
+          { method: 'DELETE', headers }
+        )
+      )
+    )
+
+    let success = 0
+    let failed = 0
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.ok) success += 1
+      else failed += 1
+    }
+
+    setSelectedTask(null)
+    setTaskDraft({})
+    setTaskContextMenu(null)
+    await mutateTasks()
+    await mutateSubscribedTopics()
+
+    if (failed > 0) alert(`无效化完成：成功 ${success}，失败 ${failed}`)
+    else alert(`无效化完成：已取消 ${success} 个任务`)
+  }
+
   const leaveTopicFromSidebar = async (topicId: string) => {
     if (!confirm('Leave this topic?')) return
 
@@ -500,7 +536,10 @@ export default function TasksPage() {
             <h1 className="text-2xl font-bold">Tasks</h1>
             <p className="text-xs text-[#8ca0b3]">Trigger · Assign · Review</p>
           </div>
-          <button onClick={createTask} className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm text-white">+ New Task</button>
+          <div className="flex items-center gap-2">
+            <button onClick={invalidateAllTasks} className="rounded-lg border border-red-500/50 bg-[#331a1d] px-3 py-2 text-sm text-red-200">无效全部任务</button>
+            <button onClick={createTask} className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm text-white">+ New Task</button>
+          </div>
         </div>
 
         <div className="grid h-[calc(100%-52px)] grid-cols-[1fr_320px] gap-3">
