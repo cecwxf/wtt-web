@@ -81,6 +81,8 @@ export default function TasksPage() {
   const [taskDraft, setTaskDraft] = useState<Partial<TaskItem>>({})
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null)
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -183,6 +185,17 @@ export default function TasksPage() {
       setTaskDraft(fresh)
     }
   }, [tasks, selectedTask])
+
+  useEffect(() => {
+    const taskSet = new Set(tasks.map((t) => t.id))
+    setSelectedTaskIds((prev) => prev.filter((id) => taskSet.has(id)))
+  }, [tasks])
+
+  useEffect(() => {
+    const rows = Array.isArray(subscribedTopicsRaw) ? subscribedTopicsRaw : []
+    const topicSet = new Set(rows.map((t: { id: string }) => t.id))
+    setSelectedTopicIds((prev) => prev.filter((id) => topicSet.has(id)))
+  }, [subscribedTopicsRaw])
 
   useEffect(() => {
     if (!taskContextMenu) return
@@ -386,6 +399,84 @@ export default function TasksPage() {
     else alert(`无效化完成：已取消 ${success} 个任务`)
   }
 
+  const bulkRunTasks = async () => {
+    if (!selectedTaskIds.length) return alert('请先勾选任务')
+    const targets = tasks.filter((t) => selectedTaskIds.includes(t.id))
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session?.accessToken ?? ''}`,
+    }
+    const results = await Promise.allSettled(
+      targets.map((t) =>
+        fetch(`${CLIENT_WTT_API_BASE}/tasks/${t.id}/run`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            trigger_agent_id: selectedAgentId || 'task-runner',
+            runner_agent_id: t.runner_agent_id || t.owner_agent_id || selectedAgentId,
+          }),
+        })
+      )
+    )
+    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
+    alert(`批量运行完成：成功 ${ok} / ${targets.length}`)
+    await mutateTasks()
+  }
+
+  const bulkCancelTasks = async () => {
+    if (!selectedTaskIds.length) return alert('请先勾选任务')
+    if (!confirm(`确认取消已勾选 ${selectedTaskIds.length} 个任务？将同时删除关联Topic。`)) return
+    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+    const results = await Promise.allSettled(
+      selectedTaskIds.map((id) =>
+        fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?agent_id=${encodeURIComponent(selectedAgentId || 'reviewer')}&delete_topic=true`, {
+          method: 'DELETE',
+          headers,
+        })
+      )
+    )
+    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
+    setSelectedTaskIds([])
+    await mutateTasks()
+    await mutateSubscribedTopics()
+    alert(`批量取消完成：成功 ${ok} / ${results.length}`)
+  }
+
+  const bulkLeaveTopics = async () => {
+    if (!selectedTopicIds.length) return alert('请先勾选Topic')
+    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+    const results = await Promise.allSettled(
+      selectedTopicIds.map((id) =>
+        fetch(`${CLIENT_WTT_API_BASE}/topics/${id}/leave?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+          method: 'POST',
+          headers,
+        })
+      )
+    )
+    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
+    setSelectedTopicIds([])
+    await mutateSubscribedTopics()
+    alert(`批量Leave完成：成功 ${ok} / ${results.length}`)
+  }
+
+  const bulkDeleteTopics = async () => {
+    if (!selectedTopicIds.length) return alert('请先勾选Topic')
+    if (!confirm(`确认删除已勾选 ${selectedTopicIds.length} 个Topic？`)) return
+    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+    const results = await Promise.allSettled(
+      selectedTopicIds.map((id) =>
+        fetch(`${CLIENT_WTT_API_BASE}/topics/${id}?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+          method: 'DELETE',
+          headers,
+        })
+      )
+    )
+    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
+    setSelectedTopicIds([])
+    await mutateSubscribedTopics()
+    alert(`批量Delete完成：成功 ${ok} / ${results.length}`)
+  }
+
   const leaveTopicFromSidebar = async (topicId: string) => {
     if (!confirm('Leave this topic?')) return
 
@@ -537,6 +628,8 @@ export default function TasksPage() {
             <p className="text-xs text-[#8ca0b3]">Trigger · Assign · Review</p>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={bulkRunTasks} className="rounded-lg border border-[#2ea6ff]/50 bg-[#17324a] px-3 py-2 text-sm text-[#9fd6ff]">批量Run任务</button>
+            <button onClick={bulkCancelTasks} className="rounded-lg border border-red-500/50 bg-[#331a1d] px-3 py-2 text-sm text-red-200">批量取消任务</button>
             <button onClick={invalidateAllTasks} className="rounded-lg border border-red-500/50 bg-[#331a1d] px-3 py-2 text-sm text-red-200">无效全部任务</button>
             <button onClick={createTask} className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm text-white">+ New Task</button>
           </div>
@@ -564,7 +657,20 @@ export default function TasksPage() {
                       }}
                       className={`w-full rounded-lg border p-2 text-left hover:border-[#2ea6ff]/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''}`}
                     >
-                      <p className="text-sm font-medium leading-5">{task.title}</p>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium leading-5">{task.title}</p>
+                        <input
+                          type="checkbox"
+                          checked={selectedTaskIds.includes(task.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const checked = e.target.checked
+                            setSelectedTaskIds((prev) =>
+                              checked ? Array.from(new Set([...prev, task.id])) : prev.filter((id) => id !== task.id)
+                            )
+                          }}
+                        />
+                      </div>
                       <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
                       <div className="mt-1 h-1.5 w-full rounded bg-[#26384a]">
                         <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
@@ -612,6 +718,33 @@ export default function TasksPage() {
               ) : (
                 <p className="mt-1 text-[11px] text-[#7d8e9e]">暂无可统计的执行时长</p>
               )}
+            </div>
+
+            <div className="mb-3 rounded-lg border border-white/10 bg-[#111b28] p-2">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-[#cfe4f8]">Topic 多选操作</p>
+                <div className="flex gap-1">
+                  <button onClick={bulkLeaveTopics} className="rounded border border-white/15 px-2 py-0.5 text-[10px]">批量Leave</button>
+                  <button onClick={bulkDeleteTopics} className="rounded border border-red-500/40 px-2 py-0.5 text-[10px] text-red-300">批量Delete</button>
+                </div>
+              </div>
+              <div className="max-h-24 space-y-1 overflow-auto pr-1 text-[11px]">
+                {topics.length > 0 ? topics.map((tp) => (
+                  <label key={tp.topic_id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedTopicIds.includes(tp.topic_id)}
+                      onChange={(e) => {
+                        const checked = e.target.checked
+                        setSelectedTopicIds((prev) =>
+                          checked ? Array.from(new Set([...prev, tp.topic_id])) : prev.filter((id) => id !== tp.topic_id)
+                        )
+                      }}
+                    />
+                    <span className="truncate" title={tp.name}>{tp.name}</span>
+                  </label>
+                )) : <p className="text-[#7d8e9e]">暂无Topic</p>}
+              </div>
             </div>
 
             <h2 className="mb-2 text-sm font-semibold">Task Detail</h2>
