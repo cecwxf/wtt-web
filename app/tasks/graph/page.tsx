@@ -246,6 +246,7 @@ export default function TasksGraphPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({
         title,
+        task_mode: 'pipeline',
         pipeline_id: selectedPipelineId || 'default',
         task_type: 'feature',
         priority: 'P2',
