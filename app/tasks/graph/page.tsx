@@ -458,19 +458,21 @@ export default function TasksGraphPage() {
                   const y1 = from.y + NODE_H / 2
                   const x2 = to.x
                   const y2 = to.y + NODE_H / 2
+                  const dx = Math.max(80, Math.abs(x2 - x1) * 0.4)
+                  const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
+                  const isActive = selectedTaskId ? (selectedTaskId === e.task_id || selectedTaskId === e.depends_on_task_id) : false
+                  const stroke = isActive ? '#79c3ff' : '#4d6a85'
                   return (
                     <g key={`${e.task_id}-${e.depends_on_task_id}`}>
-                      <line
-                        x1={x1}
-                        y1={y1}
-                        x2={x2}
-                        y2={y2}
-                        stroke="#4d6a85"
-                        strokeWidth="2"
+                      <path
+                        d={path}
+                        fill="none"
+                        stroke={stroke}
+                        strokeWidth={isActive ? 2.6 : 2}
                         markerEnd="url(#arrow)"
                         className={nodes.find((n) => n.id === e.depends_on_task_id)?.status === 'doing' ? 'edge-flow' : ''}
                       />
-                      <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} fill="#8ca0b3" fontSize="10">
+                      <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 8} fill={isActive ? '#a9ddff' : '#8ca0b3'} fontSize="10">
                         {e.mode || 'p2p'}
                       </text>
                     </g>
