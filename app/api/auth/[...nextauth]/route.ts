@@ -3,6 +3,7 @@ import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
 import TwitterProvider from "next-auth/providers/twitter"
 import CredentialsProvider from "next-auth/providers/credentials"
+import type { OAuthConfig, OAuthUserConfig } from "next-auth/providers/oauth"
 
 const WTT_API_URL =
   process.env.WTT_API_URL ||
@@ -12,6 +13,94 @@ const WTT_API_URL =
 const ENABLE_TEST_LOGIN = process.env.ENABLE_TEST_LOGIN === 'true'
 const TEST_ADMIN_IDENTIFIER = process.env.TEST_ADMIN_IDENTIFIER || 'test-admin'
 const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-admin-pass'
+
+interface WeChatProfile {
+  openid: string
+  unionid?: string
+  nickname: string
+  headimgurl: string
+  sex: number
+  province: string
+  city: string
+  country: string
+}
+
+function WeChatProvider(
+  options: OAuthUserConfig<WeChatProfile>
+): OAuthConfig<WeChatProfile> {
+  const appId = options.clientId
+  const appSecret = options.clientSecret
+
+  if (!appId || !appSecret) {
+    console.warn("WeChat OAuth: WECHAT_APP_ID or WECHAT_APP_SECRET is not set. WeChat login will not work.")
+  }
+
+  return {
+    id: "wechat",
+    name: "WeChat",
+    type: "oauth",
+    checks: ["state"],
+    clientId: appId ?? "",
+    clientSecret: appSecret ?? "",
+    authorization: {
+      url: "https://open.weixin.qq.com/connect/qrconnect",
+      params: {
+        appid: appId ?? "",
+        scope: "snsapi_login",
+        response_type: "code",
+      },
+    },
+    token: {
+      url: "https://api.weixin.qq.com/sns/oauth2/access_token",
+      async request({ params }) {
+        const url = new URL(
+          "https://api.weixin.qq.com/sns/oauth2/access_token"
+        )
+        url.searchParams.set("appid", appId ?? "")
+        url.searchParams.set("secret", appSecret ?? "")
+        url.searchParams.set("code", params.code as string)
+        url.searchParams.set("grant_type", "authorization_code")
+
+        const response = await fetch(url.toString())
+        const tokens = await response.json()
+        if (tokens.errcode) {
+          throw new Error(`WeChat token error: ${tokens.errcode} - ${tokens.errmsg}`)
+        }
+        return { tokens }
+      },
+    },
+    userinfo: {
+      url: "https://api.weixin.qq.com/sns/userinfo",
+      async request({ tokens }) {
+        const url = new URL("https://api.weixin.qq.com/sns/userinfo")
+        url.searchParams.set("access_token", tokens.access_token as string)
+        url.searchParams.set("openid", (tokens as Record<string, unknown>).openid as string)
+        url.searchParams.set("lang", "zh_CN")
+
+        const response = await fetch(url.toString())
+        const profile = await response.json()
+        if (profile.errcode) {
+          throw new Error(`WeChat userinfo error: ${profile.errcode} - ${profile.errmsg}`)
+        }
+        return profile
+      },
+    },
+    profile(profile: WeChatProfile) {
+      return {
+        id: profile.unionid || profile.openid,
+        name: profile.nickname,
+        email: null,
+        image: profile.headimgurl,
+      }
+    },
+    style: {
+      logo: "https://authjs.dev/img/providers/wechat.svg",
+      bg: "#07C160",
+      text: "#fff",
+    },
+    options,
+  }
+}
 
 const authOptions: NextAuthOptions = {
   providers: [
@@ -27,6 +116,10 @@ const authOptions: NextAuthOptions = {
       clientId: process.env.TWITTER_CLIENT_ID!,
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
       version: "2.0",
+    }),
+    WeChatProvider({
+      clientId: process.env.WECHAT_APP_ID!,
+      clientSecret: process.env.WECHAT_APP_SECRET!,
     }),
     CredentialsProvider({
       name: "Phone OTP",

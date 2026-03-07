@@ -72,7 +72,35 @@
    - **OAuth 2.0 Client ID**
    - **OAuth 2.0 Client Secret**
 
-## 4. 配置环境变量
+## 4. 微信 OAuth 配置 (WeChat)
+
+### 创建微信开放平台应用
+
+1. 访问 [微信开放平台](https://open.weixin.qq.com/)
+2. 注册开发者账号（需要企业或组织身份认证）
+3. 进入 **管理中心** > **网站应用** > **创建网站应用**
+4. 填写以下信息：
+   - **应用名称**: WTT
+   - **应用官网**: `https://your-domain.vercel.app`
+5. 提交审核并等待通过
+6. 审核通过后，在应用详情页获取：
+   - **AppID** (应用ID)
+   - **AppSecret** (应用密钥)
+7. 在 **接口权限** 中申请 **网站应用微信登录** 权限
+8. 在 **授权回调域** 中配置：
+   - 开发环境: `localhost:3000`
+   - 生产环境: `your-domain.vercel.app`（不带协议前缀）
+
+### 微信登录流程
+
+微信网站应用使用扫码登录方式：
+1. 用户点击「微信登录」按钮
+2. 页面跳转至微信扫码页面
+3. 用户使用微信 App 扫描二维码
+4. 用户在微信中确认授权
+5. 微信回调到应用，完成登录
+
+## 5. 配置环境变量
 
 ### Vercel 环境变量
 
@@ -94,6 +122,10 @@ GOOGLE_CLIENT_SECRET=<你的 Google Client Secret>
 # Twitter OAuth
 TWITTER_CLIENT_ID=<你的 Twitter Client ID>
 TWITTER_CLIENT_SECRET=<你的 Twitter Client Secret>
+
+# WeChat OAuth (微信)
+WECHAT_APP_ID=<你的微信 AppID>
+WECHAT_APP_SECRET=<你的微信 AppSecret>
 
 # Backend API
 NEXT_PUBLIC_WTT_API_URL=http://170.106.109.4:8000
@@ -128,17 +160,21 @@ GOOGLE_CLIENT_SECRET=<你的 Google Client Secret>
 TWITTER_CLIENT_ID=<你的 Twitter Client ID>
 TWITTER_CLIENT_SECRET=<你的 Twitter Client Secret>
 
+# WeChat OAuth (微信)
+WECHAT_APP_ID=<你的微信 AppID>
+WECHAT_APP_SECRET=<你的微信 AppSecret>
+
 # App Configuration
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-## 5. 后端配置
+## 6. 后端配置
 
 确保后端 API 的 OAuth 回调端点正确配置：
 
 - `/auth/oauth/callback` - 处理 OAuth 回调
 
-## 6. 测试
+## 7. 测试
 
 1. 重新部署 Vercel 应用（环境变量更新后会自动触发）
 2. 访问登录页面
@@ -166,6 +202,12 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 - 确保使用的是 OAuth 2.0（不是 OAuth 1.0a）
 - 检查 App permissions 是否正确设置
+
+### 5. 微信登录常见问题
+
+- **"redirect_uri 参数错误"**: 微信开放平台中的「授权回调域」只需填写域名（如 `your-domain.vercel.app`），不需要协议前缀和路径。NextAuth 会自动生成完整的回调 URL（`/api/auth/callback/wechat`）
+- **需要企业认证**: 微信开放平台的网站应用需要企业或组织身份认证才能使用
+- **scope 错误**: 确保已在微信开放平台申请了「网站应用微信登录」接口权限
 
 ## 安全建议
 
