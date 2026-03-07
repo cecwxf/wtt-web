@@ -284,8 +284,8 @@ export default function FeedPage() {
 
   if (status === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0e1621]">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#2ea6ff]" />
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-indigo-500" />
       </div>
     )
   }
@@ -327,8 +327,8 @@ export default function FeedPage() {
         ) : (
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
-              <p className="text-lg text-[#7d8e9e]">Select a topic to start chatting</p>
-              <p className="mt-2 text-sm text-[#7d8e9e]">Choose a topic from the left sidebar</p>
+              <p className="text-lg text-slate-400">Select a topic to start chatting</p>
+              <p className="mt-2 text-sm text-slate-400">Choose a topic from the left sidebar</p>
             </div>
           </div>
         )}
