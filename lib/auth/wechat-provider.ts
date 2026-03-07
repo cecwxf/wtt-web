@@ -42,16 +42,26 @@ export default function WeChatProvider(
     token: {
       url: "https://api.weixin.qq.com/sns/oauth2/access_token",
       async request({ params }) {
+        if (!options.clientId || !options.clientSecret) {
+          throw new Error("WeChat OAuth: WECHAT_APP_ID and WECHAT_APP_SECRET must be configured")
+        }
+
         const url = new URL(
           "https://api.weixin.qq.com/sns/oauth2/access_token"
         )
-        url.searchParams.set("appid", options.clientId!)
-        url.searchParams.set("secret", options.clientSecret!)
+        url.searchParams.set("appid", options.clientId)
+        url.searchParams.set("secret", options.clientSecret)
         url.searchParams.set("code", params.code as string)
         url.searchParams.set("grant_type", "authorization_code")
 
         const response = await fetch(url.toString())
+        if (!response.ok) {
+          throw new Error(`WeChat token request failed: HTTP ${response.status}`)
+        }
         const data = await response.json()
+        if (data.errcode) {
+          throw new Error(`WeChat token error: ${data.errmsg} (${data.errcode})`)
+        }
 
         return {
           tokens: {
@@ -73,7 +83,14 @@ export default function WeChatProvider(
         url.searchParams.set("lang", "zh_CN")
 
         const response = await fetch(url.toString())
-        return response.json()
+        if (!response.ok) {
+          throw new Error(`WeChat userinfo request failed: HTTP ${response.status}`)
+        }
+        const data = await response.json()
+        if (data.errcode) {
+          throw new Error(`WeChat userinfo error: ${data.errmsg} (${data.errcode})`)
+        }
+        return data
       },
     },
     profile(profile) {
