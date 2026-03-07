@@ -3,6 +3,7 @@ import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
 import TwitterProvider from "next-auth/providers/twitter"
 import CredentialsProvider from "next-auth/providers/credentials"
+import WeChatProvider from "@/lib/auth/wechat-provider"
 
 const WTT_API_URL =
   process.env.WTT_API_URL ||
@@ -27,6 +28,10 @@ const authOptions: NextAuthOptions = {
       clientId: process.env.TWITTER_CLIENT_ID!,
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
       version: "2.0",
+    }),
+    WeChatProvider({
+      clientId: process.env.WECHAT_APP_ID!,
+      clientSecret: process.env.WECHAT_APP_SECRET!,
     }),
     CredentialsProvider({
       name: "Phone OTP",
