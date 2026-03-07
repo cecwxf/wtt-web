@@ -253,6 +253,16 @@ export default function LoginPage() {
             <Twitter className="h-5 w-5" />
             Continue with Twitter
           </button>
+
+          <button
+            onClick={() => handleOAuthSignIn('wechat')}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-green-300 hover:bg-green-50"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05a6.093 6.093 0 0 1-.253-1.724c0-3.583 3.357-6.495 7.496-6.495.252 0 .5.02.749.037C16.456 4.795 12.912 2.188 8.691 2.188zm-2.79 3.91a1.06 1.06 0 1 1 0 2.122 1.06 1.06 0 0 1 0-2.122zm5.618 0a1.06 1.06 0 1 1 0 2.122 1.06 1.06 0 0 1 0-2.122zM16.745 9.6c-3.671 0-6.648 2.507-6.648 5.6 0 3.093 2.977 5.6 6.648 5.6.71 0 1.395-.098 2.05-.274a.71.71 0 0 1 .59.08l1.378.809a.263.263 0 0 0 .136.044.237.237 0 0 0 .236-.236c0-.06-.023-.117-.039-.174l-.283-1.074a.476.476 0 0 1 .173-.54C22.623 18.384 24 16.583 24 14.6c0-3.493-3.277-6-7.255-6zm-2.487 3.24a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814zm4.974 0a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814z" />
+            </svg>
+            Continue with WeChat
+          </button>
         </div>
 
         <div className="relative mb-5">
