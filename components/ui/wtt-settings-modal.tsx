@@ -435,10 +435,10 @@ export function WttSettingsModal({
 
           {activePage === 'appearance' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {['Light Default', 'Warm Light', 'Cool Indigo'].map((theme) => (
+              {['Light (Active)', 'Warm Neutral', 'Cool Blue'].map((theme, i) => (
                 <button
                   key={theme}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-8 text-sm text-slate-600 transition hover:border-indigo-300"
+                  className={`rounded-xl border px-3 py-8 text-sm transition ${i === 0 ? 'border-indigo-300 bg-indigo-50 text-indigo-600 font-medium' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-300'}`}
                 >
                   {theme}
                 </button>
