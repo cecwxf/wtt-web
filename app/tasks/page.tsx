@@ -55,7 +55,7 @@ interface TaskItem {
 }
 
 const columns: Array<TaskItem['status']> = ['todo', 'doing', 'review', 'done', 'blocked']
-const pieColors = ['#2ea6ff', '#52d1a8', '#ffd166', '#f78c6b', '#c792ea', '#7fd1f5', '#f5b4e6', '#9be564']
+const pieColors = ['#6366f1', '#52d1a8', '#ffd166', '#f78c6b', '#c792ea', '#7fd1f5', '#f5b4e6', '#9be564']
 
 const toMs = (value?: string) => {
   if (!value) return null
@@ -703,19 +703,19 @@ export default function TasksPage() {
   }
 
   const taskCardTone = (status: TaskItem['status']) => {
-    if (status === 'doing') return 'border-[#2ea6ff]/50 bg-[#102033]'
-    if (status === 'review') return 'border-yellow-500/40 bg-[#2a2416]'
-    if (status === 'done') return 'border-green-500/40 bg-[#13281f]'
-    if (status === 'blocked') return 'border-red-500/40 bg-[#2a1718]'
-    return 'border-white/10 bg-[#111a25]'
+    if (status === 'doing') return 'border-indigo-300 bg-indigo-50'
+    if (status === 'review') return 'border-yellow-500/40 bg-amber-50'
+    if (status === 'done') return 'border-green-500/40 bg-emerald-50'
+    if (status === 'blocked') return 'border-red-500/40 bg-red-50'
+    return 'border-slate-200 bg-slate-50'
   }
 
   const progressBarTone = (status: TaskItem['status']) => {
     if (status === 'done') return 'bg-green-400'
     if (status === 'review') return 'bg-yellow-400 animate-pulse'
     if (status === 'blocked') return 'bg-red-400'
-    if (status === 'doing') return 'task-progress-flow bg-[#2ea6ff]'
-    return 'bg-[#2ea6ff]'
+    if (status === 'doing') return 'task-progress-flow bg-indigo-500'
+    return 'bg-indigo-500'
   }
 
   const taskTickerText = (task: TaskItem) => {
@@ -740,27 +740,27 @@ export default function TasksPage() {
       onTopicsRefresh={() => mutateSubscribedTopics()}
       onLogout={() => signOut({ callbackUrl: '/login' })}
     >
-      <div className="h-full p-4 text-[#e8edf2]">
+      <div className="h-full p-4 text-slate-800">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Tasks</h1>
-            <p className="text-xs text-[#8ca0b3]">Trigger · Assign · Review</p>
+            <p className="text-xs text-slate-500">Trigger · Assign · Review</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={bulkRunTasks} className="rounded-lg border border-[#2ea6ff]/50 bg-[#17324a] px-3 py-2 text-sm text-[#9fd6ff]">批量Run任务</button>
-            <button onClick={bulkCancelTasks} className="rounded-lg border border-red-500/50 bg-[#331a1d] px-3 py-2 text-sm text-red-200">批量取消任务</button>
-            <button onClick={invalidateAllTasks} className="rounded-lg border border-red-500/50 bg-[#331a1d] px-3 py-2 text-sm text-red-200">无效全部任务</button>
-            <button onClick={createTask} className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm text-white">+ New Task</button>
+            <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-500">批量Run任务</button>
+            <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">批量取消任务</button>
+            <button onClick={invalidateAllTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">无效全部任务</button>
+            <button onClick={createTask} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
           </div>
         </div>
 
         <div className="grid h-[calc(100%-52px)] grid-cols-[1fr_320px] gap-3">
           <div className="grid grid-cols-5 gap-3">
             {columns.map((col) => (
-              <div key={col} className="rounded-xl border border-white/10 bg-[#16202c] p-2">
+              <div key={col} className="rounded-xl border border-slate-200 bg-slate-50 p-2">
                 <div className="mb-2 flex items-center justify-between text-sm font-semibold capitalize">
                   <span>{col}</span>
-                  <span className="text-xs text-[#8ca0b3]">{grouped[col].length}</span>
+                  <span className="text-xs text-slate-500">{grouped[col].length}</span>
                 </div>
                 <div className="space-y-2">
                   {grouped[col].map((task) => (
@@ -774,7 +774,7 @@ export default function TasksPage() {
                         e.preventDefault()
                         setTaskContextMenu({ x: e.clientX, y: e.clientY, task })
                       }}
-                      className={`w-full rounded-lg border p-2 text-left hover:border-[#2ea6ff]/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''}`}
+                      className={`w-full rounded-lg border p-2 text-left hover:border-indigo-500/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''}`}
                     >
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <p className="text-sm font-medium leading-5">{task.title}</p>
@@ -790,20 +790,20 @@ export default function TasksPage() {
                           }}
                         />
                       </div>
-                      <p className="mt-1 text-[10px] text-[#8ca0b3]">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
-                      <div className="mt-1 h-1.5 w-full rounded bg-[#26384a]">
+                      <p className="mt-1 text-[10px] text-slate-500">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
+                      <div className="mt-1 h-1.5 w-full rounded bg-slate-200">
                         <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
                       </div>
-                      <div className="mt-1 overflow-hidden rounded border border-white/10 bg-[#0f1824] px-1 py-0.5">
+                      <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100 px-1 py-0.5">
                         <div className={`whitespace-nowrap text-[10px] text-[#9ab3c9] ${task.status === 'doing' ? 'task-ticker-scroll' : ''}`}>
                           {taskTickerText(task)}
                         </div>
                       </div>
                       <div className="mt-2 flex gap-1">
-                        {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Todo</span>}
-                        {col !== 'doing' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'doing') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Doing</span>}
-                        {col !== 'review' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'review') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Review</span>}
-                        {col !== 'blocked' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'blocked') }} className="cursor-pointer rounded border border-white/10 px-1 text-[10px]">Blocked</span>}
+                        {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-slate-200 px-1 text-[10px]">Todo</span>}
+                        {col !== 'doing' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'doing') }} className="cursor-pointer rounded border border-slate-200 px-1 text-[10px]">Doing</span>}
+                        {col !== 'review' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'review') }} className="cursor-pointer rounded border border-slate-200 px-1 text-[10px]">Review</span>}
+                        {col !== 'blocked' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'blocked') }} className="cursor-pointer rounded border border-slate-200 px-1 text-[10px]">Blocked</span>}
                       </div>
                     </button>
                   ))}
@@ -812,18 +812,18 @@ export default function TasksPage() {
             ))}
           </div>
 
-          <aside className={`rounded-xl border border-white/10 bg-[#16202c] p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
-            <div className="mb-3 rounded-lg border border-white/10 bg-[#111b28] p-2">
+          <aside className={`rounded-xl border border-slate-200 bg-slate-50 p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
+            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-100 p-2">
               <p className="text-xs font-semibold text-[#cfe4f8]">Task执行时间饼图（Top 8）</p>
               {taskDurationSummary.slices.length > 0 ? (
                 <>
                   <div className="mt-2 flex items-center gap-3">
                     <svg viewBox="0 0 120 120" className="h-28 w-28 shrink-0">
-                      <circle cx="60" cy="60" r="52" fill="#1f2c3a" />
+                      <circle cx="60" cy="60" r="52" fill="#f1f5f9" />
                       {taskDurationSummary.slices.map((slice) => (
                         <path key={slice.id} d={slice.path} fill={slice.color} />
                       ))}
-                      <circle cx="60" cy="60" r="25" fill="#0f1824" />
+                      <circle cx="60" cy="60" r="25" fill="#f8fafc" />
                       <text x="60" y="57" textAnchor="middle" className="fill-[#dbe9f7] text-[8px]">总耗时</text>
                       <text x="60" y="67" textAnchor="middle" className="fill-[#dbe9f7] text-[9px] font-semibold">{formatDuration(taskDurationSummary.totalMs)}</text>
                     </svg>
@@ -837,10 +837,10 @@ export default function TasksPage() {
                       ))}
                     </div>
                   </div>
-                  <p className="mt-1 text-[10px] text-[#8ca0b3]">按任务执行时长占比统计（进行中任务按当前时间持续累计）</p>
+                  <p className="mt-1 text-[10px] text-slate-500">按任务执行时长占比统计（进行中任务按当前时间持续累计）</p>
                 </>
               ) : (
-                <p className="mt-1 text-[11px] text-[#7d8e9e]">暂无可统计的执行时长</p>
+                <p className="mt-1 text-[11px] text-slate-400">暂无可统计的执行时长</p>
               )}
             </div>
 
@@ -852,15 +852,15 @@ export default function TasksPage() {
                 <p className="text-xs">Owner: {selectedTask.owner_agent_id || 'unassigned'}</p>
                 <p className="text-xs">Runner: {selectedTask.runner_agent_id || '-'}</p>
 
-                <div className="rounded border border-white/10 bg-[#0f1824] p-2 text-xs">
+                <div className="rounded border border-slate-200 bg-slate-100 p-2 text-xs">
                   <p className="mb-1 font-semibold text-[#cfe4f8]">任务规划</p>
                   {selectedTaskPlan ? (
                     <>
                       <p className="mb-2 text-[#d8e5f2]">🎯 目标：{selectedTaskPlan.goal}</p>
                       <div className="space-y-2">
                         {selectedTaskPlan.phases.map((phase, i) => (
-                          <div key={phase.id} className="rounded border border-white/10 bg-[#111b28] p-2">
-                            <p className="mb-1 text-[#9fd6ff]">阶段{i + 1} · {phase.title}</p>
+                          <div key={phase.id} className="rounded border border-slate-200 bg-slate-100 p-2">
+                            <p className="mb-1 text-indigo-500">阶段{i + 1} · {phase.title}</p>
                             <div className="space-y-1">
                               {phase.subtasks.map((st) => {
                                 const state = selectedTaskSubtaskState.doneSet.has(st.title)
@@ -870,7 +870,7 @@ export default function TasksPage() {
                                     : 'todo'
                                 return (
                                   <p key={st.id} className="flex items-center gap-1">
-                                    <span className={state === 'done' ? 'text-green-300' : state === 'ongoing' ? 'text-yellow-300' : 'text-[#8ca0b3]'}>
+                                    <span className={state === 'done' ? 'text-green-300' : state === 'ongoing' ? 'text-yellow-300' : 'text-slate-500'}>
                                       {state === 'done' ? '✅ Done' : state === 'ongoing' ? '🟡 On Going' : '⚪ ToDo'}
                                     </span>
                                     <span className="text-[#d8e5f2]">{st.title}</span>
@@ -883,77 +883,77 @@ export default function TasksPage() {
                       </div>
                     </>
                   ) : (
-                    <p className="text-[#8ca0b3]">未规划。点击 Run Task 时会先进入任务规划。</p>
+                    <p className="text-slate-500">未规划。点击 Run Task 时会先进入任务规划。</p>
                   )}
                 </div>
 
                 {selectedTask.topic_id && (
                   <button
-                    className="mt-1 rounded-md border border-white/10 bg-[#1d2a3a] px-2 py-1 text-xs"
+                    className="mt-1 rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs"
                     onClick={() => router.push(`/feed?topicId=${selectedTask.topic_id}`)}
                   >
                     Open in Feed
                   </button>
                 )}
 
-                <div className="border-t border-white/10 pt-2">
+                <div className="border-t border-slate-200 pt-2">
                   <button
                     onClick={runCurrent}
                     disabled={runningTaskId === selectedTask.id}
-                    className="rounded-md border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs text-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {runningTaskId === selectedTask.id ? 'Running...' : 'Run Task'}
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2 border-t border-white/10 pt-2">
-                  <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Task description" className="min-h-16 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
-                  <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="Acceptance criteria" className="min-h-14 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                <div className="grid grid-cols-1 gap-2 border-t border-slate-200 pt-2">
+                  <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Task description" className="min-h-16 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
+                  <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="Acceptance criteria" className="min-h-14 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
                   <div className="grid grid-cols-2 gap-2">
-                    <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} placeholder="Runner agent" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="Exec mode" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.due_at || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, due_at: e.target.value }))} placeholder="Due at (ISO)" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: Number(e.target.value || 0) }))} placeholder="Estimate hours" className="rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} placeholder="Dependencies" className="col-span-2 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} placeholder="Runner agent" className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="Exec mode" className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.due_at || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, due_at: e.target.value }))} placeholder="Due at (ISO)" className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: Number(e.target.value || 0) }))} placeholder="Estimate hours" className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
+                    <input value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} placeholder="Dependencies" className="col-span-2 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
                   </div>
-                  <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Notes" className="min-h-12 rounded border border-white/10 bg-[#0f1824] px-2 py-1 text-xs outline-none" />
-                  <button onClick={saveTaskDetails} className="rounded-md border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff]">Save Details</button>
+                  <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Notes" className="min-h-12 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
+                  <button onClick={saveTaskDetails} className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs text-indigo-500">Save Details</button>
                 </div>
 
-                <div className="border-t border-white/10 pt-2">
-                  <p className="mb-1 text-xs text-[#8ca0b3]">Assign</p>
+                <div className="border-t border-slate-200 pt-2">
+                  <p className="mb-1 text-xs text-slate-500">Assign</p>
                   <div className="flex flex-wrap gap-1">
                     {agents.slice(0, 6).map((a) => (
-                      <button key={a.agent_id} onClick={() => assignCurrent(a.agent_id)} className="rounded border border-white/10 px-2 py-1 text-[10px]">
+                      <button key={a.agent_id} onClick={() => assignCurrent(a.agent_id)} className="rounded border border-slate-200 px-2 py-1 text-[10px]">
                         {a.display_name}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="border-t border-white/10 pt-2">
-                  <p className="mb-1 text-xs text-[#8ca0b3]">Review</p>
+                <div className="border-t border-slate-200 pt-2">
+                  <p className="mb-1 text-xs text-slate-500">Review</p>
                   <div className="flex gap-2">
                     <button onClick={() => reviewCurrent('approve')} className="rounded border border-green-500/40 px-2 py-1 text-xs text-green-300">Approve</button>
                     <button onClick={() => reviewCurrent('reject')} className="rounded border border-yellow-500/40 px-2 py-1 text-xs text-yellow-300">Reject</button>
-                    <button onClick={() => reviewCurrent('block')} className="rounded border border-red-500/40 px-2 py-1 text-xs text-red-300">Block</button>
+                    <button onClick={() => reviewCurrent('block')} className="rounded border border-red-500/40 px-2 py-1 text-xs text-red-500">Block</button>
                   </div>
                 </div>
 
-                <div className="border-t border-white/10 pt-2">
-                  <p className="mb-1 text-xs text-[#8ca0b3]">Execution Timeline</p>
-                  <div className="max-h-40 space-y-1 overflow-auto rounded border border-white/10 bg-[#0f1824] p-2">
+                <div className="border-t border-slate-200 pt-2">
+                  <p className="mb-1 text-xs text-slate-500">Execution Timeline</p>
+                  <div className="max-h-40 space-y-1 overflow-auto rounded border border-slate-200 bg-slate-100 p-2">
                     {timeline.length > 0 ? (
                       timeline.map((item) => (
                         <button
                           key={item.id || `${item.sender}-${item.created_at}`}
                           onClick={() => selectedTask?.topic_id && router.push(`/feed?topicId=${selectedTask.topic_id}`)}
-                          className="w-full rounded border border-white/10 bg-[#111b28] p-1.5 text-left hover:border-[#2ea6ff]/60"
+                          className="w-full rounded border border-slate-200 bg-slate-100 p-1.5 text-left hover:border-indigo-500/60"
                         >
-                          <p className="flex items-center gap-1 text-[10px] text-[#8ca0b3]">
+                          <p className="flex items-center gap-1 text-[10px] text-slate-500">
                             <span>{item.sender}</span>
                             <span>·</span>
                             <span>{item.created_at?.replace('T', ' ').slice(0, 19)}</span>
-                            <span className={`ml-auto rounded px-1 ${item.kind === 'reasoned' ? 'bg-[#214361] text-[#9fd6ff]' : item.kind === 'review' ? 'bg-[#3f3320] text-[#ffd792]' : 'bg-[#2a2f37] text-[#c3ced9]'}`}>
+                            <span className={`ml-auto rounded px-1 ${item.kind === 'reasoned' ? 'bg-indigo-100 text-indigo-500' : item.kind === 'review' ? 'bg-amber-100 text-[#ffd792]' : 'bg-slate-100 text-[#c3ced9]'}`}>
                               {item.kind === 'reasoned' ? 'AUTO' : item.kind === 'review' ? 'REVIEW' : 'MSG'}
                             </span>
                           </p>
@@ -961,13 +961,13 @@ export default function TasksPage() {
                         </button>
                       ))
                     ) : (
-                      <p className="text-[11px] text-[#7d8e9e]">No timeline yet</p>
+                      <p className="text-[11px] text-slate-400">No timeline yet</p>
                     )}
                   </div>
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-[#8ca0b3]">Select a task card to review details.</p>
+              <p className="text-xs text-slate-500">Select a task card to review details.</p>
             )}
           </aside>
         </div>
@@ -975,12 +975,12 @@ export default function TasksPage() {
 
       {taskContextMenu && (
         <div
-          className="fixed z-50 min-w-36 rounded-lg border border-white/15 bg-[#0f1824] p-1 shadow-2xl"
+          className="fixed z-50 min-w-36 rounded-lg border border-slate-200 bg-slate-100 p-1 shadow-2xl"
           style={{ left: taskContextMenu.x, top: taskContextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-[#ffb4b4] hover:bg-[#2a1718]"
+            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-[#ffb4b4] hover:bg-red-50"
             onClick={() => cancelTask(taskContextMenu.task)}
           >
             取消任务（删除Topic）

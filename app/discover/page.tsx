@@ -285,8 +285,8 @@ export default function DiscoverPage() {
 
   if (status === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0e1621]">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#2ea6ff]" />
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-indigo-500" />
       </div>
     )
   }
@@ -310,30 +310,30 @@ export default function DiscoverPage() {
       onBindingChanged={loadAgents}
       notificationCount={0}
     >
-      <section className="mb-4 rounded-2xl border border-white/10 bg-[#17212b] p-4 sm:p-5">
+      <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row">
           <input
             value={randomTalkText}
             onChange={(e) => setRandomTalkText(e.target.value)}
             placeholder="Random Talk: say one sentence, auto match+subscribe+publish"
-            className="w-full rounded-xl border border-white/10 bg-[#1c2733] px-3 py-2.5 text-sm text-[#e8edf2] placeholder:text-[#4a5a6a] outline-none focus:border-[#2ea6ff]"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500"
           />
           <button
             type="button"
             onClick={handleRandomTalkPreview}
             disabled={randomTalkRunning || !randomTalkText.trim()}
-            className="rounded-xl bg-[#00b98f] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#00a57f] disabled:opacity-60"
+            className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-60"
           >
             {randomTalkRunning ? 'Matching...' : 'Random Talk Match'}
           </button>
         </div>
 
         {randomTalkPreview.length > 0 && (
-          <div className="mb-3 rounded-xl border border-white/10 bg-[#1c2733] p-3">
-            <p className="mb-2 text-xs uppercase tracking-wide text-[#7d8e9e]">Matched Topics (select to execute)</p>
+          <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">Matched Topics (select to execute)</p>
             <div className="space-y-1">
               {randomTalkPreview.map((t) => (
-                <label key={t.id} className="flex items-center gap-2 text-sm text-[#d2e0ec]">
+                <label key={t.id} className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
                     checked={randomTalkSelected.includes(t.id)}
@@ -344,7 +344,7 @@ export default function DiscoverPage() {
                     }}
                   />
                   <span>{t.name}</span>
-                  <span className="text-xs text-[#6f8396]">({t.id.slice(0, 8)}...)</span>
+                  <span className="text-xs text-slate-400">({t.id.slice(0, 8)}...)</span>
                 </label>
               ))}
             </div>
@@ -353,21 +353,21 @@ export default function DiscoverPage() {
                 type="button"
                 onClick={handleExecuteRandomTalk}
                 disabled={randomTalkRunning || randomTalkSelected.length === 0}
-                className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
               >
                 Execute on Selected ({randomTalkSelected.length})
               </button>
               <button
                 type="button"
                 onClick={() => setRandomTalkSelected(randomTalkPreview.map((x) => x.id))}
-                className="rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#a5b3c2]"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500"
               >
                 Select All
               </button>
               <button
                 type="button"
                 onClick={() => setRandomTalkSelected([])}
-                className="rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#a5b3c2]"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500"
               >
                 Clear
               </button>
@@ -376,18 +376,18 @@ export default function DiscoverPage() {
         )}
         <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4a5a6a]" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search topics by name or description"
-              className="w-full rounded-xl border border-white/10 bg-[#1c2733] px-10 py-2.5 text-sm text-[#e8edf2] placeholder:text-[#4a5a6a] outline-none focus:border-[#2ea6ff]"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-10 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500"
             />
           </div>
           <button
             type="submit"
-            className="rounded-xl bg-[#2ea6ff] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1f94ec]"
+            className="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600"
           >
             {searchLoading ? 'Searching...' : 'Search'}
           </button>
@@ -398,7 +398,7 @@ export default function DiscoverPage() {
                 setSearchQuery('')
                 setSearchResults(null)
               }}
-              className="rounded-xl border border-white/10 bg-[#1c2733] px-5 py-2.5 text-sm text-[#a5b3c2] transition hover:text-white"
+              className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-2.5 text-sm text-slate-500 transition hover:text-slate-900"
             >
               Clear
             </button>
@@ -408,36 +408,36 @@ export default function DiscoverPage() {
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {displayTopics.length === 0 && (
-          <div className="col-span-full rounded-2xl border border-white/10 bg-[#17212b] px-5 py-12 text-center text-sm text-[#7d8e9e]">
+          <div className="col-span-full rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm text-slate-400">
             No topics found.
           </div>
         )}
 
         {displayTopics.map((topic) => (
-          <article key={topic.id} className="rounded-2xl border border-white/10 bg-[#17212b] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
+          <article key={topic.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-md">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="truncate text-base font-semibold">{topic.name}</h3>
-              <span className="rounded-md border border-[#2ea6ff44] bg-[#2ea6ff1a] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2ea6ff]">
+              <span className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
                 {topic.type}
               </span>
             </div>
 
-            <p className="line-clamp-3 min-h-[58px] text-sm leading-6 text-[#9eb0c1]">{topic.description}</p>
+            <p className="line-clamp-3 min-h-[58px] text-sm leading-6 text-slate-500">{topic.description}</p>
 
-            <div className="mt-3 inline-flex rounded-md border border-white/10 bg-[#1c2733] px-2 py-1 text-[10px] uppercase tracking-wide text-[#7d8e9e]">
+            <div className="mt-3 inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">
               {topic.join_method}
             </div>
 
             <div className="mt-4 flex gap-2">
               <Link
                 href={`/topics/${topic.id}`}
-                className="flex-1 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-center text-sm text-[#c5d3df] transition hover:text-white"
+                className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-sm text-slate-600 transition hover:text-slate-900"
               >
                 View
               </Link>
               <button
                 onClick={() => handleSubscribe(topic.id)}
-                className="flex-1 rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec]"
+                className="flex-1 rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600"
               >
                 Subscribe
               </button>

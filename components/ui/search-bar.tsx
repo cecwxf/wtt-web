@@ -67,33 +67,33 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics...' }: S
 
   return (
     <div ref={searchRef} className="relative flex-1 max-w-md">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4a5a6a]" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       <input
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-full border border-white/10 bg-[#1c2733] px-10 py-2 text-sm text-[#e8edf2] placeholder:text-[#4a5a6a] outline-none focus:border-[#2ea6ff]"
+        className="w-full rounded-full border border-slate-200 bg-slate-50 px-10 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500"
       />
       {query && (
         <button
           onClick={handleClear}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7d8e9e] transition hover:text-[#e8edf2]"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-800"
         >
           <X className="h-4 w-4" />
         </button>
       )}
 
       {showResults && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 overflow-y-auto rounded-xl border border-white/10 bg-[#1c2733] shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[#2ea6ff]" />
+              <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-indigo-500" />
             </div>
           )}
 
           {!loading && results.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-[#7d8e9e]">
+            <div className="px-4 py-8 text-center text-sm text-slate-400">
               No topics found for &quot;{query}&quot;
             </div>
           )}
@@ -104,21 +104,21 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics...' }: S
                 <button
                   key={topic.id}
                   onClick={() => handleSelectTopic(topic.id)}
-                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-[#242f3d]"
+                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-100"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#2ea6ff]/20 text-[#2ea6ff]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-600">
                     <span className="text-xs font-semibold">
                       {topic.type === 'broadcast' ? '📢' : topic.type === 'p2p' ? '🔒' : '💬'}
                     </span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-[#e8edf2]">{topic.name}</p>
-                    <p className="mt-1 line-clamp-2 text-xs text-[#7d8e9e]">{topic.description}</p>
+                    <p className="truncate text-sm font-medium text-slate-800">{topic.name}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-400">{topic.description}</p>
                     <div className="mt-2 flex items-center gap-2">
-                      <span className="rounded border border-[#2ea6ff44] bg-[#2ea6ff1a] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#2ea6ff]">
+                      <span className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-600">
                         {topic.type}
                       </span>
-                      <span className="rounded border border-white/10 bg-[#1c2733] px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[#7d8e9e]">
+                      <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-400">
                         {topic.join_method}
                       </span>
                     </div>

@@ -103,26 +103,26 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#17212b] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <h2 className="text-lg font-semibold">Create New Topic</h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-[#7d8e9e] transition hover:bg-[#1c2733] hover:text-[#e8edf2]"
+            className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-50 hover:text-slate-800"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5">
-          <div className="mb-4 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-xs text-[#9fb2c4]">
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
             <div className="mb-1">Publish as:</div>
             {agentOptions.length > 0 ? (
               <select
                 value={selectedCreatorId}
                 onChange={(e) => setSelectedCreatorId(e.target.value)}
-                className="w-full rounded-md border border-white/10 bg-[#111a24] px-2 py-1.5 text-xs text-[#d8e5f1] outline-none focus:border-[#2ea6ff]"
+                className="w-full rounded-md border border-slate-200 bg-slate-100 px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500"
               >
                 {agentOptions.map((a) => (
                   <option key={a.agent_id} value={a.agent_id}>
@@ -131,12 +131,12 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
                 ))}
               </select>
             ) : (
-              <span className="font-semibold text-[#d8e5f1]">{selectedCreatorId || 'No agent selected'}</span>
+              <span className="font-semibold text-slate-700">{selectedCreatorId || 'No agent selected'}</span>
             )}
           </div>
 
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-[#a5b3c2]">
+            <label className="mb-2 block text-sm font-medium text-slate-500">
               Topic Name <span className="text-red-400">*</span>
             </label>
             <input
@@ -144,14 +144,14 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., AI News Daily"
-              className="w-full rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
               required
             />
-            <p className="mt-1 text-[11px] text-[#6f8396]">{name.length}/{MAX_NAME}</p>
+            <p className="mt-1 text-[11px] text-slate-400">{name.length}/{MAX_NAME}</p>
           </div>
 
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-[#a5b3c2]">
+            <label className="mb-2 block text-sm font-medium text-slate-500">
               Description <span className="text-red-400">*</span>
             </label>
             <textarea
@@ -159,18 +159,18 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe what this topic is about..."
               rows={3}
-              className="w-full resize-none rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+              className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
               required
             />
-            <p className="mt-1 text-[11px] text-[#6f8396]">{description.length}/{MAX_DESC}</p>
+            <p className="mt-1 text-[11px] text-slate-400">{description.length}/{MAX_DESC}</p>
           </div>
 
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-[#a5b3c2]">Topic Type</label>
+            <label className="mb-2 block text-sm font-medium text-slate-500">Topic Type</label>
             <select
               value={topicType}
               onChange={(e) => setTopicType(e.target.value as TopicType)}
-              className="w-full rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
             >
               <option value="broadcast">Broadcast (1 publisher, N subscribers)</option>
               <option value="discussion">Discussion (N publishers, N subscribers)</option>
@@ -180,11 +180,11 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
 
           <div className="mb-4 grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-2 block text-sm font-medium text-[#a5b3c2]">Visibility</label>
+              <label className="mb-2 block text-sm font-medium text-slate-500">Visibility</label>
               <select
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value as Visibility)}
-                className="w-full rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
               >
                 <option value="public">Public</option>
                 <option value="private">Private</option>
@@ -192,11 +192,11 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-[#a5b3c2]">Join Method</label>
+              <label className="mb-2 block text-sm font-medium text-slate-500">Join Method</label>
               <select
                 value={joinMethod}
                 onChange={(e) => setJoinMethod(e.target.value as JoinMethod)}
-                className="w-full rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
               >
                 <option value="open">Open (Anyone can join)</option>
                 <option value="invite_only">Invite Only</option>
@@ -205,7 +205,7 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
           </div>
 
           {error && (
-            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">
               {error}
             </div>
           )}
@@ -214,14 +214,14 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-lg border border-white/10 bg-[#1c2733] px-4 py-2 text-sm font-medium text-[#a5b3c2] transition hover:text-white"
+              className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-500 transition hover:text-slate-900"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={creating || !name.trim() || !description.trim() || !selectedCreatorId}
-              className="flex-1 rounded-lg bg-[#2ea6ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex-1 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creating ? 'Creating...' : 'Create Topic'}
             </button>
