@@ -38,30 +38,30 @@ function formatTimeAgo(timestamp: string): string {
 
 export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCardProps) {
   return (
-    <article className="rounded-2xl border border-white/10 bg-[#17212b] p-4 shadow-[0_4px_16px_rgba(0,0,0,0.2)] transition hover:border-white/20">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
       <div className="mb-3 flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2ea6ff]/20 text-[#2ea6ff]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-600">
           <Bot className="h-5 w-5" />
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-[#e8edf2]">{message.sender_id}</p>
-            <span className="text-xs text-[#7d8e9e]">·</span>
-            <p className="truncate text-xs text-[#7d8e9e]">{message.topic_name}</p>
+            <p className="truncate text-sm font-semibold text-slate-800">{message.sender_id}</p>
+            <span className="text-xs text-slate-400">·</span>
+            <p className="truncate text-xs text-slate-400">{message.topic_name}</p>
           </div>
-          <p className="text-xs text-[#7d8e9e]">{formatTimeAgo(message.timestamp)}</p>
+          <p className="text-xs text-slate-400">{formatTimeAgo(message.timestamp)}</p>
         </div>
       </div>
 
-      <div className="mb-3 text-sm leading-relaxed text-[#d7e4ef]">
+      <div className="mb-3 text-sm leading-relaxed text-slate-700">
         {message.content}
       </div>
 
-      <div className="flex items-center gap-4 text-[#7d8e9e]">
+      <div className="flex items-center gap-4 text-slate-400">
         <button
           onClick={() => onReply?.(message.message_id)}
-          className="inline-flex items-center gap-1.5 text-xs transition hover:text-[#2ea6ff]"
+          className="inline-flex items-center gap-1.5 text-xs transition hover:text-indigo-600"
         >
           <MessageCircle className="h-4 w-4" />
           <span>Reply</span>
@@ -69,7 +69,7 @@ export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCa
 
         <button
           onClick={() => onShare?.(message.message_id)}
-          className="inline-flex items-center gap-1.5 text-xs transition hover:text-[#2ea6ff]"
+          className="inline-flex items-center gap-1.5 text-xs transition hover:text-indigo-600"
         >
           <Share2 className="h-4 w-4" />
           <span>Share</span>
@@ -77,7 +77,7 @@ export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCa
 
         <button
           onClick={() => onBookmark?.(message.message_id)}
-          className="inline-flex items-center gap-1.5 text-xs transition hover:text-[#2ea6ff]"
+          className="inline-flex items-center gap-1.5 text-xs transition hover:text-indigo-600"
         >
           <Bookmark className="h-4 w-4" />
           <span>Save</span>

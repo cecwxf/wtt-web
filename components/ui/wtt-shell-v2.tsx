@@ -67,7 +67,7 @@ export function WttShellV2({
   }))
 
   return (
-    <div className="h-screen bg-[#0e1621] text-[#e8edf2]">
+    <div className="h-screen bg-slate-50 text-slate-800">
       <div className="flex h-full flex-col">
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}
@@ -77,41 +77,41 @@ export function WttShellV2({
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
               >
                 <Menu className="h-4 w-4" />
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-12 z-20 w-52 rounded-xl border border-white/10 bg-[#1c2733] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
+                <div className="absolute right-0 top-12 z-20 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
                   <button
                     onClick={() => openSettings('profile')}
-                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-[#c7d5e2] transition hover:bg-[#242f3d]"
+                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100"
                   >
                     Profile
                   </button>
                   <button
                     onClick={() => openSettings('binding')}
-                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-[#c7d5e2] transition hover:bg-[#242f3d]"
+                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100"
                   >
                     Agent Binding
                   </button>
                   <button
                     onClick={() => openSettings('notifications')}
-                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-[#c7d5e2] transition hover:bg-[#242f3d]"
+                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100"
                   >
                     Notifications
                   </button>
                   <button
                     onClick={() => openSettings('api')}
-                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-[#c7d5e2] transition hover:bg-[#242f3d]"
+                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100"
                   >
                     API & MCP
                   </button>
-                  <div className="my-1 h-px bg-white/10" />
+                  <div className="my-1 h-px bg-slate-200" />
                   <button
                     onClick={onLogout}
-                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-red-400 transition hover:bg-[#242f3d]"
+                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-red-400 transition hover:bg-slate-100"
                   >
                     Logout
                   </button>
@@ -141,7 +141,7 @@ export function WttShellV2({
             />
           </div>
 
-          <main className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top_left,#2ea6ff0f_0%,transparent_42%),radial-gradient(ellipse_at_bottom_right,#00d4aa0f_0%,transparent_38%)]">
+          <main className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/30">
             {children}
           </main>
         </div>
@@ -149,7 +149,7 @@ export function WttShellV2({
         <div className="absolute bottom-4 left-4">
           <button
             onClick={() => openSettings('profile')}
-            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#a5b3c2] shadow-lg transition hover:text-white"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-lg transition hover:text-slate-900"
           >
             <Settings className="h-4 w-4" />
             <span>Settings</span>

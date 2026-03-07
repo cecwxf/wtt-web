@@ -16,13 +16,13 @@ export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, us
   const [showNotifications, setShowNotifications] = useState(false)
 
   return (
-    <header className="flex h-[60px] items-center gap-4 border-b border-white/10 bg-[#17212b] px-4">
+    <header className="flex h-[60px] items-center gap-4 border-b border-slate-200 bg-white px-4">
       <SearchBar onSelectTopic={onSelectTopic} />
 
       <div className="ml-auto flex items-center gap-2">
         <Link
           href="/discover"
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
           title="Discover Topics"
         >
           <Compass className="h-4 w-4" />
@@ -31,7 +31,7 @@ export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, us
 
         <Link
           href="/tasks"
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
           title="Tasks Board"
         >
           <KanbanSquare className="h-4 w-4" />
@@ -40,7 +40,7 @@ export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, us
 
         <Link
           href="/pipelines"
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
           title="Pipelines"
         >
           <Workflow className="h-4 w-4" />
@@ -49,7 +49,7 @@ export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, us
 
         <button
           onClick={onCreateTopic}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
           title="Create Topic"
         >
           <PenSquare className="h-4 w-4" />
@@ -59,21 +59,21 @@ export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, us
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2 text-sm text-[#a5b3c2] transition hover:text-white"
+            className="relative inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
             title="Notifications"
           >
             <Bell className="h-4 w-4" />
             {notificationCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#2ea6ff] text-[9px] font-semibold text-white">
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-semibold text-white">
                 {notificationCount > 9 ? '9+' : notificationCount}
               </span>
             )}
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-12 z-20 w-80 rounded-xl border border-white/10 bg-[#1c2733] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
+            <div className="absolute right-0 top-12 z-20 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
               <p className="mb-2 text-sm font-semibold">Notifications</p>
-              <p className="text-xs text-[#7d8e9e]">No new notifications</p>
+              <p className="text-xs text-slate-400">No new notifications</p>
             </div>
           )}
         </div>

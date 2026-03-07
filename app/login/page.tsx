@@ -190,30 +190,30 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0a1524] px-4 py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_25%,#2ea6ff44_0%,transparent_35%),radial-gradient(circle_at_80%_70%,#00d4aa33_0%,transparent_35%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#79b9ff_0.8px,transparent_0.8px)] [background-size:26px_26px]" />
+    <div className="relative min-h-screen overflow-hidden bg-slate-50 px-4 py-10">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_25%,rgba(99,102,241,0.12)_0%,transparent_35%),radial-gradient(circle_at_80%_70%,rgba(16,185,129,0.1)_0%,transparent_35%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#cbd5e1_0.8px,transparent_0.8px)] [background-size:26px_26px]" />
       <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-30" viewBox="0 0 1440 900" fill="none" aria-hidden>
-        <path d="M120 160L360 240L560 180L820 300L1040 220L1320 330" stroke="#77c1ff" strokeWidth="1.2" />
-        <path d="M100 520L300 460L520 560L760 500L980 620L1260 560" stroke="#65e0c0" strokeWidth="1.2" />
-        <circle cx="360" cy="240" r="4" fill="#9dd2ff" />
-        <circle cx="820" cy="300" r="4" fill="#9dd2ff" />
-        <circle cx="980" cy="620" r="4" fill="#82e6cd" />
+        <path d="M120 160L360 240L560 180L820 300L1040 220L1320 330" stroke="#a5b4fc" strokeWidth="1.2" />
+        <path d="M100 520L300 460L520 560L760 500L980 620L1260 560" stroke="#6ee7b7" strokeWidth="1.2" />
+        <circle cx="360" cy="240" r="4" fill="#a5b4fc" />
+        <circle cx="820" cy="300" r="4" fill="#a5b4fc" />
+        <circle cx="980" cy="620" r="4" fill="#6ee7b7" />
       </svg>
 
       <motion.main
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="relative mx-auto w-full max-w-[430px] rounded-[28px] border border-[#d6e2ee] bg-white px-6 pb-7 pt-8 shadow-[0_24px_70px_rgba(26,66,99,0.2)] sm:px-8"
+        className="relative mx-auto w-full max-w-[430px] rounded-[28px] border border-slate-200 bg-white px-6 pb-7 pt-8 shadow-[0_24px_70px_rgba(99,102,241,0.12)] sm:px-8"
       >
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[#7cc6f5] bg-gradient-to-b from-[#e6f5ff] to-[#ccecff] text-[#1f84c5] shadow-[0_14px_28px_rgba(42,171,238,0.22)]">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 text-indigo-600 shadow-[0_14px_28px_rgba(99,102,241,0.18)]">
           <span className="text-xl font-semibold tracking-[0.12em]">WTT</span>
         </div>
 
         <div className="mb-7 text-center">
-          <h1 className="text-[32px] font-semibold leading-tight text-[#233849]">Want To Talk</h1>
-          <p className="mt-1 text-sm font-medium tracking-[0.12em] text-[#6f8396]">Link The Agent World</p>
+          <h1 className="text-[32px] font-semibold leading-tight text-slate-800">Want To Talk</h1>
+          <p className="mt-1 text-sm font-medium tracking-[0.12em] text-slate-400">Link The Agent World</p>
         </div>
 
         <div className="mb-5 space-y-2.5">
@@ -227,7 +227,7 @@ export default function LoginPage() {
           )}
           <button
             onClick={() => handleOAuthSignIn('google')}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#d7e5f2] bg-[#f8fbfe] px-4 py-2.5 text-sm font-medium text-[#2a3e51] transition hover:border-[#9fcdf2] hover:bg-[#f1f8fe]"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -240,7 +240,7 @@ export default function LoginPage() {
 
           <button
             onClick={() => handleOAuthSignIn('github')}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#d7e5f2] bg-[#f8fbfe] px-4 py-2.5 text-sm font-medium text-[#2a3e51] transition hover:border-[#9fcdf2] hover:bg-[#f1f8fe]"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
           >
             <Github className="h-5 w-5" />
             Continue with GitHub
@@ -248,7 +248,7 @@ export default function LoginPage() {
 
           <button
             onClick={() => handleOAuthSignIn('twitter')}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#d7e5f2] bg-[#f8fbfe] px-4 py-2.5 text-sm font-medium text-[#2a3e51] transition hover:border-[#9fcdf2] hover:bg-[#f1f8fe]"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
           >
             <Twitter className="h-5 w-5" />
             Continue with Twitter
@@ -257,32 +257,32 @@ export default function LoginPage() {
 
         <div className="relative mb-5">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-[#e2ebf3]" />
+            <div className="w-full border-t border-slate-200" />
           </div>
-          <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-[#90a2b3]">or</p>
+          <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-slate-400">or</p>
         </div>
 
-        <div className="mb-4 space-y-2 rounded-xl border border-[#d7e5f2] bg-[#f8fbfe] p-3">
-          <p className="text-xs font-semibold tracking-[0.1em] text-[#6f8396]">EMAIL LOGIN (TEST)</p>
+        <div className="mb-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold tracking-[0.1em] text-slate-400">EMAIL LOGIN (TEST)</p>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-[#d7e5f2] bg-white px-3 py-2 text-sm text-[#1e3447] outline-none focus:border-[#2aabee]"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
             placeholder="testadmin@example.com"
           />
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-[#d7e5f2] bg-white px-3 py-2 text-sm text-[#1e3447] outline-none focus:border-[#2aabee]"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
             placeholder="password"
           />
           <button
             type="button"
             onClick={handleEmailSignIn}
             disabled={loading}
-            className="w-full rounded-lg bg-[#20364a] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1a2d3e] disabled:opacity-60"
+            className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
           >
             {loading ? 'Signing in...' : 'Sign In with Email'}
           </button>
@@ -290,7 +290,7 @@ export default function LoginPage() {
 
         <form onSubmit={handlePhoneSignIn} className="space-y-3.5">
           <label className="block">
-            <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-[#6f8396]">
+            <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
               <User className="h-3.5 w-3.5" />
               Display Name (Optional)
             </span>
@@ -298,13 +298,13 @@ export default function LoginPage() {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm text-[#1e3447] outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
               placeholder="Your name"
             />
           </label>
 
           <label className="block">
-            <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-[#6f8396]">
+            <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
               <Smartphone className="h-3.5 w-3.5" />
               Phone Number
             </span>
@@ -312,7 +312,7 @@ export default function LoginPage() {
               <select
                 value={countryDial}
                 onChange={(e) => setCountryDial(e.target.value)}
-                className="w-[52%] rounded-xl border border-[#d7e5f2] bg-white px-3 py-2.5 text-sm text-[#1e3447] outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+                className="w-[52%] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
               >
                 {COUNTRY_OPTIONS.map((country) => (
                   <option key={`${country.code}-${country.dial}`} value={country.dial}>
@@ -324,7 +324,7 @@ export default function LoginPage() {
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm text-[#1e3447] outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 placeholder="Phone number"
                 required
               />
@@ -333,12 +333,12 @@ export default function LoginPage() {
 
           {codeSent && (
             <label className="block">
-              <span className="mb-1.5 text-xs font-medium text-[#6f8396]">Verification Code</span>
+              <span className="mb-1.5 text-xs font-medium text-slate-400">Verification Code</span>
               <input
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm text-[#1e3447] outline-none transition focus:border-[#2aabee] focus:ring-4 focus:ring-[#2aabee]/15"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 placeholder="6-digit code"
                 required
               />
@@ -360,7 +360,7 @@ export default function LoginPage() {
               type="button"
               onClick={sendCode}
               disabled={sendingCode || cooldown > 0}
-              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2aabee] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#209ad8] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {sendingCode ? 'Sending...' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Send Code'}
               {!sendingCode && cooldown <= 0 && <ArrowRight className="h-4 w-4" />}
@@ -370,7 +370,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2aabee] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#209ad8] disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? 'Signing in...' : 'Sign In with Code'}
                 {!loading && <ArrowRight className="h-4 w-4" />}
@@ -379,7 +379,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={sendCode}
                 disabled={sendingCode || cooldown > 0}
-                className="w-full rounded-xl border border-[#d7e5f2] bg-white px-4 py-2.5 text-sm font-medium text-[#3c5770] transition hover:border-[#9fcdf2] disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
               </button>

@@ -319,11 +319,11 @@ export default function TasksGraphPage() {
   }
 
   const statusColor = (s: TaskNode['status']) => {
-    if (s === 'doing') return 'border-[#2ea6ff]'
+    if (s === 'doing') return 'border-indigo-500'
     if (s === 'done') return 'border-green-500/60'
     if (s === 'review') return 'border-yellow-500/60'
     if (s === 'blocked') return 'border-red-500/60'
-    return 'border-white/20'
+    return 'border-slate-300'
   }
 
   const onNodeClick = async (e: React.MouseEvent<HTMLButtonElement>, nodeId: string) => {
@@ -369,47 +369,47 @@ export default function TasksGraphPage() {
       onTopicChange={() => {}}
       onLogout={() => signOut({ callbackUrl: '/login' })}
     >
-      <div className="h-full p-4 text-[#e8edf2]">
+      <div className="h-full p-4 text-slate-800">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-bold">Tasks Graph</h1>
-            <p className="text-xs text-[#8ca0b3]">DAG view for task dependencies · Shift+Click two nodes to connect</p>
+            <p className="text-xs text-slate-500">DAG view for task dependencies · Shift+Click two nodes to connect</p>
           </div>
           <div className="flex items-center gap-2">
-            <select value={selectedPipelineId} onChange={(e) => setSelectedPipelineId(e.target.value)} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
+            <select value={selectedPipelineId} onChange={(e) => setSelectedPipelineId(e.target.value)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs">
               {pipelines.map((p: { id: string; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}
               {pipelines.length === 0 && <option value="default">Default Pipeline</option>}
             </select>
-            <button onClick={createPipeline} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">+ Pipeline</button>
-            <button onClick={autoLayout} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">Auto Layout</button>
-            <button onClick={() => setZoom((z) => Math.min(2, Number((z + 0.1).toFixed(2))))} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-2 py-2 text-xs">+</button>
-            <button onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-2 py-2 text-xs">-</button>
-            <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="New node title" className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
-            <select value={depFromId} onChange={(e) => setDepFromId(e.target.value)} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
+            <button onClick={createPipeline} className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs">+ Pipeline</button>
+            <button onClick={autoLayout} className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs">Auto Layout</button>
+            <button onClick={() => setZoom((z) => Math.min(2, Number((z + 0.1).toFixed(2))))} className="rounded-lg border border-slate-200 bg-slate-100 px-2 py-2 text-xs">+</button>
+            <button onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))} className="rounded-lg border border-slate-200 bg-slate-100 px-2 py-2 text-xs">-</button>
+            <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="New node title" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
+            <select value={depFromId} onChange={(e) => setDepFromId(e.target.value)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs">
               <option value="">From task</option>
               {nodes.map((n) => <option key={`from-${n.id}`} value={n.id}>{n.title}</option>)}
             </select>
-            <select value={depToId} onChange={(e) => setDepToId(e.target.value)} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
+            <select value={depToId} onChange={(e) => setDepToId(e.target.value)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs">
               <option value="">To task</option>
               {nodes.map((n) => <option key={`to-${n.id}`} value={n.id}>{n.title}</option>)}
             </select>
-            <button onClick={addDependency} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">Add Edge</button>
-            <button onClick={() => runPipeline(selectedTaskIds)} className="rounded-lg border border-white/10 bg-[#1d2a3a] px-3 py-2 text-xs">Run Selected ({selectedTaskIds.length})</button>
-            <button onClick={() => runPipeline()} className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm text-white">Run Pipeline</button>
+            <button onClick={addDependency} className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs">Add Edge</button>
+            <button onClick={() => runPipeline(selectedTaskIds)} className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs">Run Selected ({selectedTaskIds.length})</button>
+            <button onClick={() => runPipeline()} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">Run Pipeline</button>
           </div>
         </div>
 
         <div className="grid h-[calc(100%-52px)] grid-cols-[260px_1fr_340px] gap-3">
-          <aside className="rounded-xl border border-white/10 bg-[#16202c] p-2">
+          <aside className="rounded-xl border border-slate-200 bg-slate-50 p-2">
             <p className="mb-2 text-sm font-semibold">Task Library</p>
             <div className="space-y-2 overflow-auto">
               {nodes.map((n) => (
-                <div key={n.id} className={`w-full rounded-lg border p-2 text-left ${statusColor(n.status)} bg-[#111a25]`}>
+                <div key={n.id} className={`w-full rounded-lg border p-2 text-left ${statusColor(n.status)} bg-slate-50`}>
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <button onClick={() => setSelectedTaskId(n.id)} className="truncate text-left text-sm hover:text-[#9fd6ff]">{n.title}</button>
+                    <button onClick={() => setSelectedTaskId(n.id)} className="truncate text-left text-sm hover:text-indigo-500">{n.title}</button>
                     <input type="checkbox" checked={selectedTaskIds.includes(n.id)} onChange={() => toggleSelectTask(n.id)} />
                   </div>
-                  <p className="text-[10px] text-[#8ca0b3]">{n.status} · {n.owner_agent_id || '-'}</p>
+                  <p className="text-[10px] text-slate-500">{n.status} · {n.owner_agent_id || '-'}</p>
                 </div>
               ))}
             </div>
@@ -439,7 +439,7 @@ export default function TasksGraphPage() {
               const y = (e.clientY - rect.top - pan.y) / zoom
               createTaskAt(Math.max(0, x - NODE_W / 2), Math.max(0, y - NODE_H / 2))
             }}
-            className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0f1824]"
+            className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
           >
             <div
               className="absolute inset-0"
@@ -491,7 +491,7 @@ export default function TasksGraphPage() {
                   <button
                     key={`del-${e.task_id}-${e.depends_on_task_id}`}
                     onClick={() => removeDependency(e.task_id, e.depends_on_task_id)}
-                    className="absolute rounded border border-red-500/40 bg-[#2a1618] px-1 text-[10px] text-red-300"
+                    className="absolute rounded border border-red-500/40 bg-red-50 px-1 text-[10px] text-red-500"
                     style={{ left: x, top: y }}
                     title="Remove edge"
                   >
@@ -512,75 +512,75 @@ export default function TasksGraphPage() {
                       setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
                     }}
                     onClick={(e) => onNodeClick(e, n.id)}
-                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} ${n.status === 'doing' ? 'node-doing' : ''} ${n.status === 'review' ? 'node-review' : ''} ${n.status === 'blocked' ? 'node-blocked' : ''} ${selectedTaskIds.includes(n.id) ? 'ring-2 ring-[#2ea6ff]/60' : ''} ${connectFromId === n.id ? 'ring-2 ring-yellow-400/80' : ''} bg-[#111a25] shadow-sm`}
+                    className={`absolute rounded-lg border p-3 text-left ${statusColor(n.status)} ${n.status === 'doing' ? 'node-doing' : ''} ${n.status === 'review' ? 'node-review' : ''} ${n.status === 'blocked' ? 'node-blocked' : ''} ${selectedTaskIds.includes(n.id) ? 'ring-2 ring-indigo-400' : ''} ${connectFromId === n.id ? 'ring-2 ring-yellow-400/80' : ''} bg-slate-50 shadow-sm`}
                     style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H }}
                   >
                     <p className="line-clamp-1 text-sm font-medium">{n.title}</p>
-                    <p className="mt-1 text-[10px] text-[#8ca0b3]">{n.status} · runner: {n.runner_agent_id || '-'}</p>
-                    <p className="text-[10px] text-[#8ca0b3]">{n.id.slice(0, 8)}</p>
+                    <p className="mt-1 text-[10px] text-slate-500">{n.status} · runner: {n.runner_agent_id || '-'}</p>
+                    <p className="text-[10px] text-slate-500">{n.id.slice(0, 8)}</p>
                   </button>
                 )
               })}
             </div>
           </main>
 
-          <aside className="rounded-xl border border-white/10 bg-[#16202c] p-3">
+          <aside className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <p className="mb-2 text-sm font-semibold">Node Detail</p>
             {selected ? (
               <div className="space-y-2 text-sm">
-                <input value={taskDraft.title || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} className="w-full rounded border border-white/10 bg-[#111a25] px-2 py-1 text-sm font-semibold" />
+                <input value={taskDraft.title || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-sm font-semibold" />
                 <div className="grid grid-cols-2 gap-2">
-                  <select value={taskDraft.status || selected.status} onChange={(e) => setTaskDraft((d) => ({ ...d, status: e.target.value as TaskNode['status'] }))} className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs">
+                  <select value={taskDraft.status || selected.status} onChange={(e) => setTaskDraft((d) => ({ ...d, status: e.target.value as TaskNode['status'] }))} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs">
                     <option value="todo">todo</option><option value="doing">doing</option><option value="review">review</option><option value="done">done</option><option value="blocked">blocked</option>
                   </select>
-                  <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="exec_mode" className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
-                  <input value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} placeholder="owner agent" className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
-                  <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} placeholder="runner agent" className="rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
+                  <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="exec_mode" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
+                  <input value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} placeholder="owner agent" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
+                  <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} placeholder="runner agent" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
                 </div>
-                <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="description" className="min-h-14 w-full rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
-                <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="acceptance" className="min-h-12 w-full rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
-                <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="notes" className="min-h-10 w-full rounded border border-white/10 bg-[#111a25] px-2 py-1 text-xs" />
-                <button onClick={saveTaskDetail} className="rounded border border-[#2ea6ff]/50 bg-[#17324a] px-2 py-1 text-xs text-[#9fd6ff]">Save Task</button>
-                <div className="rounded border border-white/10 bg-[#111a25] p-2">
-                  <p className="mb-1 text-[11px] text-[#8ca0b3]">Inbound Dependencies</p>
+                <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="description" className="min-h-14 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
+                <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="acceptance" className="min-h-12 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
+                <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="notes" className="min-h-10 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
+                <button onClick={saveTaskDetail} className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs text-indigo-500">Save Task</button>
+                <div className="rounded border border-slate-200 bg-slate-50 p-2">
+                  <p className="mb-1 text-[11px] text-slate-500">Inbound Dependencies</p>
                   <div className="space-y-1">
                     {edges.filter((e) => e.task_id === selected.id).map((e) => (
                       <p key={`${e.task_id}-${e.depends_on_task_id}`} className="text-[11px]">
                         {e.depends_on_task_id.slice(0, 8)} · {e.mode || 'p2p'} · {e.required ? 'required' : 'optional'}
                       </p>
                     ))}
-                    {edges.filter((e) => e.task_id === selected.id).length === 0 && <p className="text-[11px] text-[#8ca0b3]">none</p>}
+                    {edges.filter((e) => e.task_id === selected.id).length === 0 && <p className="text-[11px] text-slate-500">none</p>}
                   </div>
                 </div>
 
-                <div className="rounded border border-white/10 bg-[#111a25] p-2">
-                  <p className="mb-1 text-[11px] text-[#8ca0b3]">Outbound Links</p>
+                <div className="rounded border border-slate-200 bg-slate-50 p-2">
+                  <p className="mb-1 text-[11px] text-slate-500">Outbound Links</p>
                   <div className="space-y-1">
                     {edges.filter((e) => e.depends_on_task_id === selected.id).map((e) => (
                       <p key={`out-${e.task_id}-${e.depends_on_task_id}`} className="text-[11px]">
                         to {e.task_id.slice(0, 8)} · {e.mode || 'p2p'}
                       </p>
                     ))}
-                    {edges.filter((e) => e.depends_on_task_id === selected.id).length === 0 && <p className="text-[11px] text-[#8ca0b3]">none</p>}
+                    {edges.filter((e) => e.depends_on_task_id === selected.id).length === 0 && <p className="text-[11px] text-slate-500">none</p>}
                   </div>
                 </div>
 
-                <div className="rounded border border-white/10 bg-[#111a25] p-2">
-                  <p className="mb-1 text-[11px] text-[#8ca0b3]">Execution Log</p>
+                <div className="rounded border border-slate-200 bg-slate-50 p-2">
+                  <p className="mb-1 text-[11px] text-slate-500">Execution Log</p>
                   <div className="max-h-40 space-y-1 overflow-auto">
                     {selectedTimeline.length > 0 ? selectedTimeline.map((m) => (
                       <p key={m.id || `${m.sender}-${m.content.slice(0, 10)}`} className="text-[11px] text-[#d7e4f0]">
-                        <span className="text-[#8ca0b3]">{m.sender}:</span> {m.content.slice(0, 140)}
+                        <span className="text-slate-500">{m.sender}:</span> {m.content.slice(0, 140)}
                       </p>
-                    )) : <p className="text-[11px] text-[#8ca0b3]">No TASK log yet</p>}
+                    )) : <p className="text-[11px] text-slate-500">No TASK log yet</p>}
                   </div>
                 </div>
 
-                <button className="rounded border border-white/10 bg-[#1d2a3a] px-2 py-1 text-xs" onClick={() => router.push('/tasks')}>Open in Tasks Board</button>
-                {selected.topic_id && <button className="rounded border border-white/10 bg-[#1d2a3a] px-2 py-1 text-xs" onClick={() => router.push(`/feed?topicId=${selected.topic_id}`)}>Open Topic Feed</button>}
+                <button className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs" onClick={() => router.push('/tasks')}>Open in Tasks Board</button>
+                {selected.topic_id && <button className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs" onClick={() => router.push(`/feed?topicId=${selected.topic_id}`)}>Open Topic Feed</button>}
               </div>
             ) : (
-              <p className="text-xs text-[#8ca0b3]">Select a node</p>
+              <p className="text-xs text-slate-500">Select a node</p>
             )}
           </aside>
         </div>

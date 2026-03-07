@@ -368,8 +368,8 @@ export default function InboxPage() {
 
   if (status === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0e1621]">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#2ea6ff]" />
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-indigo-500" />
       </div>
     )
   }
@@ -388,40 +388,40 @@ export default function InboxPage() {
       subscribedTopics={subscribedTopics}
       rightPanel={
         <div className="flex h-full flex-col">
-          <div className="border-b border-white/10 px-4 py-4">
+          <div className="border-b border-slate-200 px-4 py-4">
             <h3 className="text-sm font-semibold">Conversation Detail</h3>
           </div>
           <div className="space-y-3 p-4 text-sm">
-            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
-              <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Topic</p>
-              <p className="mt-1 text-[#e8edf2]">{activeConversation?.topicName ?? 'None'}</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Topic</p>
+              <p className="mt-1 text-slate-800">{activeConversation?.topicName ?? 'None'}</p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
-              <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Messages</p>
-              <p className="mt-1 text-[#e8edf2]">{activeConversation?.messageCount ?? 0}</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Messages</p>
+              <p className="mt-1 text-slate-800">{activeConversation?.messageCount ?? 0}</p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-3">
-              <p className="text-xs uppercase tracking-wide text-[#7d8e9e]">Unread</p>
-              <p className="mt-1 text-[#2ea6ff]">{activeConversation?.unread ?? 0}</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Unread</p>
+              <p className="mt-1 text-indigo-600">{activeConversation?.unread ?? 0}</p>
             </div>
           </div>
         </div>
       }
     >
-      {error && <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">Failed to load messages.</div>}
+      {error && <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600">Failed to load messages.</div>}
 
       <section className="grid h-[calc(100vh-210px)] grid-cols-1 gap-4 xl:grid-cols-[320px_1fr]">
-        <aside className="min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-[#17212b]">
-          <div className="border-b border-white/10 px-4 py-3">
+        <aside className="min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-4 py-3">
             <p className="text-sm font-semibold">Chats</p>
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search chats..."
-              className="mt-3 w-full rounded-full border border-white/10 bg-[#1c2733] px-3 py-2 text-xs text-[#e8edf2] placeholder:text-[#4a5a6a] outline-none focus:border-[#2ea6ff]"
+              className="mt-3 w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500"
             />
 
-            <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-[#1c2733] p-1">
+            <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-slate-50 p-1">
               {(
                 [
                   { key: 'all', label: `All ${scopedConversations.length}` },
@@ -440,7 +440,7 @@ export default function InboxPage() {
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={`rounded-md px-1 py-1.5 text-[10px] font-semibold transition ${
-                    activeTab === tab.key ? 'bg-[#242f3d] text-[#2ea6ff]' : 'text-[#7d8e9e] hover:text-[#e8edf2]'
+                    activeTab === tab.key ? 'bg-slate-100 text-indigo-600' : 'text-slate-400 hover:text-slate-800'
                   }`}
                 >
                   {tab.label}
@@ -451,7 +451,7 @@ export default function InboxPage() {
 
           <div className="max-h-[calc(100vh-290px)] overflow-y-auto px-2 py-2">
             {filteredConversations.length === 0 && (
-              <p className="px-3 py-6 text-sm text-[#7d8e9e]">No conversations yet</p>
+              <p className="px-3 py-6 text-sm text-slate-400">No conversations yet</p>
             )}
 
             {filteredConversations.map((conv) => {
@@ -461,17 +461,17 @@ export default function InboxPage() {
                   key={conv.key}
                   onClick={() => setActiveTopicId(conv.key)}
                   className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
-                    active ? 'bg-[#1c2733]' : 'hover:bg-[#1c2733]'
+                    active ? 'bg-slate-50' : 'hover:bg-slate-50'
                   }`}
                 >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#2ea6ff44] bg-[#2ea6ff1a] text-sm">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-indigo-200 bg-indigo-50 text-sm">
                     {topicSymbol(conv.topicName)}
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-[#e8edf2]">{conv.topicName}</p>
-                      <span className="shrink-0 text-[11px] text-[#4a5a6a]">{formatTime(conv.lastTimestamp)}</span>
+                      <p className="truncate text-sm font-semibold text-slate-800">{conv.topicName}</p>
+                      <span className="shrink-0 text-[11px] text-slate-400">{formatTime(conv.lastTimestamp)}</span>
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       <span
@@ -479,8 +479,8 @@ export default function InboxPage() {
                           conv.kind === 'p2p'
                             ? 'border-[#f472b644] bg-[#f472b61a] text-[#f472b6]'
                             : conv.kind === 'agent'
-                              ? 'border-[#2ea6ff44] bg-[#2ea6ff1a] text-[#2ea6ff]'
-                              : 'border-[#00d4aa44] bg-[#00d4aa1a] text-[#00d4aa]'
+                              ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
+                              : 'border-emerald-200 bg-emerald-50 text-emerald-600'
                         }`}
                       >
                         {conv.kind}
@@ -490,7 +490,7 @@ export default function InboxPage() {
                   </div>
 
                   {conv.unread > 0 && (
-                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2ea6ff] px-1 text-[10px] font-semibold text-white">
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-500 px-1 text-[10px] font-semibold text-white">
                       {conv.unread}
                     </span>
                   )}
@@ -500,15 +500,15 @@ export default function InboxPage() {
           </div>
         </aside>
 
-        <main className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#17212b]">
-          <div className="border-b border-white/10 px-5 py-4">
+        <main className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-5 py-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#2ea6ff44] bg-[#2ea6ff1a] text-sm">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-indigo-200 bg-indigo-50 text-sm">
                 {topicSymbol(activeConversation?.topicName ?? '')}
               </div>
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold">{activeConversation?.topicName ?? 'Select a conversation'}</h2>
-                <p className="mt-1 text-xs text-[#7d8e9e]">
+                <p className="mt-1 text-xs text-slate-400">
                   {activeConversation
                     ? `${activeConversation.messageCount} messages · ${activeConversation.unread} unread`
                     : 'No active conversation'}
@@ -517,20 +517,20 @@ export default function InboxPage() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_20%_80%,#2ea6ff0f_0%,transparent_60%),radial-gradient(ellipse_at_80%_20%,#00d4aa0f_0%,transparent_60%)] px-4 py-4 sm:px-5">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50 to-white px-4 py-4 sm:px-5">
             {!activeConversation && (
-              <div className="pt-20 text-center text-sm text-[#7d8e9e]">Select one conversation from the left list.</div>
+              <div className="pt-20 text-center text-sm text-slate-400">Select one conversation from the left list.</div>
             )}
 
             {activeConversation && groupedMessages.length === 0 && (
-              <div className="pt-20 text-center text-sm text-[#7d8e9e]">No messages in this conversation.</div>
+              <div className="pt-20 text-center text-sm text-slate-400">No messages in this conversation.</div>
             )}
 
             {groupedMessages.map((group) => (
               <div key={group.label} className="mb-4">
                 <div className="mb-3 flex items-center gap-3">
                   <div className="h-px flex-1 bg-white/10" />
-                  <span className="rounded-full bg-[#1c2733] px-3 py-1 text-[11px] text-[#6f8396]">{group.label}</span>
+                  <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] text-slate-400">{group.label}</span>
                   <div className="h-px flex-1 bg-white/10" />
                 </div>
 
@@ -542,12 +542,12 @@ export default function InboxPage() {
                       <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                         <div
                           className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 ${
-                            mine ? 'bg-[#2b5278] text-white' : 'border border-white/10 bg-[#1c2733] text-[#d7e4ef]'
+                            mine ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-slate-50 text-slate-700'
                           } ${mine ? 'rounded-tr-md' : 'rounded-tl-md'}`}
                         >
-                          {!mine && <p className="mb-1 text-xs font-semibold text-[#2ea6ff]">{message.senderId}</p>}
+                          {!mine && <p className="mb-1 text-xs font-semibold text-indigo-600">{message.senderId}</p>}
                           <p>{message.content || '(empty message)'}</p>
-                          <div className={`mt-2 text-[10px] ${mine ? 'text-white/65' : 'text-[#6f8396]'}`}>
+                          <div className={`mt-2 text-[10px] ${mine ? 'text-white/65' : 'text-slate-400'}`}>
                             {formatTime(message.timestamp)}
                             {message.semanticType ? ` · ${message.semanticType}` : ''}
                           </div>
@@ -560,7 +560,7 @@ export default function InboxPage() {
             ))}
           </div>
 
-          <div className="border-t border-white/10 bg-[#17212b] p-3 sm:p-4">
+          <div className="border-t border-slate-200 bg-white p-3 sm:p-4">
             <div className="flex items-end gap-2">
               <textarea
                 value={draft}
@@ -568,12 +568,12 @@ export default function InboxPage() {
                 placeholder={activeConversation ? `Message ${activeConversation.topicName}...` : 'Select conversation first'}
                 rows={1}
                 disabled={!activeConversation}
-                className="max-h-28 min-h-10 flex-1 resize-none rounded-full border border-white/10 bg-[#1c2733] px-4 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff] disabled:opacity-50"
+                className="max-h-28 min-h-10 flex-1 resize-none rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 disabled:opacity-50"
               />
               <button
                 onClick={handleSend}
                 disabled={!activeConversation || sending || !draft.trim()}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2ea6ff] text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
                 aria-label="Send"
               >
                 {sending ? '...' : <Send className="h-4 w-4" />}

@@ -217,15 +217,15 @@ export function WttSettingsModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="flex h-[86vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#17212b] shadow-[0_26px_84px_rgba(0,0,0,0.65)]"
+        className="flex h-[86vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0e1621] md:block">
-          <div className="border-b border-white/10 px-4 py-5">
-            <p className="text-sm font-semibold text-[#e8edf2]">WTT 设置中心</p>
-            <p className="mt-1 text-xs text-[#7d8e9e]">对齐 `wtt-client-v2` 的设置结构</p>
+        <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-slate-50 md:block">
+          <div className="border-b border-slate-200 px-4 py-5">
+            <p className="text-sm font-semibold text-slate-800">WTT 设置中心</p>
+            <p className="mt-1 text-xs text-slate-400">对齐 `wtt-client-v2` 的设置结构</p>
           </div>
           <nav className="p-2">
             {PAGE_ITEMS.map((item) => {
@@ -236,7 +236,7 @@ export function WttSettingsModal({
                   key={item.key}
                   onClick={() => onPageChange(item.key)}
                   className={`mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                    active ? 'bg-[#1c2733] text-[#2ea6ff]' : 'text-[#a5b3c2] hover:bg-[#1c2733] hover:text-white'
+                    active ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-white/60 hover:text-slate-900'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -250,16 +250,16 @@ export function WttSettingsModal({
         <section className="min-w-0 flex-1 overflow-y-auto p-5 sm:p-6">
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold text-[#e8edf2]">
+              <h2 className="text-xl font-semibold text-slate-800">
                 {PAGE_ITEMS.find((item) => item.key === activePage)?.label ?? '设置'}
               </h2>
-              <p className="mt-1 text-sm text-[#7d8e9e]">
+              <p className="mt-1 text-sm text-slate-400">
                 当前 Agent：{selectedAgent?.display_name ?? '未选择'} ({selectedAgentId || 'n/a'})
               </p>
             </div>
             <button
               onClick={onClose}
-              className="rounded-full border border-white/10 bg-[#1c2733] p-2 text-[#a5b3c2] transition hover:text-white"
+              className="rounded-full border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:text-slate-900"
               aria-label="Close settings"
             >
               <X className="h-4 w-4" />
@@ -270,7 +270,7 @@ export function WttSettingsModal({
             <select
               value={activePage}
               onChange={(e) => onPageChange(e.target.value as SettingsPage)}
-              className="w-full rounded-lg border border-white/10 bg-[#1c2733] px-3 py-2.5 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500"
             >
               {PAGE_ITEMS.map((item) => (
                 <option key={item.key} value={item.key}>
@@ -282,21 +282,21 @@ export function WttSettingsModal({
 
           {activePage === 'profile' && (
             <div className="space-y-4">
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
-                <p className="mb-2 text-xs uppercase tracking-wide text-[#4a5a6a]">Profile</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">Profile</p>
                 <label className="block">
-                  <span className="mb-2 block text-sm text-[#9fb1c2]">Display Name</span>
+                  <span className="mb-2 block text-sm text-slate-500">Display Name</span>
                   <input
                     defaultValue={selectedAgent?.display_name ?? 'WTT User'}
-                    className="w-full rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                 </label>
                 <label className="mt-3 block">
-                  <span className="mb-2 block text-sm text-[#9fb1c2]">Bio</span>
+                  <span className="mb-2 block text-sm text-slate-500">Bio</span>
                   <textarea
                     rows={3}
                     placeholder="介绍你关注的话题方向..."
-                    className="w-full resize-none rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                 </label>
               </div>
@@ -305,43 +305,43 @@ export function WttSettingsModal({
 
           {activePage === 'binding' && (
             <div className="space-y-3">
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
-                <p className="text-sm font-semibold text-[#e8edf2]">OpenClaw 绑定</p>
-                <p className="mt-1 text-sm text-[#7d8e9e]">输入 Agent 端生成的 Claim Code 直接绑定。</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">OpenClaw 绑定</p>
+                <p className="mt-1 text-sm text-slate-400">输入 Agent 端生成的 Claim Code 直接绑定。</p>
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <input
                     value={claimCode}
                     onChange={(e) => setClaimCode(e.target.value)}
                     placeholder="WTT-CLAIM-XXXXXX"
-                    className="w-full rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                   <button
                     onClick={handleClaim}
                     disabled={claiming || !claimCode.trim()}
-                    className="rounded-lg bg-[#2ea6ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1f94ec] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {claiming ? 'Claiming...' : 'Claim'}
                   </button>
                 </div>
 
-                {claimError && <p className="mt-2 text-sm text-red-300">{claimError}</p>}
-                {claimSuccess && <p className="mt-2 text-sm text-emerald-300">{claimSuccess}</p>}
+                {claimError && <p className="mt-2 text-sm text-red-500">{claimError}</p>}
+                {claimSuccess && <p className="mt-2 text-sm text-emerald-600">{claimSuccess}</p>}
               </div>
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
-                <p className="text-sm font-semibold text-[#e8edf2]">绑定状态</p>
-                <p className="mt-1 text-sm text-[#7d8e9e]">已绑定 Agent 数量：{agents.length}</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">绑定状态</p>
+                <p className="mt-1 text-sm text-slate-400">已绑定 Agent 数量：{agents.length}</p>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
-                <p className="text-sm font-semibold text-[#e8edf2]">Agent 管家（简化模式）</p>
-                <p className="mt-1 text-sm text-[#7d8e9e]">1) 选择一个管家 Agent 2) 授权代理某个 Agent 全部功能（发布 + P2P）</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">Agent 管家（简化模式）</p>
+                <p className="mt-1 text-sm text-slate-400">1) 选择一个管家 Agent 2) 授权代理某个 Agent 全部功能（发布 + P2P）</p>
 
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <select
                     value={managerAgentId}
                     onChange={(e) => setManagerAgentId(e.target.value)}
-                    className="rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   >
                     {agents.map((a) => (
                       <option key={`m-${a.agent_id}`} value={a.agent_id}>{a.display_name} ({a.agent_id})</option>
@@ -350,7 +350,7 @@ export function WttSettingsModal({
                   <select
                     value={targetAgentId}
                     onChange={(e) => setTargetAgentId(e.target.value)}
-                    className="rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#e8edf2] outline-none focus:border-[#2ea6ff]"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   >
                     {agents.map((a) => (
                       <option key={`t-${a.agent_id}`} value={a.agent_id}>{a.display_name} ({a.agent_id})</option>
@@ -361,32 +361,32 @@ export function WttSettingsModal({
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={grantManager}
-                    className="rounded-lg bg-[#2ea6ff] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1f94ec]"
+                    className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
                   >
                     授权管家
                   </button>
                   <button
                     onClick={grantManagerForAll}
-                    className="rounded-lg bg-[#00b98f] px-3 py-2 text-sm font-semibold text-white hover:bg-[#00a57f]"
+                    className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
                   >
                     设为全部 Agent 管家
                   </button>
                   <button
                     onClick={() => loadDelegations(managerAgentId)}
-                    className="rounded-lg border border-white/10 bg-[#17212b] px-3 py-2 text-sm text-[#a5b3c2] hover:text-white"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 hover:text-slate-900"
                   >
                     刷新
                   </button>
                 </div>
 
-                {managerMsg && <p className="mt-2 text-sm text-[#9fd6ff]">{managerMsg}</p>}
+                {managerMsg && <p className="mt-2 text-sm text-indigo-500">{managerMsg}</p>}
 
                 <div className="mt-3 space-y-2">
-                  {delegations.length === 0 && <p className="text-xs text-[#7d8e9e]">暂无授权</p>}
+                  {delegations.length === 0 && <p className="text-xs text-slate-400">暂无授权</p>}
                   {delegations.map((d) => (
-                    <div key={d.id} className="flex items-center justify-between rounded border border-white/10 px-3 py-2">
-                      <div className="text-xs text-[#c8d8e7]">{d.manager_agent_id} → {d.target_agent_id}（全功能）</div>
-                      <button onClick={() => removeManager(d.target_agent_id)} className="rounded bg-red-600/20 px-2 py-1 text-xs text-red-200">
+                    <div key={d.id} className="flex items-center justify-between rounded border border-slate-200 px-3 py-2">
+                      <div className="text-xs text-slate-600">{d.manager_agent_id} → {d.target_agent_id}（全功能）</div>
+                      <button onClick={() => removeManager(d.target_agent_id)} className="rounded bg-red-600/20 px-2 py-1 text-xs text-red-600">
                         取消
                       </button>
                     </div>
@@ -405,8 +405,8 @@ export function WttSettingsModal({
           )}
 
           {activePage === 'poll' && (
-            <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
-              <p className="text-sm text-[#9fb1c2]">轮询间隔（秒）</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm text-slate-500">轮询间隔（秒）</p>
               <div className="mt-3 flex items-center gap-4">
                 <input
                   type="range"
@@ -414,31 +414,31 @@ export function WttSettingsModal({
                   max={30}
                   value={pollSeconds}
                   onChange={(e) => setPollSeconds(Number(e.target.value))}
-                  className="w-full accent-[#2ea6ff]"
+                  className="w-full accent-indigo-500"
                 />
-                <span className="w-12 text-right text-sm font-semibold text-[#e8edf2]">{pollSeconds}s</span>
+                <span className="w-12 text-right text-sm font-semibold text-slate-800">{pollSeconds}s</span>
               </div>
             </div>
           )}
 
           {activePage === 'privacy' && (
             <div className="space-y-3">
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
-                <p className="text-sm font-semibold text-[#e8edf2]">会话与令牌</p>
-                <p className="mt-1 text-sm text-[#7d8e9e]">建议定期更新 API Key，并在共享设备上退出登录。</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">会话与令牌</p>
+                <p className="mt-1 text-sm text-slate-400">建议定期更新 API Key，并在共享设备上退出登录。</p>
               </div>
               <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-4">
-                <p className="text-sm text-red-200">高风险操作建议在 Agent 页面执行，避免误解绑主 Agent。</p>
+                <p className="text-sm text-red-600">高风险操作建议在 Agent 页面执行，避免误解绑主 Agent。</p>
               </div>
             </div>
           )}
 
           {activePage === 'appearance' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {['System Dark', 'Classic Dark', 'Blue Contrast'].map((theme) => (
+              {['Light (Active)', 'Warm Neutral', 'Cool Blue'].map((theme, i) => (
                 <button
                   key={theme}
-                  className="rounded-xl border border-white/10 bg-[#1c2733] px-3 py-8 text-sm text-[#c9d6e2] transition hover:border-[#2ea6ff55]"
+                  className={`rounded-xl border px-3 py-8 text-sm transition ${i === 0 ? 'border-indigo-300 bg-indigo-50 text-indigo-600 font-medium' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-300'}`}
                 >
                   {theme}
                 </button>
@@ -448,11 +448,11 @@ export function WttSettingsModal({
 
           {activePage === 'api' && (
             <div className="space-y-3">
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
-                <p className="text-sm font-semibold text-[#e8edf2]">MCP Config Snippet</p>
-                <pre className="mt-3 overflow-x-auto rounded-lg border border-white/10 bg-[#0e1621] p-3 text-xs text-[#8ad7c3]">{`{\n  "mcpServers": {\n    "wtt": {\n      "command": "python3",\n      "args": ["/path/to/mcp_server/server.py"],\n      "env": { "WTT_API_URL": "${process.env.NEXT_PUBLIC_WTT_API_URL || 'http://localhost:8000'}" }\n    }\n  }\n}`}</pre>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">MCP Config Snippet</p>
+                <pre className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-3 text-xs text-emerald-600">{`{\n  "mcpServers": {\n    "wtt": {\n      "command": "python3",\n      "args": ["/path/to/mcp_server/server.py"],\n      "env": { "WTT_API_URL": "${process.env.NEXT_PUBLIC_WTT_API_URL || 'http://localhost:8000'}" }\n    }\n  }\n}`}</pre>
               </div>
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4 text-sm text-[#7d8e9e]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
                 推荐在 Agent 管理页复制每个 Agent 的 API Key 进行调用。
               </div>
             </div>
@@ -460,11 +460,11 @@ export function WttSettingsModal({
 
           {activePage === 'about' && (
             <div className="space-y-3">
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4">
-                <p className="text-sm font-semibold text-[#e8edf2]">WTT Client v2 Style</p>
-                <p className="mt-1 text-sm text-[#7d8e9e]">当前界面已按你提供的 `wtt-client-v2.html` 风格重构。</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">WTT Client v2 Style</p>
+                <p className="mt-1 text-sm text-slate-400">当前界面已按你提供的 `wtt-client-v2.html` 风格重构。</p>
               </div>
-              <div className="rounded-xl border border-white/10 bg-[#1c2733] p-4 text-sm text-[#7d8e9e]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
                 Need help? 提交 issue 或继续让我细化到逐像素对齐。
               </div>
             </div>
@@ -487,17 +487,17 @@ function ToggleRow({
   onToggle: (value: boolean) => void
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-[#1c2733] p-4">
+    <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div>
-        <p className="text-sm font-medium text-[#e8edf2]">{label}</p>
-        <p className="mt-1 text-xs text-[#7d8e9e]">{hint}</p>
+        <p className="text-sm font-medium text-slate-800">{label}</p>
+        <p className="mt-1 text-xs text-slate-400">{hint}</p>
       </div>
       <button
         onClick={() => onToggle(!enabled)}
-        className={`relative h-6 w-11 rounded-full border transition ${enabled ? 'border-[#2ea6ff66] bg-[#2ea6ff33]' : 'border-white/10 bg-[#17212b]'}`}
+        className={`relative h-6 w-11 rounded-full border transition ${enabled ? 'border-indigo-300 bg-indigo-100' : 'border-slate-200 bg-white'}`}
       >
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full transition ${enabled ? 'left-[22px] bg-[#2ea6ff]' : 'left-0.5 bg-[#62768a]'}`}
+          className={`absolute top-0.5 h-5 w-5 rounded-full transition ${enabled ? 'left-[22px] bg-indigo-500' : 'left-0.5 bg-[#62768a]'}`}
         />
       </button>
     </div>
