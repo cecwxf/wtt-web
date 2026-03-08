@@ -3,7 +3,6 @@
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pencil } from 'lucide-react'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
@@ -324,6 +323,7 @@ export default function FeedPage() {
         onUnclaimAgent={handleUnclaimAgent}
         onLeaveTopic={handleLeaveTopic}
         onDeleteTopic={handleDeleteTopic}
+        onOpenEditor={() => setEditorOpen(true)}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
         onBindingChanged={loadAgents}
@@ -340,32 +340,12 @@ export default function FeedPage() {
             onRecall={handleRecallTopic}
             hasOlder={hasOlder && !loadingOlder}
             loading={!feedRaw && !error}
-            extraHeaderActions={
-              <button
-                type="button"
-                onClick={() => setEditorOpen(true)}
-                title="Open Markdown Editor"
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            }
           />
         ) : (
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
               <p className="text-lg text-slate-400">Select a topic to start chatting</p>
               <p className="mt-2 text-sm text-slate-400">Choose a topic from the left sidebar</p>
-              {topics.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setEditorOpen(true)}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-600"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Write with Markdown
-                </button>
-              )}
             </div>
           </div>
         )}

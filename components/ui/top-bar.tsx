@@ -1,19 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, PenSquare, KanbanSquare, Workflow } from 'lucide-react'
+import { Bell, FileEdit, PenSquare, KanbanSquare, Workflow } from 'lucide-react'
 import { useState } from 'react'
 import { SearchBar } from './search-bar'
 
 interface TopBarProps {
   onSelectTopic?: (topicId: string) => void
   onCreateTopic?: () => void
+  onOpenEditor?: () => void
   hideCreateTopic?: boolean
   notificationCount?: number
   userMenu?: React.ReactNode
 }
 
-export function TopBar({ onSelectTopic, onCreateTopic, hideCreateTopic, notificationCount = 0, userMenu }: TopBarProps) {
+export function TopBar({ onSelectTopic, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, userMenu }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
 
   return (
@@ -38,6 +39,17 @@ export function TopBar({ onSelectTopic, onCreateTopic, hideCreateTopic, notifica
           <Workflow className="h-4 w-4" />
           <span className="hidden sm:inline">Pipelines</span>
         </Link>
+
+        {!hideCreateTopic && (
+          <button
+            onClick={onOpenEditor}
+            className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-600 transition hover:bg-indigo-100 hover:text-indigo-700"
+            title="Markdown Editor"
+          >
+            <FileEdit className="h-4 w-4" />
+            <span className="hidden sm:inline">Editor</span>
+          </button>
+        )}
 
         {!hideCreateTopic && (
           <button

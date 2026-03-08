@@ -20,6 +20,7 @@ import {
   Highlighter,
   FileUp,
   Send,
+  Download,
   Eye,
   Columns2,
   Pencil,
@@ -465,6 +466,17 @@ export function MarkdownEditor({ topics, defaultTopicId, onPublish, onClose }: M
     }
   }, [selectedTopicId, content, onPublish, onClose])
 
+  const handleSaveLocal = useCallback(() => {
+    if (!content.trim()) return
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `draft-${new Date().toISOString().slice(0, 10)}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [content])
+
   // Close with Escape
   useEffect(() => {
     function handleEscape(e: globalThis.KeyboardEvent) {
@@ -563,15 +575,27 @@ export function MarkdownEditor({ topics, defaultTopicId, onPublish, onClose }: M
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={handlePublish}
-          disabled={publishing || !content.trim() || !selectedTopicId}
-          className="flex items-center gap-2 rounded-lg bg-indigo-500 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Send className="h-4 w-4" />
-          {publishing ? 'Publishing...' : 'Publish'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleSaveLocal}
+            disabled={!content.trim()}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            Save
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={publishing || !content.trim() || !selectedTopicId}
+            className="flex items-center gap-2 rounded-lg bg-indigo-500 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+            {publishing ? 'Publishing...' : 'Publish'}
+          </button>
+        </div>
       </div>
 
       {/* Hidden file input */}
