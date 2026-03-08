@@ -23,6 +23,7 @@ interface WttShellV2Props {
   onUnclaimAgent?: (agentId: string) => void
   onLeaveTopic?: (topicId: string) => void
   onDeleteTopic?: (topicId: string) => void
+  onOpenEditor?: () => void
   notificationCount?: number
   hideTopics?: boolean
   hideCreateTopic?: boolean
@@ -45,6 +46,7 @@ export function WttShellV2({
   onUnclaimAgent,
   onLeaveTopic,
   onDeleteTopic,
+  onOpenEditor,
   notificationCount = 0,
   hideTopics = false,
   hideCreateTopic = false,
@@ -76,6 +78,7 @@ export function WttShellV2({
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}
           onCreateTopic={() => setCreateTopicOpen(true)}
+          onOpenEditor={onOpenEditor}
           hideCreateTopic={hideCreateTopic}
           notificationCount={notificationCount}
           userMenu={
