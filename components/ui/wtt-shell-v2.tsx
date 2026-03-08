@@ -24,6 +24,7 @@ interface WttShellV2Props {
   onLeaveTopic?: (topicId: string) => void
   onDeleteTopic?: (topicId: string) => void
   notificationCount?: number
+  hideTopics?: boolean
   children: ReactNode
 }
 
@@ -44,6 +45,7 @@ export function WttShellV2({
   onLeaveTopic,
   onDeleteTopic,
   notificationCount = 0,
+  hideTopics = false,
   children,
 }: WttShellV2Props) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -131,14 +133,16 @@ export function WttShellV2({
               onUnclaimAgent={onUnclaimAgent}
             />
 
-            <TopicColumn
-              topics={topics}
-              selectedTopicId={selectedTopicId}
-              onSelectTopic={onTopicChange}
-              onLeaveTopic={onLeaveTopic}
-              onDeleteTopic={onDeleteTopic}
-              agentName={selectedAgent?.display_name}
-            />
+            {!hideTopics && (
+              <TopicColumn
+                topics={topics}
+                selectedTopicId={selectedTopicId}
+                onSelectTopic={onTopicChange}
+                onLeaveTopic={onLeaveTopic}
+                onDeleteTopic={onDeleteTopic}
+                agentName={selectedAgent?.display_name}
+              />
+            )}
           </div>
 
           <main className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/30">
