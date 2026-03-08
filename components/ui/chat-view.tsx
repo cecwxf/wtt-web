@@ -212,6 +212,54 @@ function formatDateGroup(timestamp: string): string {
   }
 }
 
+function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <>
+      <button type="button" onClick={() => setExpanded(true)} className="block cursor-zoom-in">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt="image"
+          className={`h-20 w-20 rounded-lg object-cover border ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
+        />
+      </button>
+      {expanded && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setExpanded(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="image" className="max-h-[90vh] max-w-[90vw] rounded-lg" />
+        </div>
+      )}
+    </>
+  )
+}
+
+function ThumbnailVideo({ url, isMine }: { url: string; isMine: boolean }) {
+  const [playing, setPlaying] = useState(false)
+  if (playing) {
+    return (
+      <video controls autoPlay className="max-h-72 w-full rounded-lg border border-slate-200">
+        <source src={url} />
+      </video>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setPlaying(true)}
+      className={`relative flex h-20 w-28 items-center justify-center rounded-lg border bg-black/80 ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
+    >
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
+        <div className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-indigo-500" />
+      </div>
+      <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[9px] text-white">Video</span>
+    </button>
+  )
+}
+
 export function ChatView({
   topicName,
   messages,
@@ -515,22 +563,13 @@ export function ChatView({
                           <div className="space-y-2">
                             {blocks.map((block, bi) => {
                               if (block.kind === 'image') {
-                                return (
-                                  <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="block">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={block.url} alt="image" className="max-h-64 w-auto rounded-lg border border-slate-200" />
-                                  </a>
-                                )
+                                return <ThumbnailImage key={bi} url={block.url} isMine={isMine} />
                               }
                               if (block.kind === 'audio') {
                                 return <audio key={bi} controls src={block.url} className="w-full max-w-xs" />
                               }
                               if (block.kind === 'video') {
-                                return (
-                                  <video key={bi} controls preload="metadata" className="max-h-72 w-full rounded-lg border border-slate-200">
-                                    <source src={block.url} />
-                                  </video>
-                                )
+                                return <ThumbnailVideo key={bi} url={block.url} isMine={isMine} />
                               }
                               if (block.kind === 'file') {
                                 const url = block.url
