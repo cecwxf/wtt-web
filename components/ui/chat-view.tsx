@@ -552,9 +552,9 @@ export function ChatView({
                     <div
                       className={`max-w-[82%] rounded-2xl px-5 py-3.5 text-[14px] leading-relaxed tracking-[-0.01em] ${
                         isMine
-                          ? 'bg-indigo-500 text-white/95'
-                          : 'border border-slate-200 bg-slate-50/90 text-slate-700'
-                      } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'}`}
+                          ? 'border border-indigo-200 bg-indigo-50/80 text-slate-800'
+                          : 'border border-slate-200 bg-white text-slate-700'
+                      } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
                     >
                       {!isMine && <p className="mb-1 text-xs font-semibold text-indigo-600">{message.sender_id}</p>}
                       {(() => {
@@ -573,24 +573,31 @@ export function ChatView({
                           const pct = task.progress ? parseInt(task.progress, 10) : undefined
 
                           return (
-                            <div className={`space-y-2 rounded-lg border border-l-4 ${colors.border} ${colors.bg} border-slate-200 p-3`}>
-                              <div className="flex items-center justify-between gap-2">
+                            <div className="space-y-3">
+                              {/* Header card: badge + task ID */}
+                              <div className={`flex items-center justify-between gap-2 rounded-lg border border-l-4 ${colors.border} ${colors.bg} border-slate-200 px-3 py-2.5`}>
                                 <span className="font-mono text-xs text-slate-500">{task.taskId || 'N/A'}</span>
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${colors.badge}`}>{colors.badgeText}</span>
+                                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${colors.badge}`}>{colors.badgeText}</span>
                               </div>
 
-                              {(task.runner || task.executor) && (
-                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                                  {task.runner && <span>Runner: <span className="font-medium text-slate-700">{task.runner}</span></span>}
-                                  {task.executor && <span>Executor: <span className="font-medium text-slate-700">{task.executor}</span></span>}
-                                  {task.sessionId && <span>Session: <span className="font-mono text-slate-600">{task.sessionId.slice(0, 8)}</span></span>}
+                              {/* Metadata card */}
+                              {(task.runner || task.executor || task.sessionId) && (
+                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Metadata</p>
+                                  <div className="space-y-1 text-xs text-slate-600">
+                                    {task.runner && <div className="flex justify-between"><span className="text-slate-400">Runner</span><span className="font-medium text-slate-700">{task.runner}</span></div>}
+                                    {task.executor && <div className="flex justify-between"><span className="text-slate-400">Executor</span><span className="font-medium text-slate-700">{task.executor}</span></div>}
+                                    {task.sessionId && <div className="flex justify-between"><span className="text-slate-400">Session</span><span className="font-mono text-slate-600">{task.sessionId.slice(0, 8)}</span></div>}
+                                  </div>
                                 </div>
                               )}
 
+                              {/* Progress card */}
                               {task.kind === 'status' && (
-                                <div className="space-y-1.5">
+                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Progress</p>
                                   {pct !== undefined && (
-                                    <div className="flex items-center gap-2">
+                                    <div className="mb-2 flex items-center gap-2">
                                       <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
                                         <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
                                       </div>
@@ -601,12 +608,20 @@ export function ChatView({
                                 </div>
                               )}
 
+                              {/* Result / Blocked / Review card */}
                               {(task.kind === 'summary' || task.kind === 'blocked' || task.kind === 'review') && task.body && (
-                                <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
+                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                    {task.kind === 'summary' ? 'Result' : task.kind === 'blocked' ? 'Blocked' : 'Review'}
+                                  </p>
+                                  <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
+                                </div>
                               )}
 
+                              {/* Asset card */}
                               {task.kind === 'asset' && (
-                                <div>
+                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Asset</p>
                                   {task.assetUrl ? (
                                     <a href={task.assetUrl} target="_blank" rel="noreferrer" className="text-sm text-indigo-600 underline break-all hover:text-indigo-800">{task.assetUrl}</a>
                                   ) : (
@@ -615,8 +630,12 @@ export function ChatView({
                                 </div>
                               )}
 
+                              {/* Run body card */}
                               {task.kind === 'run' && task.body && (
-                                <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
+                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Details</p>
+                                  <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
+                                </div>
                               )}
                             </div>
                           )
@@ -650,11 +669,11 @@ export function ChatView({
                                 }
                                 if (isMd) {
                                   return (
-                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-400/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-white' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'}`}>
+                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100/80 text-slate-700' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'}`}>
                                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-500 text-xs font-bold">.md</span>
                                       <span className="min-w-0 flex-1">
                                         <span className="block truncate font-medium">{fname}</span>
-                                        <span className={`block text-xs ${isMine ? 'text-indigo-200' : 'text-slate-400'}`}>Markdown · Click to download</span>
+                                        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>Markdown · Click to download</span>
                                       </span>
                                     </a>
                                   )
@@ -668,7 +687,7 @@ export function ChatView({
                               }
                               if (block.kind === 'markdown') {
                                 return (
-                                  <div key={bi} className={`prose prose-sm max-w-none ${isMine ? 'prose-invert' : ''}`}>
+                                  <div key={bi} className="prose prose-sm max-w-none prose-slate">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
                                   </div>
                                 )
@@ -716,7 +735,7 @@ export function ChatView({
                           </div>
                         )
                       })()}
-                      <div className={`mt-2 text-[10px] ${isMine ? 'text-white/65' : 'text-slate-400'}`}>
+                      <div className={`mt-2 text-[10px] ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>
                         {formatTime(message.timestamp)}
                         {message.semantic_type && ` · ${message.semantic_type}`}
                       </div>
