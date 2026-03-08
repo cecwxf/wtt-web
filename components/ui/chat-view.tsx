@@ -2,6 +2,8 @@
 
 import { Image as ImageIcon, Link as LinkIcon, Mic, Paperclip, Send } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 export interface ChatMessage {
@@ -38,8 +40,10 @@ type ParsedRich =
   | { kind: 'plain'; text: string }
   | { kind: 'image'; url: string }
   | { kind: 'audio'; url: string }
-  | { kind: 'file'; url: string }
+  | { kind: 'video'; url: string }
+  | { kind: 'file'; url: string; filename?: string }
   | { kind: 'link'; url: string }
+  | { kind: 'markdown'; text: string }
   | { kind: 'preview'; title?: string; desc?: string; url?: string; image?: string }
 
 interface UrlPreview {
@@ -104,12 +108,20 @@ function parseRichContent(content: string): ParsedRich {
   if (imageMatch) return { kind: 'image', url: imageMatch[1] }
   const audioMatch = c.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
   if (audioMatch) return { kind: 'audio', url: audioMatch[1] }
-  const fileMatch = c.match(/^\[file\]\((https?:\/\/[^)]+)\)$/i)
-  if (fileMatch) return { kind: 'file', url: fileMatch[1] }
+  const videoMatch = c.match(/^\[video\]\((https?:\/\/[^)]+)\)$/i)
+  if (videoMatch) return { kind: 'video', url: videoMatch[1] }
+  const fileMatch = c.match(/^\[file(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
+  if (fileMatch) return { kind: 'file', url: fileMatch[2], filename: fileMatch[1] || undefined }
   const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
   if (linkMatch) return { kind: 'link', url: linkMatch[1] }
   const plainUrl = c.match(/^(https?:\/\/\S+)$/i)
-  if (plainUrl) return { kind: 'link', url: plainUrl[1] }
+  if (plainUrl) {
+    const u = plainUrl[1].toLowerCase()
+    if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: plainUrl[1] }
+    if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) return { kind: 'image', url: plainUrl[1] }
+    if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) return { kind: 'audio', url: plainUrl[1] }
+    return { kind: 'link', url: plainUrl[1] }
+  }
 
   if (c.startsWith('[preview]')) {
     const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
@@ -118,6 +130,10 @@ function parseRichContent(content: string): ParsedRich {
     const image = (c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
     return { kind: 'preview', title, desc, url, image }
   }
+
+  // Detect markdown: has headings, bold, lists, code blocks, tables, or links
+  const hasMarkdown = /(?:^#{1,6}\s|^\s*[-*+]\s|\*\*.+\*\*|`.+`|^\|.+\||```[\s\S]*```|\[.+\]\(.+\))/m.test(c)
+  if (hasMarkdown && c.length > 20) return { kind: 'markdown', text: c }
 
   return { kind: 'plain', text: content }
 }
@@ -205,7 +221,7 @@ export function ChatView({
   }, [previewCache])
 
   type DraftBlock = {
-    type: 'image' | 'audio' | 'file' | 'link' | 'preview' | 'markdown'
+    type: 'image' | 'audio' | 'video' | 'file' | 'link' | 'preview' | 'markdown'
     value: string
     title?: string
     desc?: string
@@ -223,8 +239,10 @@ export function ChatView({
         if (image) return { type: 'image', value: x, url: image[1] }
         const audio = x.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
         if (audio) return { type: 'audio', value: x, url: audio[1] }
-        const file = x.match(/^\[file\]\((https?:\/\/[^)]+)\)$/i)
-        if (file) return { type: 'file', value: x, url: file[1] }
+        const video = x.match(/^\[video\]\((https?:\/\/[^)]+)\)$/i)
+        if (video) return { type: 'video', value: x, url: video[1] }
+        const file = x.match(/^\[file(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
+        if (file) return { type: 'file', value: x, url: file[2] }
         const link = x.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
         if (link) return { type: 'link', value: x, url: link[1] }
         if (/^\[preview\]/i.test(x)) {
@@ -321,8 +339,15 @@ export function ChatView({
 
       const isImage = file.type.startsWith('image/')
       const isAudio = file.type.startsWith('audio/')
+      const isVideo = file.type.startsWith('video/')
       const kind: 'image' | 'audio' | 'file' = isImage ? 'image' : isAudio ? 'audio' : 'file'
-      const token = isImage ? `![](${asset.url})` : isAudio ? `[audio](${asset.url})` : `[file](${asset.url})`
+      const token = isImage
+        ? `![](${asset.url})`
+        : isAudio
+          ? `[audio](${asset.url})`
+          : isVideo
+            ? `[video](${asset.url})`
+            : `[file:${file.name}](${asset.url})`
       setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
       setRecentAssets((prev) => [{ url: asset.url, kind }, ...prev].slice(0, 8))
     } catch (e) {
@@ -556,11 +581,49 @@ export function ChatView({
                         if (parsed.kind === 'audio') {
                           return <audio controls src={parsed.url} className="w-full max-w-xs" />
                         }
-                        if (parsed.kind === 'file') {
+                        if (parsed.kind === 'video') {
                           return (
-                            <a href={parsed.url} target="_blank" rel="noreferrer" className="text-indigo-500 underline break-all">
-                              Download file
+                            <video
+                              controls
+                              preload="metadata"
+                              className="max-h-72 w-full rounded-lg border border-slate-200"
+                            >
+                              <source src={parsed.url} />
+                            </video>
+                          )
+                        }
+                        if (parsed.kind === 'file') {
+                          const url = parsed.url
+                          const fname = parsed.filename || url.split('/').pop() || 'file'
+                          const isPdf = /\.pdf(\?|$)/i.test(url)
+                          if (isPdf) {
+                            return (
+                              <div className="space-y-2">
+                                <iframe
+                                  src={url}
+                                  title={fname}
+                                  className="h-80 w-full rounded-lg border border-slate-200"
+                                />
+                                <a href={url} target="_blank" rel="noreferrer" className="inline-block text-xs text-indigo-500 underline">
+                                  Open PDF in new tab
+                                </a>
+                              </div>
+                            )
+                          }
+                          return (
+                            <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-indigo-500 hover:bg-slate-100">
+                              <Paperclip className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{fname}</span>
                             </a>
+                          )
+                        }
+                        if (parsed.kind === 'markdown') {
+                          return (
+                            <div className={`prose prose-sm max-w-none ${isMine ? 'prose-invert' : ''}`}>
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {parsed.text}
+                              </ReactMarkdown>
+                            </div>
                           )
                         }
                         if (parsed.kind === 'link') {
