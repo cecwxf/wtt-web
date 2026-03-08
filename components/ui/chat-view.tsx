@@ -214,23 +214,39 @@ function formatDateGroup(timestamp: string): string {
 
 function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
   const [expanded, setExpanded] = useState(false)
+  const [failed, setFailed] = useState(false)
   return (
     <>
       <button type="button" onClick={() => setExpanded(true)} className="block cursor-zoom-in">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt="image"
-          className={`h-20 w-20 rounded-lg object-cover border ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
-        />
+        {failed ? (
+          <div className={`flex h-20 w-20 items-center justify-center rounded-lg border bg-slate-100 ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}>
+            <ImageIcon className="h-6 w-6 text-slate-400" />
+          </div>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={url}
+            alt=""
+            onError={() => setFailed(true)}
+            className={`h-20 w-auto max-w-[160px] rounded-lg object-cover border ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
+          />
+        )}
       </button>
       {expanded && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
           onClick={() => setExpanded(false)}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt="image" className="max-h-[90vh] max-w-[90vw] rounded-lg" />
+          {failed ? (
+            <div className="rounded-lg bg-white p-8 text-center">
+              <ImageIcon className="mx-auto h-12 w-12 text-slate-400" />
+              <p className="mt-2 text-sm text-slate-500">Image failed to load</p>
+              <a href={url} target="_blank" rel="noreferrer" className="mt-1 text-xs text-indigo-500 underline break-all">{url}</a>
+            </div>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={url} alt="" className="max-h-[90vh] max-w-[90vw] rounded-lg" />
+          )}
         </div>
       )}
     </>
@@ -239,6 +255,7 @@ function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
 
 function ThumbnailVideo({ url, isMine }: { url: string; isMine: boolean }) {
   const [playing, setPlaying] = useState(false)
+  const thumbRef = useRef<HTMLVideoElement>(null)
   if (playing) {
     return (
       <video controls autoPlay className="max-h-72 w-full rounded-lg border border-slate-200">
@@ -250,12 +267,14 @@ function ThumbnailVideo({ url, isMine }: { url: string; isMine: boolean }) {
     <button
       type="button"
       onClick={() => setPlaying(true)}
-      className={`relative flex h-20 w-28 items-center justify-center rounded-lg border bg-black/80 ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
+      className={`group relative block overflow-hidden rounded-lg border ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
     >
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
-        <div className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-indigo-500" />
+      <video ref={thumbRef} src={url} preload="metadata" muted className="h-20 w-auto max-w-[160px] object-cover" />
+      <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition group-hover:bg-black/50">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
+          <div className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-indigo-500" />
+        </div>
       </div>
-      <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[9px] text-white">Video</span>
     </button>
   )
 }
