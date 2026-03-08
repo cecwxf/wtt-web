@@ -26,6 +26,7 @@ interface ChatViewProps {
   hasOlder?: boolean
   loading?: boolean
   extraHeaderActions?: React.ReactNode
+  isTaskTopic?: boolean
 }
 
 function formatTime(timestamp: string): string {
@@ -301,9 +302,11 @@ export function ChatView({
   hasOlder = false,
   loading,
   extraHeaderActions,
+  isTaskTopic = false,
 }: ChatViewProps) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [awaitingAgent, setAwaitingAgent] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
@@ -352,6 +355,7 @@ export function ChatView({
     try {
       await onSendMessage(draft.trim())
       setDraft('')
+      if (isTaskTopic) setAwaitingAgent(true)
     } catch (error) {
       console.error('Failed to send message:', error)
       alert(error instanceof Error ? error.message : 'Failed to send message')
@@ -359,6 +363,15 @@ export function ChatView({
       setSending(false)
     }
   }
+
+  // Clear thinking indicator when a new agent message arrives
+  useEffect(() => {
+    if (!awaitingAgent || !isTaskTopic) return
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg && lastMsg.sender_id !== currentAgentId) {
+      setAwaitingAgent(false)
+    }
+  }, [messages, awaitingAgent, isTaskTopic, currentAgentId])
 
   const uploadAssetAndInsert = async (file: File) => {
     setUploading(true)
@@ -696,6 +709,17 @@ export function ChatView({
           </div>
         ))}
       </div>
+
+      {awaitingAgent && isTaskTopic && (
+        <div className="flex items-center gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-2.5">
+          <div className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:0ms]" />
+            <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:150ms]" />
+            <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:300ms]" />
+          </div>
+          <span className="text-xs text-slate-500">Agent thinking…</span>
+        </div>
+      )}
 
       <div className="border-t border-slate-200 bg-white p-3 sm:p-4">
         <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2">

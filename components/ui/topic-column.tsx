@@ -1,6 +1,6 @@
 'use client'
 
-import { Hash, Lock, MoreVertical, Users } from 'lucide-react'
+import { Bot, Hash, Lock, MoreVertical, Users } from 'lucide-react'
 import { useState } from 'react'
 
 export interface TopicItem {
@@ -9,6 +9,8 @@ export interface TopicItem {
   topic_type: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
   unread_count?: number
   can_delete?: boolean
+  task_id?: string
+  runner_agent_id?: string
 }
 
 interface TopicColumnProps {
@@ -20,7 +22,8 @@ interface TopicColumnProps {
   agentName?: string
 }
 
-function getTopicIcon(type: string) {
+function getTopicIcon(type: string, isTask?: boolean) {
+  if (isTask) return Bot
   switch (type) {
     case 'p2p':
       return Lock
@@ -66,7 +69,7 @@ export function TopicColumn({
 
         {topics.map((topic) => {
           const isSelected = topic.topic_id === selectedTopicId
-          const Icon = getTopicIcon(topic.topic_type)
+          const Icon = getTopicIcon(topic.topic_type, !!topic.task_id)
           const isMenuOpen = menuFor === topic.topic_id
 
           return (
