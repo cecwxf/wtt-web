@@ -868,7 +868,12 @@ export default function PipelinesPage() {
                 <span className="text-[10px] text-slate-500">{Math.round(zoom * 100)}%</span>
                 <button onClick={() => setZoom((z) => Math.max(0.3, +(z - 0.1).toFixed(2)))} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs">-</button>
                 <div className="mx-1 h-4 w-px bg-slate-200" />
-                <button onClick={() => cancelPipeline()} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50">
+                {editingPipeline && editingPipeline.id !== 'default' && (
+                  <button onClick={() => deletePipeline(editingPipeline)} className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50">
+                    Delete Pipeline
+                  </button>
+                )}
+                <button onClick={() => cancelPipeline()} className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-600 hover:bg-amber-50">
                   Cancel
                 </button>
                 <button onClick={runPipeline} className="rounded-lg bg-indigo-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-600">
