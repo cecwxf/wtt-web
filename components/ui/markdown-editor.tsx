@@ -136,6 +136,10 @@ function handleEditorKeyDown(
   const meta = e.ctrlKey || e.metaKey
   if (!meta) return
 
+  // Let native browser shortcuts pass through (copy, paste, undo, redo, select-all, cut)
+  const nativeKeys = new Set(['c', 'v', 'x', 'z', 'a', 'y'])
+  if (nativeKeys.has(e.key.toLowerCase())) return
+
   const keyMap: Record<string, string> = {
     b: 'Bold',
     i: 'Italic',
@@ -468,11 +472,15 @@ export function MarkdownEditor({ topics, defaultTopicId, onPublish, onClose }: M
 
   const handleSaveLocal = useCallback(() => {
     if (!content.trim()) return
+    const defaultName = `draft-${new Date().toISOString().slice(0, 10)}.md`
+    const filename = prompt('Save as:', defaultName)
+    if (!filename) return
+    const finalName = filename.endsWith('.md') || filename.endsWith('.markdown') ? filename : `${filename}.md`
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `draft-${new Date().toISOString().slice(0, 10)}.md`
+    a.download = finalName
     a.click()
     URL.revokeObjectURL(url)
   }, [content])
