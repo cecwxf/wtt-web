@@ -57,7 +57,6 @@ export default function LoginPage() {
   const router = useRouter()
   const enableTestLogin = process.env.NEXT_PUBLIC_ENABLE_TEST_LOGIN === 'true'
   const testPhone = process.env.NEXT_PUBLIC_TEST_PHONE || '+8613800138000'
-  const testCode = process.env.NEXT_PUBLIC_TEST_CODE || '888888'
 
   const localPhone = phone.replace(/\D/g, '')
   const e164Phone = useMemo(() => {
@@ -138,6 +137,30 @@ export default function LoginPage() {
 
   const handleOAuthSignIn = (provider: string) => {
     signIn(provider, { callbackUrl: '/feed' })
+  }
+
+  const handleTestLogin = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const testCode = process.env.NEXT_PUBLIC_TEST_CODE || '888888'
+      const result = await signIn('credentials', {
+        identifier: testPhone,
+        code: testCode,
+        displayName: 'Test User',
+        redirect: false,
+      })
+
+      if (result?.ok) {
+        router.push('/feed')
+      } else {
+        setError('Test login failed')
+      }
+    } catch {
+      setError('Test login failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

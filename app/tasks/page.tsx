@@ -386,13 +386,22 @@ export default function TasksPage() {
 
   const topics = useMemo(() => {
     if (!Array.isArray(subscribedTopicsRaw)) return []
-    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string }) => ({
-      topic_id: topic.id,
-      name: topic.name,
-      topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
-      unread_count: 0,
-      can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
-    }))
+    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string }) => {
+      // Strip "TASK-xxxxxxxx " prefix from task topic names
+      let displayName = topic.name
+      const taskPrefixMatch = displayName.match(/^TASK-[a-f0-9]{8}\s+(.+)$/i)
+      if (taskPrefixMatch) {
+        displayName = taskPrefixMatch[1]
+      }
+
+      return {
+        topic_id: topic.id,
+        name: displayName,
+        topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
+        unread_count: 0,
+        can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
+      }
+    })
   }, [subscribedTopicsRaw])
 
   const agentItems = useMemo(() => {
@@ -460,42 +469,6 @@ export default function TasksPage() {
     setTaskContextMenu(null)
     await mutateTasks()
     await mutateSubscribedTopics()
-  }
-
-  const invalidateAllTasks = async () => {
-    if (!tasks.length) {
-      alert('当前没有可取消的任务')
-      return
-    }
-
-    const ok = window.confirm(`确认将当前全部 ${tasks.length} 个任务标记为无效并取消吗？\n操作后任务会从所有栏消失，关联 Topic 也会删除。`)
-    if (!ok) return
-
-    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
-    const results = await Promise.allSettled(
-      tasks.map((t) =>
-        fetch(
-          `${CLIENT_WTT_API_BASE}/tasks/${t.id}?agent_id=${encodeURIComponent(selectedAgentId || 'reviewer')}&delete_topic=true`,
-          { method: 'DELETE', headers }
-        )
-      )
-    )
-
-    let success = 0
-    let failed = 0
-    for (const r of results) {
-      if (r.status === 'fulfilled' && r.value.ok) success += 1
-      else failed += 1
-    }
-
-    setSelectedTask(null)
-    setTaskDraft({})
-    setTaskContextMenu(null)
-    await mutateTasks()
-    await mutateSubscribedTopics()
-
-    if (failed > 0) alert(`无效化完成：成功 ${success}，失败 ${failed}`)
-    else alert(`无效化完成：已取消 ${success} 个任务`)
   }
 
   const bulkRunTasks = async () => {
@@ -749,7 +722,6 @@ export default function TasksPage() {
           <div className="flex items-center gap-2">
             <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-500">批量Run任务</button>
             <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">批量取消任务</button>
-            <button onClick={invalidateAllTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">无效全部任务</button>
             <button onClick={createTask} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
           </div>
         </div>
@@ -795,7 +767,7 @@ export default function TasksPage() {
                         <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
                       </div>
                       <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100 px-1 py-0.5">
-                        <div className={`whitespace-nowrap text-[10px] text-[#9ab3c9] ${task.status === 'doing' ? 'task-ticker-scroll' : ''}`}>
+                        <div className={`whitespace-nowrap text-[10px] text-slate-600 ${task.status === 'doing' ? 'task-ticker-scroll' : ''}`}>
                           {taskTickerText(task)}
                         </div>
                       </div>
@@ -814,7 +786,7 @@ export default function TasksPage() {
 
           <aside className={`rounded-xl border border-slate-200 bg-slate-50 p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
             <div className="mb-3 rounded-lg border border-slate-200 bg-slate-100 p-2">
-              <p className="text-xs font-semibold text-[#cfe4f8]">Task执行时间饼图（Top 8）</p>
+              <p className="text-xs font-semibold text-slate-600">Task执行时间饼图（Top 8）</p>
               {taskDurationSummary.slices.length > 0 ? (
                 <>
                   <div className="mt-2 flex items-center gap-3">
@@ -824,15 +796,15 @@ export default function TasksPage() {
                         <path key={slice.id} d={slice.path} fill={slice.color} />
                       ))}
                       <circle cx="60" cy="60" r="25" fill="#f8fafc" />
-                      <text x="60" y="57" textAnchor="middle" className="fill-[#dbe9f7] text-[8px]">总耗时</text>
-                      <text x="60" y="67" textAnchor="middle" className="fill-[#dbe9f7] text-[9px] font-semibold">{formatDuration(taskDurationSummary.totalMs)}</text>
+                      <text x="60" y="57" textAnchor="middle" className="fill-slate-500 text-[8px]">总耗时</text>
+                      <text x="60" y="67" textAnchor="middle" className="fill-slate-600 text-[9px] font-semibold">{formatDuration(taskDurationSummary.totalMs)}</text>
                     </svg>
                     <div className="max-h-28 flex-1 space-y-1 overflow-auto pr-1">
                       {taskDurationSummary.slices.map((slice) => (
-                        <div key={slice.id} className="flex items-center gap-1 text-[10px] text-[#b9cadc]">
+                        <div key={slice.id} className="flex items-center gap-1 text-[10px] text-slate-600">
                           <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: slice.color }} />
                           <span className="truncate" title={slice.title}>{slice.title}</span>
-                          <span className="ml-auto shrink-0 text-[#d6e8fa]">{formatDuration(slice.durationMs)}</span>
+                          <span className="ml-auto shrink-0 text-slate-700">{formatDuration(slice.durationMs)}</span>
                         </div>
                       ))}
                     </div>
@@ -853,10 +825,10 @@ export default function TasksPage() {
                 <p className="text-xs">Runner: {selectedTask.runner_agent_id || '-'}</p>
 
                 <div className="rounded border border-slate-200 bg-slate-100 p-2 text-xs">
-                  <p className="mb-1 font-semibold text-[#cfe4f8]">任务规划</p>
+                  <p className="mb-1 font-semibold text-slate-600">任务规划</p>
                   {selectedTaskPlan ? (
                     <>
-                      <p className="mb-2 text-[#d8e5f2]">🎯 目标：{selectedTaskPlan.goal}</p>
+                      <p className="mb-2 text-slate-700">🎯 目标：{selectedTaskPlan.goal}</p>
                       <div className="space-y-2">
                         {selectedTaskPlan.phases.map((phase, i) => (
                           <div key={phase.id} className="rounded border border-slate-200 bg-slate-100 p-2">
@@ -873,7 +845,7 @@ export default function TasksPage() {
                                     <span className={state === 'done' ? 'text-green-300' : state === 'ongoing' ? 'text-yellow-300' : 'text-slate-500'}>
                                       {state === 'done' ? '✅ Done' : state === 'ongoing' ? '🟡 On Going' : '⚪ ToDo'}
                                     </span>
-                                    <span className="text-[#d8e5f2]">{st.title}</span>
+                                    <span className="text-slate-700">{st.title}</span>
                                   </p>
                                 )
                               })}
@@ -953,11 +925,11 @@ export default function TasksPage() {
                             <span>{item.sender}</span>
                             <span>·</span>
                             <span>{item.created_at?.replace('T', ' ').slice(0, 19)}</span>
-                            <span className={`ml-auto rounded px-1 ${item.kind === 'reasoned' ? 'bg-indigo-100 text-indigo-500' : item.kind === 'review' ? 'bg-amber-100 text-[#ffd792]' : 'bg-slate-100 text-[#c3ced9]'}`}>
+                            <span className={`ml-auto rounded px-1 ${item.kind === 'reasoned' ? 'bg-indigo-100 text-indigo-500' : item.kind === 'review' ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-600'}`}>
                               {item.kind === 'reasoned' ? 'AUTO' : item.kind === 'review' ? 'REVIEW' : 'MSG'}
                             </span>
                           </p>
-                          <p className="mt-0.5 line-clamp-2 text-[11px] text-[#d8e5f2]">{item.content}</p>
+                          <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-700">{item.content}</p>
                         </button>
                       ))
                     ) : (
