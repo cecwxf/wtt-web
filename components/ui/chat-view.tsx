@@ -1,8 +1,10 @@
 'use client'
 
-import { Image as ImageIcon, Link as LinkIcon, Mic, Paperclip, Send } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { Image as ImageIcon, Mic, Paperclip, Send } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 
 export interface ChatMessage {
   message_id: string
@@ -39,8 +41,10 @@ type ParsedRich =
   | { kind: 'plain'; text: string }
   | { kind: 'image'; url: string }
   | { kind: 'audio'; url: string }
-  | { kind: 'file'; url: string }
+  | { kind: 'video'; url: string }
+  | { kind: 'file'; url: string; filename?: string }
   | { kind: 'link'; url: string }
+  | { kind: 'markdown'; text: string }
   | { kind: 'preview'; title?: string; desc?: string; url?: string; image?: string }
 
 interface UrlPreview {
@@ -54,11 +58,6 @@ interface UrlPreview {
 interface CachedPreview {
   data: UrlPreview
   fetchedAt: number
-}
-
-function extractFirstUrl(content: string): string | null {
-  const m = (content || '').match(/https?:\/\/\S+/i)
-  return m ? m[0] : null
 }
 
 type ParsedTask = {
@@ -99,28 +98,102 @@ function parseTaskContent(content: string): ParsedTask {
   return { isTask: true, kind, taskId, sessionId, runner, executor, progress, body, assetUrl, assetPath }
 }
 
-function parseRichContent(content: string): ParsedRich {
-  const c = (content || '').trim()
-  const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
-  if (imageMatch) return { kind: 'image', url: imageMatch[1] }
-  const audioMatch = c.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
-  if (audioMatch) return { kind: 'audio', url: audioMatch[1] }
-  const fileMatch = c.match(/^\[file\]\((https?:\/\/[^)]+)\)$/i)
-  if (fileMatch) return { kind: 'file', url: fileMatch[1] }
-  const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
-  if (linkMatch) return { kind: 'link', url: linkMatch[1] }
-  const plainUrl = c.match(/^(https?:\/\/\S+)$/i)
-  if (plainUrl) return { kind: 'link', url: plainUrl[1] }
+/** Rewrite absolute backend media URLs to go through the Next.js proxy so
+ *  HTTPS pages can load HTTP resources without mixed-content blocking. */
+function proxyUrl(url: string): string {
+  if (url.startsWith(DEFAULT_WTT_API_ORIGIN)) {
+    return url.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
+  }
+  return url
+}
 
+function classifyLine(line: string): ParsedRich {
+  const c = line.trim()
+  if (!c) return { kind: 'plain', text: '' }
+  const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
+  if (imageMatch) return { kind: 'image', url: proxyUrl(imageMatch[1]) }
+  const audioMatch = c.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
+  if (audioMatch) return { kind: 'audio', url: proxyUrl(audioMatch[1]) }
+  const videoMatch = c.match(/^\[video\]\((https?:\/\/[^)]+)\)$/i)
+  if (videoMatch) return { kind: 'video', url: proxyUrl(videoMatch[1]) }
+  const fileMatch = c.match(/^\[file(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
+  if (fileMatch) return { kind: 'file', url: proxyUrl(fileMatch[2]), filename: fileMatch[1] || undefined }
+  const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
+  if (linkMatch) return { kind: 'link', url: proxyUrl(linkMatch[1]) }
+  const plainUrl = c.match(/^(https?:\/\/\S+)$/i)
+  if (plainUrl) {
+    const raw = plainUrl[1]
+    const u = raw.toLowerCase()
+    if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: proxyUrl(raw) }
+    if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) return { kind: 'image', url: proxyUrl(raw) }
+    if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) return { kind: 'audio', url: proxyUrl(raw) }
+    if (/\.(pdf)(\?|$)/.test(u)) return { kind: 'file', url: proxyUrl(raw), filename: undefined }
+    if (/\.(docx|xlsx|csv|zip)(\?|$)/.test(u)) return { kind: 'file', url: proxyUrl(raw), filename: undefined }
+    return { kind: 'link', url: raw }
+  }
+  return { kind: 'plain', text: line }
+}
+
+function parseRichBlocks(content: string): ParsedRich[] {
+  const c = (content || '').trim()
+  if (!c) return [{ kind: 'plain', text: '' }]
+
+  // [preview] block — return as single block
   if (c.startsWith('[preview]')) {
     const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
     const desc = (c.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
     const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-    const image = (c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-    return { kind: 'preview', title, desc, url, image }
+    const image = proxyUrl((c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim())
+    return [{ kind: 'preview', title, desc, url, image }]
   }
 
-  return { kind: 'plain', text: content }
+  // Detect markdown: has headings, bold, code blocks, tables
+  const hasMarkdown = /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(c)
+  if (hasMarkdown && c.length > 30) return [{ kind: 'markdown', text: c }]
+
+  // Split by lines / double newlines and classify each segment
+  const segments = c.split(/\n/)
+  const blocks: ParsedRich[] = []
+  let textBuf: string[] = []
+
+  const flushText = () => {
+    if (textBuf.length > 0) {
+      blocks.push({ kind: 'plain', text: textBuf.join('\n') })
+      textBuf = []
+    }
+  }
+
+  for (const seg of segments) {
+    const classified = classifyLine(seg)
+    if (classified.kind === 'plain') {
+      textBuf.push(seg)
+    } else {
+      flushText()
+      blocks.push(classified)
+    }
+  }
+  flushText()
+
+  // If only plain text, also extract inline URLs for preview
+  if (blocks.length === 1 && blocks[0].kind === 'plain') {
+    const urls = (blocks[0].text || '').match(/https?:\/\/\S+/gi)
+    if (urls) {
+      for (const raw of urls) {
+        const u = raw.toLowerCase()
+        if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) {
+          blocks.push({ kind: 'image', url: proxyUrl(raw) })
+        } else if (/\.(mp4|webm|mov)(\?|$)/.test(u)) {
+          blocks.push({ kind: 'video', url: proxyUrl(raw) })
+        } else if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) {
+          blocks.push({ kind: 'audio', url: proxyUrl(raw) })
+        } else {
+          blocks.push({ kind: 'link', url: raw })
+        }
+      }
+    }
+  }
+
+  return blocks.length > 0 ? blocks : [{ kind: 'plain', text: content }]
 }
 
 function formatDateGroup(timestamp: string): string {
@@ -150,6 +223,73 @@ function formatDateGroup(timestamp: string): string {
   }
 }
 
+function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  const [failed, setFailed] = useState(false)
+  return (
+    <>
+      <button type="button" onClick={() => setExpanded(true)} className="block cursor-zoom-in">
+        {failed ? (
+          <div className={`flex h-20 w-20 items-center justify-center rounded-lg border bg-slate-100 ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}>
+            <ImageIcon className="h-6 w-6 text-slate-400" />
+          </div>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={url}
+            alt=""
+            onError={() => setFailed(true)}
+            className={`h-20 w-auto max-w-[160px] rounded-lg object-cover border ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
+          />
+        )}
+      </button>
+      {expanded && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setExpanded(false)}
+        >
+          {failed ? (
+            <div className="rounded-lg bg-white p-8 text-center">
+              <ImageIcon className="mx-auto h-12 w-12 text-slate-400" />
+              <p className="mt-2 text-sm text-slate-500">Image failed to load</p>
+              <a href={url} target="_blank" rel="noreferrer" className="mt-1 text-xs text-indigo-500 underline break-all">{url}</a>
+            </div>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={url} alt="" className="max-h-[90vh] max-w-[90vw] rounded-lg" />
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
+function ThumbnailVideo({ url, isMine }: { url: string; isMine: boolean }) {
+  const [playing, setPlaying] = useState(false)
+  const thumbRef = useRef<HTMLVideoElement>(null)
+  if (playing) {
+    return (
+      <video controls autoPlay className="max-h-72 w-full rounded-lg border border-slate-200">
+        <source src={url} />
+      </video>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setPlaying(true)}
+      className={`group relative block overflow-hidden rounded-lg border ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
+    >
+      <video ref={thumbRef} src={url} preload="metadata" muted className="h-20 w-auto max-w-[160px] object-cover" />
+      <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition group-hover:bg-black/50">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
+          <div className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-indigo-500" />
+        </div>
+      </div>
+    </button>
+  )
+}
+
 export function ChatView({
   topicName,
   messages,
@@ -166,7 +306,6 @@ export function ChatView({
   const [sending, setSending] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [showSendPreview, setShowSendPreview] = useState(false)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -205,80 +344,6 @@ export function ChatView({
       // ignore storage errors
     }
   }, [previewCache])
-
-  type DraftBlock = {
-    type: 'image' | 'audio' | 'file' | 'link' | 'preview' | 'markdown'
-    value: string
-    title?: string
-    desc?: string
-    url?: string
-    image?: string
-  }
-
-  const parseDraftBlocks = useCallback((text: string): DraftBlock[] => {
-    return text
-      .split(/\n\n+/)
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .map((x) => {
-        const image = x.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
-        if (image) return { type: 'image', value: x, url: image[1] }
-        const audio = x.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
-        if (audio) return { type: 'audio', value: x, url: audio[1] }
-        const file = x.match(/^\[file\]\((https?:\/\/[^)]+)\)$/i)
-        if (file) return { type: 'file', value: x, url: file[1] }
-        const link = x.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
-        if (link) return { type: 'link', value: x, url: link[1] }
-        if (/^\[preview\]/i.test(x)) {
-          const title = (x.match(/Title:\s*(.*)/i)?.[1] || '').trim()
-          const desc = (x.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
-          const url = (x.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-          const image = (x.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-          return { type: 'preview', value: x, title, desc, url, image }
-        }
-        return { type: 'markdown', value: x }
-      })
-  }, [])
-
-  const blocksToDraft = (blocks: DraftBlock[]) => {
-    return blocks
-      .map((b) => {
-        if (b.type === 'preview') {
-          return `[preview]\nTitle: ${b.title || ''}\nDesc: ${b.desc || ''}\nURL: ${b.url || ''}\nImage: ${b.image || ''}`
-        }
-        return b.value
-      })
-      .filter(Boolean)
-      .join('\n\n')
-  }
-
-  const draftBlocksPreview = useMemo(() => parseDraftBlocks(draft), [draft, parseDraftBlocks])
-
-  const moveDraftBlock = (idx: number, dir: -1 | 1) => {
-    const blocks = parseDraftBlocks(draft)
-    const to = idx + dir
-    if (to < 0 || to >= blocks.length) return
-    const next = [...blocks]
-    ;[next[idx], next[to]] = [next[to], next[idx]]
-    setDraft(blocksToDraft(next))
-  }
-
-  const removeDraftBlock = (idx: number) => {
-    const blocks = parseDraftBlocks(draft)
-    if (idx < 0 || idx >= blocks.length) return
-    const next = [...blocks.slice(0, idx), ...blocks.slice(idx + 1)]
-    setDraft(blocksToDraft(next))
-  }
-
-  const updatePreviewBlock = (idx: number, field: 'title' | 'desc' | 'url' | 'image', value: string) => {
-    const blocks = parseDraftBlocks(draft)
-    if (idx < 0 || idx >= blocks.length) return
-    const b = blocks[idx]
-    if (b.type !== 'preview') return
-    const next = [...blocks]
-    next[idx] = { ...b, [field]: value }
-    setDraft(blocksToDraft(next))
-  }
 
   const handleSend = async () => {
     if (!draft.trim()) return
@@ -323,8 +388,15 @@ export function ChatView({
 
       const isImage = file.type.startsWith('image/')
       const isAudio = file.type.startsWith('audio/')
+      const isVideo = file.type.startsWith('video/')
       const kind: 'image' | 'audio' | 'file' = isImage ? 'image' : isAudio ? 'audio' : 'file'
-      const token = isImage ? `![](${asset.url})` : isAudio ? `[audio](${asset.url})` : `[file](${asset.url})`
+      const token = isImage
+        ? `![](${asset.url})`
+        : isAudio
+          ? `[audio](${asset.url})`
+          : isVideo
+            ? `[video](${asset.url})`
+            : `[file:${file.name}](${asset.url})`
       setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
       setRecentAssets((prev) => [{ url: asset.url, kind }, ...prev].slice(0, 8))
     } catch (e) {
@@ -332,37 +404,6 @@ export function ChatView({
     } finally {
       setUploading(false)
     }
-  }
-
-  const insertUrlWithPreview = async () => {
-    const url = prompt('Paste URL')
-    if (!url) return
-    const v = url.trim()
-
-    let title = ''
-    let desc = ''
-    let image = ''
-    try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/preview/url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: v }),
-      })
-      if (r.ok) {
-        const j = await r.json()
-        title = j?.title || ''
-        desc = j?.description || ''
-        image = j?.image || ''
-      }
-    } catch {
-      // fallback to plain link block
-    }
-
-    const block = title || desc || image
-      ? `[preview]\nTitle: ${title}\nDesc: ${desc}\nURL: ${v}\nImage: ${image}`
-      : `[link](${v})`
-
-    setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${block}`)
   }
 
   const handleLoadOlder = async () => {
@@ -391,12 +432,14 @@ export function ChatView({
     const now = Date.now()
     const urls = new Set<string>()
     for (const m of messages) {
-      const parsed = parseRichContent(m.content || '')
-      const candidateUrl = parsed.kind === 'link' ? parsed.url : extractFirstUrl(m.content || '')
-      if (candidateUrl) {
-        const cached = previewCache[candidateUrl]
-        const isFresh = cached && now - cached.fetchedAt < TTL_MS
-        if (!isFresh) urls.add(candidateUrl)
+      const blocks = parseRichBlocks(m.content || '')
+      for (const block of blocks) {
+        const candidateUrl = block.kind === 'link' ? block.url : undefined
+        if (candidateUrl) {
+          const cached = previewCache[candidateUrl]
+          const isFresh = cached && now - cached.fetchedAt < TTL_MS
+          if (!isFresh) urls.add(candidateUrl)
+        }
       }
     }
     if (urls.size === 0) return
@@ -547,89 +590,85 @@ export function ChatView({
                           )
                         }
 
-                        const parsed = parseRichContent(message.content || '')
-                        if (parsed.kind === 'image') {
-                          return (
-                            <a href={parsed.url} target="_blank" rel="noreferrer" className="block">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={parsed.url} alt="image" className="max-h-64 w-auto rounded-lg border border-slate-200" />
-                            </a>
-                          )
-                        }
-                        if (parsed.kind === 'audio') {
-                          return <audio controls src={parsed.url} className="w-full max-w-xs" />
-                        }
-                        if (parsed.kind === 'file') {
-                          return (
-                            <a href={parsed.url} target="_blank" rel="noreferrer" className="text-indigo-500 underline break-all">
-                              Download file
-                            </a>
-                          )
-                        }
-                        if (parsed.kind === 'link') {
-                          const pv = parsed.url ? previewCache[parsed.url]?.data : undefined
-                          if (pv && (pv.title || pv.description || pv.image)) {
-                            return (
-                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                                {pv.image && (
-                                  <a href={parsed.url} target="_blank" rel="noreferrer" className="mb-2 block">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={pv.image} alt={pv.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
-                                  </a>
-                                )}
-                                <p className="text-xs font-semibold text-slate-700">{pv.title || parsed.url}</p>
-                                {pv.description && <p className="mt-1 text-xs text-slate-500">{pv.description}</p>}
-                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">
-                                  {parsed.url}
-                                </a>
-                              </div>
-                            )
-                          }
-                          return (
-                            <a href={parsed.url} target="_blank" rel="noreferrer" className="text-indigo-500 underline break-all">
-                              {parsed.url}
-                            </a>
-                          )
-                        }
-                        if (parsed.kind === 'preview') {
-                          return (
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                              {parsed.image && (
-                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mb-2 block">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={parsed.image} alt={parsed.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
-                                </a>
-                              )}
-                              <p className="text-xs font-semibold text-slate-700">{parsed.title || 'Link Preview'}</p>
-                              {parsed.desc && <p className="mt-1 text-xs text-slate-500">{parsed.desc}</p>}
-                              {parsed.url && (
-                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">
-                                  {parsed.url}
-                                </a>
-                              )}
-                            </div>
-                          )
-                        }
-                        const inlineUrl = extractFirstUrl(parsed.text || '')
-                        const inlinePv = inlineUrl ? previewCache[inlineUrl]?.data : undefined
+                        const blocks = parseRichBlocks(message.content || '')
                         return (
-                          <div>
-                            <p className="whitespace-pre-wrap break-words">{parsed.text}</p>
-                            {inlineUrl && inlinePv && (inlinePv.title || inlinePv.description || inlinePv.image) && (
-                              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-                                {inlinePv.image && (
-                                  <a href={inlineUrl} target="_blank" rel="noreferrer" className="mb-2 block">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={inlinePv.image} alt={inlinePv.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
+                          <div className="space-y-2">
+                            {blocks.map((block, bi) => {
+                              if (block.kind === 'image') {
+                                return <ThumbnailImage key={bi} url={block.url} isMine={isMine} />
+                              }
+                              if (block.kind === 'audio') {
+                                return <audio key={bi} controls src={block.url} className="w-full max-w-xs" />
+                              }
+                              if (block.kind === 'video') {
+                                return <ThumbnailVideo key={bi} url={block.url} isMine={isMine} />
+                              }
+                              if (block.kind === 'file') {
+                                const url = block.url
+                                const fname = block.filename || url.split('/').pop() || 'file'
+                                const isPdf = /\.pdf(\?|$)/i.test(url)
+                                if (isPdf) {
+                                  return (
+                                    <div key={bi} className="space-y-1">
+                                      <iframe src={url} title={fname} className="h-80 w-full rounded-lg border border-slate-200" />
+                                      <a href={url} target="_blank" rel="noreferrer" className="inline-block text-xs text-indigo-500 underline">Open PDF</a>
+                                    </div>
+                                  )
+                                }
+                                return (
+                                  <a key={bi} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-indigo-500 hover:bg-slate-100">
+                                    <Paperclip className="h-4 w-4 shrink-0" />
+                                    <span className="truncate">{fname}</span>
                                   </a>
-                                )}
-                                <p className="text-xs font-semibold text-slate-700">{inlinePv.title || inlineUrl}</p>
-                                {inlinePv.description && <p className="mt-1 text-xs text-slate-500">{inlinePv.description}</p>}
-                                <a href={inlineUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">
-                                  {inlineUrl}
-                                </a>
-                              </div>
-                            )}
+                                )
+                              }
+                              if (block.kind === 'markdown') {
+                                return (
+                                  <div key={bi} className={`prose prose-sm max-w-none ${isMine ? 'prose-invert' : ''}`}>
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+                                  </div>
+                                )
+                              }
+                              if (block.kind === 'link') {
+                                const pv = block.url ? previewCache[block.url]?.data : undefined
+                                if (pv && (pv.title || pv.description || pv.image)) {
+                                  return (
+                                    <div key={bi} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                      {pv.image && (
+                                        <a href={block.url} target="_blank" rel="noreferrer" className="mb-2 block">
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          <img src={pv.image} alt={pv.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
+                                        </a>
+                                      )}
+                                      <p className="text-xs font-semibold text-slate-700">{pv.title || block.url}</p>
+                                      {pv.description && <p className="mt-1 text-xs text-slate-500">{pv.description}</p>}
+                                      <a href={block.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">{block.url}</a>
+                                    </div>
+                                  )
+                                }
+                                return (
+                                  <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="block text-indigo-500 underline break-all">{block.url}</a>
+                                )
+                              }
+                              if (block.kind === 'preview') {
+                                return (
+                                  <div key={bi} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                    {block.image && (
+                                      <a href={block.url} target="_blank" rel="noreferrer" className="mb-2 block">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={block.image} alt={block.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
+                                      </a>
+                                    )}
+                                    <p className="text-xs font-semibold text-slate-700">{block.title || 'Link Preview'}</p>
+                                    {block.desc && <p className="mt-1 text-xs text-slate-500">{block.desc}</p>}
+                                    {block.url && <a href={block.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">{block.url}</a>}
+                                  </div>
+                                )
+                              }
+                              // plain text
+                              if (!block.text?.trim()) return null
+                              return <p key={bi} className="whitespace-pre-wrap break-words">{block.text}</p>
+                            })}
                           </div>
                         )
                       })()}
@@ -656,9 +695,6 @@ export function ChatView({
           </button>
           <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
             <Mic className="h-4 w-4" />
-          </button>
-          <button type="button" onClick={insertUrlWithPreview} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
-            <LinkIcon className="h-4 w-4" />
           </button>
 
           <textarea
@@ -689,43 +725,6 @@ export function ChatView({
             }}
           />
         </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <button type="button" onClick={() => setShowSendPreview((v) => !v)} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500">
-            {showSendPreview ? 'Hide Send Preview' : 'Show Send Preview'}
-          </button>
-        </div>
-
-        {showSendPreview && draftBlocksPreview.length > 0 && (
-          <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
-            <p className="mb-2 text-[11px] text-slate-400">Send preview ({draftBlocksPreview.length} blocks)</p>
-            <div className="max-h-44 overflow-auto space-y-1">
-              {draftBlocksPreview.map((b, i) => (
-                <div key={`pv-${i}`} className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] text-slate-600">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="mr-1 text-indigo-500">[{b.type}]</span>
-                      <span className="truncate">{b.value}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button type="button" onClick={() => moveDraftBlock(i, -1)} className="rounded border border-slate-200 px-1 text-[10px] text-slate-500">↑</button>
-                      <button type="button" onClick={() => moveDraftBlock(i, 1)} className="rounded border border-slate-200 px-1 text-[10px] text-slate-500">↓</button>
-                      <button type="button" onClick={() => removeDraftBlock(i)} className="rounded border border-red-500/30 px-1 text-[10px] text-red-500">×</button>
-                    </div>
-                  </div>
-                  {b.type === 'preview' && (
-                    <div className="mt-2 grid grid-cols-1 gap-1">
-                      <input value={b.title || ''} onChange={(e) => updatePreviewBlock(i, 'title', e.target.value)} placeholder="Preview title" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-slate-700 outline-none" />
-                      <input value={b.desc || ''} onChange={(e) => updatePreviewBlock(i, 'desc', e.target.value)} placeholder="Preview description" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-slate-500 outline-none" />
-                      <input value={b.url || ''} onChange={(e) => updatePreviewBlock(i, 'url', e.target.value)} placeholder="Preview URL" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-indigo-500 outline-none" />
-                      <input value={b.image || ''} onChange={(e) => updatePreviewBlock(i, 'image', e.target.value)} placeholder="Preview image URL" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-indigo-500 outline-none" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {recentAssets.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
