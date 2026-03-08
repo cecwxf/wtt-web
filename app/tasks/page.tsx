@@ -431,6 +431,7 @@ export default function TasksPage() {
     mutateTasks()
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const moveStatus = async (task: TaskItem, status: TaskItem['status']) => {
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}`, {
       method: 'PATCH',
@@ -691,6 +692,7 @@ export default function TasksPage() {
     return 'bg-indigo-500'
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const taskTickerText = (task: TaskItem) => {
     const progress = Math.round(taskProgressMap[task.id] ?? 0)
     const statusText = task.status.toUpperCase()
@@ -762,20 +764,8 @@ export default function TasksPage() {
                           }}
                         />
                       </div>
-                      <p className="mt-1 text-[10px] text-slate-500">{task.priority} · owner:{task.owner_agent_id || 'unassigned'} · runner:{task.runner_agent_id || '-'}</p>
-                      <div className="mt-1 h-1.5 w-full rounded bg-slate-200">
+                      <div className="mt-2 h-1.5 w-full rounded bg-slate-200">
                         <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
-                      </div>
-                      <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100 px-1 py-0.5">
-                        <div className={`whitespace-nowrap text-[10px] text-slate-600 ${task.status === 'doing' ? 'task-ticker-scroll' : ''}`}>
-                          {taskTickerText(task)}
-                        </div>
-                      </div>
-                      <div className="mt-2 flex gap-1">
-                        {col !== 'todo' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'todo') }} className="cursor-pointer rounded border border-slate-200 px-1 text-[10px]">Todo</span>}
-                        {col !== 'doing' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'doing') }} className="cursor-pointer rounded border border-slate-200 px-1 text-[10px]">Doing</span>}
-                        {col !== 'review' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'review') }} className="cursor-pointer rounded border border-slate-200 px-1 text-[10px]">Review</span>}
-                        {col !== 'blocked' && <span onClick={(e) => { e.stopPropagation(); moveStatus(task, 'blocked') }} className="cursor-pointer rounded border border-slate-200 px-1 text-[10px]">Blocked</span>}
                       </div>
                     </button>
                   ))}
