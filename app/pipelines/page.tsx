@@ -35,9 +35,10 @@ interface TaskEdge {
   required?: boolean
 }
 
-type NodeShape = 'rect' | 'circle' | 'ellipse'
+type NodeShape = 'rect' | 'circle' | 'ellipse' | 'diamond' | 'parallelogram' | 'hexagon'
+type LineStyle = 'solid' | 'dashed' | 'dotted'
 
-interface NodeMeta { x: number; y: number; shape: NodeShape }
+interface NodeMeta { x: number; y: number; shape: NodeShape; color?: string; label?: string }
 
 interface TaskDraft extends Partial<TaskNode> {
   description?: string
@@ -45,18 +46,28 @@ interface TaskDraft extends Partial<TaskNode> {
   exec_mode?: string
   acceptance?: string
   notes?: string
+  task_type?: string
+  due_at?: string
+  estimate_hours?: number | null
+  dependencies?: string
+  timeout_minutes?: number | null
+  tags?: string
 }
 
 /* ─── constants ─── */
-const RECT_W = 220
-const RECT_H = 80
+const RECT_W = 220, RECT_H = 80
 const CIRCLE_D = 100
-const ELLIPSE_W = 160
-const ELLIPSE_H = 80
+const ELLIPSE_W = 160, ELLIPSE_H = 80
+const DIAMOND_S = 110
+const PARA_W = 200, PARA_H = 70
+const HEX_W = 160, HEX_H = 80
 
 const shapeDims = (s: NodeShape) => {
   if (s === 'circle') return { w: CIRCLE_D, h: CIRCLE_D }
   if (s === 'ellipse') return { w: ELLIPSE_W, h: ELLIPSE_H }
+  if (s === 'diamond') return { w: DIAMOND_S, h: DIAMOND_S }
+  if (s === 'parallelogram') return { w: PARA_W, h: PARA_H }
+  if (s === 'hexagon') return { w: HEX_W, h: HEX_H }
   return { w: RECT_W, h: RECT_H }
 }
 
@@ -85,18 +96,66 @@ const statusDot = (s: TaskNode['status']) => {
   return 'bg-slate-400'
 }
 
-/* ─── edge anchor for each shape ─── */
+/* edge anchor by shape */
 function getAnchor(meta: NodeMeta, side: 'out' | 'in'): { x: number; y: number } {
   const { w, h } = shapeDims(meta.shape)
+  const cx = meta.x + w / 2
+  const cy = meta.y + h / 2
   if (meta.shape === 'circle') {
-    const cx = meta.x + CIRCLE_D / 2
-    const cy = meta.y + CIRCLE_D / 2
     return side === 'out' ? { x: cx + CIRCLE_D / 2, y: cy } : { x: cx - CIRCLE_D / 2, y: cy }
   }
-  if (meta.shape === 'ellipse') {
-    return side === 'out' ? { x: meta.x + w, y: meta.y + h / 2 } : { x: meta.x, y: meta.y + h / 2 }
+  if (meta.shape === 'diamond') {
+    return side === 'out' ? { x: meta.x + DIAMOND_S, y: cy } : { x: meta.x, y: cy }
   }
-  return side === 'out' ? { x: meta.x + w, y: meta.y + h / 2 } : { x: meta.x, y: meta.y + h / 2 }
+  return side === 'out' ? { x: meta.x + w, y: cy } : { x: meta.x, y: cy }
+}
+
+/* line style stroke attrs */
+const lineStrokeAttrs = (style: LineStyle) => {
+  if (style === 'dashed') return { strokeDasharray: '10 5' }
+  if (style === 'dotted') return { strokeDasharray: '3 4' }
+  return {}
+}
+
+/* node color presets */
+const NODE_COLORS = [
+  { value: '', label: 'Auto (status)' },
+  { value: '#eef2ff', label: 'Indigo' },
+  { value: '#ecfdf5', label: 'Green' },
+  { value: '#fffbeb', label: 'Amber' },
+  { value: '#fef2f2', label: 'Red' },
+  { value: '#f0f9ff', label: 'Sky' },
+  { value: '#faf5ff', label: 'Purple' },
+  { value: '#fff7ed', label: 'Orange' },
+  { value: '#f0fdf4', label: 'Lime' },
+]
+
+/* ─── SVG clip paths for special shapes ─── */
+function DiamondClip({ id, s }: { id: string; s: number }) {
+  const half = s / 2
+  return (
+    <clipPath id={id}>
+      <polygon points={`${half},0 ${s},${half} ${half},${s} 0,${half}`} />
+    </clipPath>
+  )
+}
+
+function HexClip({ id, w, h }: { id: string; w: number; h: number }) {
+  const inset = w * 0.2
+  return (
+    <clipPath id={id}>
+      <polygon points={`${inset},0 ${w - inset},0 ${w},${h / 2} ${w - inset},${h} ${inset},${h} 0,${h / 2}`} />
+    </clipPath>
+  )
+}
+
+function ParaClip({ id, w, h }: { id: string; w: number; h: number }) {
+  const skew = w * 0.12
+  return (
+    <clipPath id={id}>
+      <polygon points={`${skew},0 ${w},0 ${w - skew},${h} 0,${h}`} />
+    </clipPath>
+  )
 }
 
 /* ─── page component ─── */
@@ -104,7 +163,6 @@ export default function PipelinesPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  /* auth & agents */
   const [agents, setAgents] = useState<Array<{ agent_id: string; display_name: string }>>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
 
@@ -161,12 +219,15 @@ export default function PipelinesPage() {
 
   /* ─── node selection state ─── */
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
-  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [connectFromId, setConnectFromId] = useState<string | null>(null)
+  const [connectLineStyle, setConnectLineStyle] = useState<LineStyle>('solid')
   const [taskDraft, setTaskDraft] = useState<TaskDraft>({})
 
+  /* ─── edge styles persisted alongside positions ─── */
+  const [edgeStyles, setEdgeStyles] = useState<Record<string, LineStyle>>({})
+
   const selected = useMemo(() => nodes.find((n) => n.id === selectedTaskId) || null, [nodes, selectedTaskId])
-  useEffect(() => { if (selected) setTaskDraft(selected) }, [selected])
+  useEffect(() => { if (selected) setTaskDraft(selected as TaskDraft) }, [selected])
 
   /* ─── timeline for selected node ─── */
   const { data: timelineRaw } = useSWR(
@@ -183,19 +244,26 @@ export default function PipelinesPage() {
     return rows.map((x) => x as Record<string, unknown>).map((x) => ({ id: String(x.id || x.message_id || ''), sender: String(x.sender_id || 'unknown'), content: String(x.content || '') })).filter((x) => x.content.includes('[TASK_')).slice(-8).reverse()
   }, [timelineRaw])
 
-  /* ─── persist positions in localStorage ─── */
+  /* ─── persist positions & edge styles in localStorage ─── */
   useEffect(() => {
     if (!editingPipelineId) return
     try {
-      const raw = localStorage.getItem(`wtt_pipe_pos_v2:${editingPipelineId}`)
-      setPositions(raw ? JSON.parse(raw) : {})
-    } catch { setPositions({}) }
+      const raw = localStorage.getItem(`wtt_pipe_v3:${editingPipelineId}`)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        setPositions(parsed.positions || {})
+        setEdgeStyles(parsed.edgeStyles || {})
+      } else {
+        setPositions({})
+        setEdgeStyles({})
+      }
+    } catch { setPositions({}); setEdgeStyles({}) }
   }, [editingPipelineId])
 
   useEffect(() => {
     if (!editingPipelineId) return
-    try { localStorage.setItem(`wtt_pipe_pos_v2:${editingPipelineId}`, JSON.stringify(positions)) } catch {}
-  }, [positions, editingPipelineId])
+    try { localStorage.setItem(`wtt_pipe_v3:${editingPipelineId}`, JSON.stringify({ positions, edgeStyles })) } catch {}
+  }, [positions, edgeStyles, editingPipelineId])
 
   /* assign default positions for new nodes */
   useEffect(() => {
@@ -316,6 +384,11 @@ export default function PipelinesPage() {
         acceptance: taskDraft.acceptance,
         notes: taskDraft.notes,
         exec_mode: taskDraft.exec_mode,
+        task_type: taskDraft.task_type,
+        priority: taskDraft.priority,
+        due_at: taskDraft.due_at || null,
+        estimate_hours: taskDraft.estimate_hours ?? null,
+        dependencies: taskDraft.dependencies || null,
       }),
     })
     if (!r.ok) { alert(`Save failed: ${(await r.text()) || r.status}`); return }
@@ -330,12 +403,39 @@ export default function PipelinesPage() {
     })
     setPositions((prev) => { const n = { ...prev }; delete n[taskId]; return n })
     if (selectedTaskId === taskId) setSelectedTaskId(null)
-    setSelectedTaskIds((prev) => prev.filter((x) => x !== taskId))
     await mutateGraph()
   }
 
+  const duplicateTask = async () => {
+    if (!selected) return
+    const meta = positions[selected.id]
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      body: JSON.stringify({
+        title: `${selected.title} (copy)`,
+        task_mode: 'pipeline',
+        pipeline_id: editingPipelineId || 'default',
+        task_type: (taskDraft.task_type as string) || 'feature',
+        priority: taskDraft.priority || 'P2',
+        status: 'todo',
+        owner_agent_id: selected.owner_agent_id,
+        runner_agent_id: selected.runner_agent_id,
+        created_by: selectedAgentId || 'user',
+        description: taskDraft.description,
+        acceptance: taskDraft.acceptance,
+        notes: taskDraft.notes,
+      }),
+    })
+    if (!r.ok) return
+    const j = await r.json()
+    setPositions((prev) => ({ ...prev, [j.id]: { x: (meta?.x || 40) + 30, y: (meta?.y || 40) + 30, shape: meta?.shape || 'rect', color: meta?.color, label: meta?.label } }))
+    await mutateGraph()
+    setSelectedTaskId(j.id)
+  }
+
   /* ─── edge CRUD ─── */
-  const addDependencyByIds = async (fromId: string, toId: string) => {
+  const addDependencyByIds = async (fromId: string, toId: string, style: LineStyle = 'solid') => {
     if (!fromId || !toId || fromId === toId) return
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${toId}/dependencies`, {
       method: 'POST',
@@ -343,6 +443,8 @@ export default function PipelinesPage() {
       body: JSON.stringify({ depends_on_task_id: fromId, mode: 'p2p', required: true }),
     })
     if (!r.ok) { alert(`Add edge failed: ${(await r.text()) || r.status}`); return }
+    const edgeKey = `${fromId}->${toId}`
+    setEdgeStyles((prev) => ({ ...prev, [edgeKey]: style }))
     await mutateGraph()
   }
 
@@ -351,18 +453,18 @@ export default function PipelinesPage() {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
     })
+    setEdgeStyles((prev) => { const n = { ...prev }; delete n[`${depId}->${taskId}`]; return n })
     await mutateGraph()
   }
 
   /* ─── pipeline execution ─── */
-  const runPipeline = async (taskIds?: string[]) => {
+  const runPipeline = async () => {
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipeline/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({
         trigger_agent_id: selectedAgentId || 'pipeline-runner',
         pipeline_id: editingPipelineId || undefined,
-        task_ids: taskIds && taskIds.length > 0 ? taskIds : undefined,
       }),
     })
     const j = await r.json()
@@ -398,7 +500,6 @@ export default function PipelinesPage() {
       })
       queue = next
     }
-    // any remaining nodes (cycles) go into a final layer
     const remaining = nodes.filter((n) => !visited.has(n.id)).map((n) => n.id)
     if (remaining.length) layers.push(remaining)
 
@@ -407,7 +508,7 @@ export default function PipelinesPage() {
       const totalH = layer.length * 130 - 30
       const startY = Math.max(40, (600 - totalH) / 2)
       layer.forEach((id, ni) => {
-        next[id] = { x: 80 + li * 320, y: startY + ni * 130, shape: positions[id]?.shape || 'rect' }
+        next[id] = { x: 80 + li * 320, y: startY + ni * 130, shape: positions[id]?.shape || 'rect', color: positions[id]?.color, label: positions[id]?.label }
       })
     })
     setPan({ x: 0, y: 0 })
@@ -421,7 +522,7 @@ export default function PipelinesPage() {
       if (!connectFromId) {
         setConnectFromId(nodeId)
       } else {
-        await addDependencyByIds(connectFromId, nodeId)
+        await addDependencyByIds(connectFromId, nodeId, connectLineStyle)
         setConnectFromId(null)
       }
       return
@@ -458,8 +559,62 @@ export default function PipelinesPage() {
     createTaskAt(Math.max(0, x), Math.max(0, y), shape)
   }
 
+  /* ─── shape SVG helpers for rendering special shapes ─── */
+  const renderShapeOutline = (n: TaskNode, meta: NodeMeta, w: number, h: number) => {
+    const shape = meta.shape || 'rect'
+    const bg = meta.color || undefined
+    if (shape === 'diamond') {
+      const half = DIAMOND_S / 2
+      return (
+        <svg className="absolute inset-0" width={w} height={h}>
+          <polygon points={`${half},2 ${DIAMOND_S - 2},${half} ${half},${DIAMOND_S - 2} 2,${half}`}
+            fill={bg || (statusBg(n.status) === 'bg-slate-50' ? '#f8fafc' : statusBg(n.status) === 'bg-indigo-50' ? '#eef2ff' : statusBg(n.status) === 'bg-emerald-50' ? '#ecfdf5' : statusBg(n.status) === 'bg-amber-50' ? '#fffbeb' : '#fef2f2')}
+            stroke={n.status === 'doing' ? '#6366f1' : n.status === 'done' ? '#22c55e' : n.status === 'review' ? '#eab308' : n.status === 'blocked' ? '#ef4444' : '#cbd5e1'}
+            strokeWidth="2" />
+        </svg>
+      )
+    }
+    if (shape === 'hexagon') {
+      const inset = w * 0.2
+      return (
+        <svg className="absolute inset-0" width={w} height={h}>
+          <polygon points={`${inset},1 ${w - inset},1 ${w - 1},${h / 2} ${w - inset},${h - 1} ${inset},${h - 1} 1,${h / 2}`}
+            fill={bg || '#f8fafc'} stroke={n.status === 'doing' ? '#6366f1' : n.status === 'done' ? '#22c55e' : n.status === 'review' ? '#eab308' : n.status === 'blocked' ? '#ef4444' : '#cbd5e1'}
+            strokeWidth="2" />
+        </svg>
+      )
+    }
+    if (shape === 'parallelogram') {
+      const skew = w * 0.12
+      return (
+        <svg className="absolute inset-0" width={w} height={h}>
+          <polygon points={`${skew},1 ${w - 1},1 ${w - skew},${h - 1} 1,${h - 1}`}
+            fill={bg || '#f8fafc'} stroke={n.status === 'doing' ? '#6366f1' : n.status === 'done' ? '#22c55e' : n.status === 'review' ? '#eab308' : n.status === 'blocked' ? '#ef4444' : '#cbd5e1'}
+            strokeWidth="2" />
+        </svg>
+      )
+    }
+    return null
+  }
+
   /* ─── render ─── */
   const editingPipeline = pipelines.find((p) => p.id === editingPipelineId)
+
+  /* palette shape definitions */
+  const shapeItems: { shape: NodeShape; icon: React.ReactNode; label: string; title: string }[] = [
+    { shape: 'rect', label: 'Task', title: 'Rectangle — Task Node', icon: <div className="h-7 w-11 rounded border-2 border-slate-400 bg-white" /> },
+    { shape: 'circle', label: 'Decision', title: 'Circle — Decision Node', icon: <div className="h-9 w-9 rounded-full border-2 border-slate-400 bg-white" /> },
+    { shape: 'ellipse', label: 'Start/End', title: 'Ellipse — Start/End Node', icon: <div className="h-6 w-12 rounded-[50%] border-2 border-slate-400 bg-white" /> },
+    { shape: 'diamond', label: 'Condition', title: 'Diamond — Condition/Gate', icon: <svg width="36" height="36" viewBox="0 0 36 36"><polygon points="18,2 34,18 18,34 2,18" fill="white" stroke="#94a3b8" strokeWidth="2" /></svg> },
+    { shape: 'parallelogram', label: 'I/O', title: 'Parallelogram — Input/Output', icon: <svg width="44" height="28" viewBox="0 0 44 28"><polygon points="8,1 43,1 36,27 1,27" fill="white" stroke="#94a3b8" strokeWidth="2" /></svg> },
+    { shape: 'hexagon', label: 'Process', title: 'Hexagon — Subprocess', icon: <svg width="44" height="28" viewBox="0 0 44 28"><polygon points="9,1 35,1 43,14 35,27 9,27 1,14" fill="white" stroke="#94a3b8" strokeWidth="2" /></svg> },
+  ]
+
+  const lineItems: { style: LineStyle; label: string; title: string; dash: string }[] = [
+    { style: 'solid', label: 'Solid', title: 'Solid Line — Strong Dependency', dash: '' },
+    { style: 'dashed', label: 'Dashed', title: 'Dashed Line — Weak Dependency', dash: '8 4' },
+    { style: 'dotted', label: 'Dotted', title: 'Dotted Line — Optional/Async', dash: '3 4' },
+  ]
 
   return (
     <WttShellV2
@@ -470,6 +625,7 @@ export default function PipelinesPage() {
       selectedTopicId={null}
       onTopicChange={() => {}}
       onLogout={() => signOut({ callbackUrl: '/login' })}
+      hideTopics
     >
       <div className="flex h-full flex-col text-slate-800">
         {/* ═══ LIST MODE ═══ */}
@@ -498,9 +654,7 @@ export default function PipelinesPage() {
                     </div>
                   </button>
                   <div className="mt-3 flex gap-1 border-t border-slate-100 pt-2">
-                    <button onClick={() => toggleAutoReview(p)} className="rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">
-                      AutoReview: {p.auto_review ?? true ? 'ON' : 'OFF'}
-                    </button>
+                    <button onClick={() => toggleAutoReview(p)} className="rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">AutoReview: {p.auto_review ?? true ? 'ON' : 'OFF'}</button>
                     {p.id !== 'default' && (
                       <>
                         <button onClick={() => renamePipeline(p)} className="rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">Rename</button>
@@ -521,7 +675,7 @@ export default function PipelinesPage() {
             {/* top toolbar */}
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-2">
               <div className="flex items-center gap-3">
-                <button onClick={() => { setEditingPipelineId(null); setSelectedTaskId(null); setSelectedTaskIds([]); setConnectFromId(null) }} className="rounded p-1 text-slate-500 hover:bg-slate-200" title="Back to list">
+                <button onClick={() => { setEditingPipelineId(null); setSelectedTaskId(null); setConnectFromId(null) }} className="rounded p-1 text-slate-500 hover:bg-slate-200" title="Back to list">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
                 </button>
                 <div>
@@ -541,61 +695,52 @@ export default function PipelinesPage() {
                 <span className="text-[10px] text-slate-500">{Math.round(zoom * 100)}%</span>
                 <button onClick={() => setZoom((z) => Math.max(0.3, +(z - 0.1).toFixed(2)))} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs">-</button>
                 <div className="mx-1 h-4 w-px bg-slate-200" />
-                <button
-                  onClick={() => runPipeline(selectedTaskIds.length > 0 ? selectedTaskIds : undefined)}
-                  className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
-                >
-                  Run Selected ({selectedTaskIds.length})
-                </button>
-                <button onClick={() => runPipeline()} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-600">
+                <button onClick={runPipeline} className="rounded-lg bg-indigo-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-600">
                   Run Pipeline
                 </button>
               </div>
             </div>
 
             {/* main area: palette | canvas | detail */}
-            <div className="grid flex-1 grid-cols-[72px_1fr_340px] gap-0 overflow-hidden">
+            <div className="grid flex-1 grid-cols-[80px_1fr_380px] gap-0 overflow-hidden">
 
-              {/* ── shape palette ── */}
-              <aside className="flex flex-col items-center gap-3 border-r border-slate-200 bg-slate-50 py-4">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Shapes</p>
-                {/* rect */}
-                <div
-                  draggable
-                  onDragStart={(e) => { e.dataTransfer.setData('application/wtt-shape', 'rect'); e.dataTransfer.effectAllowed = 'copy' }}
-                  className="flex cursor-grab flex-col items-center gap-1 rounded-lg p-2 hover:bg-slate-100 active:cursor-grabbing"
-                  title="Rectangle — Task Node"
-                >
-                  <div className="h-8 w-12 rounded border-2 border-slate-400 bg-white" />
-                  <span className="text-[9px] text-slate-500">Task</span>
-                </div>
-                {/* circle */}
-                <div
-                  draggable
-                  onDragStart={(e) => { e.dataTransfer.setData('application/wtt-shape', 'circle'); e.dataTransfer.effectAllowed = 'copy' }}
-                  className="flex cursor-grab flex-col items-center gap-1 rounded-lg p-2 hover:bg-slate-100 active:cursor-grabbing"
-                  title="Circle — Decision Node"
-                >
-                  <div className="h-10 w-10 rounded-full border-2 border-slate-400 bg-white" />
-                  <span className="text-[9px] text-slate-500">Decision</span>
-                </div>
-                {/* ellipse */}
-                <div
-                  draggable
-                  onDragStart={(e) => { e.dataTransfer.setData('application/wtt-shape', 'ellipse'); e.dataTransfer.effectAllowed = 'copy' }}
-                  className="flex cursor-grab flex-col items-center gap-1 rounded-lg p-2 hover:bg-slate-100 active:cursor-grabbing"
-                  title="Ellipse — Start/End Node"
-                >
-                  <div className="h-7 w-14 rounded-[50%] border-2 border-slate-400 bg-white" />
-                  <span className="text-[9px] text-slate-500">Start/End</span>
-                </div>
+              {/* ── shape & line palette ── */}
+              <aside className="flex flex-col items-center gap-1 overflow-y-auto border-r border-slate-200 bg-slate-50 py-3">
+                <p className="mb-1 text-[8px] font-bold uppercase tracking-widest text-slate-400">Nodes</p>
+                {shapeItems.map((item) => (
+                  <div
+                    key={item.shape}
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.setData('application/wtt-shape', item.shape); e.dataTransfer.effectAllowed = 'copy' }}
+                    className="flex cursor-grab flex-col items-center gap-0.5 rounded-lg p-1.5 hover:bg-slate-100 active:cursor-grabbing"
+                    title={item.title}
+                  >
+                    {item.icon}
+                    <span className="text-[8px] text-slate-500">{item.label}</span>
+                  </div>
+                ))}
 
-                <div className="my-2 h-px w-10 bg-slate-200" />
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Tips</p>
-                <p className="px-1 text-center text-[8px] leading-3 text-slate-400">Drag shape to canvas</p>
-                <p className="px-1 text-center text-[8px] leading-3 text-slate-400">Double-click canvas to add rect</p>
-                <p className="px-1 text-center text-[8px] leading-3 text-slate-400">Shift+click two nodes to connect</p>
-                <p className="px-1 text-center text-[8px] leading-3 text-slate-400">Scroll to zoom</p>
+                <div className="my-1.5 h-px w-10 bg-slate-200" />
+                <p className="mb-1 text-[8px] font-bold uppercase tracking-widest text-slate-400">Lines</p>
+                {lineItems.map((item) => (
+                  <button
+                    key={item.style}
+                    onClick={() => setConnectLineStyle(item.style)}
+                    className={`flex w-full flex-col items-center gap-0.5 rounded-lg p-1.5 ${connectLineStyle === item.style ? 'bg-indigo-100 ring-1 ring-indigo-300' : 'hover:bg-slate-100'}`}
+                    title={item.title}
+                  >
+                    <svg width="48" height="16" viewBox="0 0 48 16">
+                      <line x1="4" y1="8" x2="44" y2="8" stroke="#6b7fa0" strokeWidth="2" strokeDasharray={item.dash} />
+                      <polygon points="40,4 48,8 40,12" fill="#6b7fa0" />
+                    </svg>
+                    <span className="text-[8px] text-slate-500">{item.label}</span>
+                  </button>
+                ))}
+
+                <div className="my-1.5 h-px w-10 bg-slate-200" />
+                <p className="px-1 text-center text-[7px] leading-3 text-slate-400">Drag shapes to canvas</p>
+                <p className="px-1 text-center text-[7px] leading-3 text-slate-400">Select line style then Shift+click two nodes</p>
+                <p className="px-1 text-center text-[7px] leading-3 text-slate-400">Scroll to zoom</p>
               </aside>
 
               {/* ── canvas ── */}
@@ -621,7 +766,7 @@ export default function PipelinesPage() {
                 className="relative overflow-hidden bg-slate-100"
                 style={{ cursor: panning ? 'grabbing' : draggingId ? 'move' : 'default' }}
               >
-                {/* grid pattern background */}
+                {/* grid background */}
                 <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-30">
                   <defs>
                     <pattern id="grid" width={40 * zoom} height={40 * zoom} patternUnits="userSpaceOnUse" x={pan.x % (40 * zoom)} y={pan.y % (40 * zoom)}>
@@ -632,9 +777,12 @@ export default function PipelinesPage() {
                 </svg>
 
                 <div className="absolute inset-0" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
-                  {/* SVG edges */}
-                  <svg className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
+                  {/* clip path defs for special shapes */}
+                  <svg width="0" height="0" style={{ position: 'absolute' }}>
                     <defs>
+                      <DiamondClip id="clip-diamond" s={DIAMOND_S} />
+                      <HexClip id="clip-hex" w={HEX_W} h={HEX_H} />
+                      <ParaClip id="clip-para" w={PARA_W} h={PARA_H} />
                       <marker id="pipe-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
                         <path d="M0,0 L8,4 L0,8 z" fill="#6b7fa0" />
                       </marker>
@@ -642,6 +790,10 @@ export default function PipelinesPage() {
                         <path d="M0,0 L8,4 L0,8 z" fill="#6366f1" />
                       </marker>
                     </defs>
+                  </svg>
+
+                  {/* SVG edges */}
+                  <svg className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
                     {edges.map((edge) => {
                       const fromMeta = positions[edge.depends_on_task_id]
                       const toMeta = positions[edge.task_id]
@@ -652,6 +804,8 @@ export default function PipelinesPage() {
                       const path = `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`
                       const isActive = selectedTaskId === edge.task_id || selectedTaskId === edge.depends_on_task_id
                       const fromNode = nodes.find((n) => n.id === edge.depends_on_task_id)
+                      const edgeKey = `${edge.depends_on_task_id}->${edge.task_id}`
+                      const style = edgeStyles[edgeKey] || 'solid'
                       return (
                         <g key={`e-${edge.task_id}-${edge.depends_on_task_id}`}>
                           <path
@@ -661,6 +815,7 @@ export default function PipelinesPage() {
                             strokeWidth={isActive ? 2.5 : 1.8}
                             markerEnd={isActive ? 'url(#pipe-arrow-active)' : 'url(#pipe-arrow)'}
                             className={fromNode?.status === 'doing' ? 'edge-flow' : ''}
+                            {...lineStrokeAttrs(style)}
                           />
                           <text x={(p1.x + p2.x) / 2} y={(p1.y + p2.y) / 2 - 8} fill={isActive ? '#6366f1' : '#94a3b8'} fontSize="10" textAnchor="middle">
                             {edge.mode || 'p2p'}
@@ -677,14 +832,12 @@ export default function PipelinesPage() {
                     if (!fromMeta || !toMeta) return null
                     const p1 = getAnchor(fromMeta, 'out')
                     const p2 = getAnchor(toMeta, 'in')
-                    const mx = (p1.x + p2.x) / 2 - 8
-                    const my = (p1.y + p2.y) / 2 + 4
                     return (
                       <button
                         key={`del-${edge.task_id}-${edge.depends_on_task_id}`}
                         onClick={() => removeDependency(edge.task_id, edge.depends_on_task_id)}
                         className="absolute rounded border border-red-400/50 bg-red-50 px-1 text-[9px] text-red-500 opacity-0 transition hover:opacity-100"
-                        style={{ left: mx, top: my, pointerEvents: 'auto' }}
+                        style={{ left: (p1.x + p2.x) / 2 - 8, top: (p1.y + p2.y) / 2 + 4, pointerEvents: 'auto' }}
                         title="Remove edge"
                       >
                         ×
@@ -697,19 +850,18 @@ export default function PipelinesPage() {
                     const meta = positions[n.id] || { x: 30, y: 30, shape: 'rect' as NodeShape }
                     const shape = meta.shape || 'rect'
                     const { w, h } = shapeDims(shape)
-                    const isSelected = selectedTaskIds.includes(n.id)
                     const isConnecting = connectFromId === n.id
+                    const isActive = selectedTaskId === n.id
 
-                    const shapeClass =
-                      shape === 'circle' ? 'rounded-full'
-                        : shape === 'ellipse' ? 'rounded-[50%]'
+                    const isSpecial = shape === 'diamond' || shape === 'hexagon' || shape === 'parallelogram'
+                    const shapeClass = shape === 'circle' ? 'rounded-full'
+                      : shape === 'ellipse' ? 'rounded-[50%]'
+                        : isSpecial ? ''
                           : 'rounded-lg'
 
-                    const animClass =
-                      n.status === 'doing' ? 'node-doing'
-                        : n.status === 'review' ? 'node-review'
-                          : n.status === 'blocked' ? 'node-blocked'
-                            : ''
+                    const animClass = n.status === 'doing' ? 'node-doing' : n.status === 'review' ? 'node-review' : n.status === 'blocked' ? 'node-blocked' : ''
+
+                    const bgStyle = meta.color ? { backgroundColor: meta.color } : undefined
 
                     return (
                       <button
@@ -722,24 +874,32 @@ export default function PipelinesPage() {
                         }}
                         onClick={(e) => onNodeClick(e, n.id)}
                         className={[
-                          'absolute border-2 text-left shadow-sm transition-shadow',
-                          shapeClass,
-                          statusBorder(n.status),
-                          statusBg(n.status),
+                          'absolute text-left shadow-sm transition-shadow',
+                          isSpecial ? '' : 'border-2',
+                          isSpecial ? '' : shapeClass,
+                          isSpecial ? '' : statusBorder(n.status),
+                          isSpecial ? '' : statusBg(n.status),
                           animClass,
-                          isSelected ? 'ring-2 ring-indigo-400 ring-offset-1' : '',
+                          isActive ? 'ring-2 ring-indigo-400 ring-offset-1' : '',
                           isConnecting ? 'ring-2 ring-yellow-400' : '',
                           'hover:shadow-md',
                         ].filter(Boolean).join(' ')}
-                        style={{ left: meta.x, top: meta.y, width: w, height: h }}
+                        style={{ left: meta.x, top: meta.y, width: w, height: h, ...(!isSpecial && bgStyle ? bgStyle : {}) }}
                       >
-                        <div className={`flex h-full flex-col ${shape === 'circle' || shape === 'ellipse' ? 'items-center justify-center px-2 text-center' : 'justify-between p-2.5'}`}>
-                          <div className={`flex items-center gap-1.5 ${shape !== 'rect' ? 'justify-center' : ''}`}>
+                        {isSpecial && renderShapeOutline(n, meta, w, h)}
+                        <div
+                          className={`relative flex h-full flex-col ${shape === 'circle' || shape === 'ellipse' ? 'items-center justify-center px-2 text-center' : isSpecial ? 'items-center justify-center px-4 text-center' : 'justify-between p-2.5'}`}
+                          style={isSpecial ? { clipPath: shape === 'diamond' ? 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' : undefined } : undefined}
+                        >
+                          <div className={`flex items-center gap-1.5 ${shape === 'rect' ? '' : 'justify-center'}`}>
                             <div className={`h-2 w-2 flex-shrink-0 rounded-full ${statusDot(n.status)}`} />
                             <p className={`font-medium leading-tight ${shape === 'rect' ? 'line-clamp-2 text-[12px]' : 'line-clamp-1 text-[10px]'}`}>{n.title}</p>
                           </div>
                           {shape === 'rect' && (
-                            <p className="text-[9px] text-slate-500">{n.status} · {n.runner_agent_id?.slice(0, 12) || '-'}</p>
+                            <div className="flex items-center justify-between">
+                              <p className="text-[9px] text-slate-500">{n.status} · {n.runner_agent_id?.slice(0, 12) || '-'}</p>
+                              {meta.label && <span className="rounded bg-indigo-100 px-1 text-[8px] text-indigo-600">{meta.label}</span>}
+                            </div>
                           )}
                         </div>
                       </button>
@@ -748,17 +908,22 @@ export default function PipelinesPage() {
                 </div>
               </main>
 
-              {/* ── detail panel ── */}
+              {/* ── detail panel (expanded) ── */}
               <aside className="overflow-y-auto border-l border-slate-200 bg-slate-50 p-3">
                 {selected ? (
-                  <div className="space-y-2 text-sm">
+                  <div className="space-y-2.5 text-sm">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-400">Node Detail</p>
-                      <button onClick={() => deleteTask(selected.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                      <p className="text-xs font-semibold text-slate-500">Node Detail</p>
+                      <div className="flex gap-2">
+                        <button onClick={duplicateTask} className="text-[10px] text-indigo-400 hover:text-indigo-600">Duplicate</button>
+                        <button onClick={() => deleteTask(selected.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                      </div>
                     </div>
 
+                    {/* title */}
                     <input value={taskDraft.title || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold" placeholder="Title" />
 
+                    {/* row: status + shape */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-[9px] text-slate-400">Status</label>
@@ -776,54 +941,150 @@ export default function PipelinesPage() {
                           <option value="rect">Rectangle (Task)</option>
                           <option value="circle">Circle (Decision)</option>
                           <option value="ellipse">Ellipse (Start/End)</option>
+                          <option value="diamond">Diamond (Condition)</option>
+                          <option value="parallelogram">Parallelogram (I/O)</option>
+                          <option value="hexagon">Hexagon (Subprocess)</option>
                         </select>
                       </div>
                     </div>
 
+                    {/* row: task_type + priority */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[9px] text-slate-400">Exec Mode</label>
-                        <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="reasoning" className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
+                        <label className="text-[9px] text-slate-400">Task Type</label>
+                        <select value={taskDraft.task_type || 'feature'} onChange={(e) => setTaskDraft((d) => ({ ...d, task_type: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                          <option value="feature">Feature</option>
+                          <option value="bug">Bug Fix</option>
+                          <option value="research">Research</option>
+                          <option value="refactor">Refactor</option>
+                          <option value="test">Test</option>
+                          <option value="deploy">Deploy</option>
+                          <option value="review">Review</option>
+                          <option value="documentation">Documentation</option>
+                        </select>
                       </div>
                       <div>
                         <label className="text-[9px] text-slate-400">Priority</label>
-                        <input value={taskDraft.priority || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, priority: e.target.value }))} placeholder="P2" className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
+                        <select value={taskDraft.priority || 'P2'} onChange={(e) => setTaskDraft((d) => ({ ...d, priority: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                          <option value="P0">P0 (Critical)</option>
+                          <option value="P1">P1 (High)</option>
+                          <option value="P2">P2 (Medium)</option>
+                          <option value="P3">P3 (Low)</option>
+                        </select>
                       </div>
                     </div>
 
-                    <div>
-                      <label className="text-[9px] text-slate-400">Owner Agent</label>
-                      <input value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-[9px] text-slate-400">Runner Agent</label>
-                      <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
+                    {/* row: exec_mode + estimate */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] text-slate-400">Exec Mode</label>
+                        <select value={taskDraft.exec_mode || 'reasoning'} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                          <option value="reasoning">Reasoning</option>
+                          <option value="coding">Coding</option>
+                          <option value="search">Search</option>
+                          <option value="human">Human Review</option>
+                          <option value="api_call">API Call</option>
+                          <option value="mixed">Mixed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-slate-400">Estimate (hours)</label>
+                        <input type="number" min="0" step="0.5" value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: e.target.value ? parseFloat(e.target.value) : null }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. 2" />
+                      </div>
                     </div>
 
+                    {/* row: due_at + timeout */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] text-slate-400">Due Date</label>
+                        <input type="date" value={taskDraft.due_at?.slice(0, 10) || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, due_at: e.target.value || undefined }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-slate-400">Timeout (min)</label>
+                        <input type="number" min="0" value={taskDraft.timeout_minutes ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, timeout_minutes: e.target.value ? parseInt(e.target.value) : null }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. 30" />
+                      </div>
+                    </div>
+
+                    {/* owner + runner */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] text-slate-400">Owner Agent</label>
+                        <input value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="agent_id" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-slate-400">Runner Agent</label>
+                        <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="agent_id" />
+                      </div>
+                    </div>
+
+                    {/* node visual: color + label */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] text-slate-400">Node Color</label>
+                        <select
+                          value={positions[selected.id]?.color || ''}
+                          onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], color: e.target.value || undefined } }))}
+                          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                        >
+                          {NODE_COLORS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-slate-400">Tag / Label</label>
+                        <input
+                          value={positions[selected.id]?.label || ''}
+                          onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], label: e.target.value || undefined } }))}
+                          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. v2.0"
+                        />
+                      </div>
+                    </div>
+
+                    {/* tags */}
+                    <div>
+                      <label className="text-[9px] text-slate-400">Tags (comma-separated)</label>
+                      <input value={taskDraft.tags || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, tags: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. backend, api, critical" />
+                    </div>
+
+                    {/* description */}
                     <div>
                       <label className="text-[9px] text-slate-400">Description</label>
-                      <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} className="min-h-14 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
+                      <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} className="min-h-16 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="What this node does..." />
                     </div>
+
+                    {/* acceptance */}
                     <div>
                       <label className="text-[9px] text-slate-400">Acceptance Criteria</label>
-                      <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
+                      <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="How to verify completion..." />
                     </div>
+
+                    {/* input/output spec */}
+                    <div>
+                      <label className="text-[9px] text-slate-400">Input / Output Specification</label>
+                      <textarea value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Input: camera_frame (image)&#10;Output: obstacle_list (json)" />
+                    </div>
+
+                    {/* notes */}
                     <div>
                       <label className="text-[9px] text-slate-400">Notes</label>
-                      <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} className="min-h-10 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
+                      <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} className="min-h-10 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Additional notes..." />
                     </div>
 
                     <button onClick={saveTaskDetail} className="w-full rounded border border-indigo-300 bg-indigo-50 px-2 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100">Save Node</button>
 
                     {/* dependencies */}
                     <div className="rounded border border-slate-200 bg-white p-2">
-                      <p className="mb-1 text-[10px] font-medium text-slate-400">Inbound (depends on)</p>
+                      <p className="mb-1 text-[10px] font-medium text-slate-500">Inbound (depends on)</p>
                       <div className="space-y-1">
                         {edges.filter((e) => e.task_id === selected.id).map((e) => {
                           const dep = nodes.find((n) => n.id === e.depends_on_task_id)
+                          const edgeKey = `${e.depends_on_task_id}->${e.task_id}`
+                          const style = edgeStyles[edgeKey] || 'solid'
                           return (
                             <div key={`in-${e.depends_on_task_id}`} className="flex items-center justify-between text-[10px]">
-                              <span>{dep?.title?.slice(0, 20) || e.depends_on_task_id.slice(0, 8)} · {e.mode || 'p2p'}</span>
+                              <span className="flex items-center gap-1">
+                                <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#6b7fa0" strokeWidth="1.5" strokeDasharray={style === 'dashed' ? '4 2' : style === 'dotted' ? '2 2' : ''} /><polygon points="14,1 20,4 14,7" fill="#6b7fa0" /></svg>
+                                {dep?.title?.slice(0, 20) || e.depends_on_task_id.slice(0, 8)} · {e.mode || 'p2p'}
+                              </span>
                               <button onClick={() => removeDependency(e.task_id, e.depends_on_task_id)} className="text-red-400 hover:text-red-600">×</button>
                             </div>
                           )
@@ -833,13 +1094,18 @@ export default function PipelinesPage() {
                     </div>
 
                     <div className="rounded border border-slate-200 bg-white p-2">
-                      <p className="mb-1 text-[10px] font-medium text-slate-400">Outbound (flows to)</p>
+                      <p className="mb-1 text-[10px] font-medium text-slate-500">Outbound (flows to)</p>
                       <div className="space-y-1">
                         {edges.filter((e) => e.depends_on_task_id === selected.id).map((e) => {
                           const target = nodes.find((n) => n.id === e.task_id)
+                          const edgeKey = `${e.depends_on_task_id}->${e.task_id}`
+                          const style = edgeStyles[edgeKey] || 'solid'
                           return (
                             <div key={`out-${e.task_id}`} className="flex items-center justify-between text-[10px]">
-                              <span>{target?.title?.slice(0, 20) || e.task_id.slice(0, 8)} · {e.mode || 'p2p'}</span>
+                              <span className="flex items-center gap-1">
+                                <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#6b7fa0" strokeWidth="1.5" strokeDasharray={style === 'dashed' ? '4 2' : style === 'dotted' ? '2 2' : ''} /><polygon points="14,1 20,4 14,7" fill="#6b7fa0" /></svg>
+                                {target?.title?.slice(0, 20) || e.task_id.slice(0, 8)} · {e.mode || 'p2p'}
+                              </span>
                               <button onClick={() => removeDependency(e.task_id, e.depends_on_task_id)} className="text-red-400 hover:text-red-600">×</button>
                             </div>
                           )
@@ -850,7 +1116,7 @@ export default function PipelinesPage() {
 
                     {/* execution log */}
                     <div className="rounded border border-slate-200 bg-white p-2">
-                      <p className="mb-1 text-[10px] font-medium text-slate-400">Execution Log</p>
+                      <p className="mb-1 text-[10px] font-medium text-slate-500">Execution Log</p>
                       <div className="max-h-32 space-y-1 overflow-auto">
                         {timeline.length > 0 ? timeline.map((m) => (
                           <p key={m.id} className="text-[10px] text-slate-600">
@@ -860,16 +1126,20 @@ export default function PipelinesPage() {
                       </div>
                     </div>
 
+                    {/* quick links */}
                     <div className="flex gap-2">
                       <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push('/tasks')}>Tasks Board</button>
                       {selected.topic_id && <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push(`/feed?topicId=${selected.topic_id}`)}>Topic Feed</button>}
                     </div>
+
+                    {/* node ID */}
+                    <p className="text-[9px] text-slate-400">ID: {selected.id}</p>
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center text-slate-400">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-2 opacity-40"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 12h6M12 9v6" /></svg>
                     <p className="text-xs">Select a node to edit</p>
-                    <p className="mt-1 text-[10px]">or drag shapes to canvas</p>
+                    <p className="mt-1 text-[10px]">or drag shapes from palette</p>
                   </div>
                 )}
               </aside>
