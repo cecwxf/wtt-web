@@ -4,7 +4,7 @@ import { Image as ImageIcon, Mic, Paperclip, Send } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 
 export interface ChatMessage {
   message_id: string
@@ -97,28 +97,38 @@ function parseTaskContent(content: string): ParsedTask {
   return { isTask: true, kind, taskId, sessionId, runner, executor, progress, body, assetUrl, assetPath }
 }
 
+/** Rewrite absolute backend media URLs to go through the Next.js proxy so
+ *  HTTPS pages can load HTTP resources without mixed-content blocking. */
+function proxyUrl(url: string): string {
+  if (url.startsWith(DEFAULT_WTT_API_ORIGIN)) {
+    return url.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
+  }
+  return url
+}
+
 function classifyLine(line: string): ParsedRich {
   const c = line.trim()
   if (!c) return { kind: 'plain', text: '' }
   const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
-  if (imageMatch) return { kind: 'image', url: imageMatch[1] }
+  if (imageMatch) return { kind: 'image', url: proxyUrl(imageMatch[1]) }
   const audioMatch = c.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
-  if (audioMatch) return { kind: 'audio', url: audioMatch[1] }
+  if (audioMatch) return { kind: 'audio', url: proxyUrl(audioMatch[1]) }
   const videoMatch = c.match(/^\[video\]\((https?:\/\/[^)]+)\)$/i)
-  if (videoMatch) return { kind: 'video', url: videoMatch[1] }
+  if (videoMatch) return { kind: 'video', url: proxyUrl(videoMatch[1]) }
   const fileMatch = c.match(/^\[file(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
-  if (fileMatch) return { kind: 'file', url: fileMatch[2], filename: fileMatch[1] || undefined }
+  if (fileMatch) return { kind: 'file', url: proxyUrl(fileMatch[2]), filename: fileMatch[1] || undefined }
   const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
-  if (linkMatch) return { kind: 'link', url: linkMatch[1] }
+  if (linkMatch) return { kind: 'link', url: proxyUrl(linkMatch[1]) }
   const plainUrl = c.match(/^(https?:\/\/\S+)$/i)
   if (plainUrl) {
-    const u = plainUrl[1].toLowerCase()
-    if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: plainUrl[1] }
-    if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) return { kind: 'image', url: plainUrl[1] }
-    if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) return { kind: 'audio', url: plainUrl[1] }
-    if (/\.(pdf)(\?|$)/.test(u)) return { kind: 'file', url: plainUrl[1], filename: undefined }
-    if (/\.(docx|xlsx|csv|zip)(\?|$)/.test(u)) return { kind: 'file', url: plainUrl[1], filename: undefined }
-    return { kind: 'link', url: plainUrl[1] }
+    const raw = plainUrl[1]
+    const u = raw.toLowerCase()
+    if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: proxyUrl(raw) }
+    if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) return { kind: 'image', url: proxyUrl(raw) }
+    if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) return { kind: 'audio', url: proxyUrl(raw) }
+    if (/\.(pdf)(\?|$)/.test(u)) return { kind: 'file', url: proxyUrl(raw), filename: undefined }
+    if (/\.(docx|xlsx|csv|zip)(\?|$)/.test(u)) return { kind: 'file', url: proxyUrl(raw), filename: undefined }
+    return { kind: 'link', url: raw }
   }
   return { kind: 'plain', text: line }
 }
@@ -132,7 +142,7 @@ function parseRichBlocks(content: string): ParsedRich[] {
     const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
     const desc = (c.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
     const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-    const image = (c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
+    const image = proxyUrl((c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim())
     return [{ kind: 'preview', title, desc, url, image }]
   }
 
@@ -167,16 +177,16 @@ function parseRichBlocks(content: string): ParsedRich[] {
   if (blocks.length === 1 && blocks[0].kind === 'plain') {
     const urls = (blocks[0].text || '').match(/https?:\/\/\S+/gi)
     if (urls) {
-      for (const url of urls) {
-        const u = url.toLowerCase()
+      for (const raw of urls) {
+        const u = raw.toLowerCase()
         if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'image', url })
+          blocks.push({ kind: 'image', url: proxyUrl(raw) })
         } else if (/\.(mp4|webm|mov)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'video', url })
+          blocks.push({ kind: 'video', url: proxyUrl(raw) })
         } else if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'audio', url })
+          blocks.push({ kind: 'audio', url: proxyUrl(raw) })
         } else {
-          blocks.push({ kind: 'link', url })
+          blocks.push({ kind: 'link', url: raw })
         }
       }
     }
