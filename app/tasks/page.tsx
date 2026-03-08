@@ -952,7 +952,7 @@ export default function TasksPage() {
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-[#ffb4b4] hover:bg-red-50"
+            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
             onClick={() => cancelTask(taskContextMenu.task)}
           >
             取消任务（删除Topic）

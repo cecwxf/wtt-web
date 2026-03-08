@@ -477,7 +477,7 @@ export default function InboxPage() {
                       <span
                         className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
                           conv.kind === 'p2p'
-                            ? 'border-[#f472b644] bg-[#f472b61a] text-[#f472b6]'
+                            ? 'border-pink-300 bg-pink-50 text-pink-600'
                             : conv.kind === 'agent'
                               ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
                               : 'border-emerald-200 bg-emerald-50 text-emerald-600'
@@ -485,7 +485,7 @@ export default function InboxPage() {
                       >
                         {conv.kind}
                       </span>
-                      <p className="truncate text-xs text-[#8ea2b5]">{conv.lastMessage || '(empty message)'}</p>
+                      <p className="truncate text-xs text-slate-500">{conv.lastMessage || '(empty message)'}</p>
                     </div>
                   </div>
 

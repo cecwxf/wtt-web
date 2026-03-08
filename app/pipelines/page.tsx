@@ -149,9 +149,9 @@ export default function PipelinesPage() {
                   <div className="mt-2 flex flex-wrap gap-1 text-[10px]">
                     <span className="rounded border border-slate-200 px-1.5 py-0.5 text-slate-500">todo {p.stats?.todo ?? 0}</span>
                     <span className="rounded border border-blue-500/40 px-1.5 py-0.5 text-indigo-500">doing {p.stats?.doing ?? 0}</span>
-                    <span className="rounded border border-yellow-500/40 px-1.5 py-0.5 text-[#ffd792]">review {p.stats?.review ?? 0}</span>
-                    <span className="rounded border border-green-500/40 px-1.5 py-0.5 text-[#9fe0ba]">done {p.stats?.done ?? 0}</span>
-                    <span className="rounded border border-red-500/40 px-1.5 py-0.5 text-[#ffb0b0]">blocked {p.stats?.blocked ?? 0}</span>
+                    <span className="rounded border border-yellow-500/40 px-1.5 py-0.5 text-amber-600">review {p.stats?.review ?? 0}</span>
+                    <span className="rounded border border-green-500/40 px-1.5 py-0.5 text-green-600">done {p.stats?.done ?? 0}</span>
+                    <span className="rounded border border-red-500/40 px-1.5 py-0.5 text-red-500">blocked {p.stats?.blocked ?? 0}</span>
                   </div>
                 </button>
                 <div className="flex gap-1">
