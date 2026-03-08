@@ -1,7 +1,7 @@
 'use client'
 
-import { Image as ImageIcon, Link as LinkIcon, Mic, Paperclip, Send } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Image as ImageIcon, Mic, Paperclip, Send } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
@@ -180,7 +180,6 @@ export function ChatView({
   const [sending, setSending] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [showSendPreview, setShowSendPreview] = useState(false)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -219,82 +218,6 @@ export function ChatView({
       // ignore storage errors
     }
   }, [previewCache])
-
-  type DraftBlock = {
-    type: 'image' | 'audio' | 'video' | 'file' | 'link' | 'preview' | 'markdown'
-    value: string
-    title?: string
-    desc?: string
-    url?: string
-    image?: string
-  }
-
-  const parseDraftBlocks = useCallback((text: string): DraftBlock[] => {
-    return text
-      .split(/\n\n+/)
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .map((x) => {
-        const image = x.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
-        if (image) return { type: 'image', value: x, url: image[1] }
-        const audio = x.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
-        if (audio) return { type: 'audio', value: x, url: audio[1] }
-        const video = x.match(/^\[video\]\((https?:\/\/[^)]+)\)$/i)
-        if (video) return { type: 'video', value: x, url: video[1] }
-        const file = x.match(/^\[file(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
-        if (file) return { type: 'file', value: x, url: file[2] }
-        const link = x.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
-        if (link) return { type: 'link', value: x, url: link[1] }
-        if (/^\[preview\]/i.test(x)) {
-          const title = (x.match(/Title:\s*(.*)/i)?.[1] || '').trim()
-          const desc = (x.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
-          const url = (x.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-          const image = (x.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-          return { type: 'preview', value: x, title, desc, url, image }
-        }
-        return { type: 'markdown', value: x }
-      })
-  }, [])
-
-  const blocksToDraft = (blocks: DraftBlock[]) => {
-    return blocks
-      .map((b) => {
-        if (b.type === 'preview') {
-          return `[preview]\nTitle: ${b.title || ''}\nDesc: ${b.desc || ''}\nURL: ${b.url || ''}\nImage: ${b.image || ''}`
-        }
-        return b.value
-      })
-      .filter(Boolean)
-      .join('\n\n')
-  }
-
-  const draftBlocksPreview = useMemo(() => parseDraftBlocks(draft), [draft, parseDraftBlocks])
-
-  const moveDraftBlock = (idx: number, dir: -1 | 1) => {
-    const blocks = parseDraftBlocks(draft)
-    const to = idx + dir
-    if (to < 0 || to >= blocks.length) return
-    const next = [...blocks]
-    ;[next[idx], next[to]] = [next[to], next[idx]]
-    setDraft(blocksToDraft(next))
-  }
-
-  const removeDraftBlock = (idx: number) => {
-    const blocks = parseDraftBlocks(draft)
-    if (idx < 0 || idx >= blocks.length) return
-    const next = [...blocks.slice(0, idx), ...blocks.slice(idx + 1)]
-    setDraft(blocksToDraft(next))
-  }
-
-  const updatePreviewBlock = (idx: number, field: 'title' | 'desc' | 'url' | 'image', value: string) => {
-    const blocks = parseDraftBlocks(draft)
-    if (idx < 0 || idx >= blocks.length) return
-    const b = blocks[idx]
-    if (b.type !== 'preview') return
-    const next = [...blocks]
-    next[idx] = { ...b, [field]: value }
-    setDraft(blocksToDraft(next))
-  }
 
   const handleSend = async () => {
     if (!draft.trim()) return
@@ -355,37 +278,6 @@ export function ChatView({
     } finally {
       setUploading(false)
     }
-  }
-
-  const insertUrlWithPreview = async () => {
-    const url = prompt('Paste URL')
-    if (!url) return
-    const v = url.trim()
-
-    let title = ''
-    let desc = ''
-    let image = ''
-    try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/preview/url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: v }),
-      })
-      if (r.ok) {
-        const j = await r.json()
-        title = j?.title || ''
-        desc = j?.description || ''
-        image = j?.image || ''
-      }
-    } catch {
-      // fallback to plain link block
-    }
-
-    const block = title || desc || image
-      ? `[preview]\nTitle: ${title}\nDesc: ${desc}\nURL: ${v}\nImage: ${image}`
-      : `[link](${v})`
-
-    setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${block}`)
   }
 
   const handleLoadOlder = async () => {
@@ -717,9 +609,6 @@ export function ChatView({
           <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
             <Mic className="h-4 w-4" />
           </button>
-          <button type="button" onClick={insertUrlWithPreview} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
-            <LinkIcon className="h-4 w-4" />
-          </button>
 
           <textarea
             value={draft}
@@ -749,43 +638,6 @@ export function ChatView({
             }}
           />
         </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <button type="button" onClick={() => setShowSendPreview((v) => !v)} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500">
-            {showSendPreview ? 'Hide Send Preview' : 'Show Send Preview'}
-          </button>
-        </div>
-
-        {showSendPreview && draftBlocksPreview.length > 0 && (
-          <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
-            <p className="mb-2 text-[11px] text-slate-400">Send preview ({draftBlocksPreview.length} blocks)</p>
-            <div className="max-h-44 overflow-auto space-y-1">
-              {draftBlocksPreview.map((b, i) => (
-                <div key={`pv-${i}`} className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] text-slate-600">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="mr-1 text-indigo-500">[{b.type}]</span>
-                      <span className="truncate">{b.value}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button type="button" onClick={() => moveDraftBlock(i, -1)} className="rounded border border-slate-200 px-1 text-[10px] text-slate-500">↑</button>
-                      <button type="button" onClick={() => moveDraftBlock(i, 1)} className="rounded border border-slate-200 px-1 text-[10px] text-slate-500">↓</button>
-                      <button type="button" onClick={() => removeDraftBlock(i)} className="rounded border border-red-500/30 px-1 text-[10px] text-red-500">×</button>
-                    </div>
-                  </div>
-                  {b.type === 'preview' && (
-                    <div className="mt-2 grid grid-cols-1 gap-1">
-                      <input value={b.title || ''} onChange={(e) => updatePreviewBlock(i, 'title', e.target.value)} placeholder="Preview title" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-slate-700 outline-none" />
-                      <input value={b.desc || ''} onChange={(e) => updatePreviewBlock(i, 'desc', e.target.value)} placeholder="Preview description" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-slate-500 outline-none" />
-                      <input value={b.url || ''} onChange={(e) => updatePreviewBlock(i, 'url', e.target.value)} placeholder="Preview URL" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-indigo-500 outline-none" />
-                      <input value={b.image || ''} onChange={(e) => updatePreviewBlock(i, 'image', e.target.value)} placeholder="Preview image URL" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-indigo-500 outline-none" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {recentAssets.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
