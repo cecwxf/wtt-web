@@ -59,11 +59,6 @@ interface CachedPreview {
   fetchedAt: number
 }
 
-function extractFirstUrl(content: string): string | null {
-  const m = (content || '').match(/https?:\/\/\S+/i)
-  return m ? m[0] : null
-}
-
 type ParsedTask = {
   isTask: boolean
   kind?: 'run' | 'status' | 'summary' | 'blocked' | 'asset' | 'review' | 'other'
@@ -102,8 +97,9 @@ function parseTaskContent(content: string): ParsedTask {
   return { isTask: true, kind, taskId, sessionId, runner, executor, progress, body, assetUrl, assetPath }
 }
 
-function parseRichContent(content: string): ParsedRich {
-  const c = (content || '').trim()
+function classifyLine(line: string): ParsedRich {
+  const c = line.trim()
+  if (!c) return { kind: 'plain', text: '' }
   const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
   if (imageMatch) return { kind: 'image', url: imageMatch[1] }
   const audioMatch = c.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
@@ -120,22 +116,73 @@ function parseRichContent(content: string): ParsedRich {
     if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: plainUrl[1] }
     if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) return { kind: 'image', url: plainUrl[1] }
     if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) return { kind: 'audio', url: plainUrl[1] }
+    if (/\.(pdf)(\?|$)/.test(u)) return { kind: 'file', url: plainUrl[1], filename: undefined }
+    if (/\.(docx|xlsx|csv|zip)(\?|$)/.test(u)) return { kind: 'file', url: plainUrl[1], filename: undefined }
     return { kind: 'link', url: plainUrl[1] }
   }
+  return { kind: 'plain', text: line }
+}
 
+function parseRichBlocks(content: string): ParsedRich[] {
+  const c = (content || '').trim()
+  if (!c) return [{ kind: 'plain', text: '' }]
+
+  // [preview] block — return as single block
   if (c.startsWith('[preview]')) {
     const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
     const desc = (c.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
     const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
     const image = (c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-    return { kind: 'preview', title, desc, url, image }
+    return [{ kind: 'preview', title, desc, url, image }]
   }
 
-  // Detect markdown: has headings, bold, lists, code blocks, tables, or links
-  const hasMarkdown = /(?:^#{1,6}\s|^\s*[-*+]\s|\*\*.+\*\*|`.+`|^\|.+\||```[\s\S]*```|\[.+\]\(.+\))/m.test(c)
-  if (hasMarkdown && c.length > 20) return { kind: 'markdown', text: c }
+  // Detect markdown: has headings, bold, code blocks, tables
+  const hasMarkdown = /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(c)
+  if (hasMarkdown && c.length > 30) return [{ kind: 'markdown', text: c }]
 
-  return { kind: 'plain', text: content }
+  // Split by lines / double newlines and classify each segment
+  const segments = c.split(/\n/)
+  const blocks: ParsedRich[] = []
+  let textBuf: string[] = []
+
+  const flushText = () => {
+    if (textBuf.length > 0) {
+      blocks.push({ kind: 'plain', text: textBuf.join('\n') })
+      textBuf = []
+    }
+  }
+
+  for (const seg of segments) {
+    const classified = classifyLine(seg)
+    if (classified.kind === 'plain') {
+      textBuf.push(seg)
+    } else {
+      flushText()
+      blocks.push(classified)
+    }
+  }
+  flushText()
+
+  // If only plain text, also extract inline URLs for preview
+  if (blocks.length === 1 && blocks[0].kind === 'plain') {
+    const urls = (blocks[0].text || '').match(/https?:\/\/\S+/gi)
+    if (urls) {
+      for (const url of urls) {
+        const u = url.toLowerCase()
+        if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) {
+          blocks.push({ kind: 'image', url })
+        } else if (/\.(mp4|webm|mov)(\?|$)/.test(u)) {
+          blocks.push({ kind: 'video', url })
+        } else if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) {
+          blocks.push({ kind: 'audio', url })
+        } else {
+          blocks.push({ kind: 'link', url })
+        }
+      }
+    }
+  }
+
+  return blocks.length > 0 ? blocks : [{ kind: 'plain', text: content }]
 }
 
 function formatDateGroup(timestamp: string): string {
@@ -306,12 +353,14 @@ export function ChatView({
     const now = Date.now()
     const urls = new Set<string>()
     for (const m of messages) {
-      const parsed = parseRichContent(m.content || '')
-      const candidateUrl = parsed.kind === 'link' ? parsed.url : extractFirstUrl(m.content || '')
-      if (candidateUrl) {
-        const cached = previewCache[candidateUrl]
-        const isFresh = cached && now - cached.fetchedAt < TTL_MS
-        if (!isFresh) urls.add(candidateUrl)
+      const blocks = parseRichBlocks(m.content || '')
+      for (const block of blocks) {
+        const candidateUrl = block.kind === 'link' ? block.url : undefined
+        if (candidateUrl) {
+          const cached = previewCache[candidateUrl]
+          const isFresh = cached && now - cached.fetchedAt < TTL_MS
+          if (!isFresh) urls.add(candidateUrl)
+        }
       }
     }
     if (urls.size === 0) return
@@ -461,127 +510,94 @@ export function ChatView({
                           )
                         }
 
-                        const parsed = parseRichContent(message.content || '')
-                        if (parsed.kind === 'image') {
-                          return (
-                            <a href={parsed.url} target="_blank" rel="noreferrer" className="block">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={parsed.url} alt="image" className="max-h-64 w-auto rounded-lg border border-slate-200" />
-                            </a>
-                          )
-                        }
-                        if (parsed.kind === 'audio') {
-                          return <audio controls src={parsed.url} className="w-full max-w-xs" />
-                        }
-                        if (parsed.kind === 'video') {
-                          return (
-                            <video
-                              controls
-                              preload="metadata"
-                              className="max-h-72 w-full rounded-lg border border-slate-200"
-                            >
-                              <source src={parsed.url} />
-                            </video>
-                          )
-                        }
-                        if (parsed.kind === 'file') {
-                          const url = parsed.url
-                          const fname = parsed.filename || url.split('/').pop() || 'file'
-                          const isPdf = /\.pdf(\?|$)/i.test(url)
-                          if (isPdf) {
-                            return (
-                              <div className="space-y-2">
-                                <iframe
-                                  src={url}
-                                  title={fname}
-                                  className="h-80 w-full rounded-lg border border-slate-200"
-                                />
-                                <a href={url} target="_blank" rel="noreferrer" className="inline-block text-xs text-indigo-500 underline">
-                                  Open PDF in new tab
-                                </a>
-                              </div>
-                            )
-                          }
-                          return (
-                            <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-indigo-500 hover:bg-slate-100">
-                              <Paperclip className="h-4 w-4 shrink-0" />
-                              <span className="truncate">{fname}</span>
-                            </a>
-                          )
-                        }
-                        if (parsed.kind === 'markdown') {
-                          return (
-                            <div className={`prose prose-sm max-w-none ${isMine ? 'prose-invert' : ''}`}>
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {parsed.text}
-                              </ReactMarkdown>
-                            </div>
-                          )
-                        }
-                        if (parsed.kind === 'link') {
-                          const pv = parsed.url ? previewCache[parsed.url]?.data : undefined
-                          if (pv && (pv.title || pv.description || pv.image)) {
-                            return (
-                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                                {pv.image && (
-                                  <a href={parsed.url} target="_blank" rel="noreferrer" className="mb-2 block">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={pv.image} alt={pv.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
-                                  </a>
-                                )}
-                                <p className="text-xs font-semibold text-slate-700">{pv.title || parsed.url}</p>
-                                {pv.description && <p className="mt-1 text-xs text-slate-500">{pv.description}</p>}
-                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">
-                                  {parsed.url}
-                                </a>
-                              </div>
-                            )
-                          }
-                          return (
-                            <a href={parsed.url} target="_blank" rel="noreferrer" className="text-indigo-500 underline break-all">
-                              {parsed.url}
-                            </a>
-                          )
-                        }
-                        if (parsed.kind === 'preview') {
-                          return (
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                              {parsed.image && (
-                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mb-2 block">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={parsed.image} alt={parsed.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
-                                </a>
-                              )}
-                              <p className="text-xs font-semibold text-slate-700">{parsed.title || 'Link Preview'}</p>
-                              {parsed.desc && <p className="mt-1 text-xs text-slate-500">{parsed.desc}</p>}
-                              {parsed.url && (
-                                <a href={parsed.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">
-                                  {parsed.url}
-                                </a>
-                              )}
-                            </div>
-                          )
-                        }
-                        const inlineUrl = extractFirstUrl(parsed.text || '')
-                        const inlinePv = inlineUrl ? previewCache[inlineUrl]?.data : undefined
+                        const blocks = parseRichBlocks(message.content || '')
                         return (
-                          <div>
-                            <p className="whitespace-pre-wrap break-words">{parsed.text}</p>
-                            {inlineUrl && inlinePv && (inlinePv.title || inlinePv.description || inlinePv.image) && (
-                              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-                                {inlinePv.image && (
-                                  <a href={inlineUrl} target="_blank" rel="noreferrer" className="mb-2 block">
+                          <div className="space-y-2">
+                            {blocks.map((block, bi) => {
+                              if (block.kind === 'image') {
+                                return (
+                                  <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="block">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={inlinePv.image} alt={inlinePv.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
+                                    <img src={block.url} alt="image" className="max-h-64 w-auto rounded-lg border border-slate-200" />
                                   </a>
-                                )}
-                                <p className="text-xs font-semibold text-slate-700">{inlinePv.title || inlineUrl}</p>
-                                {inlinePv.description && <p className="mt-1 text-xs text-slate-500">{inlinePv.description}</p>}
-                                <a href={inlineUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">
-                                  {inlineUrl}
-                                </a>
-                              </div>
-                            )}
+                                )
+                              }
+                              if (block.kind === 'audio') {
+                                return <audio key={bi} controls src={block.url} className="w-full max-w-xs" />
+                              }
+                              if (block.kind === 'video') {
+                                return (
+                                  <video key={bi} controls preload="metadata" className="max-h-72 w-full rounded-lg border border-slate-200">
+                                    <source src={block.url} />
+                                  </video>
+                                )
+                              }
+                              if (block.kind === 'file') {
+                                const url = block.url
+                                const fname = block.filename || url.split('/').pop() || 'file'
+                                const isPdf = /\.pdf(\?|$)/i.test(url)
+                                if (isPdf) {
+                                  return (
+                                    <div key={bi} className="space-y-1">
+                                      <iframe src={url} title={fname} className="h-80 w-full rounded-lg border border-slate-200" />
+                                      <a href={url} target="_blank" rel="noreferrer" className="inline-block text-xs text-indigo-500 underline">Open PDF</a>
+                                    </div>
+                                  )
+                                }
+                                return (
+                                  <a key={bi} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-indigo-500 hover:bg-slate-100">
+                                    <Paperclip className="h-4 w-4 shrink-0" />
+                                    <span className="truncate">{fname}</span>
+                                  </a>
+                                )
+                              }
+                              if (block.kind === 'markdown') {
+                                return (
+                                  <div key={bi} className={`prose prose-sm max-w-none ${isMine ? 'prose-invert' : ''}`}>
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+                                  </div>
+                                )
+                              }
+                              if (block.kind === 'link') {
+                                const pv = block.url ? previewCache[block.url]?.data : undefined
+                                if (pv && (pv.title || pv.description || pv.image)) {
+                                  return (
+                                    <div key={bi} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                      {pv.image && (
+                                        <a href={block.url} target="_blank" rel="noreferrer" className="mb-2 block">
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          <img src={pv.image} alt={pv.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
+                                        </a>
+                                      )}
+                                      <p className="text-xs font-semibold text-slate-700">{pv.title || block.url}</p>
+                                      {pv.description && <p className="mt-1 text-xs text-slate-500">{pv.description}</p>}
+                                      <a href={block.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">{block.url}</a>
+                                    </div>
+                                  )
+                                }
+                                return (
+                                  <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="block text-indigo-500 underline break-all">{block.url}</a>
+                                )
+                              }
+                              if (block.kind === 'preview') {
+                                return (
+                                  <div key={bi} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                    {block.image && (
+                                      <a href={block.url} target="_blank" rel="noreferrer" className="mb-2 block">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={block.image} alt={block.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
+                                      </a>
+                                    )}
+                                    <p className="text-xs font-semibold text-slate-700">{block.title || 'Link Preview'}</p>
+                                    {block.desc && <p className="mt-1 text-xs text-slate-500">{block.desc}</p>}
+                                    {block.url && <a href={block.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">{block.url}</a>}
+                                  </div>
+                                )
+                              }
+                              // plain text
+                              if (!block.text?.trim()) return null
+                              return <p key={bi} className="whitespace-pre-wrap break-words">{block.text}</p>
+                            })}
                           </div>
                         )
                       })()}
