@@ -287,7 +287,7 @@ export default function FeedPage() {
   const handleEditorPublish = async (topicId: string, content: string) => {
     await wttApi.publishMessage(topicId, {
       content,
-      content_type: 'text',
+      content_type: 'text/markdown',
       semantic_type: 'post',
     })
     mutate()
