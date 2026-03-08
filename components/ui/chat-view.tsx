@@ -550,9 +550,9 @@ export function ChatView({
                 return (
                   <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 ${
+                      className={`max-w-[82%] rounded-2xl px-5 py-3.5 text-[14px] leading-relaxed tracking-[-0.01em] ${
                         isMine
-                          ? 'bg-indigo-500 text-white'
+                          ? 'bg-indigo-500 text-white/95'
                           : 'border border-slate-200 bg-slate-50/90 text-slate-700'
                       } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'}`}
                     >
@@ -560,44 +560,63 @@ export function ChatView({
                       {(() => {
                         const task = parseTaskContent(message.content || '')
                         if (task.isTask) {
-                          const titleMap: Record<string, string> = {
-                            run: 'Task Meta',
-                            status: 'Task Progress',
-                            summary: 'Task Result',
-                            blocked: 'Task Blocked',
-                            asset: 'Task Asset',
-                            review: 'Task Review',
-                            other: 'Task Update',
+                          const colorMap: Record<string, { border: string; badge: string; badgeText: string; bg: string }> = {
+                            run: { border: 'border-l-indigo-500', badge: 'bg-indigo-100 text-indigo-700', badgeText: 'Task Meta', bg: 'bg-indigo-50/50' },
+                            status: { border: 'border-l-amber-500', badge: 'bg-amber-100 text-amber-700', badgeText: 'Progress', bg: 'bg-amber-50/50' },
+                            summary: { border: 'border-l-emerald-500', badge: 'bg-emerald-100 text-emerald-700', badgeText: 'Result', bg: 'bg-emerald-50/50' },
+                            blocked: { border: 'border-l-red-500', badge: 'bg-red-100 text-red-700', badgeText: 'Blocked', bg: 'bg-red-50/50' },
+                            asset: { border: 'border-l-violet-500', badge: 'bg-violet-100 text-violet-700', badgeText: 'Asset', bg: 'bg-violet-50/50' },
+                            review: { border: 'border-l-sky-500', badge: 'bg-sky-100 text-sky-700', badgeText: 'Review', bg: 'bg-sky-50/50' },
+                            other: { border: 'border-l-slate-400', badge: 'bg-slate-100 text-slate-600', badgeText: 'Update', bg: 'bg-slate-50/50' },
                           }
+                          const colors = colorMap[task.kind || 'other']
+                          const pct = task.progress ? parseInt(task.progress, 10) : undefined
+
                           return (
-                            <div className="space-y-2 text-xs">
-                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-700">
-                                <p className="mb-1 font-semibold text-indigo-500">{titleMap[task.kind || 'other']}</p>
-                                <p className="text-slate-600">task_id: {task.taskId || '-'}</p>
-                                <p className="text-slate-600">session: {task.sessionId || '-'}</p>
-                                <p className="text-slate-600">runner/executor: {(task.runner || '-') + '/' + (task.executor || '-')}</p>
+                            <div className={`space-y-2 rounded-lg border border-l-4 ${colors.border} ${colors.bg} border-slate-200 p-3`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-xs text-slate-500">{task.taskId || 'N/A'}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${colors.badge}`}>{colors.badgeText}</span>
                               </div>
+
+                              {(task.runner || task.executor) && (
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                                  {task.runner && <span>Runner: <span className="font-medium text-slate-700">{task.runner}</span></span>}
+                                  {task.executor && <span>Executor: <span className="font-medium text-slate-700">{task.executor}</span></span>}
+                                  {task.sessionId && <span>Session: <span className="font-mono text-slate-600">{task.sessionId.slice(0, 8)}</span></span>}
+                                </div>
+                              )}
+
                               {task.kind === 'status' && (
-                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 text-slate-700">
-                                  <p className="font-semibold text-indigo-600">进度 {task.progress ? `${task.progress}%` : ''}</p>
-                                  <p className="mt-1 whitespace-pre-wrap break-words text-slate-700">{task.body || '执行中'}</p>
+                                <div className="space-y-1.5">
+                                  {pct !== undefined && (
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                                        <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
+                                      </div>
+                                      <span className="text-xs font-medium text-amber-700">{pct}%</span>
+                                    </div>
+                                  )}
+                                  {task.body && <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>}
                                 </div>
                               )}
-                              {(task.kind === 'summary' || task.kind === 'blocked' || task.kind === 'review') && (
-                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 text-slate-700">
-                                  <p className="font-semibold text-indigo-600">结果</p>
-                                  <p className="mt-1 whitespace-pre-wrap break-words text-slate-700">{task.body || '-'}</p>
-                                </div>
+
+                              {(task.kind === 'summary' || task.kind === 'blocked' || task.kind === 'review') && task.body && (
+                                <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
                               )}
+
                               {task.kind === 'asset' && (
-                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 text-slate-700">
-                                  <p className="font-semibold text-indigo-600">产物</p>
+                                <div>
                                   {task.assetUrl ? (
-                                    <a href={task.assetUrl} target="_blank" rel="noreferrer" className="text-indigo-500 underline break-all">{task.assetUrl}</a>
+                                    <a href={task.assetUrl} target="_blank" rel="noreferrer" className="text-sm text-indigo-600 underline break-all hover:text-indigo-800">{task.assetUrl}</a>
                                   ) : (
-                                    <p className="break-all text-slate-700">{task.assetPath || task.body || '-'}</p>
+                                    <p className="text-[13px] break-all text-slate-600">{task.assetPath || task.body || '—'}</p>
                                   )}
                                 </div>
+                              )}
+
+                              {task.kind === 'run' && task.body && (
+                                <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
                               )}
                             </div>
                           )
@@ -605,7 +624,7 @@ export function ChatView({
 
                         const blocks = parseRichBlocks(message.content || '')
                         return (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {blocks.map((block, bi) => {
                               if (block.kind === 'image') {
                                 return <ThumbnailImage key={bi} url={block.url} isMine={isMine} />
@@ -692,7 +711,7 @@ export function ChatView({
                               }
                               // plain text
                               if (!block.text?.trim()) return null
-                              return <p key={bi} className="whitespace-pre-wrap break-words">{block.text}</p>
+                              return <p key={bi} className="whitespace-pre-wrap break-words leading-relaxed">{block.text}</p>
                             })}
                           </div>
                         )
