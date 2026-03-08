@@ -740,29 +740,23 @@ export default function TasksPage() {
                   {grouped[col].map((task) => (
                     <button
                       key={task.id}
-                      onClick={() => {
+                      onClick={(e) => {
                         setSelectedTask(task)
                         setTaskDraft(task)
+                        if (e.metaKey || e.ctrlKey) {
+                          setSelectedTaskIds((prev) =>
+                            prev.includes(task.id) ? prev.filter((id) => id !== task.id) : Array.from(new Set([...prev, task.id]))
+                          )
+                        }
                       }}
                       onContextMenu={(e) => {
                         e.preventDefault()
                         setTaskContextMenu({ x: e.clientX, y: e.clientY, task })
                       }}
-                      className={`w-full rounded-lg border p-2 text-left hover:border-indigo-500/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''}`}
+                      className={`w-full rounded-lg border p-2 text-left hover:border-indigo-500/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''} ${selectedTaskIds.includes(task.id) ? 'ring-2 ring-indigo-400 !bg-indigo-100/80' : ''}`}
                     >
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium leading-5">{task.title}</p>
-                        <input
-                          type="checkbox"
-                          checked={selectedTaskIds.includes(task.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => {
-                            const checked = e.target.checked
-                            setSelectedTaskIds((prev) =>
-                              checked ? Array.from(new Set([...prev, task.id])) : prev.filter((id) => id !== task.id)
-                            )
-                          }}
-                        />
+                      <div className="mb-1 flex items-center gap-2">
+                        <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
                       </div>
                       <div className="mt-2 h-1.5 w-full rounded bg-slate-200">
                         <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />

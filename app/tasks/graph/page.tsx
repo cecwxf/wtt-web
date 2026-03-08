@@ -404,10 +404,13 @@ export default function TasksGraphPage() {
             <p className="mb-2 text-sm font-semibold">Task Library</p>
             <div className="space-y-2 overflow-auto">
               {nodes.map((n) => (
-                <div key={n.id} className={`w-full rounded-lg border p-2 text-left ${statusColor(n.status)} bg-slate-50`}>
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <button onClick={() => setSelectedTaskId(n.id)} className="truncate text-left text-sm hover:text-indigo-500">{n.title}</button>
-                    <input type="checkbox" checked={selectedTaskIds.includes(n.id)} onChange={() => toggleSelectTask(n.id)} />
+                <div
+                  key={n.id}
+                  onClick={() => { setSelectedTaskId(n.id); toggleSelectTask(n.id) }}
+                  className={`w-full cursor-pointer rounded-lg border p-2 text-left ${statusColor(n.status)} ${selectedTaskIds.includes(n.id) ? 'ring-2 ring-indigo-400 !bg-indigo-100/80' : 'bg-slate-50'}`}
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <p className="truncate text-sm hover:text-indigo-500">{n.title}</p>
                   </div>
                   <p className="text-[10px] text-slate-500">{n.status} · {n.owner_agent_id || '-'}</p>
                 </div>
