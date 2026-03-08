@@ -1,21 +1,43 @@
 'use client'
 
-import { Search, X } from 'lucide-react'
+import { Search, X, MessageSquare, KanbanSquare, Workflow } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { wttApi } from '@/lib/api/wtt-client'
 import type { Topic } from '@/lib/api/wtt-client'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+
+interface TaskResult {
+  id: string
+  title: string
+  status: string
+  priority: string
+  pipeline_id?: string
+  owner_agent_id?: string
+}
+
+interface PipelineResult {
+  id: string
+  name: string
+  description?: string
+  task_count?: number
+  auto_review?: boolean
+}
 
 interface SearchBarProps {
   onSelectTopic?: (topicId: string) => void
   placeholder?: string
 }
 
-export function SearchBar({ onSelectTopic, placeholder = 'Search topics...' }: SearchBarProps) {
+export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, pipelines...' }: SearchBarProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<Topic[]>([])
+  const [topics, setTopics] = useState<Topic[]>([])
+  const [tasks, setTasks] = useState<TaskResult[]>([])
+  const [pipelines, setPipelines] = useState<PipelineResult[]>([])
   const [loading, setLoading] = useState(false)
   const [showResults, setShowResults] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -23,33 +45,43 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics...' }: S
         setShowResults(false)
       }
     }
-
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   useEffect(() => {
-    const searchTopics = async () => {
-      if (!query.trim()) {
-        setResults([])
+    const doSearch = async () => {
+      const q = query.trim()
+      if (!q) {
+        setTopics([])
+        setTasks([])
+        setPipelines([])
         setShowResults(false)
         return
       }
 
       setLoading(true)
       try {
-        const topics = await wttApi.searchTopics(query.trim())
-        setResults(topics)
+        const [topicResults, taskResults, pipelineResults] = await Promise.allSettled([
+          wttApi.searchTopics(q),
+          searchTasks(q),
+          searchPipelines(q),
+        ])
+
+        setTopics(topicResults.status === 'fulfilled' ? topicResults.value : [])
+        setTasks(taskResults.status === 'fulfilled' ? taskResults.value : [])
+        setPipelines(pipelineResults.status === 'fulfilled' ? pipelineResults.value : [])
         setShowResults(true)
-      } catch (error) {
-        console.error('Search failed:', error)
-        setResults([])
+      } catch {
+        setTopics([])
+        setTasks([])
+        setPipelines([])
       } finally {
         setLoading(false)
       }
     }
 
-    const debounceTimer = setTimeout(searchTopics, 300)
+    const debounceTimer = setTimeout(doSearch, 300)
     return () => clearTimeout(debounceTimer)
   }, [query])
 
@@ -59,14 +91,52 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics...' }: S
     onSelectTopic?.(topicId)
   }
 
+  const handleSelectTask = (taskId: string) => {
+    setShowResults(false)
+    setQuery('')
+    router.push(`/tasks?highlight=${taskId}`)
+  }
+
+  const handleSelectPipeline = (pipelineId: string) => {
+    setShowResults(false)
+    setQuery('')
+    router.push(`/pipelines?edit=${pipelineId}`)
+  }
+
   const handleClear = () => {
     setQuery('')
-    setResults([])
+    setTopics([])
+    setTasks([])
+    setPipelines([])
     setShowResults(false)
   }
 
+  const totalResults = topics.length + tasks.length + pipelines.length
+
+  const statusIcon = (status: string) => {
+    switch (status) {
+      case 'todo': return 'O'
+      case 'doing': return '~'
+      case 'review': return '?'
+      case 'done': return 'V'
+      case 'blocked': return 'X'
+      default: return '?'
+    }
+  }
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'todo': return 'text-slate-500 bg-slate-100'
+      case 'doing': return 'text-blue-600 bg-blue-50'
+      case 'review': return 'text-amber-600 bg-amber-50'
+      case 'done': return 'text-green-600 bg-green-50'
+      case 'blocked': return 'text-red-600 bg-red-50'
+      default: return 'text-slate-500 bg-slate-100'
+    }
+  }
+
   return (
-    <div ref={searchRef} className="relative flex-1 max-w-md">
+    <div ref={searchRef} className="relative flex-1 max-w-lg">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       <input
         type="text"
@@ -85,50 +155,139 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics...' }: S
       )}
 
       {showResults && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[480px] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-indigo-500" />
             </div>
           )}
 
-          {!loading && results.length === 0 && (
+          {!loading && totalResults === 0 && (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
-              No topics found for &quot;{query}&quot;
+              No results for &quot;{query}&quot;
             </div>
           )}
 
-          {!loading && results.length > 0 && (
-            <div className="py-2">
-              {results.map((topic) => (
+          {!loading && topics.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Topics ({topics.length})
+                </span>
+              </div>
+              {topics.map((topic) => (
                 <button
                   key={topic.id}
                   onClick={() => handleSelectTopic(topic.id)}
-                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-100"
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-600">
-                    <span className="text-xs font-semibold">
-                      {topic.type === 'broadcast' ? '📢' : topic.type === 'p2p' ? '🔒' : '💬'}
-                    </span>
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-xs">
+                    {topic.type === 'broadcast' ? '📢' : topic.type === 'p2p' ? '🔒' : '💬'}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-800">{topic.name}</p>
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-400">{topic.description}</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-600">
-                        {topic.type}
-                      </span>
-                      <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-400">
-                        {topic.join_method}
-                      </span>
-                    </div>
+                    {topic.description && (
+                      <p className="truncate text-xs text-slate-400">{topic.description}</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-indigo-600">
+                    {topic.type}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!loading && tasks.length > 0 && (
+            <div>
+              {topics.length > 0 && <div className="mx-4 h-px bg-slate-100" />}
+              <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                <KanbanSquare className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Tasks ({tasks.length})
+                </span>
+              </div>
+              {tasks.map((task) => (
+                <button
+                  key={task.id}
+                  onClick={() => handleSelectTask(task.id)}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50"
+                >
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${statusColor(task.status)}`}>
+                    {statusIcon(task.status)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-800">{task.title}</p>
+                    <p className="text-xs text-slate-400">
+                      {task.priority} · {task.status}
+                      {task.owner_agent_id ? ` · ${task.owner_agent_id}` : ''}
+                    </p>
                   </div>
                 </button>
               ))}
             </div>
           )}
+
+          {!loading && pipelines.length > 0 && (
+            <div>
+              {(topics.length > 0 || tasks.length > 0) && <div className="mx-4 h-px bg-slate-100" />}
+              <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                <Workflow className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Pipelines ({pipelines.length})
+                </span>
+              </div>
+              {pipelines.map((pipeline) => (
+                <button
+                  key={pipeline.id}
+                  onClick={() => handleSelectPipeline(pipeline.id)}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600">
+                    <Workflow className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-800">{pipeline.name}</p>
+                    <p className="text-xs text-slate-400">
+                      {pipeline.task_count != null ? `${pipeline.task_count} tasks` : ''}
+                      {pipeline.auto_review ? ' · auto-review' : ''}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="h-1" />
         </div>
       )}
     </div>
   )
+}
+
+async function searchTasks(query: string): Promise<TaskResult[]> {
+  const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks?limit=200`)
+  if (!resp.ok) return []
+  const allTasks: TaskResult[] = await resp.json()
+  const q = query.toLowerCase()
+  return allTasks.filter(
+    (t) =>
+      t.title?.toLowerCase().includes(q) ||
+      t.id?.toLowerCase().includes(q) ||
+      t.owner_agent_id?.toLowerCase().includes(q)
+  ).slice(0, 10)
+}
+
+async function searchPipelines(query: string): Promise<PipelineResult[]> {
+  const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines`)
+  if (!resp.ok) return []
+  const allPipelines: PipelineResult[] = await resp.json()
+  const q = query.toLowerCase()
+  return allPipelines.filter(
+    (p) =>
+      p.name?.toLowerCase().includes(q) ||
+      p.id?.toLowerCase().includes(q) ||
+      p.description?.toLowerCase().includes(q)
+  ).slice(0, 5)
 }
