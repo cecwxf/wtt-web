@@ -512,31 +512,31 @@ export function ChatView({
                           }
                           return (
                             <div className="space-y-2 text-xs">
-                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-700">
                                 <p className="mb-1 font-semibold text-indigo-500">{titleMap[task.kind || 'other']}</p>
-                                <p>task_id: {task.taskId || '-'}</p>
-                                <p>session: {task.sessionId || '-'}</p>
-                                <p>runner/executor: {(task.runner || '-') + '/' + (task.executor || '-')}</p>
+                                <p className="text-slate-600">task_id: {task.taskId || '-'}</p>
+                                <p className="text-slate-600">session: {task.sessionId || '-'}</p>
+                                <p className="text-slate-600">runner/executor: {(task.runner || '-') + '/' + (task.executor || '-')}</p>
                               </div>
                               {task.kind === 'status' && (
-                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2">
+                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 text-slate-700">
                                   <p className="font-semibold text-indigo-600">进度 {task.progress ? `${task.progress}%` : ''}</p>
-                                  <p className="mt-1 whitespace-pre-wrap break-words">{task.body || '执行中'}</p>
+                                  <p className="mt-1 whitespace-pre-wrap break-words text-slate-700">{task.body || '执行中'}</p>
                                 </div>
                               )}
                               {(task.kind === 'summary' || task.kind === 'blocked' || task.kind === 'review') && (
-                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2">
+                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 text-slate-700">
                                   <p className="font-semibold text-indigo-600">结果</p>
-                                  <p className="mt-1 whitespace-pre-wrap break-words">{task.body || '-'}</p>
+                                  <p className="mt-1 whitespace-pre-wrap break-words text-slate-700">{task.body || '-'}</p>
                                 </div>
                               )}
                               {task.kind === 'asset' && (
-                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2">
+                                <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 text-slate-700">
                                   <p className="font-semibold text-indigo-600">产物</p>
                                   {task.assetUrl ? (
                                     <a href={task.assetUrl} target="_blank" rel="noreferrer" className="text-indigo-500 underline break-all">{task.assetUrl}</a>
                                   ) : (
-                                    <p className="break-all">{task.assetPath || task.body || '-'}</p>
+                                    <p className="break-all text-slate-700">{task.assetPath || task.body || '-'}</p>
                                   )}
                                 </div>
                               )}
