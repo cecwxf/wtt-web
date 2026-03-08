@@ -545,6 +545,31 @@ export default function PipelinesPage() {
     mutateGraph()
   }
 
+  /* ─── pipeline cancel ─── */
+  const cancelPipeline = async (pipelineId?: string) => {
+    const pid = pipelineId || editingPipelineId
+    if (!pid) return
+    if (!confirm('Cancel all running/pending tasks in this pipeline?')) return
+    // Fetch pipeline tasks
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks?pipeline_id=${pid}&limit=200`, {
+      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    })
+    if (!r.ok) { alert('Failed to fetch pipeline tasks'); return }
+    const allTasks: { id: string; status: string }[] = await r.json()
+    const active = allTasks.filter((t) => t.status === 'doing' || t.status === 'todo' || t.status === 'review')
+    let cancelled = 0
+    for (const t of active) {
+      const pr = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${t.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify({ status: 'blocked' }),
+      })
+      if (pr.ok) cancelled++
+    }
+    alert(`Cancelled ${cancelled} tasks`)
+    mutateGraph()
+  }
+
   /* ─── auto layout (topological sort) ─── */
   const autoLayout = () => {
     const inDeg: Record<string, number> = {}
@@ -750,6 +775,7 @@ export default function PipelinesPage() {
       onTopicChange={() => {}}
       onLogout={() => signOut({ callbackUrl: '/login' })}
       hideTopics
+      hideCreateTopic
     >
       <div className="flex h-full flex-col text-slate-800">
         {/* ═══ LIST MODE ═══ */}
@@ -782,6 +808,7 @@ export default function PipelinesPage() {
                     {p.id !== 'default' && (
                       <>
                         <button onClick={() => renamePipeline(p)} className="rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">Rename</button>
+                        <button onClick={() => cancelPipeline(p.id)} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-600 hover:bg-amber-50">Cancel</button>
                         <button onClick={() => deletePipeline(p)} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-500 hover:bg-red-50">Delete</button>
                       </>
                     )}
@@ -841,6 +868,9 @@ export default function PipelinesPage() {
                 <span className="text-[10px] text-slate-500">{Math.round(zoom * 100)}%</span>
                 <button onClick={() => setZoom((z) => Math.max(0.3, +(z - 0.1).toFixed(2)))} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs">-</button>
                 <div className="mx-1 h-4 w-px bg-slate-200" />
+                <button onClick={() => cancelPipeline()} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50">
+                  Cancel
+                </button>
                 <button onClick={runPipeline} className="rounded-lg bg-indigo-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-600">
                   Run Pipeline
                 </button>

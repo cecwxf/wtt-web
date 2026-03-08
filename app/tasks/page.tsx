@@ -714,6 +714,7 @@ export default function TasksPage() {
       onDeleteTopic={deleteTopicFromSidebar}
       onTopicsRefresh={() => mutateSubscribedTopics()}
       onLogout={() => signOut({ callbackUrl: '/login' })}
+      hideCreateTopic
     >
       <div className="h-full p-4 text-slate-800">
         <div className="mb-3 flex items-center justify-between">
