@@ -25,6 +25,7 @@ interface WttShellV2Props {
   onDeleteTopic?: (topicId: string) => void
   notificationCount?: number
   hideTopics?: boolean
+  hideCreateTopic?: boolean
   children: ReactNode
 }
 
@@ -46,6 +47,7 @@ export function WttShellV2({
   onDeleteTopic,
   notificationCount = 0,
   hideTopics = false,
+  hideCreateTopic = false,
   children,
 }: WttShellV2Props) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -74,6 +76,7 @@ export function WttShellV2({
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}
           onCreateTopic={() => setCreateTopicOpen(true)}
+          hideCreateTopic={hideCreateTopic}
           notificationCount={notificationCount}
           userMenu={
             <div className="relative">

@@ -8,11 +8,12 @@ import { SearchBar } from './search-bar'
 interface TopBarProps {
   onSelectTopic?: (topicId: string) => void
   onCreateTopic?: () => void
+  hideCreateTopic?: boolean
   notificationCount?: number
   userMenu?: React.ReactNode
 }
 
-export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, userMenu }: TopBarProps) {
+export function TopBar({ onSelectTopic, onCreateTopic, hideCreateTopic, notificationCount = 0, userMenu }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
 
   return (
@@ -38,14 +39,16 @@ export function TopBar({ onSelectTopic, onCreateTopic, notificationCount = 0, us
           <span className="hidden sm:inline">Pipelines</span>
         </Link>
 
-        <button
-          onClick={onCreateTopic}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
-          title="Create Topic"
-        >
-          <PenSquare className="h-4 w-4" />
-          <span className="hidden sm:inline">Create</span>
-        </button>
+        {!hideCreateTopic && (
+          <button
+            onClick={onCreateTopic}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
+            title="Create Topic"
+          >
+            <PenSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">Create Topic</span>
+          </button>
+        )}
 
         <div className="relative">
           <button
