@@ -180,12 +180,14 @@ export default function FeedPage() {
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
 
-    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string }) => ({
+    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string }) => ({
       topic_id: topic.id,
       name: topic.name,
       topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
       unread_count: 0,
       can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
+      task_id: topic.task_id,
+      runner_agent_id: topic.runner_agent_id,
     }))
   }, [subscribedTopicsRaw])
 
@@ -211,10 +213,12 @@ export default function FeedPage() {
   const handleSendMessage = async (content: string) => {
     if (!selectedTopicId || !selectedAgentId) return
 
+    const isTask = !!selectedTopic?.task_id
+
     await wttApi.publishMessage(selectedTopicId, {
       content,
       content_type: 'text',
-      semantic_type: 'post',
+      semantic_type: isTask ? 'task_request' : 'post',
     })
 
     mutate()
@@ -372,6 +376,7 @@ export default function FeedPage() {
             onRecall={handleRecallTopic}
             hasOlder={hasOlder && !loadingOlder}
             loading={!feedRaw && !error}
+            isTaskTopic={!!selectedTopic.task_id}
           />
         ) : (
           <div className="flex h-full items-center justify-center">
