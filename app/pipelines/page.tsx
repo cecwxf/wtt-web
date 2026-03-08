@@ -225,6 +225,9 @@ export default function PipelinesPage() {
   const [connectLineStyle, setConnectLineStyle] = useState<LineStyle>('solid')
   const [taskDraft, setTaskDraft] = useState<TaskDraft>({})
 
+  /* ─── drag-to-connect state ─── */
+  const [dragLine, setDragLine] = useState<{ fromId: string; fromX: number; fromY: number; toX: number; toY: number } | null>(null)
+
   /* ─── edge styles persisted alongside positions ─── */
   const [edgeStyles, setEdgeStyles] = useState<Record<string, LineStyle>>({})
 
@@ -589,13 +592,12 @@ export default function PipelinesPage() {
   /* ─── canvas interactions ─── */
   const onNodeClick = async (e: React.MouseEvent<HTMLButtonElement>, nodeId: string) => {
     setContextMenu(null)
-    if (e.shiftKey) {
-      if (!connectFromId) {
-        setConnectFromId(nodeId)
-      } else {
+    // If in connecting mode, this click completes the connection
+    if (connectFromId) {
+      if (connectFromId !== nodeId) {
         await addDependencyByIds(connectFromId, nodeId, connectLineStyle)
-        setConnectFromId(null)
       }
+      setConnectFromId(null)
       return
     }
     // Ctrl/Cmd click for multi-select
@@ -607,8 +609,24 @@ export default function PipelinesPage() {
     setSelectedTaskIds([])
   }
 
+  /* clicking a line style in palette: if a node is selected, enter connect mode from that node */
+  const onLineStyleClick = (style: LineStyle) => {
+    setConnectLineStyle(style)
+    if (selectedTaskId) {
+      setConnectFromId(selectedTaskId)
+    }
+  }
+
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!canvasRef.current) return
+    // dragging a connection line from port
+    if (dragLine) {
+      const rect = canvasRef.current.getBoundingClientRect()
+      const x = (e.clientX - rect.left - pan.x) / zoom
+      const y = (e.clientY - rect.top - pan.y) / zoom
+      setDragLine((prev) => prev ? { ...prev, toX: x, toY: y } : null)
+      return
+    }
     if (panning) {
       const dx = e.clientX - panStart.x
       const dy = e.clientY - panStart.y
@@ -621,6 +639,35 @@ export default function PipelinesPage() {
     const x = (e.clientX - rect.left - pan.x) / zoom - dragOffset.x
     const y = (e.clientY - rect.top - pan.y) / zoom - dragOffset.y
     setPositions((prev) => ({ ...prev, [draggingId]: { ...prev[draggingId], x: Math.max(0, x), y: Math.max(0, y) } }))
+  }
+
+  /* find node at canvas position */
+  const findNodeAt = (canvasX: number, canvasY: number): string | null => {
+    for (const n of nodes) {
+      const meta = positions[n.id]
+      if (!meta) continue
+      const { w, h } = shapeDims(meta.shape || 'rect')
+      if (canvasX >= meta.x && canvasX <= meta.x + w && canvasY >= meta.y && canvasY <= meta.y + h) {
+        return n.id
+      }
+    }
+    return null
+  }
+
+  const onCanvasMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    // finish drag-to-connect
+    if (dragLine && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect()
+      const x = (e.clientX - rect.left - pan.x) / zoom
+      const y = (e.clientY - rect.top - pan.y) / zoom
+      const targetId = findNodeAt(x, y)
+      if (targetId && targetId !== dragLine.fromId) {
+        addDependencyByIds(dragLine.fromId, targetId, connectLineStyle)
+      }
+      setDragLine(null)
+    }
+    setDraggingId(null)
+    setPanning(false)
   }
 
   /* drag from palette */
@@ -824,9 +871,9 @@ export default function PipelinesPage() {
                 {lineItems.map((item) => (
                   <button
                     key={item.style}
-                    onClick={() => setConnectLineStyle(item.style)}
+                    onClick={() => onLineStyleClick(item.style)}
                     className={`flex w-full flex-col items-center gap-0.5 rounded-lg p-1.5 ${connectLineStyle === item.style ? 'bg-indigo-100 ring-1 ring-indigo-300' : 'hover:bg-slate-100'}`}
-                    title={item.title}
+                    title={`${item.title}${selectedTaskId ? ' — click to start connecting from selected node' : ''}`}
                   >
                     <svg width="48" height="16" viewBox="0 0 48 16">
                       <line x1="4" y1="8" x2="44" y2="8" stroke="#6b7fa0" strokeWidth="2" strokeDasharray={item.dash} />
@@ -838,7 +885,8 @@ export default function PipelinesPage() {
 
                 <div className="my-1.5 h-px w-10 bg-slate-200" />
                 <p className="px-1 text-center text-[7px] leading-3 text-slate-400">Drag shapes to canvas</p>
-                <p className="px-1 text-center text-[7px] leading-3 text-slate-400">Select line style then Shift+click two nodes</p>
+                <p className="px-1 text-center text-[7px] leading-3 text-slate-400">Drag port dot to connect nodes</p>
+                <p className="px-1 text-center text-[7px] leading-3 text-slate-400">Or: select node → click line → click target</p>
                 <p className="px-1 text-center text-[7px] leading-3 text-slate-400">Scroll to zoom</p>
               </aside>
 
@@ -846,8 +894,8 @@ export default function PipelinesPage() {
               <main
                 ref={canvasRef}
                 onMouseMove={onMouseMove}
-                onMouseUp={() => { setDraggingId(null); setPanning(false) }}
-                onMouseLeave={() => { setDraggingId(null); setPanning(false) }}
+                onMouseUp={onCanvasMouseUp}
+                onMouseLeave={() => { setDraggingId(null); setPanning(false); setDragLine(null) }}
                 onMouseDown={(e) => {
                   setContextMenu(null)
                   if ((e.target as HTMLElement).closest('button')) return
@@ -864,7 +912,7 @@ export default function PipelinesPage() {
                 onDragOver={onCanvasDragOver}
                 onDrop={onCanvasDrop}
                 className="relative overflow-hidden bg-slate-100"
-                style={{ cursor: panning ? 'grabbing' : draggingId ? 'move' : 'default' }}
+                style={{ cursor: dragLine ? 'crosshair' : connectFromId ? 'crosshair' : panning ? 'grabbing' : draggingId ? 'move' : 'default' }}
               >
                 {/* grid background */}
                 <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-30">
@@ -965,54 +1013,90 @@ export default function PipelinesPage() {
                     const bgStyle = meta.color ? { backgroundColor: meta.color } : undefined
 
                     return (
-                      <button
-                        key={n.id}
-                        onMouseDown={(e) => {
-                          if (e.button === 2) return
-                          setSelectedTaskId(n.id)
-                          const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
-                          setDraggingId(n.id)
-                          setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
-                        }}
-                        onClick={(e) => onNodeClick(e, n.id)}
-                        onContextMenu={(e) => {
-                          e.preventDefault()
-                          setSelectedTaskId(n.id)
-                          setContextMenu({ x: e.clientX, y: e.clientY, nodeId: n.id })
-                        }}
-                        className={[
-                          'absolute text-left shadow-sm transition-shadow',
-                          isSpecial ? '' : 'border-2',
-                          isSpecial ? '' : shapeClass,
-                          isSpecial ? '' : statusBorder(n.status),
-                          isSpecial ? '' : statusBg(n.status),
-                          animClass,
-                          isActive ? 'ring-2 ring-indigo-400 ring-offset-1' : '',
-                          isMultiSelected ? 'ring-2 ring-indigo-400/60 ring-offset-1' : '',
-                          isConnecting ? 'ring-2 ring-yellow-400' : '',
-                          'hover:shadow-md',
-                        ].filter(Boolean).join(' ')}
-                        style={{ left: meta.x, top: meta.y, width: w, height: h, ...(!isSpecial && bgStyle ? bgStyle : {}) }}
-                      >
-                        {isSpecial && renderShapeOutline(n, meta, w, h)}
+                      <div key={n.id} className="group/node absolute" style={{ left: meta.x, top: meta.y, width: w, height: h }}>
+                        {/* input port (left) */}
                         <div
-                          className={`relative flex h-full flex-col ${shape === 'circle' || shape === 'ellipse' ? 'items-center justify-center px-2 text-center' : isSpecial ? 'items-center justify-center px-4 text-center' : 'justify-between p-2.5'}`}
-                          style={isSpecial ? { clipPath: shape === 'diamond' ? 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' : undefined } : undefined}
+                          className="absolute z-10 flex h-4 w-4 cursor-crosshair items-center justify-center opacity-0 transition-opacity group-hover/node:opacity-100"
+                          style={{ left: -8, top: h / 2 - 8 }}
+                          title="Input — drag a line here from another node"
                         >
-                          <div className={`flex items-center gap-1.5 ${shape === 'rect' ? '' : 'justify-center'}`}>
-                            <div className={`h-2 w-2 flex-shrink-0 rounded-full ${statusDot(n.status)}`} />
-                            <p className={`font-medium leading-tight ${shape === 'rect' ? 'line-clamp-2 text-[12px]' : 'line-clamp-1 text-[10px]'}`}>{n.title}</p>
-                          </div>
-                          {shape === 'rect' && (
-                            <div className="flex items-center justify-between">
-                              <p className="text-[9px] text-slate-500">{n.status} · {n.runner_agent_id?.slice(0, 12) || '-'}</p>
-                              {meta.label && <span className="rounded bg-indigo-100 px-1 text-[8px] text-indigo-600">{meta.label}</span>}
-                            </div>
-                          )}
+                          <div className="h-2.5 w-2.5 rounded-full border-2 border-indigo-400 bg-white shadow-sm" />
                         </div>
-                      </button>
+                        {/* output port (right) — drag from here to connect */}
+                        <div
+                          className="absolute z-10 flex h-4 w-4 cursor-crosshair items-center justify-center opacity-0 transition-opacity group-hover/node:opacity-100"
+                          style={{ right: -8, top: h / 2 - 8 }}
+                          title="Output — drag to another node to connect"
+                          onMouseDown={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            const anchor = getAnchor(meta, 'out')
+                            setDragLine({ fromId: n.id, fromX: anchor.x, fromY: anchor.y, toX: anchor.x, toY: anchor.y })
+                          }}
+                        >
+                          <div className="h-2.5 w-2.5 rounded-full border-2 border-indigo-500 bg-indigo-100 shadow-sm" />
+                        </div>
+                        <button
+                          onMouseDown={(e) => {
+                            if (e.button === 2) return
+                            setSelectedTaskId(n.id)
+                            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
+                            setDraggingId(n.id)
+                            setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
+                          }}
+                          onClick={(e) => onNodeClick(e, n.id)}
+                          onContextMenu={(e) => {
+                            e.preventDefault()
+                            setSelectedTaskId(n.id)
+                            setContextMenu({ x: e.clientX, y: e.clientY, nodeId: n.id })
+                          }}
+                          className={[
+                            'h-full w-full text-left shadow-sm transition-shadow',
+                            isSpecial ? '' : 'border-2',
+                            isSpecial ? '' : shapeClass,
+                            isSpecial ? '' : statusBorder(n.status),
+                            isSpecial ? '' : statusBg(n.status),
+                            animClass,
+                            isActive ? 'ring-2 ring-indigo-400 ring-offset-1' : '',
+                            isMultiSelected ? 'ring-2 ring-indigo-400/60 ring-offset-1' : '',
+                            isConnecting ? 'ring-2 ring-yellow-400' : '',
+                            'hover:shadow-md',
+                          ].filter(Boolean).join(' ')}
+                          style={{ ...(!isSpecial && bgStyle ? bgStyle : {}) }}
+                        >
+                          {isSpecial && renderShapeOutline(n, meta, w, h)}
+                          <div
+                            className={`relative flex h-full flex-col ${shape === 'circle' || shape === 'ellipse' ? 'items-center justify-center px-2 text-center' : isSpecial ? 'items-center justify-center px-4 text-center' : 'justify-between p-2.5'}`}
+                            style={isSpecial ? { clipPath: shape === 'diamond' ? 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' : undefined } : undefined}
+                          >
+                            <div className={`flex items-center gap-1.5 ${shape === 'rect' ? '' : 'justify-center'}`}>
+                              <div className={`h-2 w-2 flex-shrink-0 rounded-full ${statusDot(n.status)}`} />
+                              <p className={`font-medium leading-tight ${shape === 'rect' ? 'line-clamp-2 text-[12px]' : 'line-clamp-1 text-[10px]'}`}>{n.title}</p>
+                            </div>
+                            {shape === 'rect' && (
+                              <div className="flex items-center justify-between">
+                                <p className="text-[9px] text-slate-500">{n.status} · {n.runner_agent_id?.slice(0, 12) || '-'}</p>
+                                {meta.label && <span className="rounded bg-indigo-100 px-1 text-[8px] text-indigo-600">{meta.label}</span>}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      </div>
                     )
                   })}
+
+                  {/* temporary drag line while connecting */}
+                  {dragLine && (
+                    <svg className="pointer-events-none absolute inset-0 h-full w-full" style={{ zIndex: 50 }}>
+                      <line
+                        x1={dragLine.fromX} y1={dragLine.fromY}
+                        x2={dragLine.toX} y2={dragLine.toY}
+                        stroke="#6366f1" strokeWidth="2" strokeDasharray="6 4"
+                        markerEnd="url(#pipe-arrow-active)"
+                      />
+                      <circle cx={dragLine.toX} cy={dragLine.toY} r="6" fill="#6366f1" fillOpacity="0.3" stroke="#6366f1" strokeWidth="1.5" />
+                    </svg>
+                  )}
                 </div>
                 {/* right-click context menu */}
                 {contextMenu && (
