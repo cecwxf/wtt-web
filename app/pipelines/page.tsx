@@ -219,7 +219,9 @@ export default function PipelinesPage() {
 
   /* ─── node selection state ─── */
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [connectFromId, setConnectFromId] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null)
   const [connectLineStyle, setConnectLineStyle] = useState<LineStyle>('solid')
   const [taskDraft, setTaskDraft] = useState<TaskDraft>({})
 
@@ -457,6 +459,74 @@ export default function PipelinesPage() {
     await mutateGraph()
   }
 
+  /* ─── batch delete selected nodes ─── */
+  const deleteSelectedNodes = async () => {
+    const ids = selectedTaskIds.length > 0 ? selectedTaskIds : selectedTaskId ? [selectedTaskId] : []
+    if (ids.length === 0) return
+    if (!confirm(`Delete ${ids.length} node(s)?`)) return
+    for (const id of ids) {
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      })
+    }
+    setPositions((prev) => {
+      const n = { ...prev }
+      ids.forEach((id) => delete n[id])
+      return n
+    })
+    setSelectedTaskId(null)
+    setSelectedTaskIds([])
+    await mutateGraph()
+  }
+
+  /* ─── clear all nodes in pipeline ─── */
+  const clearAllNodes = async () => {
+    if (nodes.length === 0) return
+    if (!confirm(`Clear all ${nodes.length} nodes from this pipeline?`)) return
+    for (const n of nodes) {
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${n.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      })
+    }
+    setPositions({})
+    setSelectedTaskId(null)
+    setSelectedTaskIds([])
+    await mutateGraph()
+  }
+
+  /* ─── select all nodes ─── */
+  const selectAllNodes = () => {
+    setSelectedTaskIds(nodes.map((n) => n.id))
+  }
+
+  /* ─── keyboard shortcuts ─── */
+  useEffect(() => {
+    if (!editingPipelineId) return
+    const handler = (e: KeyboardEvent) => {
+      // Delete / Backspace to delete selected nodes
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) {
+        e.preventDefault()
+        deleteSelectedNodes()
+      }
+      // Escape to deselect / cancel connect
+      if (e.key === 'Escape') {
+        setConnectFromId(null)
+        setContextMenu(null)
+        setSelectedTaskIds([])
+      }
+      // Ctrl+A to select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault()
+        selectAllNodes()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingPipelineId, selectedTaskIds, selectedTaskId, nodes])
+
   /* ─── pipeline execution ─── */
   const runPipeline = async () => {
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipeline/execute`, {
@@ -518,6 +588,7 @@ export default function PipelinesPage() {
 
   /* ─── canvas interactions ─── */
   const onNodeClick = async (e: React.MouseEvent<HTMLButtonElement>, nodeId: string) => {
+    setContextMenu(null)
     if (e.shiftKey) {
       if (!connectFromId) {
         setConnectFromId(nodeId)
@@ -527,7 +598,13 @@ export default function PipelinesPage() {
       }
       return
     }
+    // Ctrl/Cmd click for multi-select
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedTaskIds((prev) => prev.includes(nodeId) ? prev.filter((x) => x !== nodeId) : [...prev, nodeId])
+      return
+    }
     setSelectedTaskId(nodeId)
+    setSelectedTaskIds([])
   }
 
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -675,19 +752,41 @@ export default function PipelinesPage() {
             {/* top toolbar */}
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-2">
               <div className="flex items-center gap-3">
-                <button onClick={() => { setEditingPipelineId(null); setSelectedTaskId(null); setConnectFromId(null) }} className="rounded p-1 text-slate-500 hover:bg-slate-200" title="Back to list">
+                <button onClick={() => { setEditingPipelineId(null); setSelectedTaskId(null); setSelectedTaskIds([]); setConnectFromId(null) }} className="rounded p-1 text-slate-500 hover:bg-slate-200" title="Back to list">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
                 </button>
                 <div>
                   <p className="text-sm font-semibold">{editingPipeline?.name || 'Pipeline'}</p>
                   <p className="text-[10px] text-slate-500">{editingPipelineId.slice(0, 12)} · {nodes.length} nodes · {edges.length} edges</p>
                 </div>
+                {/* pipeline management */}
+                {editingPipeline && (
+                  <div className="flex items-center gap-1 border-l border-slate-200 pl-3">
+                    <button onClick={() => renamePipeline(editingPipeline)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">Rename</button>
+                    <button onClick={() => toggleAutoReview(editingPipeline)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">
+                      AutoReview: {editingPipeline.auto_review ?? true ? 'ON' : 'OFF'}
+                    </button>
+                    <button onClick={clearAllNodes} className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100" title="Clear all nodes">Clear All</button>
+                    {editingPipeline.id !== 'default' && (
+                      <button onClick={() => deletePipeline(editingPipeline)} className="rounded border border-red-200 bg-white px-2 py-1 text-[10px] text-red-500 hover:bg-red-50">Delete Pipeline</button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {connectFromId && (
                   <span className="rounded border border-yellow-400 bg-yellow-50 px-2 py-1 text-[10px] text-yellow-700">
                     Connecting from: {nodes.find((n) => n.id === connectFromId)?.title?.slice(0, 15) || connectFromId.slice(0, 8)} — Shift+click target
                     <button onClick={() => setConnectFromId(null)} className="ml-1 text-yellow-500 hover:text-yellow-700">×</button>
+                  </span>
+                )}
+                {selectedTaskIds.length > 0 && (
+                  <span className="flex items-center gap-1 rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[10px] text-indigo-600">
+                    {selectedTaskIds.length} selected
+                    <button onClick={deleteSelectedNodes} className="ml-1 text-red-400 hover:text-red-600" title="Delete selected nodes">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                    </button>
+                    <button onClick={() => setSelectedTaskIds([])} className="text-slate-400 hover:text-slate-600">×</button>
                   </span>
                 )}
                 <button onClick={autoLayout} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Auto Layout</button>
@@ -750,6 +849,7 @@ export default function PipelinesPage() {
                 onMouseUp={() => { setDraggingId(null); setPanning(false) }}
                 onMouseLeave={() => { setDraggingId(null); setPanning(false) }}
                 onMouseDown={(e) => {
+                  setContextMenu(null)
                   if ((e.target as HTMLElement).closest('button')) return
                   setPanning(true)
                   setPanStart({ x: e.clientX, y: e.clientY })
@@ -852,6 +952,7 @@ export default function PipelinesPage() {
                     const { w, h } = shapeDims(shape)
                     const isConnecting = connectFromId === n.id
                     const isActive = selectedTaskId === n.id
+                    const isMultiSelected = selectedTaskIds.includes(n.id)
 
                     const isSpecial = shape === 'diamond' || shape === 'hexagon' || shape === 'parallelogram'
                     const shapeClass = shape === 'circle' ? 'rounded-full'
@@ -867,12 +968,18 @@ export default function PipelinesPage() {
                       <button
                         key={n.id}
                         onMouseDown={(e) => {
+                          if (e.button === 2) return
                           setSelectedTaskId(n.id)
                           const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
                           setDraggingId(n.id)
                           setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
                         }}
                         onClick={(e) => onNodeClick(e, n.id)}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          setSelectedTaskId(n.id)
+                          setContextMenu({ x: e.clientX, y: e.clientY, nodeId: n.id })
+                        }}
                         className={[
                           'absolute text-left shadow-sm transition-shadow',
                           isSpecial ? '' : 'border-2',
@@ -881,6 +988,7 @@ export default function PipelinesPage() {
                           isSpecial ? '' : statusBg(n.status),
                           animClass,
                           isActive ? 'ring-2 ring-indigo-400 ring-offset-1' : '',
+                          isMultiSelected ? 'ring-2 ring-indigo-400/60 ring-offset-1' : '',
                           isConnecting ? 'ring-2 ring-yellow-400' : '',
                           'hover:shadow-md',
                         ].filter(Boolean).join(' ')}
@@ -906,6 +1014,49 @@ export default function PipelinesPage() {
                     )
                   })}
                 </div>
+                {/* right-click context menu */}
+                {contextMenu && (
+                  <div
+                    className="fixed z-50 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                    onMouseLeave={() => setContextMenu(null)}
+                  >
+                    {(() => {
+                      const ctxNode = nodes.find((n) => n.id === contextMenu.nodeId)
+                      return (
+                        <>
+                          <button onClick={() => { setSelectedTaskId(contextMenu.nodeId); setContextMenu(null) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-100">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                            Edit
+                          </button>
+                          <button onClick={() => { setSelectedTaskIds((prev) => prev.includes(contextMenu.nodeId) ? prev : [...prev, contextMenu.nodeId]); setContextMenu(null) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-100">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" /></svg>
+                            Select
+                          </button>
+                          <button onClick={() => { if (ctxNode) { setSelectedTaskId(ctxNode.id); duplicateTask() }; setContextMenu(null) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-100">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                            Duplicate
+                          </button>
+                          <button onClick={() => { setConnectFromId(contextMenu.nodeId); setContextMenu(null) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-100">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                            Connect from here
+                          </button>
+                          <div className="my-1 h-px bg-slate-100" />
+                          <button onClick={() => { deleteTask(contextMenu.nodeId); setContextMenu(null) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                            Delete Node
+                          </button>
+                          {selectedTaskIds.length > 1 && (
+                            <button onClick={() => { deleteSelectedNodes(); setContextMenu(null) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+                              Delete Selected ({selectedTaskIds.length})
+                            </button>
+                          )}
+                        </>
+                      )
+                    })()}
+                  </div>
+                )}
               </main>
 
               {/* ── detail panel (expanded) ── */}
