@@ -569,7 +569,7 @@ export default function TasksGraphPage() {
                   <p className="mb-1 text-[11px] text-slate-500">Execution Log</p>
                   <div className="max-h-40 space-y-1 overflow-auto">
                     {selectedTimeline.length > 0 ? selectedTimeline.map((m) => (
-                      <p key={m.id || `${m.sender}-${m.content.slice(0, 10)}`} className="text-[11px] text-[#d7e4f0]">
+                      <p key={m.id || `${m.sender}-${m.content.slice(0, 10)}`} className="text-[11px] text-slate-600">
                         <span className="text-slate-500">{m.sender}:</span> {m.content.slice(0, 140)}
                       </p>
                     )) : <p className="text-[11px] text-slate-500">No TASK log yet</p>}
