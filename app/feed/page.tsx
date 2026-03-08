@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Pencil } from 'lucide-react'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
@@ -11,6 +12,7 @@ import { ChatView, ChatMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
+import { MarkdownEditor, EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 
 interface Agent {
@@ -52,6 +54,7 @@ export default function FeedPage() {
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
 
   const loadAgents = useCallback(async () => {
     try {
@@ -282,6 +285,20 @@ export default function FeedPage() {
     }
   }
 
+  const handleEditorPublish = async (topicId: string, content: string) => {
+    await wttApi.publishMessage(topicId, {
+      content,
+      content_type: 'text',
+      semantic_type: 'post',
+    })
+    mutate()
+  }
+
+  const editorTopics = useMemo<EditorTopic[]>(
+    () => topics.map((t) => ({ topic_id: t.topic_id, name: t.name, topic_type: t.topic_type })),
+    [topics],
+  )
+
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -323,16 +340,45 @@ export default function FeedPage() {
             onRecall={handleRecallTopic}
             hasOlder={hasOlder && !loadingOlder}
             loading={!feedRaw && !error}
+            extraHeaderActions={
+              <button
+                type="button"
+                onClick={() => setEditorOpen(true)}
+                title="Open Markdown Editor"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            }
           />
         ) : (
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
               <p className="text-lg text-slate-400">Select a topic to start chatting</p>
               <p className="mt-2 text-sm text-slate-400">Choose a topic from the left sidebar</p>
+              {topics.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setEditorOpen(true)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-600"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Write with Markdown
+                </button>
+              )}
             </div>
           </div>
         )}
       </WttShellV2>
+
+      {editorOpen && (
+        <MarkdownEditor
+          topics={editorTopics}
+          defaultTopicId={selectedTopicId}
+          onPublish={handleEditorPublish}
+          onClose={() => setEditorOpen(false)}
+        />
+      )}
     </>
   )
 }
