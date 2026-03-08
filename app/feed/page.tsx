@@ -285,9 +285,41 @@ export default function FeedPage() {
   }
 
   const handleEditorPublish = async (topicId: string, content: string) => {
+    // 1. Upload markdown content as a .md file
+    const filename = `post-${Date.now()}.md`
+    const blob = new Blob([content], { type: 'text/markdown' })
+
+    const signRes = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, mime_type: 'text/markdown', size: blob.size }),
+    })
+    if (!signRes.ok) throw new Error(await signRes.text())
+    const signed = await signRes.json()
+
+    const uploadRes = await fetch(`${CLIENT_WTT_API_BASE}${signed.upload_url}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/markdown' },
+      body: blob,
+    })
+    if (!uploadRes.ok) throw new Error(await uploadRes.text())
+
+    const commitRes = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ upload_token: signed.upload_token }),
+    })
+    if (!commitRes.ok) throw new Error(await commitRes.text())
+    const asset = await commitRes.json()
+
+    // 2. Build message: short preview + file link
+    const plain = content.replace(/[#*`>_~\[\]()!|]/g, '').trim()
+    const preview = plain.length > 120 ? plain.slice(0, 120) + '…' : plain
+    const messageContent = `${preview}\n\n[file:${filename}](${asset.url})`
+
     await wttApi.publishMessage(topicId, {
-      content,
-      content_type: 'text/markdown',
+      content: messageContent,
+      content_type: 'mixed',
       semantic_type: 'post',
     })
     mutate()

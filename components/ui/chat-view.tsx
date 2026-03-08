@@ -607,12 +607,24 @@ export function ChatView({
                                 const url = block.url
                                 const fname = block.filename || url.split('/').pop() || 'file'
                                 const isPdf = /\.pdf(\?|$)/i.test(url)
+                                const isMd = /\.md(\?|$)/i.test(fname) || /\.md(\?|$)/i.test(url)
                                 if (isPdf) {
                                   return (
                                     <div key={bi} className="space-y-1">
                                       <iframe src={url} title={fname} className="h-80 w-full rounded-lg border border-slate-200" />
                                       <a href={url} target="_blank" rel="noreferrer" className="inline-block text-xs text-indigo-500 underline">Open PDF</a>
                                     </div>
+                                  )
+                                }
+                                if (isMd) {
+                                  return (
+                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-400/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-white' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'}`}>
+                                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-500 text-xs font-bold">.md</span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block truncate font-medium">{fname}</span>
+                                        <span className={`block text-xs ${isMine ? 'text-indigo-200' : 'text-slate-400'}`}>Markdown · Click to download</span>
+                                      </span>
+                                    </a>
                                   )
                                 }
                                 return (
