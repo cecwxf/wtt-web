@@ -49,8 +49,6 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [codeSent, setCodeSent] = useState(false)
   const [cooldown, setCooldown] = useState(0)
   const [error, setError] = useState('')
@@ -58,8 +56,8 @@ export default function LoginPage() {
   const [sendingCode, setSendingCode] = useState(false)
   const router = useRouter()
   const enableTestLogin = process.env.NEXT_PUBLIC_ENABLE_TEST_LOGIN === 'true'
-  const testIdentifier = process.env.NEXT_PUBLIC_TEST_ADMIN_IDENTIFIER || 'test-admin'
-  const testPassword = process.env.NEXT_PUBLIC_TEST_ADMIN_PASSWORD || 'test-admin-pass'
+  const testPhone = process.env.NEXT_PUBLIC_TEST_PHONE || '+8613800138000'
+  const testCode = process.env.NEXT_PUBLIC_TEST_CODE || '888888'
 
   const localPhone = phone.replace(/\D/g, '')
   const e164Phone = useMemo(() => {
@@ -105,32 +103,6 @@ export default function LoginPage() {
     }
   }
 
-  const handleEmailSignIn = async () => {
-    setError('')
-    if (!email.trim() || !password) {
-      setError('Please enter email and password')
-      return
-    }
-    setLoading(true)
-    try {
-      const result = await signIn('credentials', {
-        identifier: email.trim(),
-        password,
-        redirect: false,
-      })
-
-      if (result?.ok) {
-        router.push('/feed')
-      } else {
-        setError('Invalid email or password')
-      }
-    } catch {
-      setError('Authentication failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handlePhoneSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -168,27 +140,6 @@ export default function LoginPage() {
     signIn(provider, { callbackUrl: '/feed' })
   }
 
-  const handleTestAdminLogin = async () => {
-    setError('')
-    setLoading(true)
-    try {
-      const result = await signIn('credentials', {
-        identifier: testIdentifier,
-        password: testPassword,
-        redirect: false,
-      })
-      if (result?.ok) {
-        router.push('/feed')
-      } else {
-        setError('Test admin login failed')
-      }
-    } catch {
-      setError('Test admin login failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-50 px-4 py-10">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_25%,rgba(99,102,241,0.12)_0%,transparent_35%),radial-gradient(circle_at_80%_70%,rgba(16,185,129,0.1)_0%,transparent_35%)]" />
@@ -217,14 +168,6 @@ export default function LoginPage() {
         </div>
 
         <div className="mb-5 space-y-2.5">
-          {enableTestLogin && (
-            <button
-              onClick={handleTestAdminLogin}
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/20"
-            >
-              Quick Login (Test Admin)
-            </button>
-          )}
           <button
             onClick={() => handleOAuthSignIn('google')}
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
@@ -272,31 +215,16 @@ export default function LoginPage() {
           <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-slate-400">or</p>
         </div>
 
-        <div className="mb-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold tracking-[0.1em] text-slate-400">EMAIL LOGIN (TEST)</p>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
-            placeholder="testadmin@example.com"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
-            placeholder="password"
-          />
+        {enableTestLogin && (
           <button
-            type="button"
-            onClick={handleEmailSignIn}
+            onClick={handleTestLogin}
             disabled={loading}
-            className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
+            className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/20 disabled:opacity-60"
           >
-            {loading ? 'Signing in...' : 'Sign In with Email'}
+            <Smartphone className="h-4 w-4" />
+            Quick Test Login ({testPhone})
           </button>
-        </div>
+        )}
 
         <form onSubmit={handlePhoneSignIn} className="space-y-3.5">
           <label className="block">
