@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
@@ -12,9 +13,14 @@ import { ChatView, ChatMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
-import { ContentEditor, type ContentFormat } from '@/components/ui/content-editor'
+import type { ContentFormat } from '@/components/ui/content-editor'
 import type { EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
+
+const ContentEditor = dynamic(
+  () => import('@/components/ui/content-editor').then((m) => m.ContentEditor),
+  { ssr: false },
+)
 
 interface Agent {
   id: string
