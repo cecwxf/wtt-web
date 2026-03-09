@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
@@ -89,6 +90,12 @@ async function requestUpstream(urlString: string, method: string, headers: Heade
 }
 
 async function proxy(request: NextRequest, path: string[]): Promise<Response> {
+  // Auth check: require valid session to prevent open proxy / SSRF
+  const token = await getToken({ req: request })
+  if (!token) {
+    return Response.json({ detail: 'Unauthorized' }, { status: 401 })
+  }
+
   const url = buildUpstreamUrl(path, request)
   const headers = new Headers(request.headers)
   ;[

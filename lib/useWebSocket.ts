@@ -33,6 +33,7 @@ interface PendingRequest {
 interface UseWebSocketOptions {
   url: string
   enabled?: boolean
+  token?: string
   onMessage?: (msg: WsMessage) => void
   heartbeatInterval?: number
   reconnectDelay?: number
@@ -50,6 +51,7 @@ function nextRequestId(): string {
 export function useWebSocket({
   url,
   enabled = true,
+  token,
   onMessage,
   heartbeatInterval = 30000,
   reconnectDelay = 2000,
@@ -63,6 +65,10 @@ export function useWebSocket({
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onMessageRef = useRef(onMessage)
   const pendingRef = useRef<Map<string, PendingRequest>>(new Map())
+  const mountedRef = useRef(true)
+  const tokenRef = useRef(token)
+  onMessageRef.current = onMessage
+  tokenRef.current = token
   onMessageRef.current = onMessage
 
   const cleanup = useCallback(() => {
@@ -85,7 +91,7 @@ export function useWebSocket({
   }, [])
 
   const connect = useCallback(() => {
-    if (!enabled || !url) return
+    if (!enabled || !url || !mountedRef.current) return
     cleanup()
     setState('connecting')
 
@@ -93,6 +99,11 @@ export function useWebSocket({
     wsRef.current = ws
 
     ws.onopen = () => {
+      if (!mountedRef.current) { ws.close(); return }
+      // Send auth token as first message (avoids token in URL/logs)
+      if (tokenRef.current) {
+        ws.send(JSON.stringify({ action: 'auth', token: tokenRef.current }))
+      }
       setState('connected')
       retryRef.current = 0
       heartbeatRef.current = setInterval(() => {
@@ -134,6 +145,7 @@ export function useWebSocket({
         p.reject(new Error('WebSocket disconnected'))
       })
       pendingRef.current.clear()
+      if (!mountedRef.current) return
       const delay = Math.min(reconnectDelay * Math.pow(1.5, retryRef.current), maxReconnectDelay)
       retryRef.current++
       reconnectRef.current = setTimeout(connect, delay)
@@ -143,8 +155,12 @@ export function useWebSocket({
   }, [url, enabled, cleanup, heartbeatInterval, reconnectDelay, maxReconnectDelay])
 
   useEffect(() => {
+    mountedRef.current = true
     if (enabled && url) connect()
-    return cleanup
+    return () => {
+      mountedRef.current = false
+      cleanup()
+    }
   }, [enabled, url, connect, cleanup])
 
   /**
