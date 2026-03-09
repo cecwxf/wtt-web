@@ -69,7 +69,6 @@ export function useWebSocket({
   const tokenRef = useRef(token)
   onMessageRef.current = onMessage
   tokenRef.current = token
-  onMessageRef.current = onMessage
 
   const cleanup = useCallback(() => {
     if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null }

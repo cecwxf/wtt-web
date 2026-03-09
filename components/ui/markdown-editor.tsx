@@ -40,7 +40,24 @@ import {
 } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import DOMPurify from 'dompurify'
+// DOMPurify loaded lazily — the module is browser-only
+let _purify: { sanitize: (dirty: string, cfg?: Record<string, unknown>) => string } | null = null
+function getPurify() {
+  if (!_purify && typeof window !== 'undefined') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require('dompurify')
+      // dompurify CJS exports the factory; ESM exports an instance
+      const inst = mod.default ?? mod
+      if (typeof inst === 'function') {
+        _purify = inst(window)
+      } else if (inst && typeof (inst as Record<string, unknown>).sanitize === 'function') {
+        _purify = inst
+      }
+    } catch { /* unavailable */ }
+  }
+  return _purify
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -208,7 +225,8 @@ function CalloutBlockquote({ children, ...props }: React.ComponentPropsWithoutRe
 
 function processHighlights(content: string): string {
   const raw = content.replace(/==(.*?)==/g, '<mark>$1</mark>')
-  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['mark'] })
+  const purify = getPurify()
+  return purify ? purify.sanitize(raw, { ALLOWED_TAGS: ['mark'] }) : raw
 }
 
 /* ------------------------------------------------------------------ */
