@@ -40,6 +40,7 @@ import {
 } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import DOMPurify from 'dompurify'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -206,7 +207,8 @@ function CalloutBlockquote({ children, ...props }: React.ComponentPropsWithoutRe
 /* ------------------------------------------------------------------ */
 
 function processHighlights(content: string): string {
-  return content.replace(/==(.*?)==/g, '<mark>$1</mark>')
+  const raw = content.replace(/==(.*?)==/g, '<mark>$1</mark>')
+  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['mark'] })
 }
 
 /* ------------------------------------------------------------------ */
