@@ -11,7 +11,7 @@ import { ChatView, ChatMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
-import { ContentEditor } from '@/components/ui/content-editor'
+import { ContentEditor, type ContentFormat } from '@/components/ui/content-editor'
 import type { EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 
@@ -289,22 +289,24 @@ export default function FeedPage() {
     }
   }
 
-  const handleEditorPublish = async (topicId: string, content: string) => {
-    // 1. Upload markdown content as a .md file
-    const filename = `post-${Date.now()}.md`
-    const blob = new Blob([content], { type: 'text/markdown' })
+  const handleEditorPublish = async (topicId: string, content: string, format: ContentFormat = 'markdown') => {
+    const isHtml = format === 'html'
+    const ext = isHtml ? '.html' : '.md'
+    const mime = isHtml ? 'text/html' : 'text/markdown'
+    const filename = `post-${Date.now()}${ext}`
+    const blob = new Blob([content], { type: mime })
 
     const signRes = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, mime_type: 'text/markdown', size: blob.size }),
+      body: JSON.stringify({ filename, mime_type: mime, size: blob.size }),
     })
     if (!signRes.ok) throw new Error(await signRes.text())
     const signed = await signRes.json()
 
     const uploadRes = await fetch(`${CLIENT_WTT_API_BASE}${signed.upload_url}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'text/markdown' },
+      headers: { 'Content-Type': mime },
       body: blob,
     })
     if (!uploadRes.ok) throw new Error(await uploadRes.text())
@@ -317,9 +319,11 @@ export default function FeedPage() {
     if (!commitRes.ok) throw new Error(await commitRes.text())
     const asset = await commitRes.json()
 
-    // 2. Build message: short preview + file link
-    const plain = content.replace(/[#*`>_~\[\]()!|]/g, '').trim()
-    const preview = plain.length > 120 ? plain.slice(0, 120) + '…' : plain
+    // Build message: short plain-text preview + file link
+    const stripped = isHtml
+      ? content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      : content.replace(/[#*`>_~\[\]()!|]/g, '').trim()
+    const preview = stripped.length > 120 ? stripped.slice(0, 120) + '…' : stripped
     const messageContent = `${preview}\n\n[file:${filename}](${asset.url})`
 
     await wttApi.publishMessage(topicId, {

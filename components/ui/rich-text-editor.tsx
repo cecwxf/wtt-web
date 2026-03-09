@@ -48,135 +48,6 @@ import TextAlign from '@tiptap/extension-text-align'
 import type { EditorTopic } from './markdown-editor'
 
 /* ------------------------------------------------------------------ */
-/*  HTML → Markdown conversion                                         */
-/* ------------------------------------------------------------------ */
-
-function htmlToMarkdown(html: string): string {
-  let md = html
-
-  // Pre-pass: protect code blocks from inner conversions
-  const codeBlocks: string[] = []
-  md = md.replace(/<pre><code(?:\s+class="language-(\w+)")?>([\s\S]*?)<\/code><\/pre>/gi, (_m, lang, code) => {
-    const decoded = decodeHtmlEntities(code.trim())
-    const placeholder = `%%CODEBLOCK_${codeBlocks.length}%%`
-    codeBlocks.push(`\`\`\`${lang || ''}\n${decoded}\n\`\`\``)
-    return placeholder
-  })
-
-  // Headings
-  md = md.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, (_m, c) => `# ${stripTags(c).trim()}\n\n`)
-  md = md.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, (_m, c) => `## ${stripTags(c).trim()}\n\n`)
-  md = md.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, (_m, c) => `### ${stripTags(c).trim()}\n\n`)
-  md = md.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, (_m, c) => `#### ${stripTags(c).trim()}\n\n`)
-  md = md.replace(/<h5[^>]*>([\s\S]*?)<\/h5>/gi, (_m, c) => `##### ${stripTags(c).trim()}\n\n`)
-  md = md.replace(/<h6[^>]*>([\s\S]*?)<\/h6>/gi, (_m, c) => `###### ${stripTags(c).trim()}\n\n`)
-
-  // Horizontal rule
-  md = md.replace(/<hr\s*\/?>/gi, '\n---\n\n')
-
-  // Blockquote
-  md = md.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (_m, c) => {
-    const inner = stripTags(c).trim()
-    return inner.split('\n').map((l: string) => `> ${l}`).join('\n') + '\n\n'
-  })
-
-  // Task lists (must come before generic lists)
-  md = md.replace(/<ul[^>]*data-type="taskList"[^>]*>([\s\S]*?)<\/ul>/gi, (_m, items) => {
-    return items.replace(/<li[^>]*data-checked="true"[^>]*>([\s\S]*?)<\/li>/gi, (_lm: string, c: string) => `- [x] ${stripTags(c).trim()}\n`)
-      .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_lm: string, c: string) => `- [ ] ${stripTags(c).trim()}\n`) + '\n'
-  })
-
-  // Tables
-  md = md.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (_m, tableContent) => {
-    const rows: string[][] = []
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
-    let rowMatch
-    while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
-      const cells: string[] = []
-      const cellRegex = /<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi
-      let cellMatch
-      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
-        cells.push(stripTags(cellMatch[1]).trim())
-      }
-      rows.push(cells)
-    }
-    if (rows.length === 0) return ''
-    const colCount = Math.max(...rows.map(r => r.length))
-    const header = rows[0] || []
-    const headerLine = '| ' + Array.from({ length: colCount }, (_, i) => header[i] || '').join(' | ') + ' |'
-    const sepLine = '| ' + Array.from({ length: colCount }, () => '---').join(' | ') + ' |'
-    const bodyLines = rows.slice(1).map(r =>
-      '| ' + Array.from({ length: colCount }, (_, i) => r[i] || '').join(' | ') + ' |'
-    )
-    return '\n' + [headerLine, sepLine, ...bodyLines].join('\n') + '\n\n'
-  })
-
-  // Unordered lists
-  md = md.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, (_m, items) => {
-    return items.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_lm: string, c: string) => `- ${stripTags(c).trim()}\n`) + '\n'
-  })
-
-  // Ordered lists
-  md = md.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (_m, items) => {
-    let idx = 0
-    return items.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_lm: string, c: string) => `${++idx}. ${stripTags(c).trim()}\n`) + '\n'
-  })
-
-  // Images (before links so img inside a doesn't get mangled)
-  md = md.replace(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/gi, '![$2]($1)')
-  md = md.replace(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*\/?>/gi, '![$1]($2)')
-  md = md.replace(/<img[^>]*src="([^"]*)"[^>]*\/?>/gi, '![]($1)')
-
-  // Links
-  md = md.replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, text) => `[${stripTags(text).trim()}](${href})`)
-
-  // Inline styles
-  md = md.replace(/<mark[^>]*>([\s\S]*?)<\/mark>/gi, '==$1==')
-  md = md.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**')
-  md = md.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**')
-  md = md.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*')
-  md = md.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*')
-  md = md.replace(/<u[^>]*>([\s\S]*?)<\/u>/gi, '**$1**') // md has no underline, use bold
-  md = md.replace(/<del[^>]*>([\s\S]*?)<\/del>/gi, '~~$1~~')
-  md = md.replace(/<s[^>]*>([\s\S]*?)<\/s>/gi, '~~$1~~')
-  md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
-
-  // Paragraphs and line breaks
-  md = md.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '$1\n\n')
-  md = md.replace(/<br\s*\/?>/gi, '\n')
-
-  // Strip remaining tags
-  md = md.replace(/<[^>]+>/g, '')
-
-  // Restore code blocks
-  codeBlocks.forEach((block, i) => {
-    md = md.replace(`%%CODEBLOCK_${i}%%`, block)
-  })
-
-  // Decode entities
-  md = decodeHtmlEntities(md)
-
-  // Clean up whitespace
-  md = md.replace(/\n{3,}/g, '\n\n').trim()
-
-  return md
-}
-
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, '')
-}
-
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-}
-
-/* ------------------------------------------------------------------ */
 /*  Markdown → HTML (for import)                                       */
 /* ------------------------------------------------------------------ */
 
@@ -469,13 +340,13 @@ export function RichTextEditor({ topics, defaultTopicId, onPublish, onClose }: R
   const handleSaveLocal = useCallback(() => {
     if (!editor) return
     const html = editor.getHTML()
-    const md = htmlToMarkdown(html)
-    if (!md.trim()) return
-    const defaultName = `draft-${new Date().toISOString().slice(0, 10)}.md`
+    if (!html.trim() || html === '<p></p>') return
+    const defaultName = `draft-${new Date().toISOString().slice(0, 10)}.html`
     const filename = prompt('Save as:', defaultName)
     if (!filename) return
-    const finalName = filename.endsWith('.md') || filename.endsWith('.markdown') ? filename : `${filename}.md`
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+    const finalName = filename.endsWith('.html') || filename.endsWith('.htm') ? filename : `${filename}.html`
+    const fullHtml = `<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>${finalName}</title></head><body>\n${html}\n</body></html>`
+    const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -488,11 +359,10 @@ export function RichTextEditor({ topics, defaultTopicId, onPublish, onClose }: R
   const handlePublish = useCallback(async () => {
     if (!editor || !selectedTopicId) return
     const html = editor.getHTML()
-    const md = htmlToMarkdown(html)
-    if (!md.trim()) return
+    if (!html.trim() || html === '<p></p>') return
     setPublishing(true)
     try {
-      await onPublish(selectedTopicId, md.trim())
+      await onPublish(selectedTopicId, html)
       editor.commands.clearContent()
       onClose()
     } catch (err) {

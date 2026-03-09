@@ -683,6 +683,18 @@ export function ChatView({
                                     </a>
                                   )
                                 }
+                                const isHtml = /\.html?(\?|$)/i.test(fname) || /\.html?(\?|$)/i.test(url)
+                                if (isHtml) {
+                                  return (
+                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100/80 text-slate-700' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'}`}>
+                                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-orange-500 text-xs font-bold">.html</span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block truncate font-medium">{fname}</span>
+                                        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>Rich Text · Click to download</span>
+                                      </span>
+                                    </a>
+                                  )
+                                }
                                 return (
                                   <a key={bi} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-indigo-500 hover:bg-slate-100">
                                     <Paperclip className="h-4 w-4 shrink-0" />

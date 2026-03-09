@@ -6,29 +6,29 @@ import { MarkdownEditor, type EditorTopic } from './markdown-editor'
 import { RichTextEditor } from './rich-text-editor'
 
 export type EditorMode = 'markdown' | 'richtext'
+export type ContentFormat = 'markdown' | 'html'
 
 interface ContentEditorProps {
   topics: EditorTopic[]
   defaultTopicId?: string | null
-  onPublish: (topicId: string, content: string) => Promise<void>
+  onPublish: (topicId: string, content: string, format: ContentFormat) => Promise<void>
   onClose: () => void
 }
 
 const MODES: { key: EditorMode; label: string; icon: React.ReactNode; desc: string }[] = [
   { key: 'markdown', label: 'Markdown', icon: <FileText className="h-4 w-4" />, desc: 'Obsidian-style markdown with live preview' },
-  { key: 'richtext', label: 'Rich Text', icon: <Type className="h-4 w-4" />, desc: 'WYSIWYG editor with formatting toolbar' },
+  { key: 'richtext', label: 'Rich Text', icon: <Type className="h-4 w-4" />, desc: 'Notion-style WYSIWYG with images & formatting' },
 ]
 
 export function ContentEditor({ topics, defaultTopicId, onPublish, onClose }: ContentEditorProps) {
   const [mode, setMode] = useState<EditorMode | null>(null)
 
-  // Once a mode is selected, render the corresponding editor
   if (mode === 'markdown') {
     return (
       <MarkdownEditor
         topics={topics}
         defaultTopicId={defaultTopicId}
-        onPublish={onPublish}
+        onPublish={(topicId, content) => onPublish(topicId, content, 'markdown')}
         onClose={onClose}
       />
     )
@@ -39,13 +39,12 @@ export function ContentEditor({ topics, defaultTopicId, onPublish, onClose }: Co
       <RichTextEditor
         topics={topics}
         defaultTopicId={defaultTopicId}
-        onPublish={onPublish}
+        onPublish={(topicId, content) => onPublish(topicId, content, 'html')}
         onClose={onClose}
       />
     )
   }
 
-  // Mode selector screen
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-2xl">
