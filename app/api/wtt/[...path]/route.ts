@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
@@ -90,9 +89,11 @@ async function requestUpstream(urlString: string, method: string, headers: Heade
 }
 
 async function proxy(request: NextRequest, path: string[]): Promise<Response> {
-  // Auth check: require valid session to prevent open proxy / SSRF
-  const token = await getToken({ req: request })
-  if (!token) {
+  // Auth check: require Authorization header or NextAuth session cookie
+  const hasAuthHeader = !!request.headers.get('authorization')
+  const hasSessionCookie = request.cookies.has('next-auth.session-token') ||
+    request.cookies.has('__Secure-next-auth.session-token')
+  if (!hasAuthHeader && !hasSessionCookie) {
     return Response.json({ detail: 'Unauthorized' }, { status: 401 })
   }
 
