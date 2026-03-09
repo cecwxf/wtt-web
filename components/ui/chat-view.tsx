@@ -105,6 +105,11 @@ function proxyUrl(url: string): string {
   if (url.startsWith(DEFAULT_WTT_API_ORIGIN)) {
     return url.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
   }
+  // Also handle localhost / 127.0.0.1 backend origins (dev or stored URLs)
+  const localBackend = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
+  if (localBackend) {
+    return url.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
+  }
   return url
 }
 
