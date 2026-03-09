@@ -91,10 +91,23 @@ export function useWebSocket({
 
   const connect = useCallback(() => {
     if (!enabled || !url || !mountedRef.current) return
+
+    // Block ws:// from HTTPS pages (browsers reject mixed content)
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('ws://')) {
+      return
+    }
+
     cleanup()
     setState('connecting')
 
-    const ws = new WebSocket(url)
+    let ws: WebSocket
+    try {
+      ws = new WebSocket(url)
+    } catch {
+      // Construction can throw for invalid URLs or mixed-content
+      setState('disconnected')
+      return
+    }
     wsRef.current = ws
 
     ws.onopen = () => {
