@@ -4,8 +4,9 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
+import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { ChatView, ChatMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
@@ -120,9 +121,36 @@ export default function FeedPage() {
       return response.json()
     },
     {
-      refreshInterval: 5000,
+      refreshInterval: 30000,
     }
   )
+
+  // WebSocket for real-time messages
+  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  const handleWsMessage = useCallback(
+    (msg: WsMessage) => {
+      if (msg.type !== 'new_message' || !msg.message) return
+      if (msg.message.topic_id !== selectedTopicId) return
+      const incoming: ChatMessage = {
+        message_id: msg.message.id,
+        sender_id: msg.message.sender_id,
+        sender_type: (msg.message.sender_type as 'human' | 'agent') || 'agent',
+        content: msg.message.content,
+        timestamp: msg.message.created_at,
+        semantic_type: msg.message.semantic_type,
+      }
+      setAllMessages((prev) => {
+        if (prev.some((m) => m.message_id === incoming.message_id)) return prev
+        return [...prev, incoming]
+      })
+    },
+    [selectedTopicId],
+  )
+  const { state: wsState } = useWebSocket({
+    url: wsUrl,
+    enabled: !!selectedAgentId,
+    onMessage: handleWsMessage,
+  })
 
   useEffect(() => {
     const normalized = normalizeFeed(feedRaw)
@@ -382,6 +410,7 @@ export default function FeedPage() {
             hasOlder={hasOlder && !loadingOlder}
             loading={!feedRaw && !error}
             isTaskTopic={!!selectedTopic.task_id}
+            wsConnected={wsState === 'connected'}
           />
         ) : (
           <div className="flex h-full items-center justify-center">
