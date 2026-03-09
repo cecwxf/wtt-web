@@ -125,8 +125,10 @@ export default function FeedPage() {
     }
   )
 
-  // WebSocket for real-time messages
-  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  // WebSocket for real-time messages (with auth token)
+  const wsUrl = selectedAgentId
+    ? `${WS_BASE_URL}/ws/${selectedAgentId}${session?.accessToken ? `?token=${encodeURIComponent(session.accessToken)}` : ''}`
+    : ''
   const handleWsMessage = useCallback(
     (msg: WsMessage) => {
       if (msg.type !== 'new_message' || !msg.message) return
