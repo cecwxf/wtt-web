@@ -6,8 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { wttApi, Topic } from '@/lib/api/wtt-client'
+import { useWebSocket } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
@@ -36,6 +37,9 @@ export default function DiscoverPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
+
+  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  const { sendAction } = useWebSocket({ url: wsUrl, enabled: !!selectedAgentId })
 
   const loadAgents = useCallback(async () => {
     try {
@@ -231,7 +235,10 @@ export default function DiscoverPage() {
 
   const handleSubscribe = async (topicId: string) => {
     try {
-      await wttApi.joinTopic(topicId, selectedAgentId)
+      const wsResult = await sendAction('join', { topic_id: topicId })
+      if (wsResult === null) {
+        await wttApi.joinTopic(topicId, selectedAgentId)
+      }
       await mutateTopics()
       alert('Subscribed successfully')
     } catch (err) {
@@ -264,7 +271,10 @@ export default function DiscoverPage() {
   const handleLeaveTopic = async (topicId: string) => {
     if (!confirm('Leave this topic?')) return
     try {
-      await wttApi.leaveTopic(topicId, selectedAgentId)
+      const wsResult = await sendAction('leave', { topic_id: topicId })
+      if (wsResult === null) {
+        await wttApi.leaveTopic(topicId, selectedAgentId)
+      }
       if (selectedTopicId === topicId) setSelectedTopicId(null)
       await mutateTopics()
     } catch (err) {
