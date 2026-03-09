@@ -11,7 +11,8 @@ import { ChatView, ChatMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
-import { MarkdownEditor, EditorTopic } from '@/components/ui/markdown-editor'
+import { ContentEditor } from '@/components/ui/content-editor'
+import type { EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 
 interface Agent {
@@ -389,7 +390,7 @@ export default function FeedPage() {
       </WttShellV2>
 
       {editorOpen && (
-        <MarkdownEditor
+        <ContentEditor
           topics={editorTopics}
           defaultTopicId={selectedTopicId}
           onPublish={handleEditorPublish}
