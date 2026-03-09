@@ -38,7 +38,9 @@ export default function DiscoverPage() {
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
 
-  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  const wsUrl = selectedAgentId
+    ? `${WS_BASE_URL}/ws/${selectedAgentId}${session?.accessToken ? `?token=${encodeURIComponent(session.accessToken)}` : ''}`
+    : ''
   const { sendAction } = useWebSocket({ url: wsUrl, enabled: !!selectedAgentId })
 
   const loadAgents = useCallback(async () => {
