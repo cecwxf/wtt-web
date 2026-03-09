@@ -27,6 +27,7 @@ interface ChatViewProps {
   loading?: boolean
   extraHeaderActions?: React.ReactNode
   isTaskTopic?: boolean
+  wsConnected?: boolean
 }
 
 function formatTime(timestamp: string): string {
@@ -308,6 +309,7 @@ export function ChatView({
   loading,
   extraHeaderActions,
   isTaskTopic = false,
+  wsConnected = false,
 }: ChatViewProps) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -504,7 +506,15 @@ export function ChatView({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="truncate text-lg font-semibold">{topicName}</h2>
-            <p className="mt-1 text-xs text-slate-400">{messages.length} messages loaded</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {messages.length} messages loaded
+              {wsConnected && (
+                <span className="ml-2 inline-flex items-center gap-1 text-emerald-500">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  live
+                </span>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-1">
             {extraHeaderActions}
