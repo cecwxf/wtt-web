@@ -1,6 +1,6 @@
 'use client'
 
-import { Image as ImageIcon, Mic, Paperclip, Send } from 'lucide-react'
+import { Download, Image as ImageIcon, Mic, Paperclip, Send } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -647,6 +647,44 @@ export function ChatView({
                         }
 
                         const blocks = parseRichBlocks(message.content || '')
+
+                        // Detect document message pattern: plain text preview + .md/.html file
+                        const docFileIdx = blocks.findIndex(
+                          (b) => b.kind === 'file' && b.url && (/\.md(\?|$)/i.test(b.url) || /\.html?(\?|$)/i.test(b.url) || /\.md(\?|$)/i.test(b.filename || '') || /\.html?(\?|$)/i.test(b.filename || ''))
+                        )
+                        const hasPreviewText = docFileIdx > 0 && blocks.slice(0, docFileIdx).some((b) => b.kind === 'plain' && b.text?.trim())
+                        if (hasPreviewText && docFileIdx >= 0) {
+                          const fileBlock = blocks[docFileIdx] as { kind: 'file'; url: string; filename?: string }
+                          const fname = fileBlock.filename || fileBlock.url.split('/').pop() || 'file'
+                          const isMdFile = /\.md(\?|$)/i.test(fname) || /\.md(\?|$)/i.test(fileBlock.url)
+                          const previewText = blocks
+                            .slice(0, docFileIdx)
+                            .filter((b): b is { kind: 'plain'; text: string } => b.kind === 'plain' && !!b.text?.trim())
+                            .map((b) => b.text.trim())
+                            .join('\n')
+
+                          return (
+                            <div className="rounded-lg border border-slate-200 overflow-hidden">
+                              <div className="bg-white px-4 py-3">
+                                <p className="text-[13px] leading-relaxed text-slate-600 line-clamp-4">{previewText}</p>
+                              </div>
+                              <a
+                                href={fileBlock.url}
+                                download={fname}
+                                className="flex items-center gap-3 border-t border-slate-100 bg-slate-50/80 px-4 py-2.5 text-sm transition-colors hover:bg-slate-100"
+                              >
+                                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xs font-bold ${isMdFile ? 'bg-indigo-500/15 text-indigo-500' : 'bg-orange-500/15 text-orange-500'}`}>
+                                  {isMdFile ? '.md' : '.html'}
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-sm font-medium text-slate-700">{fname}</span>
+                                </span>
+                                <Download className="h-4 w-4 text-slate-400" />
+                              </a>
+                            </div>
+                          )
+                        }
+
                         return (
                           <div className="space-y-3">
                             {blocks.map((block, bi) => {
