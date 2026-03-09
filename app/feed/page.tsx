@@ -146,7 +146,7 @@ export default function FeedPage() {
     },
     [selectedTopicId],
   )
-  const { state: wsState } = useWebSocket({
+  const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
     enabled: !!selectedAgentId,
     onMessage: handleWsMessage,
@@ -243,12 +243,22 @@ export default function FeedPage() {
     if (!selectedTopicId || !selectedAgentId) return
 
     const isTask = !!selectedTopic?.task_id
-
-    await wttApi.publishMessage(selectedTopicId, {
+    const payload = {
+      topic_id: selectedTopicId,
       content,
       content_type: 'text',
       semantic_type: isTask ? 'task_request' : 'post',
-    })
+    }
+
+    // Try WebSocket first, fall back to HTTP
+    const wsResult = await sendAction('publish', payload)
+    if (wsResult === null) {
+      await wttApi.publishMessage(selectedTopicId, {
+        content,
+        content_type: 'text',
+        semantic_type: isTask ? 'task_request' : 'post',
+      })
+    }
 
     mutate()
   }
@@ -298,7 +308,10 @@ export default function FeedPage() {
   const handleLeaveTopic = async (topicId: string) => {
     if (!confirm('Leave this topic?')) return
     try {
-      await wttApi.leaveTopic(topicId, selectedAgentId)
+      const wsResult = await sendAction('leave', { topic_id: topicId })
+      if (wsResult === null) {
+        await wttApi.leaveTopic(topicId, selectedAgentId)
+      }
       if (selectedTopicId === topicId) setSelectedTopicId(null)
       await mutateTopics()
     } catch (err) {
@@ -354,11 +367,19 @@ export default function FeedPage() {
     const preview = stripped.length > 120 ? stripped.slice(0, 120) + '…' : stripped
     const messageContent = `${preview}\n\n[file:${filename}](${asset.url})`
 
-    await wttApi.publishMessage(topicId, {
+    const wsResult = await sendAction('publish', {
+      topic_id: topicId,
       content: messageContent,
       content_type: 'mixed',
       semantic_type: 'post',
     })
+    if (wsResult === null) {
+      await wttApi.publishMessage(topicId, {
+        content: messageContent,
+        content_type: 'mixed',
+        semantic_type: 'post',
+      })
+    }
     mutate()
   }
 
