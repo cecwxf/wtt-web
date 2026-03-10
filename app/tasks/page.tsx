@@ -317,7 +317,18 @@ export default function TasksPage() {
   const createTask = async () => {
     const title = prompt('Task title')?.trim()
     if (!title) return
-    await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+    const optimistic: TaskItem = {
+      id: `temp-${Date.now()}`,
+      title,
+      task_type: 'feature',
+      priority: 'P1',
+      status: 'todo',
+      exec_mode: 'reasoning',
+      owner_agent_id: selectedAgentId || undefined,
+      runner_agent_id: selectedAgentId || undefined,
+    }
+    mutateTasks((prev: TaskItem[] | undefined) => [...(prev || []), optimistic], { revalidate: false })
+    fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -334,8 +345,7 @@ export default function TasksPage() {
         runner_agent_id: selectedAgentId || undefined,
         created_by: actorSource(session, selectedAgentId),
       }),
-    })
-    mutateTasks()
+    }).then(() => mutateTasks())
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -467,8 +477,15 @@ export default function TasksPage() {
 
   const runCurrent = async () => {
     if (!selectedTask) return
-
     setRunningTaskId(selectedTask.id)
+
+    // Optimistic: show "doing" immediately
+    mutateTasks(
+      (prev: TaskItem[] | undefined) =>
+        (prev || []).map((t) => (t.id === selectedTask.id ? { ...t, status: 'doing' as const } : t)),
+      { revalidate: false },
+    )
+
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
         method: 'POST',
@@ -485,12 +502,12 @@ export default function TasksPage() {
       if (!resp.ok) {
         const txt = await resp.text()
         alert(`Run Task failed: ${txt || resp.status}`)
+        mutateTasks()
         return
       }
-      alert('Run Task dispatched')
-      mutateTasks()
     } catch (e) {
       alert(`Run Task failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+      mutateTasks()
     } finally {
       setRunningTaskId(null)
     }
