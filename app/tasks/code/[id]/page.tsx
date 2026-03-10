@@ -143,10 +143,9 @@ export default function CodeTaskPage() {
   const [dirName, setDirName] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const [openFiles, setOpenFiles] = useState<FileNode[]>([])
-  const [taskRunning, setTaskRunning] = useState(false)
 
   // Load task
-  const { data: task, mutate: mutateTask } = useSWR(
+  const { data: task } = useSWR(
     session?.accessToken ? [`task-${taskId}`, session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, {
@@ -156,11 +155,6 @@ export default function CodeTaskPage() {
       return r.json()
     },
   )
-
-  // Sync taskRunning state from loaded task
-  useEffect(() => {
-    if (task?.status && task.status !== 'todo') setTaskRunning(true)
-  }, [task?.status])
 
   // ── WebSocket for real-time messages ───────────────
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
@@ -421,31 +415,57 @@ export default function CodeTaskPage() {
     }
   }
 
-  // ── Auto-run task (set to "doing") on first send ─────
-  const ensureTaskRunning = async () => {
-    if (taskRunning || !task?.id) return
-    try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
-        },
-        body: JSON.stringify({
-          runner_agent_id: selectedAgentId,
-          exec_mode: 'reasoning',
-        }),
-      })
-      if (r.ok || r.status === 400) {
-        // 400 = invalid transition (already running) — that's fine
-        setTaskRunning(true)
-        mutateTask()
-      } else {
-        console.error('[CodeTask] run failed:', r.status, await r.text().catch(() => ''))
+  const buildCodebaseContextMessage = async (text: string): Promise<string> => {
+    if (fileTree.length === 0) return text
+
+    const allFiles: FileNode[] = []
+    const collect = (nodes: FileNode[]) => {
+      for (const n of nodes) {
+        if (n.kind === 'file') allFiles.push(n)
+        if (n.children) collect(n.children)
       }
-    } catch (e) {
-      console.error('[CodeTask] run error:', e)
     }
+    collect(fileTree)
+
+    const MAX_TOTAL = 45000
+    let used = 0
+    let included = 0
+    let skipped = 0
+    const fileBlocks: string[] = []
+
+    for (const f of allFiles) {
+      if (!f.handle) continue
+      try {
+        let content = ''
+        if (selectedFile && f.path === selectedFile.path) {
+          content = modifiedContent
+        } else {
+          content = await readFileContent(f.handle as FileSystemFileHandle)
+        }
+        const lang = langFromPath(f.path)
+        const block = `\n[FILE] ${f.path}\n\
+\`\`\`${lang}\n${content}\n\`\`\`\n`
+        if (used + block.length > MAX_TOTAL) {
+          skipped++
+          continue
+        }
+        fileBlocks.push(block)
+        used += block.length
+        included++
+      } catch {
+        skipped++
+      }
+    }
+
+    const treeText = buildTreeText(fileTree)
+    const header = [
+      `[CODEBASE CONTEXT] ${dirName || 'workspace'}`,
+      `files_in_workspace=${allFiles.length}, files_included=${included}, files_skipped=${skipped}`,
+      `\n[PROJECT TREE]\n\
+\`\`\`\n${dirName || 'workspace'}/\n${treeText}\n\`\`\``,
+    ].join('\n')
+
+    return `${text}\n\n${header}${fileBlocks.join('')}`
   }
 
   // ── Send chat message ──────────────────────────────
@@ -469,14 +489,8 @@ export default function CodeTaskPage() {
     setChatMessages(prev => [...prev, optimisticMsg])
 
     try {
-      // Auto-run the task on first message (no-op if already running)
-      await ensureTaskRunning()
-
-      let fullContent = text
-      if (selectedFile && modifiedContent) {
-        fullContent = `[Context: ${selectedFile.path}]\n\`\`\`${langFromPath(selectedFile.path)}\n${modifiedContent.slice(0, 8000)}\n\`\`\`\n\n${text}`
-      }
-      await publishToTopic(fullContent, 'task_request', 'HUMAN')
+      const fullContent = await buildCodebaseContextMessage(text)
+      await publishToTopic(fullContent, 'post', 'HUMAN')
       setAwaitingAgent(true)
     } catch (e) {
       console.error('[CodeTask] sendMessage failed:', e)
