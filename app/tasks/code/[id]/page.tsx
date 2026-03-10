@@ -35,6 +35,12 @@ interface Agent {
   is_primary: boolean
 }
 
+const getSessionSenderName = (session: unknown): string => {
+  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
+  const uid = s?.userId || ''
+  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
+}
+
 // ── Helpers ────────────────────────────────────────────
 const langFromPath = (path: string): string => {
   const ext = path.split('.').pop()?.toLowerCase() || ''
@@ -479,24 +485,34 @@ export default function CodeTaskPage() {
     setSending(true)
     setChatInput('')
 
-    // Optimistic: show message in chat immediately
-    const optimisticMsg: ChatMsg = {
-      id: `opt-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-    }
-    setChatMessages(prev => [...prev, optimisticMsg])
-
+    const optimisticId = `opt-${Date.now()}`
     try {
       const fullContent = await buildCodebaseContextMessage(text)
+      const senderName = getSessionSenderName(session)
+      const displayContent = [
+        '┌─ 来源标识 ─────────────',
+        `│ 来源用户: ${senderName}`,
+        '└────────────────────',
+        fullContent,
+      ].join('\n')
+
+      // Optimistic: mirror feed/topic info flow in right chat panel immediately
+      const optimisticMsg: ChatMsg = {
+        id: optimisticId,
+        role: 'user',
+        content: displayContent,
+        timestamp: new Date().toISOString(),
+        sender_display_name: senderName,
+      }
+      setChatMessages(prev => [...prev, optimisticMsg])
+
       await publishToTopic(fullContent, 'post', 'HUMAN')
       setAwaitingAgent(true)
     } catch (e) {
       console.error('[CodeTask] sendMessage failed:', e)
       // Mark optimistic message as failed
       setChatMessages(prev => prev.map(m =>
-        m.id === optimisticMsg.id ? { ...m, content: `⚠️ ${text}\n\n(Send failed: ${e instanceof Error ? e.message : 'unknown'})` } : m
+        m.id === optimisticId ? { ...m, content: `⚠️ ${text}\n\n(Send failed: ${e instanceof Error ? e.message : 'unknown'})` } : m
       ))
     } finally {
       setSending(false)
