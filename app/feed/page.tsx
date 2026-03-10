@@ -32,7 +32,8 @@ interface Agent {
 
 function getHumanSender(session: unknown): string {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
-  return s?.user?.name || s?.user?.email || s?.userId || 'human'
+  const uid = s?.userId || ''
+  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
 function normalizeFeed(raw: unknown): ChatMessage[] {
