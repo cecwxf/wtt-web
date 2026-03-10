@@ -62,6 +62,11 @@ const DIAMOND_S = 110
 const PARA_W = 200, PARA_H = 70
 const HEX_W = 160, HEX_H = 80
 
+const actorSource = (session: unknown, selectedAgentId: string) => {
+  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
+  return s?.userId || s?.user?.name || s?.user?.email || selectedAgentId || 'user'
+}
+
 const shapeDims = (s: NodeShape) => {
   if (s === 'circle') return { w: CIRCLE_D, h: CIRCLE_D }
   if (s === 'ellipse') return { w: ELLIPSE_W, h: ELLIPSE_H }
@@ -365,7 +370,7 @@ export default function PipelinesPage() {
         status: 'todo',
         owner_agent_id: selectedAgentId || undefined,
         runner_agent_id: selectedAgentId || undefined,
-        created_by: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
+        created_by: actorSource(session, selectedAgentId),
       }),
     })
     if (!r.ok) { alert(`Create task failed: ${(await r.text()) || r.status}`); return }
@@ -426,7 +431,7 @@ export default function PipelinesPage() {
         status: 'todo',
         owner_agent_id: selected.owner_agent_id,
         runner_agent_id: selected.runner_agent_id,
-        created_by: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
+        created_by: actorSource(session, selectedAgentId),
         description: taskDraft.description,
         acceptance: taskDraft.acceptance,
         notes: taskDraft.notes,
@@ -536,7 +541,7 @@ export default function PipelinesPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({
-        trigger_agent_id: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'pipeline-runner',
+        trigger_agent_id: actorSource(session, selectedAgentId) || 'pipeline-runner',
         pipeline_id: editingPipelineId || undefined,
       }),
     })

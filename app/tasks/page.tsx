@@ -96,57 +96,10 @@ const parseTaskPlanFromNotes = (notes?: string): TaskPlan | null => {
   }
 }
 
-const stringifyTaskPlanToNotes = (existingNotes: string | undefined, plan: TaskPlan) => {
-  const base = (existingNotes || '').split(PLAN_PREFIX)[0].trim()
-  const blob = `${PLAN_PREFIX}${JSON.stringify(plan)}`
-  return base ? `${base}\n\n${blob}` : blob
-}
 
-const buildPlanByAgentHeuristic = (task: TaskItem): TaskPlan => {
-  const title = (task.title || '').trim()
-  const desc = (task.description || '').trim()
-  const goal = desc || title || '完成任务交付'
-
-  const seed = `${title} ${desc}`.toLowerCase()
-  const phases: TaskPlanPhase[] = [
-    {
-      id: 'p1',
-      title: '需求澄清与方案设计',
-      subtasks: [
-        { id: 'p1s1', title: '明确目标与验收标准' },
-        { id: 'p1s2', title: '拆分阶段与风险点' },
-      ],
-    },
-    {
-      id: 'p2',
-      title: '实现与联调',
-      subtasks: [
-        { id: 'p2s1', title: '完成核心功能实现' },
-        { id: 'p2s2', title: '完成联调与回归验证' },
-      ],
-    },
-    {
-      id: 'p3',
-      title: '结果交付',
-      subtasks: [
-        { id: 'p3s1', title: '整理结果与变更说明' },
-        { id: 'p3s2', title: '提交评审并等待反馈' },
-      ],
-    },
-  ]
-
-  if (seed.includes('ui') || seed.includes('页面') || seed.includes('侧栏') || seed.includes('交互')) {
-    phases[1] = {
-      id: 'p2',
-      title: '页面实现与交互联调',
-      subtasks: [
-        { id: 'p2s1', title: '完成页面结构与组件改造' },
-        { id: 'p2s2', title: '完成交互行为与状态联调' },
-      ],
-    }
-  }
-
-  return { goal, phases }
+const actorSource = (session: unknown, selectedAgentId: string) => {
+  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
+  return s?.userId || s?.user?.name || s?.user?.email || selectedAgentId || 'user'
 }
 
 const fallbackProgressByStatus = (status: TaskItem['status']) => {
@@ -425,7 +378,7 @@ export default function TasksPage() {
         task_type: 'feature',
         owner_agent_id: selectedAgentId || undefined,
         runner_agent_id: selectedAgentId || undefined,
-        created_by: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
+        created_by: actorSource(session, selectedAgentId),
       }),
     })
     mutateTasks()
@@ -485,7 +438,7 @@ export default function TasksPage() {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            trigger_agent_id: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'task-runner',
+            trigger_agent_id: actorSource(session, selectedAgentId) || 'task-runner',
             runner_agent_id: t.runner_agent_id || t.owner_agent_id || selectedAgentId,
           }),
         })
@@ -571,7 +524,7 @@ export default function TasksPage() {
           Authorization: `Bearer ${session?.accessToken ?? ''}`,
         },
         body: JSON.stringify({
-          trigger_agent_id: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'task-runner',
+          trigger_agent_id: actorSource(session, selectedAgentId) || 'task-runner',
           runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId,
         }),
       })
