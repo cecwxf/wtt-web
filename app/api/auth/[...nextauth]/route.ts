@@ -140,12 +140,20 @@ const authOptions: NextAuthOptions = {
       if (user) {
         token.accessToken = user.accessToken
         token.userId = user.id
+        token.userName = (user.name as string | undefined) || (user.email as string | undefined) || `user_${String(user.id || '').slice(0, 8)}`
+      }
+      if (!token.userName && token.userId) {
+        token.userName = `user_${String(token.userId).slice(0, 8)}`
       }
       return token
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string
       session.userId = token.userId as string
+      if (!session.user) session.user = { name: undefined, email: undefined } as typeof session.user
+      if (!session.user.name) {
+        session.user.name = (token.userName as string | undefined) || `user_${String(token.userId || '').slice(0, 8)}`
+      }
       return session
     },
   },
