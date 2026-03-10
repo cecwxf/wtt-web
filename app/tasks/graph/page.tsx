@@ -185,7 +185,7 @@ export default function TasksGraphPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({
-        trigger_agent_id: selectedAgentId || 'pipeline-runner',
+        trigger_agent_id: (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'pipeline-runner',
         pipeline_id: selectedPipelineId || undefined,
         task_ids: taskIds && taskIds.length > 0 ? taskIds : undefined,
       }),
@@ -253,7 +253,7 @@ export default function TasksGraphPage() {
         status: 'todo',
         owner_agent_id: selectedAgentId || undefined,
         runner_agent_id: selectedAgentId || undefined,
-        created_by: selectedAgentId || 'user',
+        created_by: (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
       }),
     })
     if (!r.ok) {
