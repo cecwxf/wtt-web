@@ -149,6 +149,7 @@ export default function CodeTaskPage() {
   const [dirName, setDirName] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const [openFiles, setOpenFiles] = useState<FileNode[]>([])
+  const codebaseSharedSigRef = useRef<string>('')
 
   // Load task
   const { data: task } = useSWR(
@@ -290,6 +291,18 @@ export default function CodeTaskPage() {
     }
   }
 
+  const codebaseSignature = (nodes: FileNode[]): string => {
+    const paths: string[] = []
+    const walk = (arr: FileNode[]) => {
+      for (const n of arr) {
+        paths.push(`${n.kind}:${n.path}`)
+        if (n.children) walk(n.children)
+      }
+    }
+    walk(nodes)
+    return `${dirName}|${paths.join('|')}`
+  }
+
   // ── Build tree text ────────────────────────────────
   const buildTreeText = (nodes: FileNode[], prefix = ''): string => {
     return nodes.map((n, i) => {
@@ -421,8 +434,20 @@ export default function CodeTaskPage() {
     }
   }
 
-  const buildCodebaseContextMessage = async (text: string): Promise<string> => {
-    if (fileTree.length === 0) return text
+  const buildCodebaseContextMessage = async (text: string): Promise<{ content: string; fullCodebase: boolean }> => {
+    if (fileTree.length === 0) return { content: text, fullCodebase: false }
+
+    const sig = codebaseSignature(fileTree)
+    const needFullCodebase = codebaseSharedSigRef.current !== sig
+
+    // Full codebase already shared for current tree: send lightweight context only
+    if (!needFullCodebase) {
+      if (selectedFile && modifiedContent) {
+        const lightweight = `[Context: ${selectedFile.path}]\n\`\`\`${langFromPath(selectedFile.path)}\n${modifiedContent.slice(0, 8000)}\n\`\`\`\n\n${text}`
+        return { content: lightweight, fullCodebase: false }
+      }
+      return { content: text, fullCodebase: false }
+    }
 
     const allFiles: FileNode[] = []
     const collect = (nodes: FileNode[]) => {
@@ -471,7 +496,7 @@ export default function CodeTaskPage() {
 \`\`\`\n${dirName || 'workspace'}/\n${treeText}\n\`\`\``,
     ].join('\n')
 
-    return `${text}\n\n${header}${fileBlocks.join('')}`
+    return { content: `${text}\n\n${header}${fileBlocks.join('')}`, fullCodebase: true }
   }
 
   // ── Send chat message ──────────────────────────────
@@ -487,7 +512,8 @@ export default function CodeTaskPage() {
 
     const optimisticId = `opt-${Date.now()}`
     try {
-      const fullContent = await buildCodebaseContextMessage(text)
+      const built = await buildCodebaseContextMessage(text)
+      const fullContent = built.content
       const senderName = getSessionSenderName(session)
       const displayContent = [
         '┌─ 来源标识 ─────────────',
@@ -507,6 +533,9 @@ export default function CodeTaskPage() {
       setChatMessages(prev => [...prev, optimisticMsg])
 
       await publishToTopic(fullContent, 'post', 'HUMAN')
+      if (built.fullCodebase) {
+        codebaseSharedSigRef.current = codebaseSignature(fileTree)
+      }
       setAwaitingAgent(true)
     } catch (e) {
       console.error('[CodeTask] sendMessage failed:', e)
