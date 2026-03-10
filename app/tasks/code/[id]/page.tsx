@@ -168,18 +168,19 @@ export default function CodeTaskPage() {
     (msg: WsMessage) => {
       if (msg.type !== 'new_message' || !msg.message) return
       if (msg.message.topic_id !== task?.topic_id) return
+      const m = msg.message as Record<string, string>
       const incoming: ChatMsg = {
-        id: msg.message.id,
-        role: msg.message.sender_id === selectedAgentId ? 'user' : 'assistant',
-        content: msg.message.content,
-        timestamp: msg.message.created_at,
-        sender_display_name: (msg.message as Record<string, string>).sender_display_name,
+        id: m.id,
+        role: m.sender_type === 'HUMAN' ? 'user' : 'assistant',
+        content: m.content,
+        timestamp: m.created_at,
+        sender_display_name: m.sender_id,
       }
       setChatMessages(prev => {
-        if (prev.some(m => m.id === incoming.id)) return prev
+        if (prev.some(x => x.id === incoming.id)) return prev
         // Replace optimistic message (opt-*) with real server message if content matches
         if (incoming.role === 'user') {
-          const optIdx = prev.findIndex(m => m.id.startsWith('opt-') && incoming.content.includes(m.content.replace(/^⚠️ /, '').split('\n\n(Send failed')[0]))
+          const optIdx = prev.findIndex(x => x.id.startsWith('opt-') && incoming.content.includes(x.content.replace(/^⚠️ /, '').split('\n\n(Send failed')[0]))
           if (optIdx >= 0) {
             const updated = [...prev]
             updated[optIdx] = incoming
@@ -189,7 +190,7 @@ export default function CodeTaskPage() {
         return [...prev, incoming]
       })
     },
-    [task?.topic_id, selectedAgentId],
+    [task?.topic_id],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
@@ -216,7 +217,7 @@ export default function CodeTaskPage() {
     if (!topicMessages) return
     const mapped: ChatMsg[] = topicMessages.map((m: Record<string, string>) => ({
       id: m.message_id,
-      role: m.sender_id === selectedAgentId ? 'user' : 'assistant',
+      role: m.sender_type === 'HUMAN' ? 'user' : 'assistant',
       content: m.content,
       timestamp: m.timestamp,
       sender_display_name: m.sender_display_name,
@@ -248,7 +249,7 @@ export default function CodeTaskPage() {
   }, [status, router, loadAgents])
 
   // ── Publish to topic helper (WS first, HTTP fallback) ──
-  const publishToTopic = async (content: string, semanticType = 'post') => {
+  const publishToTopic = async (content: string, semanticType = 'post', senderType: 'HUMAN' | 'AGENT' = 'AGENT') => {
     if (!task?.topic_id || !selectedAgentId) {
       throw new Error('No topic or agent selected')
     }
@@ -260,6 +261,7 @@ export default function CodeTaskPage() {
         content,
         content_type: 'text',
         semantic_type: semanticType,
+        sender_type: senderType,
       })
       if (wsResult !== null) return // WS succeeded
     } catch {
@@ -278,6 +280,7 @@ export default function CodeTaskPage() {
         content,
         content_type: 'text',
         semantic_type: semanticType,
+        sender_type: senderType,
       }),
     })
     if (!resp.ok) {
@@ -473,7 +476,7 @@ export default function CodeTaskPage() {
       if (selectedFile && modifiedContent) {
         fullContent = `[Context: ${selectedFile.path}]\n\`\`\`${langFromPath(selectedFile.path)}\n${modifiedContent.slice(0, 8000)}\n\`\`\`\n\n${text}`
       }
-      await publishToTopic(fullContent, 'task_request')
+      await publishToTopic(fullContent, 'task_request', 'HUMAN')
       setAwaitingAgent(true)
     } catch (e) {
       console.error('[CodeTask] sendMessage failed:', e)
@@ -669,8 +672,11 @@ export default function CodeTaskPage() {
                     ? 'border border-indigo-200 bg-indigo-50/80 text-slate-800 rounded-tr-md'
                     : 'border border-slate-200 bg-white text-slate-700 rounded-tl-md'
                 }`}>
-                  {msg.role === 'assistant' && msg.sender_display_name && (
-                    <p className="mb-1 text-[11px] font-semibold text-indigo-600">{msg.sender_display_name}</p>
+                  {msg.role === 'user' && (
+                    <p className="mb-1 text-[11px] font-semibold text-emerald-600">You</p>
+                  )}
+                  {msg.role === 'assistant' && (
+                    <p className="mb-1 text-[11px] font-semibold text-indigo-600">🤖 {msg.sender_display_name || 'Agent'}</p>
                   )}
                   <div className="whitespace-pre-wrap break-words">{msg.content}</div>
                   <p className="mt-1 text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
