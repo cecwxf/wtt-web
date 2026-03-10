@@ -80,9 +80,9 @@ async function readFileContent(handle: FileSystemFileHandle): Promise<string> {
 
 // ── File Tree Component ────────────────────────────────
 function FileTreeNode({
-  node, depth, selectedPath, onSelect,
+  node, depth, selectedPath, onSelect, onShare,
 }: {
-  node: FileNode; depth: number; selectedPath: string; onSelect: (node: FileNode) => void
+  node: FileNode; depth: number; selectedPath: string; onSelect: (node: FileNode) => void; onShare?: (node: FileNode) => void
 }) {
   const [expanded, setExpanded] = useState(depth < 1)
   const isDir = node.kind === 'directory'
@@ -90,21 +90,32 @@ function FileTreeNode({
 
   return (
     <div>
-      <button
-        className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[12px] hover:bg-slate-200/60 ${isSelected ? 'bg-indigo-100 font-medium text-indigo-700' : 'text-slate-600'}`}
+      <div
+        className={`group flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[12px] hover:bg-slate-200/60 ${isSelected ? 'bg-indigo-100 font-medium text-indigo-700' : 'text-slate-600'}`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
-        onClick={() => {
-          if (isDir) setExpanded(!expanded)
-          else onSelect(node)
-        }}
       >
-        <span className="shrink-0 text-[11px]">
-          {isDir ? (expanded ? '📂' : '📁') : '📄'}
-        </span>
-        <span className="truncate">{node.name}</span>
-      </button>
+        <button
+          className="flex flex-1 items-center gap-1 truncate"
+          onClick={() => {
+            if (isDir) setExpanded(!expanded)
+            else onSelect(node)
+          }}
+        >
+          <span className="shrink-0 text-[11px]">
+            {isDir ? (expanded ? '📂' : '📁') : '📄'}
+          </span>
+          <span className="truncate">{node.name}</span>
+        </button>
+        {!isDir && onShare && (
+          <button
+            onClick={() => onShare(node)}
+            title="Share to topic"
+            className="hidden shrink-0 rounded px-0.5 text-[10px] text-indigo-400 hover:bg-indigo-100 hover:text-indigo-600 group-hover:inline"
+          >📤</button>
+        )}
+      </div>
       {isDir && expanded && node.children?.map((child) => (
-        <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
+        <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} onShare={onShare} />
       ))}
     </div>
   )
@@ -190,6 +201,39 @@ export default function CodeTaskPage() {
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
 
+  // ── Publish to topic helper ─────────────────────────
+  const publishToTopic = async (content: string, semanticType = 'post') => {
+    if (!task?.topic_id || !selectedAgentId) return
+    await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.accessToken ?? ''}`,
+      },
+      body: JSON.stringify({
+        sender_id: selectedAgentId,
+        content,
+        content_type: 'text',
+        semantic_type: semanticType,
+      }),
+    })
+    mutateMessages()
+  }
+
+  // ── Build tree text ────────────────────────────────
+  const buildTreeText = (nodes: FileNode[], prefix = ''): string => {
+    return nodes.map((n, i) => {
+      const isLast = i === nodes.length - 1
+      const connector = isLast ? '└── ' : '├── '
+      const childPrefix = isLast ? '    ' : '│   '
+      let line = `${prefix}${connector}${n.name}`
+      if (n.kind === 'directory' && n.children?.length) {
+        line += '\n' + buildTreeText(n.children, prefix + childPrefix)
+      }
+      return line
+    }).join('\n')
+  }
+
   // ── Open Directory ─────────────────────────────────
   const openDirectory = async () => {
     try {
@@ -197,9 +241,82 @@ export default function CodeTaskPage() {
       setDirName(dirHandle.name)
       const tree = await readDirectory(dirHandle)
       setFileTree(tree)
+
+      // Auto-publish file tree structure to topic so agent can see the codebase
+      if (task?.topic_id) {
+        const treeText = buildTreeText(tree)
+        await publishToTopic(
+          `[CODEBASE] ${dirHandle.name}\n\`\`\`\n${dirHandle.name}/\n${treeText}\n\`\`\`\nCodebase opened with ${countFiles(tree)} files. Ask me to share specific files for analysis.`,
+          'notification',
+        )
+      }
     } catch {
       // User cancelled
     }
+  }
+
+  // ── Count files helper ─────────────────────────────
+  const countFiles = (nodes: FileNode[]): number => {
+    let c = 0
+    for (const n of nodes) {
+      if (n.kind === 'file') c++
+      if (n.children) c += countFiles(n.children)
+    }
+    return c
+  }
+
+  // ── Share file to topic ────────────────────────────
+  const shareFile = async (node: FileNode) => {
+    if (!node.handle || node.kind !== 'file') return
+    try {
+      const content = await readFileContent(node.handle as FileSystemFileHandle)
+      const lang = langFromPath(node.path)
+      await publishToTopic(
+        `[FILE] ${node.path}\n\`\`\`${lang}\n${content}\n\`\`\``,
+        'post',
+      )
+    } catch (e) {
+      console.error('Share failed:', e)
+    }
+  }
+
+  // ── Share all open files ───────────────────────────
+  const [sharing, setSharing] = useState(false)
+  const shareAllFiles = async () => {
+    if (fileTree.length === 0) return
+    setSharing(true)
+    const allFiles: FileNode[] = []
+    const collect = (nodes: FileNode[]) => {
+      for (const n of nodes) {
+        if (n.kind === 'file') allFiles.push(n)
+        if (n.children) collect(n.children)
+      }
+    }
+    collect(fileTree)
+
+    // Share in batches to avoid message size limits
+    let batch = ''
+    let batchCount = 0
+    for (const f of allFiles) {
+      if (!f.handle) continue
+      try {
+        const content = await readFileContent(f.handle as FileSystemFileHandle)
+        const entry = `### ${f.path}\n\`\`\`${langFromPath(f.path)}\n${content}\n\`\`\`\n\n`
+        if ((batch + entry).length > 30000 && batch) {
+          await publishToTopic(`[CODEBASE FILES batch]\n\n${batch}`, 'post')
+          batch = entry
+          batchCount++
+        } else {
+          batch += entry
+        }
+      } catch {
+        // skip unreadable files
+      }
+    }
+    if (batch) {
+      await publishToTopic(`[CODEBASE FILES${batchCount > 0 ? ' batch' : ''}]\n\n${batch}`, 'post')
+    }
+    setSharing(false)
   }
 
   // ── Select file ────────────────────────────────────
@@ -239,30 +356,15 @@ export default function CodeTaskPage() {
     const text = chatInput.trim()
     if (!text || !task?.topic_id || sending) return
     setSending(true)
-
-    // Build context: include current file if open
-    let fullContent = text
-    if (selectedFile && fileContent) {
-      fullContent = `[File: ${selectedFile.path}]\n\`\`\`${langFromPath(selectedFile.path)}\n${modifiedContent.slice(0, 8000)}\n\`\`\`\n\n${text}`
-    }
-
     setChatInput('')
 
     try {
-      await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
-        },
-        body: JSON.stringify({
-          sender_id: selectedAgentId,
-          content: fullContent,
-          content_type: 'text',
-          semantic_type: 'post',
-        }),
-      })
-      mutateMessages()
+      // If a file is open, include it as context
+      let fullContent = text
+      if (selectedFile && modifiedContent) {
+        fullContent = `[Context: ${selectedFile.path}]\n\`\`\`${langFromPath(selectedFile.path)}\n${modifiedContent.slice(0, 8000)}\n\`\`\`\n\n${text}`
+      }
+      await publishToTopic(fullContent)
     } catch {
       // ignore
     } finally {
@@ -270,18 +372,7 @@ export default function CodeTaskPage() {
     }
   }
 
-  // ── File stats ─────────────────────────────────────
-  const fileCount = useMemo(() => {
-    let count = 0
-    const walk = (nodes: FileNode[]) => {
-      for (const n of nodes) {
-        if (n.kind === 'file') count++
-        if (n.children) walk(n.children)
-      }
-    }
-    walk(fileTree)
-    return count
-  }, [fileTree])
+  const fileCount = useMemo(() => countFiles(fileTree), [fileTree])
 
   return (
     <div className="flex h-screen flex-col bg-white">
@@ -325,7 +416,17 @@ export default function CodeTaskPage() {
             <>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-semibold text-slate-500">{dirName}</p>
-                <span className="text-[10px] text-slate-400">{fileCount} files</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-400">{fileCount} files</span>
+                  <button
+                    onClick={shareAllFiles}
+                    disabled={sharing}
+                    title="Share all files to topic (Agent can see the full codebase)"
+                    className="rounded bg-indigo-100 px-1 py-0.5 text-[10px] text-indigo-600 hover:bg-indigo-200 disabled:opacity-50"
+                  >
+                    {sharing ? '⏳' : '📤 All'}
+                  </button>
+                </div>
               </div>
               {fileTree.map((node) => (
                 <FileTreeNode
@@ -334,6 +435,7 @@ export default function CodeTaskPage() {
                   depth={0}
                   selectedPath={selectedFile?.path || ''}
                   onSelect={selectFile}
+                  onShare={shareFile}
                 />
               ))}
             </>
