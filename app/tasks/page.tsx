@@ -317,8 +317,9 @@ export default function TasksPage() {
   const createTask = async () => {
     const title = prompt('Task title')?.trim()
     if (!title) return
+    const tempId = `temp-${Date.now()}`
     const optimistic: TaskItem = {
-      id: `temp-${Date.now()}`,
+      id: tempId,
       title,
       task_type: 'feature',
       priority: 'P1',
@@ -327,25 +328,37 @@ export default function TasksPage() {
       owner_agent_id: selectedAgentId || undefined,
       runner_agent_id: selectedAgentId || undefined,
     }
+    // Show card instantly
     mutateTasks((prev: TaskItem[] | undefined) => [...(prev || []), optimistic], { revalidate: false })
-    fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.accessToken ?? ''}`,
-      },
-      body: JSON.stringify({
-        title,
-        task_mode: 'single',
-        priority: 'P1',
-        status: 'todo',
-        task_type: 'feature',
-        exec_mode: 'reasoning',
-        owner_agent_id: selectedAgentId || undefined,
-        runner_agent_id: selectedAgentId || undefined,
-        created_by: actorSource(session, selectedAgentId),
-      }),
-    }).then(() => mutateTasks())
+    try {
+      const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+        body: JSON.stringify({
+          title,
+          task_mode: 'single',
+          priority: 'P1',
+          status: 'todo',
+          task_type: 'feature',
+          exec_mode: 'reasoning',
+          owner_agent_id: selectedAgentId || undefined,
+          runner_agent_id: selectedAgentId || undefined,
+          created_by: actorSource(session, selectedAgentId),
+        }),
+      })
+      if (resp.ok) {
+        const real = await resp.json()
+        // Replace temp card with real task (has server ID)
+        mutateTasks((prev: TaskItem[] | undefined) => (prev || []).map((t) => (t.id === tempId ? { ...t, ...real } : t)), { revalidate: false })
+      } else {
+        mutateTasks()
+      }
+    } catch {
+      mutateTasks()
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
