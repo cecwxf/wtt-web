@@ -30,6 +30,11 @@ interface Agent {
   api_key?: string
 }
 
+function getHumanSender(session: unknown): string {
+  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
+  return s?.user?.name || s?.user?.email || s?.userId || 'human'
+}
+
 function normalizeFeed(raw: unknown): ChatMessage[] {
   if (!raw || typeof raw !== 'object') return []
 
@@ -250,22 +255,14 @@ export default function FeedPage() {
     if (!selectedTopicId || !selectedAgentId) return
 
     const isTask = !!selectedTopic?.task_id
-    const payload = {
-      topic_id: selectedTopicId,
+    // Web 端统一以 HUMAN 身份发消息（来源=登录用户）
+    await wttApi.publishMessage(selectedTopicId, {
       content,
       content_type: 'text',
       semantic_type: isTask ? 'task_request' : 'post',
-    }
-
-    // Try WebSocket first, fall back to HTTP
-    const wsResult = await sendAction('publish', payload)
-    if (wsResult === null) {
-      await wttApi.publishMessage(selectedTopicId, {
-        content,
-        content_type: 'text',
-        semantic_type: isTask ? 'task_request' : 'post',
-      })
-    }
+      sender_type: 'HUMAN',
+      sender_id: getHumanSender(session),
+    })
 
     mutate()
   }
@@ -374,19 +371,13 @@ export default function FeedPage() {
     const preview = stripped.length > 120 ? stripped.slice(0, 120) + '…' : stripped
     const messageContent = `${preview}\n\n[file:${filename}](${asset.url})`
 
-    const wsResult = await sendAction('publish', {
-      topic_id: topicId,
+    await wttApi.publishMessage(topicId, {
       content: messageContent,
       content_type: 'mixed',
       semantic_type: 'post',
+      sender_type: 'HUMAN',
+      sender_id: getHumanSender(session),
     })
-    if (wsResult === null) {
-      await wttApi.publishMessage(topicId, {
-        content: messageContent,
-        content_type: 'mixed',
-        semantic_type: 'post',
-      })
-    }
     mutate()
   }
 
