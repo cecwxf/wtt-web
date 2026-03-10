@@ -561,51 +561,7 @@ export default function TasksPage() {
   const runCurrent = async () => {
     if (!selectedTask) return
 
-    // 执行前先进入任务规划：默认由 agent 自动生成（可手工覆盖）
-    let plan = parseTaskPlanFromNotes(selectedTask.notes)
-    if (!plan) {
-      const autoPlan = buildPlanByAgentHeuristic(selectedTask)
-      const useAuto = window.confirm('未发现任务规划。是否使用 Agent 自动规划并继续执行？\n(确定=自动规划，取消=手工输入)')
-
-      if (useAuto) {
-        plan = autoPlan
-      } else {
-        const goal = window.prompt('任务目标（Goal）是什么？', selectedTask.title || '')?.trim()
-        if (!goal) return
-        const phasesText = window.prompt('请输入阶段与子任务（每行一个阶段，格式：阶段名: 子任务1, 子任务2）', '阶段1: 子任务A, 子任务B\n阶段2: 子任务C')?.trim()
-        if (!phasesText) return
-        const phases = phasesText
-          .split('\n')
-          .map((line, idx) => {
-            const [name, subs] = line.split(':')
-            const subtasks = (subs || '')
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-              .map((s, j) => ({ id: `p${idx + 1}s${j + 1}`, title: s }))
-            return { id: `p${idx + 1}`, title: (name || `阶段${idx + 1}`).trim(), subtasks }
-          })
-          .filter((p) => p.subtasks.length > 0)
-
-        if (!phases.length) {
-          alert('至少要有1个阶段且包含子任务')
-          return
-        }
-        plan = { goal, phases }
-      }
-
-      const notes = stringifyTaskPlanToNotes(selectedTask.notes, plan)
-      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
-        },
-        body: JSON.stringify({ notes }),
-      })
-      await mutateTasks()
-    }
-
+    // 提速：直接下发运行，Plan 由后端/Agent 自动处理
     setRunningTaskId(selectedTask.id)
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
@@ -624,8 +580,8 @@ export default function TasksPage() {
         alert(`Run Task failed: ${txt || resp.status}`)
         return
       }
-      await mutateTasks()
       alert('Run Task dispatched')
+      mutateTasks()
     } catch (e) {
       alert(`Run Task failed: ${e instanceof Error ? e.message : 'unknown error'}`)
     } finally {
