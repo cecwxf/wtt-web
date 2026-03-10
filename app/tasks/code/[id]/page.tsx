@@ -141,9 +141,10 @@ export default function CodeTaskPage() {
   const [dirName, setDirName] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const [openFiles, setOpenFiles] = useState<FileNode[]>([])
+  const [taskRunning, setTaskRunning] = useState(false)
 
   // Load task
-  const { data: task } = useSWR(
+  const { data: task, mutate: mutateTask } = useSWR(
     session?.accessToken ? [`task-${taskId}`, session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, {
@@ -153,6 +154,11 @@ export default function CodeTaskPage() {
       return r.json()
     },
   )
+
+  // Sync taskRunning state from loaded task
+  useEffect(() => {
+    if (task?.status && task.status !== 'todo') setTaskRunning(true)
+  }, [task?.status])
 
   // Load messages from task topic as chat history
   const { data: topicMessages, mutate: mutateMessages } = useSWR(
@@ -359,6 +365,30 @@ export default function CodeTaskPage() {
     }
   }
 
+  // ── Auto-run task (set to "doing") on first send ─────
+  const ensureTaskRunning = async () => {
+    if (taskRunning || !task?.id) return
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+        body: JSON.stringify({
+          runner_agent_id: selectedAgentId,
+          exec_mode: 'reasoning',
+        }),
+      })
+      if (r.ok) {
+        setTaskRunning(true)
+        mutateTask()
+      }
+    } catch {
+      // task might already be running — ignore
+    }
+  }
+
   // ── Send chat message ──────────────────────────────
   const sendMessage = async () => {
     const text = chatInput.trim()
@@ -367,7 +397,19 @@ export default function CodeTaskPage() {
     setSending(true)
     setChatInput('')
 
+    // Optimistic: show message in chat immediately
+    const optimisticMsg: ChatMsg = {
+      id: `opt-${Date.now()}`,
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString(),
+    }
+    setChatMessages(prev => [...prev, optimisticMsg])
+
     try {
+      // Auto-run the task on first message
+      await ensureTaskRunning()
+
       let fullContent = text
       if (selectedFile && modifiedContent) {
         fullContent = `[Context: ${selectedFile.path}]\n\`\`\`${langFromPath(selectedFile.path)}\n${modifiedContent.slice(0, 8000)}\n\`\`\`\n\n${text}`
@@ -376,6 +418,8 @@ export default function CodeTaskPage() {
     } catch (e) {
       console.error('[CodeTask] sendMessage failed:', e)
       alert(e instanceof Error ? e.message : 'Failed to send message')
+      // Remove optimistic message on failure
+      setChatMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
     } finally {
       setSending(false)
     }
@@ -391,6 +435,13 @@ export default function CodeTaskPage() {
           <button onClick={() => router.push('/tasks')} className="text-sm text-indigo-500 hover:underline">← Tasks</button>
           <span className="text-sm font-semibold text-slate-700">{task?.title || 'Code Task'}</span>
           <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium text-cyan-700">💻 Code</span>
+          {task?.status && (
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+              task.status === 'doing' ? 'bg-amber-100 text-amber-700' :
+              task.status === 'done' ? 'bg-green-100 text-green-700' :
+              'bg-slate-100 text-slate-500'
+            }`}>{task.status === 'doing' ? '⚡ Running' : task.status === 'done' ? '✅ Done' : task.status}</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {agents.length > 1 && (
