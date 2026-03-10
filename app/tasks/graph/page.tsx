@@ -33,6 +33,11 @@ interface Pos {
 const NODE_W = 240
 const NODE_H = 90
 
+const actorSource = (session: unknown, selectedAgentId: string) => {
+  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
+  return s?.userId || s?.user?.name || s?.user?.email || selectedAgentId || 'user'
+}
+
 export default function TasksGraphPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -185,7 +190,7 @@ export default function TasksGraphPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({
-        trigger_agent_id: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'pipeline-runner',
+        trigger_agent_id: actorSource(session, selectedAgentId) || 'pipeline-runner',
         pipeline_id: selectedPipelineId || undefined,
         task_ids: taskIds && taskIds.length > 0 ? taskIds : undefined,
       }),
@@ -253,7 +258,7 @@ export default function TasksGraphPage() {
         status: 'todo',
         owner_agent_id: selectedAgentId || undefined,
         runner_agent_id: selectedAgentId || undefined,
-        created_by: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
+        created_by: actorSource(session, selectedAgentId),
       }),
     })
     if (!r.ok) {
