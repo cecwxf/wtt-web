@@ -177,6 +177,15 @@ export default function CodeTaskPage() {
       }
       setChatMessages(prev => {
         if (prev.some(m => m.id === incoming.id)) return prev
+        // Replace optimistic message (opt-*) with real server message if content matches
+        if (incoming.role === 'user') {
+          const optIdx = prev.findIndex(m => m.id.startsWith('opt-') && incoming.content.includes(m.content.replace(/^⚠️ /, '').split('\n\n(Send failed')[0]))
+          if (optIdx >= 0) {
+            const updated = [...prev]
+            updated[optIdx] = incoming
+            return updated
+          }
+        }
         return [...prev, incoming]
       })
     },
