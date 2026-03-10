@@ -5,8 +5,9 @@ import { useRouter, useParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
+import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -24,6 +25,7 @@ interface ChatMsg {
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: string
+  sender_display_name?: string
 }
 
 interface Agent {
@@ -160,8 +162,35 @@ export default function CodeTaskPage() {
     if (task?.status && task.status !== 'todo') setTaskRunning(true)
   }, [task?.status])
 
-  // Load messages from task topic as chat history
-  const { data: topicMessages, mutate: mutateMessages } = useSWR(
+  // ── WebSocket for real-time messages ───────────────
+  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  const handleWsMessage = useCallback(
+    (msg: WsMessage) => {
+      if (msg.type !== 'new_message' || !msg.message) return
+      if (msg.message.topic_id !== task?.topic_id) return
+      const incoming: ChatMsg = {
+        id: msg.message.id,
+        role: msg.message.sender_id === selectedAgentId ? 'user' : 'assistant',
+        content: msg.message.content,
+        timestamp: msg.message.created_at,
+        sender_display_name: (msg.message as Record<string, string>).sender_display_name,
+      }
+      setChatMessages(prev => {
+        if (prev.some(m => m.id === incoming.id)) return prev
+        return [...prev, incoming]
+      })
+    },
+    [task?.topic_id, selectedAgentId],
+  )
+  const { state: wsState, sendAction } = useWebSocket({
+    url: wsUrl,
+    enabled: !!selectedAgentId,
+    token: session?.accessToken || undefined,
+    onMessage: handleWsMessage,
+  })
+
+  // Load initial message history via HTTP (once)
+  const { data: topicMessages } = useSWR(
     task?.topic_id && session?.accessToken && selectedAgentId ? [`code-chat-${task.topic_id}`, session.accessToken, selectedAgentId] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?limit=200&agent_id=${encodeURIComponent(selectedAgentId)}`, {
@@ -170,9 +199,10 @@ export default function CodeTaskPage() {
       if (!r.ok) return []
       return r.json()
     },
-    { refreshInterval: 3000 },
+    { revalidateOnFocus: false },
   )
 
+  // Seed chat from history (only once on load or agent switch)
   useEffect(() => {
     if (!topicMessages) return
     const mapped: ChatMsg[] = topicMessages.map((m: Record<string, string>) => ({
@@ -180,6 +210,7 @@ export default function CodeTaskPage() {
       role: m.sender_id === selectedAgentId ? 'user' : 'assistant',
       content: m.content,
       timestamp: m.timestamp,
+      sender_display_name: m.sender_display_name,
     }))
     setChatMessages(mapped)
   }, [topicMessages, selectedAgentId])
@@ -207,12 +238,22 @@ export default function CodeTaskPage() {
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
 
-  // ── Publish to topic helper ─────────────────────────
+  // ── Publish to topic helper (WS first, HTTP fallback) ──
   const publishToTopic = async (content: string, semanticType = 'post') => {
     if (!task?.topic_id || !selectedAgentId) {
       console.warn('[CodeTask] publishToTopic skipped: topic_id=', task?.topic_id, 'agent=', selectedAgentId)
       return
     }
+    // Try WebSocket first
+    const wsResult = await sendAction('publish', {
+      topic_id: task.topic_id,
+      content,
+      content_type: 'text',
+      semantic_type: semanticType,
+    })
+    if (wsResult !== null) return // WS succeeded
+
+    // HTTP fallback
     const url = `${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?agent_id=${encodeURIComponent(selectedAgentId)}`
     const resp = await fetch(url, {
       method: 'POST',
@@ -231,7 +272,6 @@ export default function CodeTaskPage() {
       console.error('[CodeTask] publish failed:', resp.status, err)
       throw new Error(`Publish failed: ${resp.status}`)
     }
-    mutateMessages()
   }
 
   // ── Build tree text ────────────────────────────────
@@ -368,28 +408,32 @@ export default function CodeTaskPage() {
   // ── Auto-run task (set to "doing") on first send ─────
   const ensureTaskRunning = async () => {
     if (taskRunning || !task?.id) return
-    try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
-        },
-        body: JSON.stringify({
-          runner_agent_id: selectedAgentId,
-          exec_mode: 'reasoning',
-        }),
-      })
-      if (r.ok) {
-        setTaskRunning(true)
-        mutateTask()
-      }
-    } catch {
-      // task might already be running — ignore
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}/run`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.accessToken ?? ''}`,
+      },
+      body: JSON.stringify({
+        runner_agent_id: selectedAgentId,
+        exec_mode: 'reasoning',
+      }),
+    })
+    if (r.ok) {
+      setTaskRunning(true)
+      mutateTask()
+    } else if (r.status !== 400) {
+      // 400 = invalid transition (already running) — that's fine
+      const err = await r.text().catch(() => '')
+      console.error('[CodeTask] run failed:', r.status, err)
+    } else {
+      setTaskRunning(true) // already running
     }
   }
 
   // ── Send chat message ──────────────────────────────
+  const [awaitingAgent, setAwaitingAgent] = useState(false)
+
   const sendMessage = async () => {
     const text = chatInput.trim()
     if (!text || !task?.topic_id || sending) return
@@ -414,16 +458,23 @@ export default function CodeTaskPage() {
       if (selectedFile && modifiedContent) {
         fullContent = `[Context: ${selectedFile.path}]\n\`\`\`${langFromPath(selectedFile.path)}\n${modifiedContent.slice(0, 8000)}\n\`\`\`\n\n${text}`
       }
-      await publishToTopic(fullContent)
+      await publishToTopic(fullContent, 'task_request')
+      setAwaitingAgent(true)
     } catch (e) {
       console.error('[CodeTask] sendMessage failed:', e)
       alert(e instanceof Error ? e.message : 'Failed to send message')
-      // Remove optimistic message on failure
       setChatMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
     } finally {
       setSending(false)
     }
   }
+
+  // Clear thinking indicator when agent responds
+  useEffect(() => {
+    if (!awaitingAgent) return
+    const lastMsg = chatMessages[chatMessages.length - 1]
+    if (lastMsg && lastMsg.role === 'assistant') setAwaitingAgent(false)
+  }, [chatMessages, awaitingAgent])
 
   const fileCount = useMemo(() => countFiles(fileTree), [fileTree])
 
@@ -574,7 +625,10 @@ export default function CodeTaskPage() {
         {/* Chat panel */}
         <div className="flex w-[33%] min-w-[320px] shrink-0 flex-col border-l border-slate-200">
           <div className="flex h-10 items-center justify-between border-b border-slate-200 bg-slate-50 px-3">
-            <span className="text-xs font-semibold text-slate-600">Agent Chat</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600">Agent Chat</span>
+              <span className={`h-2 w-2 rounded-full ${wsState === 'connected' ? 'bg-green-400' : 'bg-slate-300'}`} title={wsState === 'connected' ? 'WebSocket connected' : 'Disconnected'} />
+            </div>
             {task?.runner_agent_id && (
               <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] text-indigo-600">{task.runner_agent_id}</span>
             )}
@@ -598,11 +652,23 @@ export default function CodeTaskPage() {
                     ? 'border border-indigo-200 bg-indigo-50/80 text-slate-800 rounded-tr-md'
                     : 'border border-slate-200 bg-white text-slate-700 rounded-tl-md'
                 }`}>
+                  {msg.role === 'assistant' && msg.sender_display_name && (
+                    <p className="mb-1 text-[11px] font-semibold text-indigo-600">{msg.sender_display_name}</p>
+                  )}
                   <div className="whitespace-pre-wrap break-words">{msg.content}</div>
                   <p className="mt-1 text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
                 </div>
               </div>
             ))}
+            {awaitingAgent && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-[13px] text-slate-500">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="animate-pulse">🤔</span> Agent is thinking...
+                  </span>
+                </div>
+              </div>
+            )}
             <div ref={chatEndRef} />
           </div>
 
