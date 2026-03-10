@@ -16,22 +16,6 @@ interface Agent {
   api_key?: string
 }
 
-interface TaskPlanSubtask {
-  id: string
-  title: string
-}
-
-interface TaskPlanPhase {
-  id: string
-  title: string
-  subtasks: TaskPlanSubtask[]
-}
-
-interface TaskPlan {
-  goal: string
-  phases: TaskPlanPhase[]
-}
-
 interface TaskItem {
   id: string
   title: string
@@ -78,22 +62,6 @@ const arcPath = (cx: number, cy: number, r: number, start: number, end: number) 
   const y2 = cy + r * Math.sin(end)
   const largeArc = end - start > Math.PI ? 1 : 0
   return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
-}
-
-const PLAN_PREFIX = 'WTT_PLAN_JSON:'
-
-const parseTaskPlanFromNotes = (notes?: string): TaskPlan | null => {
-  if (!notes) return null
-  const idx = notes.indexOf(PLAN_PREFIX)
-  if (idx < 0) return null
-  const raw = notes.slice(idx + PLAN_PREFIX.length).trim()
-  try {
-    const obj = JSON.parse(raw) as TaskPlan
-    if (!obj?.goal || !Array.isArray(obj?.phases)) return null
-    return obj
-  } catch {
-    return null
-  }
 }
 
 
@@ -220,21 +188,6 @@ export default function TasksPage() {
       .slice(-8)
       .reverse()
   }, [timelineRaw])
-
-  const selectedTaskPlan = useMemo(() => parseTaskPlanFromNotes(selectedTask?.notes), [selectedTask?.notes])
-
-  const selectedTaskSubtaskState = useMemo(() => {
-    const stepLines = timeline
-      .map((t) => t.content)
-      .flatMap((c) => c.split('\n'))
-      .map((s) => s.trim())
-      .filter((s) => s.startsWith('step='))
-      .map((s) => s.slice(5).trim())
-
-    const doneSet = new Set(stepLines)
-    const onGoing = stepLines.length > 0 ? stepLines[stepLines.length - 1] : ''
-    return { doneSet, onGoing }
-  }, [timeline])
 
   useEffect(() => {
     if (selectedTask) {
@@ -376,6 +329,7 @@ export default function TasksPage() {
         priority: 'P1',
         status: 'todo',
         task_type: 'feature',
+        exec_mode: 'reasoning',
         owner_agent_id: selectedAgentId || undefined,
         runner_agent_id: selectedAgentId || undefined,
         created_by: actorSource(session, selectedAgentId),
@@ -514,7 +468,6 @@ export default function TasksPage() {
   const runCurrent = async () => {
     if (!selectedTask) return
 
-    // 提速：直接下发运行，Plan 由后端/Agent 自动处理
     setRunningTaskId(selectedTask.id)
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
@@ -526,6 +479,7 @@ export default function TasksPage() {
         body: JSON.stringify({
           trigger_agent_id: actorSource(session, selectedAgentId) || 'task-runner',
           runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId,
+          exec_mode: selectedTask.exec_mode || 'reasoning',
         }),
       })
       if (!resp.ok) {
@@ -545,11 +499,27 @@ export default function TasksPage() {
   const reviewCurrent = async (action: 'approve' | 'reject' | 'block') => {
     if (!selectedTask) return
 
-    let comment = ''
     if (action === 'reject') {
-      const input = window.prompt('请输入 Reject 意见（会回传给 Agent 重新执行）：', '')
-      if (input === null) return
-      comment = input.trim()
+      // Reject: post a plain message to the task topic feed
+      const input = window.prompt('请输入 Reject 意见：', '')
+      if (input === null || !input.trim()) return
+      if (selectedTask.topic_id) {
+        await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          },
+          body: JSON.stringify({
+            sender_id: selectedAgentId || 'reviewer',
+            content: input.trim(),
+            content_type: 'text',
+            semantic_type: 'reply',
+          }),
+        })
+      }
+      mutateTasks()
+      return
     }
 
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/review`, {
@@ -558,7 +528,7 @@ export default function TasksPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.accessToken ?? ''}`,
       },
-      body: JSON.stringify({ action, reviewer: selectedAgentId || 'reviewer', comment }),
+      body: JSON.stringify({ action, reviewer: selectedAgentId || 'reviewer', comment: '' }),
     })
     mutateTasks()
   }
@@ -718,39 +688,30 @@ export default function TasksPage() {
                 <p className="text-xs">Owner: {selectedTask.owner_agent_id || 'unassigned'}</p>
                 <p className="text-xs">Runner: {selectedTask.runner_agent_id || '-'}</p>
 
-                <div className="rounded border border-slate-200 bg-slate-100 p-2 text-xs">
-                  <p className="mb-1 font-semibold text-slate-600">任务规划</p>
-                  {selectedTaskPlan ? (
-                    <>
-                      <p className="mb-2 text-slate-700">🎯 目标：{selectedTaskPlan.goal}</p>
-                      <div className="space-y-2">
-                        {selectedTaskPlan.phases.map((phase, i) => (
-                          <div key={phase.id} className="rounded border border-slate-200 bg-slate-100 p-2">
-                            <p className="mb-1 text-indigo-500">阶段{i + 1} · {phase.title}</p>
-                            <div className="space-y-1">
-                              {phase.subtasks.map((st) => {
-                                const state = selectedTaskSubtaskState.doneSet.has(st.title)
-                                  ? 'done'
-                                  : selectedTaskSubtaskState.onGoing && selectedTaskSubtaskState.onGoing.includes(st.title)
-                                    ? 'ongoing'
-                                    : 'todo'
-                                return (
-                                  <p key={st.id} className="flex items-center gap-1">
-                                    <span className={state === 'done' ? 'text-green-300' : state === 'ongoing' ? 'text-yellow-300' : 'text-slate-500'}>
-                                      {state === 'done' ? '✅ Done' : state === 'ongoing' ? '🟡 On Going' : '⚪ ToDo'}
-                                    </span>
-                                    <span className="text-slate-700">{st.title}</span>
-                                  </p>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-slate-500">未规划。点击 Run Task 时会先进入任务规划。</p>
-                  )}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-500">Mode:</span>
+                  <button
+                    className={`rounded-md px-2 py-0.5 ${(selectedTask.exec_mode || 'reasoning') !== 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                    onClick={async () => {
+                      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                        body: JSON.stringify({ exec_mode: 'reasoning' }),
+                      })
+                      mutateTasks()
+                    }}
+                  >Agent Mode</button>
+                  <button
+                    className={`rounded-md px-2 py-0.5 ${selectedTask.exec_mode === 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                    onClick={async () => {
+                      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                        body: JSON.stringify({ exec_mode: 'plan' }),
+                      })
+                      mutateTasks()
+                    }}
+                  >Plan Mode</button>
                 </div>
 
                 {selectedTask.topic_id && (
