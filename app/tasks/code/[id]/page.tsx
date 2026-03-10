@@ -102,9 +102,9 @@ function findFileNodeByPath(nodes: FileNode[], target: string): FileNode | null 
 
 // ── File Tree Component ────────────────────────────────
 function FileTreeNode({
-  node, depth, selectedPath, onSelect, onShare,
+  node, depth, selectedPath, onSelect,
 }: {
-  node: FileNode; depth: number; selectedPath: string; onSelect: (node: FileNode) => void; onShare?: (node: FileNode) => void
+  node: FileNode; depth: number; selectedPath: string; onSelect: (node: FileNode) => void
 }) {
   const [expanded, setExpanded] = useState(depth < 1)
   const isDir = node.kind === 'directory'
@@ -128,16 +128,9 @@ function FileTreeNode({
           </span>
           <span className="truncate">{node.name}</span>
         </button>
-        {!isDir && onShare && (
-          <button
-            onClick={() => onShare(node)}
-            title="Share to topic"
-            className="hidden shrink-0 rounded px-0.5 text-[10px] text-indigo-400 hover:bg-indigo-100 hover:text-indigo-600 group-hover:inline"
-          >📤</button>
-        )}
       </div>
       {isDir && expanded && node.children?.map((child) => (
-        <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} onShare={onShare} />
+        <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
       ))}
     </div>
   )
@@ -399,60 +392,6 @@ export default function CodeTaskPage() {
     return c
   }
 
-  // ── Share file to topic ────────────────────────────
-  const shareFile = async (node: FileNode) => {
-    if (!node.handle || node.kind !== 'file') return
-    try {
-      const content = await readFileContent(node.handle as FileSystemFileHandle)
-      const lang = langFromPath(node.path)
-      await publishToTopic(
-        `[FILE] ${node.path}\n\`\`\`${lang}\n${content}\n\`\`\``,
-        'post',
-      )
-    } catch (e) {
-      console.error('Share failed:', e)
-    }
-  }
-
-  // ── Share all open files ───────────────────────────
-  const [sharing, setSharing] = useState(false)
-  const shareAllFiles = async () => {
-    if (fileTree.length === 0) return
-    setSharing(true)
-    const allFiles: FileNode[] = []
-    const collect = (nodes: FileNode[]) => {
-      for (const n of nodes) {
-        if (n.kind === 'file') allFiles.push(n)
-        if (n.children) collect(n.children)
-      }
-    }
-    collect(fileTree)
-
-    // Share in batches to avoid message size limits
-    let batch = ''
-    let batchCount = 0
-    for (const f of allFiles) {
-      if (!f.handle) continue
-      try {
-        const content = await readFileContent(f.handle as FileSystemFileHandle)
-        const entry = `### ${f.path}\n\`\`\`${langFromPath(f.path)}\n${content}\n\`\`\`\n\n`
-        if ((batch + entry).length > 30000 && batch) {
-          await publishToTopic(`[CODEBASE FILES batch]\n\n${batch}`, 'post')
-          batch = entry
-          batchCount++
-        } else {
-          batch += entry
-        }
-      } catch {
-        // skip unreadable files
-      }
-    }
-    if (batch) {
-      await publishToTopic(`[CODEBASE FILES${batchCount > 0 ? ' batch' : ''}]\n\n${batch}`, 'post')
-    }
-    setSharing(false)
-  }
-
   // ── Select file ────────────────────────────────────
   const selectFile = async (node: FileNode) => {
     if (!node.handle || node.kind !== 'file') return
@@ -682,14 +621,6 @@ export default function CodeTaskPage() {
                 <p className="text-xs font-semibold text-slate-500">{dirName}</p>
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] text-slate-400">{fileCount} files</span>
-                  <button
-                    onClick={shareAllFiles}
-                    disabled={sharing}
-                    title="Share all files to topic (Agent can see the full codebase)"
-                    className="rounded bg-indigo-100 px-1 py-0.5 text-[10px] text-indigo-600 hover:bg-indigo-200 disabled:opacity-50"
-                  >
-                    {sharing ? '⏳' : '📤 All'}
-                  </button>
                 </div>
               </div>
               {fileTree.map((node) => (
@@ -699,7 +630,6 @@ export default function CodeTaskPage() {
                   depth={0}
                   selectedPath={selectedFile?.path || ''}
                   onSelect={selectFile}
-                  onShare={shareFile}
                 />
               ))}
             </>
