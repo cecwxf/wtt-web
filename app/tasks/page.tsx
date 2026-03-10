@@ -425,7 +425,7 @@ export default function TasksPage() {
         task_type: 'feature',
         owner_agent_id: selectedAgentId || undefined,
         runner_agent_id: selectedAgentId || undefined,
-        created_by: (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
+        created_by: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
       }),
     })
     mutateTasks()
@@ -485,7 +485,7 @@ export default function TasksPage() {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            trigger_agent_id: (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'task-runner',
+            trigger_agent_id: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'task-runner',
             runner_agent_id: t.runner_agent_id || t.owner_agent_id || selectedAgentId,
           }),
         })
@@ -615,7 +615,7 @@ export default function TasksPage() {
           Authorization: `Bearer ${session?.accessToken ?? ''}`,
         },
         body: JSON.stringify({
-          trigger_agent_id: (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'task-runner',
+          trigger_agent_id: (session as any)?.userId || (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'task-runner',
           runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId,
         }),
       })
