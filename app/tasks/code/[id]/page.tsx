@@ -11,6 +11,9 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
+const FULL_CODEBASE_MAX_FILES = 120
+const FULL_CODEBASE_MAX_CHARS = 45000
+
 // ── Types ──────────────────────────────────────────────
 interface FileNode {
   name: string
@@ -84,6 +87,17 @@ async function readDirectory(dirHandle: FileSystemDirectoryHandle, parentPath = 
 async function readFileContent(handle: FileSystemFileHandle): Promise<string> {
   const file = await handle.getFile()
   return file.text()
+}
+
+function findFileNodeByPath(nodes: FileNode[], target: string): FileNode | null {
+  for (const n of nodes) {
+    if (n.kind === 'file' && n.path === target) return n
+    if (n.children?.length) {
+      const hit = findFileNodeByPath(n.children, target)
+      if (hit) return hit
+    }
+  }
+  return null
 }
 
 // ── File Tree Component ────────────────────────────────
@@ -190,8 +204,45 @@ export default function CodeTaskPage() {
         }
         return [...prev, incoming]
       })
+
+      // Agent can ask: REQUEST_FILES: path/a.ts, path/b.py
+      if (incoming.role === 'assistant') {
+        const mm = incoming.content.match(/REQUEST_FILES\s*:\s*([^\n]+)/i)
+        if (mm?.[1] && task?.topic_id && selectedAgentId) {
+          const requested = Array.from(new Set(mm[1].split(',').map((s) => s.trim()).filter(Boolean))).slice(0, 20)
+          if (requested.length) {
+            void (async () => {
+              for (const p of requested) {
+                const node = findFileNodeByPath(fileTree, p)
+                if (!node?.handle || node.kind !== 'file') continue
+                try {
+                  const content = (selectedFile && selectedFile.path === node.path)
+                    ? modifiedContent
+                    : await readFileContent(node.handle as FileSystemFileHandle)
+                  const body = {
+                    content: `[FILE] ${node.path}\n\`\`\`${langFromPath(node.path)}\n${content}\n\`\`\``,
+                    content_type: 'text',
+                    semantic_type: 'post',
+                    sender_type: 'HUMAN',
+                  }
+                  await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${session?.accessToken ?? ''}`,
+                    },
+                    body: JSON.stringify(body),
+                  })
+                } catch {
+                  // ignore per-file failures
+                }
+              }
+            })()
+          }
+        }
+      }
     },
-    [task?.topic_id],
+    [task?.topic_id, selectedAgentId, fileTree, selectedFile, modifiedContent, session?.accessToken],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
@@ -458,7 +509,30 @@ export default function CodeTaskPage() {
     }
     collect(fileTree)
 
-    const MAX_TOTAL = 45000
+    // Large repos: share index only, then let agent request files via REQUEST_FILES
+    if (allFiles.length > FULL_CODEBASE_MAX_FILES) {
+      const treeText = buildTreeText(fileTree)
+      const topList = allFiles.slice(0, 200).map((f) => `- ${f.path}`).join('\n')
+      const indexed = [
+        text,
+        '',
+        `[CODEBASE INDEX] ${dirName || 'workspace'}`,
+        `files_in_workspace=${allFiles.length}`,
+        '',
+        '[PROJECT TREE]',
+        '```',
+        `${dirName || 'workspace'}/`,
+        treeText,
+        '```',
+        '',
+        '[FILES sample<=200]',
+        topList,
+        '',
+        '需要具体文件请回复: REQUEST_FILES: path/a.ts, path/b.py',
+      ].join('\n')
+      return { content: indexed, fullCodebase: true }
+    }
+
     let used = 0
     let included = 0
     let skipped = 0
@@ -476,7 +550,7 @@ export default function CodeTaskPage() {
         const lang = langFromPath(f.path)
         const block = `\n[FILE] ${f.path}\n\
 \`\`\`${lang}\n${content}\n\`\`\`\n`
-        if (used + block.length > MAX_TOTAL) {
+        if (used + block.length > FULL_CODEBASE_MAX_CHARS) {
           skipped++
           continue
         }
