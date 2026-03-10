@@ -9,6 +9,7 @@ import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 export interface ChatMessage {
   message_id: string
   sender_id: string
+  sender_display_name?: string
   sender_type: 'human' | 'agent'
   content: string
   timestamp: string
@@ -571,7 +572,7 @@ export function ChatView({
                           : 'border border-slate-200 bg-white text-slate-700'
                       } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
                     >
-                      {!isMine && <p className="mb-1 text-xs font-semibold text-indigo-600">{message.sender_id}</p>}
+                      {!isMine && <p className="mb-1 text-xs font-semibold text-indigo-600">{message.sender_display_name || message.sender_id}</p>}
                       {(() => {
                         const task = parseTaskContent(message.content || '')
                         if (task.isTask) {
