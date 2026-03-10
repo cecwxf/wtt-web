@@ -365,7 +365,7 @@ export default function PipelinesPage() {
         status: 'todo',
         owner_agent_id: selectedAgentId || undefined,
         runner_agent_id: selectedAgentId || undefined,
-        created_by: selectedAgentId || 'user',
+        created_by: (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
       }),
     })
     if (!r.ok) { alert(`Create task failed: ${(await r.text()) || r.status}`); return }
@@ -426,7 +426,7 @@ export default function PipelinesPage() {
         status: 'todo',
         owner_agent_id: selected.owner_agent_id,
         runner_agent_id: selected.runner_agent_id,
-        created_by: selectedAgentId || 'user',
+        created_by: (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'user',
         description: taskDraft.description,
         acceptance: taskDraft.acceptance,
         notes: taskDraft.notes,
@@ -536,7 +536,7 @@ export default function PipelinesPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({
-        trigger_agent_id: selectedAgentId || 'pipeline-runner',
+        trigger_agent_id: (session?.user as any)?.name || (session?.user as any)?.email || selectedAgentId || 'pipeline-runner',
         pipeline_id: editingPipelineId || undefined,
       }),
     })
