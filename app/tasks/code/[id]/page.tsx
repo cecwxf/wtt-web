@@ -241,17 +241,21 @@ export default function CodeTaskPage() {
   // ── Publish to topic helper (WS first, HTTP fallback) ──
   const publishToTopic = async (content: string, semanticType = 'post') => {
     if (!task?.topic_id || !selectedAgentId) {
-      console.warn('[CodeTask] publishToTopic skipped: topic_id=', task?.topic_id, 'agent=', selectedAgentId)
-      return
+      throw new Error('No topic or agent selected')
     }
-    // Try WebSocket first
-    const wsResult = await sendAction('publish', {
-      topic_id: task.topic_id,
-      content,
-      content_type: 'text',
-      semantic_type: semanticType,
-    })
-    if (wsResult !== null) return // WS succeeded
+
+    // Try WebSocket first (wrapped in try-catch — sendAction can throw on timeout)
+    try {
+      const wsResult = await sendAction('publish', {
+        topic_id: task.topic_id,
+        content,
+        content_type: 'text',
+        semantic_type: semanticType,
+      })
+      if (wsResult !== null) return // WS succeeded
+    } catch {
+      console.warn('[CodeTask] WS publish failed, falling back to HTTP')
+    }
 
     // HTTP fallback
     const url = `${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?agent_id=${encodeURIComponent(selectedAgentId)}`
@@ -269,8 +273,8 @@ export default function CodeTaskPage() {
     })
     if (!resp.ok) {
       const err = await resp.text().catch(() => 'unknown')
-      console.error('[CodeTask] publish failed:', resp.status, err)
-      throw new Error(`Publish failed: ${resp.status}`)
+      console.error('[CodeTask] HTTP publish failed:', resp.status, err)
+      throw new Error(`Publish failed: ${resp.status} ${err}`)
     }
   }
 
@@ -408,26 +412,27 @@ export default function CodeTaskPage() {
   // ── Auto-run task (set to "doing") on first send ─────
   const ensureTaskRunning = async () => {
     if (taskRunning || !task?.id) return
-    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}/run`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.accessToken ?? ''}`,
-      },
-      body: JSON.stringify({
-        runner_agent_id: selectedAgentId,
-        exec_mode: 'reasoning',
-      }),
-    })
-    if (r.ok) {
-      setTaskRunning(true)
-      mutateTask()
-    } else if (r.status !== 400) {
-      // 400 = invalid transition (already running) — that's fine
-      const err = await r.text().catch(() => '')
-      console.error('[CodeTask] run failed:', r.status, err)
-    } else {
-      setTaskRunning(true) // already running
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+        body: JSON.stringify({
+          runner_agent_id: selectedAgentId,
+          exec_mode: 'reasoning',
+        }),
+      })
+      if (r.ok || r.status === 400) {
+        // 400 = invalid transition (already running) — that's fine
+        setTaskRunning(true)
+        mutateTask()
+      } else {
+        console.error('[CodeTask] run failed:', r.status, await r.text().catch(() => ''))
+      }
+    } catch (e) {
+      console.error('[CodeTask] run error:', e)
     }
   }
 
@@ -436,7 +441,8 @@ export default function CodeTaskPage() {
 
   const sendMessage = async () => {
     const text = chatInput.trim()
-    if (!text || !task?.topic_id || sending) return
+    if (!text || sending) return
+    if (!task?.topic_id) { console.error('[CodeTask] No topic_id yet'); return }
     if (!selectedAgentId) { alert('Please select an agent first'); return }
     setSending(true)
     setChatInput('')
@@ -451,7 +457,7 @@ export default function CodeTaskPage() {
     setChatMessages(prev => [...prev, optimisticMsg])
 
     try {
-      // Auto-run the task on first message
+      // Auto-run the task on first message (no-op if already running)
       await ensureTaskRunning()
 
       let fullContent = text
@@ -462,8 +468,10 @@ export default function CodeTaskPage() {
       setAwaitingAgent(true)
     } catch (e) {
       console.error('[CodeTask] sendMessage failed:', e)
-      alert(e instanceof Error ? e.message : 'Failed to send message')
-      setChatMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
+      // Mark optimistic message as failed
+      setChatMessages(prev => prev.map(m =>
+        m.id === optimisticMsg.id ? { ...m, content: `⚠️ ${text}\n\n(Send failed: ${e instanceof Error ? e.message : 'unknown'})` } : m
+      ))
     } finally {
       setSending(false)
     }

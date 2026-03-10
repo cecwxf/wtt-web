@@ -358,6 +358,22 @@ export default function TasksPage() {
       if (resp.ok) {
         const real = await resp.json()
         mutateTasks((prev: TaskItem[] | undefined) => (prev || []).map((t) => (t.id === tempId ? { ...t, ...real } : t)), { revalidate: false })
+
+        // Auto-run code/research tasks so agent is ready immediately
+        if (newTaskType === 'code' || newTaskType === 'research') {
+          fetch(`${CLIENT_WTT_API_BASE}/tasks/${real.id}/run`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session?.accessToken ?? ''}`,
+            },
+            body: JSON.stringify({
+              runner_agent_id: selectedAgentId || undefined,
+              exec_mode: 'reasoning',
+            }),
+          }).catch(() => {})
+        }
+
         // Navigate to the appropriate task page
         if (newTaskType === 'code') {
           router.push(`/tasks/code/${real.id}`)
