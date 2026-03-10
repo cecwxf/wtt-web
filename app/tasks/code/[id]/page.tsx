@@ -156,9 +156,9 @@ export default function CodeTaskPage() {
 
   // Load messages from task topic as chat history
   const { data: topicMessages, mutate: mutateMessages } = useSWR(
-    task?.topic_id && session?.accessToken ? [`code-chat-${task.topic_id}`, session.accessToken] : null,
+    task?.topic_id && session?.accessToken && selectedAgentId ? [`code-chat-${task.topic_id}`, session.accessToken, selectedAgentId] : null,
     async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?limit=200&agent_id=${selectedAgentId}`, {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?limit=200&agent_id=${encodeURIComponent(selectedAgentId)}`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!r.ok) return []
@@ -203,20 +203,28 @@ export default function CodeTaskPage() {
 
   // ── Publish to topic helper ─────────────────────────
   const publishToTopic = async (content: string, semanticType = 'post') => {
-    if (!task?.topic_id || !selectedAgentId) return
-    await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages`, {
+    if (!task?.topic_id || !selectedAgentId) {
+      console.warn('[CodeTask] publishToTopic skipped: topic_id=', task?.topic_id, 'agent=', selectedAgentId)
+      return
+    }
+    const url = `${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?agent_id=${encodeURIComponent(selectedAgentId)}`
+    const resp = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.accessToken ?? ''}`,
       },
       body: JSON.stringify({
-        sender_id: selectedAgentId,
         content,
         content_type: 'text',
         semantic_type: semanticType,
       }),
     })
+    if (!resp.ok) {
+      const err = await resp.text().catch(() => 'unknown')
+      console.error('[CodeTask] publish failed:', resp.status, err)
+      throw new Error(`Publish failed: ${resp.status}`)
+    }
     mutateMessages()
   }
 
@@ -355,18 +363,19 @@ export default function CodeTaskPage() {
   const sendMessage = async () => {
     const text = chatInput.trim()
     if (!text || !task?.topic_id || sending) return
+    if (!selectedAgentId) { alert('Please select an agent first'); return }
     setSending(true)
     setChatInput('')
 
     try {
-      // If a file is open, include it as context
       let fullContent = text
       if (selectedFile && modifiedContent) {
         fullContent = `[Context: ${selectedFile.path}]\n\`\`\`${langFromPath(selectedFile.path)}\n${modifiedContent.slice(0, 8000)}\n\`\`\`\n\n${text}`
       }
       await publishToTopic(fullContent)
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error('[CodeTask] sendMessage failed:', e)
+      alert(e instanceof Error ? e.message : 'Failed to send message')
     } finally {
       setSending(false)
     }
