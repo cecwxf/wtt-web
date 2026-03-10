@@ -89,6 +89,9 @@ export default function TasksPage() {
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [nowTs, setNowTs] = useState(Date.now())
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false)
+  const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [newTaskType, setNewTaskType] = useState<'code' | 'research' | 'common'>('common')
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -315,20 +318,23 @@ export default function TasksPage() {
   }, [agents])
 
   const createTask = async () => {
-    const title = prompt('Task title')?.trim()
+    const title = newTaskTitle.trim()
     if (!title) return
+    setShowNewTaskModal(false)
+    setNewTaskTitle('')
+
+    const taskType = newTaskType === 'code' ? 'code' : newTaskType === 'research' ? 'research' : 'feature'
     const tempId = `temp-${Date.now()}`
     const optimistic: TaskItem = {
       id: tempId,
       title,
-      task_type: 'feature',
+      task_type: taskType,
       priority: 'P1',
       status: 'todo',
       exec_mode: 'reasoning',
       owner_agent_id: selectedAgentId || undefined,
       runner_agent_id: selectedAgentId || undefined,
     }
-    // Show card instantly
     mutateTasks((prev: TaskItem[] | undefined) => [...(prev || []), optimistic], { revalidate: false })
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
@@ -342,7 +348,7 @@ export default function TasksPage() {
           task_mode: 'single',
           priority: 'P1',
           status: 'todo',
-          task_type: 'feature',
+          task_type: taskType,
           exec_mode: 'reasoning',
           owner_agent_id: selectedAgentId || undefined,
           runner_agent_id: selectedAgentId || undefined,
@@ -351,8 +357,13 @@ export default function TasksPage() {
       })
       if (resp.ok) {
         const real = await resp.json()
-        // Replace temp card with real task (has server ID)
         mutateTasks((prev: TaskItem[] | undefined) => (prev || []).map((t) => (t.id === tempId ? { ...t, ...real } : t)), { revalidate: false })
+        // Navigate to the appropriate task page
+        if (newTaskType === 'code') {
+          router.push(`/tasks/code/${real.id}`)
+        } else if (newTaskType === 'research') {
+          router.push(`/tasks/research/${real.id}`)
+        }
       } else {
         mutateTasks()
       }
@@ -634,7 +645,7 @@ export default function TasksPage() {
           <div className="flex items-center gap-2">
             <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-500">批量Run任务</button>
             <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">批量取消任务</button>
-            <button onClick={createTask} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
+            <button onClick={() => setShowNewTaskModal(true)} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
           </div>
         </div>
 
@@ -651,6 +662,14 @@ export default function TasksPage() {
                     <button
                       key={task.id}
                       onClick={(e) => {
+                        if (task.task_type === 'code') {
+                          router.push(`/tasks/code/${task.id}`)
+                          return
+                        }
+                        if (task.task_type === 'research') {
+                          router.push(`/tasks/research/${task.id}`)
+                          return
+                        }
                         setSelectedTask(task)
                         setTaskDraft(task)
                         if (e.metaKey || e.ctrlKey) {
@@ -666,6 +685,8 @@ export default function TasksPage() {
                       className={`w-full rounded-lg border p-2 text-left hover:border-indigo-500/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''} ${selectedTaskIds.includes(task.id) ? 'ring-2 ring-indigo-400 !bg-indigo-100/80' : ''}`}
                     >
                       <div className="mb-1 flex items-center gap-2">
+                        {task.task_type === 'code' && <span className="shrink-0 rounded bg-cyan-100 px-1 text-[10px] font-medium text-cyan-700">💻</span>}
+                        {task.task_type === 'research' && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700">📄</span>}
                         <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
                       </div>
                       <div className="mt-2 h-1.5 w-full rounded bg-slate-200">
@@ -893,6 +914,51 @@ export default function TasksPage() {
           100% { transform: translateX(-45%); }
         }
       `}</style>
+
+      {/* New Task Modal */}
+      {showNewTaskModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNewTaskModal(false)}>
+          <div className="w-[420px] rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 text-lg font-semibold text-slate-800">New Task</h3>
+            <input
+              autoFocus
+              className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+              placeholder="Task title..."
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && newTaskTitle.trim()) createTask() }}
+            />
+            <p className="mb-2 text-xs font-medium text-slate-500">Task Type</p>
+            <div className="mb-5 grid grid-cols-3 gap-3">
+              {([
+                { key: 'code' as const, icon: '💻', label: 'Code Task', desc: 'IDE + Agent coding' },
+                { key: 'research' as const, icon: '📄', label: 'Research', desc: 'Papers & reports' },
+                { key: 'common' as const, icon: '📋', label: 'Common', desc: 'General task' },
+              ]).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setNewTaskType(t.key)}
+                  className={`rounded-xl border-2 p-3 text-left transition-all ${
+                    newTaskType === t.key ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <p className="text-2xl">{t.icon}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">{t.label}</p>
+                  <p className="text-[11px] text-slate-500">{t.desc}</p>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowNewTaskModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">Cancel</button>
+              <button
+                onClick={createTask}
+                disabled={!newTaskTitle.trim()}
+                className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white disabled:opacity-50"
+              >Create</button>
+            </div>
+          </div>
+        </div>
+      )}
     </WttShellV2>
   )
 }
