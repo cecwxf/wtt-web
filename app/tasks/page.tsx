@@ -96,6 +96,7 @@ export default function TasksPage() {
   const [newTaskType, setNewTaskType] = useState<'code' | 'research' | 'common'>('common')
   const [panelInput, setPanelInput] = useState('')
   const [panelSending, setPanelSending] = useState(false)
+  const panelSendingRef = useRef(false)
   const [queueIndicator, setQueueIndicator] = useState(false)
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
@@ -613,8 +614,10 @@ export default function TasksPage() {
 
   const sendPanelMessage = async () => {
     if (!selectedTask || !panelInput.trim()) return
+    if (panelSendingRef.current) return
     const text = panelInput.trim()
     setPanelInput('')
+    panelSendingRef.current = true
     setPanelSending(true)
 
     const isUser = panelSendAs === 'user'
@@ -681,6 +684,7 @@ export default function TasksPage() {
     } catch (e) {
       alert(e instanceof Error ? e.message : 'send failed')
     } finally {
+      panelSendingRef.current = false
       setPanelSending(false)
       await mutateTasks()
     }
