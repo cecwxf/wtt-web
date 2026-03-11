@@ -630,19 +630,6 @@ export default function TasksPage() {
     }
 
     try {
-      // If task is in "todo" status, run it first
-      if (selectedTask.status === 'todo') {
-        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId,
-            exec_mode: selectedTask.exec_mode || 'reasoning',
-          }),
-        })
-        await mutateTasks()
-      }
-
       if (selectedTask.topic_id) {
         const url = isUser
           ? `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages`
