@@ -5,11 +5,14 @@ import { useRouter, useParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN, WS_BASE_URL } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
+
+// SSH calls go directly to backend to avoid Vercel proxy timeout
+const SSH_API_BASE = (typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_WTT_API_URL || 'https://www.waxbyte.com') : DEFAULT_WTT_API_ORIGIN).replace(/\/+$/, '')
 
 const FULL_CODEBASE_MAX_FILES = 120
 const FULL_CODEBASE_MAX_CHARS = 45000
@@ -250,7 +253,7 @@ export default function CodeTaskPage() {
                     if (cached !== undefined) {
                       content = cached
                     } else {
-                      const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/read?path=${encodeURIComponent(node.path)}`, {
+                      const r = await fetch(`${SSH_API_BASE}/ssh/read?path=${encodeURIComponent(node.path)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
                         body: JSON.stringify(sshConfig),
@@ -457,7 +460,7 @@ export default function CodeTaskPage() {
     setSshTesting(true)
     setSshTestResult('')
     try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/test`, {
+      const r = await fetch(`${SSH_API_BASE}/ssh/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify(sshConfig),
@@ -474,7 +477,7 @@ export default function CodeTaskPage() {
   const connectSsh = async () => {
     setSshConnecting(true)
     try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/tree?max_depth=3`, {
+      const r = await fetch(`${SSH_API_BASE}/ssh/tree?max_depth=3`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify(sshConfig),
@@ -507,7 +510,7 @@ export default function CodeTaskPage() {
     if (!sshConnected) return
     setSshConnecting(true)
     try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/tree?max_depth=3`, {
+      const r = await fetch(`${SSH_API_BASE}/ssh/tree?max_depth=3`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify(sshConfig),
@@ -525,7 +528,7 @@ export default function CodeTaskPage() {
   const readRemoteFile = async (filePath: string): Promise<string> => {
     const cached = remoteContentCacheRef.current[filePath]
     if (cached !== undefined) return cached
-    const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/read?path=${encodeURIComponent(filePath)}`, {
+    const r = await fetch(`${SSH_API_BASE}/ssh/read?path=${encodeURIComponent(filePath)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify(sshConfig),
