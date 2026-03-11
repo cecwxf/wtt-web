@@ -642,7 +642,7 @@ export default function TasksPage() {
         const url = isUser
           ? `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages`
           : `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages?agent_id=${encodeURIComponent(agentId)}`
-        await fetch(url, {
+        const resp = await fetch(url, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -653,6 +653,10 @@ export default function TasksPage() {
             semantic_type: 'reply',
           }),
         })
+        if (!resp.ok) {
+          const err = await resp.text().catch(() => '')
+          throw new Error(`send failed: ${resp.status} ${err}`)
+        }
       }
 
       // Show queue indicator if task is actively running
@@ -660,8 +664,8 @@ export default function TasksPage() {
         setQueueIndicator(true)
         setTimeout(() => setQueueIndicator(false), 4000)
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'send failed')
     } finally {
       setPanelSending(false)
       await mutateTasks()
