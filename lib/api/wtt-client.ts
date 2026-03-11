@@ -192,12 +192,13 @@ class WTTApiClient {
   async getTopicMessages(
     topicId: string,
     limit: number = 50,
-    options?: { before?: string; offset?: number }
+    options?: { before?: string; offset?: number; agentId?: string }
   ): Promise<Message[]> {
     const params = new URLSearchParams()
     params.set('limit', String(limit))
     if (options?.before) params.set('before', options.before)
     if (typeof options?.offset === 'number') params.set('offset', String(options.offset))
+    if (options?.agentId) params.set('agent_id', options.agentId)
     return this.request<Message[]>(`/topics/${topicId}/messages?${params.toString()}`)
   }
 
