@@ -621,7 +621,7 @@ export default function TasksPage() {
     const agentId = isUser ? (selectedAgentId || 'user') : panelSendAs
     const senderType = isUser ? 'HUMAN' : 'AGENT'
     const senderId = isUser ? actorSource(session, selectedAgentId) : agentId
-    if (isUser && panelAwaitingInference) {
+    if (panelAwaitingInference) {
       setQueueIndicator(true)
     }
     const headers = {
@@ -657,7 +657,7 @@ export default function TasksPage() {
       }
 
       // If already waiting for a prior inference, show queued hint persistently
-      if (isUser && panelAwaitingInference) {
+      if (panelAwaitingInference) {
         setQueueIndicator(true)
       }
     } catch (e) {
