@@ -715,6 +715,11 @@ export default function CodeTaskPage() {
   const selectFile = async (node: FileNode) => {
     if (task?.repo_url) {
       if (node.kind !== 'file') return
+      setSelectedFile(node)
+      setFileLoading(true)
+      setFileContent('')
+      setModifiedContent('// Loading file content...')
+      setIsModified(false)
       try {
         const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file?path=${encodeURIComponent(node.path)}`, {
           headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
@@ -722,7 +727,6 @@ export default function CodeTaskPage() {
         if (!r.ok) throw new Error(await r.text())
         const data = await r.json()
         const content = data.content || ''
-        setSelectedFile(node)
         setFileContent(content)
         setModifiedContent(content)
         setIsModified(false)
@@ -730,7 +734,13 @@ export default function CodeTaskPage() {
           setOpenFiles((prev) => [...prev, node])
         }
       } catch (e) {
+        const msg = e instanceof Error ? e.message : 'unknown error'
         console.error('Failed to read repo file:', e)
+        setFileContent('')
+        setModifiedContent(`// Failed to load file\n// ${msg}`)
+        alert(`读取仓库文件失败: ${msg}`)
+      } finally {
+        setFileLoading(false)
       }
       return
     }
@@ -918,6 +928,7 @@ export default function CodeTaskPage() {
 
   // ── Send chat message ──────────────────────────────
   const [awaitingAgent, setAwaitingAgent] = useState(false)
+  const [fileLoading, setFileLoading] = useState(false)
 
   const sendMessage = async () => {
     const text = chatInput.trim()
@@ -1142,7 +1153,10 @@ export default function CodeTaskPage() {
 
           {/* Monaco editor */}
           {selectedFile ? (
-            <div className="flex-1">
+            <div className="flex-1 relative">
+              {fileLoading && (
+                <div className="absolute left-2 top-2 z-10 rounded bg-slate-800/80 px-2 py-1 text-[11px] text-white">Loading...</div>
+              )}
               <MonacoEditor
                 height="100%"
                 language={langFromPath(selectedFile.path)}
