@@ -38,6 +38,24 @@ interface Agent {
   is_primary: boolean
 }
 
+interface SSHConfig {
+  host: string
+  port: number
+  username: string
+  password: string
+  private_key: string
+  project_path: string
+}
+
+const DEFAULT_SSH_CONFIG: SSHConfig = {
+  host: '',
+  port: 22,
+  username: '',
+  password: '',
+  private_key: '',
+  project_path: '~',
+}
+
 const getSessionSenderName = (session: unknown): string => {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
   const uid = s?.userId || ''
@@ -158,6 +176,18 @@ export default function CodeTaskPage() {
   const [openFiles, setOpenFiles] = useState<FileNode[]>([])
   const codebaseSharedSigRef = useRef<string>('')
 
+  // ── Remote agent (SSH) state ──────────────────────
+  const [agentMode, setAgentMode] = useState<'local' | 'remote'>('local')
+  const [sshConfig, setSshConfig] = useState<SSHConfig>(DEFAULT_SSH_CONFIG)
+  const [sshConnected, setSshConnected] = useState(false)
+  const [sshTree, setSshTree] = useState<FileNode[]>([])
+  const [sshConnecting, setSshConnecting] = useState(false)
+  const [sshTesting, setSshTesting] = useState(false)
+  const [sshTestResult, setSshTestResult] = useState('')
+  const [sshPanelOpen, setSshPanelOpen] = useState(true)
+  const remoteContentCacheRef = useRef<Record<string, string>>({})
+  const [sshRemoteDirName, setSshRemoteDirName] = useState('')
+
   // Load task
   const { data: task } = useSWR(
     session?.accessToken ? [`task-${taskId}`, session.accessToken] : null,
@@ -204,14 +234,35 @@ export default function CodeTaskPage() {
         if (mm?.[1] && task?.topic_id && selectedAgentId) {
           const requested = Array.from(new Set(mm[1].split(',').map((s) => s.trim()).filter(Boolean))).slice(0, 20)
           if (requested.length) {
+            const activeTree = agentMode === 'remote' ? sshTree : fileTree
             void (async () => {
               for (const p of requested) {
-                const node = findFileNodeByPath(fileTree, p)
-                if (!node?.handle || node.kind !== 'file') continue
+                const node = findFileNodeByPath(activeTree, p)
+                if (!node || node.kind !== 'file') continue
+                if (agentMode === 'local' && !node.handle) continue
                 try {
-                  const content = (selectedFile && selectedFile.path === node.path)
-                    ? modifiedContent
-                    : await readFileContent(node.handle as FileSystemFileHandle)
+                  let content: string
+                  if (selectedFile && selectedFile.path === node.path) {
+                    content = modifiedContent
+                  } else if (agentMode === 'remote') {
+                    // Read remote file via SSH
+                    const cached = remoteContentCacheRef.current[node.path]
+                    if (cached !== undefined) {
+                      content = cached
+                    } else {
+                      const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/read?path=${encodeURIComponent(node.path)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                        body: JSON.stringify(sshConfig),
+                      })
+                      if (!r.ok) continue
+                      const data = await r.json()
+                      content = data.content
+                      remoteContentCacheRef.current[node.path] = content
+                    }
+                  } else {
+                    content = await readFileContent(node.handle as FileSystemFileHandle)
+                  }
                   const body = {
                     content: `[FILE] ${node.path}\n\`\`\`${langFromPath(node.path)}\n${content}\n\`\`\``,
                     content_type: 'text',
@@ -235,7 +286,7 @@ export default function CodeTaskPage() {
         }
       }
     },
-    [task?.topic_id, selectedAgentId, fileTree, selectedFile, modifiedContent, session?.accessToken],
+    [task?.topic_id, selectedAgentId, fileTree, selectedFile, modifiedContent, session?.accessToken, agentMode, sshTree, sshConfig],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
@@ -293,6 +344,15 @@ export default function CodeTaskPage() {
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
 
+  // ── Load saved SSH config from localStorage ───────
+  useEffect(() => {
+    if (!taskId) return
+    try {
+      const saved = localStorage.getItem(`ssh-config-${taskId}`)
+      if (saved) setSshConfig(JSON.parse(saved) as SSHConfig)
+    } catch { /* ignore */ }
+  }, [taskId])
+
   // ── Publish to topic helper (WS first, HTTP fallback) ──
   const publishToTopic = async (content: string, semanticType = 'post', senderType: 'HUMAN' | 'AGENT' = 'AGENT') => {
     if (!task?.topic_id || !selectedAgentId) {
@@ -335,7 +395,7 @@ export default function CodeTaskPage() {
     }
   }
 
-  const codebaseSignature = (nodes: FileNode[]): string => {
+  const codebaseSignature = (nodes: FileNode[], label?: string): string => {
     const paths: string[] = []
     const walk = (arr: FileNode[]) => {
       for (const n of arr) {
@@ -344,7 +404,7 @@ export default function CodeTaskPage() {
       }
     }
     walk(nodes)
-    return `${dirName}|${paths.join('|')}`
+    return `${label ?? dirName}|${paths.join('|')}`
   }
 
   // ── Build tree text ────────────────────────────────
@@ -392,8 +452,108 @@ export default function CodeTaskPage() {
     return c
   }
 
+  // ── SSH helpers ────────────────────────────────────
+  const testSshConnection = async () => {
+    setSshTesting(true)
+    setSshTestResult('')
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify(sshConfig),
+      })
+      const data = await r.json()
+      setSshTestResult(data.ok ? `✅ ${data.detail || 'Connected'}` : `❌ ${data.detail || 'Failed'}`)
+    } catch (e) {
+      setSshTestResult(`❌ ${e instanceof Error ? e.message : 'Connection error'}`)
+    } finally {
+      setSshTesting(false)
+    }
+  }
+
+  const connectSsh = async () => {
+    setSshConnecting(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/tree?max_depth=3`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify(sshConfig),
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const data = await r.json()
+      const tree: FileNode[] = data.tree || []
+      setSshTree(tree)
+      setSshConnected(true)
+      setSshRemoteDirName(data.project_path || sshConfig.project_path)
+      setSshPanelOpen(false)
+      remoteContentCacheRef.current = {}
+      localStorage.setItem(`ssh-config-${taskId}`, JSON.stringify(sshConfig))
+      if (task?.topic_id) {
+        const treeText = buildTreeText(tree)
+        const name = data.project_path || sshConfig.project_path
+        await publishToTopic(
+          `[CODEBASE] ${name} (remote)\n\`\`\`\n${name}/\n${treeText}\n\`\`\`\nRemote codebase opened with ${countFiles(tree)} files. Ask me to share specific files for analysis.`,
+          'notification',
+        )
+      }
+    } catch (e) {
+      alert(`SSH connect failed: ${e instanceof Error ? e.message : 'unknown'}`)
+    } finally {
+      setSshConnecting(false)
+    }
+  }
+
+  const refreshSshTree = async () => {
+    if (!sshConnected) return
+    setSshConnecting(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/tree?max_depth=3`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify(sshConfig),
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const data = await r.json()
+      setSshTree(data.tree || [])
+    } catch (e) {
+      console.error('SSH tree refresh failed:', e)
+    } finally {
+      setSshConnecting(false)
+    }
+  }
+
+  const readRemoteFile = async (filePath: string): Promise<string> => {
+    const cached = remoteContentCacheRef.current[filePath]
+    if (cached !== undefined) return cached
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/ssh/read?path=${encodeURIComponent(filePath)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      body: JSON.stringify(sshConfig),
+    })
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    const data = await r.json()
+    remoteContentCacheRef.current[filePath] = data.content
+    return data.content
+  }
+
   // ── Select file ────────────────────────────────────
   const selectFile = async (node: FileNode) => {
+    if (agentMode === 'remote') {
+      if (node.kind !== 'file') return
+      try {
+        const content = await readRemoteFile(node.path)
+        setSelectedFile(node)
+        setFileContent(content)
+        setModifiedContent(content)
+        setIsModified(false)
+        if (!openFiles.find((f) => f.path === node.path)) {
+          setOpenFiles((prev) => [...prev, node])
+        }
+      } catch (e) {
+        console.error('Failed to read remote file:', e)
+      }
+      return
+    }
     if (!node.handle || node.kind !== 'file') return
     try {
       const content = await readFileContent(node.handle as FileSystemFileHandle)
@@ -425,9 +585,12 @@ export default function CodeTaskPage() {
   }
 
   const buildCodebaseContextMessage = async (text: string): Promise<{ content: string; fullCodebase: boolean }> => {
-    if (fileTree.length === 0) return { content: text, fullCodebase: false }
+    const activeTree = agentMode === 'remote' ? sshTree : fileTree
+    const activeDirName = agentMode === 'remote' ? sshRemoteDirName : dirName
 
-    const sig = codebaseSignature(fileTree)
+    if (activeTree.length === 0) return { content: text, fullCodebase: false }
+
+    const sig = codebaseSignature(activeTree, activeDirName)
     const needFullCodebase = codebaseSharedSigRef.current !== sig
 
     // Full codebase already shared for current tree: send lightweight context only
@@ -439,6 +602,50 @@ export default function CodeTaskPage() {
       return { content: text, fullCodebase: false }
     }
 
+    // Remote mode: send tree + cached files + REQUEST_FILES protocol
+    if (agentMode === 'remote') {
+      const treeText = buildTreeText(activeTree)
+      const allFiles: FileNode[] = []
+      const collect = (nodes: FileNode[]) => {
+        for (const n of nodes) {
+          if (n.kind === 'file') allFiles.push(n)
+          if (n.children) collect(n.children)
+        }
+      }
+      collect(activeTree)
+
+      const cachedBlocks: string[] = []
+      let used = 0
+      for (const f of allFiles) {
+        const cached = remoteContentCacheRef.current[f.path]
+        if (cached === undefined) continue
+        const content = (selectedFile && f.path === selectedFile.path) ? modifiedContent : cached
+        const block = `\n[FILE] ${f.path}\n\`\`\`${langFromPath(f.path)}\n${content}\n\`\`\`\n`
+        if (used + block.length > FULL_CODEBASE_MAX_CHARS) break
+        cachedBlocks.push(block)
+        used += block.length
+      }
+
+      const parts = [
+        text,
+        '',
+        `[CODEBASE INDEX] ${activeDirName || 'workspace'} (remote)`,
+        `files_in_workspace=${allFiles.length}, cached_files=${cachedBlocks.length}`,
+        '',
+        '[PROJECT TREE]',
+        '```',
+        `${activeDirName || 'workspace'}/`,
+        treeText,
+        '```',
+      ]
+      if (cachedBlocks.length > 0) {
+        parts.push('', '[CACHED FILES]', ...cachedBlocks)
+      }
+      parts.push('', '需要具体文件请回复: REQUEST_FILES: path/a.ts, path/b.py')
+      return { content: parts.join('\n'), fullCodebase: true }
+    }
+
+    // Local mode: existing behavior
     const allFiles: FileNode[] = []
     const collect = (nodes: FileNode[]) => {
       for (const n of nodes) {
@@ -547,7 +754,9 @@ export default function CodeTaskPage() {
 
       await publishToTopic(fullContent, 'post', 'HUMAN')
       if (built.fullCodebase) {
-        codebaseSharedSigRef.current = codebaseSignature(fileTree)
+        const at = agentMode === 'remote' ? sshTree : fileTree
+        const adn = agentMode === 'remote' ? sshRemoteDirName : dirName
+        codebaseSharedSigRef.current = codebaseSignature(at, adn)
       }
       setAwaitingAgent(true)
     } catch (e) {
@@ -596,9 +805,27 @@ export default function CodeTaskPage() {
               {agents.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>)}
             </select>
           )}
-          <button onClick={openDirectory} className="rounded-lg bg-indigo-500 px-3 py-1 text-xs text-white">
-            {dirName ? `📁 ${dirName}` : 'Open Folder'}
-          </button>
+          <div className="flex rounded-lg border border-slate-200 bg-white text-[11px]">
+            <button
+              onClick={() => setAgentMode('local')}
+              className={`px-2 py-1 rounded-l-lg transition-colors ${agentMode === 'local' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >🖥️ Local</button>
+            <button
+              onClick={() => setAgentMode('remote')}
+              className={`px-2 py-1 rounded-r-lg transition-colors ${agentMode === 'remote' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >☁️ Remote</button>
+          </div>
+          {agentMode === 'remote' && sshConnected && (
+            <span className="flex items-center gap-1 text-[11px] text-green-600">
+              <span className="h-2 w-2 rounded-full bg-green-400" />
+              SSH
+            </span>
+          )}
+          {agentMode === 'local' && (
+            <button onClick={openDirectory} className="rounded-lg bg-indigo-500 px-3 py-1 text-xs text-white">
+              {dirName ? `📁 ${dirName}` : 'Open Folder'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -606,32 +833,145 @@ export default function CodeTaskPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* File tree panel */}
         <div className="w-60 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50/80 p-2">
-          {fileTree.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-              <p className="text-3xl">📂</p>
-              <p className="text-sm text-slate-500">No folder open</p>
-              <button onClick={openDirectory} className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white">
-                Open Folder
+          {agentMode === 'remote' ? (
+            <>
+              {/* SSH Config Panel */}
+              <button
+                onClick={() => setSshPanelOpen(!sshPanelOpen)}
+                className="mb-2 flex w-full items-center justify-between rounded bg-slate-200/60 px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-200"
+              >
+                <span className="flex items-center gap-1.5">
+                  {sshConnected ? <span className="h-2 w-2 rounded-full bg-green-400" /> : <span className="h-2 w-2 rounded-full bg-slate-300" />}
+                  SSH Config
+                </span>
+                <span>{sshPanelOpen ? '▼' : '▶'}</span>
               </button>
-              <p className="mt-2 text-[11px] text-slate-400">Files stay local — nothing is uploaded</p>
-            </div>
+              {sshPanelOpen && (
+                <div className="mb-2 space-y-1.5 rounded border border-slate-200 bg-white p-2">
+                  <input
+                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
+                    placeholder="Host"
+                    value={sshConfig.host}
+                    onChange={(e) => setSshConfig({ ...sshConfig, host: e.target.value })}
+                  />
+                  <div className="flex gap-1">
+                    <input
+                      className="w-16 rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
+                      placeholder="Port"
+                      type="number"
+                      value={sshConfig.port}
+                      onChange={(e) => setSshConfig({ ...sshConfig, port: parseInt(e.target.value) || 22 })}
+                    />
+                    <input
+                      className="flex-1 rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
+                      placeholder="Username"
+                      value={sshConfig.username}
+                      onChange={(e) => setSshConfig({ ...sshConfig, username: e.target.value })}
+                    />
+                  </div>
+                  <input
+                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
+                    placeholder="Password"
+                    type="password"
+                    value={sshConfig.password}
+                    onChange={(e) => setSshConfig({ ...sshConfig, password: e.target.value })}
+                  />
+                  <textarea
+                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px] font-mono focus:border-indigo-400 focus:outline-none"
+                    placeholder="Private Key (paste PEM content)"
+                    rows={3}
+                    value={sshConfig.private_key}
+                    onChange={(e) => setSshConfig({ ...sshConfig, private_key: e.target.value })}
+                  />
+                  <input
+                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
+                    placeholder="Project Path (e.g. ~/myproject)"
+                    value={sshConfig.project_path}
+                    onChange={(e) => setSshConfig({ ...sshConfig, project_path: e.target.value })}
+                  />
+                  <div className="flex gap-1">
+                    <button
+                      onClick={testSshConnection}
+                      disabled={sshTesting || !sshConfig.host || !sshConfig.username}
+                      className="flex-1 rounded bg-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-50"
+                    >{sshTesting ? '...' : 'Test'}</button>
+                    <button
+                      onClick={connectSsh}
+                      disabled={sshConnecting || !sshConfig.host || !sshConfig.username}
+                      className="flex-1 rounded bg-indigo-500 px-2 py-1 text-[11px] font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
+                    >{sshConnecting ? 'Connecting...' : 'Connect'}</button>
+                  </div>
+                  {sshTestResult && (
+                    <p className="text-[10px] text-slate-500">{sshTestResult}</p>
+                  )}
+                </div>
+              )}
+              {/* Remote tree */}
+              {sshConnected && sshTree.length > 0 && (
+                <>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="truncate text-xs font-semibold text-slate-500">{sshRemoteDirName}</p>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-slate-400">{countFiles(sshTree)} files</span>
+                      <button
+                        onClick={refreshSshTree}
+                        disabled={sshConnecting}
+                        className="rounded p-0.5 text-[11px] text-slate-400 hover:bg-slate-200 hover:text-slate-600 disabled:opacity-50"
+                        title="Refresh"
+                      >🔄</button>
+                    </div>
+                  </div>
+                  {sshTree.map((node) => (
+                    <FileTreeNode
+                      key={node.path}
+                      node={node}
+                      depth={0}
+                      selectedPath={selectedFile?.path || ''}
+                      onSelect={selectFile}
+                    />
+                  ))}
+                </>
+              )}
+              {sshConnected && sshTree.length === 0 && !sshConnecting && (
+                <p className="text-center text-[11px] text-slate-400">No files found</p>
+              )}
+              {!sshConnected && !sshPanelOpen && (
+                <div className="flex h-32 flex-col items-center justify-center text-center">
+                  <p className="text-2xl">☁️</p>
+                  <p className="mt-1 text-[11px] text-slate-400">Configure SSH to connect</p>
+                </div>
+              )}
+            </>
           ) : (
             <>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate-500">{dirName}</p>
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-slate-400">{fileCount} files</span>
+              {fileTree.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                  <p className="text-3xl">📂</p>
+                  <p className="text-sm text-slate-500">No folder open</p>
+                  <button onClick={openDirectory} className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white">
+                    Open Folder
+                  </button>
+                  <p className="mt-2 text-[11px] text-slate-400">Files stay local — nothing is uploaded</p>
                 </div>
-              </div>
-              {fileTree.map((node) => (
-                <FileTreeNode
-                  key={node.path}
-                  node={node}
-                  depth={0}
-                  selectedPath={selectedFile?.path || ''}
-                  onSelect={selectFile}
-                />
-              ))}
+              ) : (
+                <>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-500">{dirName}</p>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-slate-400">{fileCount} files</span>
+                    </div>
+                  </div>
+                  {fileTree.map((node) => (
+                    <FileTreeNode
+                      key={node.path}
+                      node={node}
+                      depth={0}
+                      selectedPath={selectedFile?.path || ''}
+                      onSelect={selectFile}
+                    />
+                  ))}
+                </>
+              )}
             </>
           )}
         </div>
@@ -685,9 +1025,10 @@ export default function CodeTaskPage() {
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
                   tabSize: 2,
+                  readOnly: agentMode === 'remote',
                 }}
               />
-              {isModified && (
+              {isModified && agentMode === 'local' && (
                 <div className="absolute bottom-2 right-[calc(33%+12px)] z-10">
                   <button onClick={saveFile} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg">
                     💾 Save (Ctrl+S)
