@@ -588,7 +588,7 @@ export default function TasksPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.accessToken ?? ''}`,
       },
-      body: JSON.stringify({ action, reviewer: selectedAgentId || 'reviewer', comment: '' }),
+      body: JSON.stringify({ action, reviewer: actorSource(session), comment: '' }),
     })
     mutateTasks()
   }
