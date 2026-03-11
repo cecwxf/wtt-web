@@ -161,6 +161,12 @@ function buildFileTreeFromFlat(items: RepoTreeItem[]): FileNode[] {
   return materialize(root)
 }
 
+function extractFilePatch(content: string): { path: string; code: string } | null {
+  const m = content.match(/\[FILE\]\s+([^\n]+)\n```[\w-]*\n([\s\S]*?)\n```/)
+  if (!m) return null
+  return { path: m[1].trim(), code: m[2] }
+}
+
 function findFileNodeByPath(nodes: FileNode[], target: string): FileNode | null {
   for (const n of nodes) {
     if (n.kind === 'file' && n.path === target) return n
@@ -930,6 +936,18 @@ export default function CodeTaskPage() {
     return { content: `${text}\n\n${header}${fileBlocks.join('')}`, fullCodebase: true }
   }
 
+  const applyPatchToEditor = (path: string, code: string) => {
+    if (!path || !code) return
+    if (selectedFile && selectedFile.path !== path) {
+      const node = findFileNodeByPath(repoTree, path)
+      if (node) {
+        setSelectedFile(node)
+      }
+    }
+    setModifiedContent(code)
+    setIsModified(true)
+  }
+
   // ── Send chat message ──────────────────────────────
   const [awaitingAgent, setAwaitingAgent] = useState(false)
   const [fileLoading, setFileLoading] = useState(false)
@@ -972,7 +990,7 @@ export default function CodeTaskPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },
-          body: JSON.stringify({ content: fullContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: true }),
+          body: JSON.stringify({ content: fullContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: false }),
         })
         if (!r.ok) throw new Error(await r.text())
         await mutateTask()
@@ -1221,24 +1239,28 @@ export default function CodeTaskPage() {
                 </div>
               </div>
             )}
-            {chatMessages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'border border-indigo-200 bg-indigo-50/80 text-slate-800 rounded-tr-md'
-                    : 'border border-slate-200 bg-white text-slate-700 rounded-tl-md'
-                }`}>
-                  {msg.role === 'user' && (
-                    <p className="mb-1 text-[11px] font-semibold text-emerald-600">You</p>
-                  )}
-                  {msg.role === 'assistant' && (
-                    <p className="mb-1 text-[11px] font-semibold text-indigo-600">🤖 {msg.sender_display_name || 'Agent'}</p>
-                  )}
+            {chatMessages.map((msg) => {
+              const patch = msg.role === 'assistant' ? extractFilePatch(msg.content) : null
+              return (
+                <div key={msg.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] leading-relaxed">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className={`text-[11px] font-semibold ${msg.role === 'user' ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                      {msg.role === 'user' ? `来自WTT User: ${msg.sender_display_name || 'User'}` : `来自Agent: ${msg.sender_display_name || 'Agent'}`}
+                    </p>
+                    <p className="text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                  </div>
                   <div className="whitespace-pre-wrap break-words">{msg.content}</div>
-                  <p className="mt-1 text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                  {patch && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() => applyPatchToEditor(patch.path, patch.code)}
+                        className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600 hover:bg-indigo-100"
+                      >Apply to Editor ({patch.path})</button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
             {awaitingAgent && (
               <div className="flex justify-start">
                 <div className="rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-[13px] text-slate-500">
