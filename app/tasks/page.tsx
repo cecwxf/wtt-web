@@ -771,8 +771,8 @@ export default function TasksPage() {
             ))}
           </div>
 
-          <aside className={`flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
-            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-100 p-2">
+          <aside className={`flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
+            <div className="mb-3 shrink-0 rounded-lg border border-slate-200 bg-slate-100 p-2">
               <p className="text-xs font-semibold text-slate-600">Task执行时间饼图（Top 8）</p>
               {taskDurationSummary.slices.length > 0 ? (
                 <>
@@ -803,7 +803,7 @@ export default function TasksPage() {
               )}
             </div>
 
-            <h2 className="mb-2 text-sm font-semibold">Messages</h2>
+            <h2 className="mb-2 shrink-0 text-sm font-semibold">Messages</h2>
             {selectedTask ? (
               <>
                 {/* Task header */}
@@ -864,7 +864,7 @@ export default function TasksPage() {
                 </div>
 
                 {/* Send box */}
-                <div className="border-t border-slate-200 pt-2 px-1">
+                <div className="shrink-0 border-t border-slate-200 pt-2 px-1">
                   <div className="flex items-center gap-1 mb-1">
                     <select
                       className="flex-1 rounded border border-slate-200 bg-slate-100 px-1.5 py-1 text-[11px] outline-none"
