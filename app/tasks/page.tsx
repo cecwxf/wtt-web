@@ -164,9 +164,10 @@ export default function TasksPage() {
   )
 
   const { data: timelineRaw } = useSWR(
-    selectedTask?.topic_id && session?.accessToken ? ['task-timeline', selectedTask.topic_id, session.accessToken] : null,
+    selectedTask?.topic_id && session?.accessToken ? ['task-timeline', selectedTask.topic_id, session.accessToken, selectedAgentId] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask?.topic_id}/messages?limit=500`, {
+      const agentQuery = selectedAgentId ? `&agent_id=${encodeURIComponent(selectedAgentId)}` : ''
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask?.topic_id}/messages?limit=500${agentQuery}`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!response.ok) return []
