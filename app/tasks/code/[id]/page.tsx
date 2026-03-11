@@ -385,25 +385,39 @@ export default function CodeTaskPage() {
   const { data: topicMessages } = useSWR(
     task?.topic_id && session?.accessToken && selectedAgentId ? [`code-chat-${task.topic_id}`, session.accessToken, selectedAgentId] : null,
     async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?limit=200&agent_id=${encodeURIComponent(selectedAgentId)}`, {
-        headers: { Authorization: `Bearer ${session?.accessToken}` },
-      })
+      const tryFetch = async (agentId?: string) => {
+        const q = agentId ? `?limit=200&agent_id=${encodeURIComponent(agentId)}` : '?limit=200'
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages${q}`, {
+          headers: { Authorization: `Bearer ${session?.accessToken}` },
+        })
+        return r
+      }
+
+      let r = await tryFetch(selectedAgentId)
+      if (!r.ok && task?.runner_agent_id && task.runner_agent_id !== selectedAgentId) {
+        r = await tryFetch(task.runner_agent_id)
+      }
+      if (!r.ok) {
+        r = await tryFetch(undefined)
+      }
       if (!r.ok) return []
       return r.json()
     },
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, refreshInterval: 3000 },
   )
 
   // Seed chat from history (only once on load or agent switch)
   useEffect(() => {
     if (!topicMessages) return
-    const mapped: ChatMsg[] = topicMessages.map((m: Record<string, string>) => ({
-      id: m.message_id,
-      role: m.sender_type === 'HUMAN' ? 'user' : 'assistant',
-      content: m.content,
-      timestamp: m.timestamp,
-      sender_display_name: m.sender_display_name,
-    }))
+    const mapped: ChatMsg[] = topicMessages
+      .filter((m: Record<string, string>) => !!(m.content || m.message || m.text))
+      .map((m: Record<string, string>) => ({
+        id: m.id || m.message_id || `${m.sender_id || 'unknown'}-${m.created_at || m.timestamp || Date.now()}`,
+        role: String(m.sender_type || '').toUpperCase() === 'HUMAN' ? 'user' : 'assistant',
+        content: m.content || m.message || m.text || '',
+        timestamp: m.created_at || m.timestamp || new Date().toISOString(),
+        sender_display_name: m.sender_display_name || m.sender_id,
+      }))
     setChatMessages(mapped)
   }, [topicMessages, selectedAgentId])
 
