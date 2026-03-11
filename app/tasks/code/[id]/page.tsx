@@ -976,6 +976,81 @@ export default function CodeTaskPage() {
   // ── Send chat message ──────────────────────────────
   const [awaitingAgent, setAwaitingAgent] = useState(false)
   const [fileLoading, setFileLoading] = useState(false)
+  const [rightTab, setRightTab] = useState<'chat' | 'issues' | 'prs'>('chat')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [issues, setIssues] = useState<Record<string, any>[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [pulls, setPulls] = useState<Record<string, any>[]>([])
+  const [issuesLoading, setIssuesLoading] = useState(false)
+  const [pullsLoading, setPullsLoading] = useState(false)
+  const [expandedIssue, setExpandedIssue] = useState<number | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [issueComments, setIssueComments] = useState<Record<string, any>[]>([])
+  const [expandedPR, setExpandedPR] = useState<number | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [prFiles, setPrFiles] = useState<Record<string, any>[]>([])
+
+  const fetchIssues = async () => {
+    if (!task?.repo_url || !session?.accessToken) return
+    setIssuesLoading(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/issues?state=open`, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      })
+      if (r.ok) {
+        const data = await r.json()
+        setIssues(data.issues || [])
+      }
+    } catch (e) { console.error('fetchIssues failed:', e) }
+    finally { setIssuesLoading(false) }
+  }
+
+  const fetchPulls = async () => {
+    if (!task?.repo_url || !session?.accessToken) return
+    setPullsLoading(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/pulls?state=open`, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      })
+      if (r.ok) {
+        const data = await r.json()
+        setPulls(data.pulls || [])
+      }
+    } catch (e) { console.error('fetchPulls failed:', e) }
+    finally { setPullsLoading(false) }
+  }
+
+  const fetchIssueDetail = async (number: number) => {
+    if (!session?.accessToken) return
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/issues/${number}`, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      })
+      if (r.ok) {
+        const data = await r.json()
+        setIssueComments(data.comments || [])
+      }
+    } catch (e) { console.error('fetchIssueDetail failed:', e) }
+  }
+
+  const fetchPRFiles = async (number: number) => {
+    if (!session?.accessToken) return
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/pulls/${number}/files`, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      })
+      if (r.ok) {
+        const data = await r.json()
+        setPrFiles(data.files || [])
+      }
+    } catch (e) { console.error('fetchPRFiles failed:', e) }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (rightTab === 'issues' && issues.length === 0) fetchIssues()
+    if (rightTab === 'prs' && pulls.length === 0) fetchPulls()
+  }, [rightTab])
 
   const sendMessage = async () => {
     const text = chatInput.trim()
@@ -1010,7 +1085,7 @@ export default function CodeTaskPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },
-          body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: false }),
+          body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: false, context_file: selectedFile?.path || undefined }),
         })
         if (!r.ok) throw new Error(await r.text())
         await mutateTask()
@@ -1238,88 +1313,244 @@ export default function CodeTaskPage() {
 
         {/* Chat panel */}
         <div className="flex w-[33%] min-w-[320px] shrink-0 flex-col border-l border-slate-200">
-          <div className="flex h-10 items-center justify-between border-b border-slate-200 bg-slate-50 px-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-600">Agent Chat</span>
-              <span className={`h-2 w-2 rounded-full ${wsState === 'connected' ? 'bg-green-400' : 'bg-slate-300'}`} title={wsState === 'connected' ? 'WebSocket connected' : 'Disconnected'} />
-            </div>
-            {task?.runner_agent_id && (
-              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] text-indigo-600">{task.runner_agent_id}</span>
-            )}
+          {/* Tab header */}
+          <div className="flex h-10 shrink-0 items-center border-b border-slate-200 bg-slate-50">
+            {(['chat', 'issues', 'prs'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setRightTab(tab)}
+                className={`flex-1 h-full text-[12px] font-medium transition-colors ${
+                  rightTab === tab
+                    ? 'text-indigo-600 border-b-2 border-indigo-500 bg-white'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {tab === 'chat' && `💬 Chat${wsState === 'connected' ? '' : ' ⚪'}`}
+                {tab === 'issues' && `🐛 Issues${issues.length ? ` (${issues.length})` : ''}`}
+                {tab === 'prs' && `🔀 PRs${pulls.length ? ` (${pulls.length})` : ''}`}
+              </button>
+            ))}
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {chatMessages.length === 0 && (
-              <div className="flex h-full items-center justify-center">
-                <div className="text-center text-slate-400">
-                  <p className="text-3xl">💬</p>
-                  <p className="mt-2 text-sm">Ask the agent about your code</p>
-                  <p className="mt-1 text-[11px]">Selected file will be sent as context</p>
+          {rightTab === 'chat' && (
+            <>
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {chatMessages.length === 0 && (
+                  <div className="flex h-full items-center justify-center">
+                    <div className="text-center text-slate-400">
+                      <p className="text-3xl">💬</p>
+                      <p className="mt-2 text-sm">Ask the agent about your code</p>
+                      <p className="mt-1 text-[11px]">Selected file will be sent as context</p>
+                    </div>
+                  </div>
+                )}
+                {chatMessages.map((msg) => {
+                  const patch = msg.role === 'assistant' ? extractFilePatch(msg.content) : null
+                  return (
+                    <div key={msg.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] leading-relaxed">
+                      <div className="mb-1 flex items-center justify-between">
+                        <p className={`text-[11px] font-semibold ${msg.role === 'user' ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                          {msg.role === 'user' ? `来自WTT User: ${msg.sender_display_name || 'User'}` : `来自Agent: ${msg.sender_display_name || 'Agent'}`}
+                        </p>
+                        <p className="text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                      </div>
+                      <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                      {patch && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => applyPatchToEditor(patch.path, patch.code)}
+                            className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600 hover:bg-indigo-100"
+                          >Apply to Editor ({patch.path})</button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {awaitingAgent && (
+                  <div className="flex justify-start">
+                    <div className="rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-[13px] text-slate-500">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="animate-pulse">🤔</span> Agent is thinking...
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input */}
+              <div className="border-t border-slate-200 bg-slate-50 p-3">
+                {selectedFile && (
+                  <div className="mb-2 flex items-center gap-1 rounded bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600">
+                    <span>📎</span>
+                    <span className="truncate">{selectedFile.path}</span>
+                    <span className="text-slate-400">will be sent as context</span>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+                    placeholder="Ask about code..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                    disabled={sending}
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={sending || !chatInput.trim()}
+                    className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white disabled:opacity-50"
+                  >
+                    {sending ? '...' : 'Send'}
+                  </button>
                 </div>
               </div>
-            )}
-            {chatMessages.map((msg) => {
-              const patch = msg.role === 'assistant' ? extractFilePatch(msg.content) : null
-              return (
-                <div key={msg.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] leading-relaxed">
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className={`text-[11px] font-semibold ${msg.role === 'user' ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                      {msg.role === 'user' ? `来自WTT User: ${msg.sender_display_name || 'User'}` : `来自Agent: ${msg.sender_display_name || 'Agent'}`}
-                    </p>
-                    <p className="text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
-                  </div>
-                  <div className="whitespace-pre-wrap break-words">{msg.content}</div>
-                  {patch && (
-                    <div className="mt-2">
+            </>
+          )}
+
+          {rightTab === 'issues' && (
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] text-slate-400">{issues.length} open issues</span>
+                <button onClick={fetchIssues} className="text-[11px] text-indigo-500 hover:text-indigo-700">🔄 Refresh</button>
+              </div>
+              {issuesLoading && <p className="text-center text-[11px] text-slate-400">Loading...</p>}
+              {!issuesLoading && issues.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                  <span className="text-2xl mb-2">🐛</span>
+                  <p className="text-[12px]">No open issues</p>
+                </div>
+              )}
+              {issues.map((issue) => (
+                <div key={issue.number} className="rounded border border-slate-200 bg-white">
+                  <button
+                    onClick={() => {
+                      if (expandedIssue === issue.number) { setExpandedIssue(null) }
+                      else { setExpandedIssue(issue.number); fetchIssueDetail(issue.number) }
+                    }}
+                    className="flex w-full items-start gap-2 p-2 text-left hover:bg-slate-50"
+                  >
+                    <span className="mt-0.5 text-[11px]">{issue.state === 'open' ? '🟢' : '🔴'}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12px] font-medium text-slate-700 leading-tight">#{issue.number} {issue.title}</p>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        {(issue.labels || []).map((label: Record<string, any>) => (
+                          <span key={label.id || label.name} className="rounded-full px-1.5 py-0.5 text-[9px] font-medium" style={{
+                            backgroundColor: `#${label.color || 'e1e4e8'}20`,
+                            color: `#${label.color || '586069'}`,
+                            border: `1px solid #${label.color || 'e1e4e8'}40`,
+                          }}>{label.name}</span>
+                        ))}
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-slate-400">by {issue.user?.login} · {new Date(issue.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <span className="text-[10px] text-slate-400">{expandedIssue === issue.number ? '▼' : '▶'}</span>
+                  </button>
+                  {expandedIssue === issue.number && (
+                    <div className="border-t border-slate-100 p-2 space-y-2">
+                      {issue.body && (
+                        <div className="rounded bg-slate-50 p-2 text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">{issue.body}</div>
+                      )}
+                      {issueComments.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] font-semibold text-slate-500">💬 Comments ({issueComments.length})</p>
+                          {issueComments.map((c) => (
+                            <div key={c.id} className="rounded border border-slate-100 bg-white p-1.5">
+                              <p className="text-[10px] font-medium text-slate-500">{c.user?.login} · {new Date(c.created_at).toLocaleDateString()}</p>
+                              <p className="mt-0.5 text-[11px] text-slate-600 whitespace-pre-wrap max-h-24 overflow-y-auto">{c.body}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <button
-                        onClick={() => applyPatchToEditor(patch.path, patch.code)}
-                        className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600 hover:bg-indigo-100"
-                      >Apply to Editor ({patch.path})</button>
+                        onClick={() => {
+                          const ref = `@issue #${issue.number}: ${issue.title}\n${issue.body?.slice(0, 200) || ''}`
+                          setChatInput(ref)
+                          setRightTab('chat')
+                        }}
+                        className="w-full rounded bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100"
+                      >📎 Reference in Chat</button>
                     </div>
                   )}
                 </div>
-              )
-            })}
-            {awaitingAgent && (
-              <div className="flex justify-start">
-                <div className="rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-[13px] text-slate-500">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="animate-pulse">🤔</span> Agent is thinking...
-                  </span>
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="border-t border-slate-200 bg-slate-50 p-3">
-            {selectedFile && (
-              <div className="mb-2 flex items-center gap-1 rounded bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600">
-                <span>📎</span>
-                <span className="truncate">{selectedFile.path}</span>
-                <span className="text-slate-400">will be sent as context</span>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <input
-                className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
-                placeholder="Ask about code..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-                disabled={sending}
-              />
-              <button
-                onClick={sendMessage}
-                disabled={sending || !chatInput.trim()}
-                className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white disabled:opacity-50"
-              >
-                {sending ? '...' : 'Send'}
-              </button>
+              ))}
             </div>
-          </div>
+          )}
+
+          {rightTab === 'prs' && (
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] text-slate-400">{pulls.length} open PRs</span>
+                <button onClick={fetchPulls} className="text-[11px] text-indigo-500 hover:text-indigo-700">🔄 Refresh</button>
+              </div>
+              {pullsLoading && <p className="text-center text-[11px] text-slate-400">Loading...</p>}
+              {!pullsLoading && pulls.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                  <span className="text-2xl mb-2">🔀</span>
+                  <p className="text-[12px]">No open pull requests</p>
+                </div>
+              )}
+              {pulls.map((pr) => (
+                <div key={pr.number} className="rounded border border-slate-200 bg-white">
+                  <button
+                    onClick={() => {
+                      if (expandedPR === pr.number) { setExpandedPR(null) }
+                      else { setExpandedPR(pr.number); fetchPRFiles(pr.number) }
+                    }}
+                    className="flex w-full items-start gap-2 p-2 text-left hover:bg-slate-50"
+                  >
+                    <span className="mt-0.5 text-[11px]">{pr.state === 'open' ? '🟢' : pr.merged_at ? '🟣' : '🔴'}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12px] font-medium text-slate-700 leading-tight">#{pr.number} {pr.title}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">
+                        {pr.head?.ref} → {pr.base?.ref} · by {pr.user?.login}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-slate-400">{expandedPR === pr.number ? '▼' : '▶'}</span>
+                  </button>
+                  {expandedPR === pr.number && (
+                    <div className="border-t border-slate-100 p-2 space-y-2">
+                      {pr.body && (
+                        <div className="rounded bg-slate-50 p-2 text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">{pr.body}</div>
+                      )}
+                      {prFiles.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-semibold text-slate-500">📁 Changed Files ({prFiles.length})</p>
+                          {prFiles.map((f) => (
+                            <button
+                              key={f.filename}
+                              onClick={() => {
+                                const node = findFileNodeByPath(fileTree, f.filename)
+                                if (node) selectFile(node)
+                              }}
+                              className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-slate-50"
+                            >
+                              <span className={`text-[10px] font-mono ${
+                                f.status === 'added' ? 'text-green-600' : f.status === 'removed' ? 'text-red-600' : 'text-amber-600'
+                              }`}>{f.status === 'added' ? '+' : f.status === 'removed' ? '-' : '~'}</span>
+                              <span className="flex-1 truncate text-[11px] text-slate-600">{f.filename}</span>
+                              <span className="text-[10px] text-green-600">+{f.additions}</span>
+                              <span className="text-[10px] text-red-500">-{f.deletions}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => {
+                          const ref = `@pr #${pr.number}: ${pr.title}\n${pr.head?.ref} → ${pr.base?.ref}`
+                          setChatInput(ref)
+                          setRightTab('chat')
+                        }}
+                        className="w-full rounded bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100"
+                      >📎 Reference in Chat</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
