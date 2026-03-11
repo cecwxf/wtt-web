@@ -755,6 +755,7 @@ export default function PipelinesPage() {
       selectedTopicId={null}
       onTopicChange={() => {}}
       onLogout={() => signOut({ callbackUrl: '/login' })}
+      currentUserName={actorSource(session, '')}
       hideTopics
       hideCreateTopic
     >

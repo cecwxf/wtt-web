@@ -22,6 +22,12 @@ interface Agent {
   api_key?: string
 }
 
+const sessionUserName = (session: unknown) => {
+  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
+  const uid = s?.userId || ''
+  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
+}
+
 export default function DiscoverPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -319,6 +325,7 @@ export default function DiscoverPage() {
       onTopicsRefresh={() => mutateTopics()}
       onBindingChanged={loadAgents}
       notificationCount={0}
+      currentUserName={sessionUserName(session)}
     >
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row">
