@@ -725,7 +725,7 @@ export default function CodeTaskPage() {
       setModifiedContent('// Loading file content...')
       setIsModified(false)
       try {
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file?path=${encodeURIComponent(node.path)}`, {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}`, {
           headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
         })
         if (!r.ok) throw new Error(await r.text())
