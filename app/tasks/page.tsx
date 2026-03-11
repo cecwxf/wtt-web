@@ -97,6 +97,8 @@ export default function TasksPage() {
   const [panelInput, setPanelInput] = useState('')
   const [panelSending, setPanelSending] = useState(false)
   const [queueIndicator, setQueueIndicator] = useState(false)
+  const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
+  const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
   const [panelSendAs, setPanelSendAs] = useState<'user' | string>('user') // 'user' or agent_id
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
@@ -613,12 +615,14 @@ export default function TasksPage() {
     const text = panelInput.trim()
     setPanelInput('')
     setPanelSending(true)
-    setQueueIndicator(false)
 
     const isUser = panelSendAs === 'user'
     const agentId = isUser ? (selectedAgentId || 'user') : panelSendAs
     const senderType = isUser ? 'HUMAN' : 'AGENT'
     const senderId = isUser ? actorSource(session, selectedAgentId) : agentId
+    if (isUser && panelAwaitingInference) {
+      setQueueIndicator(true)
+    }
     const headers = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session?.accessToken ?? ''}`,
@@ -659,10 +663,14 @@ export default function TasksPage() {
         }
       }
 
-      // Show queue indicator if task is actively running
-      if (selectedTask.status === 'doing') {
+      if (isUser) {
+        setPanelAwaitingInference(true)
+        setLastPanelUserSendAt(new Date().toISOString())
+      }
+
+      // If already waiting for a prior inference, show queued hint persistently
+      if (isUser && panelAwaitingInference) {
         setQueueIndicator(true)
-        setTimeout(() => setQueueIndicator(false), 4000)
       }
     } catch (e) {
       alert(e instanceof Error ? e.message : 'send failed')
@@ -678,6 +686,29 @@ export default function TasksPage() {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
     }
   }, [timeline])
+
+  // Clear queued/awaiting states once agent has replied after latest user send
+  useEffect(() => {
+    if (!panelAwaitingInference || !lastPanelUserSendAt) return
+    const sentAt = Date.parse(lastPanelUserSendAt)
+    if (!Number.isFinite(sentAt)) return
+    const hasAgentReply = timeline.some((item) => {
+      if ((item.sender_type || '').toUpperCase() !== 'AGENT') return false
+      const t = Date.parse(item.created_at || '')
+      return Number.isFinite(t) && t > sentAt
+    })
+    if (hasAgentReply) {
+      setPanelAwaitingInference(false)
+      setQueueIndicator(false)
+    }
+  }, [timeline, panelAwaitingInference, lastPanelUserSendAt])
+
+  // Reset queue state when switching tasks
+  useEffect(() => {
+    setPanelAwaitingInference(false)
+    setLastPanelUserSendAt(null)
+    setQueueIndicator(false)
+  }, [selectedTask?.id])
 
   const taskCardTone = (status: TaskItem['status']) => {
     if (status === 'doing') return 'border-indigo-300 bg-indigo-50'
