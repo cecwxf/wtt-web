@@ -67,7 +67,8 @@ const arcPath = (cx: number, cy: number, r: number, start: number, end: number) 
 
 const actorSource = (session: unknown, selectedAgentId: string) => {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
-  return s?.userId || s?.user?.name || s?.user?.email || selectedAgentId || 'user'
+  const uid = s?.userId || ''
+  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : selectedAgentId || 'user')
 }
 
 const fallbackProgressByStatus = (status: TaskItem['status']) => {
@@ -650,6 +651,7 @@ export default function TasksPage() {
       onDeleteTopic={deleteTopicFromSidebar}
       onTopicsRefresh={() => mutateSubscribedTopics()}
       onLogout={() => signOut({ callbackUrl: '/login' })}
+      currentUserName={actorSource(session, '')}
       hideCreateTopic
     >
       <div className="h-full p-4 text-slate-800">

@@ -27,6 +27,7 @@ interface WttShellV2Props {
   notificationCount?: number
   hideTopics?: boolean
   hideCreateTopic?: boolean
+  currentUserName?: string
   children: ReactNode
 }
 
@@ -50,6 +51,7 @@ export function WttShellV2({
   notificationCount = 0,
   hideTopics = false,
   hideCreateTopic = false,
+  currentUserName,
   children,
 }: WttShellV2Props) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -137,6 +139,7 @@ export function WttShellV2({
               onSelectAgent={onAgentChange}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
+              currentUserName={currentUserName}
             />
 
             {!hideTopics && (

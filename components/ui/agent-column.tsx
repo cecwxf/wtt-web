@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, MoreVertical } from 'lucide-react'
+import { Bot, MoreVertical, User } from 'lucide-react'
 import { useState } from 'react'
 
 export interface AgentItem {
@@ -15,6 +15,7 @@ interface AgentColumnProps {
   onSelectAgent: (agentId: string) => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
+  currentUserName?: string
 }
 
 export function AgentColumn({
@@ -23,6 +24,7 @@ export function AgentColumn({
   onSelectAgent,
   onRenameAgent,
   onUnclaimAgent,
+  currentUserName,
 }: AgentColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
 
@@ -33,6 +35,20 @@ export function AgentColumn({
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
+        {currentUserName && (
+          <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white">
+                <User className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{currentUserName}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Logged-in User</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {agents.length === 0 && <p className="px-2 py-4 text-xs text-slate-400">No agents bound</p>}
 
         {agents.map((agent) => {

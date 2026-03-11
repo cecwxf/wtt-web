@@ -35,7 +35,8 @@ const NODE_H = 90
 
 const actorSource = (session: unknown, selectedAgentId: string) => {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
-  return s?.userId || s?.user?.name || s?.user?.email || selectedAgentId || 'user'
+  const uid = s?.userId || ''
+  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : selectedAgentId || 'user')
 }
 
 export default function TasksGraphPage() {
