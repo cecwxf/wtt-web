@@ -11,8 +11,9 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
-// SSH calls go directly to backend to avoid Vercel proxy timeout
-const SSH_API_BASE = (typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_WTT_API_URL || 'https://www.waxbyte.com') : DEFAULT_WTT_API_ORIGIN).replace(/\/+$/, '')
+// Local relay (runs on user's machine) preferred; falls back to backend
+const LOCAL_RELAY_URL = 'http://localhost:9877'
+const REMOTE_SSH_FALLBACK = (typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_WTT_API_URL || 'https://www.waxbyte.com') : DEFAULT_WTT_API_ORIGIN).replace(/\/+$/, '')
 
 const FULL_CODEBASE_MAX_FILES = 120
 const FULL_CODEBASE_MAX_CHARS = 45000
@@ -191,7 +192,29 @@ export default function CodeTaskPage() {
   const remoteContentCacheRef = useRef<Record<string, string>>({})
   const [sshRemoteDirName, setSshRemoteDirName] = useState('')
 
-  // Load task
+  // ── Local relay detection ──────────────────────────
+  const [relayAvailable, setRelayAvailable] = useState<boolean | null>(null)
+  const sshApiBase = relayAvailable ? LOCAL_RELAY_URL : REMOTE_SSH_FALLBACK
+
+  useEffect(() => {
+    if (agentMode !== 'remote') return
+    let cancelled = false
+    const check = async () => {
+      try {
+        const r = await fetch(`${LOCAL_RELAY_URL}/ssh/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host: '127.0.0.1', port: 22, username: 'test', password: 'test' }),
+          signal: AbortSignal.timeout(2000),
+        }).catch(() => null)
+        if (!cancelled) setRelayAvailable(r !== null && r.status !== 0)
+      } catch {
+        if (!cancelled) setRelayAvailable(false)
+      }
+    }
+    check()
+    return () => { cancelled = true }
+  }, [agentMode])
   const { data: task } = useSWR(
     session?.accessToken ? [`task-${taskId}`, session.accessToken] : null,
     async () => {
@@ -253,7 +276,7 @@ export default function CodeTaskPage() {
                     if (cached !== undefined) {
                       content = cached
                     } else {
-                      const r = await fetch(`${SSH_API_BASE}/ssh/read?path=${encodeURIComponent(node.path)}`, {
+                      const r = await fetch(`${sshApiBase}/ssh/read?path=${encodeURIComponent(node.path)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
                         body: JSON.stringify(sshConfig),
@@ -460,7 +483,7 @@ export default function CodeTaskPage() {
     setSshTesting(true)
     setSshTestResult('')
     try {
-      const r = await fetch(`${SSH_API_BASE}/ssh/test`, {
+      const r = await fetch(`${sshApiBase}/ssh/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify(sshConfig),
@@ -477,7 +500,7 @@ export default function CodeTaskPage() {
   const connectSsh = async () => {
     setSshConnecting(true)
     try {
-      const r = await fetch(`${SSH_API_BASE}/ssh/tree?max_depth=3`, {
+      const r = await fetch(`${sshApiBase}/ssh/tree?max_depth=3`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify(sshConfig),
@@ -510,7 +533,7 @@ export default function CodeTaskPage() {
     if (!sshConnected) return
     setSshConnecting(true)
     try {
-      const r = await fetch(`${SSH_API_BASE}/ssh/tree?max_depth=3`, {
+      const r = await fetch(`${sshApiBase}/ssh/tree?max_depth=3`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify(sshConfig),
@@ -528,7 +551,7 @@ export default function CodeTaskPage() {
   const readRemoteFile = async (filePath: string): Promise<string> => {
     const cached = remoteContentCacheRef.current[filePath]
     if (cached !== undefined) return cached
-    const r = await fetch(`${SSH_API_BASE}/ssh/read?path=${encodeURIComponent(filePath)}`, {
+    const r = await fetch(`${sshApiBase}/ssh/read?path=${encodeURIComponent(filePath)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify(sshConfig),
@@ -849,6 +872,13 @@ export default function CodeTaskPage() {
                 </span>
                 <span>{sshPanelOpen ? '▼' : '▶'}</span>
               </button>
+              {/* Relay status */}
+              <div className={`mb-2 flex items-center gap-1.5 rounded px-2 py-1 text-[10px] ${
+                relayAvailable === null ? 'bg-slate-100 text-slate-400' : relayAvailable ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${relayAvailable === null ? 'bg-slate-300' : relayAvailable ? 'bg-green-400' : 'bg-amber-400'}`} />
+                {relayAvailable === null ? 'Detecting local relay...' : relayAvailable ? '🔌 Local Relay active (localhost:9877)' : '☁️ Using cloud SSH (run wtt_local_relay.py for local)'}
+              </div>
               {sshPanelOpen && (
                 <div className="mb-2 space-y-1.5 rounded border border-slate-200 bg-white p-2">
                   <input
