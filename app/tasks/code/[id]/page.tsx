@@ -1024,6 +1024,8 @@ export default function CodeTaskPage() {
   const [pulls, setPulls] = useState<Record<string, any>[]>([])
   const [issuesLoading, setIssuesLoading] = useState(false)
   const [pullsLoading, setPullsLoading] = useState(false)
+  const [issueFilter, setIssueFilter] = useState<'open' | 'closed' | 'all'>('all')
+  const [prFilter, setPrFilter] = useState<'open' | 'closed' | 'all'>('all')
   const [expandedIssue, setExpandedIssue] = useState<number | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [issueComments, setIssueComments] = useState<Record<string, any>[]>([])
@@ -1037,11 +1039,12 @@ export default function CodeTaskPage() {
   const [activeDiffIndex, setActiveDiffIndex] = useState(0)
   const [diffOriginalContent, setDiffOriginalContent] = useState('')
   const [reviewingPR, setReviewingPR] = useState<{ number: number; title: string; head: string; base: string } | null>(null)
-  const fetchIssues = async () => {
+  const fetchIssues = async (state?: string) => {
     if (!task?.repo_url || !session?.accessToken) return
     setIssuesLoading(true)
+    const s = state || issueFilter
     try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/issues?state=open`, {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/issues?state=${s}`, {
         headers: { Authorization: `Bearer ${session.accessToken}` },
       })
       if (r.ok) {
@@ -1052,11 +1055,12 @@ export default function CodeTaskPage() {
     finally { setIssuesLoading(false) }
   }
 
-  const fetchPulls = async () => {
+  const fetchPulls = async (state?: string) => {
     if (!task?.repo_url || !session?.accessToken) return
     setPullsLoading(true)
+    const s = state || prFilter
     try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/pulls?state=open`, {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/pulls?state=${s}`, {
         headers: { Authorization: `Bearer ${session.accessToken}` },
       })
       if (r.ok) {
@@ -1771,14 +1775,21 @@ export default function CodeTaskPage() {
           {rightTab === 'issues' && (
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] text-slate-400">{issues.length} open issues</span>
-                <button onClick={fetchIssues} className="text-[11px] text-indigo-500 hover:text-indigo-700">🔄 Refresh</button>
+                <div className="flex items-center gap-1">
+                  {(['all', 'open', 'closed'] as const).map(s => (
+                    <button key={s} onClick={() => { setIssueFilter(s); fetchIssues(s) }}
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${issueFilter === s ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-400 hover:bg-slate-100'}`}
+                    >{s === 'all' ? 'All' : s === 'open' ? '🟢 Open' : '🔴 Closed'}</button>
+                  ))}
+                  <span className="ml-1 text-[10px] text-slate-300">({issues.length})</span>
+                </div>
+                <button onClick={() => fetchIssues()} className="text-[11px] text-indigo-500 hover:text-indigo-700">🔄</button>
               </div>
               {issuesLoading && <p className="text-center text-[11px] text-slate-400">Loading...</p>}
               {!issuesLoading && issues.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 text-slate-400">
                   <span className="text-2xl mb-2">🐛</span>
-                  <p className="text-[12px]">No open issues</p>
+                  <p className="text-[12px]">No {issueFilter === 'all' ? '' : issueFilter} issues</p>
                 </div>
               )}
               {issues.map((issue) => (
@@ -1841,14 +1852,21 @@ export default function CodeTaskPage() {
            {rightTab === 'prs' && (
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] text-slate-400">{pulls.length} open PRs</span>
-                <button onClick={fetchPulls} className="text-[11px] text-indigo-500 hover:text-indigo-700">🔄 Refresh</button>
+                <div className="flex items-center gap-1">
+                  {(['all', 'open', 'closed'] as const).map(s => (
+                    <button key={s} onClick={() => { setPrFilter(s); fetchPulls(s) }}
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${prFilter === s ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-400 hover:bg-slate-100'}`}
+                    >{s === 'all' ? 'All' : s === 'open' ? '🟢 Open' : '🔴 Closed'}</button>
+                  ))}
+                  <span className="ml-1 text-[10px] text-slate-300">({pulls.length})</span>
+                </div>
+                <button onClick={() => fetchPulls()} className="text-[11px] text-indigo-500 hover:text-indigo-700">🔄</button>
               </div>
               {pullsLoading && <p className="text-center text-[11px] text-slate-400">Loading...</p>}
               {!pullsLoading && pulls.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 text-slate-400">
                   <span className="text-2xl mb-2">🔀</span>
-                  <p className="text-[12px]">No open pull requests</p>
+                  <p className="text-[12px]">No {prFilter === 'all' ? '' : prFilter} pull requests</p>
                 </div>
               )}
               {pulls.map((pr) => (
