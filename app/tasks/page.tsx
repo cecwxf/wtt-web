@@ -101,7 +101,6 @@ export default function TasksPage() {
   const [queueIndicator, setQueueIndicator] = useState(false)
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
-  const [panelSendAs, setPanelSendAs] = useState<'user' | string>('user') // 'user' or agent_id
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const loadAgents = useCallback(async () => {
@@ -625,10 +624,10 @@ export default function TasksPage() {
     panelSendingRef.current = true
     setPanelSending(true)
 
-    const isUser = panelSendAs === 'user'
-    const agentId = isUser ? (selectedAgentId || 'user') : panelSendAs
-    const senderType = isUser ? 'HUMAN' : 'AGENT'
-    const senderId = isUser ? actorSource(session) : agentId
+    const isUser = true
+    const agentId = selectedAgentId || 'user'
+    const senderType = 'HUMAN'
+    const senderId = actorSource(session)
     if (panelAwaitingInference) {
       setQueueIndicator(true)
     }
@@ -927,21 +926,7 @@ export default function TasksPage() {
 
                 {/* Send box */}
                 <div className="shrink-0 border-t border-slate-200 pt-2 px-1">
-                  <div className="flex items-center gap-1 mb-1">
-                    <select
-                      className="flex-1 rounded border border-slate-200 bg-slate-100 px-1.5 py-1 text-[11px] outline-none"
-                      value={panelSendAs}
-                      onChange={(e) => setPanelSendAs(e.target.value)}
-                    >
-                      <option value="user">👤 {actorSource(session)}</option>
-                      {agents.map((a) => (
-                        <option key={a.agent_id} value={a.agent_id}>🤖 {a.display_name}</option>
-                      ))}
-                    </select>
-                    <span className="text-[10px] text-slate-400 shrink-0">
-                      {panelSendAs === 'user' ? '👤 User' : '🤖 Agent'}
-                    </span>
-                  </div>
+                  <div className="mb-1 text-[10px] text-slate-500">发送身份：👤 {actorSource(session)}</div>
                   <div className="flex gap-1">
                     <input
                       className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-indigo-400"
