@@ -94,6 +94,7 @@ export default function TasksPage() {
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskType, setNewTaskType] = useState<'code' | 'research' | 'common'>('common')
+  const [newTaskAgentId, setNewTaskAgentId] = useState('')
   const [panelInput, setPanelInput] = useState('')
   const [panelSending, setPanelSending] = useState(false)
   const panelSendingRef = useRef(false)
@@ -121,6 +122,10 @@ export default function TasksPage() {
     }
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
+
+  useEffect(() => {
+    if (!newTaskAgentId && selectedAgentId) setNewTaskAgentId(selectedAgentId)
+  }, [selectedAgentId, newTaskAgentId])
 
   useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 5000)
@@ -330,6 +335,10 @@ export default function TasksPage() {
   const createTask = async () => {
     const title = newTaskTitle.trim()
     if (!title) return
+    if (!newTaskAgentId) {
+      alert('请选择分配的 Agent')
+      return
+    }
     setShowNewTaskModal(false)
     setNewTaskTitle('')
 
@@ -342,8 +351,8 @@ export default function TasksPage() {
       priority: 'P1',
       status: 'todo',
       exec_mode: 'reasoning',
-      owner_agent_id: selectedAgentId || undefined,
-      runner_agent_id: selectedAgentId || undefined,
+      owner_agent_id: newTaskAgentId || undefined,
+      runner_agent_id: newTaskAgentId || undefined,
     }
     mutateTasks((prev: TaskItem[] | undefined) => [...(prev || []), optimistic], { revalidate: false })
     try {
@@ -360,9 +369,9 @@ export default function TasksPage() {
           status: 'todo',
           task_type: taskType,
           exec_mode: 'reasoning',
-          owner_agent_id: selectedAgentId || undefined,
-          runner_agent_id: selectedAgentId || undefined,
-          created_by: actorSource(session, selectedAgentId),
+          owner_agent_id: newTaskAgentId || undefined,
+          runner_agent_id: newTaskAgentId || undefined,
+          created_by: actorSource(session, newTaskAgentId),
         }),
       })
       if (resp.ok) {
@@ -774,7 +783,7 @@ export default function TasksPage() {
           <div className="flex items-center gap-2">
             <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-500">批量Run任务</button>
             <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">批量取消任务</button>
-            <button onClick={() => setShowNewTaskModal(true)} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
+            <button onClick={() => { setNewTaskAgentId(selectedAgentId || ''); setShowNewTaskModal(true) }} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
           </div>
         </div>
 
@@ -1050,6 +1059,18 @@ export default function TasksPage() {
               onChange={(e) => setNewTaskTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && newTaskTitle.trim()) createTask() }}
             />
+            <p className="mb-2 text-xs font-medium text-slate-500">Assign Agent</p>
+            <select
+              className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+              value={newTaskAgentId}
+              onChange={(e) => setNewTaskAgentId(e.target.value)}
+            >
+              <option value="">请选择 Agent</option>
+              {agents.map((a) => (
+                <option key={a.agent_id} value={a.agent_id}>{a.display_name || a.agent_id}</option>
+              ))}
+            </select>
+
             <p className="mb-2 text-xs font-medium text-slate-500">Task Type</p>
             <div className="mb-5 grid grid-cols-3 gap-3">
               {([
@@ -1074,7 +1095,7 @@ export default function TasksPage() {
               <button onClick={() => setShowNewTaskModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">Cancel</button>
               <button
                 onClick={createTask}
-                disabled={!newTaskTitle.trim()}
+                disabled={!newTaskTitle.trim() || !newTaskAgentId}
                 className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white disabled:opacity-50"
               >Create</button>
             </div>
