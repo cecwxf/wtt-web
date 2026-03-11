@@ -630,10 +630,11 @@ export default function TasksPage() {
     }
 
     try {
-      // Desired behavior:
-      // - todo: first send should move task to doing
-      // - doing/review/done: send should not trigger run again
-      if (isUser && selectedTask.status === 'todo') {
+      // User sends always go through task chat API:
+      // - todo => auto_run=true (todo->doing)
+      // - doing/review/done => auto_run=false (no rerun task)
+      if (isUser) {
+        const autoRun = selectedTask.status === 'todo'
         const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/chat/send`, {
           method: 'POST',
           headers,
@@ -642,7 +643,7 @@ export default function TasksPage() {
             sender_type: 'HUMAN',
             sender_id: senderId,
             semantic_type: 'reply',
-            auto_run: true,
+            auto_run: autoRun,
           }),
         })
         if (!resp.ok) {
@@ -650,9 +651,7 @@ export default function TasksPage() {
           throw new Error(`send failed: ${resp.status} ${err}`)
         }
       } else if (selectedTask.topic_id) {
-        const url = isUser
-          ? `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages`
-          : `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages?agent_id=${encodeURIComponent(agentId)}`
+        const url = `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages?agent_id=${encodeURIComponent(agentId)}`
         const resp = await fetch(url, {
           method: 'POST',
           headers,
