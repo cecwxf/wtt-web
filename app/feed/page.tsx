@@ -119,7 +119,7 @@ export default function FeedPage() {
   const { data: feedRaw, error, mutate } = useSWR(
     selectedAgentId && session?.accessToken && selectedTopicId ? ['topic-messages', selectedTopicId, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100&agent_id=${encodeURIComponent(selectedAgentId)}`, {
         headers: {
           Authorization: `Bearer ${session?.accessToken}`,
         },
@@ -179,6 +179,7 @@ export default function FeedPage() {
       const oldest = allMessages[0]
       const older = await wttApi.getTopicMessages(selectedTopicId, 100, {
         before: oldest.timestamp,
+        agentId: selectedAgentId,
       })
 
       const normalizedOlder = normalizeFeed(older)
