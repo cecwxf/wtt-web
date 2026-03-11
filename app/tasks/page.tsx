@@ -696,7 +696,11 @@ export default function TasksPage() {
     const hasAgentReply = timeline.some((item) => {
       if ((item.sender_type || '').toUpperCase() !== 'AGENT') return false
       const t = Date.parse(item.created_at || '')
-      return Number.isFinite(t) && t > sentAt
+      if (!(Number.isFinite(t) && t > sentAt)) return false
+      const content = String(item.content || '')
+      // "Agent thinking..." should NOT be treated as final reply
+      if (content.includes('Agent thinking')) return false
+      return true
     })
     if (hasAgentReply) {
       setPanelAwaitingInference(false)
