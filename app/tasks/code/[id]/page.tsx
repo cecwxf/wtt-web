@@ -11,6 +11,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { buildWttUserSourceFlow } from '@/lib/wtt-info-flow'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
+const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
 
 // Local relay (runs on user's machine) preferred; falls back to backend
 const LOCAL_RELAY_URL = 'http://localhost:9877'
@@ -166,6 +167,23 @@ function extractFilePatch(content: string): { path: string; code: string } | nul
   const m = content.match(/\[FILE\]\s+([^\n]+)\n```[\w-]*\n([\s\S]*?)\n```/)
   if (!m) return null
   return { path: m[1].trim(), code: m[2] }
+}
+
+interface PendingPatch {
+  path: string
+  code: string
+  status: 'pending' | 'accepted' | 'rejected'
+  originalContent?: string
+}
+
+function extractAllPatches(content: string): PendingPatch[] {
+  const re = /\[FILE\]\s+([^\n]+)\n```[\w-]*\n([\s\S]*?)\n```/g
+  const patches: PendingPatch[] = []
+  let m
+  while ((m = re.exec(content)) !== null) {
+    patches.push({ path: m[1].trim(), code: m[2], status: 'pending' })
+  }
+  return patches
 }
 
 function findFileNodeByPath(nodes: FileNode[], target: string): FileNode | null {
@@ -990,6 +1008,11 @@ export default function CodeTaskPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [prFiles, setPrFiles] = useState<Record<string, any>[]>([])
 
+  // ── Diff Review state ──────────────────────────────
+  const [diffMode, setDiffMode] = useState(false)
+  const [pendingPatches, setPendingPatches] = useState<PendingPatch[]>([])
+  const [activeDiffIndex, setActiveDiffIndex] = useState(0)
+  const [diffOriginalContent, setDiffOriginalContent] = useState('')
   const fetchIssues = async () => {
     if (!task?.repo_url || !session?.accessToken) return
     setIssuesLoading(true)
@@ -1051,6 +1074,76 @@ export default function CodeTaskPage() {
     if (rightTab === 'issues' && issues.length === 0) fetchIssues()
     if (rightTab === 'prs' && pulls.length === 0) fetchPulls()
   }, [rightTab])
+
+  // ── Diff Review functions ──────────────────────────
+  const enterDiffReview = useCallback(async (patches: PendingPatch[]) => {
+    if (patches.length === 0) return
+    setPendingPatches(patches)
+    setActiveDiffIndex(0)
+    setDiffMode(true)
+    // Fetch original content for first file from GitHub
+    const first = patches[0]
+    if (task?.repo_url && session?.accessToken) {
+      try {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(first.path)}`, {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        })
+        if (r.ok) {
+          const data = await r.json()
+          setDiffOriginalContent(typeof data === 'string' ? data : data.content || '')
+        } else {
+          setDiffOriginalContent('// (new file)')
+        }
+      } catch { setDiffOriginalContent('// (unable to load original)') }
+    } else {
+      setDiffOriginalContent('')
+    }
+  }, [task?.repo_url, session?.accessToken, taskId])
+
+  const switchDiffFile = useCallback(async (index: number) => {
+    setActiveDiffIndex(index)
+    const patch = pendingPatches[index]
+    if (!patch) return
+    if (task?.repo_url && session?.accessToken) {
+      try {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(patch.path)}`, {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        })
+        if (r.ok) {
+          const data = await r.json()
+          setDiffOriginalContent(typeof data === 'string' ? data : data.content || '')
+        } else {
+          setDiffOriginalContent('// (new file)')
+        }
+      } catch { setDiffOriginalContent('// (unable to load original)') }
+    }
+  }, [task?.repo_url, session?.accessToken, taskId, pendingPatches])
+
+  const updatePatchStatus = (index: number, status: 'accepted' | 'rejected') => {
+    setPendingPatches(prev => prev.map((p, i) => i === index ? { ...p, status } : p))
+  }
+
+  const exitDiffReview = () => {
+    setDiffMode(false)
+    setPendingPatches([])
+    setActiveDiffIndex(0)
+    setDiffOriginalContent('')
+  }
+
+  const submitDiffReview = async () => {
+    const accepted = pendingPatches.filter(p => p.status === 'accepted')
+    const rejected = pendingPatches.filter(p => p.status === 'rejected')
+    const summary = [
+      `## Review Complete`,
+      `✅ Accepted: ${accepted.length} file(s)`,
+      rejected.length > 0 ? `❌ Rejected: ${rejected.length} file(s): ${rejected.map(p => p.path).join(', ')}` : '',
+      accepted.length > 0 ? `\nAccepted files:\n${accepted.map(p => `- ${p.path}`).join('\n')}` : '',
+      `\nPlease proceed with committing the accepted changes.`,
+    ].filter(Boolean).join('\n')
+    setChatInput(summary)
+    setRightTab('chat')
+    exitDiffReview()
+  }
 
   const sendMessage = async () => {
     const text = chatInput.trim()
@@ -1240,74 +1333,148 @@ export default function CodeTaskPage() {
 
         {/* Editor panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Tab bar */}
-          {openFiles.length > 0 && (
-            <div className="flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-slate-200 bg-slate-100 px-1">
-              {openFiles.map((f) => (
-                <button
-                  key={f.path}
-                  onClick={() => selectFile(f)}
-                  className={`group flex items-center gap-1 rounded-t px-2 py-1 text-[11px] ${
-                    f.path === selectedFile?.path ? 'bg-white font-medium text-slate-800' : 'text-slate-500 hover:bg-white/60'
-                  }`}
-                >
-                  <span className="truncate max-w-[120px]">{f.name}</span>
-                  <span
-                    className="ml-1 hidden text-slate-400 hover:text-red-500 group-hover:inline"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setOpenFiles((prev) => prev.filter((x) => x.path !== f.path))
-                      if (selectedFile?.path === f.path) {
-                        setSelectedFile(null)
-                        setFileContent('')
-                      }
-                    }}
-                  >×</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Monaco editor */}
-          {selectedFile ? (
-            <div className="flex-1 relative">
-              {fileLoading && (
-                <div className="absolute left-2 top-2 z-10 rounded bg-slate-800/80 px-2 py-1 text-[11px] text-white">Loading...</div>
-              )}
-              <MonacoEditor
-                height="100%"
-                language={langFromPath(selectedFile.path)}
-                value={modifiedContent}
-                onChange={(v) => {
-                  setModifiedContent(v || '')
-                  setIsModified(v !== fileContent)
-                }}
-                theme="vs-light"
-                options={{
-                  fontSize: 13,
-                  minimap: { enabled: true },
-                  wordWrap: 'on',
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  tabSize: 2,
-                  readOnly: agentMode === 'remote',
-                }}
-              />
-              {isModified && agentMode === 'local' && (
-                <div className="absolute bottom-2 right-[calc(33%+12px)] z-10">
-                  <button onClick={saveFile} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg">
-                    💾 Save (Ctrl+S)
+          {/* Diff mode: file list + toolbar */}
+          {diffMode && pendingPatches.length > 0 ? (
+            <>
+              <div className="flex h-9 shrink-0 items-center gap-1 border-b border-slate-200 bg-amber-50 px-2">
+                <span className="text-[11px] font-semibold text-amber-700">🔍 Review Changes</span>
+                <span className="text-[10px] text-amber-600">({pendingPatches.filter(p => p.status === 'pending').length} pending)</span>
+                <div className="flex-1" />
+                <button onClick={submitDiffReview} disabled={pendingPatches.some(p => p.status === 'pending')}
+                  className="rounded bg-green-500 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-green-600 disabled:opacity-40"
+                >✅ Submit Review</button>
+                <button onClick={exitDiffReview}
+                  className="rounded bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-300"
+                >✕ Cancel</button>
+              </div>
+              {/* Diff file tabs */}
+              <div className="flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-slate-200 bg-slate-100 px-1">
+                {pendingPatches.map((p, i) => (
+                  <button key={p.path} onClick={() => switchDiffFile(i)}
+                    className={`flex items-center gap-1 rounded-t px-2 py-1 text-[11px] ${
+                      i === activeDiffIndex ? 'bg-white font-medium text-slate-800' : 'text-slate-500 hover:bg-white/60'
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${
+                      p.status === 'accepted' ? 'bg-green-400' : p.status === 'rejected' ? 'bg-red-400' : 'bg-amber-400'
+                    }`} />
+                    <span className="truncate max-w-[140px]">{p.path.split('/').pop()}</span>
                   </button>
+                ))}
+              </div>
+              {/* Diff editor */}
+              <div className="flex-1 relative">
+                <MonacoDiffEditor
+                  height="100%"
+                  language={langFromPath(pendingPatches[activeDiffIndex]?.path || '')}
+                  original={diffOriginalContent}
+                  modified={pendingPatches[activeDiffIndex]?.code || ''}
+                  theme="vs-light"
+                  options={{
+                    fontSize: 13,
+                    readOnly: true,
+                    renderSideBySide: true,
+                    automaticLayout: true,
+                    scrollBeyondLastLine: false,
+                    minimap: { enabled: false },
+                  }}
+                />
+                {/* Per-file accept/reject bar */}
+                <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-slate-200 bg-white/95 px-3 py-1.5 backdrop-blur">
+                  <span className="text-[12px] font-medium text-slate-600">{pendingPatches[activeDiffIndex]?.path}</span>
+                  <div className="flex items-center gap-2">
+                    {pendingPatches[activeDiffIndex]?.status !== 'pending' && (
+                      <span className={`text-[11px] font-semibold ${pendingPatches[activeDiffIndex]?.status === 'accepted' ? 'text-green-600' : 'text-red-500'}`}>
+                        {pendingPatches[activeDiffIndex]?.status === 'accepted' ? '✅ Accepted' : '❌ Rejected'}
+                      </span>
+                    )}
+                    <button onClick={() => updatePatchStatus(activeDiffIndex, 'accepted')}
+                      className="rounded bg-green-500 px-3 py-1 text-[11px] font-medium text-white hover:bg-green-600"
+                    >✅ Accept</button>
+                    <button onClick={() => updatePatchStatus(activeDiffIndex, 'rejected')}
+                      className="rounded bg-red-500 px-3 py-1 text-[11px] font-medium text-white hover:bg-red-600"
+                    >❌ Reject</button>
+                    {activeDiffIndex < pendingPatches.length - 1 && (
+                      <button onClick={() => switchDiffFile(activeDiffIndex + 1)}
+                        className="rounded bg-slate-200 px-3 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-300"
+                      >Next →</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Normal tab bar */}
+              {openFiles.length > 0 && (
+                <div className="flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-slate-200 bg-slate-100 px-1">
+                  {openFiles.map((f) => (
+                    <button
+                      key={f.path}
+                      onClick={() => selectFile(f)}
+                      className={`group flex items-center gap-1 rounded-t px-2 py-1 text-[11px] ${
+                        f.path === selectedFile?.path ? 'bg-white font-medium text-slate-800' : 'text-slate-500 hover:bg-white/60'
+                      }`}
+                    >
+                      <span className="truncate max-w-[120px]">{f.name}</span>
+                      <span
+                        className="ml-1 hidden text-slate-400 hover:text-red-500 group-hover:inline"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenFiles((prev) => prev.filter((x) => x.path !== f.path))
+                          if (selectedFile?.path === f.path) {
+                            setSelectedFile(null)
+                            setFileContent('')
+                          }
+                        }}
+                      >×</span>
+                    </button>
+                  ))}
                 </div>
               )}
-            </div>
-          ) : (
-            <div className="flex flex-1 items-center justify-center text-slate-400">
-              <div className="text-center">
-                <p className="text-4xl">📝</p>
-                <p className="mt-2 text-sm">Select a file to edit</p>
-              </div>
-            </div>
+
+              {/* Monaco editor */}
+              {selectedFile ? (
+                <div className="flex-1 relative">
+                  {fileLoading && (
+                    <div className="absolute left-2 top-2 z-10 rounded bg-slate-800/80 px-2 py-1 text-[11px] text-white">Loading...</div>
+                  )}
+                  <MonacoEditor
+                    height="100%"
+                    language={langFromPath(selectedFile.path)}
+                    value={modifiedContent}
+                    onChange={(v) => {
+                      setModifiedContent(v || '')
+                      setIsModified(v !== fileContent)
+                    }}
+                    theme="vs-light"
+                    options={{
+                      fontSize: 13,
+                      minimap: { enabled: true },
+                      wordWrap: 'on',
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                      tabSize: 2,
+                      readOnly: agentMode === 'remote',
+                    }}
+                  />
+                  {isModified && agentMode === 'local' && (
+                    <div className="absolute bottom-2 right-[calc(33%+12px)] z-10">
+                      <button onClick={saveFile} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg">
+                        💾 Save (Ctrl+S)
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-1 items-center justify-center text-slate-400">
+                  <div className="text-center">
+                    <p className="text-4xl">📝</p>
+                    <p className="mt-2 text-sm">Select a file to edit</p>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -1347,6 +1514,7 @@ export default function CodeTaskPage() {
                 )}
                 {chatMessages.map((msg) => {
                   const patch = msg.role === 'assistant' ? extractFilePatch(msg.content) : null
+                  const allPatches = msg.role === 'assistant' ? extractAllPatches(msg.content) : []
                   return (
                     <div key={msg.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] leading-relaxed">
                       <div className="mb-1 flex items-center justify-between">
@@ -1356,14 +1524,30 @@ export default function CodeTaskPage() {
                         <p className="text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
                       </div>
                       <div className="whitespace-pre-wrap break-words">{msg.content}</div>
-                      {patch && (
-                        <div className="mt-2">
+                      {allPatches.length > 1 ? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            onClick={() => enterDiffReview(allPatches)}
+                            className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+                          >🔍 Review {allPatches.length} files</button>
+                          {allPatches.map((p, i) => (
+                            <button key={i} onClick={() => applyPatchToEditor(p.path, p.code)}
+                              className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-100"
+                            >{p.path.split('/').pop()}</button>
+                          ))}
+                        </div>
+                      ) : patch ? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            onClick={() => enterDiffReview([{ ...patch, status: 'pending' }])}
+                            className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+                          >🔍 Review Diff</button>
                           <button
                             onClick={() => applyPatchToEditor(patch.path, patch.code)}
                             className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600 hover:bg-indigo-100"
-                          >Apply to Editor ({patch.path})</button>
+                          >Apply ({patch.path})</button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   )
                 })}
