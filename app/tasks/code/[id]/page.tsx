@@ -174,6 +174,9 @@ interface PendingPatch {
   code: string
   status: 'pending' | 'accepted' | 'rejected'
   originalContent?: string
+  fileStatus?: string // 'added' | 'modified' | 'removed' | 'renamed'
+  additions?: number
+  deletions?: number
 }
 
 function extractAllPatches(content: string): PendingPatch[] {
@@ -1033,6 +1036,7 @@ export default function CodeTaskPage() {
   const [pendingPatches, setPendingPatches] = useState<PendingPatch[]>([])
   const [activeDiffIndex, setActiveDiffIndex] = useState(0)
   const [diffOriginalContent, setDiffOriginalContent] = useState('')
+  const [reviewingPR, setReviewingPR] = useState<{ number: number; title: string; head: string; base: string } | null>(null)
   const fetchIssues = async () => {
     if (!task?.repo_url || !session?.accessToken) return
     setIssuesLoading(true)
@@ -1096,37 +1100,65 @@ export default function CodeTaskPage() {
   }, [rightTab])
 
   // ── Diff Review functions ──────────────────────────
-  const enterDiffReview = useCallback(async (patches: PendingPatch[]) => {
-    if (patches.length === 0) return
+  const fetchFileFromRef = useCallback(async (filePath: string, ref?: string): Promise<string> => {
+    if (!session?.accessToken) return ''
+    try {
+      const refParam = ref ? `?ref=${encodeURIComponent(ref)}` : ''
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(filePath)}${refParam}`, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      })
+      if (r.ok) {
+        const data = await r.json()
+        return typeof data === 'string' ? data : data.content || ''
+      }
+      return '// (new file)'
+    } catch { return '// (unable to load)' }
+  }, [session?.accessToken, taskId])
+
+  // Enter PR diff review: fetch base vs head for each file
+  const enterPRDiffReview = useCallback(async (pr: { number: number; title: string; head: string; base: string }, files: Record<string, unknown>[]) => {
+    if (files.length === 0) return
+    setReviewingPR(pr)
+    const patches: PendingPatch[] = files.map((f: Record<string, unknown>) => ({
+      path: f.filename as string,
+      code: '', // will be loaded on demand
+      status: 'pending' as const,
+      fileStatus: (f.status as string) || 'modified',
+      additions: (f.additions as number) || 0,
+      deletions: (f.deletions as number) || 0,
+    }))
     setPendingPatches(patches)
     setActiveDiffIndex(0)
     setDiffMode(true)
-    // Fetch original content for first file from GitHub
-    const first = patches[0]
-    if (task?.repo_url && session?.accessToken) {
-      try {
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(first.path)}`, {
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-        })
-        if (r.ok) {
-          const data = await r.json()
-          setDiffOriginalContent(typeof data === 'string' ? data : data.content || '')
-        } else {
-          setDiffOriginalContent('// (new file)')
-        }
-      } catch { setDiffOriginalContent('// (unable to load original)') }
-    } else {
-      setDiffOriginalContent('')
-    }
-  }, [task?.repo_url, session?.accessToken, taskId])
+    // Load first file's base and head content
+    const firstPath = patches[0].path
+    const [original, modified] = await Promise.all([
+      patches[0].fileStatus === 'added' ? Promise.resolve('') : fetchFileFromRef(firstPath, pr.base),
+      patches[0].fileStatus === 'removed' ? Promise.resolve('') : fetchFileFromRef(firstPath, pr.head),
+    ])
+    setDiffOriginalContent(original)
+    setPendingPatches(prev => prev.map((p, i) => i === 0 ? { ...p, code: modified } : p))
+  }, [fetchFileFromRef])
 
-  // Auto-enter diff review when Agent sends [FILE] blocks
+  // Legacy: enter diff review from [FILE] blocks (fallback)
+  const enterDiffReview = useCallback(async (patches: PendingPatch[]) => {
+    if (patches.length === 0) return
+    setReviewingPR(null)
+    setPendingPatches(patches)
+    setActiveDiffIndex(0)
+    setDiffMode(true)
+    const first = patches[0]
+    const original = await fetchFileFromRef(first.path)
+    setDiffOriginalContent(original)
+  }, [fetchFileFromRef])
+
+  // Auto-enter diff review when Agent sends [FILE] blocks (fallback)
   const lastReviewedMsgRef = useRef<string | null>(null)
   useEffect(() => {
-    if (diffMode) return // already in diff review
+    if (diffMode) return
     const lastMsg = chatMessages[chatMessages.length - 1]
     if (!lastMsg || lastMsg.role !== 'assistant') return
-    if (lastMsg.id === lastReviewedMsgRef.current) return // already processed
+    if (lastMsg.id === lastReviewedMsgRef.current) return
     const patches = extractAllPatches(lastMsg.content)
     if (patches.length > 0) {
       lastReviewedMsgRef.current = lastMsg.id
@@ -1134,24 +1166,39 @@ export default function CodeTaskPage() {
     }
   }, [chatMessages, diffMode, enterDiffReview])
 
+  // Auto-detect PR mentions in Agent chat (e.g. "PR #42" or "pull request #42")
+  const lastPrDetectedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (diffMode) return
+    const lastMsg = chatMessages[chatMessages.length - 1]
+    if (!lastMsg || lastMsg.role !== 'assistant') return
+    if (lastMsg.id === lastPrDetectedRef.current) return
+    const prMatch = lastMsg.content.match(/(?:PR|pull request)\s*#(\d+)/i)
+    if (prMatch) {
+      lastPrDetectedRef.current = lastMsg.id
+      // Refresh the PR list so user can click to review
+      fetchPulls()
+    }
+  }, [chatMessages, diffMode])
+
   const switchDiffFile = useCallback(async (index: number) => {
     setActiveDiffIndex(index)
     const patch = pendingPatches[index]
     if (!patch) return
-    if (task?.repo_url && session?.accessToken) {
-      try {
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(patch.path)}`, {
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-        })
-        if (r.ok) {
-          const data = await r.json()
-          setDiffOriginalContent(typeof data === 'string' ? data : data.content || '')
-        } else {
-          setDiffOriginalContent('// (new file)')
-        }
-      } catch { setDiffOriginalContent('// (unable to load original)') }
+    if (reviewingPR) {
+      // PR mode: fetch from base and head branches
+      const [original, modified] = await Promise.all([
+        patch.fileStatus === 'added' ? Promise.resolve('') : fetchFileFromRef(patch.path, reviewingPR.base),
+        patch.fileStatus === 'removed' ? Promise.resolve('') : fetchFileFromRef(patch.path, reviewingPR.head),
+      ])
+      setDiffOriginalContent(original)
+      setPendingPatches(prev => prev.map((p, i) => i === index ? { ...p, code: modified } : p))
+    } else {
+      // Legacy [FILE] mode
+      const original = await fetchFileFromRef(patch.path)
+      setDiffOriginalContent(original)
     }
-  }, [task?.repo_url, session?.accessToken, taskId, pendingPatches])
+  }, [pendingPatches, reviewingPR, fetchFileFromRef])
 
   const updatePatchStatus = (index: number, status: 'accepted' | 'rejected') => {
     setPendingPatches(prev => prev.map((p, i) => i === index ? { ...p, status } : p))
@@ -1162,33 +1209,54 @@ export default function CodeTaskPage() {
     setPendingPatches([])
     setActiveDiffIndex(0)
     setDiffOriginalContent('')
+    setReviewingPR(null)
   }
 
   const submitDiffReview = async () => {
     const accepted = pendingPatches.filter(p => p.status === 'accepted')
     const rejected = pendingPatches.filter(p => p.status === 'rejected')
     const pending = pendingPatches.filter(p => p.status === 'pending')
-    const parts: string[] = [`## Code Review Complete`]
 
-    if (accepted.length > 0) {
-      parts.push(`\n✅ **Accepted** (${accepted.length} file${accepted.length > 1 ? 's' : ''})：`)
-      accepted.forEach(p => parts.push(`- ${p.path}`))
-      parts.push(`\nPlease commit the accepted files to the repository. Use a descriptive commit message.`)
+    if (reviewingPR) {
+      // PR-based review
+      const parts: string[] = [`## PR #${reviewingPR.number} Review: ${reviewingPR.title}`]
+      parts.push(`Branch: ${reviewingPR.head} → ${reviewingPR.base}`)
+      if (rejected.length === 0 && pending.length === 0) {
+        parts.push(`\n✅ All ${accepted.length} file(s) approved.`)
+        parts.push(`\nPlease merge PR #${reviewingPR.number}.`)
+      } else {
+        if (accepted.length > 0) {
+          parts.push(`\n✅ Approved (${accepted.length}):`)
+          accepted.forEach(p => parts.push(`- ${p.path}`))
+        }
+        if (rejected.length > 0) {
+          parts.push(`\n❌ Needs changes (${rejected.length}):`)
+          rejected.forEach(p => parts.push(`- ${p.path}`))
+          parts.push(`\nPlease fix the rejected files and update PR #${reviewingPR.number}. Do NOT merge yet.`)
+        }
+        if (pending.length > 0) {
+          parts.push(`\n⏳ Not reviewed (${pending.length}):`)
+          pending.forEach(p => parts.push(`- ${p.path}`))
+        }
+      }
+      setChatInput(parts.join('\n'))
+    } else {
+      // Legacy [FILE] block review
+      const parts: string[] = [`## Code Review Complete`]
+      if (accepted.length > 0) {
+        parts.push(`\n✅ **Accepted** (${accepted.length} file${accepted.length > 1 ? 's' : ''})：`)
+        accepted.forEach(p => parts.push(`- ${p.path}`))
+        parts.push(`\nPlease commit the accepted files. Use a descriptive commit message.`)
+      }
+      if (rejected.length > 0) {
+        parts.push(`\n❌ **Rejected** (${rejected.length} file${rejected.length > 1 ? 's' : ''})：`)
+        rejected.forEach(p => parts.push(`- ${p.path}`))
+      }
+      if (accepted.length === 0) {
+        parts.push(`\nAll changes rejected. Please revise.`)
+      }
+      setChatInput(parts.join('\n'))
     }
-    if (rejected.length > 0) {
-      parts.push(`\n❌ **Rejected** (${rejected.length} file${rejected.length > 1 ? 's' : ''})：`)
-      rejected.forEach(p => parts.push(`- ${p.path}`))
-      parts.push(`\nDo NOT commit the rejected files.`)
-    }
-    if (pending.length > 0) {
-      parts.push(`\n⏳ **Not reviewed** (${pending.length} file${pending.length > 1 ? 's' : ''})：`)
-      pending.forEach(p => parts.push(`- ${p.path}`))
-    }
-    if (accepted.length === 0) {
-      parts.push(`\nAll changes were rejected. Please revise and propose new changes using [FILE] format.`)
-    }
-
-    setChatInput(parts.join('\n'))
     setRightTab('chat')
     exitDiffReview()
   }
@@ -1385,10 +1453,15 @@ export default function CodeTaskPage() {
           {diffMode && pendingPatches.length > 0 ? (
             <>
               <div className="flex h-9 shrink-0 items-center gap-1 border-b border-slate-200 bg-amber-50 px-2">
-                <span className="text-[11px] font-semibold text-amber-700">🔍 Review Changes</span>
+                <span className="text-[11px] font-semibold text-amber-700">
+                  {reviewingPR ? `🔍 PR #${reviewingPR.number}: ${reviewingPR.title}` : '🔍 Review Changes'}
+                </span>
+                {reviewingPR && (
+                  <span className="text-[10px] text-amber-500">{reviewingPR.head} → {reviewingPR.base}</span>
+                )}
                 <span className="text-[10px] text-amber-600">({pendingPatches.filter(p => p.status === 'pending').length} pending)</span>
                 <div className="flex-1" />
-                <button onClick={submitDiffReview} disabled={pendingPatches.some(p => p.status === 'pending')}
+                <button onClick={submitDiffReview} disabled={pendingPatches.every(p => p.status === 'pending')}
                   className="rounded bg-green-500 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-green-600 disabled:opacity-40"
                 >✅ Submit Review</button>
                 <button onClick={exitDiffReview}
@@ -1407,6 +1480,11 @@ export default function CodeTaskPage() {
                       p.status === 'accepted' ? 'bg-green-400' : p.status === 'rejected' ? 'bg-red-400' : 'bg-amber-400'
                     }`} />
                     <span className="truncate max-w-[140px]">{p.path.split('/').pop()}</span>
+                    {p.fileStatus && (
+                      <span className={`text-[9px] ${
+                        p.fileStatus === 'added' ? 'text-green-500' : p.fileStatus === 'removed' ? 'text-red-500' : 'text-amber-500'
+                      }`}>{p.fileStatus === 'added' ? '+' : p.fileStatus === 'removed' ? '-' : '~'}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1760,7 +1838,7 @@ export default function CodeTaskPage() {
             </div>
           )}
 
-          {rightTab === 'prs' && (
+           {rightTab === 'prs' && (
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] text-slate-400">{pulls.length} open PRs</span>
@@ -1796,36 +1874,55 @@ export default function CodeTaskPage() {
                       {pr.body && (
                         <div className="rounded bg-slate-50 p-2 text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">{pr.body}</div>
                       )}
+                      {/* Review all files button */}
+                      {prFiles.length > 0 && (
+                        <button
+                          onClick={() => enterPRDiffReview(
+                            { number: pr.number, title: pr.title, head: pr.head?.ref, base: pr.base?.ref },
+                            prFiles,
+                          )}
+                          className="w-full rounded bg-amber-50 border border-amber-300 px-2 py-1.5 text-[12px] font-medium text-amber-700 hover:bg-amber-100"
+                        >🔍 Review All {prFiles.length} Files (Diff)</button>
+                      )}
                       {prFiles.length > 0 && (
                         <div className="space-y-1">
                           <p className="text-[10px] font-semibold text-slate-500">📁 Changed Files ({prFiles.length})</p>
                           {prFiles.map((f) => (
-                            <button
-                              key={f.filename}
-                              onClick={() => {
-                                const node = findFileNodeByPath(fileTree, f.filename)
-                                if (node) selectFile(node)
-                              }}
-                              className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-slate-50"
-                            >
+                            <div key={f.filename} className="flex w-full items-center gap-1 rounded px-1.5 py-1 hover:bg-slate-50">
                               <span className={`text-[10px] font-mono ${
                                 f.status === 'added' ? 'text-green-600' : f.status === 'removed' ? 'text-red-600' : 'text-amber-600'
                               }`}>{f.status === 'added' ? '+' : f.status === 'removed' ? '-' : '~'}</span>
                               <span className="flex-1 truncate text-[11px] text-slate-600">{f.filename}</span>
                               <span className="text-[10px] text-green-600">+{f.additions}</span>
                               <span className="text-[10px] text-red-500">-{f.deletions}</span>
-                            </button>
+                              <button
+                                onClick={() => enterPRDiffReview(
+                                  { number: pr.number, title: pr.title, head: pr.head?.ref, base: pr.base?.ref },
+                                  [f],
+                                )}
+                                className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-600 hover:bg-amber-100"
+                              >diff</button>
+                            </div>
                           ))}
                         </div>
                       )}
-                      <button
-                        onClick={() => {
-                          const ref = `@pr #${pr.number}: ${pr.title}\n${pr.head?.ref} → ${pr.base?.ref}`
-                          setChatInput(ref)
-                          setRightTab('chat')
-                        }}
-                        className="w-full rounded bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100"
-                      >📎 Reference in Chat</button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => {
+                            setChatInput(`Please merge PR #${pr.number}: ${pr.title}`)
+                            setRightTab('chat')
+                          }}
+                          className="flex-1 rounded bg-green-50 px-2 py-1 text-[11px] font-medium text-green-600 hover:bg-green-100"
+                        >✅ Approve & Merge</button>
+                        <button
+                          onClick={() => {
+                            const ref = `@pr #${pr.number}: ${pr.title}\n${pr.head?.ref} → ${pr.base?.ref}`
+                            setChatInput(ref)
+                            setRightTab('chat')
+                          }}
+                          className="flex-1 rounded bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100"
+                        >📎 Reference in Chat</button>
+                      </div>
                     </div>
                   )}
                 </div>
