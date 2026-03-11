@@ -65,10 +65,10 @@ const arcPath = (cx: number, cy: number, r: number, start: number, end: number) 
 }
 
 
-const actorSource = (session: unknown, selectedAgentId: string) => {
+const actorSource = (session: unknown) => {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
   const uid = s?.userId || ''
-  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : selectedAgentId || 'user')
+  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
 const fallbackProgressByStatus = (status: TaskItem['status']) => {
@@ -367,7 +367,7 @@ export default function TasksPage() {
           exec_mode: 'reasoning',
           owner_agent_id: newTaskAgentId || undefined,
           runner_agent_id: newTaskAgentId || undefined,
-          created_by: actorSource(session, newTaskAgentId),
+          created_by: actorSource(session),
         }),
       })
       if (resp.ok) {
@@ -442,7 +442,7 @@ export default function TasksPage() {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            trigger_agent_id: actorSource(session, selectedAgentId) || 'task-runner',
+            trigger_agent_id: actorSource(session) || 'task-runner',
             runner_agent_id: t.runner_agent_id || t.owner_agent_id || selectedAgentId,
           }),
         })
@@ -536,7 +536,7 @@ export default function TasksPage() {
           Authorization: `Bearer ${session?.accessToken ?? ''}`,
         },
         body: JSON.stringify({
-          trigger_agent_id: actorSource(session, selectedAgentId) || 'task-runner',
+          trigger_agent_id: actorSource(session) || 'task-runner',
           runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId,
           exec_mode: selectedTask.exec_mode || 'reasoning',
         }),
@@ -571,7 +571,7 @@ export default function TasksPage() {
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },
           body: JSON.stringify({
-            sender_id: actorSource(session, selectedAgentId),
+            sender_id: actorSource(session),
             sender_type: 'HUMAN',
             content: input.trim(),
             content_type: 'text',
@@ -628,7 +628,7 @@ export default function TasksPage() {
     const isUser = panelSendAs === 'user'
     const agentId = isUser ? (selectedAgentId || 'user') : panelSendAs
     const senderType = isUser ? 'HUMAN' : 'AGENT'
-    const senderId = isUser ? actorSource(session, selectedAgentId) : agentId
+    const senderId = isUser ? actorSource(session) : agentId
     if (panelAwaitingInference) {
       setQueueIndicator(true)
     }
@@ -767,7 +767,7 @@ export default function TasksPage() {
       onDeleteTopic={deleteTopicFromSidebar}
       onTopicsRefresh={() => mutateSubscribedTopics()}
       onLogout={() => signOut({ callbackUrl: '/login' })}
-      currentUserName={actorSource(session, '')}
+      currentUserName={actorSource(session)}
       hideCreateTopic
     >
       <div className="h-full p-4 text-slate-800">
@@ -933,7 +933,7 @@ export default function TasksPage() {
                       value={panelSendAs}
                       onChange={(e) => setPanelSendAs(e.target.value)}
                     >
-                      <option value="user">👤 {actorSource(session, selectedAgentId)}</option>
+                      <option value="user">👤 {actorSource(session)}</option>
                       {agents.map((a) => (
                         <option key={a.agent_id} value={a.agent_id}>🤖 {a.display_name}</option>
                       ))}
