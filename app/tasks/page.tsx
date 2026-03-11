@@ -562,7 +562,8 @@ export default function TasksPage() {
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },
           body: JSON.stringify({
-            sender_id: selectedAgentId || 'reviewer',
+            sender_id: actorSource(session, selectedAgentId),
+            sender_type: 'HUMAN',
             content: input.trim(),
             content_type: 'text',
             semantic_type: 'reply',
@@ -617,6 +618,7 @@ export default function TasksPage() {
     const isUser = panelSendAs === 'user'
     const agentId = isUser ? (selectedAgentId || 'user') : panelSendAs
     const senderType = isUser ? 'HUMAN' : 'AGENT'
+    const senderId = isUser ? actorSource(session, selectedAgentId) : agentId
     const headers = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session?.accessToken ?? ''}`,
@@ -637,11 +639,14 @@ export default function TasksPage() {
       }
 
       if (selectedTask.topic_id) {
-        await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages?agent_id=${encodeURIComponent(agentId)}`, {
+        const url = isUser
+          ? `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages`
+          : `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages?agent_id=${encodeURIComponent(agentId)}`
+        await fetch(url, {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            sender_id: agentId,
+            sender_id: senderId,
             sender_type: senderType,
             content: text,
             content_type: 'text',
@@ -850,7 +855,7 @@ export default function TasksPage() {
                   {timeline.length > 0 ? (
                     timeline.map((item) => {
                       const isHuman = item.sender_type.toUpperCase() === 'HUMAN'
-                      const displayContent = item.content.length > 200 ? item.content.slice(0, 200) + '…' : item.content
+                      const displayContent = item.content
                       return (
                         <div key={item.id || `${item.sender}-${item.created_at}`} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 ${isHuman ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-800'}`}>
