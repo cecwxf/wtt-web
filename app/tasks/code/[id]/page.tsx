@@ -1120,6 +1120,20 @@ export default function CodeTaskPage() {
     }
   }, [task?.repo_url, session?.accessToken, taskId])
 
+  // Auto-enter diff review when Agent sends [FILE] blocks
+  const lastReviewedMsgRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (diffMode) return // already in diff review
+    const lastMsg = chatMessages[chatMessages.length - 1]
+    if (!lastMsg || lastMsg.role !== 'assistant') return
+    if (lastMsg.id === lastReviewedMsgRef.current) return // already processed
+    const patches = extractAllPatches(lastMsg.content)
+    if (patches.length > 0) {
+      lastReviewedMsgRef.current = lastMsg.id
+      enterDiffReview(patches)
+    }
+  }, [chatMessages, diffMode, enterDiffReview])
+
   const switchDiffFile = useCallback(async (index: number) => {
     setActiveDiffIndex(index)
     const patch = pendingPatches[index]
@@ -1153,14 +1167,28 @@ export default function CodeTaskPage() {
   const submitDiffReview = async () => {
     const accepted = pendingPatches.filter(p => p.status === 'accepted')
     const rejected = pendingPatches.filter(p => p.status === 'rejected')
-    const summary = [
-      `## Review Complete`,
-      `✅ Accepted: ${accepted.length} file(s)`,
-      rejected.length > 0 ? `❌ Rejected: ${rejected.length} file(s): ${rejected.map(p => p.path).join(', ')}` : '',
-      accepted.length > 0 ? `\nAccepted files:\n${accepted.map(p => `- ${p.path}`).join('\n')}` : '',
-      `\nPlease proceed with committing the accepted changes.`,
-    ].filter(Boolean).join('\n')
-    setChatInput(summary)
+    const pending = pendingPatches.filter(p => p.status === 'pending')
+    const parts: string[] = [`## Code Review Complete`]
+
+    if (accepted.length > 0) {
+      parts.push(`\n✅ **Accepted** (${accepted.length} file${accepted.length > 1 ? 's' : ''})：`)
+      accepted.forEach(p => parts.push(`- ${p.path}`))
+      parts.push(`\nPlease commit the accepted files to the repository. Use a descriptive commit message.`)
+    }
+    if (rejected.length > 0) {
+      parts.push(`\n❌ **Rejected** (${rejected.length} file${rejected.length > 1 ? 's' : ''})：`)
+      rejected.forEach(p => parts.push(`- ${p.path}`))
+      parts.push(`\nDo NOT commit the rejected files.`)
+    }
+    if (pending.length > 0) {
+      parts.push(`\n⏳ **Not reviewed** (${pending.length} file${pending.length > 1 ? 's' : ''})：`)
+      pending.forEach(p => parts.push(`- ${p.path}`))
+    }
+    if (accepted.length === 0) {
+      parts.push(`\nAll changes were rejected. Please revise and propose new changes using [FILE] format.`)
+    }
+
+    setChatInput(parts.join('\n'))
     setRightTab('chat')
     exitDiffReview()
   }
@@ -1198,7 +1226,7 @@ export default function CodeTaskPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },
-          body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: false, context_file: selectedFile?.path || undefined }),
+          body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: task?.status === 'todo', context_file: selectedFile?.path || undefined }),
         })
         if (!r.ok) throw new Error(await r.text())
         await mutateTask()
@@ -1389,9 +1417,9 @@ export default function CodeTaskPage() {
                   language={langFromPath(pendingPatches[activeDiffIndex]?.path || '')}
                   original={diffOriginalContent}
                   modified={pendingPatches[activeDiffIndex]?.code || ''}
-                  theme="vs-light"
+                  theme={editorTheme}
                   options={{
-                    fontSize: 13,
+                    fontSize: editorFontSize,
                     readOnly: true,
                     renderSideBySide: true,
                     automaticLayout: true,
