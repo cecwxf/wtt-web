@@ -988,6 +988,17 @@ export default function CodeTaskPage() {
     if (lastMsg && lastMsg.role === 'assistant') setAwaitingAgent(false)
   }, [chatMessages, awaitingAgent])
 
+  // legacy local/remote helpers kept temporarily; mark as used until full cleanup
+  void setAgentMode
+  void sshConnecting
+  void sshTesting
+  void sshTestResult
+  void sshPanelOpen
+  void openDirectory
+  void testSshConnection
+  void connectSsh
+  void refreshSshTree
+
   const activeTree = task?.repo_url ? repoTree : (agentMode === 'remote' ? sshTree : fileTree)
   const fileCount = useMemo(() => countFiles(activeTree), [activeTree])
 
@@ -1017,32 +1028,7 @@ export default function CodeTaskPage() {
               {agents.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>)}
             </select>
           )}
-          {!task?.repo_url && (
-            <div className="flex rounded-lg border border-slate-200 bg-white text-[11px]">
-              <button
-                onClick={() => setAgentMode('local')}
-                className={`px-2 py-1 rounded-l-lg transition-colors ${agentMode === 'local' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-              >🖥️ Local</button>
-              <button
-                onClick={() => setAgentMode('remote')}
-                className={`px-2 py-1 rounded-r-lg transition-colors ${agentMode === 'remote' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-              >☁️ Remote</button>
-            </div>
-          )}
-          {task?.repo_url && (
-            <span className="rounded bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">🐙 GitHub Repo</span>
-          )}
-          {agentMode === 'remote' && !task?.repo_url && sshConnected && (
-            <span className="flex items-center gap-1 text-[11px] text-green-600">
-              <span className="h-2 w-2 rounded-full bg-green-400" />
-              SSH
-            </span>
-          )}
-          {!task?.repo_url && agentMode === 'local' && (
-            <button onClick={openDirectory} className="rounded-lg bg-indigo-500 px-3 py-1 text-xs text-white">
-              {dirName ? `📁 ${dirName}` : 'Open Folder'}
-            </button>
-          )}
+          <span className="rounded bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">🐙 GitHub Repo Mode</span>
           {task?.repo_url && (
             <button onClick={() => void loadRepoTree()} className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">{repoLoading ? '...' : 'Refresh Tree'}</button>
           )}
@@ -1112,153 +1098,15 @@ export default function CodeTaskPage() {
                 </>
               )}
             </>
-          ) : agentMode === 'remote' ? (
-            <>
-              {/* SSH Config Panel */}
-              <button
-                onClick={() => setSshPanelOpen(!sshPanelOpen)}
-                className="mb-2 flex w-full items-center justify-between rounded bg-slate-200/60 px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-200"
-              >
-                <span className="flex items-center gap-1.5">
-                  {sshConnected ? <span className="h-2 w-2 rounded-full bg-green-400" /> : <span className="h-2 w-2 rounded-full bg-slate-300" />}
-                  SSH Config
-                </span>
-                <span>{sshPanelOpen ? '▼' : '▶'}</span>
-              </button>
-              {/* Relay status */}
-              <div className={`mb-2 flex items-center gap-1.5 rounded px-2 py-1 text-[10px] ${
-                relayAvailable === null ? 'bg-slate-100 text-slate-400' : relayAvailable ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${relayAvailable === null ? 'bg-slate-300' : relayAvailable ? 'bg-green-400' : 'bg-amber-400'}`} />
-                {relayAvailable === null ? 'Detecting local relay...' : relayAvailable ? '🔌 Local Relay active (localhost:9877)' : '☁️ Using cloud SSH (run wtt_local_relay.py for local)'}
-              </div>
-              {sshPanelOpen && (
-                <div className="mb-2 space-y-1.5 rounded border border-slate-200 bg-white p-2">
-                  <input
-                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
-                    placeholder="Host"
-                    value={sshConfig.host}
-                    onChange={(e) => setSshConfig({ ...sshConfig, host: e.target.value })}
-                  />
-                  <div className="flex gap-1">
-                    <input
-                      className="w-16 rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
-                      placeholder="Port"
-                      type="number"
-                      value={sshConfig.port}
-                      onChange={(e) => setSshConfig({ ...sshConfig, port: parseInt(e.target.value) || 22 })}
-                    />
-                    <input
-                      className="flex-1 rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
-                      placeholder="Username"
-                      value={sshConfig.username}
-                      onChange={(e) => setSshConfig({ ...sshConfig, username: e.target.value })}
-                    />
-                  </div>
-                  <input
-                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
-                    placeholder="Password"
-                    type="password"
-                    value={sshConfig.password}
-                    onChange={(e) => setSshConfig({ ...sshConfig, password: e.target.value })}
-                  />
-                  <textarea
-                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px] font-mono focus:border-indigo-400 focus:outline-none"
-                    placeholder="Private Key (paste PEM content)"
-                    rows={3}
-                    value={sshConfig.private_key}
-                    onChange={(e) => setSshConfig({ ...sshConfig, private_key: e.target.value })}
-                  />
-                  <input
-                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px] focus:border-indigo-400 focus:outline-none"
-                    placeholder="Project Path (e.g. ~/myproject)"
-                    value={sshConfig.project_path}
-                    onChange={(e) => setSshConfig({ ...sshConfig, project_path: e.target.value })}
-                  />
-                  <div className="flex gap-1">
-                    <button
-                      onClick={testSshConnection}
-                      disabled={sshTesting || !sshConfig.host || !sshConfig.username}
-                      className="flex-1 rounded bg-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-50"
-                    >{sshTesting ? '...' : 'Test'}</button>
-                    <button
-                      onClick={connectSsh}
-                      disabled={sshConnecting || !sshConfig.host || !sshConfig.username}
-                      className="flex-1 rounded bg-indigo-500 px-2 py-1 text-[11px] font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
-                    >{sshConnecting ? 'Connecting...' : 'Connect'}</button>
-                  </div>
-                  {sshTestResult && (
-                    <p className="text-[10px] text-slate-500">{sshTestResult}</p>
-                  )}
-                </div>
-              )}
-              {/* Remote tree */}
-              {sshConnected && sshTree.length > 0 && (
-                <>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="truncate text-xs font-semibold text-slate-500">{sshRemoteDirName}</p>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-slate-400">{countFiles(sshTree)} files</span>
-                      <button
-                        onClick={refreshSshTree}
-                        disabled={sshConnecting}
-                        className="rounded p-0.5 text-[11px] text-slate-400 hover:bg-slate-200 hover:text-slate-600 disabled:opacity-50"
-                        title="Refresh"
-                      >🔄</button>
-                    </div>
-                  </div>
-                  {sshTree.map((node) => (
-                    <FileTreeNode
-                      key={node.path}
-                      node={node}
-                      depth={0}
-                      selectedPath={selectedFile?.path || ''}
-                      onSelect={selectFile}
-                    />
-                  ))}
-                </>
-              )}
-              {sshConnected && sshTree.length === 0 && !sshConnecting && (
-                <p className="text-center text-[11px] text-slate-400">No files found</p>
-              )}
-              {!sshConnected && !sshPanelOpen && (
-                <div className="flex h-32 flex-col items-center justify-center text-center">
-                  <p className="text-2xl">☁️</p>
-                  <p className="mt-1 text-[11px] text-slate-400">Configure SSH to connect</p>
-                </div>
-              )}
-            </>
           ) : (
-            <>
-              {fileTree.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-                  <p className="text-3xl">📂</p>
-                  <p className="text-sm text-slate-500">No folder open</p>
-                  <button onClick={openDirectory} className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white">
-                    Open Folder
-                  </button>
-                  <p className="mt-2 text-[11px] text-slate-400">Files stay local — nothing is uploaded</p>
-                </div>
-              ) : (
-                <>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-500">{dirName}</p>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-slate-400">{fileCount} files</span>
-                    </div>
-                  </div>
-                  {fileTree.map((node) => (
-                    <FileTreeNode
-                      key={node.path}
-                      node={node}
-                      depth={0}
-                      selectedPath={selectedFile?.path || ''}
-                      onSelect={selectFile}
-                    />
-                  ))}
-                </>
-              )}
-            </>
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+              <p className="text-3xl">🐙</p>
+              <p className="text-sm text-slate-500">GitHub repo is required for Code Task</p>
+              <div className="flex gap-2">
+                <button onClick={linkRepo} disabled={repoLinking} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 disabled:opacity-50">{repoLinking ? 'Linking...' : 'Link Repo'}</button>
+                <button onClick={createRepo} disabled={repoCreating} className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white disabled:opacity-50">{repoCreating ? 'Creating...' : 'Create Repo'}</button>
+              </div>
+            </div>
           )}
         </div>
 
