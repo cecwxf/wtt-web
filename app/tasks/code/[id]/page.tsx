@@ -201,13 +201,10 @@ export default function CodeTaskPage() {
     let cancelled = false
     const check = async () => {
       try {
-        const r = await fetch(`${LOCAL_RELAY_URL}/ssh/test`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ host: '127.0.0.1', port: 22, username: 'test', password: 'test' }),
+        const r = await fetch(`${LOCAL_RELAY_URL}/health`, {
           signal: AbortSignal.timeout(2000),
         }).catch(() => null)
-        if (!cancelled) setRelayAvailable(r !== null && r.status !== 0)
+        if (!cancelled) setRelayAvailable(r !== null && r.ok)
       } catch {
         if (!cancelled) setRelayAvailable(false)
       }
