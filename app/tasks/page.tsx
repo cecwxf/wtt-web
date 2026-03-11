@@ -722,14 +722,14 @@ export default function TasksPage() {
         </div>
 
         <div className="grid h-[calc(100%-52px)] grid-cols-[1fr_380px] gap-3">
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid min-h-0 grid-cols-5 gap-3">
             {columns.map((col) => (
-              <div key={col} className="rounded-xl border border-slate-200 bg-slate-50 p-2">
-                <div className="mb-2 flex items-center justify-between text-sm font-semibold capitalize">
+              <div key={col} className="flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-2 overflow-hidden">
+                <div className="mb-2 flex shrink-0 items-center justify-between text-sm font-semibold capitalize">
                   <span>{col}</span>
                   <span className="text-xs text-slate-500">{grouped[col].length}</span>
                 </div>
-                <div className="space-y-2">
+                <div className="flex-1 space-y-2 overflow-y-auto">
                   {grouped[col].map((task) => (
                     <button
                       key={task.id}
