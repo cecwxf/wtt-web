@@ -417,6 +417,7 @@ export default function FeedPage() {
         onTopicsRefresh={() => mutateTopics()}
         onBindingChanged={loadAgents}
         notificationCount={0}
+        currentUserName={getHumanSender(session)}
       >
         {selectedTopicId && selectedTopic ? (
           <ChatView

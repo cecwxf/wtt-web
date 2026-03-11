@@ -374,6 +374,7 @@ export default function TasksGraphPage() {
       selectedTopicId={null}
       onTopicChange={() => {}}
       onLogout={() => signOut({ callbackUrl: '/login' })}
+      currentUserName={actorSource(session, '')}
     >
       <div className="h-full p-4 text-slate-800">
         <div className="mb-3 flex items-center justify-between gap-2">
