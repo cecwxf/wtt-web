@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
@@ -86,6 +86,7 @@ export default function TasksPage() {
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   const [taskDraft, setTaskDraft] = useState<Partial<TaskItem>>({})
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null)
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
@@ -93,6 +94,10 @@ export default function TasksPage() {
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskType, setNewTaskType] = useState<'code' | 'research' | 'common'>('common')
+  const [panelInput, setPanelInput] = useState('')
+  const [panelSending, setPanelSending] = useState(false)
+  const [queueIndicator, setQueueIndicator] = useState(false)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -158,7 +163,7 @@ export default function TasksPage() {
   const { data: timelineRaw } = useSWR(
     selectedTask?.topic_id && session?.accessToken ? ['task-timeline', selectedTask.topic_id, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask?.topic_id}/messages?limit=20`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask?.topic_id}/messages?limit=50`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!response.ok) return []
@@ -183,14 +188,13 @@ export default function TasksPage() {
         return {
           id: String(x.id || x.message_id || ''),
           sender: String(x.sender_id || 'unknown'),
+          sender_type: String(x.sender_type || 'agent'),
           content,
           created_at: String(x.created_at || x.timestamp || ''),
           kind,
         }
       })
       .filter((x) => x.content)
-      .slice(-8)
-      .reverse()
   }, [timelineRaw])
 
   useEffect(() => {
@@ -360,21 +364,6 @@ export default function TasksPage() {
         const real = await resp.json()
         mutateTasks((prev: TaskItem[] | undefined) => (prev || []).map((t) => (t.id === tempId ? { ...t, ...real } : t)), { revalidate: false })
 
-        // Auto-run code/research tasks so agent is ready immediately
-        if (newTaskType === 'code' || newTaskType === 'research') {
-          fetch(`${CLIENT_WTT_API_BASE}/tasks/${real.id}/run`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session?.accessToken ?? ''}`,
-            },
-            body: JSON.stringify({
-              runner_agent_id: selectedAgentId || undefined,
-              exec_mode: 'reasoning',
-            }),
-          }).catch(() => {})
-        }
-
         // Navigate to the appropriate task page
         if (newTaskType === 'code') {
           router.push(`/tasks/code/${real.id}`)
@@ -507,6 +496,7 @@ export default function TasksPage() {
     await mutateSubscribedTopics()
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const assignCurrent = async (agentId: string) => {
     if (!selectedTask) return
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/assign?agent_id=${encodeURIComponent(agentId)}`, {
@@ -516,6 +506,7 @@ export default function TasksPage() {
     mutateTasks()
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const runCurrent = async () => {
     if (!selectedTask) return
     setRunningTaskId(selectedTask.id)
@@ -554,6 +545,7 @@ export default function TasksPage() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const reviewCurrent = async (action: 'approve' | 'reject' | 'block') => {
     if (!selectedTask) return
 
@@ -591,6 +583,7 @@ export default function TasksPage() {
     mutateTasks()
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const saveTaskDetails = async () => {
     if (!selectedTask) return
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
@@ -612,6 +605,67 @@ export default function TasksPage() {
     })
     mutateTasks()
   }
+
+  const sendPanelMessage = async () => {
+    if (!selectedTask || !panelInput.trim()) return
+    const text = panelInput.trim()
+    setPanelInput('')
+    setPanelSending(true)
+    setQueueIndicator(false)
+
+    const agentId = selectedAgentId || 'user'
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session?.accessToken ?? ''}`,
+    }
+
+    try {
+      // If task is in "todo" status, run it first
+      if (selectedTask.status === 'todo') {
+        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId,
+            exec_mode: selectedTask.exec_mode || 'reasoning',
+          }),
+        })
+        await mutateTasks()
+      }
+
+      if (selectedTask.topic_id) {
+        await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages?agent_id=${encodeURIComponent(agentId)}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            sender_id: agentId,
+            sender_type: 'HUMAN',
+            content: text,
+            content_type: 'text',
+            semantic_type: 'reply',
+          }),
+        })
+      }
+
+      // Show queue indicator if task is actively running
+      if (selectedTask.status === 'doing') {
+        setQueueIndicator(true)
+        setTimeout(() => setQueueIndicator(false), 4000)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setPanelSending(false)
+      await mutateTasks()
+    }
+  }
+
+  // Scroll chat to bottom when timeline changes
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+    }
+  }, [timeline])
 
   const taskCardTone = (status: TaskItem['status']) => {
     if (status === 'doing') return 'border-indigo-300 bg-indigo-50'
@@ -667,7 +721,7 @@ export default function TasksPage() {
           </div>
         </div>
 
-        <div className="grid h-[calc(100%-52px)] grid-cols-[1fr_320px] gap-3">
+        <div className="grid h-[calc(100%-52px)] grid-cols-[1fr_380px] gap-3">
           <div className="grid grid-cols-5 gap-3">
             {columns.map((col) => (
               <div key={col} className="rounded-xl border border-slate-200 bg-slate-50 p-2">
@@ -717,7 +771,7 @@ export default function TasksPage() {
             ))}
           </div>
 
-          <aside className={`rounded-xl border border-slate-200 bg-slate-50 p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
+          <aside className={`flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
             <div className="mb-3 rounded-lg border border-slate-200 bg-slate-100 p-2">
               <p className="text-xs font-semibold text-slate-600">Task执行时间饼图（Top 8）</p>
               {taskDurationSummary.slices.length > 0 ? (
@@ -749,121 +803,101 @@ export default function TasksPage() {
               )}
             </div>
 
-            <h2 className="mb-2 text-sm font-semibold">Task Detail</h2>
+            <h2 className="mb-2 text-sm font-semibold">Messages</h2>
             {selectedTask ? (
-              <div className="space-y-2 text-sm">
-                <p className="font-semibold">{selectedTask.title}</p>
-                <p className="text-xs">Priority: {selectedTask.priority} · Status: {selectedTask.status}</p>
-                <p className="text-xs">Owner: {selectedTask.owner_agent_id || 'unassigned'}</p>
-                <p className="text-xs">Runner: {selectedTask.runner_agent_id || '-'}</p>
-
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-500">Mode:</span>
-                  <button
-                    className={`rounded-md px-2 py-0.5 ${(selectedTask.exec_mode || 'reasoning') !== 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
-                    onClick={async () => {
-                      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                        body: JSON.stringify({ exec_mode: 'reasoning' }),
-                      })
-                      mutateTasks()
-                    }}
-                  >Agent Mode</button>
-                  <button
-                    className={`rounded-md px-2 py-0.5 ${selectedTask.exec_mode === 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
-                    onClick={async () => {
-                      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                        body: JSON.stringify({ exec_mode: 'plan' }),
-                      })
-                      mutateTasks()
-                    }}
-                  >Plan Mode</button>
-                </div>
-
-                {selectedTask.topic_id && (
-                  <button
-                    className="mt-1 rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs"
-                    onClick={() => router.push(`/feed?topicId=${selectedTask.topic_id}`)}
-                  >
-                    Open in Feed
-                  </button>
-                )}
-
-                <div className="border-t border-slate-200 pt-2">
-                  <button
-                    onClick={runCurrent}
-                    disabled={runningTaskId === selectedTask.id}
-                    className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs text-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {runningTaskId === selectedTask.id ? 'Running...' : 'Run Task'}
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 gap-2 border-t border-slate-200 pt-2">
-                  <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Task description" className="min-h-16 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
-                  <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="Acceptance criteria" className="min-h-14 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} placeholder="Runner agent" className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="Exec mode" className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.due_at || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, due_at: e.target.value }))} placeholder="Due at (ISO)" className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: Number(e.target.value || 0) }))} placeholder="Estimate hours" className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
-                    <input value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} placeholder="Dependencies" className="col-span-2 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
-                  </div>
-                  <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Notes" className="min-h-12 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs outline-none" />
-                  <button onClick={saveTaskDetails} className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs text-indigo-500">Save Details</button>
-                </div>
-
-                <div className="border-t border-slate-200 pt-2">
-                  <p className="mb-1 text-xs text-slate-500">Assign</p>
-                  <div className="flex flex-wrap gap-1">
-                    {agents.slice(0, 6).map((a) => (
-                      <button key={a.agent_id} onClick={() => assignCurrent(a.agent_id)} className="rounded border border-slate-200 px-2 py-1 text-[10px]">
-                        {a.display_name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="border-t border-slate-200 pt-2">
-                  <p className="mb-1 text-xs text-slate-500">Review</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => reviewCurrent('approve')} className="rounded border border-green-500/40 px-2 py-1 text-xs text-green-300">Approve</button>
-                    <button onClick={() => reviewCurrent('reject')} className="rounded border border-yellow-500/40 px-2 py-1 text-xs text-yellow-300">Reject</button>
-                    <button onClick={() => reviewCurrent('block')} className="rounded border border-red-500/40 px-2 py-1 text-xs text-red-500">Block</button>
+              <>
+                {/* Task header */}
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="text-sm font-semibold truncate flex-1">{selectedTask.title}</span>
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    selectedTask.status === 'doing' ? 'bg-indigo-100 text-indigo-600' :
+                    selectedTask.status === 'review' ? 'bg-amber-100 text-amber-600' :
+                    selectedTask.status === 'done' ? 'bg-green-100 text-green-600' :
+                    selectedTask.status === 'blocked' ? 'bg-red-100 text-red-600' :
+                    'bg-slate-200 text-slate-600'
+                  }`}>{selectedTask.status}</span>
+                  <div className="flex gap-1">
+                    <button
+                      className={`rounded-md px-2 py-0.5 text-[10px] ${(selectedTask.exec_mode || 'reasoning') !== 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                      onClick={async () => {
+                        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                          body: JSON.stringify({ exec_mode: 'reasoning' }),
+                        })
+                        mutateTasks()
+                      }}
+                    >Agent</button>
+                    <button
+                      className={`rounded-md px-2 py-0.5 text-[10px] ${selectedTask.exec_mode === 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                      onClick={async () => {
+                        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                          body: JSON.stringify({ exec_mode: 'plan' }),
+                        })
+                        mutateTasks()
+                      }}
+                    >Plan</button>
                   </div>
                 </div>
 
-                <div className="border-t border-slate-200 pt-2">
-                  <p className="mb-1 text-xs text-slate-500">Execution Timeline</p>
-                  <div className="max-h-40 space-y-1 overflow-auto rounded border border-slate-200 bg-slate-100 p-2">
-                    {timeline.length > 0 ? (
-                      timeline.map((item) => (
-                        <button
-                          key={item.id || `${item.sender}-${item.created_at}`}
-                          onClick={() => selectedTask?.topic_id && router.push(`/feed?topicId=${selectedTask.topic_id}`)}
-                          className="w-full rounded border border-slate-200 bg-slate-100 p-1.5 text-left hover:border-indigo-500/60"
-                        >
-                          <p className="flex items-center gap-1 text-[10px] text-slate-500">
-                            <span>{item.sender}</span>
-                            <span>·</span>
-                            <span>{item.created_at?.replace('T', ' ').slice(0, 19)}</span>
-                            <span className={`ml-auto rounded px-1 ${item.kind === 'reasoned' ? 'bg-indigo-100 text-indigo-500' : item.kind === 'review' ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-600'}`}>
-                              {item.kind === 'reasoned' ? 'AUTO' : item.kind === 'review' ? 'REVIEW' : 'MSG'}
-                            </span>
-                          </p>
-                          <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-700">{item.content}</p>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="text-[11px] text-slate-400">No timeline yet</p>
-                    )}
-                  </div>
+                {/* Message stream */}
+                <div ref={chatScrollRef} className="flex-1 overflow-y-auto space-y-2 px-1 mb-2">
+                  {timeline.length > 0 ? (
+                    timeline.map((item) => {
+                      const isHuman = item.sender_type.toUpperCase() === 'HUMAN'
+                      const displayContent = item.content.length > 200 ? item.content.slice(0, 200) + '…' : item.content
+                      return (
+                        <div key={item.id || `${item.sender}-${item.created_at}`} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 ${isHuman ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-800'}`}>
+                            <p className={`text-[10px] mb-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-500'}`}>{item.sender}</p>
+                            <p className="text-[11px] leading-4 whitespace-pre-wrap break-words">{displayContent}</p>
+                            <p className={`text-[9px] mt-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-400'}`}>{item.created_at?.replace('T', ' ').slice(0, 19)}</p>
+                          </div>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <p className="text-[11px] text-slate-400 text-center py-4">No messages yet</p>
+                  )}
                 </div>
-              </div>
+
+                {/* Send box */}
+                <div className="border-t border-slate-200 pt-2 px-1">
+                  <div className="flex items-center gap-1 mb-1">
+                    <select
+                      className="flex-1 rounded border border-slate-200 bg-slate-100 px-1.5 py-1 text-[11px] outline-none"
+                      value={selectedAgentId}
+                      onChange={(e) => setSelectedAgentId(e.target.value)}
+                    >
+                      {agents.map((a) => (
+                        <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>
+                      ))}
+                    </select>
+                    <span className="text-[10px] text-slate-400 shrink-0">
+                      {(selectedTask.exec_mode || 'reasoning') === 'plan' ? '📋 Plan' : '🤖 Agent'}
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    <input
+                      className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-indigo-400"
+                      placeholder="Type a message..."
+                      value={panelInput}
+                      onChange={(e) => setPanelInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && panelInput.trim()) { e.preventDefault(); sendPanelMessage() } }}
+                    />
+                    <button
+                      onClick={sendPanelMessage}
+                      disabled={panelSending || !panelInput.trim()}
+                      className="shrink-0 rounded-md bg-indigo-500 px-3 py-1 text-xs text-white disabled:opacity-50"
+                    >{panelSending ? '...' : 'Send'}</button>
+                  </div>
+                  {queueIndicator && <p className="text-[10px] text-amber-500 mt-1">📨 Message queued, will be processed after current reasoning</p>}
+                </div>
+              </>
             ) : (
-              <p className="text-xs text-slate-500">Select a task card to review details.</p>
+              <p className="text-xs text-slate-500">Select a task to start chatting.</p>
             )}
           </aside>
         </div>
