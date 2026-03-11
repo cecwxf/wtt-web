@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic'
 import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN, WS_BASE_URL } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
+import { buildWttUserSourceFlow } from '@/lib/wtt-info-flow'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -990,12 +991,7 @@ export default function CodeTaskPage() {
         ? { content: text, fullCodebase: false }
         : await buildCodebaseContextMessage(text)
       const fullContent = built.content
-      const displayContent = [
-        '┌─ 来源标识 ─────────────',
-        `│ 来自WTT User: ${senderName}`,
-        '└────────────────────',
-        fullContent,
-      ].join('\n')
+      const displayContent = buildWttUserSourceFlow(senderName, fullContent)
 
       // Optimistic: mirror feed/topic info flow in right chat panel immediately
       const optimisticMsg: ChatMsg = {
@@ -1014,12 +1010,12 @@ export default function CodeTaskPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },
-          body: JSON.stringify({ content: fullContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: false }),
+          body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: false }),
         })
         if (!r.ok) throw new Error(await r.text())
         await mutateTask()
       } else {
-        await publishToTopic(fullContent, 'post', 'HUMAN')
+        await publishToTopic(displayContent, 'post', 'HUMAN')
         if (built.fullCodebase) {
           const at = agentMode === 'remote' ? sshTree : fileTree
           const adn = agentMode === 'remote' ? sshRemoteDirName : dirName
