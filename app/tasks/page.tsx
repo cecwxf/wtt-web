@@ -894,6 +894,18 @@ export default function TasksPage() {
                     >{panelSending ? '...' : 'Send'}</button>
                   </div>
                   {queueIndicator && <p className="text-[10px] text-amber-500 mt-1">📨 Message queued, will be processed after current reasoning</p>}
+                  {selectedTask.status === 'review' && (
+                    <div className="mt-2 flex gap-1">
+                      <button
+                        onClick={() => reviewCurrent('approve')}
+                        className="flex-1 rounded-md bg-green-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-600"
+                      >✅ Approve</button>
+                      <button
+                        onClick={() => reviewCurrent('reject')}
+                        className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50"
+                      >↩ Reject</button>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
