@@ -715,6 +715,10 @@ export default function CodeTaskPage() {
   const selectFile = async (node: FileNode) => {
     if (task?.repo_url) {
       if (node.kind !== 'file') return
+      if (!node.path || !String(node.path).trim()) {
+        alert('文件路径为空，无法读取')
+        return
+      }
       setSelectedFile(node)
       setFileLoading(true)
       setFileContent('')
@@ -1075,10 +1079,10 @@ export default function CodeTaskPage() {
                 </div>
                 {repoSearchResults.length > 0 && (
                   <div className="max-h-28 overflow-y-auto rounded border border-slate-200 bg-white p-1">
-                    {repoSearchResults.map((it) => (
+                    {repoSearchResults.filter((it) => !!it.path).map((it) => (
                       <button
                         key={`${it.path}-${it.sha || ''}`}
-                        onClick={() => void selectFile({ name: (it.path || '').split('/').pop() || it.path, path: it.path, kind: 'file' })}
+                        onClick={() => void selectFile({ name: (it.path || '').split('/').pop() || it.path, path: it.path!, kind: 'file' })}
                         className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] text-indigo-600 hover:bg-indigo-50"
                         title={it.path}
                       >{it.path}</button>
