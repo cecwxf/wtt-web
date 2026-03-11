@@ -232,6 +232,9 @@ export default function CodeTaskPage() {
   const [repoLoading, setRepoLoading] = useState(false)
   const [repoLinking, setRepoLinking] = useState(false)
   const [repoCreating, setRepoCreating] = useState(false)
+  const [repoQuery, setRepoQuery] = useState('')
+  const [repoSearching, setRepoSearching] = useState(false)
+  const [repoSearchResults, setRepoSearchResults] = useState<Array<{ path: string; name?: string; sha?: string; url?: string }>>([])
   const codebaseSharedSigRef = useRef<string>('')
 
   // ── Remote agent (SSH) state ──────────────────────
@@ -495,6 +498,24 @@ export default function CodeTaskPage() {
       alert(`Create repo failed: ${e instanceof Error ? e.message : 'unknown'}`)
     } finally {
       setRepoCreating(false)
+    }
+  }
+
+  const searchRepo = async () => {
+    if (!task?.repo_url || !repoQuery.trim()) return
+    setRepoSearching(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/search?q=${encodeURIComponent(repoQuery.trim())}&limit=20`, {
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      })
+      if (!r.ok) throw new Error(await r.text())
+      const data = await r.json()
+      setRepoSearchResults(data.items || [])
+    } catch (e) {
+      alert(`Search failed: ${e instanceof Error ? e.message : 'unknown'}`)
+      setRepoSearchResults([])
+    } finally {
+      setRepoSearching(false)
     }
   }
 
@@ -1040,6 +1061,35 @@ export default function CodeTaskPage() {
                 <div className="font-semibold">{task.repo_url}</div>
                 <div>branch: {task.repo_branch || 'main'}{task.repo_path ? ` · path: ${task.repo_path}` : ''}</div>
               </div>
+              <div className="mb-2 space-y-1">
+                <div className="flex gap-1">
+                  <input
+                    className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                    placeholder="Search in repo..."
+                    value={repoQuery}
+                    onChange={(e) => setRepoQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void searchRepo() } }}
+                  />
+                  <button
+                    onClick={() => void searchRepo()}
+                    disabled={repoSearching || !repoQuery.trim()}
+                    className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 disabled:opacity-50"
+                  >{repoSearching ? '...' : 'Search'}</button>
+                </div>
+                {repoSearchResults.length > 0 && (
+                  <div className="max-h-28 overflow-y-auto rounded border border-slate-200 bg-white p-1">
+                    {repoSearchResults.map((it) => (
+                      <button
+                        key={`${it.path}-${it.sha || ''}`}
+                        onClick={() => void selectFile({ name: (it.path || '').split('/').pop() || it.path, path: it.path, kind: 'file' })}
+                        className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] text-indigo-600 hover:bg-indigo-50"
+                        title={it.path}
+                      >{it.path}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {repoLoading ? (
                 <p className="text-center text-[11px] text-slate-400">Loading repo tree...</p>
               ) : repoTree.length === 0 ? (
