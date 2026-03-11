@@ -51,6 +51,11 @@ interface SSHConfig {
   project_path: string
 }
 
+interface RepoTreeItem {
+  path: string
+  kind: 'file' | 'directory'
+}
+
 const DEFAULT_SSH_CONFIG: SSHConfig = {
   host: '',
   port: 22,
@@ -109,6 +114,51 @@ async function readDirectory(dirHandle: FileSystemDirectoryHandle, parentPath = 
 async function readFileContent(handle: FileSystemFileHandle): Promise<string> {
   const file = await handle.getFile()
   return file.text()
+}
+
+function buildFileTreeFromFlat(items: RepoTreeItem[]): FileNode[] {
+  type NodeMap = Record<string, { __node: FileNode; __children: NodeMap }>
+  const root: NodeMap = {}
+
+  for (const it of items) {
+    const parts = it.path.split('/').filter(Boolean)
+    if (!parts.length) continue
+    let level = root
+    let pathAcc = ''
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
+      pathAcc = pathAcc ? `${pathAcc}/${part}` : part
+      const isLast = i === parts.length - 1
+      const kind: 'file' | 'directory' = isLast ? it.kind : 'directory'
+
+      if (!level[part]) {
+        level[part] = {
+          __node: { name: part, path: pathAcc, kind, children: kind === 'directory' ? [] : undefined },
+          __children: {},
+        }
+      }
+      if (kind === 'directory') level[part].__node.kind = 'directory'
+      level = level[part].__children
+    }
+  }
+
+  const materialize = (m: NodeMap): FileNode[] => {
+    const nodes = Object.values(m).map((x) => {
+      const n = x.__node
+      if (n.kind === 'directory') {
+        n.children = materialize(x.__children)
+      }
+      return n
+    })
+    nodes.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    return nodes
+  }
+
+  return materialize(root)
 }
 
 function findFileNodeByPath(nodes: FileNode[], target: string): FileNode | null {
@@ -178,6 +228,10 @@ export default function CodeTaskPage() {
   const [dirName, setDirName] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const [openFiles, setOpenFiles] = useState<FileNode[]>([])
+  const [repoTree, setRepoTree] = useState<FileNode[]>([])
+  const [repoLoading, setRepoLoading] = useState(false)
+  const [repoLinking, setRepoLinking] = useState(false)
+  const [repoCreating, setRepoCreating] = useState(false)
   const codebaseSharedSigRef = useRef<string>('')
 
   // ── Remote agent (SSH) state ──────────────────────
@@ -212,7 +266,7 @@ export default function CodeTaskPage() {
     check()
     return () => { cancelled = true }
   }, [agentMode])
-  const { data: task } = useSWR(
+  const { data: task, mutate: mutateTask } = useSWR(
     session?.accessToken ? [`task-${taskId}`, session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, {
@@ -366,6 +420,83 @@ export default function CodeTaskPage() {
     if (status === 'unauthenticated') router.push('/login')
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
+
+  const loadRepoTree = useCallback(async () => {
+    if (!task?.repo_url || !session?.accessToken) {
+      setRepoTree([])
+      return
+    }
+    setRepoLoading(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/tree`, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      })
+      if (!r.ok) throw new Error(await r.text())
+      const data = await r.json()
+      const tree = buildFileTreeFromFlat((data.tree || []) as RepoTreeItem[])
+      setRepoTree(tree)
+    } catch (e) {
+      console.error('load repo tree failed', e)
+      setRepoTree([])
+    } finally {
+      setRepoLoading(false)
+    }
+  }, [task?.repo_url, session?.accessToken, taskId])
+
+  useEffect(() => {
+    void loadRepoTree()
+  }, [loadRepoTree])
+
+  const linkRepo = async () => {
+    if (!task?.id) return
+    const repo = window.prompt('GitHub repo URL (e.g. https://github.com/owner/repo)')?.trim()
+    if (!repo) return
+    const branch = window.prompt('Branch', task?.repo_branch || 'main')?.trim() || 'main'
+    const repoPath = window.prompt('Repo sub path (optional)', task?.repo_path || '')?.trim() || null
+    setRepoLinking(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}/repo/link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+        body: JSON.stringify({ repo_url: repo, repo_branch: branch, repo_path: repoPath }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      await mutateTask()
+      await loadRepoTree()
+    } catch (e) {
+      alert(`Link repo failed: ${e instanceof Error ? e.message : 'unknown'}`)
+    } finally {
+      setRepoLinking(false)
+    }
+  }
+
+  const createRepo = async () => {
+    if (!task?.id) return
+    const defaultName = `wtt-${task.id.slice(0, 8)}`
+    const name = window.prompt('New GitHub repo name', defaultName)?.trim() || defaultName
+    const branch = window.prompt('Branch', 'main')?.trim() || 'main'
+    setRepoCreating(true)
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}/repo/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+        body: JSON.stringify({ repo_name: name, repo_branch: branch, private: true }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      await mutateTask()
+      await loadRepoTree()
+    } catch (e) {
+      alert(`Create repo failed: ${e instanceof Error ? e.message : 'unknown'}`)
+    } finally {
+      setRepoCreating(false)
+    }
+  }
 
   // ── Load saved SSH config from localStorage ───────
   useEffect(() => {
@@ -561,6 +692,28 @@ export default function CodeTaskPage() {
 
   // ── Select file ────────────────────────────────────
   const selectFile = async (node: FileNode) => {
+    if (task?.repo_url) {
+      if (node.kind !== 'file') return
+      try {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file?path=${encodeURIComponent(node.path)}`, {
+          headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        })
+        if (!r.ok) throw new Error(await r.text())
+        const data = await r.json()
+        const content = data.content || ''
+        setSelectedFile(node)
+        setFileContent(content)
+        setModifiedContent(content)
+        setIsModified(false)
+        if (!openFiles.find((f) => f.path === node.path)) {
+          setOpenFiles((prev) => [...prev, node])
+        }
+      } catch (e) {
+        console.error('Failed to read repo file:', e)
+      }
+      return
+    }
+
     if (agentMode === 'remote') {
       if (node.kind !== 'file') return
       try {
@@ -748,19 +901,20 @@ export default function CodeTaskPage() {
   const sendMessage = async () => {
     const text = chatInput.trim()
     if (!text || sending) return
-    if (!task?.topic_id) { console.error('[CodeTask] No topic_id yet'); return }
     if (!selectedAgentId) { alert('Please select an agent first'); return }
     setSending(true)
     setChatInput('')
 
     const optimisticId = `opt-${Date.now()}`
     try {
-      const built = await buildCodebaseContextMessage(text)
-      const fullContent = built.content
       const senderName = getSessionSenderName(session)
+      const built = task?.repo_url
+        ? { content: text, fullCodebase: false }
+        : await buildCodebaseContextMessage(text)
+      const fullContent = built.content
       const displayContent = [
         '┌─ 来源标识 ─────────────',
-        `│ 来源用户: ${senderName}`,
+        `│ 来自WTT User: ${senderName}`,
         '└────────────────────',
         fullContent,
       ].join('\n')
@@ -775,11 +929,24 @@ export default function CodeTaskPage() {
       }
       setChatMessages(prev => [...prev, optimisticMsg])
 
-      await publishToTopic(fullContent, 'post', 'HUMAN')
-      if (built.fullCodebase) {
-        const at = agentMode === 'remote' ? sshTree : fileTree
-        const adn = agentMode === 'remote' ? sshRemoteDirName : dirName
-        codebaseSharedSigRef.current = codebaseSignature(at, adn)
+      if (task?.repo_url) {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          },
+          body: JSON.stringify({ content: fullContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: true }),
+        })
+        if (!r.ok) throw new Error(await r.text())
+        await mutateTask()
+      } else {
+        await publishToTopic(fullContent, 'post', 'HUMAN')
+        if (built.fullCodebase) {
+          const at = agentMode === 'remote' ? sshTree : fileTree
+          const adn = agentMode === 'remote' ? sshRemoteDirName : dirName
+          codebaseSharedSigRef.current = codebaseSignature(at, adn)
+        }
       }
       setAwaitingAgent(true)
     } catch (e) {
@@ -800,7 +967,8 @@ export default function CodeTaskPage() {
     if (lastMsg && lastMsg.role === 'assistant') setAwaitingAgent(false)
   }, [chatMessages, awaitingAgent])
 
-  const fileCount = useMemo(() => countFiles(fileTree), [fileTree])
+  const activeTree = task?.repo_url ? repoTree : (agentMode === 'remote' ? sshTree : fileTree)
+  const fileCount = useMemo(() => countFiles(activeTree), [activeTree])
 
   return (
     <div className="flex h-screen flex-col bg-white">
@@ -828,27 +996,37 @@ export default function CodeTaskPage() {
               {agents.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>)}
             </select>
           )}
-          <div className="flex rounded-lg border border-slate-200 bg-white text-[11px]">
-            <button
-              onClick={() => setAgentMode('local')}
-              className={`px-2 py-1 rounded-l-lg transition-colors ${agentMode === 'local' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-            >🖥️ Local</button>
-            <button
-              onClick={() => setAgentMode('remote')}
-              className={`px-2 py-1 rounded-r-lg transition-colors ${agentMode === 'remote' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-            >☁️ Remote</button>
-          </div>
-          {agentMode === 'remote' && sshConnected && (
+          {!task?.repo_url && (
+            <div className="flex rounded-lg border border-slate-200 bg-white text-[11px]">
+              <button
+                onClick={() => setAgentMode('local')}
+                className={`px-2 py-1 rounded-l-lg transition-colors ${agentMode === 'local' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >🖥️ Local</button>
+              <button
+                onClick={() => setAgentMode('remote')}
+                className={`px-2 py-1 rounded-r-lg transition-colors ${agentMode === 'remote' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >☁️ Remote</button>
+            </div>
+          )}
+          {task?.repo_url && (
+            <span className="rounded bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">🐙 GitHub Repo</span>
+          )}
+          {agentMode === 'remote' && !task?.repo_url && sshConnected && (
             <span className="flex items-center gap-1 text-[11px] text-green-600">
               <span className="h-2 w-2 rounded-full bg-green-400" />
               SSH
             </span>
           )}
-          {agentMode === 'local' && (
+          {!task?.repo_url && agentMode === 'local' && (
             <button onClick={openDirectory} className="rounded-lg bg-indigo-500 px-3 py-1 text-xs text-white">
               {dirName ? `📁 ${dirName}` : 'Open Folder'}
             </button>
           )}
+          {task?.repo_url && (
+            <button onClick={() => void loadRepoTree()} className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">{repoLoading ? '...' : 'Refresh Tree'}</button>
+          )}
+          <button onClick={linkRepo} disabled={repoLinking} className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 disabled:opacity-50">{repoLinking ? 'Linking...' : 'Link Repo'}</button>
+          {!task?.repo_url && <button onClick={createRepo} disabled={repoCreating} className="rounded-lg bg-emerald-500 px-3 py-1 text-xs text-white disabled:opacity-50">{repoCreating ? 'Creating...' : 'Create Repo'}</button>}
         </div>
       </div>
 
@@ -856,7 +1034,35 @@ export default function CodeTaskPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* File tree panel */}
         <div className="w-60 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50/80 p-2">
-          {agentMode === 'remote' ? (
+          {task?.repo_url ? (
+            <>
+              <div className="mb-2 rounded border border-emerald-200 bg-emerald-50 p-2 text-[10px] text-emerald-700">
+                <div className="font-semibold">{task.repo_url}</div>
+                <div>branch: {task.repo_branch || 'main'}{task.repo_path ? ` · path: ${task.repo_path}` : ''}</div>
+              </div>
+              {repoLoading ? (
+                <p className="text-center text-[11px] text-slate-400">Loading repo tree...</p>
+              ) : repoTree.length === 0 ? (
+                <p className="text-center text-[11px] text-slate-400">No repo files</p>
+              ) : (
+                <>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-500">Repository</p>
+                    <span className="text-[10px] text-slate-400">{fileCount} files</span>
+                  </div>
+                  {repoTree.map((node) => (
+                    <FileTreeNode
+                      key={node.path}
+                      node={node}
+                      depth={0}
+                      selectedPath={selectedFile?.path || ''}
+                      onSelect={selectFile}
+                    />
+                  ))}
+                </>
+              )}
+            </>
+          ) : agentMode === 'remote' ? (
             <>
               {/* SSH Config Panel */}
               <button
