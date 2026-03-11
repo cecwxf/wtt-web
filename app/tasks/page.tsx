@@ -124,10 +124,6 @@ export default function TasksPage() {
   }, [status, router, loadAgents])
 
   useEffect(() => {
-    if (!newTaskAgentId && selectedAgentId) setNewTaskAgentId(selectedAgentId)
-  }, [selectedAgentId, newTaskAgentId])
-
-  useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 5000)
     return () => clearInterval(timer)
   }, [])
@@ -783,7 +779,7 @@ export default function TasksPage() {
           <div className="flex items-center gap-2">
             <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-500">批量Run任务</button>
             <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">批量取消任务</button>
-            <button onClick={() => { setNewTaskAgentId(selectedAgentId || ''); setShowNewTaskModal(true) }} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
+            <button onClick={() => { setNewTaskAgentId(''); setShowNewTaskModal(true) }} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
           </div>
         </div>
 
