@@ -97,6 +97,7 @@ export default function TasksPage() {
   const [panelInput, setPanelInput] = useState('')
   const [panelSending, setPanelSending] = useState(false)
   const [queueIndicator, setQueueIndicator] = useState(false)
+  const [panelSendAs, setPanelSendAs] = useState<'user' | string>('user') // 'user' or agent_id
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const loadAgents = useCallback(async () => {
@@ -163,7 +164,7 @@ export default function TasksPage() {
   const { data: timelineRaw } = useSWR(
     selectedTask?.topic_id && session?.accessToken ? ['task-timeline', selectedTask.topic_id, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask?.topic_id}/messages?limit=50`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask?.topic_id}/messages?limit=500`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!response.ok) return []
@@ -613,7 +614,9 @@ export default function TasksPage() {
     setPanelSending(true)
     setQueueIndicator(false)
 
-    const agentId = selectedAgentId || 'user'
+    const isUser = panelSendAs === 'user'
+    const agentId = isUser ? (selectedAgentId || 'user') : panelSendAs
+    const senderType = isUser ? 'HUMAN' : 'AGENT'
     const headers = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session?.accessToken ?? ''}`,
@@ -639,7 +642,7 @@ export default function TasksPage() {
           headers,
           body: JSON.stringify({
             sender_id: agentId,
-            sender_type: 'HUMAN',
+            sender_type: senderType,
             content: text,
             content_type: 'text',
             semantic_type: 'reply',
@@ -868,15 +871,16 @@ export default function TasksPage() {
                   <div className="flex items-center gap-1 mb-1">
                     <select
                       className="flex-1 rounded border border-slate-200 bg-slate-100 px-1.5 py-1 text-[11px] outline-none"
-                      value={selectedAgentId}
-                      onChange={(e) => setSelectedAgentId(e.target.value)}
+                      value={panelSendAs}
+                      onChange={(e) => setPanelSendAs(e.target.value)}
                     >
+                      <option value="user">👤 {actorSource(session, selectedAgentId)}</option>
                       {agents.map((a) => (
-                        <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>
+                        <option key={a.agent_id} value={a.agent_id}>🤖 {a.display_name}</option>
                       ))}
                     </select>
                     <span className="text-[10px] text-slate-400 shrink-0">
-                      {(selectedTask.exec_mode || 'reasoning') === 'plan' ? '📋 Plan' : '🤖 Agent'}
+                      {panelSendAs === 'user' ? '👤 User' : '🤖 Agent'}
                     </span>
                   </div>
                   <div className="flex gap-1">
