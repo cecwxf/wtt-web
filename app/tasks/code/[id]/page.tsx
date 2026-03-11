@@ -287,7 +287,8 @@ export default function CodeTaskPage() {
   )
 
   // ── WebSocket for real-time messages ───────────────
-  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  const streamAgentId = selectedAgentId || task?.runner_agent_id || task?.owner_agent_id || ''
+  const wsUrl = streamAgentId ? `${WS_BASE_URL}/ws/${streamAgentId}` : ''
   const handleWsMessage = useCallback(
     (msg: WsMessage) => {
       if (msg.type !== 'new_message' || !msg.message) return
@@ -317,7 +318,7 @@ export default function CodeTaskPage() {
       // Agent can ask: REQUEST_FILES: path/a.ts, path/b.py
       if (incoming.role === 'assistant') {
         const mm = incoming.content.match(/REQUEST_FILES\s*:\s*([^\n]+)/i)
-        if (mm?.[1] && task?.topic_id && selectedAgentId) {
+        if (mm?.[1] && task?.topic_id && streamAgentId) {
           const requested = Array.from(new Set(mm[1].split(',').map((s) => s.trim()).filter(Boolean))).slice(0, 20)
           if (requested.length) {
             const activeTree = agentMode === 'remote' ? sshTree : fileTree
@@ -355,7 +356,7 @@ export default function CodeTaskPage() {
                     semantic_type: 'post',
                     sender_type: 'HUMAN',
                   }
-                  await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+                  await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?agent_id=${encodeURIComponent(streamAgentId)}`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -372,18 +373,18 @@ export default function CodeTaskPage() {
         }
       }
     },
-    [task?.topic_id, selectedAgentId, fileTree, selectedFile, modifiedContent, session?.accessToken, agentMode, sshTree, sshConfig],
+    [task?.topic_id, streamAgentId, fileTree, selectedFile, modifiedContent, session?.accessToken, agentMode, sshTree, sshConfig],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
-    enabled: !!selectedAgentId,
+    enabled: !!streamAgentId,
     token: session?.accessToken || undefined,
     onMessage: handleWsMessage,
   })
 
   // Load initial message history via HTTP (once)
   const { data: topicMessages } = useSWR(
-    task?.topic_id && session?.accessToken && selectedAgentId ? [`code-chat-${task.topic_id}`, session.accessToken, selectedAgentId] : null,
+    task?.topic_id && session?.accessToken ? [`code-chat-${task.topic_id}`, session.accessToken, streamAgentId] : null,
     async () => {
       const tryFetch = async (agentId?: string) => {
         const q = agentId ? `?limit=200&agent_id=${encodeURIComponent(agentId)}` : '?limit=200'
@@ -393,8 +394,8 @@ export default function CodeTaskPage() {
         return r
       }
 
-      let r = await tryFetch(selectedAgentId)
-      if (!r.ok && task?.runner_agent_id && task.runner_agent_id !== selectedAgentId) {
+      let r = await tryFetch(streamAgentId || undefined)
+      if (!r.ok && task?.runner_agent_id && task.runner_agent_id !== streamAgentId) {
         r = await tryFetch(task.runner_agent_id)
       }
       if (!r.ok) {
@@ -978,7 +979,7 @@ export default function CodeTaskPage() {
   const sendMessage = async () => {
     const text = chatInput.trim()
     if (!text || sending) return
-    if (!selectedAgentId) { alert('Please select an agent first'); return }
+    if (!streamAgentId) { alert('No available agent for this task'); return }
     setSending(true)
     setChatInput('')
 
