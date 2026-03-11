@@ -430,6 +430,15 @@ export default function CodeTaskPage() {
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
 
+  // Keep chat subscription aligned with task runner to avoid missing topic feed updates
+  useEffect(() => {
+    if (!task?.runner_agent_id || agents.length === 0) return
+    const hasRunner = agents.some((a) => a.agent_id === task.runner_agent_id)
+    if (hasRunner && selectedAgentId !== task.runner_agent_id) {
+      setSelectedAgentId(task.runner_agent_id)
+    }
+  }, [task?.runner_agent_id, agents, selectedAgentId])
+
   const loadRepoTree = useCallback(async () => {
     if (!task?.repo_url || !session?.accessToken) {
       setRepoTree([])
