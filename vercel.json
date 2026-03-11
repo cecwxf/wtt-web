@@ -6,6 +6,7 @@
   "outputDirectory": ".next",
   "regions": ["hkg1"],
   "env": {
-    "WTT_API_URL": "http://170.106.109.4:8000"
+    "WTT_API_URL": "http://170.106.109.4:8000",
+    "NEXT_PUBLIC_WTT_API_URL": "https://www.waxbyte.com"
   }
 }

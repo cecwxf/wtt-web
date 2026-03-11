@@ -482,7 +482,7 @@ export default function CodeTaskPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify(sshConfig),
       })
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      if (!r.ok) { const err = await r.text().catch(() => ""); throw new Error(`HTTP ${r.status}: ${err}`) }
       const data = await r.json()
       const tree: FileNode[] = data.tree || []
       setSshTree(tree)
@@ -515,7 +515,7 @@ export default function CodeTaskPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify(sshConfig),
       })
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      if (!r.ok) { const err = await r.text().catch(() => ""); throw new Error(`HTTP ${r.status}: ${err}`) }
       const data = await r.json()
       setSshTree(data.tree || [])
     } catch (e) {
@@ -533,7 +533,7 @@ export default function CodeTaskPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify(sshConfig),
     })
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    if (!r.ok) { const err = await r.text().catch(() => ""); throw new Error(`HTTP ${r.status}: ${err}`) }
     const data = await r.json()
     remoteContentCacheRef.current[filePath] = data.content
     return data.content
