@@ -844,6 +844,18 @@ export default function CodeTaskPage() {
     }
   }
 
+  // Ctrl+S global handler
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        saveFile()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  })
+
   const buildCodebaseContextMessage = async (text: string): Promise<{ content: string; fullCodebase: boolean }> => {
     const activeTree = agentMode === 'remote' ? sshTree : fileTree
     const activeDirName = agentMode === 'remote' ? sshRemoteDirName : dirName
@@ -990,6 +1002,14 @@ export default function CodeTaskPage() {
     setModifiedContent(code)
     setIsModified(true)
   }
+
+  // ── Editor preferences ─────────────────────────────
+  const [editorFontSize, setEditorFontSize] = useState(13)
+  const [editorWordWrap, setEditorWordWrap] = useState<'on' | 'off'>('on')
+  const [editorMinimap, setEditorMinimap] = useState(true)
+  const [editorTheme, setEditorTheme] = useState<'vs-light' | 'vs-dark'>('vs-light')
+  const [editorTabSize, setEditorTabSize] = useState(2)
+  const editorRef = useRef<unknown>(null)
 
   // ── Send chat message ──────────────────────────────
   const [awaitingAgent, setAwaitingAgent] = useState(false)
@@ -1435,37 +1455,86 @@ export default function CodeTaskPage() {
 
               {/* Monaco editor */}
               {selectedFile ? (
-                <div className="flex-1 relative">
-                  {fileLoading && (
-                    <div className="absolute left-2 top-2 z-10 rounded bg-slate-800/80 px-2 py-1 text-[11px] text-white">Loading...</div>
-                  )}
-                  <MonacoEditor
-                    height="100%"
-                    language={langFromPath(selectedFile.path)}
-                    value={modifiedContent}
-                    onChange={(v) => {
-                      setModifiedContent(v || '')
-                      setIsModified(v !== fileContent)
-                    }}
-                    theme="vs-light"
-                    options={{
-                      fontSize: 13,
-                      minimap: { enabled: true },
-                      wordWrap: 'on',
-                      scrollBeyondLastLine: false,
-                      automaticLayout: true,
-                      tabSize: 2,
-                      readOnly: agentMode === 'remote',
-                    }}
-                  />
-                  {isModified && agentMode === 'local' && (
-                    <div className="absolute bottom-2 right-[calc(33%+12px)] z-10">
-                      <button onClick={saveFile} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg">
-                        💾 Save (Ctrl+S)
-                      </button>
+                <>
+                  {/* Editor toolbar */}
+                  <div className="flex h-7 shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50/80 px-2">
+                    {/* Font size */}
+                    <div className="flex items-center gap-0.5">
+                      <button onClick={() => setEditorFontSize(s => Math.max(10, s - 1))}
+                        className="rounded px-1 text-[11px] text-slate-500 hover:bg-slate-200" title="Decrease font">A-</button>
+                      <span className="min-w-[20px] text-center text-[10px] text-slate-400">{editorFontSize}</span>
+                      <button onClick={() => setEditorFontSize(s => Math.min(24, s + 1))}
+                        className="rounded px-1 text-[11px] text-slate-500 hover:bg-slate-200" title="Increase font">A+</button>
                     </div>
-                  )}
-                </div>
+                    <span className="text-slate-300">|</span>
+                    {/* Tab size */}
+                    <button onClick={() => setEditorTabSize(t => t === 2 ? 4 : 2)}
+                      className="rounded px-1.5 text-[10px] text-slate-500 hover:bg-slate-200" title="Toggle tab size"
+                    >Tab: {editorTabSize}</button>
+                    <span className="text-slate-300">|</span>
+                    {/* Word wrap */}
+                    <button onClick={() => setEditorWordWrap(w => w === 'on' ? 'off' : 'on')}
+                      className={`rounded px-1.5 text-[10px] hover:bg-slate-200 ${editorWordWrap === 'on' ? 'text-indigo-600 font-medium' : 'text-slate-500'}`}
+                      title="Toggle word wrap"
+                    >Wrap</button>
+                    {/* Minimap */}
+                    <button onClick={() => setEditorMinimap(m => !m)}
+                      className={`rounded px-1.5 text-[10px] hover:bg-slate-200 ${editorMinimap ? 'text-indigo-600 font-medium' : 'text-slate-500'}`}
+                      title="Toggle minimap"
+                    >Minimap</button>
+                    <span className="text-slate-300">|</span>
+                    {/* Theme */}
+                    <button onClick={() => setEditorTheme(t => t === 'vs-light' ? 'vs-dark' : 'vs-light')}
+                      className="rounded px-1.5 text-[10px] text-slate-500 hover:bg-slate-200" title="Toggle theme"
+                    >{editorTheme === 'vs-light' ? '☀️' : '🌙'}</button>
+                    <div className="flex-1" />
+                    {/* Language indicator */}
+                    <span className="text-[10px] text-slate-400">{langFromPath(selectedFile.path)}</span>
+                    {/* Modified indicator */}
+                    {isModified && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Unsaved changes" />}
+                  </div>
+                  <div className="flex-1 relative">
+                    {fileLoading && (
+                      <div className="absolute left-2 top-2 z-10 rounded bg-slate-800/80 px-2 py-1 text-[11px] text-white">Loading...</div>
+                    )}
+                    <MonacoEditor
+                      height="100%"
+                      language={langFromPath(selectedFile.path)}
+                      value={modifiedContent}
+                      onChange={(v) => {
+                        setModifiedContent(v || '')
+                        setIsModified(v !== fileContent)
+                      }}
+                      onMount={(editor) => { editorRef.current = editor }}
+                      theme={editorTheme}
+                      options={{
+                        fontSize: editorFontSize,
+                        minimap: { enabled: editorMinimap },
+                        wordWrap: editorWordWrap,
+                        scrollBeyondLastLine: false,
+                        automaticLayout: true,
+                        tabSize: editorTabSize,
+                        readOnly: agentMode === 'remote',
+                        cursorBlinking: 'smooth',
+                        cursorSmoothCaretAnimation: 'on',
+                        smoothScrolling: true,
+                        bracketPairColorization: { enabled: true },
+                        guides: { bracketPairs: true, indentation: true },
+                        formatOnPaste: true,
+                        linkedEditing: true,
+                        renderWhitespace: 'selection',
+                        suggest: { showKeywords: true, showSnippets: true },
+                      }}
+                    />
+                    {isModified && agentMode === 'local' && (
+                      <div className="absolute bottom-2 right-[calc(33%+12px)] z-10">
+                        <button onClick={saveFile} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-indigo-600">
+                          💾 Save (⌘S)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="flex flex-1 items-center justify-center text-slate-400">
                   <div className="text-center">
