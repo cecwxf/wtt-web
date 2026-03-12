@@ -1777,9 +1777,11 @@ export default function CodeTaskPage() {
                         monacoRef.current = monaco
 
                         // Register AI inline completion provider (ghost text on typing pause)
+                        try {
                         let completionDisposable: { dispose: () => void } | null = null
                         const registerProvider = () => {
                           if (completionDisposable) completionDisposable.dispose()
+                          if (!monaco?.languages?.registerInlineCompletionItemProvider) return
                           let debounceTimer: ReturnType<typeof setTimeout> | null = null
                           let abortController: AbortController | null = null
 
@@ -1838,8 +1840,10 @@ export default function CodeTaskPage() {
                           })
                         }
                         registerProvider()
+                        } catch (e) { console.warn('AI inline completion init failed:', e) }
 
                         // Ctrl+I / Cmd+I: inline AI edit
+                        try {
                         editor.addAction({
                           id: 'ai-inline-edit',
                           label: 'AI Inline Edit',
@@ -1872,6 +1876,7 @@ export default function CodeTaskPage() {
                             }).catch(() => {})
                           },
                         })
+                        } catch (e) { console.warn('AI action init failed:', e) }
                       }}
                       theme={editorTheme}
                       options={{
