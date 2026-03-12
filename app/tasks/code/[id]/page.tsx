@@ -215,6 +215,67 @@ function buildFileTreeFromFlat(items: RepoTreeItem[]): FileNode[] {
   return compactTree(materialize(root))
 }
 
+// ── Fuzzy file search (VSCode Ctrl+P style) ────────────
+function flattenTree(nodes: FileNode[], out: FileNode[] = []): FileNode[] {
+  for (const n of nodes) {
+    if (n.kind === 'file') out.push(n)
+    if (n.children) flattenTree(n.children, out)
+  }
+  return out
+}
+
+function fuzzyMatch(query: string, target: string): { match: boolean; score: number; indices: number[] } {
+  const ql = query.toLowerCase()
+  const tl = target.toLowerCase()
+  if (!ql) return { match: true, score: 0, indices: [] }
+
+  // Exact substring gets highest score
+  const subIdx = tl.indexOf(ql)
+  if (subIdx >= 0) {
+    const indices = Array.from({ length: ql.length }, (_, i) => subIdx + i)
+    // Prefer matches at start of filename, then shorter paths
+    const nameStart = target.lastIndexOf('/') + 1
+    const atNameStart = subIdx === nameStart ? 200 : 0
+    return { match: true, score: 300 + atNameStart - target.length * 0.5, indices }
+  }
+
+  // Fuzzy: each query char must appear in order
+  let qi = 0
+  const indices: number[] = []
+  let score = 0
+  let lastIdx = -1
+  for (let ti = 0; ti < tl.length && qi < ql.length; ti++) {
+    if (tl[ti] === ql[qi]) {
+      indices.push(ti)
+      // Bonus for consecutive matches
+      if (ti === lastIdx + 1) score += 10
+      // Bonus for match after separator (/, ., -, _)
+      if (ti === 0 || '/.-_'.includes(target[ti - 1])) score += 15
+      // Bonus for matching uppercase (camelCase boundary)
+      if (target[ti] === target[ti].toUpperCase() && target[ti] !== target[ti].toLowerCase()) score += 5
+      lastIdx = ti
+      qi++
+    }
+  }
+  if (qi < ql.length) return { match: false, score: 0, indices: [] }
+  // Penalize longer paths / larger gaps
+  score += 100 - (target.length - ql.length) * 0.5
+  return { match: true, score, indices }
+}
+
+// Render text with fuzzy-matched characters highlighted
+function renderHighlighted(text: string, allIndices: number[], offset: number) {
+  // Convert absolute path indices to relative indices for the displayed text
+  const localIndices = new Set(allIndices.filter(i => i >= offset).map(i => i - offset))
+  return (
+    <span>
+      {text.split('').map((ch, i) =>
+        localIndices.has(i) ? <b key={i} className="text-indigo-600">{ch}</b> : <span key={i}>{ch}</span>
+      )}
+    </span>
+  )
+}
+
 async function readFileContent(handle: FileSystemFileHandle): Promise<string> {
   const file = await handle.getFile()
   return file.text()
@@ -423,8 +484,6 @@ export default function CodeTaskPage() {
   const [repoLinking, setRepoLinking] = useState(false)
   const [repoCreating, setRepoCreating] = useState(false)
   const [repoQuery, setRepoQuery] = useState('')
-  const [repoSearching, setRepoSearching] = useState(false)
-  const [repoSearchResults, setRepoSearchResults] = useState<Array<{ path: string; name?: string; sha?: string; url?: string }>>([])
   const [forceExpandedPaths, setForceExpandedPaths] = useState<Set<string>>(new Set())
   const [collapseSignal, setCollapseSignal] = useState(0)
   const codebaseSharedSigRef = useRef<string>('')
@@ -746,23 +805,19 @@ export default function CodeTaskPage() {
     }
   }
 
-  const searchRepo = async () => {
-    if (!task?.repo_url || !repoQuery.trim()) return
-    setRepoSearching(true)
-    try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/search?q=${encodeURIComponent(repoQuery.trim())}&limit=20`, {
-        headers: repoHeaders(),
-      })
-      if (!r.ok) throw new Error(await r.text())
-      const data = await r.json()
-      setRepoSearchResults(data.items || [])
-    } catch (e) {
-      alert(`Search failed: ${e instanceof Error ? e.message : 'unknown'}`)
-      setRepoSearchResults([])
-    } finally {
-      setRepoSearching(false)
+  // Local fuzzy file search (like VSCode Ctrl+P)
+  const fuzzySearchResults = useMemo(() => {
+    const q = repoQuery.trim()
+    if (!q) return []
+    const allFiles = flattenTree(repoTree)
+    const scored: Array<{ node: FileNode; score: number; indices: number[] }> = []
+    for (const f of allFiles) {
+      const { match, score, indices } = fuzzyMatch(q, f.path)
+      if (match) scored.push({ node: f, score, indices })
     }
-  }
+    scored.sort((a, b) => b.score - a.score)
+    return scored.slice(0, 30)
+  }, [repoQuery, repoTree])
 
   // ── Load saved SSH config from localStorage ───────
   useEffect(() => {
@@ -2061,39 +2116,58 @@ export default function CodeTaskPage() {
                 <div className="flex gap-1">
                   <input
                     className={`flex-1 rounded border ${tc.border} ${tc.inputBg} px-2 py-1 text-[11px] ${tc.text}`}
-                    placeholder="Search in repo..."
+                    placeholder="🔍 Fuzzy search files… (e.g. pgts → page.tsx)"
                     value={repoQuery}
                     onChange={(e) => setRepoQuery(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void searchRepo() } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { setRepoQuery(''); e.currentTarget.blur() }
+                      // Enter to select first result
+                      if (e.key === 'Enter' && fuzzySearchResults.length > 0) {
+                        e.preventDefault()
+                        const first = fuzzySearchResults[0]
+                        const parts = first.node.path.split('/')
+                        const paths = new Set<string>()
+                        for (let i = 1; i < parts.length; i++) paths.add(parts.slice(0, i).join('/'))
+                        setForceExpandedPaths(prev => { const next = new Set(prev); paths.forEach(p => next.add(p)); return next })
+                        void selectFile(first.node)
+                        setRepoQuery('')
+                      }
+                    }}
                   />
-                  <button
-                    onClick={() => void searchRepo()}
-                    disabled={repoSearching || !repoQuery.trim()}
-                    className={`rounded border ${tc.border} ${tc.inputBg} px-2 py-1 text-[11px] ${tc.textMuted} disabled:opacity-50`}
-                  >{repoSearching ? '...' : 'Search'}</button>
+                  {repoQuery && (
+                    <button onClick={() => setRepoQuery('')} className={`rounded border ${tc.border} ${tc.inputBg} px-2 py-1 text-[11px] ${tc.textMuted}`}>✕</button>
+                  )}
                 </div>
-                {repoSearchResults.length > 0 && (
-                  <div className={`max-h-28 overflow-y-auto rounded border ${tc.border} ${tc.inputBg} p-1`}>
-                    {repoSearchResults.filter((it) => !!it.path).map((it) => (
-                      <button
-                        key={`${it.path}-${it.sha || ''}`}
-                        onClick={() => {
-                          // Expand all parent folders in the tree to reveal the file
-                          const parts = (it.path || '').split('/')
-                          const paths = new Set<string>()
-                          for (let i = 1; i < parts.length; i++) paths.add(parts.slice(0, i).join('/'))
-                          setForceExpandedPaths(prev => {
-                            const next = new Set(prev)
-                            paths.forEach(p => next.add(p))
-                            return next
-                          })
-                          void selectFile({ name: parts.pop() || it.path, path: it.path!, kind: 'file' })
-                        }}
-                        className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] text-indigo-600 hover:bg-indigo-50"
-                        title={it.path}
-                      >{it.path}</button>
-                    ))}
+                {fuzzySearchResults.length > 0 && (
+                  <div className={`max-h-48 overflow-y-auto rounded border ${tc.border} ${tc.inputBg} p-0.5`}>
+                    {fuzzySearchResults.map((res, idx) => {
+                      const p = res.node.path
+                      const fileName = p.split('/').pop() || p
+                      const dirPath = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : ''
+                      return (
+                        <button
+                          key={`${p}-${idx}`}
+                          onClick={() => {
+                            const parts = p.split('/')
+                            const paths = new Set<string>()
+                            for (let i = 1; i < parts.length; i++) paths.add(parts.slice(0, i).join('/'))
+                            setForceExpandedPaths(prev => { const next = new Set(prev); paths.forEach(pp => next.add(pp)); return next })
+                            void selectFile(res.node)
+                            setRepoQuery('')
+                          }}
+                          className={`flex w-full items-center gap-1.5 rounded px-1.5 py-[3px] text-left text-[11px] hover:bg-indigo-50 ${idx === 0 ? 'bg-indigo-50/60' : ''}`}
+                          title={p}
+                        >
+                          <span className="shrink-0 text-[11px]">{fileIcon(fileName)}</span>
+                          <span className="truncate font-medium text-slate-800">{renderHighlighted(fileName, res.indices, p.lastIndexOf('/') + 1)}</span>
+                          {dirPath && <span className="ml-auto truncate text-[10px] text-slate-400">{dirPath}</span>}
+                        </button>
+                      )
+                    })}
                   </div>
+                )}
+                {repoQuery.trim() && fuzzySearchResults.length === 0 && (
+                  <p className={`text-[10px] ${tc.textMuted} px-1`}>No matching files</p>
                 )}
               </div>
 
