@@ -1374,6 +1374,8 @@ export default function CodeTaskPage() {
   const [editorTabSize, setEditorTabSize] = useState(2)
   const editorRef = useRef<unknown>(null)
   const monacoRef = useRef<unknown>(null)
+  const selectedFileRef = useRef(selectedFile)
+  selectedFileRef.current = selectedFile
   const [aiCompletionEnabled, setAiCompletionEnabled] = useState(true)
 
   // ── Outline (symbols) ────────────────────────────────
@@ -2665,6 +2667,28 @@ export default function CodeTaskPage() {
                           },
                         })
                         } catch (e) { console.warn('AI action init failed:', e) }
+
+                        // Quote to Chat: right-click selected code → insert into chat
+                        try {
+                        editor.addAction({
+                          id: 'quote-to-chat',
+                          label: '💬 Quote to Chat',
+                          contextMenuGroupId: '9_cutcopypaste',
+                          contextMenuOrder: 99,
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          run: (ed: any) => {
+                            const selection = ed.getSelection()
+                            if (!selection) return
+                            const selectedCode = ed.getModel()?.getValueInRange(selection) || ''
+                            if (!selectedCode.trim()) return
+                            const filePath = selectedFileRef.current?.path || ''
+                            const lang = langFromPath(filePath)
+                            const quoted = `\`\`\`${lang}\n${selectedCode}\n\`\`\``
+                            const ref = filePath ? `📄 \`${filePath}\`:\n${quoted}` : quoted
+                            setChatInput(prev => prev ? `${prev}\n\n${ref}\n\n` : `${ref}\n\n`)
+                          },
+                        })
+                        } catch (e) { console.warn('Quote to Chat action init failed:', e) }
                       }}
                       theme={editorTheme}
                       options={{
@@ -2810,8 +2834,9 @@ export default function CodeTaskPage() {
                     onUploaded={(asset) => setPendingAttachments(prev => [...prev, asset.markdownToken])}
                     disabled={sending}
                   />
-                  <input
-                    className={`flex-1 rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-2 text-sm ${tc.text} focus:border-indigo-400 focus:outline-none`}
+                  <textarea
+                    className={`flex-1 rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-2 text-sm ${tc.text} focus:border-indigo-400 focus:outline-none resize-none`}
+                    rows={chatInput.includes('\n') ? Math.min(chatInput.split('\n').length, 6) : 1}
                     placeholder="Ask about code..."
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
