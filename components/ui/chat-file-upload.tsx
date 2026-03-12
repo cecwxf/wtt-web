@@ -128,54 +128,70 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
   )
 }
 
-/** Render rich file attachment previews from markdown tokens in message content */
+/** Render rich file attachment previews from markdown tokens in message content.
+ *  Handles: ![name](url), [file:name](url), [file](url), [audio:name](url), [audio](url), [video:name](url), [video](url)
+ */
 export function FileAttachmentPreview({ content }: { content: string }) {
-  const parts = content.split(/(\[(?:file:|audio:|video:)[^\]]*\]\([^)]+\)|!\[[^\]]*\]\([^)]+\))/)
+  // Match all variants: with or without colon+name, http or relative URLs
+  const tokenRe = /(\[(?:file|audio|video)(?::[^\]]*)?\]\([^)]+\)|!\[[^\]]*\]\([^)]+\))/g
+  const tokens: { token: string; index: number }[] = []
+  let m: RegExpExecArray | null
+  while ((m = tokenRe.exec(content)) !== null) tokens.push({ token: m[1], index: m.index })
 
-  if (parts.length <= 1) return null
+  if (tokens.length === 0) return null
 
-  const items = parts.map((part, i) => {
-    const imgMatch = part.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
+  const items = tokens.map(({ token }, i) => {
+    // Image: ![name](url) or ![](url)
+    const imgMatch = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     if (imgMatch) {
+      const url = imgMatch[2]
+      const name = imgMatch[1] || url.split('/').pop() || 'image'
       return (
-        <a key={i} href={imgMatch[2]} target="_blank" rel="noopener noreferrer"
+        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
           className="block max-w-[200px] rounded-lg overflow-hidden border border-slate-200 hover:border-indigo-300 transition-colors">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imgMatch[2]} alt={imgMatch[1] || 'image'} className="w-full h-auto max-h-[150px] object-cover" />
-          {imgMatch[1] && <p className="px-2 py-1 text-[10px] text-slate-500 truncate bg-slate-50">{imgMatch[1]}</p>}
+          <img src={url} alt={name} className="w-full h-auto max-h-[150px] object-cover" />
+          <p className="px-2 py-1 text-[10px] text-slate-500 truncate bg-slate-50">{name}</p>
         </a>
       )
     }
-    const fileMatch = part.match(/^\[file:([^\]]*)\]\(([^)]+)\)$/)
+    // File: [file:name](url) or [file](url)
+    const fileMatch = token.match(/^\[file(?::([^\]]*))?\]\(([^)]+)\)$/)
     if (fileMatch) {
-      const ext = fileMatch[1].split('.').pop()?.toLowerCase() || ''
+      const name = fileMatch[1] || fileMatch[2].split('/').pop() || 'file'
+      const url = fileMatch[2]
+      const ext = name.split('.').pop()?.toLowerCase() || ''
       const icon = ['pdf'].includes(ext) ? '📕' : ['doc','docx'].includes(ext) ? '📘' : ['xls','xlsx','csv'].includes(ext) ? '📊' : ['pptx','ppt'].includes(ext) ? '📙' : ['zip','tar','gz'].includes(ext) ? '📦' : '📄'
       return (
-        <a key={i} href={fileMatch[2]} target="_blank" rel="noopener noreferrer"
+        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors max-w-[240px]">
           <span className="text-lg">{icon}</span>
           <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-700 truncate">{fileMatch[1]}</p>
-            <p className="text-[10px] text-slate-400">{ext.toUpperCase()} file</p>
+            <p className="text-xs font-medium text-slate-700 truncate">{name}</p>
+            <p className="text-[10px] text-slate-400">{ext.toUpperCase() || 'FILE'}</p>
           </div>
         </a>
       )
     }
-    const audioMatch = part.match(/^\[audio:([^\]]*)\]\(([^)]+)\)$/)
+    // Audio: [audio:name](url) or [audio](url)
+    const audioMatch = token.match(/^\[audio(?::([^\]]*))?\]\(([^)]+)\)$/)
     if (audioMatch) {
+      const name = audioMatch[1] || audioMatch[2].split('/').pop() || 'audio'
       return (
         <div key={i} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 max-w-[280px]">
-          <p className="text-[10px] text-slate-500 mb-1">🎵 {audioMatch[1]}</p>
+          <p className="text-[10px] text-slate-500 mb-1">🎵 {name}</p>
           <audio controls className="w-full h-8" src={audioMatch[2]} preload="metadata" />
         </div>
       )
     }
-    const videoMatch = part.match(/^\[video:([^\]]*)\]\(([^)]+)\)$/)
+    // Video: [video:name](url) or [video](url)
+    const videoMatch = token.match(/^\[video(?::([^\]]*))?\]\(([^)]+)\)$/)
     if (videoMatch) {
+      const name = videoMatch[1] || videoMatch[2].split('/').pop() || 'video'
       return (
         <div key={i} className="rounded-lg border border-slate-200 overflow-hidden max-w-[280px]">
           <video controls className="w-full max-h-[180px]" src={videoMatch[2]} preload="metadata" />
-          <p className="px-2 py-1 text-[10px] text-slate-500 bg-slate-50">🎬 {videoMatch[1]}</p>
+          <p className="px-2 py-1 text-[10px] text-slate-500 bg-slate-50">🎬 {name}</p>
         </div>
       )
     }
@@ -186,11 +202,13 @@ export function FileAttachmentPreview({ content }: { content: string }) {
   return <div className="flex flex-wrap gap-2 mt-2">{items}</div>
 }
 
-/** Strip file markdown tokens from content to get clean display text */
+/** Strip file markdown tokens from content to get clean display text.
+ *  Handles both [file:name](url) and [file](url) variants.
+ */
 export function stripFileTokens(content: string): string {
   return content
     .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
-    .replace(/\[(?:file|audio|video):[^\]]*\]\([^)]+\)/g, '')
+    .replace(/\[(?:file|audio|video)(?::[^\]]*)?\]\([^)]+\)/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
