@@ -251,20 +251,26 @@ export default function PipelinesPage() {
   /* ─── right panel tab ─── */
   const [rightTab, setRightTab] = useState<RightTab>('chat')
 
-  /* ─── chat state ─── */
+  /* ─── chat state (per-node: uses selected node's topic_id) ─── */
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  /* ─── pipeline topic for chat ─── */
+  /* ─── pipeline + selected node topic for chat ─── */
   const editingPipeline = pipelines.find((p) => p.id === editingPipelineId)
   const pipelineTopicId = (editingPipeline as Pipeline & { topic_id?: string })?.topic_id || null
+  const selectedNodeTopicId = useMemo(() => {
+    if (!selectedTaskId) return null
+    const n = nodes.find(n => n.id === selectedTaskId)
+    return n?.topic_id || null
+  }, [selectedTaskId, nodes])
+  const activeChatTopicId = selectedNodeTopicId || pipelineTopicId
 
   /* ─── chat messages ─── */
   const { data: chatMessagesRaw, mutate: mutateChat } = useSWR(
-    pipelineTopicId && session?.accessToken ? ['pipe-chat', pipelineTopicId, session.accessToken] : null,
+    activeChatTopicId && session?.accessToken ? ['pipe-chat', activeChatTopicId, session.accessToken] : null,
     async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${pipelineTopicId}/messages?limit=50`, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${activeChatTopicId}/messages?limit=50`, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
       if (!r.ok) return []
       return r.json()
     },
@@ -610,6 +616,7 @@ export default function PipelinesPage() {
       body: JSON.stringify({
         trigger_agent_id: actorSource(session, selectedAgentId) || 'pipeline-runner',
         pipeline_id: editingPipelineId || undefined,
+        force_all: true,
       }),
     })
     const j = await r.json()
@@ -641,18 +648,18 @@ export default function PipelinesPage() {
 
   /* ─── chat: send message ─── */
   const sendChatMessage = async () => {
-    if (!chatInput.trim() || !pipelineTopicId || chatSending) return
+    if (!chatInput.trim() || !activeChatTopicId || chatSending) return
     setChatSending(true)
     const content = chatInput.trim()
     setChatInput('')
     try {
-      await fetch(`${CLIENT_WTT_API_BASE}/topics/${pipelineTopicId}/messages`, {
+      await fetch(`${CLIENT_WTT_API_BASE}/topics/${activeChatTopicId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify({
           content,
           sender_id: actorSource(session, selectedAgentId),
-          sender_type: 'human',
+          sender_type: 'HUMAN',
           content_type: 'text',
           semantic_type: 'post',
         }),
@@ -739,9 +746,10 @@ export default function PipelinesPage() {
       setSelectedTaskIds((prev) => prev.includes(nodeId) ? prev.filter((x) => x !== nodeId) : [...prev, nodeId])
       return
     }
+    const wasEmpty = !selectedTaskId
     setSelectedTaskId(nodeId)
     setSelectedTaskIds([])
-    setRightTab('detail')
+    if (wasEmpty) setRightTab('detail')
   }
 
   /* clicking a line style in palette: if a node is selected, enter connect mode from that node */
@@ -1315,8 +1323,22 @@ export default function PipelinesPage() {
                 {/* ─ Chat Tab ─ */}
                 {rightTab === 'chat' && (
                   <div className="flex flex-1 flex-col overflow-hidden">
+                    {/* Node chat header */}
+                    {selected && (
+                      <div className="border-b border-slate-200 bg-indigo-50 px-3 py-2">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-medium text-indigo-600">💬 {selected.title}</span>
+                          {selected.runner_agent_id && (
+                            <span className="rounded-full px-2 py-0.5 text-[9px] font-medium" style={{ backgroundColor: agentBgColor(selected.runner_agent_id, involvedAgents), color: agentColor(selected.runner_agent_id, involvedAgents) }}>
+                              🤖 {selected.runner_agent_id.slice(0, 16)}
+                            </span>
+                          )}
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] ${selected.status === 'doing' ? 'bg-blue-100 text-blue-600' : selected.status === 'done' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}>{selected.status}</span>
+                        </div>
+                      </div>
+                    )}
                     {/* DAG summary bar */}
-                    {dagAnalysis && (
+                    {dagAnalysis && !selected && (
                       <div className="border-b border-slate-200 bg-white px-3 py-2">
                         <div className="flex items-center gap-2 text-[10px]">
                           <span className="font-medium text-slate-600">DAG</span>
@@ -1327,7 +1349,6 @@ export default function PipelinesPage() {
                             <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-600">{dagAnalysis.parallelGroups.length} parallel</span>
                           )}
                         </div>
-                        {/* agent badges */}
                         {involvedAgents.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {involvedAgents.map(a => {
@@ -1347,15 +1368,15 @@ export default function PipelinesPage() {
                     )}
                     {/* messages */}
                     <div className="flex-1 overflow-y-auto px-3 py-2">
-                      {!pipelineTopicId ? (
+                      {!activeChatTopicId ? (
                         <div className="flex h-full flex-col items-center justify-center text-slate-400">
-                          <p className="text-xs">No chat topic linked.</p>
-                          <p className="mt-1 text-[10px]">Pipeline needs a topic_id for chat.</p>
+                          <p className="text-xs">{selected ? 'This task has no topic yet.' : 'Select a node to chat.'}</p>
+                          <p className="mt-1 text-[10px]">{selected ? 'Run the pipeline to create a topic for this task.' : 'Click a node on the canvas to start chatting with its agent.'}</p>
                         </div>
                       ) : chatMessages.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center text-slate-400">
                           <p className="text-xs">No messages yet</p>
-                          <p className="mt-1 text-[10px]">Start a conversation about this pipeline</p>
+                          <p className="mt-1 text-[10px]">{selected ? `Send a message to ${selected.runner_agent_id || 'the agent'}` : 'Start a conversation'}</p>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -1384,24 +1405,22 @@ export default function PipelinesPage() {
                         </div>
                       )}
                     </div>
-                    {/* input */}
-                    {pipelineTopicId && (
-                      <div className="border-t border-slate-200 bg-white p-2">
-                        <div className="flex gap-1.5">
-                          <input
-                            value={chatInput}
-                            onChange={(e) => setChatInput(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage() } }}
-                            className="flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
-                            placeholder="Chat about this pipeline..."
-                            disabled={chatSending}
-                          />
-                          <button onClick={sendChatMessage} disabled={chatSending || !chatInput.trim()} className="rounded bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-600 disabled:opacity-40">
-                            {chatSending ? '...' : 'Send'}
-                          </button>
-                        </div>
+                    {/* send box — always visible */}
+                    <div className="border-t border-slate-200 bg-white p-2">
+                      <div className="flex gap-1.5">
+                        <input
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage() } }}
+                          className="flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                          placeholder={activeChatTopicId ? `Message ${selected?.runner_agent_id || 'agent'}...` : 'Select a node to chat...'}
+                          disabled={chatSending || !activeChatTopicId}
+                        />
+                        <button onClick={sendChatMessage} disabled={chatSending || !chatInput.trim() || !activeChatTopicId} className="rounded bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-600 disabled:opacity-40">
+                          {chatSending ? '...' : 'Send'}
+                        </button>
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
