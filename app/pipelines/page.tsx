@@ -7,6 +7,7 @@ import useSWR from 'swr'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { analyzeDAG, agentColor, agentBgColor, type DAGAnalysis } from '@/lib/dag-analysis'
 
 /* ─── types ─── */
 interface Pipeline {
@@ -53,6 +54,16 @@ interface TaskDraft extends Partial<TaskNode> {
   timeout_minutes?: number | null
   tags?: string
 }
+
+interface ChatMessage {
+  id: string
+  sender_id: string
+  content: string
+  sender_type?: string
+  created_at?: string
+}
+
+type RightTab = 'chat' | 'detail'
 
 /* ─── constants ─── */
 const RECT_W = 220, RECT_H = 80
@@ -236,6 +247,57 @@ export default function PipelinesPage() {
 
   /* ─── edge styles persisted alongside positions ─── */
   const [edgeStyles, setEdgeStyles] = useState<Record<string, LineStyle>>({})
+
+  /* ─── right panel tab ─── */
+  const [rightTab, setRightTab] = useState<RightTab>('chat')
+
+  /* ─── chat state ─── */
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  /* ─── pipeline topic for chat ─── */
+  const editingPipeline = pipelines.find((p) => p.id === editingPipelineId)
+  const pipelineTopicId = (editingPipeline as Pipeline & { topic_id?: string })?.topic_id || null
+
+  /* ─── chat messages ─── */
+  const { data: chatMessagesRaw, mutate: mutateChat } = useSWR(
+    pipelineTopicId && session?.accessToken ? ['pipe-chat', pipelineTopicId, session.accessToken] : null,
+    async () => {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${pipelineTopicId}/messages?limit=50`, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
+      if (!r.ok) return []
+      return r.json()
+    },
+    { refreshInterval: 3000 }
+  )
+  const chatMessages: ChatMessage[] = useMemo(() => {
+    const raw = Array.isArray(chatMessagesRaw) ? chatMessagesRaw : Array.isArray((chatMessagesRaw as { messages?: unknown[] })?.messages) ? (chatMessagesRaw as { messages: unknown[] }).messages : []
+    return raw.map((x) => x as Record<string, unknown>).map((x) => ({
+      id: String(x.id || x.message_id || ''),
+      sender_id: String(x.sender_id || 'unknown'),
+      content: String(x.content || ''),
+      sender_type: String(x.sender_type || ''),
+      created_at: String(x.created_at || ''),
+    }))
+  }, [chatMessagesRaw])
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages.length])
+
+  /* ─── DAG analysis (computed from nodes + edges) ─── */
+  const dagAnalysis: DAGAnalysis | null = useMemo(() => {
+    if (!nodes.length) return null
+    const titleMap = new Map(nodes.map(n => [n.id, n.title]))
+    return analyzeDAG(
+      nodes.map(n => ({ id: n.id, status: n.status, runner_agent_id: n.runner_agent_id })),
+      edges,
+      titleMap,
+    )
+  }, [nodes, edges])
+
+  const involvedAgents = useMemo(() => {
+    if (!dagAnalysis) return [] as string[]
+    return Array.from(dagAnalysis.agentWorkload.keys()).filter(a => a !== 'unassigned')
+  }, [dagAnalysis])
 
   const selected = useMemo(() => nodes.find((n) => n.id === selectedTaskId) || null, [nodes, selectedTaskId])
   useEffect(() => { if (selected) setTaskDraft(selected as TaskDraft) }, [selected])
@@ -551,49 +613,111 @@ export default function PipelinesPage() {
     mutateGraph()
   }
 
-  /* ─── auto layout (topological sort) ─── */
+  /* ─── auto layout (using DAG analysis) ─── */
   const autoLayout = () => {
-    const inDeg: Record<string, number> = {}
-    const adj: Record<string, string[]> = {}
-    const nodeIdList = nodes.map((n) => n.id)
-    const nodeIds = new Set(nodeIdList)
-    nodeIdList.forEach((id) => { inDeg[id] = 0; adj[id] = [] })
-    edges.forEach((e) => {
-      if (nodeIds.has(e.depends_on_task_id) && nodeIds.has(e.task_id)) {
-        adj[e.depends_on_task_id].push(e.task_id)
-        inDeg[e.task_id] = (inDeg[e.task_id] || 0) + 1
-      }
-    })
-    const layers: string[][] = []
-    const visited = new Set<string>()
-    let queue = Object.keys(inDeg).filter((id) => inDeg[id] === 0)
-    while (queue.length > 0) {
-      layers.push(queue)
-      const next: string[] = []
-      queue.forEach((id) => {
-        visited.add(id)
-        adj[id].forEach((child) => {
-          inDeg[child]--
-          if (inDeg[child] === 0 && !visited.has(child)) next.push(child)
-        })
-      })
-      queue = next
-    }
-    const remaining = nodes.filter((n) => !visited.has(n.id)).map((n) => n.id)
-    if (remaining.length) layers.push(remaining)
-
+    if (!dagAnalysis) return
     const next: Record<string, NodeMeta> = {}
-    layers.forEach((layer, li) => {
-      const totalH = layer.length * 130 - 30
+    dagAnalysis.levels.forEach((lvl) => {
+      const totalH = lvl.nodeIds.length * 130 - 30
       const startY = Math.max(40, (600 - totalH) / 2)
-      layer.forEach((id, ni) => {
-        next[id] = { x: 80 + li * 320, y: startY + ni * 130, shape: positions[id]?.shape || 'rect', color: positions[id]?.color, label: positions[id]?.label }
+      lvl.nodeIds.forEach((id, ni) => {
+        next[id] = { x: 80 + lvl.level * 320, y: startY + ni * 130, shape: positions[id]?.shape || 'rect', color: positions[id]?.color, label: positions[id]?.label }
       })
+    })
+    // place any un-leveled nodes (cycle)
+    const placed = new Set(Object.keys(next))
+    const cx = 80 + (dagAnalysis.maxLevel + 1) * 320
+    nodes.filter(n => !placed.has(n.id)).forEach((n, i) => {
+      next[n.id] = { x: cx, y: 40 + i * 130, shape: positions[n.id]?.shape || 'rect', color: positions[n.id]?.color, label: positions[n.id]?.label }
     })
     setPan({ x: 0, y: 0 })
     setZoom(1)
     setPositions(next)
   }
+
+  /* ─── chat: send message ─── */
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || !pipelineTopicId || chatSending) return
+    setChatSending(true)
+    const content = chatInput.trim()
+    setChatInput('')
+    try {
+      await fetch(`${CLIENT_WTT_API_BASE}/topics/${pipelineTopicId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify({
+          content,
+          sender_id: actorSource(session, selectedAgentId),
+          sender_type: 'human',
+          content_type: 'text',
+          semantic_type: 'post',
+        }),
+      })
+      await mutateChat()
+    } finally {
+      setChatSending(false)
+    }
+  }
+
+  /* ─── parse pipeline_actions from chat messages ─── */
+  const parsePipelineActions = useCallback(async (msg: ChatMessage) => {
+    const match = msg.content.match(/```json\s*(\{[\s\S]*?"pipeline_actions"[\s\S]*?\})\s*```/)
+    if (!match) return
+    try {
+      const parsed = JSON.parse(match[1])
+      const actions = parsed.pipeline_actions
+      if (!Array.isArray(actions)) return
+      const titleToId = new Map<string, string>()
+      nodes.forEach(n => titleToId.set(n.title, n.id))
+
+      for (const action of actions) {
+        if (action.type === 'create_node') {
+          const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+            body: JSON.stringify({
+              title: action.title,
+              task_mode: 'pipeline',
+              pipeline_id: editingPipelineId || 'default',
+              task_type: action.task_type || 'feature',
+              priority: action.priority || 'P2',
+              status: 'todo',
+              owner_agent_id: selectedAgentId || undefined,
+              runner_agent_id: action.runner_agent_id || selectedAgentId || undefined,
+              created_by: actorSource(session, selectedAgentId),
+              description: action.description,
+            }),
+          })
+          if (r.ok) {
+            const j = await r.json()
+            titleToId.set(action.title, j.id)
+          }
+        } else if (action.type === 'add_edge') {
+          const fromId = titleToId.get(action.from_title) || action.from_id
+          const toId = titleToId.get(action.to_title) || action.to_id
+          if (fromId && toId) {
+            await fetch(`${CLIENT_WTT_API_BASE}/tasks/${toId}/dependencies`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+              body: JSON.stringify({ depends_on_task_id: fromId, mode: 'p2p', required: true }),
+            })
+          }
+        } else if (action.type === 'assign_agent') {
+          const taskId = titleToId.get(action.node_title) || action.node_id
+          if (taskId && action.runner_agent_id) {
+            await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+              body: JSON.stringify({ runner_agent_id: action.runner_agent_id }),
+            })
+          }
+        }
+      }
+      await mutateGraph()
+      autoLayout()
+    } catch { /* ignore malformed JSON */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, editingPipelineId, session?.accessToken, selectedAgentId])
 
   /* ─── canvas interactions ─── */
   const onNodeClick = async (e: React.MouseEvent<HTMLButtonElement>, nodeId: string) => {
@@ -613,6 +737,7 @@ export default function PipelinesPage() {
     }
     setSelectedTaskId(nodeId)
     setSelectedTaskIds([])
+    setRightTab('detail')
   }
 
   /* clicking a line style in palette: if a node is selected, enter connect mode from that node */
@@ -728,7 +853,6 @@ export default function PipelinesPage() {
   }
 
   /* ─── render ─── */
-  const editingPipeline = pipelines.find((p) => p.id === editingPipelineId)
 
   /* palette shape definitions */
   const shapeItems: { shape: NodeShape; icon: React.ReactNode; label: string; title: string }[] = [
@@ -950,6 +1074,9 @@ export default function PipelinesPage() {
                       <marker id="pipe-arrow-active" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
                         <path d="M0,0 L8,4 L0,8 z" fill="#6366f1" />
                       </marker>
+                      <marker id="pipe-arrow-critical" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                        <path d="M0,0 L8,4 L0,8 z" fill="#ef4444" />
+                      </marker>
                     </defs>
                   </svg>
 
@@ -964,17 +1091,20 @@ export default function PipelinesPage() {
                       const dx = Math.max(60, Math.abs(p2.x - p1.x) * 0.4)
                       const path = `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`
                       const isActive = selectedTaskId === edge.task_id || selectedTaskId === edge.depends_on_task_id
+                      const isCritical = dagAnalysis?.criticalPath.has(edge.task_id) && dagAnalysis?.criticalPath.has(edge.depends_on_task_id)
                       const fromNode = nodes.find((n) => n.id === edge.depends_on_task_id)
                       const edgeKey = `${edge.depends_on_task_id}->${edge.task_id}`
                       const style = edgeStyles[edgeKey] || 'solid'
+                      const edgeColor = isActive ? '#6366f1' : isCritical ? '#ef4444' : '#6b7fa0'
+                      const edgeWidth = isActive ? 2.5 : isCritical ? 2.2 : 1.8
                       return (
                         <g key={`e-${edge.task_id}-${edge.depends_on_task_id}`}>
                           <path
                             d={path}
                             fill="none"
-                            stroke={isActive ? '#6366f1' : '#6b7fa0'}
-                            strokeWidth={isActive ? 2.5 : 1.8}
-                            markerEnd={isActive ? 'url(#pipe-arrow-active)' : 'url(#pipe-arrow)'}
+                            stroke={edgeColor}
+                            strokeWidth={edgeWidth}
+                            markerEnd={isActive ? 'url(#pipe-arrow-active)' : isCritical ? 'url(#pipe-arrow-critical)' : 'url(#pipe-arrow)'}
                             className={fromNode?.status === 'doing' ? 'edge-flow' : ''}
                             {...lineStrokeAttrs(style)}
                           />
@@ -1088,8 +1218,18 @@ export default function PipelinesPage() {
                             </div>
                             {shape === 'rect' && (
                               <div className="flex items-center justify-between">
-                                <p className="text-[9px] text-slate-500">{n.status} · {n.runner_agent_id?.slice(0, 12) || '-'}</p>
-                                {meta.label && <span className="rounded bg-indigo-100 px-1 text-[8px] text-indigo-600">{meta.label}</span>}
+                                <p className="flex items-center gap-1 text-[9px] text-slate-500">
+                                  {n.runner_agent_id && involvedAgents.includes(n.runner_agent_id) && (
+                                    <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: agentColor(n.runner_agent_id, involvedAgents) }} />
+                                  )}
+                                  {n.status}
+                                  {dagAnalysis && <span className="text-slate-400">L{dagAnalysis.nodeLevel.get(n.id) ?? '?'}</span>}
+                                  · {n.runner_agent_id?.slice(0, 10) || '-'}
+                                </p>
+                                <div className="flex items-center gap-0.5">
+                                  {dagAnalysis?.criticalPath.has(n.id) && <span className="rounded bg-red-100 px-0.5 text-[7px] text-red-500">CP</span>}
+                                  {meta.label && <span className="rounded bg-indigo-100 px-1 text-[8px] text-indigo-600">{meta.label}</span>}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1156,242 +1296,373 @@ export default function PipelinesPage() {
                 )}
               </main>
 
-              {/* ── detail panel (expanded) ── */}
-              <aside className="overflow-y-auto border-l border-slate-200 bg-slate-50 p-3">
-                {selected ? (
-                  <div className="space-y-2.5 text-sm">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-500">Node Detail</p>
-                      <div className="flex gap-2">
-                        <button onClick={duplicateTask} className="text-[10px] text-indigo-400 hover:text-indigo-600">Duplicate</button>
-                        <button onClick={() => deleteTask(selected.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+              {/* ── right panel: Chat / Detail dual tab ── */}
+              <aside className="flex flex-col overflow-hidden border-l border-slate-200 bg-slate-50">
+                {/* tab bar */}
+                <div className="flex border-b border-slate-200 bg-white">
+                  <button onClick={() => setRightTab('chat')} className={`flex-1 px-3 py-2 text-xs font-medium transition ${rightTab === 'chat' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                    💬 Chat
+                  </button>
+                  <button onClick={() => setRightTab('detail')} className={`flex-1 px-3 py-2 text-xs font-medium transition ${rightTab === 'detail' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                    📝 Detail {selected ? `· ${selected.title.slice(0, 12)}` : ''}
+                  </button>
+                </div>
+
+                {/* ─ Chat Tab ─ */}
+                {rightTab === 'chat' && (
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    {/* DAG summary bar */}
+                    {dagAnalysis && (
+                      <div className="border-b border-slate-200 bg-white px-3 py-2">
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <span className="font-medium text-slate-600">DAG</span>
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">{dagAnalysis.maxLevel + 1} levels</span>
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">{dagAnalysis.criticalPath.size} critical</span>
+                          {dagAnalysis.hasCycle && <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-600">⚠ Cycle</span>}
+                          {dagAnalysis.parallelGroups.length > 0 && (
+                            <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-600">{dagAnalysis.parallelGroups.length} parallel</span>
+                          )}
+                        </div>
+                        {/* agent badges */}
+                        {involvedAgents.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {involvedAgents.map(a => {
+                              const wl = dagAnalysis.agentWorkload.get(a)
+                              const doingCount = wl?.tasks.filter(t => t.status === 'doing').length || 0
+                              return (
+                                <span key={a} className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium" style={{ backgroundColor: agentBgColor(a, involvedAgents), color: agentColor(a, involvedAgents) }}>
+                                  🤖 {a.slice(0, 12)}
+                                  <span className="opacity-70">{wl?.tasks.length || 0}t</span>
+                                  {doingCount > 0 && <span className="animate-pulse">●</span>}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
+                    )}
+                    {/* messages */}
+                    <div className="flex-1 overflow-y-auto px-3 py-2">
+                      {!pipelineTopicId ? (
+                        <div className="flex h-full flex-col items-center justify-center text-slate-400">
+                          <p className="text-xs">No chat topic linked.</p>
+                          <p className="mt-1 text-[10px]">Pipeline needs a topic_id for chat.</p>
+                        </div>
+                      ) : chatMessages.length === 0 ? (
+                        <div className="flex h-full flex-col items-center justify-center text-slate-400">
+                          <p className="text-xs">No messages yet</p>
+                          <p className="mt-1 text-[10px]">Start a conversation about this pipeline</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {chatMessages.map((m) => {
+                            const isMe = m.sender_type === 'HUMAN' || m.sender_id === actorSource(session, selectedAgentId)
+                            const hasActions = /```json\s*\{[\s\S]*?"pipeline_actions"/.test(m.content)
+                            return (
+                              <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[85%] rounded-lg px-3 py-2 text-xs ${isMe ? 'bg-indigo-500 text-white' : 'bg-white text-slate-700 shadow-sm border border-slate-200'}`}>
+                                  <p className={`text-[9px] font-medium ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>{m.sender_id.slice(0, 16)}</p>
+                                  <p className="mt-0.5 whitespace-pre-wrap break-words">{m.content.slice(0, 800)}</p>
+                                  {hasActions && !isMe && (
+                                    <button
+                                      onClick={() => parsePipelineActions(m)}
+                                      className="mt-1 rounded bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-600 hover:bg-indigo-200"
+                                    >
+                                      ▶ Apply Pipeline Actions
+                                    </button>
+                                  )}
+                                  {m.created_at && <p className={`mt-1 text-[8px] ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>{new Date(m.created_at).toLocaleTimeString()}</p>}
+                                </div>
+                              </div>
+                            )
+                          })}
+                          <div ref={chatEndRef} />
+                        </div>
+                      )}
                     </div>
-
-                    {/* title */}
-                    <input value={taskDraft.title || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold" placeholder="Title" />
-
-                    {/* row: status + shape */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[9px] text-slate-400">Status</label>
-                        <select value={taskDraft.status || 'todo'} onChange={(e) => setTaskDraft((d) => ({ ...d, status: e.target.value as TaskNode['status'] }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                          <option value="todo">todo</option><option value="doing">doing</option><option value="review">review</option><option value="done">done</option><option value="blocked">blocked</option>
-                        </select>
+                    {/* input */}
+                    {pipelineTopicId && (
+                      <div className="border-t border-slate-200 bg-white p-2">
+                        <div className="flex gap-1.5">
+                          <input
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage() } }}
+                            className="flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                            placeholder="Chat about this pipeline..."
+                            disabled={chatSending}
+                          />
+                          <button onClick={sendChatMessage} disabled={chatSending || !chatInput.trim()} className="rounded bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-600 disabled:opacity-40">
+                            {chatSending ? '...' : 'Send'}
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[9px] text-slate-400">Shape</label>
-                        <select
-                          value={positions[selected.id]?.shape || 'rect'}
-                          onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], shape: e.target.value as NodeShape } }))}
-                          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                        >
-                          <option value="rect">Rectangle (Task)</option>
-                          <option value="circle">Circle (Decision)</option>
-                          <option value="ellipse">Ellipse (Start/End)</option>
-                          <option value="diamond">Diamond (Condition)</option>
-                          <option value="parallelogram">Parallelogram (I/O)</option>
-                          <option value="hexagon">Hexagon (Subprocess)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* row: task_type + priority */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[9px] text-slate-400">Task Type</label>
-                        <select value={taskDraft.task_type || 'feature'} onChange={(e) => setTaskDraft((d) => ({ ...d, task_type: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                          <option value="feature">Feature</option>
-                          <option value="bug">Bug Fix</option>
-                          <option value="research">Research</option>
-                          <option value="refactor">Refactor</option>
-                          <option value="test">Test</option>
-                          <option value="deploy">Deploy</option>
-                          <option value="review">Review</option>
-                          <option value="documentation">Documentation</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[9px] text-slate-400">Priority</label>
-                        <select value={taskDraft.priority || 'P2'} onChange={(e) => setTaskDraft((d) => ({ ...d, priority: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                          <option value="P0">P0 (Critical)</option>
-                          <option value="P1">P1 (High)</option>
-                          <option value="P2">P2 (Medium)</option>
-                          <option value="P3">P3 (Low)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* row: exec_mode + estimate */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[9px] text-slate-400">Exec Mode</label>
-                        <select value={taskDraft.exec_mode || 'reasoning'} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                          <option value="reasoning">Reasoning</option>
-                          <option value="coding">Coding</option>
-                          <option value="search">Search</option>
-                          <option value="human">Human Review</option>
-                          <option value="api_call">API Call</option>
-                          <option value="mixed">Mixed</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[9px] text-slate-400">Estimate (hours)</label>
-                        <input type="number" min="0" step="0.5" value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: e.target.value ? parseFloat(e.target.value) : null }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. 2" />
-                      </div>
-                    </div>
-
-                    {/* row: due_at + timeout */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[9px] text-slate-400">Due Date</label>
-                        <input type="date" value={taskDraft.due_at?.slice(0, 10) || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, due_at: e.target.value || undefined }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" />
-                      </div>
-                      <div>
-                        <label className="text-[9px] text-slate-400">Timeout (min)</label>
-                        <input type="number" min="0" value={taskDraft.timeout_minutes ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, timeout_minutes: e.target.value ? parseInt(e.target.value) : null }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. 30" />
-                      </div>
-                    </div>
-
-                    {/* owner + runner */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[9px] text-slate-400">Owner Agent</label>
-                        <input value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="agent_id" />
-                      </div>
-                      <div>
-                        <label className="text-[9px] text-slate-400">Runner Agent</label>
-                        <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="agent_id" />
-                      </div>
-                    </div>
-
-                    {/* node visual: color + label */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[9px] text-slate-400">Node Color</label>
-                        <select
-                          value={positions[selected.id]?.color || ''}
-                          onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], color: e.target.value || undefined } }))}
-                          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                        >
-                          {NODE_COLORS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[9px] text-slate-400">Tag / Label</label>
-                        <input
-                          value={positions[selected.id]?.label || ''}
-                          onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], label: e.target.value || undefined } }))}
-                          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. v2.0"
-                        />
-                      </div>
-                    </div>
-
-                    {/* tags */}
-                    <div>
-                      <label className="text-[9px] text-slate-400">Tags (comma-separated)</label>
-                      <input value={taskDraft.tags || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, tags: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. backend, api, critical" />
-                    </div>
-
-                    {/* description */}
-                    <div>
-                      <label className="text-[9px] text-slate-400">Description</label>
-                      <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} className="min-h-16 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="What this node does..." />
-                    </div>
-
-                    {/* acceptance */}
-                    <div>
-                      <label className="text-[9px] text-slate-400">Acceptance Criteria</label>
-                      <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="How to verify completion..." />
-                    </div>
-
-                    {/* input/output spec */}
-                    <div>
-                      <label className="text-[9px] text-slate-400">Input / Output Specification</label>
-                      <textarea value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Input: camera_frame (image)&#10;Output: obstacle_list (json)" />
-                    </div>
-
-                    {/* notes */}
-                    <div>
-                      <label className="text-[9px] text-slate-400">Notes</label>
-                      <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} className="min-h-10 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Additional notes..." />
-                    </div>
-
-                    <button onClick={saveTaskDetail} className="w-full rounded border border-indigo-300 bg-indigo-50 px-2 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100">Save Node</button>
-
-                    {/* dependencies */}
-                    <div className="rounded border border-slate-200 bg-white p-2">
-                      <p className="mb-1 text-[10px] font-medium text-slate-500">Inbound (depends on)</p>
-                      <div className="space-y-1">
-                        {edges.filter((e) => e.task_id === selected.id).map((e) => {
-                          const dep = nodes.find((n) => n.id === e.depends_on_task_id)
-                          const edgeKey = `${e.depends_on_task_id}->${e.task_id}`
-                          const style = edgeStyles[edgeKey] || 'solid'
-                          return (
-                            <div key={`in-${e.depends_on_task_id}`} className="flex items-center justify-between text-[10px]">
-                              <span className="flex items-center gap-1">
-                                <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#6b7fa0" strokeWidth="1.5" strokeDasharray={style === 'dashed' ? '4 2' : style === 'dotted' ? '2 2' : ''} /><polygon points="14,1 20,4 14,7" fill="#6b7fa0" /></svg>
-                                {dep?.title?.slice(0, 20) || e.depends_on_task_id.slice(0, 8)} · {e.mode || 'p2p'}
-                              </span>
-                              <button onClick={() => removeDependency(e.task_id, e.depends_on_task_id)} className="text-red-400 hover:text-red-600">×</button>
-                            </div>
-                          )
-                        })}
-                        {edges.filter((e) => e.task_id === selected.id).length === 0 && <p className="text-[10px] text-slate-400">none (root node)</p>}
-                      </div>
-                    </div>
-
-                    <div className="rounded border border-slate-200 bg-white p-2">
-                      <p className="mb-1 text-[10px] font-medium text-slate-500">Outbound (flows to)</p>
-                      <div className="space-y-1">
-                        {edges.filter((e) => e.depends_on_task_id === selected.id).map((e) => {
-                          const target = nodes.find((n) => n.id === e.task_id)
-                          const edgeKey = `${e.depends_on_task_id}->${e.task_id}`
-                          const style = edgeStyles[edgeKey] || 'solid'
-                          return (
-                            <div key={`out-${e.task_id}`} className="flex items-center justify-between text-[10px]">
-                              <span className="flex items-center gap-1">
-                                <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#6b7fa0" strokeWidth="1.5" strokeDasharray={style === 'dashed' ? '4 2' : style === 'dotted' ? '2 2' : ''} /><polygon points="14,1 20,4 14,7" fill="#6b7fa0" /></svg>
-                                {target?.title?.slice(0, 20) || e.task_id.slice(0, 8)} · {e.mode || 'p2p'}
-                              </span>
-                              <button onClick={() => removeDependency(e.task_id, e.depends_on_task_id)} className="text-red-400 hover:text-red-600">×</button>
-                            </div>
-                          )
-                        })}
-                        {edges.filter((e) => e.depends_on_task_id === selected.id).length === 0 && <p className="text-[10px] text-slate-400">none (leaf node)</p>}
-                      </div>
-                    </div>
-
-                    {/* execution log */}
-                    <div className="rounded border border-slate-200 bg-white p-2">
-                      <p className="mb-1 text-[10px] font-medium text-slate-500">Execution Log</p>
-                      <div className="max-h-32 space-y-1 overflow-auto">
-                        {timeline.length > 0 ? timeline.map((m) => (
-                          <p key={m.id} className="text-[10px] text-slate-600">
-                            <span className="text-slate-400">{m.sender}:</span> {m.content.slice(0, 120)}
-                          </p>
-                        )) : <p className="text-[10px] text-slate-400">No execution log yet</p>}
-                      </div>
-                    </div>
-
-                    {/* quick links */}
-                    <div className="flex gap-2">
-                      <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push('/tasks')}>Tasks Board</button>
-                      {selected.topic_id && <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push(`/feed?topicId=${selected.topic_id}`)}>Topic Feed</button>}
-                    </div>
-
-                    {/* node ID */}
-                    <p className="text-[9px] text-slate-400">ID: {selected.id}</p>
+                    )}
                   </div>
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center text-slate-400">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-2 opacity-40"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 12h6M12 9v6" /></svg>
-                    <p className="text-xs">Select a node to edit</p>
-                    <p className="mt-1 text-[10px]">or drag shapes from palette</p>
+                )}
+
+                {/* ─ Detail Tab ─ */}
+                {rightTab === 'detail' && (
+                  <div className="flex-1 overflow-y-auto p-3">
+                    {selected ? (
+                      <div className="space-y-2.5 text-sm">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-slate-500">Node Detail</p>
+                          <div className="flex gap-2">
+                            <button onClick={duplicateTask} className="text-[10px] text-indigo-400 hover:text-indigo-600">Duplicate</button>
+                            <button onClick={() => deleteTask(selected.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                          </div>
+                        </div>
+
+                        {/* topo level badge */}
+                        {dagAnalysis && (
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">Level {dagAnalysis.nodeLevel.get(selected.id) ?? '?'}</span>
+                            {dagAnalysis.criticalPath.has(selected.id) && <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-500">Critical Path</span>}
+                            {dagAnalysis.parallelGroups.some(g => g.includes(selected.id)) && <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-500">Parallel</span>}
+                          </div>
+                        )}
+
+                        <input value={taskDraft.title || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold" placeholder="Title" />
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] text-slate-400">Status</label>
+                            <select value={taskDraft.status || 'todo'} onChange={(e) => setTaskDraft((d) => ({ ...d, status: e.target.value as TaskNode['status'] }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                              <option value="todo">todo</option><option value="doing">doing</option><option value="review">review</option><option value="done">done</option><option value="blocked">blocked</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-slate-400">Shape</label>
+                            <select
+                              value={positions[selected.id]?.shape || 'rect'}
+                              onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], shape: e.target.value as NodeShape } }))}
+                              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                            >
+                              <option value="rect">Rectangle (Task)</option>
+                              <option value="circle">Circle (Decision)</option>
+                              <option value="ellipse">Ellipse (Start/End)</option>
+                              <option value="diamond">Diamond (Condition)</option>
+                              <option value="parallelogram">Parallelogram (I/O)</option>
+                              <option value="hexagon">Hexagon (Subprocess)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] text-slate-400">Task Type</label>
+                            <select value={taskDraft.task_type || 'feature'} onChange={(e) => setTaskDraft((d) => ({ ...d, task_type: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                              <option value="feature">Feature</option>
+                              <option value="bug">Bug Fix</option>
+                              <option value="research">Research</option>
+                              <option value="refactor">Refactor</option>
+                              <option value="test">Test</option>
+                              <option value="deploy">Deploy</option>
+                              <option value="review">Review</option>
+                              <option value="documentation">Documentation</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-slate-400">Priority</label>
+                            <select value={taskDraft.priority || 'P2'} onChange={(e) => setTaskDraft((d) => ({ ...d, priority: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                              <option value="P0">P0 (Critical)</option>
+                              <option value="P1">P1 (High)</option>
+                              <option value="P2">P2 (Medium)</option>
+                              <option value="P3">P3 (Low)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] text-slate-400">Exec Mode</label>
+                            <select value={taskDraft.exec_mode || 'reasoning'} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                              <option value="reasoning">Reasoning</option>
+                              <option value="coding">Coding</option>
+                              <option value="search">Search</option>
+                              <option value="human">Human Review</option>
+                              <option value="api_call">API Call</option>
+                              <option value="mixed">Mixed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-slate-400">Estimate (hours)</label>
+                            <input type="number" min="0" step="0.5" value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: e.target.value ? parseFloat(e.target.value) : null }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. 2" />
+                          </div>
+                        </div>
+
+                        {/* owner + runner (dropdown) */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] text-slate-400">Owner Agent</label>
+                            <select value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                              <option value="">— select —</option>
+                              {agents.map(a => <option key={a.agent_id} value={a.agent_id}>{a.display_name || a.agent_id}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-slate-400">Runner Agent</label>
+                            <select
+                              value={taskDraft.runner_agent_id || ''}
+                              onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))}
+                              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                              style={taskDraft.runner_agent_id && involvedAgents.includes(taskDraft.runner_agent_id) ? { borderColor: agentColor(taskDraft.runner_agent_id, involvedAgents) } : {}}
+                            >
+                              <option value="">— select —</option>
+                              {agents.map(a => (
+                                <option key={a.agent_id} value={a.agent_id}>
+                                  {a.display_name || a.agent_id}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* node visual */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] text-slate-400">Node Color</label>
+                            <select
+                              value={positions[selected.id]?.color || ''}
+                              onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], color: e.target.value || undefined } }))}
+                              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                            >
+                              {NODE_COLORS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-slate-400">Tag / Label</label>
+                            <input
+                              value={positions[selected.id]?.label || ''}
+                              onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], label: e.target.value || undefined } }))}
+                              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. v2.0"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] text-slate-400">Description</label>
+                          <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} className="min-h-16 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="What this node does..." />
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] text-slate-400">Acceptance Criteria</label>
+                          <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="How to verify completion..." />
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] text-slate-400">Input / Output Specification</label>
+                          <textarea value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Input: camera_frame (image)&#10;Output: obstacle_list (json)" />
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] text-slate-400">Notes</label>
+                          <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} className="min-h-10 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Additional notes..." />
+                        </div>
+
+                        <button onClick={saveTaskDetail} className="w-full rounded border border-indigo-300 bg-indigo-50 px-2 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100">Save Node</button>
+
+                        {/* dependencies */}
+                        <div className="rounded border border-slate-200 bg-white p-2">
+                          <p className="mb-1 text-[10px] font-medium text-slate-500">Inbound (depends on)</p>
+                          <div className="space-y-1">
+                            {edges.filter((e) => e.task_id === selected.id).map((e) => {
+                              const dep = nodes.find((n) => n.id === e.depends_on_task_id)
+                              const edgeKey = `${e.depends_on_task_id}->${e.task_id}`
+                              const style = edgeStyles[edgeKey] || 'solid'
+                              return (
+                                <div key={`in-${e.depends_on_task_id}`} className="flex items-center justify-between text-[10px]">
+                                  <span className="flex items-center gap-1">
+                                    <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#6b7fa0" strokeWidth="1.5" strokeDasharray={style === 'dashed' ? '4 2' : style === 'dotted' ? '2 2' : ''} /><polygon points="14,1 20,4 14,7" fill="#6b7fa0" /></svg>
+                                    {dep?.title?.slice(0, 20) || e.depends_on_task_id.slice(0, 8)} · {e.mode || 'p2p'}
+                                  </span>
+                                  <button onClick={() => removeDependency(e.task_id, e.depends_on_task_id)} className="text-red-400 hover:text-red-600">×</button>
+                                </div>
+                              )
+                            })}
+                            {edges.filter((e) => e.task_id === selected.id).length === 0 && <p className="text-[10px] text-slate-400">none (root node)</p>}
+                          </div>
+                        </div>
+
+                        <div className="rounded border border-slate-200 bg-white p-2">
+                          <p className="mb-1 text-[10px] font-medium text-slate-500">Outbound (flows to)</p>
+                          <div className="space-y-1">
+                            {edges.filter((e) => e.depends_on_task_id === selected.id).map((e) => {
+                              const target = nodes.find((n) => n.id === e.task_id)
+                              const edgeKey = `${e.depends_on_task_id}->${e.task_id}`
+                              const style = edgeStyles[edgeKey] || 'solid'
+                              return (
+                                <div key={`out-${e.task_id}`} className="flex items-center justify-between text-[10px]">
+                                  <span className="flex items-center gap-1">
+                                    <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#6b7fa0" strokeWidth="1.5" strokeDasharray={style === 'dashed' ? '4 2' : style === 'dotted' ? '2 2' : ''} /><polygon points="14,1 20,4 14,7" fill="#6b7fa0" /></svg>
+                                    {target?.title?.slice(0, 20) || e.task_id.slice(0, 8)} · {e.mode || 'p2p'}
+                                  </span>
+                                  <button onClick={() => removeDependency(e.task_id, e.depends_on_task_id)} className="text-red-400 hover:text-red-600">×</button>
+                                </div>
+                              )
+                            })}
+                            {edges.filter((e) => e.depends_on_task_id === selected.id).length === 0 && <p className="text-[10px] text-slate-400">none (leaf node)</p>}
+                          </div>
+                        </div>
+
+                        {/* execution log */}
+                        <div className="rounded border border-slate-200 bg-white p-2">
+                          <p className="mb-1 text-[10px] font-medium text-slate-500">Execution Log</p>
+                          <div className="max-h-32 space-y-1 overflow-auto">
+                            {timeline.length > 0 ? timeline.map((m) => (
+                              <p key={m.id} className="text-[10px] text-slate-600">
+                                <span className="text-slate-400">{m.sender}:</span> {m.content.slice(0, 120)}
+                              </p>
+                            )) : <p className="text-[10px] text-slate-400">No execution log yet</p>}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push('/tasks')}>Tasks Board</button>
+                          {selected.topic_id && <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push(`/feed?topicId=${selected.topic_id}`)}>Topic Feed</button>}
+                        </div>
+
+                        <p className="text-[9px] text-slate-400">ID: {selected.id}</p>
+                      </div>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center text-slate-400">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-2 opacity-40"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 12h6M12 9v6" /></svg>
+                        <p className="text-xs">Select a node to edit</p>
+                        <p className="mt-1 text-[10px]">or drag shapes from palette</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </aside>
             </div>
+
+            {/* ── bottom agent status bar ── */}
+            {dagAnalysis && involvedAgents.length > 0 && (
+              <div className="flex items-center gap-3 border-t border-slate-200 bg-white px-4 py-1.5 text-[10px]">
+                <span className="font-medium text-slate-500">Agents:</span>
+                {involvedAgents.map(a => {
+                  const wl = dagAnalysis.agentWorkload.get(a)
+                  const doing = wl?.tasks.filter(t => t.status === 'doing') || []
+                  const todo = wl?.tasks.filter(t => t.status === 'todo') || []
+                  const done = wl?.tasks.filter(t => t.status === 'done') || []
+                  return (
+                    <span key={a} className="flex items-center gap-1.5 rounded-full border px-2 py-0.5" style={{ borderColor: agentColor(a, involvedAgents) + '60' }}>
+                      <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: agentColor(a, involvedAgents) }} />
+                      <span className="font-medium" style={{ color: agentColor(a, involvedAgents) }}>{a.slice(0, 14)}</span>
+                      {doing.length > 0 && <span className="rounded bg-indigo-100 px-1 text-indigo-600">{doing.length} doing</span>}
+                      {todo.length > 0 && <span className="rounded bg-slate-100 px-1 text-slate-500">{todo.length} todo</span>}
+                      {done.length > 0 && <span className="rounded bg-green-100 px-1 text-green-600">{done.length} done</span>}
+                    </span>
+                  )
+                })}
+                {dagAnalysis.agentWorkload.has('unassigned') && (
+                  <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-yellow-700">
+                    ⚠ {dagAnalysis.agentWorkload.get('unassigned')!.tasks.length} unassigned
+                  </span>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
