@@ -11,6 +11,12 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 
+/** Rewrite legacy http://170.106.109.4:8000 URLs to HTTPS domain */
+function fixMediaUrl(url: string | null | undefined): string {
+  if (!url) return ''
+  return url.replace(/^http:\/\/170\.106\.109\.4:8000/, 'https://www.waxbyte.com')
+}
+
 /** Client-side cleanup for raw PDF text — fixes common extraction artifacts */
 function cleanPdfText(text: string | null | undefined): string {
   if (!text) return ''
@@ -776,7 +782,7 @@ export default function ResearchTaskPage() {
                         </a>
                       )}
                       {selectedPaperFull.source_url && (
-                        <a href={selectedPaperFull.source_url} target="_blank" rel="noopener noreferrer"
+                        <a href={fixMediaUrl(selectedPaperFull.source_url)} target="_blank" rel="noopener noreferrer"
                           className="ml-3 mt-1 inline-block text-xs text-emerald-500 hover:underline">
                           📥 Download source file
                         </a>
@@ -852,7 +858,7 @@ export default function ResearchTaskPage() {
                         {l4View === 'native' ? (
                           (() => {
                             const ct = (selectedPaperFull.content_type || '').toLowerCase()
-                            const url = selectedPaperFull.source_url
+                            const url = fixMediaUrl(selectedPaperFull.source_url)
                             if (ct === 'pdf' || /\.pdf$/i.test(url)) {
                               return (
                                 <iframe
