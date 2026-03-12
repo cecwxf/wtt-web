@@ -834,16 +834,24 @@ export default function CodeTaskPage() {
 
   // ── Save file ──────────────────────────────────────
   const saveFile = async () => {
-    if (!selectedFile?.handle || !isModified) return
-    try {
-      const handle = selectedFile.handle as FileSystemFileHandle
-      const writable = await handle.createWritable()
-      await writable.write(modifiedContent)
-      await writable.close()
+    if (!isModified) return
+    if (selectedFile?.handle) {
+      // Local filesystem save
+      try {
+        const handle = selectedFile.handle as FileSystemFileHandle
+        const writable = await handle.createWritable()
+        await writable.write(modifiedContent)
+        await writable.close()
+        setFileContent(modifiedContent)
+        setIsModified(false)
+      } catch (e) {
+        alert(`Save failed: ${e instanceof Error ? e.message : 'unknown'}`)
+      }
+    } else if (selectedFile?.path) {
+      // GitHub mode: save to in-memory pending edits buffer
+      setPendingEdits(prev => ({ ...prev, [selectedFile.path]: modifiedContent }))
       setFileContent(modifiedContent)
       setIsModified(false)
-    } catch (e) {
-      alert(`Save failed: ${e instanceof Error ? e.message : 'unknown'}`)
     }
   }
 
@@ -1010,9 +1018,53 @@ export default function CodeTaskPage() {
   const [editorFontSize, setEditorFontSize] = useState(13)
   const [editorWordWrap, setEditorWordWrap] = useState<'on' | 'off'>('on')
   const [editorMinimap, setEditorMinimap] = useState(true)
-  const [editorTheme, setEditorTheme] = useState<'vs-light' | 'vs-dark'>('vs-light')
   const [editorTabSize, setEditorTabSize] = useState(2)
   const editorRef = useRef<unknown>(null)
+
+  // ── Full-page theme (VSCode-style) ──────────────────
+  type PageTheme = 'light' | 'dark' | 'dark-dimmed' | 'monokai'
+  const [pageTheme, setPageTheme] = useState<PageTheme>('light')
+  const editorTheme = pageTheme === 'light' ? 'vs-light' : 'vs-dark'
+
+  // Theme color maps
+  const themeColors: Record<PageTheme, {
+    bg: string; surface: string; border: string; text: string; textMuted: string
+    activeBg: string; hoverBg: string; accent: string; inputBg: string
+  }> = {
+    light: {
+      bg: 'bg-white', surface: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-800',
+      textMuted: 'text-slate-500', activeBg: 'bg-white', hoverBg: 'hover:bg-slate-100',
+      accent: 'text-indigo-600', inputBg: 'bg-white',
+    },
+    dark: {
+      bg: 'bg-[#1e1e1e]', surface: 'bg-[#252526]', border: 'border-[#3c3c3c]', text: 'text-[#cccccc]',
+      textMuted: 'text-[#858585]', activeBg: 'bg-[#1e1e1e]', hoverBg: 'hover:bg-[#2a2d2e]',
+      accent: 'text-[#569cd6]', inputBg: 'bg-[#3c3c3c]',
+    },
+    'dark-dimmed': {
+      bg: 'bg-[#22272e]', surface: 'bg-[#2d333b]', border: 'border-[#444c56]', text: 'text-[#adbac7]',
+      textMuted: 'text-[#768390]', activeBg: 'bg-[#22272e]', hoverBg: 'hover:bg-[#343942]',
+      accent: 'text-[#539bf5]', inputBg: 'bg-[#2d333b]',
+    },
+    monokai: {
+      bg: 'bg-[#272822]', surface: 'bg-[#2f3029]', border: 'border-[#49483e]', text: 'text-[#f8f8f2]',
+      textMuted: 'text-[#75715e]', activeBg: 'bg-[#272822]', hoverBg: 'hover:bg-[#3e3d32]',
+      accent: 'text-[#a6e22e]', inputBg: 'bg-[#3e3d32]',
+    },
+  }
+  const tc = themeColors[pageTheme]
+
+  // Persist theme in localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('code-task-theme') as PageTheme | null
+    if (saved && themeColors[saved]) setPageTheme(saved)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => { localStorage.setItem('code-task-theme', pageTheme) }, [pageTheme])
+
+  // ── Unsaved edits buffer (GitHub mode) ──────────────
+  const [pendingEdits, setPendingEdits] = useState<Record<string, string>>({})
+  const hasPendingEdits = Object.keys(pendingEdits).length > 0
 
   // ── Send chat message ──────────────────────────────
   const [awaitingAgent, setAwaitingAgent] = useState(false)
@@ -1344,12 +1396,12 @@ export default function CodeTaskPage() {
   const fileCount = useMemo(() => countFiles(activeTree), [activeTree])
 
   return (
-    <div className="flex h-screen flex-col bg-white">
+    <div className={`flex h-screen flex-col ${tc.bg}`}>
       {/* Top bar */}
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
+      <div className={`flex h-11 shrink-0 items-center justify-between border-b ${tc.border} ${tc.surface} px-4`}>
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/tasks')} className="text-sm text-indigo-500 hover:underline">← Tasks</button>
-          <span className="text-sm font-semibold text-slate-700">{task?.title || 'Code Task'}</span>
+          <span className={`text-sm font-semibold ${tc.text}`}>{task?.title || 'Code Task'}</span>
           <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium text-cyan-700">💻 Code</span>
           {task?.status && (
             <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
@@ -1379,7 +1431,7 @@ export default function CodeTaskPage() {
         <div className="flex items-center gap-2">
           {agents.length > 1 && (
             <select
-              className="rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+              className={`rounded border ${tc.border} ${tc.inputBg} px-2 py-1 text-xs ${tc.text}`}
               value={selectedAgentId}
               onChange={(e) => setSelectedAgentId(e.target.value)}
             >
@@ -1388,9 +1440,9 @@ export default function CodeTaskPage() {
           )}
           <span className="rounded bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">🐙 GitHub Repo Mode</span>
           {task?.repo_url && (
-            <button onClick={() => void loadRepoTree()} className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">{repoLoading ? '...' : 'Refresh Tree'}</button>
+            <button onClick={() => void loadRepoTree()} className={`rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1 text-xs ${tc.textMuted}`}>{repoLoading ? '...' : 'Refresh Tree'}</button>
           )}
-          <button onClick={linkRepo} disabled={repoLinking} className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 disabled:opacity-50">{repoLinking ? 'Linking...' : 'Link Repo'}</button>
+          <button onClick={linkRepo} disabled={repoLinking} className={`rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1 text-xs ${tc.textMuted} disabled:opacity-50`}>{repoLinking ? 'Linking...' : 'Link Repo'}</button>
           {!task?.repo_url && <button onClick={createRepo} disabled={repoCreating} className="rounded-lg bg-emerald-500 px-3 py-1 text-xs text-white disabled:opacity-50">{repoCreating ? 'Creating...' : 'Create Repo'}</button>}
         </div>
       </div>
@@ -1398,7 +1450,7 @@ export default function CodeTaskPage() {
       {/* Main area: file tree | editor | chat */}
       <div className="flex flex-1 overflow-hidden">
         {/* File tree panel */}
-        <div className="w-60 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50/80 p-2">
+        <div className={`w-60 shrink-0 overflow-y-auto border-r ${tc.border} ${tc.surface} p-2`}>
           {task?.repo_url ? (
             <>
               <div className="mb-2 rounded border border-emerald-200 bg-emerald-50 p-2 text-[10px] text-emerald-700">
@@ -1408,7 +1460,7 @@ export default function CodeTaskPage() {
               <div className="mb-2 space-y-1">
                 <div className="flex gap-1">
                   <input
-                    className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                    className={`flex-1 rounded border ${tc.border} ${tc.inputBg} px-2 py-1 text-[11px] ${tc.text}`}
                     placeholder="Search in repo..."
                     value={repoQuery}
                     onChange={(e) => setRepoQuery(e.target.value)}
@@ -1417,11 +1469,11 @@ export default function CodeTaskPage() {
                   <button
                     onClick={() => void searchRepo()}
                     disabled={repoSearching || !repoQuery.trim()}
-                    className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 disabled:opacity-50"
+                    className={`rounded border ${tc.border} ${tc.inputBg} px-2 py-1 text-[11px] ${tc.textMuted} disabled:opacity-50`}
                   >{repoSearching ? '...' : 'Search'}</button>
                 </div>
                 {repoSearchResults.length > 0 && (
-                  <div className="max-h-28 overflow-y-auto rounded border border-slate-200 bg-white p-1">
+                  <div className={`max-h-28 overflow-y-auto rounded border ${tc.border} ${tc.inputBg} p-1`}>
                     {repoSearchResults.filter((it) => !!it.path).map((it) => (
                       <button
                         key={`${it.path}-${it.sha || ''}`}
@@ -1435,14 +1487,14 @@ export default function CodeTaskPage() {
               </div>
 
               {repoLoading ? (
-                <p className="text-center text-[11px] text-slate-400">Loading repo tree...</p>
+                <p className={`text-center text-[11px] ${tc.textMuted}`}>Loading repo tree...</p>
               ) : repoTree.length === 0 ? (
-                <p className="text-center text-[11px] text-slate-400">No repo files</p>
+                <p className={`text-center text-[11px] ${tc.textMuted}`}>No repo files</p>
               ) : (
                 <>
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-500">Repository</p>
-                    <span className="text-[10px] text-slate-400">{fileCount} files</span>
+                    <p className={`text-xs font-semibold ${tc.textMuted}`}>Repository</p>
+                    <span className={`text-[10px] ${tc.textMuted}`}>{fileCount} files</span>
                   </div>
                   {repoTree.map((node) => (
                     <FileTreeNode
@@ -1459,9 +1511,9 @@ export default function CodeTaskPage() {
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
               <p className="text-3xl">🐙</p>
-              <p className="text-sm text-slate-500">GitHub repo is required for Code Task</p>
+              <p className={`text-sm ${tc.textMuted}`}>GitHub repo is required for Code Task</p>
               <div className="flex gap-2">
-                <button onClick={linkRepo} disabled={repoLinking} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 disabled:opacity-50">{repoLinking ? 'Linking...' : 'Link Repo'}</button>
+                <button onClick={linkRepo} disabled={repoLinking} className={`rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1.5 text-xs ${tc.textMuted} disabled:opacity-50`}>{repoLinking ? 'Linking...' : 'Link Repo'}</button>
                 <button onClick={createRepo} disabled={repoCreating} className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white disabled:opacity-50">{repoCreating ? 'Creating...' : 'Create Repo'}</button>
               </div>
             </div>
@@ -1490,11 +1542,11 @@ export default function CodeTaskPage() {
                 >✕ Cancel</button>
               </div>
               {/* Diff file tabs */}
-              <div className="flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-slate-200 bg-slate-100 px-1">
+              <div className={`flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b ${tc.border} ${tc.surface} px-1`}>
                 {pendingPatches.map((p, i) => (
                   <button key={p.path} onClick={() => switchDiffFile(i)}
                     className={`flex items-center gap-1 rounded-t px-2 py-1 text-[11px] ${
-                      i === activeDiffIndex ? 'bg-white font-medium text-slate-800' : 'text-slate-500 hover:bg-white/60'
+                      i === activeDiffIndex ? `${tc.activeBg} font-medium ${tc.text}` : `${tc.textMuted} ${tc.hoverBg}`
                     }`}
                   >
                     <span className={`h-1.5 w-1.5 rounded-full ${
@@ -1554,18 +1606,18 @@ export default function CodeTaskPage() {
             <>
               {/* Normal tab bar */}
               {openFiles.length > 0 && (
-                <div className="flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-slate-200 bg-slate-100 px-1">
+                <div className={`flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b ${tc.border} ${tc.surface} px-1`}>
                   {openFiles.map((f) => (
                     <button
                       key={f.path}
                       onClick={() => selectFile(f)}
                       className={`group flex items-center gap-1 rounded-t px-2 py-1 text-[11px] ${
-                        f.path === selectedFile?.path ? 'bg-white font-medium text-slate-800' : 'text-slate-500 hover:bg-white/60'
+                        f.path === selectedFile?.path ? `${tc.activeBg} font-medium ${tc.text}` : `${tc.textMuted} ${tc.hoverBg}`
                       }`}
                     >
                       <span className="truncate max-w-[120px]">{f.name}</span>
                       <span
-                        className="ml-1 hidden text-slate-400 hover:text-red-500 group-hover:inline"
+                        className={`ml-1 hidden ${tc.textMuted} hover:text-red-500 group-hover:inline`}
                         onClick={(e) => {
                           e.stopPropagation()
                           setOpenFiles((prev) => prev.filter((x) => x.path !== f.path))
@@ -1584,41 +1636,54 @@ export default function CodeTaskPage() {
               {selectedFile ? (
                 <>
                   {/* Editor toolbar */}
-                  <div className="flex h-7 shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50/80 px-2">
+                  <div className={`flex h-7 shrink-0 items-center gap-2 border-b ${tc.border} ${tc.surface} px-2`}>
                     {/* Font size */}
                     <div className="flex items-center gap-0.5">
                       <button onClick={() => setEditorFontSize(s => Math.max(10, s - 1))}
-                        className="rounded px-1 text-[11px] text-slate-500 hover:bg-slate-200" title="Decrease font">A-</button>
-                      <span className="min-w-[20px] text-center text-[10px] text-slate-400">{editorFontSize}</span>
+                        className={`rounded px-1 text-[11px] ${tc.textMuted} ${tc.hoverBg}`} title="Decrease font">A-</button>
+                      <span className={`min-w-[20px] text-center text-[10px] ${tc.textMuted}`}>{editorFontSize}</span>
                       <button onClick={() => setEditorFontSize(s => Math.min(24, s + 1))}
-                        className="rounded px-1 text-[11px] text-slate-500 hover:bg-slate-200" title="Increase font">A+</button>
+                        className={`rounded px-1 text-[11px] ${tc.textMuted} ${tc.hoverBg}`} title="Increase font">A+</button>
                     </div>
-                    <span className="text-slate-300">|</span>
+                    <span className={tc.textMuted}>|</span>
                     {/* Tab size */}
                     <button onClick={() => setEditorTabSize(t => t === 2 ? 4 : 2)}
-                      className="rounded px-1.5 text-[10px] text-slate-500 hover:bg-slate-200" title="Toggle tab size"
+                      className={`rounded px-1.5 text-[10px] ${tc.textMuted} ${tc.hoverBg}`} title="Toggle tab size"
                     >Tab: {editorTabSize}</button>
-                    <span className="text-slate-300">|</span>
+                    <span className={tc.textMuted}>|</span>
                     {/* Word wrap */}
                     <button onClick={() => setEditorWordWrap(w => w === 'on' ? 'off' : 'on')}
-                      className={`rounded px-1.5 text-[10px] hover:bg-slate-200 ${editorWordWrap === 'on' ? 'text-indigo-600 font-medium' : 'text-slate-500'}`}
+                      className={`rounded px-1.5 text-[10px] ${tc.hoverBg} ${editorWordWrap === 'on' ? 'text-indigo-600 font-medium' : tc.textMuted}`}
                       title="Toggle word wrap"
                     >Wrap</button>
                     {/* Minimap */}
                     <button onClick={() => setEditorMinimap(m => !m)}
-                      className={`rounded px-1.5 text-[10px] hover:bg-slate-200 ${editorMinimap ? 'text-indigo-600 font-medium' : 'text-slate-500'}`}
+                      className={`rounded px-1.5 text-[10px] ${tc.hoverBg} ${editorMinimap ? 'text-indigo-600 font-medium' : tc.textMuted}`}
                       title="Toggle minimap"
                     >Minimap</button>
-                    <span className="text-slate-300">|</span>
-                    {/* Theme */}
-                    <button onClick={() => setEditorTheme(t => t === 'vs-light' ? 'vs-dark' : 'vs-light')}
-                      className="rounded px-1.5 text-[10px] text-slate-500 hover:bg-slate-200" title="Toggle theme"
-                    >{editorTheme === 'vs-light' ? '☀️' : '🌙'}</button>
+                    <span className={tc.textMuted}>|</span>
+                    {/* Theme selector */}
+                    <select
+                      value={pageTheme}
+                      onChange={(e) => setPageTheme(e.target.value as PageTheme)}
+                      className={`rounded border ${tc.border} ${tc.inputBg} ${tc.text} px-1.5 py-0.5 text-[10px]`}
+                      title="Editor theme"
+                    >
+                      <option value="light">☀️ Light</option>
+                      <option value="dark">🌙 Dark</option>
+                      <option value="dark-dimmed">🌘 Dark Dimmed</option>
+                      <option value="monokai">🎨 Monokai</option>
+                    </select>
                     <div className="flex-1" />
                     {/* Language indicator */}
-                    <span className="text-[10px] text-slate-400">{langFromPath(selectedFile.path)}</span>
+                    <span className={`text-[10px] ${tc.textMuted}`}>{langFromPath(selectedFile.path)}</span>
                     {/* Modified indicator */}
                     {isModified && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Unsaved changes" />}
+                    {hasPendingEdits && (
+                      <span className={`text-[10px] ${tc.accent} font-medium`} title={`${Object.keys(pendingEdits).length} file(s) modified`}>
+                        ● {Object.keys(pendingEdits).length} pending
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 relative">
                     {fileLoading && (
@@ -1641,7 +1706,7 @@ export default function CodeTaskPage() {
                         scrollBeyondLastLine: false,
                         automaticLayout: true,
                         tabSize: editorTabSize,
-                        readOnly: agentMode === 'remote',
+                        readOnly: false,
                         cursorBlinking: 'smooth',
                         cursorSmoothCaretAnimation: 'on',
                         smoothScrolling: true,
@@ -1653,17 +1718,43 @@ export default function CodeTaskPage() {
                         suggest: { showKeywords: true, showSnippets: true },
                       }}
                     />
-                    {isModified && agentMode === 'local' && (
+                    {isModified && (
                       <div className="absolute bottom-2 right-[calc(33%+12px)] z-10">
                         <button onClick={saveFile} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-indigo-600">
                           💾 Save (⌘S)
                         </button>
                       </div>
                     )}
+                    {hasPendingEdits && !isModified && (
+                      <div className="absolute bottom-2 right-[calc(33%+12px)] z-10 flex items-center gap-2">
+                        <span className="rounded-lg bg-slate-800/80 px-2 py-1 text-[11px] text-white">
+                          {Object.keys(pendingEdits).length} file(s) modified
+                        </span>
+                        <button
+                          onClick={() => {
+                            const summary = Object.entries(pendingEdits).map(([path, content]) =>
+                              `[FILE] ${path}\n\`\`\`\n${content}\n\`\`\``
+                            ).join('\n\n')
+                            setChatInput(`Please commit these changes:\n\n${summary}`)
+                            setRightTab('chat')
+                            setPendingEdits({})
+                          }}
+                          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-emerald-600"
+                        >
+                          📤 Send to Agent
+                        </button>
+                        <button
+                          onClick={() => setPendingEdits({})}
+                          className="rounded-lg bg-red-500/80 px-2 py-1.5 text-xs text-white shadow-lg hover:bg-red-600"
+                        >
+                          ✕ Discard
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
-                <div className="flex flex-1 items-center justify-center text-slate-400">
+                <div className={`flex flex-1 items-center justify-center ${tc.textMuted}`}>
                   <div className="text-center">
                     <p className="text-4xl">📝</p>
                     <p className="mt-2 text-sm">Select a file to edit</p>
@@ -1675,17 +1766,17 @@ export default function CodeTaskPage() {
         </div>
 
         {/* Chat panel */}
-        <div className="flex w-[33%] min-w-[320px] shrink-0 flex-col border-l border-slate-200">
+        <div className={`flex w-[33%] min-w-[320px] shrink-0 flex-col border-l ${tc.border}`}>
           {/* Tab header */}
-          <div className="flex h-10 shrink-0 items-center border-b border-slate-200 bg-slate-50">
+          <div className={`flex h-10 shrink-0 items-center border-b ${tc.border} ${tc.surface}`}>
             {(['chat', 'issues', 'prs'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setRightTab(tab)}
                 className={`flex-1 h-full text-[12px] font-medium transition-colors ${
                   rightTab === tab
-                    ? 'text-indigo-600 border-b-2 border-indigo-500 bg-white'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                    ? `text-indigo-600 border-b-2 border-indigo-500 ${tc.activeBg}`
+                    : `${tc.textMuted} ${tc.hoverBg}`
                 }`}
               >
                 {tab === 'chat' && `💬 Chat${wsState === 'connected' ? '' : ' ⚪'}`}
@@ -1701,7 +1792,7 @@ export default function CodeTaskPage() {
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {chatMessages.length === 0 && (
                   <div className="flex h-full items-center justify-center">
-                    <div className="text-center text-slate-400">
+                    <div className={`text-center ${tc.textMuted}`}>
                       <p className="text-3xl">💬</p>
                       <p className="mt-2 text-sm">Ask the agent about your code</p>
                       <p className="mt-1 text-[11px]">Selected file will be sent as context</p>
@@ -1712,12 +1803,12 @@ export default function CodeTaskPage() {
                   const patch = msg.role === 'assistant' ? extractFilePatch(msg.content) : null
                   const allPatches = msg.role === 'assistant' ? extractAllPatches(msg.content) : []
                   return (
-                    <div key={msg.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] leading-relaxed">
+                    <div key={msg.id} className={`rounded-lg border ${tc.border} ${tc.activeBg} px-3 py-2 text-[13px] leading-relaxed ${tc.text}`}>
                       <div className="mb-1 flex items-center justify-between">
                         <p className={`text-[11px] font-semibold ${msg.role === 'user' ? 'text-emerald-600' : 'text-indigo-600'}`}>
                           {msg.role === 'user' ? `来自WTT User: ${msg.sender_display_name || 'User'}` : `来自Agent: ${msg.sender_display_name || 'Agent'}`}
                         </p>
-                        <p className="text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                        <p className={`text-[10px] ${tc.textMuted}`}>{new Date(msg.timestamp).toLocaleTimeString()}</p>
                       </div>
                       <div className="whitespace-pre-wrap break-words">{msg.content}</div>
                       {allPatches.length > 1 ? (
@@ -1749,7 +1840,7 @@ export default function CodeTaskPage() {
                 })}
                 {awaitingAgent && (
                   <div className="flex justify-start">
-                    <div className="rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-[13px] text-slate-500">
+                    <div className={`rounded-2xl rounded-tl-md border ${tc.border} ${tc.activeBg} px-4 py-3 text-[13px] ${tc.textMuted}`}>
                       <span className="inline-flex items-center gap-1">
                         <span className="animate-pulse">🤔</span> Agent is thinking...
                       </span>
@@ -1760,7 +1851,7 @@ export default function CodeTaskPage() {
               </div>
 
               {/* Input */}
-              <div className="border-t border-slate-200 bg-slate-50 p-3">
+              <div className={`border-t ${tc.border} ${tc.surface} p-3`}>
                 {selectedFile && (
                   <div className="mb-2 flex items-center gap-1 rounded bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600">
                     <span>📎</span>
@@ -1770,7 +1861,7 @@ export default function CodeTaskPage() {
                 )}
                 <div className="flex gap-2">
                   <input
-                    className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+                    className={`flex-1 rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-2 text-sm ${tc.text} focus:border-indigo-400 focus:outline-none`}
                     placeholder="Ask about code..."
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
@@ -1802,25 +1893,25 @@ export default function CodeTaskPage() {
                 </div>
                 <button onClick={() => fetchIssues()} className="text-[11px] text-indigo-500 hover:text-indigo-700">🔄</button>
               </div>
-              {issuesLoading && <p className="text-center text-[11px] text-slate-400">Loading...</p>}
+              {issuesLoading && <p className={`text-center text-[11px] ${tc.textMuted}`}>Loading...</p>}
               {!issuesLoading && issues.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                <div className={`flex flex-col items-center justify-center py-8 ${tc.textMuted}`}>
                   <span className="text-2xl mb-2">🐛</span>
                   <p className="text-[12px]">No {issueFilter === 'all' ? '' : issueFilter} issues</p>
                 </div>
               )}
               {issues.map((issue) => (
-                <div key={issue.number} className="rounded border border-slate-200 bg-white">
+                <div key={issue.number} className={`rounded border ${tc.border} ${tc.activeBg}`}>
                   <button
                     onClick={() => {
                       if (expandedIssue === issue.number) { setExpandedIssue(null) }
                       else { setExpandedIssue(issue.number); fetchIssueDetail(issue.number) }
                     }}
-                    className="flex w-full items-start gap-2 p-2 text-left hover:bg-slate-50"
+                    className={`flex w-full items-start gap-2 p-2 text-left ${tc.hoverBg}`}
                   >
                     <span className="mt-0.5 text-[11px]">{issue.state === 'open' ? '🟢' : '🔴'}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[12px] font-medium text-slate-700 leading-tight">#{issue.number} {issue.title}</p>
+                      <p className={`text-[12px] font-medium ${tc.text} leading-tight`}>#{issue.number} {issue.title}</p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {(issue.labels || []).map((label: Record<string, any>) => (
@@ -1831,22 +1922,22 @@ export default function CodeTaskPage() {
                           }}>{label.name}</span>
                         ))}
                       </div>
-                      <p className="mt-0.5 text-[10px] text-slate-400">by {issue.user?.login} · {new Date(issue.created_at).toLocaleDateString()}</p>
+                      <p className={`mt-0.5 text-[10px] ${tc.textMuted}`}>by {issue.user?.login} · {new Date(issue.created_at).toLocaleDateString()}</p>
                     </div>
-                    <span className="text-[10px] text-slate-400">{expandedIssue === issue.number ? '▼' : '▶'}</span>
+                    <span className={`text-[10px] ${tc.textMuted}`}>{expandedIssue === issue.number ? '▼' : '▶'}</span>
                   </button>
                   {expandedIssue === issue.number && (
-                    <div className="border-t border-slate-100 p-2 space-y-2">
+                    <div className={`border-t ${tc.border} p-2 space-y-2`}>
                       {issue.body && (
-                        <div className="rounded bg-slate-50 p-2 text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">{issue.body}</div>
+                        <div className={`rounded ${tc.surface} p-2 text-[11px] ${tc.textMuted} whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto`}>{issue.body}</div>
                       )}
                       {issueComments.length > 0 && (
                         <div className="space-y-1.5">
-                          <p className="text-[10px] font-semibold text-slate-500">💬 Comments ({issueComments.length})</p>
+                          <p className={`text-[10px] font-semibold ${tc.textMuted}`}>💬 Comments ({issueComments.length})</p>
                           {issueComments.map((c) => (
-                            <div key={c.id} className="rounded border border-slate-100 bg-white p-1.5">
-                              <p className="text-[10px] font-medium text-slate-500">{c.user?.login} · {new Date(c.created_at).toLocaleDateString()}</p>
-                              <p className="mt-0.5 text-[11px] text-slate-600 whitespace-pre-wrap max-h-24 overflow-y-auto">{c.body}</p>
+                            <div key={c.id} className={`rounded border ${tc.border} ${tc.activeBg} p-1.5`}>
+                              <p className={`text-[10px] font-medium ${tc.textMuted}`}>{c.user?.login} · {new Date(c.created_at).toLocaleDateString()}</p>
+                              <p className={`mt-0.5 text-[11px] ${tc.textMuted} whitespace-pre-wrap max-h-24 overflow-y-auto`}>{c.body}</p>
                             </div>
                           ))}
                         </div>
@@ -1879,35 +1970,35 @@ export default function CodeTaskPage() {
                 </div>
                 <button onClick={() => fetchPulls()} className="text-[11px] text-indigo-500 hover:text-indigo-700">🔄</button>
               </div>
-              {pullsLoading && <p className="text-center text-[11px] text-slate-400">Loading...</p>}
+              {pullsLoading && <p className={`text-center text-[11px] ${tc.textMuted}`}>Loading...</p>}
               {!pullsLoading && pulls.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                <div className={`flex flex-col items-center justify-center py-8 ${tc.textMuted}`}>
                   <span className="text-2xl mb-2">🔀</span>
                   <p className="text-[12px]">No {prFilter === 'all' ? '' : prFilter} pull requests</p>
                 </div>
               )}
               {pulls.map((pr) => (
-                <div key={pr.number} className="rounded border border-slate-200 bg-white">
+                <div key={pr.number} className={`rounded border ${tc.border} ${tc.activeBg}`}>
                   <button
                     onClick={() => {
                       if (expandedPR === pr.number) { setExpandedPR(null) }
                       else { setExpandedPR(pr.number); fetchPRFiles(pr.number) }
                     }}
-                    className="flex w-full items-start gap-2 p-2 text-left hover:bg-slate-50"
+                    className={`flex w-full items-start gap-2 p-2 text-left ${tc.hoverBg}`}
                   >
                     <span className="mt-0.5 text-[11px]">{pr.state === 'open' ? '🟢' : pr.merged_at ? '🟣' : '🔴'}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[12px] font-medium text-slate-700 leading-tight">#{pr.number} {pr.title}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">
+                      <p className={`text-[12px] font-medium ${tc.text} leading-tight`}>#{pr.number} {pr.title}</p>
+                      <p className={`mt-0.5 text-[10px] ${tc.textMuted}`}>
                         {pr.head?.ref} → {pr.base?.ref} · by {pr.user?.login}
                       </p>
                     </div>
-                    <span className="text-[10px] text-slate-400">{expandedPR === pr.number ? '▼' : '▶'}</span>
+                    <span className={`text-[10px] ${tc.textMuted}`}>{expandedPR === pr.number ? '▼' : '▶'}</span>
                   </button>
                   {expandedPR === pr.number && (
-                    <div className="border-t border-slate-100 p-2 space-y-2">
+                    <div className={`border-t ${tc.border} p-2 space-y-2`}>
                       {pr.body && (
-                        <div className="rounded bg-slate-50 p-2 text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">{pr.body}</div>
+                        <div className={`rounded ${tc.surface} p-2 text-[11px] ${tc.textMuted} whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto`}>{pr.body}</div>
                       )}
                       {/* Review all files button */}
                       {prFiles.length > 0 && (
@@ -1921,13 +2012,13 @@ export default function CodeTaskPage() {
                       )}
                       {prFiles.length > 0 && (
                         <div className="space-y-1">
-                          <p className="text-[10px] font-semibold text-slate-500">📁 Changed Files ({prFiles.length})</p>
+                          <p className={`text-[10px] font-semibold ${tc.textMuted}`}>📁 Changed Files ({prFiles.length})</p>
                           {prFiles.map((f) => (
-                            <div key={f.filename} className="flex w-full items-center gap-1 rounded px-1.5 py-1 hover:bg-slate-50">
+                            <div key={f.filename} className={`flex w-full items-center gap-1 rounded px-1.5 py-1 ${tc.hoverBg}`}>
                               <span className={`text-[10px] font-mono ${
                                 f.status === 'added' ? 'text-green-600' : f.status === 'removed' ? 'text-red-600' : 'text-amber-600'
                               }`}>{f.status === 'added' ? '+' : f.status === 'removed' ? '-' : '~'}</span>
-                              <span className="flex-1 truncate text-[11px] text-slate-600">{f.filename}</span>
+                              <span className={`flex-1 truncate text-[11px] ${tc.textMuted}`}>{f.filename}</span>
                               <span className="text-[10px] text-green-600">+{f.additions}</span>
                               <span className="text-[10px] text-red-500">-{f.deletions}</span>
                               <button
