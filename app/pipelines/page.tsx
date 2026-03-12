@@ -242,6 +242,19 @@ export default function PipelinesPage() {
   const [connectLineStyle, setConnectLineStyle] = useState<LineStyle>('solid')
   const [taskDraft, setTaskDraft] = useState<TaskDraft>({})
 
+  /* ─── draft (unsaved) nodes on canvas ─── */
+  const [draftNodes, setDraftNodes] = useState<Record<string, TaskDraft & { _shape: NodeShape }>>({})
+  const allNodes: TaskNode[] = useMemo(() => {
+    const drafts: TaskNode[] = Object.entries(draftNodes).map(([id, d]) => ({
+      id,
+      title: d.title || 'Untitled',
+      status: 'todo' as const,
+      owner_agent_id: d.owner_agent_id,
+      runner_agent_id: d.runner_agent_id,
+    }))
+    return [...nodes, ...drafts]
+  }, [nodes, draftNodes])
+
   /* ─── drag-to-connect state ─── */
   const [dragLine, setDragLine] = useState<{ fromId: string; fromX: number; fromY: number; toX: number; toY: number } | null>(null)
 
@@ -261,9 +274,9 @@ export default function PipelinesPage() {
   const pipelineTopicId = (editingPipeline as Pipeline & { topic_id?: string })?.topic_id || null
   const selectedNodeTopicId = useMemo(() => {
     if (!selectedTaskId) return null
-    const n = nodes.find(n => n.id === selectedTaskId)
+    const n = allNodes.find(n => n.id === selectedTaskId)
     return n?.topic_id || null
-  }, [selectedTaskId, nodes])
+  }, [selectedTaskId, allNodes])
   const activeChatTopicId = selectedNodeTopicId || pipelineTopicId
 
   /* ─── chat messages ─── */
@@ -289,24 +302,34 @@ export default function PipelinesPage() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages.length])
 
-  /* ─── DAG analysis (computed from nodes + edges) ─── */
+  /* ─── DAG analysis (computed from allNodes + edges) ─── */
   const dagAnalysis: DAGAnalysis | null = useMemo(() => {
-    if (!nodes.length) return null
-    const titleMap = new Map(nodes.map(n => [n.id, n.title]))
+    if (!allNodes.length) return null
+    const titleMap = new Map(allNodes.map(n => [n.id, n.title]))
     return analyzeDAG(
-      nodes.map(n => ({ id: n.id, status: n.status, runner_agent_id: n.runner_agent_id })),
+      allNodes.map(n => ({ id: n.id, status: n.status, runner_agent_id: n.runner_agent_id })),
       edges,
       titleMap,
     )
-  }, [nodes, edges])
+  }, [allNodes, edges])
 
   const involvedAgents = useMemo(() => {
     if (!dagAnalysis) return [] as string[]
     return Array.from(dagAnalysis.agentWorkload.keys()).filter(a => a !== 'unassigned')
   }, [dagAnalysis])
 
-  const selected = useMemo(() => nodes.find((n) => n.id === selectedTaskId) || null, [nodes, selectedTaskId])
-  useEffect(() => { if (selected) setTaskDraft(selected as TaskDraft) }, [selected])
+  const selected = useMemo(() => allNodes.find((n) => n.id === selectedTaskId) || null, [allNodes, selectedTaskId])
+  const isDraft = selectedTaskId ? !!draftNodes[selectedTaskId] : false
+  useEffect(() => {
+    if (!selectedTaskId) return
+    const draft = draftNodes[selectedTaskId]
+    if (draft) {
+      setTaskDraft(draft as TaskDraft)
+    } else if (selected) {
+      setTaskDraft(selected as TaskDraft)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, selectedTaskId])
 
   /* ─── timeline for selected node ─── */
   const { data: timelineRaw } = useSWR(
@@ -428,33 +451,61 @@ export default function PipelinesPage() {
   }
 
   /* ─── task / node CRUD ─── */
-  const createTaskAt = async (x: number, y: number, shape: NodeShape = 'rect', autoTitle?: string) => {
+  const createDraftAt = (x: number, y: number, shape: NodeShape = 'rect') => {
     const shapeLabel = shape === 'rect' ? 'Task' : shape === 'circle' ? 'Decision' : shape === 'ellipse' ? 'Start/End' : shape === 'diamond' ? 'Condition' : shape === 'hexagon' ? 'Process' : 'Node'
-    const title = autoTitle || `New ${shapeLabel} ${nodes.length + 1}`
+    const draftId = `draft-${Date.now()}`
+    const title = `New ${shapeLabel} ${allNodes.length + 1}`
+    setDraftNodes((prev) => ({ ...prev, [draftId]: { title, _shape: shape, task_type: 'feature', priority: 'P2', runner_agent_id: selectedAgentId || undefined, owner_agent_id: selectedAgentId || undefined } }))
+    setPositions((prev) => ({ ...prev, [draftId]: { x, y, shape } }))
+    setSelectedTaskId(draftId)
+    setRightTab('detail')
+    setTaskDraft({ title, task_type: 'feature', priority: 'P2', runner_agent_id: selectedAgentId || undefined, owner_agent_id: selectedAgentId || undefined })
+  }
+
+  const commitDraft = async (draftId: string) => {
+    const draft = draftNodes[draftId]
+    if (!draft) return
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({
-        title,
+        title: taskDraft.title || draft.title || 'Untitled',
         task_mode: 'pipeline',
         pipeline_id: editingPipelineId || 'default',
-        task_type: 'feature',
-        priority: 'P2',
+        task_type: taskDraft.task_type || 'feature',
+        priority: taskDraft.priority || 'P2',
         status: 'todo',
-        owner_agent_id: selectedAgentId || undefined,
-        runner_agent_id: selectedAgentId || undefined,
+        owner_agent_id: taskDraft.owner_agent_id || selectedAgentId || undefined,
+        runner_agent_id: taskDraft.runner_agent_id || selectedAgentId || undefined,
         created_by: actorSource(session, selectedAgentId),
+        description: taskDraft.description,
+        acceptance: taskDraft.acceptance,
+        notes: taskDraft.notes,
+        exec_mode: taskDraft.exec_mode,
       }),
     })
-    if (!r.ok) { alert(`Create task failed: ${(await r.text()) || r.status}`); return }
+    if (!r.ok) { alert(`Create task failed: ${(await r.json().catch(() => ({}))).detail || r.statusText}`); return }
     const j = await r.json()
-    setPositions((prev) => ({ ...prev, [j.id]: { x, y, shape } }))
+    // transfer position from draft to real node
+    const pos = positions[draftId]
+    setPositions((prev: Record<string, NodeMeta>) => {
+      const next: Record<string, NodeMeta> = { ...prev, [j.id]: pos || { x: 80, y: 80, shape: draft._shape } }
+      delete next[draftId]
+      return next
+    })
+    setDraftNodes((prev) => { const n = { ...prev }; delete n[draftId]; return n })
     await mutateGraph()
     setSelectedTaskId(j.id)
-    setRightTab('detail')
   }
 
   const saveTaskDetail = async () => {
+    if (!selectedTaskId) return
+    // draft node → commit to API
+    if (draftNodes[selectedTaskId]) {
+      await commitDraft(selectedTaskId)
+      return
+    }
+    // real node → PATCH update
     if (!selected) return
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selected.id}`, {
       method: 'PATCH',
@@ -480,6 +531,13 @@ export default function PipelinesPage() {
   }
 
   const deleteTask = async (taskId: string) => {
+    // draft node → just remove locally
+    if (draftNodes[taskId]) {
+      setDraftNodes((prev) => { const n = { ...prev }; delete n[taskId]; return n })
+      setPositions((prev) => { const n = { ...prev }; delete n[taskId]; return n })
+      if (selectedTaskId === taskId) setSelectedTaskId(null)
+      return
+    }
     if (!confirm('Delete this node?')) return
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, {
       method: 'DELETE',
@@ -564,14 +622,15 @@ export default function PipelinesPage() {
 
   /* ─── clear all nodes in pipeline ─── */
   const clearAllNodes = async () => {
-    if (nodes.length === 0) return
-    if (!confirm(`Clear all ${nodes.length} nodes from this pipeline?`)) return
+    if (allNodes.length === 0) return
+    if (!confirm(`Clear all ${allNodes.length} nodes from this pipeline?`)) return
     for (const n of nodes) {
       await fetch(`${CLIENT_WTT_API_BASE}/tasks/${n.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
       })
     }
+    setDraftNodes({})
     setPositions({})
     setSelectedTaskId(null)
     setSelectedTaskIds([])
@@ -580,7 +639,7 @@ export default function PipelinesPage() {
 
   /* ─── select all nodes ─── */
   const selectAllNodes = () => {
-    setSelectedTaskIds(nodes.map((n) => n.id))
+    setSelectedTaskIds(allNodes.map((n) => n.id))
   }
 
   /* ─── keyboard shortcuts ─── */
@@ -638,7 +697,7 @@ export default function PipelinesPage() {
     // place any un-leveled nodes (cycle)
     const placed = new Set(Object.keys(next))
     const cx = 80 + (dagAnalysis.maxLevel + 1) * 320
-    nodes.filter(n => !placed.has(n.id)).forEach((n, i) => {
+    allNodes.filter(n => !placed.has(n.id)).forEach((n, i) => {
       next[n.id] = { x: cx, y: 40 + i * 130, shape: positions[n.id]?.shape || 'rect', color: positions[n.id]?.color, label: positions[n.id]?.label }
     })
     setPan({ x: 0, y: 0 })
@@ -648,12 +707,40 @@ export default function PipelinesPage() {
 
   /* ─── chat: send message ─── */
   const sendChatMessage = async () => {
-    if (!chatInput.trim() || !activeChatTopicId || chatSending) return
+    if (!chatInput.trim() || chatSending) return
+    let topicId = activeChatTopicId
+    // if no topic, create a pipeline discussion topic
+    if (!topicId && editingPipelineId) {
+      const pName = editingPipeline?.name || 'Pipeline'
+      const createR = await fetch(`${CLIENT_WTT_API_BASE}/topics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify({
+          name: `pipeline:${pName}`,
+          description: `Chat for pipeline ${pName}`,
+          type: 'discussion',
+          visibility: 'private',
+          creator_agent_id: selectedAgentId || actorSource(session, selectedAgentId),
+        }),
+      })
+      if (createR.ok) {
+        const t = await createR.json()
+        topicId = t.id
+        // link topic to pipeline
+        await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines/${editingPipelineId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+          body: JSON.stringify({ topic_id: topicId }),
+        })
+        await mutatePipelines()
+      }
+    }
+    if (!topicId) return
     setChatSending(true)
     const content = chatInput.trim()
     setChatInput('')
     try {
-      await fetch(`${CLIENT_WTT_API_BASE}/topics/${activeChatTopicId}/messages`, {
+      await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify({
@@ -679,7 +766,7 @@ export default function PipelinesPage() {
       const actions = parsed.pipeline_actions
       if (!Array.isArray(actions)) return
       const titleToId = new Map<string, string>()
-      nodes.forEach(n => titleToId.set(n.title, n.id))
+      allNodes.forEach(n => titleToId.set(n.title, n.id))
 
       for (const action of actions) {
         if (action.type === 'create_node') {
@@ -823,7 +910,7 @@ export default function PipelinesPage() {
     const { w, h } = shapeDims(shape)
     const x = (e.clientX - rect.left - pan.x) / zoom - w / 2
     const y = (e.clientY - rect.top - pan.y) / zoom - h / 2
-    createTaskAt(Math.max(0, x), Math.max(0, y), shape)
+    createDraftAt(Math.max(0, x), Math.max(0, y), shape)
   }
 
   /* ─── shape SVG helpers for rendering special shapes ─── */
@@ -948,7 +1035,7 @@ export default function PipelinesPage() {
                 </button>
                 <div>
                   <p className="text-sm font-semibold">{editingPipeline?.name || 'Pipeline'}</p>
-                  <p className="text-[10px] text-slate-500">{editingPipelineId.slice(0, 12)} · {nodes.length} nodes · {edges.length} edges</p>
+                  <p className="text-[10px] text-slate-500">{editingPipelineId.slice(0, 12)} · {allNodes.length} nodes · {edges.length} edges</p>
                 </div>
                 {/* pipeline management */}
                 {editingPipeline && (
@@ -967,7 +1054,7 @@ export default function PipelinesPage() {
               <div className="flex items-center gap-2">
                 {connectFromId && (
                   <span className="rounded border border-yellow-400 bg-yellow-50 px-2 py-1 text-[10px] text-yellow-700">
-                    Connecting from: {nodes.find((n) => n.id === connectFromId)?.title?.slice(0, 15) || connectFromId.slice(0, 8)} — Shift+click target
+                    Connecting from: {allNodes.find((n) => n.id === connectFromId)?.title?.slice(0, 15) || connectFromId.slice(0, 8)} — Shift+click target
                     <button onClick={() => setConnectFromId(null)} className="ml-1 text-yellow-500 hover:text-yellow-700">×</button>
                   </span>
                 )}
@@ -1056,7 +1143,7 @@ export default function PipelinesPage() {
                   const rect = canvasRef.current.getBoundingClientRect()
                   const x = (e.clientX - rect.left - pan.x) / zoom - RECT_W / 2
                   const y = (e.clientY - rect.top - pan.y) / zoom - RECT_H / 2
-                  createTaskAt(Math.max(0, x), Math.max(0, y), 'rect')
+                  createDraftAt(Math.max(0, x), Math.max(0, y), 'rect')
                 }}
                 onDragOver={onCanvasDragOver}
                 onDrop={onCanvasDrop}
@@ -1104,7 +1191,7 @@ export default function PipelinesPage() {
                       const path = `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`
                       const isActive = selectedTaskId === edge.task_id || selectedTaskId === edge.depends_on_task_id
                       const isCritical = dagAnalysis?.criticalPath.has(edge.task_id) && dagAnalysis?.criticalPath.has(edge.depends_on_task_id)
-                      const fromNode = nodes.find((n) => n.id === edge.depends_on_task_id)
+                      const fromNode = allNodes.find((n) => n.id === edge.depends_on_task_id)
                       const edgeKey = `${edge.depends_on_task_id}->${edge.task_id}`
                       const style = edgeStyles[edgeKey] || 'solid'
                       const edgeColor = isActive ? '#6366f1' : isCritical ? '#ef4444' : '#6b7fa0'
@@ -1149,13 +1236,14 @@ export default function PipelinesPage() {
                   })}
 
                   {/* nodes */}
-                  {nodes.map((n) => {
+                  {allNodes.map((n) => {
                     const meta = positions[n.id] || { x: 30, y: 30, shape: 'rect' as NodeShape }
                     const shape = meta.shape || 'rect'
                     const { w, h } = shapeDims(shape)
                     const isConnecting = connectFromId === n.id
                     const isActive = selectedTaskId === n.id
                     const isMultiSelected = selectedTaskIds.includes(n.id)
+                    const isDraftNode = !!draftNodes[n.id]
 
                     const isSpecial = shape === 'diamond' || shape === 'hexagon' || shape === 'parallelogram'
                     const shapeClass = shape === 'circle' ? 'rounded-full'
@@ -1207,10 +1295,10 @@ export default function PipelinesPage() {
                           }}
                           className={[
                             'h-full w-full text-left shadow-sm transition-shadow',
-                            isSpecial ? '' : 'border-2',
+                            isSpecial ? '' : isDraftNode ? 'border-2 border-dashed' : 'border-2',
                             isSpecial ? '' : shapeClass,
-                            isSpecial ? '' : statusBorder(n.status),
-                            isSpecial ? '' : statusBg(n.status),
+                            isSpecial ? '' : isDraftNode ? 'border-amber-400 bg-amber-50' : statusBorder(n.status),
+                            isSpecial || isDraftNode ? '' : statusBg(n.status),
                             animClass,
                             isActive ? 'ring-2 ring-indigo-400 ring-offset-1' : '',
                             isMultiSelected ? 'ring-2 ring-indigo-400/60 ring-offset-1' : '',
@@ -1225,7 +1313,7 @@ export default function PipelinesPage() {
                             style={isSpecial ? { clipPath: shape === 'diamond' ? 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' : undefined } : undefined}
                           >
                             <div className={`flex items-center gap-1.5 ${shape === 'rect' ? '' : 'justify-center'}`}>
-                              <div className={`h-2 w-2 flex-shrink-0 rounded-full ${statusDot(n.status)}`} />
+                              {isDraftNode ? <span className="rounded bg-amber-200 px-1 text-[8px] font-bold text-amber-700">DRAFT</span> : <div className={`h-2 w-2 flex-shrink-0 rounded-full ${statusDot(n.status)}`} />}
                               <p className={`font-medium leading-tight ${shape === 'rect' ? 'line-clamp-2 text-[12px]' : 'line-clamp-1 text-[10px]'}`}>{n.title}</p>
                             </div>
                             {shape === 'rect' && (
@@ -1271,7 +1359,7 @@ export default function PipelinesPage() {
                     onMouseLeave={() => setContextMenu(null)}
                   >
                     {(() => {
-                      const ctxNode = nodes.find((n) => n.id === contextMenu.nodeId)
+                      const ctxNode = allNodes.find((n) => n.id === contextMenu.nodeId)
                       return (
                         <>
                           <button onClick={() => { setSelectedTaskId(contextMenu.nodeId); setContextMenu(null) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-100">
@@ -1368,15 +1456,15 @@ export default function PipelinesPage() {
                     )}
                     {/* messages */}
                     <div className="flex-1 overflow-y-auto px-3 py-2">
-                      {!activeChatTopicId ? (
+                      {!activeChatTopicId && chatMessages.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center text-slate-400">
-                          <p className="text-xs">{selected ? 'This task has no topic yet.' : 'Select a node to chat.'}</p>
-                          <p className="mt-1 text-[10px]">{selected ? 'Run the pipeline to create a topic for this task.' : 'Click a node on the canvas to start chatting with its agent.'}</p>
+                          <p className="text-xs">{selected ? `Chat with ${selected.runner_agent_id || 'agent'}` : 'Pipeline Chat'}</p>
+                          <p className="mt-1 text-[10px]">Send a message to start the conversation. A topic will be created automatically.</p>
                         </div>
                       ) : chatMessages.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center text-slate-400">
                           <p className="text-xs">No messages yet</p>
-                          <p className="mt-1 text-[10px]">{selected ? `Send a message to ${selected.runner_agent_id || 'the agent'}` : 'Start a conversation'}</p>
+                          <p className="mt-1 text-[10px]">{selected ? `Send a message to ${selected.runner_agent_id || 'the agent'}` : 'Start a conversation about this pipeline'}</p>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -1405,7 +1493,7 @@ export default function PipelinesPage() {
                         </div>
                       )}
                     </div>
-                    {/* send box — always visible */}
+                    {/* send box — always enabled */}
                     <div className="border-t border-slate-200 bg-white p-2">
                       <div className="flex gap-1.5">
                         <input
@@ -1413,10 +1501,10 @@ export default function PipelinesPage() {
                           onChange={(e) => setChatInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage() } }}
                           className="flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
-                          placeholder={activeChatTopicId ? `Message ${selected?.runner_agent_id || 'agent'}...` : 'Select a node to chat...'}
-                          disabled={chatSending || !activeChatTopicId}
+                          placeholder={selected ? `Message ${selected.runner_agent_id || 'agent'}...` : `Chat with ${selectedAgentId || 'agent'} about pipeline...`}
+                          disabled={chatSending}
                         />
-                        <button onClick={sendChatMessage} disabled={chatSending || !chatInput.trim() || !activeChatTopicId} className="rounded bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-600 disabled:opacity-40">
+                        <button onClick={sendChatMessage} disabled={chatSending || !chatInput.trim()} className="rounded bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-600 disabled:opacity-40">
                           {chatSending ? '...' : 'Send'}
                         </button>
                       </div>
@@ -1584,14 +1672,14 @@ export default function PipelinesPage() {
                           <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} className="min-h-10 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Additional notes..." />
                         </div>
 
-                        <button onClick={saveTaskDetail} className="w-full rounded border border-indigo-300 bg-indigo-50 px-2 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100">Save Node</button>
+                        <button onClick={saveTaskDetail} className={`w-full rounded border px-2 py-1.5 text-xs font-medium ${isDraft ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>{isDraft ? '✓ Create Task' : 'Save Node'}</button>
 
                         {/* dependencies */}
                         <div className="rounded border border-slate-200 bg-white p-2">
                           <p className="mb-1 text-[10px] font-medium text-slate-500">Inbound (depends on)</p>
                           <div className="space-y-1">
                             {edges.filter((e) => e.task_id === selected.id).map((e) => {
-                              const dep = nodes.find((n) => n.id === e.depends_on_task_id)
+                              const dep = allNodes.find((n) => n.id === e.depends_on_task_id)
                               const edgeKey = `${e.depends_on_task_id}->${e.task_id}`
                               const style = edgeStyles[edgeKey] || 'solid'
                               return (
@@ -1612,7 +1700,7 @@ export default function PipelinesPage() {
                           <p className="mb-1 text-[10px] font-medium text-slate-500">Outbound (flows to)</p>
                           <div className="space-y-1">
                             {edges.filter((e) => e.depends_on_task_id === selected.id).map((e) => {
-                              const target = nodes.find((n) => n.id === e.task_id)
+                              const target = allNodes.find((n) => n.id === e.task_id)
                               const edgeKey = `${e.depends_on_task_id}->${e.task_id}`
                               const style = edgeStyles[edgeKey] || 'solid'
                               return (
