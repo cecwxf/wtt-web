@@ -149,6 +149,10 @@ export default function ResearchTaskPage() {
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
+  // Quote-to-chat: floating button on text selection
+  const readerRef = useRef<HTMLDivElement>(null)
+  const [quoteBtn, setQuoteBtn] = useState<{ x: number; y: number; text: string } | null>(null)
+
   // Resize
   const [leftW, setLeftW] = useState(() => {
     if (typeof window !== 'undefined') return parseInt(localStorage.getItem('research-left-w') || '280') || 280
@@ -308,6 +312,44 @@ export default function ResearchTaskPage() {
     window.addEventListener('mouseup', onUp)
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
   }, [])
+
+  // ── Text selection → Quote to Chat ──
+  useEffect(() => {
+    const handleSelection = () => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+        setQuoteBtn(null)
+        return
+      }
+      // Only trigger inside the reader panel
+      const node = sel.anchorNode
+      if (!node || !readerRef.current?.contains(node)) {
+        setQuoteBtn(null)
+        return
+      }
+      const range = sel.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      setQuoteBtn({
+        x: rect.left + rect.width / 2,
+        y: rect.top - 8,
+        text: sel.toString().trim()
+      })
+    }
+    document.addEventListener('mouseup', handleSelection)
+    return () => document.removeEventListener('mouseup', handleSelection)
+  }, [])
+
+  const quoteToChat = (text: string) => {
+    const quoted = text.split('\n').map(l => `> ${l}`).join('\n')
+    setChatInput(prev => prev ? `${prev}\n\n${quoted}\n\n` : `${quoted}\n\n`)
+    setQuoteBtn(null)
+    window.getSelection()?.removeAllRanges()
+    // Focus chat input
+    setTimeout(() => {
+      const el = document.querySelector<HTMLTextAreaElement>('[data-chat-input]')
+      el?.focus()
+    }, 100)
+  }
 
   const startResize = (which: 'left' | 'right', e: React.MouseEvent) => {
     resizingRef.current = which
@@ -569,6 +611,7 @@ export default function ResearchTaskPage() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* ═══ LEFT: Library Panel ═══ */}
+        {!l4Fullscreen && (<>
         <div className="flex flex-col border-r border-slate-200 overflow-hidden" style={{ width: leftW }}>
           {/* Search + Import */}
           <div className="border-b border-slate-200 bg-slate-50 px-2 py-1.5">
@@ -722,6 +765,7 @@ export default function ResearchTaskPage() {
           className="w-[3px] shrink-0 cursor-col-resize hover:bg-indigo-400 transition-colors bg-transparent"
           onMouseDown={(e) => startResize('left', e)}
         />
+        </>)}
 
         {/* ═══ CENTER: Reader / Writer / Export ═══ */}
         <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
@@ -766,7 +810,7 @@ export default function ResearchTaskPage() {
           {/* Center content */}
           <div className="flex-1 overflow-y-auto">
             {centerTab === 'read' && (
-              <div className="p-4">
+              <div ref={readerRef} className="p-4 relative">
                 {selectedPaperFull ? (
                   <div className="max-w-4xl mx-auto space-y-4">
                     {/* L1: Metadata Card */}
@@ -838,11 +882,8 @@ export default function ResearchTaskPage() {
 
                     {/* L4: Full Document — native format based on content_type */}
                     {readingLevel >= 4 && selectedPaperFull.source_url && (
-                      <div className={l4Fullscreen
-                        ? 'fixed inset-0 z-50 bg-white flex flex-col'
-                        : 'rounded-lg border border-slate-200 bg-white p-4'
-                      }>
-                        <div className={`flex items-center justify-between ${l4Fullscreen ? 'px-4 py-2 border-b border-slate-200' : 'mb-2'}`}>
+                      <div className="rounded-lg border border-slate-200 bg-white p-4">
+                        <div className={`flex items-center justify-between mb-2`}>
                           <h2 className="text-sm font-semibold text-slate-600">📄 Full Document</h2>
                           <div className="flex gap-1 items-center">
                             <button
@@ -869,7 +910,6 @@ export default function ResearchTaskPage() {
                             </button>
                           </div>
                         </div>
-                        <div className={l4Fullscreen ? 'flex-1 overflow-auto p-2' : ''}>
                         {l4View === 'native' ? (
                           (() => {
                             const ct = (selectedPaperFull.content_type || '').toLowerCase()
@@ -878,15 +918,15 @@ export default function ResearchTaskPage() {
                               return (
                                 <iframe
                                   src={url}
-                                  className={`w-full rounded border border-slate-200 ${l4Fullscreen ? 'h-full' : ''}`}
-                                  style={l4Fullscreen ? undefined : { height: '75vh' }}
+                                  className={`w-full rounded border border-slate-200 `}
+                                  style={{ height: l4Fullscreen ? '85vh' : '75vh' }}
                                   title="PDF Viewer"
                                 />
                               )
                             }
                             if (ct === 'md' || ct === 'markdown' || /\.md$/i.test(url)) {
                               return (
-                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
+                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[85vh]`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {selectedPaperFull.content_markdown || ''}
                                   </ReactMarkdown>
@@ -895,14 +935,14 @@ export default function ResearchTaskPage() {
                             }
                             if (ct === 'bib' || /\.bib$/i.test(url)) {
                               return (
-                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
+                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap max-h-[85vh]`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
                             }
                             if (['txt', 'tex', 'latex'].includes(ct) || /\.(txt|tex|latex)$/i.test(url)) {
                               return (
-                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
+                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap max-h-[85vh]`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
@@ -910,7 +950,7 @@ export default function ResearchTaskPage() {
                             // Fallback
                             if (selectedPaperFull.content_markdown) {
                               return (
-                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
+                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[85vh]`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {cleanPdfText(selectedPaperFull.content_markdown)}
                                   </ReactMarkdown>
@@ -920,20 +960,19 @@ export default function ResearchTaskPage() {
                             return (
                               <iframe
                                 src={url}
-                                className={`w-full rounded border border-slate-200 ${l4Fullscreen ? 'h-full' : ''}`}
-                                style={l4Fullscreen ? undefined : { height: '75vh' }}
+                                className={`w-full rounded border border-slate-200 `}
+                                style={{ height: l4Fullscreen ? '85vh' : '75vh' }}
                                 title="Document Viewer"
                               />
                             )
                           })()
                         ) : (
-                          <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
+                          <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[85vh]`}>
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {cleanPdfText(selectedPaperFull.content_markdown || '')}
                             </ReactMarkdown>
                           </div>
                         )}
-                        </div>
                       </div>
                     )}
 
@@ -1032,6 +1071,18 @@ export default function ResearchTaskPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Floating quote-to-chat button */}
+            {quoteBtn && (
+              <button
+                className="fixed z-[100] flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-indigo-700 transition-colors -translate-x-1/2 -translate-y-full"
+                style={{ left: quoteBtn.x, top: quoteBtn.y }}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => quoteToChat(quoteBtn.text)}
+              >
+                💬 Quote to Chat
+              </button>
             )}
 
             {centerTab === 'write' && (
@@ -1291,8 +1342,10 @@ export default function ResearchTaskPage() {
                 onUploaded={(asset) => setPendingAttachments(prev => [...prev, asset.markdownToken])}
                 disabled={sending}
               />
-              <input
-                className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+              <textarea
+                data-chat-input
+                className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none resize-none"
+                rows={chatInput.includes('\n') ? Math.min(chatInput.split('\n').length, 5) : 1}
                 placeholder="Ask about your papers..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
