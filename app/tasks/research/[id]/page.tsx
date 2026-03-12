@@ -5,6 +5,8 @@ import { useRouter, useParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
@@ -111,6 +113,7 @@ export default function ResearchTaskPage() {
   // Center panel
   const [centerTab, setCenterTab] = useState<'read' | 'write' | 'export'>('read')
   const [readingLevel, setReadingLevel] = useState<1 | 2 | 3 | 4 | 5>(2)
+  const [l4View, setL4View] = useState<'text' | 'pdf'>('text')
   const [writeContent, setWriteContent] = useState('')
 
   // Chat
@@ -188,7 +191,7 @@ export default function ResearchTaskPage() {
 
   const papers: Paper[] = useMemo(() => papersData?.papers || [], [papersData])
 
-  const { data: selectedPaperFull } = useSWR(
+  const { data: selectedPaperFull, mutate: mutatePaperFull } = useSWR(
     selectedPaperId && session?.accessToken ? [`paper-full-${selectedPaperId}`, session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}`, { headers: authHeaders() })
@@ -761,6 +764,23 @@ export default function ResearchTaskPage() {
                           📥 Download source file
                         </a>
                       )}
+                      <button
+                        onClick={async () => {
+                          try {
+                            const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}/reprocess`, {
+                              method: 'POST',
+                              headers: authHeaders(),
+                            })
+                            if (r.ok) {
+                              mutatePapers()
+                              mutatePaperFull()
+                            }
+                          } catch {}
+                        }}
+                        className="ml-3 mt-1 inline-block text-xs text-orange-500 hover:text-orange-600 hover:underline cursor-pointer"
+                      >
+                        🔄 Reprocess text
+                      </button>
                       {selectedPaperFull.tags && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {selectedPaperFull.tags.split(',').filter(Boolean).map((t: string, i: number) => (
@@ -774,7 +794,9 @@ export default function ResearchTaskPage() {
                     {readingLevel >= 2 && selectedPaperFull.abstract && (
                       <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4">
                         <h2 className="text-sm font-semibold text-blue-700 mb-2">📋 Abstract</h2>
-                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedPaperFull.abstract}</p>
+                        <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedPaperFull.abstract}</ReactMarkdown>
+                        </div>
                       </div>
                     )}
 
@@ -782,17 +804,46 @@ export default function ResearchTaskPage() {
                     {readingLevel >= 3 && selectedPaperFull.conclusion && (
                       <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-4">
                         <h2 className="text-sm font-semibold text-emerald-700 mb-2">🎯 Conclusion</h2>
-                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedPaperFull.conclusion}</p>
+                        <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedPaperFull.conclusion}</ReactMarkdown>
+                        </div>
                       </div>
                     )}
 
                     {/* L4: Full text */}
                     {readingLevel >= 4 && selectedPaperFull.content_markdown && (
                       <div className="rounded-lg border border-slate-200 bg-white p-4">
-                        <h2 className="text-sm font-semibold text-slate-600 mb-2">📄 Full Text</h2>
-                        <div className="prose prose-sm max-w-none whitespace-pre-wrap text-slate-700">
-                          {selectedPaperFull.content_markdown}
+                        <div className="flex items-center justify-between mb-2">
+                          <h2 className="text-sm font-semibold text-slate-600">📄 Full Text</h2>
+                          {selectedPaperFull.source_url && /\.pdf$/i.test(selectedPaperFull.source_url) && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => setL4View('text')}
+                                className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'text' ? 'bg-slate-200 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                              >
+                                📝 Text
+                              </button>
+                              <button
+                                onClick={() => setL4View('pdf')}
+                                className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'pdf' ? 'bg-slate-200 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                              >
+                                📄 PDF
+                              </button>
+                            </div>
+                          )}
                         </div>
+                        {l4View === 'text' ? (
+                          <div className="prose prose-sm max-w-none text-slate-700">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedPaperFull.content_markdown}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <iframe
+                            src={selectedPaperFull.source_url}
+                            className="w-full rounded border border-slate-200"
+                            style={{ height: '70vh' }}
+                            title="PDF Viewer"
+                          />
+                        )}
                       </div>
                     )}
 
