@@ -200,11 +200,78 @@ function findFileNodeByPath(nodes: FileNode[], target: string): FileNode | null 
   return null
 }
 
+// ── Context Menu Component ─────────────────────────────
+interface ContextMenuItem {
+  label: string
+  icon?: string
+  shortcut?: string
+  onClick: () => void
+  danger?: boolean
+  divider?: boolean
+  disabled?: boolean
+}
+
+function ContextMenu({ items, x, y, onClose }: { items: ContextMenuItem[]; x: number; y: number; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('keydown', keyHandler)
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', keyHandler) }
+  }, [onClose])
+
+  // Adjust position to stay in viewport
+  const adjustedX = Math.min(x, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)
+  const adjustedY = Math.min(y, (typeof window !== 'undefined' ? window.innerHeight : 800) - items.length * 30 - 20)
+
+  return (
+    <div ref={ref} className="fixed z-[100] min-w-[180px] rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+      style={{ left: adjustedX, top: adjustedY }}>
+      {items.map((item, i) => item.divider ? (
+        <div key={i} className="my-1 border-t border-slate-100" />
+      ) : (
+        <button key={i} disabled={item.disabled}
+          className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] ${
+            item.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-100'
+          } disabled:opacity-40 disabled:cursor-default`}
+          onClick={() => { item.onClick(); onClose() }}>
+          {item.icon && <span className="w-4 text-center text-[11px]">{item.icon}</span>}
+          <span className="flex-1">{item.label}</span>
+          {item.shortcut && <span className="text-[10px] text-slate-400">{item.shortcut}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function symbolKindName(kind: number): string {
+  const map: Record<number, string> = {
+    0: 'File', 1: 'Module', 2: 'Namespace', 3: 'Package', 4: 'Class', 5: 'Method',
+    6: 'Property', 7: 'Field', 8: 'Constructor', 9: 'Enum', 10: 'Interface',
+    11: 'Function', 12: 'Variable', 13: 'Constant', 14: 'String', 15: 'Number',
+    16: 'Boolean', 17: 'Array', 18: 'Object', 19: 'Key', 20: 'Null', 21: 'EnumMember',
+    22: 'Struct', 23: 'Event', 24: 'Operator', 25: 'TypeParameter',
+  }
+  return map[kind] || 'Symbol'
+}
+
+const SYMBOL_ICONS: Record<string, string> = {
+  Function: '𝑓', Method: '𝑓', Class: '◆', Interface: '◇', Enum: '∈',
+  Variable: '𝑥', Constant: 'π', Property: '◉', Field: '◉', Type: '𝑇',
+  Constructor: '⊕', Module: '◫', Namespace: '◫', Struct: '◆', EnumMember: '∷',
+  Symbol: '○',
+}
+
 // ── File Tree Component ────────────────────────────────
 function FileTreeNode({
-  node, depth, selectedPath, onSelect,
+  node, depth, selectedPath, onSelect, onContextMenu,
 }: {
-  node: FileNode; depth: number; selectedPath: string; onSelect: (node: FileNode) => void
+  node: FileNode; depth: number; selectedPath: string
+  onSelect: (node: FileNode) => void
+  onContextMenu?: (e: React.MouseEvent, node: FileNode) => void
 }) {
   const [expanded, setExpanded] = useState(depth < 1)
   const isDir = node.kind === 'directory'
@@ -213,11 +280,12 @@ function FileTreeNode({
   return (
     <div>
       <div
-        className={`group flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[12px] hover:bg-slate-200/60 ${isSelected ? 'bg-indigo-100 font-medium text-indigo-700' : 'text-slate-600'}`}
+        className={`group flex w-full items-center gap-0.5 rounded px-1 py-0.5 text-left text-[12px] hover:bg-slate-200/60 ${isSelected ? 'bg-indigo-100 font-medium text-indigo-700' : 'text-slate-600'}`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(e, node) }}
       >
         <button
-          className="flex flex-1 items-center gap-1 truncate"
+          className="flex flex-1 items-center gap-1 truncate min-w-0"
           onClick={() => {
             if (isDir) setExpanded(!expanded)
             else onSelect(node)
@@ -228,9 +296,17 @@ function FileTreeNode({
           </span>
           <span className="truncate">{node.name}</span>
         </button>
+        {/* Quick new-file button on folders */}
+        {isDir && onContextMenu && (
+          <div className="hidden shrink-0 items-center group-hover:flex">
+            <button onClick={(e) => { e.stopPropagation(); setExpanded(true); onContextMenu(e, { ...node, _action: 'newFile' } as FileNode & { _action: string }) }}
+              className="rounded p-0.5 text-[10px] text-slate-400 hover:bg-slate-300 hover:text-slate-700" title="New file">+</button>
+          </div>
+        )}
       </div>
       {isDir && expanded && node.children?.map((child) => (
-        <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
+        <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath}
+          onSelect={onSelect} onContextMenu={onContextMenu} />
       ))}
     </div>
   )
@@ -1107,6 +1183,286 @@ export default function CodeTaskPage() {
   const monacoRef = useRef<unknown>(null)
   const [aiCompletionEnabled, setAiCompletionEnabled] = useState(true)
 
+  // ── Outline (symbols) ────────────────────────────────
+  interface OutlineSymbol { name: string; kind: string; line: number; children?: OutlineSymbol[] }
+  const [outlineSymbols, setOutlineSymbols] = useState<OutlineSymbol[]>([])
+  const [showOutline, setShowOutline] = useState(false)
+
+  const refreshOutline = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const editor = editorRef.current as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const monaco = monacoRef.current as any
+    if (!editor || !monaco) return
+    const model = editor.getModel()
+    if (!model) return
+    try {
+      // Use Monaco's built-in document symbol provider
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      monaco.editor.getModelMarkers({ resource: model.uri })
+      const getSymbols = async () => {
+        try {
+          const symbols = await (monaco.languages?.DocumentSymbolProviderRegistry?.ordered?.(model)?.[0]?.provideDocumentSymbols?.(model) ?? Promise.resolve([]))
+          if (symbols?.length) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const map = (s: any): OutlineSymbol => ({
+              name: s.name || s.detail || '?',
+              kind: symbolKindName(s.kind),
+              line: s.range?.startLineNumber || s.selectionRange?.startLineNumber || 0,
+              children: s.children?.map(map),
+            })
+            setOutlineSymbols(symbols.map(map))
+            return
+          }
+        } catch { /* fallback below */ }
+        // Fallback: regex-based symbol extraction
+        const text = model.getValue()
+        const syms: OutlineSymbol[] = []
+        const lines = text.split('\n')
+        lines.forEach((line: string, i: number) => {
+          const fn = line.match(/^\s*(export\s+)?(async\s+)?function\s+(\w+)/);
+          const cls = line.match(/^\s*(export\s+)?(default\s+)?class\s+(\w+)/)
+          const iface = line.match(/^\s*(export\s+)?interface\s+(\w+)/)
+          const typ = line.match(/^\s*(export\s+)?type\s+(\w+)/)
+          const constFn = line.match(/^\s*(export\s+)?const\s+(\w+)\s*=\s*(async\s+)?\(/)
+          const pyDef = line.match(/^(class|def|async def)\s+(\w+)/)
+          if (fn) syms.push({ name: fn[3], kind: 'Function', line: i + 1 })
+          else if (cls) syms.push({ name: cls[3], kind: 'Class', line: i + 1 })
+          else if (iface) syms.push({ name: iface[2], kind: 'Interface', line: i + 1 })
+          else if (typ) syms.push({ name: typ[2], kind: 'Type', line: i + 1 })
+          else if (constFn) syms.push({ name: constFn[2], kind: 'Function', line: i + 1 })
+          else if (pyDef) syms.push({ name: pyDef[2], kind: pyDef[1] === 'class' ? 'Class' : 'Function', line: i + 1 })
+        })
+        setOutlineSymbols(syms)
+      }
+      getSymbols()
+    } catch { /* ignore */ }
+  }, [])
+
+  // Refresh outline when file content settles
+  useEffect(() => {
+    if (!selectedFile || !showOutline) return
+    const t = setTimeout(refreshOutline, 500)
+    return () => clearTimeout(t)
+  }, [modifiedContent, selectedFile, showOutline, refreshOutline])
+
+  // ── File tree actions (new file, new folder, delete, rename) ──
+  const ensureEditBranch = async (): Promise<string | null> => {
+    if (editBranch) return editBranch
+    const branchName = `wtt-edit-${Date.now()}`
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/branch`, {
+        method: 'POST',
+        headers: { ...repoHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch_name: branchName, base_branch: currentBranch || defaultBranch }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      setEditBranch(branchName)
+      return branchName
+    } catch (e) {
+      alert(`创建分支失败: ${e instanceof Error ? e.message : 'unknown'}`)
+      return null
+    }
+  }
+
+  const handleNewFile = async (parentPath: string) => {
+    const name = window.prompt('New file name:')
+    if (!name?.trim()) return
+    const filePath = parentPath ? `${parentPath}/${name.trim()}` : name.trim()
+    const branch = await ensureEditBranch()
+    if (!branch) return
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(filePath)}`, {
+        method: 'PUT',
+        headers: { ...repoHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: '', branch, message: `Create ${filePath}` }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      setSavedFiles(prev => { const s = new Set(Array.from(prev)); s.add(filePath); return s })
+      void loadRepoTree(branch)
+      // Auto-select the new file
+      setTimeout(() => selectFile({ name: name.trim(), path: filePath, kind: 'file' }), 800)
+    } catch (e) {
+      alert(`创建文件失败: ${e instanceof Error ? e.message : 'unknown'}`)
+    }
+  }
+
+  const handleNewFolder = async (parentPath: string) => {
+    const name = window.prompt('New folder name:')
+    if (!name?.trim()) return
+    // GitHub doesn't support empty folders; create a .gitkeep
+    const filePath = parentPath ? `${parentPath}/${name.trim()}/.gitkeep` : `${name.trim()}/.gitkeep`
+    const branch = await ensureEditBranch()
+    if (!branch) return
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(filePath)}`, {
+        method: 'PUT',
+        headers: { ...repoHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: '', branch, message: `Create folder ${name.trim()}` }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      setSavedFiles(prev => { const s = new Set(Array.from(prev)); s.add(filePath); return s })
+      void loadRepoTree(branch)
+    } catch (e) {
+      alert(`创建文件夹失败: ${e instanceof Error ? e.message : 'unknown'}`)
+    }
+  }
+
+  const handleDeleteFile = async (node: FileNode) => {
+    if (!confirm(`确定删除 ${node.path}？`)) return
+    const branch = await ensureEditBranch()
+    if (!branch) return
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}`, {
+        method: 'DELETE',
+        headers: { ...repoHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch, message: `Delete ${node.path}` }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      if (selectedFile?.path === node.path) {
+        setSelectedFile(null)
+        setFileContent('')
+        setModifiedContent('')
+      }
+      setOpenFiles(prev => prev.filter(f => f.path !== node.path))
+      void loadRepoTree(branch)
+    } catch (e) {
+      alert(`删除失败: ${e instanceof Error ? e.message : 'unknown'}`)
+    }
+  }
+
+  const handleRenameFile = async (node: FileNode) => {
+    const newName = window.prompt('Rename to:', node.name)
+    if (!newName?.trim() || newName.trim() === node.name) return
+    const parentDir = node.path.includes('/') ? node.path.substring(0, node.path.lastIndexOf('/')) : ''
+    const newPath = parentDir ? `${parentDir}/${newName.trim()}` : newName.trim()
+    const branch = await ensureEditBranch()
+    if (!branch) return
+    try {
+      // Read old content
+      const branchParam = `?ref=${encodeURIComponent(branch)}`
+      const readR = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}${branchParam}`, { headers: repoHeaders() })
+      const oldContent = readR.ok ? (await readR.json()).content || '' : ''
+      // Create new file
+      const createR = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(newPath)}`, {
+        method: 'PUT',
+        headers: { ...repoHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: oldContent, branch, message: `Rename ${node.path} → ${newPath}` }),
+      })
+      if (!createR.ok) throw new Error(await createR.text())
+      // Delete old file
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}`, {
+        method: 'DELETE',
+        headers: { ...repoHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch, message: `Rename ${node.path} → ${newPath} (delete old)` }),
+      })
+      setSavedFiles(prev => { const s = new Set(Array.from(prev)); s.delete(node.path); s.add(newPath); return s })
+      void loadRepoTree(branch)
+    } catch (e) {
+      alert(`重命名失败: ${e instanceof Error ? e.message : 'unknown'}`)
+    }
+  }
+
+  const handleDuplicateFile = async (node: FileNode) => {
+    if (node.kind === 'directory') return
+    const ext = node.name.includes('.') ? '.' + node.name.split('.').pop() : ''
+    const base = node.name.includes('.') ? node.name.substring(0, node.name.lastIndexOf('.')) : node.name
+    const newName = `${base}-copy${ext}`
+    const parentDir = node.path.includes('/') ? node.path.substring(0, node.path.lastIndexOf('/')) : ''
+    const newPath = parentDir ? `${parentDir}/${newName}` : newName
+    const branch = await ensureEditBranch()
+    if (!branch) return
+    try {
+      const branchParam = `?ref=${encodeURIComponent(branch)}`
+      const readR = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}${branchParam}`, { headers: repoHeaders() })
+      const oldContent = readR.ok ? (await readR.json()).content || '' : ''
+      const createR = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(newPath)}`, {
+        method: 'PUT',
+        headers: { ...repoHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: oldContent, branch, message: `Duplicate ${node.path} → ${newPath}` }),
+      })
+      if (!createR.ok) throw new Error(await createR.text())
+      setSavedFiles(prev => { const s = new Set(Array.from(prev)); s.add(newPath); return s })
+      void loadRepoTree(branch)
+    } catch (e) {
+      alert(`复制失败: ${e instanceof Error ? e.message : 'unknown'}`)
+    }
+  }
+
+  const handleCopyPath = (node: FileNode) => {
+    navigator.clipboard.writeText(node.path).catch(() => {})
+  }
+
+  const handleCopyFullPath = (node: FileNode) => {
+    const fullUrl = task?.repo_url ? `${task.repo_url}/blob/${currentBranch || 'main'}/${node.path}` : node.path
+    navigator.clipboard.writeText(fullUrl).catch(() => {})
+  }
+
+  const handleDownloadFile = async (node: FileNode) => {
+    if (node.kind === 'directory') return
+    try {
+      const branchParam = currentBranch ? `?ref=${encodeURIComponent(currentBranch)}` : ''
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}${branchParam}`, { headers: repoHeaders() })
+      if (!r.ok) return
+      const data = await r.json()
+      const blob = new Blob([data.content || ''], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = node.name; a.click()
+      URL.revokeObjectURL(url)
+    } catch { /* ignore */ }
+  }
+
+  const handleFindInFolder = (node: FileNode) => {
+    if (node.kind !== 'directory') return
+    setRepoQuery(`path:${node.path} `)
+  }
+
+  // ── Context menu state ──
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null)
+
+  const handleTreeContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
+    // Quick action from "+" button
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((node as any)._action === 'newFile') {
+      handleNewFile(node.path)
+      return
+    }
+    setCtxMenu({ x: e.clientX, y: e.clientY, node })
+  }, [])
+
+  const buildContextMenuItems = (node: FileNode): ContextMenuItem[] => {
+    const isDir = node.kind === 'directory'
+    const items: ContextMenuItem[] = []
+
+    if (isDir) {
+      items.push({ label: 'New File…', icon: '📄', onClick: () => handleNewFile(node.path) })
+      items.push({ label: 'New Folder…', icon: '📁', onClick: () => handleNewFolder(node.path) })
+      items.push({ divider: true, label: '', onClick: () => {} })
+      items.push({ label: 'Find in Folder…', icon: '🔍', onClick: () => handleFindInFolder(node) })
+    } else {
+      items.push({ label: 'Open', icon: '📄', onClick: () => selectFile(node) })
+    }
+
+    items.push({ divider: true, label: '', onClick: () => {} })
+
+    if (!isDir) {
+      items.push({ label: 'Duplicate', icon: '📋', onClick: () => handleDuplicateFile(node) })
+    }
+    items.push({ label: 'Rename…', icon: '✏️', shortcut: 'F2', onClick: () => handleRenameFile(node) })
+    items.push({ label: 'Delete', icon: '🗑', danger: true, onClick: () => handleDeleteFile(node), disabled: isDir })
+
+    items.push({ divider: true, label: '', onClick: () => {} })
+    items.push({ label: 'Copy Path', icon: '📎', onClick: () => handleCopyPath(node) })
+    items.push({ label: 'Copy GitHub URL', icon: '🔗', onClick: () => handleCopyFullPath(node) })
+
+    if (!isDir) {
+      items.push({ label: 'Download', icon: '⬇️', onClick: () => handleDownloadFile(node) })
+    }
+
+    return items
+  }
+
   // ── Full-page theme (VSCode-style) ──────────────────
   type PageTheme = 'light' | 'dark' | 'dark-dimmed' | 'monokai'
   const [pageTheme, setPageTheme] = useState<PageTheme>('light')
@@ -1605,7 +1961,11 @@ export default function CodeTaskPage() {
                 <>
                   <div className="mb-2 flex items-center justify-between">
                     <p className={`text-xs font-semibold ${tc.textMuted}`}>Repository</p>
-                    <span className={`text-[10px] ${tc.textMuted}`}>{fileCount} files</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handleNewFile('')} className={`rounded p-0.5 text-[10px] ${tc.textMuted} hover:bg-slate-200`} title="New File">📄+</button>
+                      <button onClick={() => handleNewFolder('')} className={`rounded p-0.5 text-[10px] ${tc.textMuted} hover:bg-slate-200`} title="New Folder">📁+</button>
+                      <span className={`text-[10px] ${tc.textMuted}`}>{fileCount}</span>
+                    </div>
                   </div>
                   {repoTree.map((node) => (
                     <FileTreeNode
@@ -1614,8 +1974,41 @@ export default function CodeTaskPage() {
                       depth={0}
                       selectedPath={selectedFile?.path || ''}
                       onSelect={selectFile}
+                      onContextMenu={handleTreeContextMenu}
                     />
                   ))}
+                  {/* Outline panel */}
+                  {selectedFile && (
+                    <div className="mt-3 border-t border-slate-200 pt-2">
+                      <button
+                        className={`mb-1 flex w-full items-center justify-between text-[11px] font-semibold ${tc.textMuted}`}
+                        onClick={() => setShowOutline(v => !v)}
+                      >
+                        <span>{showOutline ? '▾' : '▸'} OUTLINE</span>
+                        <span className="text-[9px] font-normal">{outlineSymbols.length}</span>
+                      </button>
+                      {showOutline && (
+                        <div className="max-h-60 overflow-y-auto">
+                          {outlineSymbols.length === 0 ? (
+                            <p className={`text-[10px] ${tc.textMuted} pl-2`}>No symbols found</p>
+                          ) : outlineSymbols.map((sym, i) => (
+                            <button key={`${sym.name}-${sym.line}-${i}`}
+                              className={`flex w-full items-center gap-1 rounded px-2 py-0.5 text-left text-[11px] ${tc.text} hover:bg-slate-200/60`}
+                              onClick={() => {
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                const ed = editorRef.current as any
+                                if (ed) { ed.revealLineInCenter(sym.line); ed.setPosition({ lineNumber: sym.line, column: 1 }) }
+                              }}
+                            >
+                              <span className="w-3 shrink-0 text-center text-[10px] text-indigo-500">{SYMBOL_ICONS[sym.kind] || '○'}</span>
+                              <span className="flex-1 truncate">{sym.name}</span>
+                              <span className="shrink-0 text-[9px] text-slate-400">:{sym.line}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </>
@@ -2275,6 +2668,15 @@ export default function CodeTaskPage() {
           )}
         </div>
       </div>
+      {/* Right-click context menu */}
+      {ctxMenu && (
+        <ContextMenu
+          items={buildContextMenuItems(ctxMenu.node)}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   )
 }
