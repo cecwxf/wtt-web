@@ -22,6 +22,7 @@ interface Pipeline {
 interface TaskNode {
   id: string
   title: string
+  description?: string
   status: 'todo' | 'doing' | 'review' | 'done' | 'blocked'
   owner_agent_id?: string
   runner_agent_id?: string
@@ -67,7 +68,7 @@ interface ChatMessage {
 type RightTab = 'chat' | 'detail'
 
 /* ─── constants ─── */
-const RECT_W = 220, RECT_H = 80
+const RECT_W = 220, RECT_H = 100
 const CIRCLE_D = 100
 const ELLIPSE_W = 160, ELLIPSE_H = 80
 const DIAMOND_S = 110
@@ -212,6 +213,9 @@ export default function PipelinesPage() {
   )
   const pipelines: Pipeline[] = useMemo(() => (Array.isArray(pipelinesRaw) ? pipelinesRaw : []), [pipelinesRaw])
 
+  /* ─── pipeline running state ─── */
+  const [pipelineRunning, setPipelineRunning] = useState(false)
+
   /* ─── graph data (editor mode) ─── */
   const { data: graphData, mutate: mutateGraph } = useSWR(
     session?.accessToken && editingPipelineId ? ['pipeline-graph', session.accessToken, editingPipelineId] : null,
@@ -220,7 +224,7 @@ export default function PipelinesPage() {
       if (!r.ok) throw new Error('failed')
       return r.json()
     },
-    { refreshInterval: 5000 }
+    { refreshInterval: pipelineRunning ? 2000 : 5000 }
   )
   const nodes: TaskNode[] = useMemo(() => (Array.isArray(graphData?.nodes) ? graphData.nodes : []), [graphData])
   const edges: TaskEdge[] = useMemo(() => (Array.isArray(graphData?.edges) ? graphData.edges : []), [graphData])
@@ -253,6 +257,7 @@ export default function PipelinesPage() {
       .map(([id, d]) => ({
         id,
         title: d.title || 'Untitled',
+        description: d.description,
         status: 'todo' as const,
         owner_agent_id: d.owner_agent_id,
         runner_agent_id: d.runner_agent_id,
@@ -279,12 +284,31 @@ export default function PipelinesPage() {
     })
   }, [nodes, draftNodes])
 
+  // Sync taskDraft edits back into draftNodes so canvas reflects live changes
+  useEffect(() => {
+    if (!selectedTaskId || !draftNodes[selectedTaskId] || draftNodes[selectedTaskId]._committedAs) return
+    const d = draftNodes[selectedTaskId]
+    if (d.title !== taskDraft.title || d.description !== taskDraft.description ||
+        d.owner_agent_id !== taskDraft.owner_agent_id || d.runner_agent_id !== taskDraft.runner_agent_id) {
+      setDraftNodes((prev) => ({
+        ...prev,
+        [selectedTaskId]: { ...prev[selectedTaskId], title: taskDraft.title, description: taskDraft.description, owner_agent_id: taskDraft.owner_agent_id, runner_agent_id: taskDraft.runner_agent_id },
+      }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskDraft.title, taskDraft.description, taskDraft.owner_agent_id, taskDraft.runner_agent_id, selectedTaskId])
+
   /* ─── drag-to-connect state ─── */
   const [dragLine, setDragLine] = useState<{ fromId: string; fromX: number; fromY: number; toX: number; toY: number } | null>(null)
 
   /* ─── local (draft) edges for connections involving drafts ─── */
   const [localEdges, setLocalEdges] = useState<TaskEdge[]>([])
-  const allEdges: TaskEdge[] = useMemo(() => [...edges, ...localEdges], [edges, localEdges])
+  const allEdges: TaskEdge[] = useMemo(() => {
+    // Deduplicate: API edges take priority over local edges with same endpoints
+    const apiKeys = new Set(edges.map(e => `${e.depends_on_task_id}->${e.task_id}`))
+    const deduped = localEdges.filter(e => !apiKeys.has(`${e.depends_on_task_id}->${e.task_id}`))
+    return [...edges, ...deduped]
+  }, [edges, localEdges])
 
   /* ─── edge styles persisted alongside positions ─── */
   const [edgeStyles, setEdgeStyles] = useState<Record<string, LineStyle>>({})
@@ -539,7 +563,12 @@ export default function PipelinesPage() {
     }
     // Mark draft as committed — useEffect will clean it up when real node appears in nodes
     setDraftNodes((prev) => ({ ...prev, [draftId]: { ...prev[draftId], _committedAs: j.id } }))
-    setLocalEdges((prev) => prev.filter(e => e.task_id !== draftId && e.depends_on_task_id !== draftId))
+    // Remap local edges from draft ID to real ID (keep them until API edges arrive via SWR)
+    setLocalEdges((prev) => prev.map(e => ({
+      ...e,
+      task_id: e.task_id === draftId ? j.id : e.task_id,
+      depends_on_task_id: e.depends_on_task_id === draftId ? j.id : e.depends_on_task_id,
+    })))
     await mutateGraph()
     setSelectedTaskId(j.id)
   }
@@ -737,9 +766,17 @@ export default function PipelinesPage() {
       }),
     })
     const j = await r.json()
+    setPipelineRunning(true)
     alert(`Pipeline started: ${j.count || 0} tasks (dependency order)`)
     mutateGraph()
   }
+
+  // Auto-stop fast polling when all nodes are done
+  useEffect(() => {
+    if (!pipelineRunning || nodes.length === 0) return
+    const allDone = nodes.every(n => n.status === 'done' || n.status === 'blocked')
+    if (allDone) setPipelineRunning(false)
+  }, [pipelineRunning, nodes])
 
   /* ─── auto layout (using DAG analysis) ─── */
   const autoLayout = () => {
@@ -1164,8 +1201,8 @@ export default function PipelinesPage() {
                     Delete Pipeline
                   </button>
                 )}
-                <button onClick={runPipeline} className="rounded-lg bg-indigo-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-600">
-                  Run Pipeline
+                <button onClick={pipelineRunning ? () => setPipelineRunning(false) : runPipeline} className={`rounded-lg px-4 py-1.5 text-xs font-medium text-white ${pipelineRunning ? 'bg-orange-500 hover:bg-orange-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}>
+                  {pipelineRunning ? '⏹ Stop Watching' : '▶ Run Pipeline'}
                 </button>
               </div>
             </div>
@@ -1402,7 +1439,12 @@ export default function PipelinesPage() {
                             <div className={`flex items-center gap-1.5 ${shape === 'rect' ? '' : 'justify-center'}`}>
                               {isDraftNode ? <span className="rounded bg-amber-200 px-1 text-[8px] font-bold text-amber-700">DRAFT</span> : <div className={`h-2 w-2 flex-shrink-0 rounded-full ${statusDot(n.status)}`} />}
                               <p className={`font-medium leading-tight ${shape === 'rect' ? 'line-clamp-2 text-[12px]' : 'line-clamp-1 text-[10px]'}`}>{n.title}</p>
+                              {n.status === 'doing' && <span className="rounded bg-indigo-500 px-1 text-[7px] font-bold text-white">▶ RUN</span>}
+                              {n.status === 'done' && <span className="rounded bg-emerald-500 px-1 text-[7px] font-bold text-white">✓</span>}
                             </div>
+                            {shape === 'rect' && n.description && (
+                              <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-slate-500">{n.description}</p>
+                            )}
                             {shape === 'rect' && (
                               <div className="flex items-center justify-between">
                                 <p className="flex items-center gap-1 text-[9px] text-slate-500">
@@ -1892,6 +1934,8 @@ export default function PipelinesPage() {
         }
         .node-doing {
           animation: nodePulse 1.6s ease-in-out infinite;
+          border-color: #6366f1 !important;
+          background-color: #eef2ff !important;
         }
         .node-review {
           animation: nodeReview 1.9s ease-in-out infinite;
