@@ -111,6 +111,11 @@ const authOptions: NextAuthOptions = {
             return false
           }
 
+          // Preserve the original GitHub OAuth token for direct GitHub API calls
+          if (account?.provider === 'github' && account?.access_token) {
+            ;(user as unknown as Record<string, unknown>).githubToken = account.access_token
+          }
+
           const response = await fetch(`${WTT_API_URL}/auth/oauth/callback`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -141,6 +146,9 @@ const authOptions: NextAuthOptions = {
         token.accessToken = user.accessToken
         token.userId = user.id
         token.userName = (user.name as string | undefined) || (user.email as string | undefined) || `user_${String(user.id || '').slice(0, 8)}`
+        if ((user as unknown as Record<string, unknown>).githubToken) {
+          token.githubToken = (user as unknown as Record<string, unknown>).githubToken
+        }
       }
       if (!token.userName && token.userId) {
         token.userName = `user_${String(token.userId).slice(0, 8)}`
@@ -150,6 +158,9 @@ const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       session.accessToken = token.accessToken as string
       session.userId = token.userId as string
+      if (token.githubToken) {
+        ;(session as unknown as Record<string, unknown>).githubToken = token.githubToken
+      }
       if (!session.user) session.user = { name: undefined, email: undefined } as typeof session.user
       if (!session.user.name) {
         session.user.name = (token.userName as string | undefined) || `user_${String(token.userId || '').slice(0, 8)}`

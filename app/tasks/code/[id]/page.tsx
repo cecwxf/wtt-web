@@ -476,6 +476,15 @@ export default function CodeTaskPage() {
     }
   }, [task?.runner_agent_id, agents, selectedAgentId])
 
+  // Build headers for repo API calls: WTT auth + GitHub OAuth token
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ghToken = (session as any)?.githubToken as string | undefined
+  const repoHeaders = useCallback(() => {
+    const h: Record<string, string> = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+    if (ghToken) h['X-GitHub-Token'] = ghToken
+    return h
+  }, [session?.accessToken, ghToken])
+
   const loadRepoTree = useCallback(async () => {
     if (!task?.repo_url || !session?.accessToken) {
       setRepoTree([])
@@ -484,7 +493,7 @@ export default function CodeTaskPage() {
     setRepoLoading(true)
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/tree`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
+        headers: repoHeaders(),
       })
       if (!r.ok) throw new Error(await r.text())
       const data = await r.json()
@@ -514,7 +523,7 @@ export default function CodeTaskPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          ...repoHeaders(),
         },
         body: JSON.stringify({ repo_url: repo, repo_branch: branch, repo_path: repoPath }),
       })
@@ -539,7 +548,7 @@ export default function CodeTaskPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          ...repoHeaders(),
         },
         body: JSON.stringify({ repo_name: name, repo_branch: branch, private: true }),
       })
@@ -558,7 +567,7 @@ export default function CodeTaskPage() {
     setRepoSearching(true)
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/search?q=${encodeURIComponent(repoQuery.trim())}&limit=20`, {
-        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        headers: repoHeaders(),
       })
       if (!r.ok) throw new Error(await r.text())
       const data = await r.json()
@@ -778,7 +787,7 @@ export default function CodeTaskPage() {
       setIsModified(false)
       try {
         const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}`, {
-          headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+          headers: repoHeaders(),
         })
         if (!r.ok) throw new Error(await r.text())
         const data = await r.json()
@@ -856,7 +865,7 @@ export default function CodeTaskPage() {
           branch = `wtt-edit-${Date.now()}`
           const brResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/branch`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+            headers: { 'Content-Type': 'application/json', ...repoHeaders() },
             body: JSON.stringify({ branch_name: branch }),
           })
           if (!brResp.ok) throw new Error(await brResp.text())
@@ -864,7 +873,7 @@ export default function CodeTaskPage() {
         }
         const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(selectedFile.path)}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+          headers: { 'Content-Type': 'application/json', ...repoHeaders() },
           body: JSON.stringify({ content: modifiedContent, branch, message: `Update ${selectedFile.path}` }),
         })
         if (!resp.ok) throw new Error(await resp.text())
@@ -894,7 +903,7 @@ export default function CodeTaskPage() {
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/pull`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+        headers: { 'Content-Type': 'application/json', ...repoHeaders() },
         body: JSON.stringify({ title, head: editBranch, body: `Modified files:\n${Array.from(savedFiles).map(f => `- ${f}`).join('\n')}` }),
       })
       if (!resp.ok) throw new Error(await resp.text())
@@ -1153,7 +1162,7 @@ export default function CodeTaskPage() {
     const s = state || issueFilter
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/issues?state=${s}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
+        headers: repoHeaders(),
       })
       if (r.ok) {
         const data = await r.json()
@@ -1169,7 +1178,7 @@ export default function CodeTaskPage() {
     const s = state || prFilter
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/pulls?state=${s}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
+        headers: repoHeaders(),
       })
       if (r.ok) {
         const data = await r.json()
@@ -1183,7 +1192,7 @@ export default function CodeTaskPage() {
     if (!session?.accessToken) return
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/issues/${number}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
+        headers: repoHeaders(),
       })
       if (r.ok) {
         const data = await r.json()
@@ -1196,7 +1205,7 @@ export default function CodeTaskPage() {
     if (!session?.accessToken) return
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/pulls/${number}/files`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
+        headers: repoHeaders(),
       })
       if (r.ok) {
         const data = await r.json()
@@ -1217,7 +1226,7 @@ export default function CodeTaskPage() {
     try {
       const refParam = ref ? `?ref=${encodeURIComponent(ref)}` : ''
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(filePath)}${refParam}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
+        headers: repoHeaders(),
       })
       if (r.ok) {
         const data = await r.json()
