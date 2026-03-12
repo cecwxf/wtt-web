@@ -151,9 +151,11 @@ export default function ResearchTaskPage() {
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  // Quote-to-chat: floating button on text selection
+  // Quote-to-chat & context menu
   const readerRef = useRef<HTMLDivElement>(null)
   const [quoteBtn, setQuoteBtn] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [notesOpen, setNotesOpen] = useState(false)
 
   // Resize
   const [leftW, setLeftW] = useState(() => {
@@ -315,7 +317,7 @@ export default function ResearchTaskPage() {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
   }, [])
 
-  // ── Text selection → Quote to Chat ──
+  // ── Text selection → context menu (right-click) + floating button ──
   useEffect(() => {
     const handleSelection = () => {
       const sel = window.getSelection()
@@ -323,7 +325,6 @@ export default function ResearchTaskPage() {
         setQuoteBtn(null)
         return
       }
-      // Only trigger inside the reader panel
       const node = sel.anchorNode
       if (!node || !readerRef.current?.contains(node)) {
         setQuoteBtn(null)
@@ -337,20 +338,56 @@ export default function ResearchTaskPage() {
         text: sel.toString().trim()
       })
     }
+    const handleContextMenu = (e: MouseEvent) => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) return
+      const node = sel.anchorNode
+      if (!node || !readerRef.current?.contains(node)) return
+      e.preventDefault()
+      setCtxMenu({ x: e.clientX, y: e.clientY, text: sel.toString().trim() })
+      setQuoteBtn(null)
+    }
+    const dismissCtx = () => setCtxMenu(null)
     document.addEventListener('mouseup', handleSelection)
-    return () => document.removeEventListener('mouseup', handleSelection)
+    document.addEventListener('contextmenu', handleContextMenu)
+    document.addEventListener('click', dismissCtx)
+    return () => {
+      document.removeEventListener('mouseup', handleSelection)
+      document.removeEventListener('contextmenu', handleContextMenu)
+      document.removeEventListener('click', dismissCtx)
+    }
   }, [])
 
   const quoteToChat = (text: string) => {
     const quoted = text.split('\n').map(l => `> ${l}`).join('\n')
     setChatInput(prev => prev ? `${prev}\n\n${quoted}\n\n` : `${quoted}\n\n`)
     setQuoteBtn(null)
+    setCtxMenu(null)
     window.getSelection()?.removeAllRanges()
-    // Focus chat input
     setTimeout(() => {
       const el = document.querySelector<HTMLTextAreaElement>('[data-chat-input]')
       el?.focus()
     }, 100)
+  }
+
+  const addToNotes = async (text: string) => {
+    if (!selectedPaperId) return
+    setCtxMenu(null)
+    setQuoteBtn(null)
+    window.getSelection()?.removeAllRanges()
+    const timestamp = new Date().toLocaleString()
+    const entry = `\n---\n📌 ${timestamp}\n> ${text.split('\n').join('\n> ')}\n`
+    const current = selectedPaperFull?.notes || ''
+    const updated = current + entry
+    try {
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: updated }),
+      })
+      mutatePapers()
+      setNotesOpen(true)
+    } catch {}
   }
 
   const startResize = (which: 'left' | 'right', e: React.MouseEvent) => {
@@ -969,23 +1006,37 @@ export default function ResearchTaskPage() {
                       </div>
                     )}
 
-                    {/* Notes section */}
-                    {readingLevel >= 2 && readingLevel < 5 && (
-                      <div className="rounded-lg border border-amber-100 bg-amber-50/30 p-4">
-                        <h2 className="text-sm font-semibold text-amber-700 mb-2">📝 Notes</h2>
-                        <textarea
-                          className="w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-amber-400 focus:outline-none"
-                          rows={3}
-                          placeholder="Add your notes about this paper..."
-                          defaultValue={selectedPaperFull.notes || ''}
-                          onBlur={async (e) => {
-                            await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}`, {
-                              method: 'PATCH',
-                              headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ notes: e.target.value }),
-                            })
-                          }}
-                        />
+                    {/* Notes indicator — collapsible, shows saved highlights */}
+                    {selectedPaperFull.notes && (
+                      <div className="rounded-lg border border-amber-100 bg-amber-50/30">
+                        <button
+                          onClick={() => setNotesOpen(!notesOpen)}
+                          className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50/50"
+                        >
+                          <span>📝 Notes ({selectedPaperFull.notes.split('📌').length - 1})</span>
+                          <span className="text-xs">{notesOpen ? '▼' : '▶'}</span>
+                        </button>
+                        {notesOpen && (
+                          <div className="px-4 pb-3 space-y-2 max-h-60 overflow-y-auto">
+                            <div className="prose prose-sm max-w-none text-slate-600">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {selectedPaperFull.notes}
+                              </ReactMarkdown>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                if (!confirm('Clear all notes?')) return
+                                await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}`, {
+                                  method: 'PATCH',
+                                  headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ notes: '' }),
+                                })
+                                mutatePapers()
+                              }}
+                              className="text-[10px] text-red-400 hover:text-red-600"
+                            >🗑 Clear notes</button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1066,16 +1117,46 @@ export default function ResearchTaskPage() {
               </div>
             )}
 
-            {/* Floating quote-to-chat button */}
-            {quoteBtn && (
-              <button
-                className="fixed z-[100] flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-indigo-700 transition-colors -translate-x-1/2 -translate-y-full"
+            {/* Floating toolbar on text selection */}
+            {quoteBtn && !ctxMenu && (
+              <div
+                className="fixed z-[100] flex items-center gap-0.5 rounded-lg bg-slate-800 shadow-lg -translate-x-1/2 -translate-y-full"
                 style={{ left: quoteBtn.x, top: quoteBtn.y }}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => quoteToChat(quoteBtn.text)}
               >
-                💬 Quote to Chat
-              </button>
+                <button
+                  onClick={() => quoteToChat(quoteBtn.text)}
+                  className="px-2.5 py-1.5 text-xs text-white hover:bg-slate-700 rounded-l-lg"
+                >💬 Chat</button>
+                <div className="w-px h-4 bg-slate-600" />
+                <button
+                  onClick={() => addToNotes(quoteBtn.text)}
+                  className="px-2.5 py-1.5 text-xs text-white hover:bg-slate-700 rounded-r-lg"
+                >📝 Note</button>
+              </div>
+            )}
+
+            {/* Right-click context menu */}
+            {ctxMenu && (
+              <div
+                className="fixed z-[100] rounded-lg bg-white border border-slate-200 shadow-xl py-1 min-w-[160px]"
+                style={{ left: ctxMenu.x, top: ctxMenu.y }}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <button
+                  onClick={() => quoteToChat(ctxMenu.text)}
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2"
+                >💬 Quote to Chat</button>
+                <button
+                  onClick={() => addToNotes(ctxMenu.text)}
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-600 flex items-center gap-2"
+                >📝 Add to Notes</button>
+                <div className="border-t border-slate-100 my-0.5" />
+                <button
+                  onClick={() => { navigator.clipboard.writeText(ctxMenu.text); setCtxMenu(null) }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                >📋 Copy</button>
+              </div>
             )}
 
             {centerTab === 'write' && (
