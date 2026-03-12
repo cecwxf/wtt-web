@@ -118,12 +118,12 @@ function proxyUrl(url: string): string {
 function classifyLine(line: string): ParsedRich {
   const c = line.trim()
   if (!c) return { kind: 'plain', text: '' }
-  const imageMatch = c.match(/^!\[\]\((https?:\/\/[^)]+)\)$/i)
-  if (imageMatch) return { kind: 'image', url: proxyUrl(imageMatch[1]) }
-  const audioMatch = c.match(/^\[audio\]\((https?:\/\/[^)]+)\)$/i)
-  if (audioMatch) return { kind: 'audio', url: proxyUrl(audioMatch[1]) }
-  const videoMatch = c.match(/^\[video\]\((https?:\/\/[^)]+)\)$/i)
-  if (videoMatch) return { kind: 'video', url: proxyUrl(videoMatch[1]) }
+  const imageMatch = c.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/i)
+  if (imageMatch) return { kind: 'image', url: proxyUrl(imageMatch[2]) }
+  const audioMatch = c.match(/^\[audio(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
+  if (audioMatch) return { kind: 'audio', url: proxyUrl(audioMatch[2]) }
+  const videoMatch = c.match(/^\[video(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
+  if (videoMatch) return { kind: 'video', url: proxyUrl(videoMatch[2]) }
   const fileMatch = c.match(/^\[file(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
   if (fileMatch) return { kind: 'file', url: proxyUrl(fileMatch[2]), filename: fileMatch[1] || undefined }
   const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
@@ -412,11 +412,11 @@ export function ChatView({
       const isVideo = file.type.startsWith('video/')
       const kind: 'image' | 'audio' | 'file' = isImage ? 'image' : isAudio ? 'audio' : 'file'
       const token = isImage
-        ? `![](${asset.url})`
+        ? `![${file.name}](${asset.url})`
         : isAudio
-          ? `[audio](${asset.url})`
+          ? `[audio:${file.name}](${asset.url})`
           : isVideo
-            ? `[video](${asset.url})`
+            ? `[video:${file.name}](${asset.url})`
             : `[file:${file.name}](${asset.url})`
       setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
       setRecentAssets((prev) => [{ url: asset.url, kind }, ...prev].slice(0, 8))

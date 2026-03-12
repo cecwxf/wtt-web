@@ -1,8 +1,8 @@
 'use client'
 
 import { useSession, signOut } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
@@ -58,7 +58,15 @@ function normalizeFeed(raw: unknown): ChatMessage[] {
   })
 }
 
-export default function FeedPage() {
+export default function FeedPageWrapper() {
+  return (
+    <Suspense fallback={null}>
+      <FeedPageInner />
+    </Suspense>
+  )
+}
+
+function FeedPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
@@ -244,14 +252,14 @@ export default function FeedPage() {
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
 
+  const searchParams = useSearchParams()
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const topicFromUrl = new URLSearchParams(window.location.search).get('topicId')
+    const topicFromUrl = searchParams.get('topicId') || searchParams.get('topic')
     if (!topicFromUrl) return
     if (topics.some((t) => t.topic_id === topicFromUrl)) {
       setSelectedTopicId(topicFromUrl)
     }
-  }, [topics])
+  }, [topics, searchParams])
 
   const handleSendMessage = async (content: string) => {
     if (!selectedTopicId || !selectedAgentId) return

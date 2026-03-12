@@ -7,6 +7,7 @@ import useSWR from 'swr'
 import dynamic from 'next/dynamic'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
+import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -116,6 +117,7 @@ export default function ResearchTaskPage() {
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
   const [chatInput, setChatInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Resize
@@ -358,13 +360,17 @@ export default function ResearchTaskPage() {
 
   // ── Chat ─────────────────────────────────────────────
   const sendMessage = async (text?: string) => {
+    const attachmentText = pendingAttachments.join('\n')
     const content = (text || chatInput).trim()
-    if (!content || !task?.topic_id || sending) return
+    if ((!content && !attachmentText) || !task?.topic_id || sending) return
     setSending(true)
     if (!text) setChatInput('')
+    setPendingAttachments([])
+
+    const userContent = attachmentText ? `${attachmentText}\n\n${content}` : content
 
     // Attach selected paper context
-    let fullContent = content
+    let fullContent = userContent
     if (selectedPaperFull && centerTab === 'read') {
       const ctx = `[Context Paper: ${selectedPaperFull.title || 'Untitled'}]\nURL: ${selectedPaperFull.source_url || 'N/A'}\n${selectedPaperFull.doi ? `DOI: ${selectedPaperFull.doi}` : ''}\n---\n`
       fullContent = ctx + content
@@ -1102,8 +1108,9 @@ export default function ResearchTaskPage() {
                     : 'border border-slate-200 bg-white text-slate-700 rounded-tl-md'
                 }`}>
                   <div className="whitespace-pre-wrap break-words">
-                    {msg.role === 'assistant' ? <CitationText text={msg.content} papers={papers} /> : msg.content}
+                    {msg.role === 'assistant' ? <CitationText text={msg.content} papers={papers} /> : (stripFileTokens(msg.content) || msg.content)}
                   </div>
+                  <FileAttachmentPreview content={msg.content} />
                   <p className="mt-1 text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
                   {msg.role === 'assistant' && (
                     <button
@@ -1135,6 +1142,14 @@ export default function ResearchTaskPage() {
               </div>
             )}
             <div className="flex gap-1.5">
+              <PendingAttachments attachments={pendingAttachments} onRemove={(i) => setPendingAttachments(prev => prev.filter((_, j) => j !== i))} />
+            </div>
+            <div className="flex gap-1.5 items-center">
+              <ChatFileUpload
+                compact
+                onUploaded={(asset) => setPendingAttachments(prev => [...prev, asset.markdownToken])}
+                disabled={sending}
+              />
               <input
                 className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
                 placeholder="Ask about your papers..."
@@ -1145,7 +1160,7 @@ export default function ResearchTaskPage() {
               />
               <button
                 onClick={() => sendMessage()}
-                disabled={sending || !chatInput.trim()}
+                disabled={sending || (!chatInput.trim() && !pendingAttachments.length)}
                 className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white disabled:opacity-50 hover:bg-indigo-600"
               >
                 {sending ? '...' : '↑'}

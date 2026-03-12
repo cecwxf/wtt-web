@@ -9,6 +9,7 @@ import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN, WS_BASE_URL } from '@/lib/
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { buildWttUserSourceFlow } from '@/lib/wtt-info-flow'
+import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -476,6 +477,7 @@ export default function CodeTaskPage() {
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
   const [chatInput, setChatInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
   const [dirName, setDirName] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const [openFiles, setOpenFiles] = useState<FileNode[]>([])
@@ -2050,18 +2052,21 @@ export default function CodeTaskPage() {
   }
 
   const sendMessage = async () => {
+    const attachmentText = pendingAttachments.join('\n')
     const text = chatInput.trim()
-    if (!text || sending) return
+    if ((!text && !attachmentText) || sending) return
     if (!streamAgentId) { alert('No available agent for this task'); return }
     setSending(true)
     setChatInput('')
+    setPendingAttachments([])
 
+    const userText = attachmentText ? `${attachmentText}\n\n${text}` : text
     const optimisticId = `opt-${Date.now()}`
     try {
       const senderName = getSessionSenderName(session)
       const built = task?.repo_url
-        ? { content: text, fullCodebase: false }
-        : await buildCodebaseContextMessage(text)
+        ? { content: userText, fullCodebase: false }
+        : await buildCodebaseContextMessage(userText)
       const fullContent = built.content
       const displayContent = buildWttUserSourceFlow(senderName, fullContent)
 
@@ -2099,7 +2104,7 @@ export default function CodeTaskPage() {
       console.error('[CodeTask] sendMessage failed:', e)
       // Mark optimistic message as failed
       setChatMessages(prev => prev.map(m =>
-        m.id === optimisticId ? { ...m, content: `⚠️ ${text}\n\n(Send failed: ${e instanceof Error ? e.message : 'unknown'})` } : m
+        m.id === optimisticId ? { ...m, content: `⚠️ ${userText}\n\n(Send failed: ${e instanceof Error ? e.message : 'unknown'})` } : m
       ))
     } finally {
       setSending(false)
@@ -2748,7 +2753,8 @@ export default function CodeTaskPage() {
                         </p>
                         <p className={`text-[10px] ${tc.textMuted}`}>{new Date(msg.timestamp).toLocaleTimeString()}</p>
                       </div>
-                      <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                      <div className="whitespace-pre-wrap break-words">{stripFileTokens(msg.content) || msg.content}</div>
+                      <FileAttachmentPreview content={msg.content} />
                       {allPatches.length > 1 ? (
                         <div className="mt-2 flex items-center gap-2">
                           <button
@@ -2797,7 +2803,13 @@ export default function CodeTaskPage() {
                     <span className="text-slate-400">will be sent as context</span>
                   </div>
                 )}
-                <div className="flex gap-2">
+                <PendingAttachments attachments={pendingAttachments} onRemove={(i) => setPendingAttachments(prev => prev.filter((_, j) => j !== i))} />
+                <div className="flex gap-2 items-center">
+                  <ChatFileUpload
+                    compact
+                    onUploaded={(asset) => setPendingAttachments(prev => [...prev, asset.markdownToken])}
+                    disabled={sending}
+                  />
                   <input
                     className={`flex-1 rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-2 text-sm ${tc.text} focus:border-indigo-400 focus:outline-none`}
                     placeholder="Ask about code..."
@@ -2808,7 +2820,7 @@ export default function CodeTaskPage() {
                   />
                   <button
                     onClick={sendMessage}
-                    disabled={sending || !chatInput.trim()}
+                    disabled={sending || (!chatInput.trim() && !pendingAttachments.length)}
                     className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white disabled:opacity-50"
                   >
                     {sending ? '...' : 'Send'}

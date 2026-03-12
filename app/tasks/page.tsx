@@ -7,6 +7,7 @@ import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { normalizeAndFilterAgents } from '@/lib/agents'
+import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 
 interface Agent {
   id: string
@@ -98,6 +99,7 @@ export default function TasksPage() {
   const [panelInput, setPanelInput] = useState('')
   const [panelSending, setPanelSending] = useState(false)
   const panelSendingRef = useRef(false)
+  const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
   const [queueIndicator, setQueueIndicator] = useState(false)
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
@@ -617,10 +619,12 @@ export default function TasksPage() {
   }
 
   const sendPanelMessage = async () => {
-    if (!selectedTask || !panelInput.trim()) return
+    const attachmentText = pendingAttachments.join('\n')
+    if (!selectedTask || (!panelInput.trim() && !attachmentText)) return
     if (panelSendingRef.current) return
     const text = panelInput.trim()
     setPanelInput('')
+    setPendingAttachments([])
     panelSendingRef.current = true
     setPanelSending(true)
 
@@ -637,6 +641,7 @@ export default function TasksPage() {
     }
 
     try {
+      const fullContent = attachmentText ? `${attachmentText}\n\n${text}` : text
       // User sends always go through task chat API:
       // - todo => auto_run=true (todo->doing)
       // - doing/review/done => auto_run=false (no rerun task)
@@ -646,7 +651,7 @@ export default function TasksPage() {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            content: text,
+            content: fullContent,
             sender_type: 'HUMAN',
             sender_id: senderId,
             semantic_type: 'reply',
@@ -665,7 +670,7 @@ export default function TasksPage() {
           body: JSON.stringify({
             sender_id: senderId,
             sender_type: senderType,
-            content: text,
+            content: fullContent,
             content_type: 'text',
             semantic_type: 'reply',
           }),
@@ -878,6 +883,15 @@ export default function TasksPage() {
                     selectedTask.status === 'blocked' ? 'bg-red-100 text-red-600' :
                     'bg-slate-200 text-slate-600'
                   }`}>{selectedTask.status}</span>
+                  {selectedTask?.topic_id && (
+                    <button
+                      onClick={() => router.push(`/feed?topicId=${selectedTask.topic_id}`)}
+                      className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium text-indigo-500 hover:bg-indigo-50 border border-indigo-200"
+                      title="View in Feed"
+                    >
+                      📡 Feed
+                    </button>
+                  )}
                   <div className="flex gap-1">
                     <button
                       className={`rounded-md px-2 py-0.5 text-[10px] ${(selectedTask.exec_mode || 'reasoning') !== 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
@@ -914,7 +928,8 @@ export default function TasksPage() {
                         <div key={item.id || `${item.sender}-${item.created_at}`} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 ${isHuman ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-800'}`}>
                             <p className={`text-[10px] mb-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-500'}`}>{isHuman ? 'You' : `🤖 ${item.sender}`}</p>
-                            <p className="text-[11px] leading-4 whitespace-pre-wrap break-words">{displayContent}</p>
+                            <p className="text-[11px] leading-4 whitespace-pre-wrap break-words">{stripFileTokens(displayContent) || displayContent}</p>
+                            <FileAttachmentPreview content={displayContent} />
                             <p className={`text-[9px] mt-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-400'}`}>{item.created_at?.replace('T', ' ').slice(0, 19)}</p>
                           </div>
                         </div>
@@ -928,17 +943,23 @@ export default function TasksPage() {
                 {/* Send box */}
                 <div className="shrink-0 border-t border-slate-200 pt-2 px-1">
                   <div className="mb-1 text-[10px] text-slate-500">发送身份：👤 {actorSource(session)}</div>
-                  <div className="flex gap-1">
+                  <PendingAttachments attachments={pendingAttachments} onRemove={(i) => setPendingAttachments(prev => prev.filter((_, j) => j !== i))} />
+                  <div className="flex gap-1 items-center">
+                    <ChatFileUpload
+                      compact
+                      onUploaded={(asset) => setPendingAttachments(prev => [...prev, asset.markdownToken])}
+                      disabled={panelSending}
+                    />
                     <input
                       className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-indigo-400"
                       placeholder="Type a message..."
                       value={panelInput}
                       onChange={(e) => setPanelInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && panelInput.trim()) { e.preventDefault(); sendPanelMessage() } }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (panelInput.trim() || pendingAttachments.length)) { e.preventDefault(); sendPanelMessage() } }}
                     />
                     <button
                       onClick={sendPanelMessage}
-                      disabled={panelSending || !panelInput.trim()}
+                      disabled={panelSending || (!panelInput.trim() && !pendingAttachments.length)}
                       className="shrink-0 rounded-md bg-indigo-500 px-3 py-1 text-xs text-white disabled:opacity-50"
                     >{panelSending ? '...' : 'Send'}</button>
                   </div>
