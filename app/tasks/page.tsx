@@ -795,14 +795,6 @@ export default function TasksPage() {
                     <button
                       key={task.id}
                       onClick={(e) => {
-                        if (task.task_type === 'code') {
-                          router.push(`/tasks/code/${task.id}`)
-                          return
-                        }
-                        if (task.task_type === 'research') {
-                          router.push(`/tasks/research/${task.id}`)
-                          return
-                        }
                         setSelectedTask(task)
                         setTaskDraft(task)
                         if (e.metaKey || e.ctrlKey) {
@@ -810,6 +802,10 @@ export default function TasksPage() {
                             prev.includes(task.id) ? prev.filter((id) => id !== task.id) : Array.from(new Set([...prev, task.id]))
                           )
                         }
+                      }}
+                      onDoubleClick={() => {
+                        if (task.task_type === 'code') router.push(`/tasks/code/${task.id}`)
+                        else if (task.task_type === 'research') router.push(`/tasks/research/${task.id}`)
                       }}
                       onContextMenu={(e) => {
                         e.preventDefault()
@@ -822,8 +818,13 @@ export default function TasksPage() {
                         {task.task_type === 'research' && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700">📄</span>}
                         <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
                       </div>
-                      <div className="mt-2 h-1.5 w-full rounded bg-slate-200">
-                        <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="h-1.5 flex-1 rounded bg-slate-200">
+                          <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
+                        </div>
+                        {(task.task_type === 'code' || task.task_type === 'research') && (
+                          <span className="ml-2 shrink-0 text-[9px] text-slate-400">double-click to open</span>
+                        )}
                       </div>
                     </button>
                   ))}
@@ -967,15 +968,28 @@ export default function TasksPage() {
 
       {taskContextMenu && (
         <div
-          className="fixed z-50 min-w-36 rounded-lg border border-slate-200 bg-slate-100 p-1 shadow-2xl"
+          className="fixed z-50 min-w-44 rounded-lg border border-slate-200 bg-white p-1 shadow-2xl"
           style={{ left: taskContextMenu.x, top: taskContextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
+          {(taskContextMenu.task.task_type === 'code' || taskContextMenu.task.task_type === 'research') && (
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50"
+              onClick={() => {
+                const t = taskContextMenu.task
+                setTaskContextMenu(null)
+                if (t.task_type === 'code') router.push(`/tasks/code/${t.id}`)
+                else router.push(`/tasks/research/${t.id}`)
+              }}
+            >
+              {taskContextMenu.task.task_type === 'code' ? '💻' : '📄'} Open in IDE
+            </button>
+          )}
           <button
-            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
             onClick={() => cancelTask(taskContextMenu.task)}
           >
-            取消任务（删除Topic）
+            🗑️ Cancel Task
           </button>
         </div>
       )}
