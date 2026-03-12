@@ -257,15 +257,22 @@ const SYMBOL_ICONS: Record<string, string> = {
 
 // ── File Tree Component ────────────────────────────────
 function FileTreeNode({
-  node, depth, selectedPath, onSelect, onContextMenu,
+  node, depth, selectedPath, onSelect, onContextMenu, forceExpanded,
 }: {
   node: FileNode; depth: number; selectedPath: string
   onSelect: (node: FileNode) => void
   onContextMenu?: (e: React.MouseEvent, node: FileNode) => void
+  forceExpanded?: Set<string>
 }) {
-  const [expanded, setExpanded] = useState(depth < 1)
+  const [expanded, setExpanded] = useState(depth < 1 || (forceExpanded?.has(node.path) ?? false))
   const isDir = node.kind === 'directory'
   const isSelected = node.path === selectedPath
+
+  // Auto-expand when forceExpanded set includes this path
+  useEffect(() => {
+    if (forceExpanded?.has(node.path)) setExpanded(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceExpanded, node.path])
 
   return (
     <div>
@@ -296,7 +303,7 @@ function FileTreeNode({
       </div>
       {isDir && expanded && node.children?.map((child) => (
         <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath}
-          onSelect={onSelect} onContextMenu={onContextMenu} />
+          onSelect={onSelect} onContextMenu={onContextMenu} forceExpanded={forceExpanded} />
       ))}
     </div>
   )
@@ -329,6 +336,7 @@ export default function CodeTaskPage() {
   const [repoQuery, setRepoQuery] = useState('')
   const [repoSearching, setRepoSearching] = useState(false)
   const [repoSearchResults, setRepoSearchResults] = useState<Array<{ path: string; name?: string; sha?: string; url?: string }>>([])
+  const [forceExpandedPaths, setForceExpandedPaths] = useState<Set<string>>(new Set())
   const codebaseSharedSigRef = useRef<string>('')
   const [repoBranches, setRepoBranches] = useState<string[]>([])
   const [currentBranch, setCurrentBranch] = useState<string>('')
@@ -872,7 +880,9 @@ export default function CodeTaskPage() {
       setModifiedContent('// Loading file content...')
       setIsModified(false)
       try {
-        const branchParam = currentBranch ? `?ref=${encodeURIComponent(currentBranch)}` : ''
+        // If file was saved on edit branch, read from there to preserve edits
+        const readBranch = (editBranch && savedFiles.has(node.path)) ? editBranch : currentBranch
+        const branchParam = readBranch ? `?ref=${encodeURIComponent(readBranch)}` : ''
         const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}${branchParam}`, {
           headers: repoHeaders(),
         })
@@ -1515,10 +1525,33 @@ export default function CodeTaskPage() {
   useEffect(() => { localStorage.setItem('code-task-theme', pageTheme) }, [pageTheme])
 
   // ── Unsaved edits buffer (GitHub mode) ──────────────
-  const [editBranch, setEditBranch] = useState<string | null>(null)
-  const [savedFiles, setSavedFiles] = useState<Set<string>>(new Set())
+  const [editBranch, setEditBranch] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try { return localStorage.getItem(`wtt-edit-branch-${taskId}`) || null } catch { return null }
+  })
+  const [savedFiles, setSavedFiles] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const raw = localStorage.getItem(`wtt-saved-files-${taskId}`)
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+    } catch { return new Set() }
+  })
   const [saving, setSaving] = useState(false)
   const hasSavedEdits = savedFiles.size > 0
+
+  // Persist editBranch & savedFiles to localStorage
+  useEffect(() => {
+    try {
+      if (editBranch) localStorage.setItem(`wtt-edit-branch-${taskId}`, editBranch)
+      else localStorage.removeItem(`wtt-edit-branch-${taskId}`)
+    } catch {}
+  }, [editBranch, taskId])
+  useEffect(() => {
+    try {
+      if (savedFiles.size > 0) localStorage.setItem(`wtt-saved-files-${taskId}`, JSON.stringify(Array.from(savedFiles)))
+      else localStorage.removeItem(`wtt-saved-files-${taskId}`)
+    } catch {}
+  }, [savedFiles, taskId])
 
   // ── Send chat message ──────────────────────────────
   const [awaitingAgent, setAwaitingAgent] = useState(false)
@@ -1954,7 +1987,18 @@ export default function CodeTaskPage() {
                     {repoSearchResults.filter((it) => !!it.path).map((it) => (
                       <button
                         key={`${it.path}-${it.sha || ''}`}
-                        onClick={() => void selectFile({ name: (it.path || '').split('/').pop() || it.path, path: it.path!, kind: 'file' })}
+                        onClick={() => {
+                          // Expand all parent folders in the tree to reveal the file
+                          const parts = (it.path || '').split('/')
+                          const paths = new Set<string>()
+                          for (let i = 1; i < parts.length; i++) paths.add(parts.slice(0, i).join('/'))
+                          setForceExpandedPaths(prev => {
+                            const next = new Set(prev)
+                            paths.forEach(p => next.add(p))
+                            return next
+                          })
+                          void selectFile({ name: parts.pop() || it.path, path: it.path!, kind: 'file' })
+                        }}
                         className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] text-indigo-600 hover:bg-indigo-50"
                         title={it.path}
                       >{it.path}</button>
@@ -1985,6 +2029,7 @@ export default function CodeTaskPage() {
                       selectedPath={selectedFile?.path || ''}
                       onSelect={selectFile}
                       onContextMenu={handleTreeContextMenu}
+                      forceExpanded={forceExpandedPaths}
                     />
                   ))}
                   {/* Outline panel */}
@@ -2207,6 +2252,23 @@ export default function CodeTaskPage() {
                       </span>
                     )}
                   </div>
+                  {/* Action bar: save / PR / discard — always visible above editor */}
+                  {(isModified || hasSavedEdits) && (
+                    <div className={`flex h-8 shrink-0 items-center gap-2 border-b ${tc.border} px-3`} style={{ background: 'linear-gradient(90deg, rgba(99,102,241,0.08), rgba(16,185,129,0.08))' }}>
+                      {isModified && (
+                        <button onClick={saveFile} disabled={saving} className="rounded bg-indigo-500 px-2.5 py-1 text-[11px] text-white hover:bg-indigo-600 disabled:opacity-50">
+                          {saving ? '⏳ Saving...' : '💾 Save (⌘S)'}
+                        </button>
+                      )}
+                      {hasSavedEdits && (
+                        <>
+                          <span className={`text-[11px] ${tc.textMuted}`}>🌿 {savedFiles.size} file(s) on <code className="font-mono text-[10px]">{editBranch}</code></span>
+                          <button onClick={createPR} className="rounded bg-emerald-500 px-2.5 py-1 text-[11px] text-white hover:bg-emerald-600">🔀 Create PR</button>
+                          <button onClick={() => { if (confirm('Discard all edits and revert to main branch?')) discardEdits() }} className="rounded bg-red-500/80 px-2 py-1 text-[11px] text-white hover:bg-red-600">✕ Discard</button>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="flex-1 relative">
                     {fileLoading && (
                       <div className="absolute left-2 top-2 z-10 rounded bg-slate-800/80 px-2 py-1 text-[11px] text-white">Loading...</div>
@@ -2346,32 +2408,6 @@ export default function CodeTaskPage() {
                         inlineSuggest: { enabled: aiCompletionEnabled },
                       }}
                     />
-                    {isModified && (
-                      <div className="absolute bottom-2 right-[calc(33%+12px)] z-10 flex items-center gap-2">
-                        <button onClick={saveFile} disabled={saving} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-indigo-600 disabled:opacity-50">
-                          {saving ? '⏳ Saving...' : '💾 Save (⌘S)'}
-                        </button>
-                      </div>
-                    )}
-                    {hasSavedEdits && (
-                      <div className="absolute bottom-2 right-[calc(33%+12px)] z-10 flex items-center gap-2">
-                        <span className="rounded-lg bg-slate-800/80 px-2 py-1 text-[11px] text-white">
-                          🌿 {savedFiles.size} file(s) on {editBranch}
-                        </span>
-                        <button
-                          onClick={createPR}
-                          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-emerald-600"
-                        >
-                          🔀 Create PR
-                        </button>
-                        <button
-                          onClick={() => { if (confirm('Discard all edits and revert to main branch?')) discardEdits() }}
-                          className="rounded-lg bg-red-500/80 px-2 py-1.5 text-xs text-white shadow-lg hover:bg-red-600"
-                        >
-                          ✕ Discard
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </>
               ) : (
