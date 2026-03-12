@@ -123,6 +123,9 @@ export default function ResearchTaskPage() {
   const params = useParams()
   const taskId = params.id as string
 
+  // L4 fullscreen mode
+  const [l4Fullscreen, setL4Fullscreen] = useState(false)
+
   // Agent
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
@@ -835,10 +838,13 @@ export default function ResearchTaskPage() {
 
                     {/* L4: Full Document — native format based on content_type */}
                     {readingLevel >= 4 && selectedPaperFull.source_url && (
-                      <div className="rounded-lg border border-slate-200 bg-white p-4">
-                        <div className="flex items-center justify-between mb-2">
+                      <div className={l4Fullscreen
+                        ? 'fixed inset-0 z-50 bg-white flex flex-col'
+                        : 'rounded-lg border border-slate-200 bg-white p-4'
+                      }>
+                        <div className={`flex items-center justify-between ${l4Fullscreen ? 'px-4 py-2 border-b border-slate-200' : 'mb-2'}`}>
                           <h2 className="text-sm font-semibold text-slate-600">📄 Full Document</h2>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 items-center">
                             <button
                               onClick={() => setL4View('native')}
                               className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'native' ? 'bg-slate-200 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
@@ -853,8 +859,17 @@ export default function ResearchTaskPage() {
                                 📝 Extracted Text
                               </button>
                             )}
+                            <span className="mx-1 text-slate-300">|</span>
+                            <button
+                              onClick={() => setL4Fullscreen(!l4Fullscreen)}
+                              className="rounded px-2 py-0.5 text-[10px] text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                              title={l4Fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                            >
+                              {l4Fullscreen ? '⊘ Exit' : '⛶ Expand'}
+                            </button>
                           </div>
                         </div>
+                        <div className={l4Fullscreen ? 'flex-1 overflow-auto p-2' : ''}>
                         {l4View === 'native' ? (
                           (() => {
                             const ct = (selectedPaperFull.content_type || '').toLowerCase()
@@ -863,15 +878,15 @@ export default function ResearchTaskPage() {
                               return (
                                 <iframe
                                   src={url}
-                                  className="w-full rounded border border-slate-200"
-                                  style={{ height: '75vh' }}
+                                  className={`w-full rounded border border-slate-200 ${l4Fullscreen ? 'h-full' : ''}`}
+                                  style={l4Fullscreen ? undefined : { height: '75vh' }}
                                   title="PDF Viewer"
                                 />
                               )
                             }
                             if (ct === 'md' || ct === 'markdown' || /\.md$/i.test(url)) {
                               return (
-                                <div className="prose prose-sm max-w-none text-slate-700">
+                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {selectedPaperFull.content_markdown || ''}
                                   </ReactMarkdown>
@@ -880,22 +895,22 @@ export default function ResearchTaskPage() {
                             }
                             if (ct === 'bib' || /\.bib$/i.test(url)) {
                               return (
-                                <pre className="overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap max-h-[75vh]">
+                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
                             }
                             if (['txt', 'tex', 'latex'].includes(ct) || /\.(txt|tex|latex)$/i.test(url)) {
                               return (
-                                <pre className="overflow-auto rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap max-h-[75vh]">
+                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
                             }
-                            // Fallback: try iframe for unknown formats, or show extracted text
+                            // Fallback
                             if (selectedPaperFull.content_markdown) {
                               return (
-                                <div className="prose prose-sm max-w-none text-slate-700">
+                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {cleanPdfText(selectedPaperFull.content_markdown)}
                                   </ReactMarkdown>
@@ -905,19 +920,20 @@ export default function ResearchTaskPage() {
                             return (
                               <iframe
                                 src={url}
-                                className="w-full rounded border border-slate-200"
-                                style={{ height: '75vh' }}
+                                className={`w-full rounded border border-slate-200 ${l4Fullscreen ? 'h-full' : ''}`}
+                                style={l4Fullscreen ? undefined : { height: '75vh' }}
                                 title="Document Viewer"
                               />
                             )
                           })()
                         ) : (
-                          <div className="prose prose-sm max-w-none text-slate-700 max-h-[75vh] overflow-y-auto">
+                          <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto ${l4Fullscreen ? 'h-full' : 'max-h-[75vh]'}`}>
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {cleanPdfText(selectedPaperFull.content_markdown || '')}
                             </ReactMarkdown>
                           </div>
                         )}
+                        </div>
                       </div>
                     )}
 
