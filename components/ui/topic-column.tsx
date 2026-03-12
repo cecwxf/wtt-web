@@ -113,8 +113,7 @@ export function TopicColumn({
                     Leave Topic
                   </button>
                   <button
-                    disabled={!topic.can_delete}
-                    className="w-full rounded px-2 py-1.5 text-left text-xs text-red-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="w-full rounded px-2 py-1.5 text-left text-xs text-red-500 hover:bg-slate-100"
                     onClick={() => {
                       setMenuFor(null)
                       onDeleteTopic?.(topic.topic_id)

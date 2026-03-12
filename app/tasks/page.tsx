@@ -307,39 +307,20 @@ export default function TasksPage() {
   }, [tasks, progressRaw])
 
   const topics = useMemo(() => {
-    const topicMap = new Map<string, { topic_id: string; name: string; topic_type: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'; unread_count: number; can_delete: boolean }>()
-
-    // 1. Add subscribed topics
-    if (Array.isArray(subscribedTopicsRaw)) {
-      for (const topic of subscribedTopicsRaw as { id: string; name: string; type?: string; my_role?: string }[]) {
-        let displayName = topic.name
-        const taskPrefixMatch = displayName.match(/^TASK-[a-f0-9]{8}\s+(.+)$/i)
-        if (taskPrefixMatch) displayName = taskPrefixMatch[1]
-        topicMap.set(topic.id, {
-          topic_id: topic.id,
-          name: displayName,
-          topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
-          unread_count: 0,
-          can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
-        })
+    if (!Array.isArray(subscribedTopicsRaw)) return []
+    return (subscribedTopicsRaw as { id: string; name: string; type?: string; my_role?: string }[]).map((topic) => {
+      let displayName = topic.name
+      const taskPrefixMatch = displayName.match(/^TASK-[a-f0-9]{8}\s+(.+)$/i)
+      if (taskPrefixMatch) displayName = taskPrefixMatch[1]
+      return {
+        topic_id: topic.id,
+        name: displayName,
+        topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
+        unread_count: 0,
+        can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
       }
-    }
-
-    // 2. Ensure task-linked topics always appear (even if agent not subscribed)
-    for (const task of tasks) {
-      if (task.topic_id && !topicMap.has(task.topic_id)) {
-        topicMap.set(task.topic_id, {
-          topic_id: task.topic_id,
-          name: task.title,
-          topic_type: 'discussion',
-          unread_count: 0,
-          can_delete: !!task.created_by && task.created_by === actorSource(session),
-        })
-      }
-    }
-
-    return Array.from(topicMap.values())
-  }, [subscribedTopicsRaw, tasks, session])
+    })
+  }, [subscribedTopicsRaw])
 
   const agentItems = useMemo(() => {
     return agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name, unread_count: 0 }))
