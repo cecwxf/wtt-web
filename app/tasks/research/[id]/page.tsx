@@ -211,7 +211,7 @@ export default function ResearchTaskPage() {
     session?.accessToken ? [`task-${taskId}`, session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, { headers: authHeaders() })
-      if (!r.ok) return null
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return r.json()
     },
   )
@@ -225,10 +225,10 @@ export default function ResearchTaskPage() {
       const s = sortBy !== 'created_at' ? `&sort=${encodeURIComponent(sortBy)}` : ''
       const fts = useFts && searchQuery ? '&fts=true' : ''
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers?limit=200${q}${yf}${yt}${s}${fts}`, { headers: authHeaders() })
-      if (!r.ok) return { papers: [], total: 0 }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return r.json()
     },
-    { refreshInterval: 10000 },
+    { refreshInterval: 30000, keepPreviousData: true },
   )
 
   const papers: Paper[] = useMemo(() => papersData?.papers || [], [papersData])
@@ -237,9 +237,10 @@ export default function ResearchTaskPage() {
     selectedPaperId && session?.accessToken ? [`paper-full-${selectedPaperId}`, session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}`, { headers: authHeaders() })
-      if (!r.ok) return null
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return r.json()
     },
+    { keepPreviousData: true },
   )
 
   const { data: citationsData, mutate: mutateCitations } = useSWR(
@@ -249,19 +250,20 @@ export default function ResearchTaskPage() {
     async () => {
       const direction = citationTab === 'refs' ? 'references' : 'cited_by'
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}/citations?direction=${direction}`, { headers: authHeaders() })
-      if (!r.ok) return []
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return r.json()
     },
+    { keepPreviousData: true },
   )
 
   const { data: topicMessages, mutate: mutateMessages } = useSWR(
     task?.topic_id && session?.accessToken ? [`research-chat-${task.topic_id}`, session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${task.topic_id}/messages?limit=200&agent_id=${selectedAgentId}`, { headers: authHeaders() })
-      if (!r.ok) return []
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return r.json()
     },
-    { refreshInterval: 3000 },
+    { refreshInterval: 5000, keepPreviousData: true },
   )
 
   // ── Effects ──────────────────────────────────────────
@@ -622,6 +624,17 @@ export default function ResearchTaskPage() {
   }, [papers, searchQuery])
 
   // ── Render ───────────────────────────────────────────
+  if (status === 'loading') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+          <p className="mt-3 text-sm text-slate-400">Loading session…</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen flex-col bg-white">
       {/* Top bar */}

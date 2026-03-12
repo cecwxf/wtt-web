@@ -577,7 +577,7 @@ export default function CodeTaskPage() {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
-      if (!r.ok) return null
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return r.json()
     },
   )
@@ -697,10 +697,10 @@ export default function CodeTaskPage() {
       if (!r.ok) {
         r = await tryFetch(undefined)
       }
-      if (!r.ok) return []
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return r.json()
     },
-    { revalidateOnFocus: false, refreshInterval: 3000 },
+    { revalidateOnFocus: false, refreshInterval: 5000, keepPreviousData: true },
   )
 
   // Seed chat from history (only once on load or agent switch)
@@ -2133,6 +2133,17 @@ export default function CodeTaskPage() {
 
   const activeTree = task?.repo_url ? repoTree : (agentMode === 'remote' ? sshTree : fileTree)
   const fileCount = useMemo(() => countFiles(activeTree), [activeTree])
+
+  if (status === 'loading') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+          <p className="mt-3 text-sm text-slate-400">Loading session…</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={`flex h-screen flex-col ${tc.bg}`}>
