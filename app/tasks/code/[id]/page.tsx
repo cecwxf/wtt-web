@@ -486,6 +486,52 @@ export default function CodeTaskPage() {
   const [repoQuery, setRepoQuery] = useState('')
   const [forceExpandedPaths, setForceExpandedPaths] = useState<Set<string>>(new Set())
   const [collapseSignal, setCollapseSignal] = useState(0)
+
+  // ── Resizable panel widths ─────────────────────────
+  const [leftPanelWidth, setLeftPanelWidth] = useState(() => {
+    if (typeof window === 'undefined') return 240
+    try { return parseInt(localStorage.getItem('code-left-panel-w') || '240') || 240 } catch { return 240 }
+  })
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => {
+    if (typeof window === 'undefined') return 420
+    try { return parseInt(localStorage.getItem('code-right-panel-w') || '420') || 420 } catch { return 420 }
+  })
+  const resizingRef = useRef<'left' | 'right' | null>(null)
+  const resizeStartXRef = useRef(0)
+  const resizeStartWRef = useRef(0)
+
+  useEffect(() => {
+    try { localStorage.setItem('code-left-panel-w', String(leftPanelWidth)) } catch {}
+  }, [leftPanelWidth])
+  useEffect(() => {
+    try { localStorage.setItem('code-right-panel-w', String(rightPanelWidth)) } catch {}
+  }, [rightPanelWidth])
+
+  // Global mouse move/up for resize (attached only while dragging)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizingRef.current) return
+      e.preventDefault()
+      const dx = e.clientX - resizeStartXRef.current
+      if (resizingRef.current === 'left') {
+        setLeftPanelWidth(Math.max(160, Math.min(500, resizeStartWRef.current + dx)))
+      } else {
+        setRightPanelWidth(Math.max(280, Math.min(700, resizeStartWRef.current - dx)))
+      }
+    }
+    const onUp = () => { resizingRef.current = null; document.body.style.cursor = ''; document.body.style.userSelect = '' }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  const startResize = (which: 'left' | 'right', e: React.MouseEvent) => {
+    resizingRef.current = which
+    resizeStartXRef.current = e.clientX
+    resizeStartWRef.current = which === 'left' ? leftPanelWidth : rightPanelWidth
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
   const codebaseSharedSigRef = useRef<string>('')
   const [repoBranches, setRepoBranches] = useState<string[]>([])
   const [currentBranch, setCurrentBranch] = useState<string>('')
@@ -2136,7 +2182,7 @@ export default function CodeTaskPage() {
       {/* Main area: file tree | editor | chat */}
       <div className="flex flex-1 overflow-hidden">
         {/* File tree panel */}
-        <div className={`w-60 shrink-0 overflow-y-auto border-r ${tc.border} ${tc.surface} p-2`}>
+        <div className={`shrink-0 overflow-y-auto border-r ${tc.border} ${tc.surface} p-2`} style={{ width: `${leftPanelWidth}px` }}>
           {task?.repo_url ? (
             <>
               <div className="mb-2 rounded border border-emerald-200 bg-emerald-50 p-2 text-[10px] text-emerald-700">
@@ -2299,6 +2345,13 @@ export default function CodeTaskPage() {
             </div>
           )}
         </div>
+
+        {/* Left resize handle */}
+        <div
+          className="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-indigo-400/40 active:bg-indigo-500/50 transition-colors"
+          onMouseDown={(e) => startResize('left', e)}
+          title="Drag to resize"
+        />
 
         {/* Editor panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -2643,8 +2696,15 @@ export default function CodeTaskPage() {
           )}
         </div>
 
+        {/* Right resize handle */}
+        <div
+          className="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-indigo-400/40 active:bg-indigo-500/50 transition-colors"
+          onMouseDown={(e) => startResize('right', e)}
+          title="Drag to resize"
+        />
+
         {/* Chat panel */}
-        <div className={`flex w-[33%] min-w-[320px] shrink-0 flex-col border-l ${tc.border}`}>
+        <div className={`flex shrink-0 flex-col border-l ${tc.border}`} style={{ width: `${rightPanelWidth}px` }}>
           {/* Tab header */}
           <div className={`flex h-10 shrink-0 items-center border-b ${tc.border} ${tc.surface}`}>
             {(['chat', 'issues', 'prs'] as const).map(tab => (
