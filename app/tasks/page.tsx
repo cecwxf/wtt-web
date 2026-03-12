@@ -431,7 +431,8 @@ export default function TasksPage() {
     }
 
     setTaskContextMenu(null)
-    await mutateTasks()
+    // Optimistically remove from local list for instant pie chart update
+    mutateTasks((prev: TaskItem[] | undefined) => (prev || []).filter(t => t.id !== task.id), { revalidate: true })
     await mutateSubscribedTopics()
   }
 
@@ -520,7 +521,8 @@ export default function TasksPage() {
     }
 
     setSelectedTaskIds([])
-    await mutateTasks()
+    // Optimistically remove deleted tasks for instant pie chart update
+    mutateTasks((prev: TaskItem[] | undefined) => (prev || []).filter(t => !selectedTaskIds.includes(t.id)), { revalidate: true })
     await mutateSubscribedTopics()
     alert(`批量取消完成：成功 ${ok} / ${selectedTaskIds.length}${delegatedTried ? '（含代操作）' : ''}`)
   }
