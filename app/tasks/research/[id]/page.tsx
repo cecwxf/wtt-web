@@ -17,6 +17,8 @@ function cleanPdfText(text: string | null | undefined): string {
   let s = text
   // Fix hyphenated word breaks: "envi-\nronments" → "environments"
   s = s.replace(/(\w)-\n(\w)/g, '$1$2')
+  // Fix inline hyphenation: "re- source" → "resource"
+  s = s.replace(/(\w)- (\w)/g, '$1$2')
   // Merge mid-sentence line breaks (line not ending with .!? followed by lowercase)
   s = s.replace(/([^.!?\n])\n([a-z])/g, '$1 $2')
   // Collapse runs of whitespace (not newlines) into single space
