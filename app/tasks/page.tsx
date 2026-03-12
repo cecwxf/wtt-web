@@ -447,7 +447,8 @@ export default function TasksPage() {
     }
 
     setTaskContextMenu(null)
-    await mutateTasks()
+    // Optimistically remove from list immediately
+    mutateTasks((prev: TaskItem[] | undefined) => (prev || []).filter(t => t.id !== task.id), { revalidate: true })
     await mutateSubscribedTopics()
   }
 
@@ -490,8 +491,9 @@ export default function TasksPage() {
       })
     )
     const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
+    const deletedIds = new Set(selectedTaskIds)
     setSelectedTaskIds([])
-    await mutateTasks()
+    mutateTasks((prev: TaskItem[] | undefined) => (prev || []).filter(t => !deletedIds.has(t.id)), { revalidate: true })
     await mutateSubscribedTopics()
     alert(`批量取消完成：成功 ${ok} / ${results.length}`)
   }
