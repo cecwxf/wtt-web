@@ -113,9 +113,61 @@ async function readDirectory(dirHandle: FileSystemDirectoryHandle, parentPath = 
   return entries
 }
 
-async function readFileContent(handle: FileSystemFileHandle): Promise<string> {
-  const file = await handle.getFile()
-  return file.text()
+// ── File icons by extension (VSCode-style) ─────────────
+const fileIcon = (name: string): string => {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  const base = name.toLowerCase()
+  // Special filenames
+  if (base === 'package.json') return '📦'
+  if (base === 'tsconfig.json' || base === 'jsconfig.json') return '⚙️'
+  if (base === 'dockerfile' || base === '.dockerignore') return '🐳'
+  if (base === '.gitignore' || base === '.gitmodules') return '🔀'
+  if (base === 'readme.md' || base === 'readme') return '📖'
+  if (base === 'license' || base === 'license.md') return '📜'
+  if (base === '.env' || base.startsWith('.env.')) return '🔑'
+  if (base === 'makefile' || base === 'cmakelists.txt') return '🔧'
+  const iconMap: Record<string, string> = {
+    ts: '🟦', tsx: '⚛️', js: '🟨', jsx: '⚛️',
+    py: '🐍', rs: '🦀', go: '🔷', java: '☕', kt: '🟣',
+    cpp: '🔵', c: '🔵', h: '🔵', hpp: '🔵', cs: '💜',
+    rb: '💎', php: '🐘', swift: '🍊', sh: '🐚', bash: '🐚',
+    json: '📋', yaml: '📋', yml: '📋', toml: '📋', xml: '📋',
+    md: '📝', html: '🌐', css: '🎨', scss: '🎨', less: '🎨',
+    sql: '🗃️', graphql: '🔮', prisma: '🔺',
+    svg: '🖼️', png: '🖼️', jpg: '🖼️', gif: '🖼️', ico: '🖼️',
+    lock: '🔒', map: '🗺️', wasm: '⚡',
+    vue: '💚', svelte: '🧡',
+  }
+  return iconMap[ext] || '📄'
+}
+
+// ── Compact single-child folder chains (like VSCode) ───
+function compactTree(nodes: FileNode[]): FileNode[] {
+  return nodes.map(node => {
+    if (node.kind !== 'directory' || !node.children?.length) return node
+    let current = node
+    const nameParts = [current.name]
+    // Merge chain of single-child directories
+    while (
+      current.kind === 'directory' &&
+      current.children?.length === 1 &&
+      current.children[0].kind === 'directory'
+    ) {
+      current = current.children[0]
+      nameParts.push(current.name)
+    }
+    if (nameParts.length > 1) {
+      return {
+        ...current,
+        name: nameParts.join('/'),
+        children: current.children ? compactTree(current.children) : undefined,
+      }
+    }
+    return {
+      ...node,
+      children: compactTree(node.children),
+    }
+  })
 }
 
 function buildFileTreeFromFlat(items: RepoTreeItem[]): FileNode[] {
@@ -160,7 +212,12 @@ function buildFileTreeFromFlat(items: RepoTreeItem[]): FileNode[] {
     return nodes
   }
 
-  return materialize(root)
+  return compactTree(materialize(root))
+}
+
+async function readFileContent(handle: FileSystemFileHandle): Promise<string> {
+  const file = await handle.getFile()
+  return file.text()
 }
 
 function extractFilePatch(content: string): { path: string; code: string } | null {
@@ -255,55 +312,87 @@ const SYMBOL_ICONS: Record<string, string> = {
   Symbol: '○',
 }
 
-// ── File Tree Component ────────────────────────────────
+// ── File Tree Component (VSCode-style) ─────────────────
 function FileTreeNode({
-  node, depth, selectedPath, onSelect, onContextMenu, forceExpanded,
+  node, depth, selectedPath, onSelect, onContextMenu, forceExpanded, collapseSignal,
 }: {
   node: FileNode; depth: number; selectedPath: string
   onSelect: (node: FileNode) => void
   onContextMenu?: (e: React.MouseEvent, node: FileNode) => void
   forceExpanded?: Set<string>
+  collapseSignal?: number
 }) {
   const [expanded, setExpanded] = useState(depth < 1 || (forceExpanded?.has(node.path) ?? false))
   const isDir = node.kind === 'directory'
   const isSelected = node.path === selectedPath
+  // Check if any descendant is the selected file (highlight path)
+  const containsSelected = isDir && selectedPath.startsWith(node.path + '/')
 
-  // Auto-expand when forceExpanded set includes this path
+  // Auto-expand when forceExpanded includes this path
   useEffect(() => {
     if (forceExpanded?.has(node.path)) setExpanded(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceExpanded, node.path])
 
+  // Collapse All: reset to collapsed when signal changes (except root level)
+  useEffect(() => {
+    if (collapseSignal && depth > 0) setExpanded(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapseSignal])
+
+  // Auto-expand folders containing the selected file
+  useEffect(() => {
+    if (containsSelected && !expanded) setExpanded(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPath])
+
+  const childCount = isDir ? (node.children?.length ?? 0) : 0
+
   return (
-    <div>
+    <div className="relative">
+      {/* Indent guide lines */}
+      {depth > 0 && (
+        <div
+          className="absolute top-0 bottom-0 border-l border-slate-200/80"
+          style={{ left: `${(depth - 1) * 16 + 11}px` }}
+        />
+      )}
       <div
-        className={`group flex w-full items-center gap-0.5 rounded px-1 py-0.5 text-left text-[12px] hover:bg-slate-200/60 ${isSelected ? 'bg-indigo-100 font-medium text-indigo-700' : 'text-slate-600'}`}
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
+        className={`group flex w-full cursor-pointer items-center gap-0 py-[1px] text-left text-[12px] transition-colors
+          ${isSelected ? 'bg-indigo-500/15 text-indigo-700 font-medium' : containsSelected ? 'text-slate-700' : 'text-slate-600'}
+          hover:bg-slate-500/10`}
+        style={{ paddingLeft: `${depth * 16 + 4}px`, height: '22px' }}
+        onClick={() => {
+          if (isDir) setExpanded(!expanded)
+          else onSelect(node)
+        }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(e, node) }}
       >
-        <button
-          className="flex flex-1 items-center gap-1 truncate min-w-0"
-          onClick={() => {
-            if (isDir) setExpanded(!expanded)
-            else onSelect(node)
-          }}
-        >
-          <span className="shrink-0 text-[11px]">
-            {isDir ? (expanded ? '📂' : '📁') : '📄'}
-          </span>
-          <span className="truncate">{node.name}</span>
-        </button>
-        {/* Quick new-file button on folders */}
+        {/* Chevron for directories */}
+        <span className="flex w-4 shrink-0 items-center justify-center text-[9px] text-slate-400">
+          {isDir ? (expanded ? '▼' : '▶') : ''}
+        </span>
+        {/* Icon */}
+        <span className="mr-1 flex w-4 shrink-0 items-center justify-center text-[12px]">
+          {isDir ? (expanded ? '📂' : '📁') : fileIcon(node.name)}
+        </span>
+        {/* Name */}
+        <span className="truncate">{node.name}</span>
+        {/* Child count badge for directories */}
+        {isDir && !expanded && childCount > 0 && (
+          <span className="ml-1 text-[9px] text-slate-400">{childCount}</span>
+        )}
+        {/* Quick actions on hover */}
         {isDir && onContextMenu && (
-          <div className="hidden shrink-0 items-center group-hover:flex">
+          <div className="ml-auto hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
             <button onClick={(e) => { e.stopPropagation(); setExpanded(true); onContextMenu(e, { ...node, _action: 'newFile' } as FileNode & { _action: string }) }}
-              className="rounded p-0.5 text-[10px] text-slate-400 hover:bg-slate-300 hover:text-slate-700" title="New file">+</button>
+              className="rounded px-0.5 text-[10px] text-slate-400 hover:bg-slate-300 hover:text-slate-700" title="New file">+</button>
           </div>
         )}
       </div>
       {isDir && expanded && node.children?.map((child) => (
         <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath}
-          onSelect={onSelect} onContextMenu={onContextMenu} forceExpanded={forceExpanded} />
+          onSelect={onSelect} onContextMenu={onContextMenu} forceExpanded={forceExpanded} collapseSignal={collapseSignal} />
       ))}
     </div>
   )
@@ -337,6 +426,7 @@ export default function CodeTaskPage() {
   const [repoSearching, setRepoSearching] = useState(false)
   const [repoSearchResults, setRepoSearchResults] = useState<Array<{ path: string; name?: string; sha?: string; url?: string }>>([])
   const [forceExpandedPaths, setForceExpandedPaths] = useState<Set<string>>(new Set())
+  const [collapseSignal, setCollapseSignal] = useState(0)
   const codebaseSharedSigRef = useRef<string>('')
   const [repoBranches, setRepoBranches] = useState<string[]>([])
   const [currentBranch, setCurrentBranch] = useState<string>('')
@@ -2013,12 +2103,14 @@ export default function CodeTaskPage() {
                 <p className={`text-center text-[11px] ${tc.textMuted}`}>No repo files</p>
               ) : (
                 <>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className={`text-xs font-semibold ${tc.textMuted}`}>Repository</p>
-                    <div className="flex items-center gap-1">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className={`text-xs font-semibold ${tc.textMuted}`}>EXPLORER</p>
+                    <div className="flex items-center gap-0.5">
                       <button onClick={() => handleNewFile('')} className={`rounded p-0.5 text-[10px] ${tc.textMuted} hover:bg-slate-200`} title="New File">📄+</button>
                       <button onClick={() => handleNewFolder('')} className={`rounded p-0.5 text-[10px] ${tc.textMuted} hover:bg-slate-200`} title="New Folder">📁+</button>
-                      <span className={`text-[10px] ${tc.textMuted}`}>{fileCount}</span>
+                      <button onClick={() => setCollapseSignal(s => s + 1)} className={`rounded p-0.5 text-[10px] ${tc.textMuted} hover:bg-slate-200`} title="Collapse All">⊟</button>
+                      <button onClick={() => void loadRepoTree(currentBranch || undefined)} className={`rounded p-0.5 text-[10px] ${tc.textMuted} hover:bg-slate-200`} title="Refresh">↻</button>
+                      <span className={`ml-1 text-[9px] ${tc.textMuted}`}>{fileCount}</span>
                     </div>
                   </div>
                   {repoTree.map((node) => (
@@ -2030,6 +2122,7 @@ export default function CodeTaskPage() {
                       onSelect={selectFile}
                       onContextMenu={handleTreeContextMenu}
                       forceExpanded={forceExpandedPaths}
+                      collapseSignal={collapseSignal}
                     />
                   ))}
                   {/* Outline panel */}
