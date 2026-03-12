@@ -130,7 +130,7 @@ export default function ResearchTaskPage() {
   // Center panel
   const [centerTab, setCenterTab] = useState<'read' | 'write' | 'export'>('read')
   const [readingLevel, setReadingLevel] = useState<1 | 2 | 3 | 4 | 5>(2)
-  const [l4View, setL4View] = useState<'text' | 'pdf'>('text')
+  const [l4View, setL4View] = useState<'native' | 'text'>('native')
   const [writeContent, setWriteContent] = useState('')
 
   // Chat
@@ -827,39 +827,90 @@ export default function ResearchTaskPage() {
                       </div>
                     )}
 
-                    {/* L4: Full text */}
-                    {readingLevel >= 4 && selectedPaperFull.content_markdown && (
+                    {/* L4: Full Document — native format based on content_type */}
+                    {readingLevel >= 4 && selectedPaperFull.source_url && (
                       <div className="rounded-lg border border-slate-200 bg-white p-4">
                         <div className="flex items-center justify-between mb-2">
-                          <h2 className="text-sm font-semibold text-slate-600">📄 Full Text</h2>
-                          {selectedPaperFull.source_url && /\.pdf$/i.test(selectedPaperFull.source_url) && (
-                            <div className="flex gap-1">
+                          <h2 className="text-sm font-semibold text-slate-600">📄 Full Document</h2>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setL4View('native')}
+                              className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'native' ? 'bg-slate-200 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                              📑 Original
+                            </button>
+                            {selectedPaperFull.content_markdown && (
                               <button
                                 onClick={() => setL4View('text')}
                                 className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'text' ? 'bg-slate-200 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
                               >
-                                📝 Text
+                                📝 Extracted Text
                               </button>
-                              <button
-                                onClick={() => setL4View('pdf')}
-                                className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'pdf' ? 'bg-slate-200 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
-                              >
-                                📄 PDF
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        {l4View === 'text' ? (
-                          <div className="prose prose-sm max-w-none text-slate-700">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanPdfText(selectedPaperFull.content_markdown)}</ReactMarkdown>
+                            )}
                           </div>
+                        </div>
+                        {l4View === 'native' ? (
+                          (() => {
+                            const ct = (selectedPaperFull.content_type || '').toLowerCase()
+                            const url = selectedPaperFull.source_url
+                            if (ct === 'pdf' || /\.pdf$/i.test(url)) {
+                              return (
+                                <iframe
+                                  src={url}
+                                  className="w-full rounded border border-slate-200"
+                                  style={{ height: '75vh' }}
+                                  title="PDF Viewer"
+                                />
+                              )
+                            }
+                            if (ct === 'md' || ct === 'markdown' || /\.md$/i.test(url)) {
+                              return (
+                                <div className="prose prose-sm max-w-none text-slate-700">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {selectedPaperFull.content_markdown || ''}
+                                  </ReactMarkdown>
+                                </div>
+                              )
+                            }
+                            if (ct === 'bib' || /\.bib$/i.test(url)) {
+                              return (
+                                <pre className="overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap max-h-[75vh]">
+                                  {selectedPaperFull.content_markdown || ''}
+                                </pre>
+                              )
+                            }
+                            if (['txt', 'tex', 'latex'].includes(ct) || /\.(txt|tex|latex)$/i.test(url)) {
+                              return (
+                                <pre className="overflow-auto rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap max-h-[75vh]">
+                                  {selectedPaperFull.content_markdown || ''}
+                                </pre>
+                              )
+                            }
+                            // Fallback: try iframe for unknown formats, or show extracted text
+                            if (selectedPaperFull.content_markdown) {
+                              return (
+                                <div className="prose prose-sm max-w-none text-slate-700">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {cleanPdfText(selectedPaperFull.content_markdown)}
+                                  </ReactMarkdown>
+                                </div>
+                              )
+                            }
+                            return (
+                              <iframe
+                                src={url}
+                                className="w-full rounded border border-slate-200"
+                                style={{ height: '75vh' }}
+                                title="Document Viewer"
+                              />
+                            )
+                          })()
                         ) : (
-                          <iframe
-                            src={selectedPaperFull.source_url}
-                            className="w-full rounded border border-slate-200"
-                            style={{ height: '70vh' }}
-                            title="PDF Viewer"
-                          />
+                          <div className="prose prose-sm max-w-none text-slate-700 max-h-[75vh] overflow-y-auto">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {cleanPdfText(selectedPaperFull.content_markdown || '')}
+                            </ReactMarkdown>
+                          </div>
                         )}
                       </div>
                     )}
