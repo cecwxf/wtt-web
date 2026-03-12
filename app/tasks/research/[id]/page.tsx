@@ -11,6 +11,21 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 
+/** Client-side cleanup for raw PDF text — fixes common extraction artifacts */
+function cleanPdfText(text: string | null | undefined): string {
+  if (!text) return ''
+  let s = text
+  // Fix hyphenated word breaks: "envi-\nronments" → "environments"
+  s = s.replace(/(\w)-\n(\w)/g, '$1$2')
+  // Merge mid-sentence line breaks (line not ending with .!? followed by lowercase)
+  s = s.replace(/([^.!?\n])\n([a-z])/g, '$1 $2')
+  // Collapse runs of whitespace (not newlines) into single space
+  s = s.replace(/[^\S\n]+/g, ' ')
+  // Normalize multiple blank lines
+  s = s.replace(/\n{3,}/g, '\n\n')
+  return s.trim()
+}
+
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
 // ── Types ──────────────────────────────────────────────
@@ -795,7 +810,7 @@ export default function ResearchTaskPage() {
                       <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4">
                         <h2 className="text-sm font-semibold text-blue-700 mb-2">📋 Abstract</h2>
                         <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedPaperFull.abstract}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanPdfText(selectedPaperFull.abstract)}</ReactMarkdown>
                         </div>
                       </div>
                     )}
@@ -805,7 +820,7 @@ export default function ResearchTaskPage() {
                       <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-4">
                         <h2 className="text-sm font-semibold text-emerald-700 mb-2">🎯 Conclusion</h2>
                         <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedPaperFull.conclusion}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanPdfText(selectedPaperFull.conclusion)}</ReactMarkdown>
                         </div>
                       </div>
                     )}
@@ -834,7 +849,7 @@ export default function ResearchTaskPage() {
                         </div>
                         {l4View === 'text' ? (
                           <div className="prose prose-sm max-w-none text-slate-700">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedPaperFull.content_markdown}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanPdfText(selectedPaperFull.content_markdown)}</ReactMarkdown>
                           </div>
                         ) : (
                           <iframe
