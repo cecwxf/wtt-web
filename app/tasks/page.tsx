@@ -142,9 +142,9 @@ export default function TasksPage() {
   )
 
   const { data: tasksRaw, mutate: mutateTasks } = useSWR(
-    session?.accessToken ? ['tasks', session.accessToken] : null,
+    selectedAgentId && session?.accessToken ? ['tasks', selectedAgentId, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks?task_mode=single&limit=500`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks?task_mode=single&owner_agent_id=${encodeURIComponent(selectedAgentId)}&limit=500`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!response.ok) throw new Error('Failed to load tasks')
