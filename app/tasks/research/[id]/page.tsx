@@ -11,6 +11,8 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 
+const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer'), { ssr: false })
+
 /** Rewrite legacy http://170.106.109.4:8000 URLs to HTTPS domain */
 function fixMediaUrl(url: string | null | undefined): string {
   if (!url) return ''
@@ -808,7 +810,7 @@ export default function ResearchTaskPage() {
           </div>
 
           {/* Center content */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto relative">
             {centerTab === 'read' && (
               <div ref={readerRef} className="p-4 relative">
                 {selectedPaperFull ? (
@@ -882,8 +884,11 @@ export default function ResearchTaskPage() {
 
                     {/* L4: Full Document — native format based on content_type */}
                     {readingLevel >= 4 && selectedPaperFull.source_url && (
-                      <div className="rounded-lg border border-slate-200 bg-white p-4">
-                        <div className={`flex items-center justify-between mb-2`}>
+                      <div className={l4Fullscreen
+                        ? 'absolute inset-0 z-10 bg-white flex flex-col'
+                        : 'rounded-lg border border-slate-200 bg-white p-4'
+                      }>
+                        <div className={`flex items-center justify-between ${l4Fullscreen ? 'px-4 py-2 border-b border-slate-200 shrink-0' : 'mb-2'}`}>
                           <h2 className="text-sm font-semibold text-slate-600">📄 Full Document</h2>
                           <div className="flex gap-1 items-center">
                             <button
@@ -910,23 +915,17 @@ export default function ResearchTaskPage() {
                             </button>
                           </div>
                         </div>
+                        <div className={l4Fullscreen ? 'flex-1 overflow-auto p-2 min-h-0' : ''}>
                         {l4View === 'native' ? (
                           (() => {
                             const ct = (selectedPaperFull.content_type || '').toLowerCase()
                             const url = fixMediaUrl(selectedPaperFull.source_url)
                             if (ct === 'pdf' || /\.pdf$/i.test(url)) {
-                              return (
-                                <iframe
-                                  src={url}
-                                  className={`w-full rounded border border-slate-200 `}
-                                  style={{ height: l4Fullscreen ? '85vh' : '75vh' }}
-                                  title="PDF Viewer"
-                                />
-                              )
+                              return <PdfViewer url={url} expanded={l4Fullscreen} />
                             }
                             if (ct === 'md' || ct === 'markdown' || /\.md$/i.test(url)) {
                               return (
-                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[85vh]`}>
+                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[75vh]`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {selectedPaperFull.content_markdown || ''}
                                   </ReactMarkdown>
@@ -935,14 +934,14 @@ export default function ResearchTaskPage() {
                             }
                             if (ct === 'bib' || /\.bib$/i.test(url)) {
                               return (
-                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap max-h-[85vh]`}>
+                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap max-h-[75vh]`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
                             }
                             if (['txt', 'tex', 'latex'].includes(ct) || /\.(txt|tex|latex)$/i.test(url)) {
                               return (
-                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap max-h-[85vh]`}>
+                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap max-h-[75vh]`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
@@ -950,29 +949,23 @@ export default function ResearchTaskPage() {
                             // Fallback
                             if (selectedPaperFull.content_markdown) {
                               return (
-                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[85vh]`}>
+                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[75vh]`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {cleanPdfText(selectedPaperFull.content_markdown)}
                                   </ReactMarkdown>
                                 </div>
                               )
                             }
-                            return (
-                              <iframe
-                                src={url}
-                                className={`w-full rounded border border-slate-200 `}
-                                style={{ height: l4Fullscreen ? '85vh' : '75vh' }}
-                                title="Document Viewer"
-                              />
-                            )
+                            return <PdfViewer url={url} expanded={l4Fullscreen} />
                           })()
                         ) : (
-                          <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[85vh]`}>
+                          <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[75vh]`}>
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {cleanPdfText(selectedPaperFull.content_markdown || '')}
                             </ReactMarkdown>
                           </div>
                         )}
+                        </div>
                       </div>
                     )}
 
