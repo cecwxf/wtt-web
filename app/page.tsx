@@ -14,7 +14,7 @@ export default function Home() {
       // 已登录用户跳转到信息流首页。
       router.push('/feed')
     } else if (status === 'unauthenticated') {
-      // 未登录用户跳转到登录页。我们
+      // 未登录用户跳转到登录页。
       router.push('/login')
     }
     // status === 'loading' 时保持当前页面，展示下方 loading 动画。
