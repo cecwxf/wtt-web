@@ -1415,7 +1415,7 @@ export default function CodeTaskPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },
-          body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: task?.status === 'todo', context_file: selectedFile?.path || undefined }),
+          body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: task?.status === 'todo' }),
         })
         if (!r.ok) throw new Error(await r.text())
         await mutateTask()
