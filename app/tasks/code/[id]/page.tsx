@@ -247,21 +247,11 @@ function ContextMenu({ items, x, y, onClose }: { items: ContextMenuItem[]; x: nu
   )
 }
 
-function symbolKindName(kind: number): string {
-  const map: Record<number, string> = {
-    0: 'File', 1: 'Module', 2: 'Namespace', 3: 'Package', 4: 'Class', 5: 'Method',
-    6: 'Property', 7: 'Field', 8: 'Constructor', 9: 'Enum', 10: 'Interface',
-    11: 'Function', 12: 'Variable', 13: 'Constant', 14: 'String', 15: 'Number',
-    16: 'Boolean', 17: 'Array', 18: 'Object', 19: 'Key', 20: 'Null', 21: 'EnumMember',
-    22: 'Struct', 23: 'Event', 24: 'Operator', 25: 'TypeParameter',
-  }
-  return map[kind] || 'Symbol'
-}
-
 const SYMBOL_ICONS: Record<string, string> = {
   Function: '𝑓', Method: '𝑓', Class: '◆', Interface: '◇', Enum: '∈',
   Variable: '𝑥', Constant: 'π', Property: '◉', Field: '◉', Type: '𝑇',
   Constructor: '⊕', Module: '◫', Namespace: '◫', Struct: '◆', EnumMember: '∷',
+  H1: '#', H2: '##', H3: '###', H4: '####', H5: '#####', H6: '######',
   Symbol: '○',
 }
 
@@ -1189,55 +1179,61 @@ export default function CodeTaskPage() {
   const [showOutline, setShowOutline] = useState(false)
 
   const refreshOutline = useCallback(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const editor = editorRef.current as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const monaco = monacoRef.current as any
-    if (!editor || !monaco) return
-    const model = editor.getModel()
-    if (!model) return
-    try {
-      // Use Monaco's built-in document symbol provider
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      monaco.editor.getModelMarkers({ resource: model.uri })
-      const getSymbols = async () => {
-        try {
-          const symbols = await (monaco.languages?.DocumentSymbolProviderRegistry?.ordered?.(model)?.[0]?.provideDocumentSymbols?.(model) ?? Promise.resolve([]))
-          if (symbols?.length) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const map = (s: any): OutlineSymbol => ({
-              name: s.name || s.detail || '?',
-              kind: symbolKindName(s.kind),
-              line: s.range?.startLineNumber || s.selectionRange?.startLineNumber || 0,
-              children: s.children?.map(map),
-            })
-            setOutlineSymbols(symbols.map(map))
-            return
-          }
-        } catch { /* fallback below */ }
-        // Fallback: regex-based symbol extraction
-        const text = model.getValue()
-        const syms: OutlineSymbol[] = []
-        const lines = text.split('\n')
-        lines.forEach((line: string, i: number) => {
-          const fn = line.match(/^\s*(export\s+)?(async\s+)?function\s+(\w+)/);
-          const cls = line.match(/^\s*(export\s+)?(default\s+)?class\s+(\w+)/)
-          const iface = line.match(/^\s*(export\s+)?interface\s+(\w+)/)
-          const typ = line.match(/^\s*(export\s+)?type\s+(\w+)/)
-          const constFn = line.match(/^\s*(export\s+)?const\s+(\w+)\s*=\s*(async\s+)?\(/)
-          const pyDef = line.match(/^(class|def|async def)\s+(\w+)/)
-          if (fn) syms.push({ name: fn[3], kind: 'Function', line: i + 1 })
-          else if (cls) syms.push({ name: cls[3], kind: 'Class', line: i + 1 })
-          else if (iface) syms.push({ name: iface[2], kind: 'Interface', line: i + 1 })
-          else if (typ) syms.push({ name: typ[2], kind: 'Type', line: i + 1 })
-          else if (constFn) syms.push({ name: constFn[2], kind: 'Function', line: i + 1 })
-          else if (pyDef) syms.push({ name: pyDef[2], kind: pyDef[1] === 'class' ? 'Class' : 'Function', line: i + 1 })
-        })
-        setOutlineSymbols(syms)
-      }
-      getSymbols()
-    } catch { /* ignore */ }
-  }, [])
+    const text = modifiedContent
+    if (!text) { setOutlineSymbols([]); return }
+    const syms: OutlineSymbol[] = []
+    const lines = text.split('\n')
+    lines.forEach((line: string, i: number) => {
+      // JS/TS
+      const fn = line.match(/^\s*(export\s+)?(async\s+)?function\s+(\w+)/)
+      const cls = line.match(/^\s*(export\s+)?(default\s+)?(abstract\s+)?class\s+(\w+)/)
+      const iface = line.match(/^\s*(export\s+)?interface\s+(\w+)/)
+      const typ = line.match(/^\s*(export\s+)?type\s+(\w+)\s*[=<{]/)
+      const constFn = line.match(/^\s*(export\s+)?const\s+(\w+)\s*=\s*(async\s+)?(\([^)]*\)|[a-zA-Z_]\w*)\s*=>/)
+      const constFn2 = line.match(/^\s*(export\s+)?const\s+(\w+)\s*=\s*(async\s+)?function/)
+      const enumDecl = line.match(/^\s*(export\s+)?enum\s+(\w+)/)
+      // React component: const X = React.memo / forwardRef / styled
+      const reactComp = line.match(/^\s*(export\s+)?const\s+(\w+)\s*[:=]\s*(React\.)?(memo|forwardRef|styled|lazy)/)
+      // Python
+      const pyDef = line.match(/^(class|def|async def)\s+(\w+)/)
+      // Go
+      const goFunc = line.match(/^func\s+(\(.*?\)\s+)?(\w+)/)
+      // Rust
+      const rustFn = line.match(/^\s*(pub\s+)?(async\s+)?fn\s+(\w+)/)
+      const rustStruct = line.match(/^\s*(pub\s+)?struct\s+(\w+)/)
+      const rustEnum = line.match(/^\s*(pub\s+)?enum\s+(\w+)/)
+      const rustTrait = line.match(/^\s*(pub\s+)?trait\s+(\w+)/)
+      const rustImpl = line.match(/^\s*impl(<.*?>)?\s+(\w+)/)
+      // Java/Kotlin/C#
+      const javaClass = line.match(/^\s*(public|private|protected)?\s*(static\s+)?(abstract\s+)?(class|interface|enum)\s+(\w+)/)
+      const javaMethod = line.match(/^\s*(public|private|protected)\s+(static\s+)?(async\s+)?[\w<>\[\]]+\s+(\w+)\s*\(/)
+      // CSS
+      const cssSelector = line.match(/^([.#][\w-]+)\s*\{/)
+      // Markdown
+      const mdHeading = line.match(/^(#{1,6})\s+(.+)/)
+
+      if (fn) syms.push({ name: fn[3], kind: 'Function', line: i + 1 })
+      else if (cls) syms.push({ name: cls[4], kind: 'Class', line: i + 1 })
+      else if (iface) syms.push({ name: iface[2], kind: 'Interface', line: i + 1 })
+      else if (typ) syms.push({ name: typ[2], kind: 'Type', line: i + 1 })
+      else if (enumDecl) syms.push({ name: enumDecl[2], kind: 'Enum', line: i + 1 })
+      else if (constFn) syms.push({ name: constFn[2], kind: 'Function', line: i + 1 })
+      else if (constFn2) syms.push({ name: constFn2[2], kind: 'Function', line: i + 1 })
+      else if (reactComp) syms.push({ name: reactComp[2], kind: 'Class', line: i + 1 })
+      else if (pyDef) syms.push({ name: pyDef[2], kind: pyDef[1].includes('class') ? 'Class' : 'Function', line: i + 1 })
+      else if (goFunc) syms.push({ name: goFunc[2], kind: 'Function', line: i + 1 })
+      else if (rustFn) syms.push({ name: rustFn[3], kind: 'Function', line: i + 1 })
+      else if (rustStruct) syms.push({ name: rustStruct[2], kind: 'Struct', line: i + 1 })
+      else if (rustEnum) syms.push({ name: rustEnum[2], kind: 'Enum', line: i + 1 })
+      else if (rustTrait) syms.push({ name: rustTrait[2], kind: 'Interface', line: i + 1 })
+      else if (rustImpl) syms.push({ name: `impl ${rustImpl[2]}`, kind: 'Class', line: i + 1 })
+      else if (javaClass) syms.push({ name: javaClass[5], kind: javaClass[4] === 'enum' ? 'Enum' : javaClass[4] === 'interface' ? 'Interface' : 'Class', line: i + 1 })
+      else if (javaMethod) syms.push({ name: javaMethod[4], kind: 'Method', line: i + 1 })
+      else if (cssSelector) syms.push({ name: cssSelector[1], kind: 'Property', line: i + 1 })
+      else if (mdHeading) syms.push({ name: mdHeading[2].trim(), kind: `H${mdHeading[1].length}` as string, line: i + 1 })
+    })
+    setOutlineSymbols(syms)
+  }, [modifiedContent])
 
   // Refresh outline when file content settles
   useEffect(() => {
