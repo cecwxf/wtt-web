@@ -376,8 +376,14 @@ export default function ResearchTaskPage() {
   }, [])
 
   const quoteToChat = (text: string) => {
-    const quoted = text.split('\n').map(l => `> ${l}`).join('\n')
-    setChatInput(prev => prev ? `${prev}\n\n${quoted}\n\n` : `${quoted}\n\n`)
+    const charCount = text.length
+    const lineCount = text.split('\n').length
+    const preview = text.slice(0, 100).replace(/\n/g, ' ').trim()
+    const ellipsis = charCount > 100 ? '...' : ''
+    const paperTitle = selectedPaperFull?.title || 'Current Document'
+    // Compact reference — agent has paper context, just needs a locator
+    const ref = `📌 [Paper Ref: "${paperTitle}" — ${charCount} chars, ${lineCount} lines]\n> "${preview}${ellipsis}"`
+    setChatInput(prev => prev ? `${prev}\n\n${ref}\n\n` : `${ref}\n\n`)
     setQuoteBtn(null)
     setCtxMenu(null)
     window.getSelection()?.removeAllRanges()

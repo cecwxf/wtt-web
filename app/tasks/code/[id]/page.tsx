@@ -2692,10 +2692,14 @@ export default function CodeTaskPage() {
                             if (!selection) return
                             const selectedCode = ed.getModel()?.getValueInRange(selection) || ''
                             if (!selectedCode.trim()) return
-                            const filePath = selectedFileRef.current?.path || ''
+                            const filePath = selectedFileRef.current?.path || 'unknown'
+                            const startLine = selection.startLineNumber
+                            const endLine = selection.endLineNumber
+                            const lineCount = endLine - startLine + 1
+                            const charCount = selectedCode.length
                             const lang = langFromPath(filePath)
-                            const quoted = `\`\`\`${lang}\n${selectedCode}\n\`\`\``
-                            const ref = filePath ? `📄 \`${filePath}\`:\n${quoted}` : quoted
+                            // Compact reference — agent can read the file directly
+                            const ref = `📌 [Code Ref: \`${filePath}\` L${startLine}-L${endLine}, ${lineCount} lines, ${charCount} chars, ${lang}]`
                             setChatInput(prev => prev ? `${prev}\n\n${ref}\n\n` : `${ref}\n\n`)
                           },
                         })
