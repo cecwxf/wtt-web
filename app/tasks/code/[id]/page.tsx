@@ -1207,6 +1207,14 @@ export default function CodeTaskPage() {
       // Java/Kotlin/C#
       const javaClass = line.match(/^\s*(public|private|protected)?\s*(static\s+)?(abstract\s+)?(class|interface|enum)\s+(\w+)/)
       const javaMethod = line.match(/^\s*(public|private|protected)\s+(static\s+)?(async\s+)?[\w<>\[\]]+\s+(\w+)\s*\(/)
+      // C/C++
+      const cppClass = line.match(/^\s*(class|struct)\s+(\w+)/)
+      const cppNamespace = line.match(/^\s*namespace\s+(\w+)/)
+      const cppFunc = line.match(/^[\w:*&<>\s]+?\s+(\w+)\s*\([^)]*\)\s*(const\s*)?\{?\s*$/)
+      const cppEnum = line.match(/^\s*enum\s+(class\s+)?(\w+)/)
+      const cppTypedef = line.match(/^\s*typedef\s+.*\s+(\w+)\s*;/)
+      const cppDefine = line.match(/^\s*#define\s+(\w+)/)
+      const cppTemplate = line.match(/^\s*template\s*</)
       // CSS
       const cssSelector = line.match(/^([.#][\w-]+)\s*\{/)
       // Markdown
@@ -1229,6 +1237,12 @@ export default function CodeTaskPage() {
       else if (rustImpl) syms.push({ name: `impl ${rustImpl[2]}`, kind: 'Class', line: i + 1 })
       else if (javaClass) syms.push({ name: javaClass[5], kind: javaClass[4] === 'enum' ? 'Enum' : javaClass[4] === 'interface' ? 'Interface' : 'Class', line: i + 1 })
       else if (javaMethod) syms.push({ name: javaMethod[4], kind: 'Method', line: i + 1 })
+      else if (cppNamespace) syms.push({ name: cppNamespace[1], kind: 'Namespace', line: i + 1 })
+      else if (cppEnum) syms.push({ name: cppEnum[2], kind: 'Enum', line: i + 1 })
+      else if (cppClass) syms.push({ name: cppClass[2], kind: cppClass[1] === 'struct' ? 'Struct' : 'Class', line: i + 1 })
+      else if (cppTypedef) syms.push({ name: cppTypedef[1], kind: 'Type', line: i + 1 })
+      else if (cppDefine) syms.push({ name: cppDefine[1], kind: 'Constant', line: i + 1 })
+      else if (!cppTemplate && cppFunc && !line.match(/^\s*(if|else|for|while|switch|return|#|\/\/)/)) syms.push({ name: cppFunc[1], kind: 'Function', line: i + 1 })
       else if (cssSelector) syms.push({ name: cssSelector[1], kind: 'Property', line: i + 1 })
       else if (mdHeading) syms.push({ name: mdHeading[2].trim(), kind: `H${mdHeading[1].length}` as string, line: i + 1 })
     })
