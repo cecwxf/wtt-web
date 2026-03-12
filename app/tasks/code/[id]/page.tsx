@@ -848,12 +848,11 @@ export default function CodeTaskPage() {
         alert(`Save failed: ${e instanceof Error ? e.message : 'unknown'}`)
       }
     } else if (task?.repo_url && session?.accessToken) {
-      // GitHub mode: save file to remote edit branch
+      // GitHub mode: save file to remote edit branch (keep original baseline)
       setSaving(true)
       try {
         let branch = editBranch
         if (!branch) {
-          // Auto-create edit branch
           branch = `wtt-edit-${Date.now()}`
           const brResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/branch`, {
             method: 'POST',
@@ -863,14 +862,13 @@ export default function CodeTaskPage() {
           if (!brResp.ok) throw new Error(await brResp.text())
           setEditBranch(branch)
         }
-        // Save file to branch
         const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(selectedFile.path)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
           body: JSON.stringify({ content: modifiedContent, branch, message: `Update ${selectedFile.path}` }),
         })
         if (!resp.ok) throw new Error(await resp.text())
-        setFileContent(modifiedContent)
+        // Don't overwrite fileContent — keep main branch baseline for discard
         setIsModified(false)
         setSavedFiles(prev => { const s = new Set(Array.from(prev)); s.add(selectedFile.path); return s })
       } catch (e) {
@@ -879,6 +877,14 @@ export default function CodeTaskPage() {
         setSaving(false)
       }
     }
+  }
+
+  const discardEdits = () => {
+    // Revert editor to original main-branch content
+    setModifiedContent(fileContent)
+    setIsModified(false)
+    setEditBranch(null)
+    setSavedFiles(new Set())
   }
 
   const createPR = async () => {
@@ -1776,7 +1782,7 @@ export default function CodeTaskPage() {
                         </button>
                       </div>
                     )}
-                    {hasSavedEdits && !isModified && (
+                    {hasSavedEdits && (
                       <div className="absolute bottom-2 right-[calc(33%+12px)] z-10 flex items-center gap-2">
                         <span className="rounded-lg bg-slate-800/80 px-2 py-1 text-[11px] text-white">
                           🌿 {savedFiles.size} file(s) on {editBranch}
@@ -1786,6 +1792,12 @@ export default function CodeTaskPage() {
                           className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-emerald-600"
                         >
                           🔀 Create PR
+                        </button>
+                        <button
+                          onClick={() => { if (confirm('Discard all edits and revert to main branch?')) discardEdits() }}
+                          className="rounded-lg bg-red-500/80 px-2 py-1.5 text-xs text-white shadow-lg hover:bg-red-600"
+                        >
+                          ✕ Discard
                         </button>
                       </div>
                     )}
