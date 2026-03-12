@@ -1150,17 +1150,8 @@ export default function CodeTaskPage() {
       // GitHub mode: save file to remote edit branch (keep original baseline)
       setSaving(true)
       try {
-        let branch = editBranch
-        if (!branch) {
-          branch = `wtt-edit-${Date.now()}`
-          const brResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/branch`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...repoHeaders() },
-            body: JSON.stringify({ branch_name: branch }),
-          })
-          if (!brResp.ok) throw new Error(await brResp.text())
-          setEditBranch(branch)
-        }
+        const branch = await ensureEditBranch()
+        if (!branch) { setSaving(false); return }
         const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(selectedFile.path)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...repoHeaders() },
@@ -1199,6 +1190,7 @@ export default function CodeTaskPage() {
       if (!resp.ok) throw new Error(await resp.text())
       const data = await resp.json()
       alert(`PR #${data.number} created!`)
+      // Clear saved-files tracking but keep editBranch — fixed branch reused next time
       setEditBranch(null)
       setSavedFiles(new Set())
       void fetchPulls()
@@ -1516,18 +1508,20 @@ export default function CodeTaskPage() {
   }, [modifiedContent, selectedFile, showOutline, refreshOutline])
 
   // ── File tree actions (new file, new folder, delete, rename) ──
+  // Fixed per-task edit branch — reused across sessions, no timestamp clutter
+  const editBranchName = `wtt-edit-${taskId}`
   const ensureEditBranch = async (): Promise<string | null> => {
     if (editBranch) return editBranch
-    const branchName = `wtt-edit-${Date.now()}`
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/branch`, {
         method: 'POST',
         headers: { ...repoHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branch_name: branchName, base_branch: currentBranch || defaultBranch }),
+        body: JSON.stringify({ branch_name: editBranchName, base_branch: currentBranch || defaultBranch }),
       })
-      if (!r.ok) throw new Error(await r.text())
-      setEditBranch(branchName)
-      return branchName
+      // 422 = branch already exists on remote — reuse it
+      if (!r.ok && r.status !== 422) throw new Error(await r.text())
+      setEditBranch(editBranchName)
+      return editBranchName
     } catch (e) {
       alert(`创建分支失败: ${e instanceof Error ? e.message : 'unknown'}`)
       return null
