@@ -1083,6 +1083,8 @@ export default function CodeTaskPage() {
   const [editorMinimap, setEditorMinimap] = useState(true)
   const [editorTabSize, setEditorTabSize] = useState(2)
   const editorRef = useRef<unknown>(null)
+  const monacoRef = useRef<unknown>(null)
+  const [aiCompletionEnabled, setAiCompletionEnabled] = useState(true)
 
   // ── Full-page theme (VSCode-style) ──────────────────
   type PageTheme = 'light' | 'dark' | 'dark-dimmed' | 'monokai'
@@ -1739,6 +1741,13 @@ export default function CodeTaskPage() {
                       <option value="dark-dimmed">🌘 Dark Dimmed</option>
                       <option value="monokai">🎨 Monokai</option>
                     </select>
+                    <span className={tc.textMuted}>|</span>
+                    {/* AI completion toggle */}
+                    <button
+                      onClick={() => setAiCompletionEnabled(v => !v)}
+                      className={`rounded px-1.5 text-[10px] ${tc.hoverBg} ${aiCompletionEnabled ? 'text-indigo-600 font-medium' : tc.textMuted}`}
+                      title={aiCompletionEnabled ? 'AI completion ON (Tab to accept)' : 'AI completion OFF'}
+                    >✨ AI {aiCompletionEnabled ? 'ON' : 'OFF'}</button>
                     <div className="flex-1" />
                     {/* Language indicator */}
                     <span className={`text-[10px] ${tc.textMuted}`}>{langFromPath(selectedFile.path)}</span>
@@ -1763,7 +1772,107 @@ export default function CodeTaskPage() {
                         setModifiedContent(v || '')
                         setIsModified(v !== fileContent)
                       }}
-                      onMount={(editor) => { editorRef.current = editor }}
+                      onMount={(editor, monaco) => {
+                        editorRef.current = editor
+                        monacoRef.current = monaco
+
+                        // Register AI inline completion provider (ghost text on typing pause)
+                        let completionDisposable: { dispose: () => void } | null = null
+                        const registerProvider = () => {
+                          if (completionDisposable) completionDisposable.dispose()
+                          let debounceTimer: ReturnType<typeof setTimeout> | null = null
+                          let abortController: AbortController | null = null
+
+                          completionDisposable = monaco.languages.registerInlineCompletionItemProvider('*', {
+                            provideInlineCompletionItems: async (model: { getValueInRange: (r: unknown) => string; getLineCount: () => number; getLineMaxColumn: (l: number) => number }, position: { lineNumber: number; column: number }) => {
+                              // Cancel previous request
+                              if (abortController) abortController.abort()
+                              if (debounceTimer) clearTimeout(debounceTimer)
+
+                              return new Promise((resolve) => {
+                                debounceTimer = setTimeout(async () => {
+                                  abortController = new AbortController()
+                                  try {
+                                    const codeBefore = model.getValueInRange({
+                                      startLineNumber: Math.max(1, position.lineNumber - 50),
+                                      startColumn: 1,
+                                      endLineNumber: position.lineNumber,
+                                      endColumn: position.column,
+                                    })
+                                    const codeAfter = model.getValueInRange({
+                                      startLineNumber: position.lineNumber,
+                                      startColumn: position.column,
+                                      endLineNumber: Math.min(model.getLineCount(), position.lineNumber + 20),
+                                      endColumn: model.getLineMaxColumn(Math.min(model.getLineCount(), position.lineNumber + 20)),
+                                    })
+                                    if (codeBefore.trim().length < 3) { resolve({ items: [] }); return }
+
+                                    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/completions`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                                      body: JSON.stringify({ file_path: selectedFile?.path || 'untitled', code_before: codeBefore, code_after: codeAfter }),
+                                      signal: abortController!.signal,
+                                    })
+                                    if (!r.ok) { resolve({ items: [] }); return }
+                                    const data = await r.json()
+                                    const text = data.completion?.trim()
+                                    if (!text) { resolve({ items: [] }); return }
+                                    resolve({
+                                      items: [{
+                                        insertText: text,
+                                        range: {
+                                          startLineNumber: position.lineNumber,
+                                          startColumn: position.column,
+                                          endLineNumber: position.lineNumber,
+                                          endColumn: position.column,
+                                        },
+                                      }],
+                                    })
+                                  } catch {
+                                    resolve({ items: [] })
+                                  }
+                                }, 600)
+                              })
+                            },
+                            freeInlineCompletionItems: () => {},
+                          })
+                        }
+                        registerProvider()
+
+                        // Ctrl+I / Cmd+I: inline AI edit
+                        editor.addAction({
+                          id: 'ai-inline-edit',
+                          label: 'AI Inline Edit',
+                          keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI],
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          run: (ed: any) => {
+                            const selection = ed.getSelection()
+                            if (!selection) return
+                            const selectedCode = ed.getModel()?.getValueInRange(selection) || ''
+                            const instruction = window.prompt('AI Edit Instruction:', selectedCode ? 'Refactor this code' : 'Generate code here')
+                            if (!instruction) return
+                            // Send to completions endpoint with instruction
+                            fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/completions`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                              body: JSON.stringify({
+                                file_path: selectedFile?.path || 'untitled',
+                                code_before: `// Instruction: ${instruction}\n${selectedCode ? `// Selected code:\n${selectedCode}\n// Rewritten code:\n` : ''}`,
+                                code_after: '',
+                                max_tokens: 512,
+                              }),
+                            }).then(r => r.json()).then(data => {
+                              const text = data.completion?.trim()
+                              if (text) {
+                                ed.executeEdits('ai-edit', [{
+                                  range: selection,
+                                  text: text,
+                                }])
+                              }
+                            }).catch(() => {})
+                          },
+                        })
+                      }}
                       theme={editorTheme}
                       options={{
                         fontSize: editorFontSize,
@@ -1782,6 +1891,7 @@ export default function CodeTaskPage() {
                         linkedEditing: true,
                         renderWhitespace: 'selection',
                         suggest: { showKeywords: true, showSnippets: true },
+                        inlineSuggest: { enabled: aiCompletionEnabled },
                       }}
                     />
                     {isModified && (
