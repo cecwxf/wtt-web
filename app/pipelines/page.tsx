@@ -53,6 +53,7 @@ interface TaskDraft extends Partial<TaskNode> {
   dependencies?: string
   timeout_minutes?: number | null
   tags?: string
+  _committedAs?: string
 }
 
 interface ChatMessage {
@@ -245,14 +246,37 @@ export default function PipelinesPage() {
   /* ─── draft (unsaved) nodes on canvas ─── */
   const [draftNodes, setDraftNodes] = useState<Record<string, TaskDraft & { _shape: NodeShape }>>({})
   const allNodes: TaskNode[] = useMemo(() => {
-    const drafts: TaskNode[] = Object.entries(draftNodes).map(([id, d]) => ({
-      id,
-      title: d.title || 'Untitled',
-      status: 'todo' as const,
-      owner_agent_id: d.owner_agent_id,
-      runner_agent_id: d.runner_agent_id,
-    }))
+    const realIds = new Set(nodes.map(n => n.id))
+    // Exclude committed drafts whose real node is already in nodes
+    const drafts: TaskNode[] = Object.entries(draftNodes)
+      .filter(([, d]) => !d._committedAs || !realIds.has(d._committedAs))
+      .map(([id, d]) => ({
+        id,
+        title: d.title || 'Untitled',
+        status: 'todo' as const,
+        owner_agent_id: d.owner_agent_id,
+        runner_agent_id: d.runner_agent_id,
+      }))
     return [...nodes, ...drafts]
+  }, [nodes, draftNodes])
+
+  // Auto-cleanup committed drafts once real node appears in nodes
+  useEffect(() => {
+    const realIds = new Set(nodes.map(n => n.id))
+    const toRemove = Object.entries(draftNodes)
+      .filter(([, d]) => d._committedAs && realIds.has(d._committedAs))
+      .map(([id]) => id)
+    if (toRemove.length === 0) return
+    setDraftNodes((prev) => {
+      const next = { ...prev }
+      toRemove.forEach(id => delete next[id])
+      return next
+    })
+    setPositions((prev: Record<string, NodeMeta>) => {
+      const next = { ...prev }
+      toRemove.forEach(id => delete next[id])
+      return next
+    })
   }, [nodes, draftNodes])
 
   /* ─── drag-to-connect state ─── */
@@ -495,13 +519,13 @@ export default function PipelinesPage() {
     })
     if (!r.ok) { alert(`Create task failed: ${(await r.json().catch(() => ({}))).detail || r.statusText}`); return }
     const j = await r.json()
-    // First: set position for real node (keep draft visible)
+    // Set position for the real node ID
     const pos = positions[draftId]
     setPositions((prev: Record<string, NodeMeta>) => ({
       ...prev,
       [j.id]: pos || { x: 80, y: 80, shape: draft._shape },
     }))
-    // Commit any local edges involving this draft to the API
+    // Commit local edges involving this draft to the API
     const draftEdges = localEdges.filter(e => e.task_id === draftId || e.depends_on_task_id === draftId)
     for (const le of draftEdges) {
       const realFrom = le.depends_on_task_id === draftId ? j.id : le.depends_on_task_id
@@ -513,16 +537,10 @@ export default function PipelinesPage() {
         body: JSON.stringify({ depends_on_task_id: realFrom, mode: 'p2p', required: true }),
       }).catch(() => {})
     }
-    // Refresh graph — real node now in SWR
-    await mutateGraph()
-    // NOW safe to remove draft (real node is in nodes)
-    setPositions((prev: Record<string, NodeMeta>) => {
-      const next = { ...prev }
-      delete next[draftId]
-      return next
-    })
-    setDraftNodes((prev) => { const n = { ...prev }; delete n[draftId]; return n })
+    // Mark draft as committed — useEffect will clean it up when real node appears in nodes
+    setDraftNodes((prev) => ({ ...prev, [draftId]: { ...prev[draftId], _committedAs: j.id } }))
     setLocalEdges((prev) => prev.filter(e => e.task_id !== draftId && e.depends_on_task_id !== draftId))
+    await mutateGraph()
     setSelectedTaskId(j.id)
   }
 
@@ -748,80 +766,67 @@ export default function PipelinesPage() {
   /* ─── chat: send message ─── */
   const sendChatMessage = async () => {
     if (!chatInput.trim() || chatSending) return
-    let topicId = activeChatTopicId
-
-    if (chatTarget === 'agent' && !topicId && selectedAgentId) {
-      // Create P2P topic between user and agent for pipeline chat
-      const userActor = actorSource(session, selectedAgentId)
-      const createR = await fetch(`${CLIENT_WTT_API_BASE}/p2p`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-        body: JSON.stringify({
-          sender_id: userActor,
-          target_id: selectedAgentId,
-          content: '',
-        }),
-      })
-      if (createR.ok) {
-        const res = await createR.json()
-        topicId = res.topic_id || res.id
-        setAgentP2pTopicId(topicId!)
-      } else {
-        // Fallback: create a P2P topic directly
-        const fallbackR = await fetch(`${CLIENT_WTT_API_BASE}/topics`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-          body: JSON.stringify({
-            name: `p2p:${userActor}:${selectedAgentId}`,
-            description: `Pipeline chat between ${userActor} and ${selectedAgentId}`,
-            type: 'p2p',
-            visibility: 'private',
-            creator_agent_id: userActor,
-          }),
-        })
-        if (fallbackR.ok) {
-          const t = await fallbackR.json()
-          topicId = t.id
-          setAgentP2pTopicId(topicId!)
-          // Join agent to the topic
-          await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/join`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-            body: JSON.stringify({ agent_id: selectedAgentId }),
-          }).catch(() => {})
-        }
-      }
-    } else if (chatTarget === 'node' && !topicId && editingPipelineId) {
-      // Create a pipeline discussion topic for node chat
-      const pName = editingPipeline?.name || 'Pipeline'
-      const createR = await fetch(`${CLIENT_WTT_API_BASE}/topics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-        body: JSON.stringify({
-          name: `pipeline:${pName}`,
-          description: `Chat for pipeline ${pName}`,
-          type: 'discussion',
-          visibility: 'private',
-          creator_agent_id: selectedAgentId || actorSource(session, selectedAgentId),
-        }),
-      })
-      if (createR.ok) {
-        const t = await createR.json()
-        topicId = t.id
-        await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines/${editingPipelineId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-          body: JSON.stringify({ topic_id: topicId }),
-        })
-        await mutatePipelines()
-      }
-    }
-
-    if (!topicId) return
     setChatSending(true)
     const content = chatInput.trim()
     setChatInput('')
+
     try {
+      let topicId = activeChatTopicId
+
+      if (chatTarget === 'agent' && !topicId && selectedAgentId) {
+        // Use /messages/p2p — auto-creates P2P topic + sends first message
+        const userActor = actorSource(session, selectedAgentId)
+        const p2pR = await fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(userActor)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+          body: JSON.stringify({
+            target_agent_id: selectedAgentId,
+            content,
+            content_type: 'text',
+            semantic_type: 'post',
+          }),
+        })
+        if (p2pR.ok) {
+          const res = await p2pR.json()
+          topicId = res.topic_id
+          setAgentP2pTopicId(topicId!)
+          await mutateChat()
+        } else {
+          const errTxt = await p2pR.text().catch(() => '')
+          alert(`P2P message failed: ${errTxt || p2pR.status}`)
+        }
+        return
+      }
+
+      if (chatTarget === 'node' && !topicId && editingPipelineId) {
+        // Create a pipeline discussion topic for node chat
+        const pName = editingPipeline?.name || 'Pipeline'
+        const createR = await fetch(`${CLIENT_WTT_API_BASE}/topics`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+          body: JSON.stringify({
+            name: `pipeline:${pName}`,
+            description: `Chat for pipeline ${pName}`,
+            type: 'discussion',
+            visibility: 'private',
+            creator_agent_id: selectedAgentId || actorSource(session, selectedAgentId),
+          }),
+        })
+        if (createR.ok) {
+          const t = await createR.json()
+          topicId = t.id
+          await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines/${editingPipelineId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+            body: JSON.stringify({ topic_id: topicId }),
+          })
+          await mutatePipelines()
+        }
+      }
+
+      if (!topicId) return
+
+      // Send to existing topic
       await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
