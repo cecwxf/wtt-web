@@ -264,6 +264,9 @@ export default function CodeTaskPage() {
   const [repoSearching, setRepoSearching] = useState(false)
   const [repoSearchResults, setRepoSearchResults] = useState<Array<{ path: string; name?: string; sha?: string; url?: string }>>([])
   const codebaseSharedSigRef = useRef<string>('')
+  const [repoBranches, setRepoBranches] = useState<string[]>([])
+  const [currentBranch, setCurrentBranch] = useState<string>('')
+  const [defaultBranch, setDefaultBranch] = useState<string>('main')
 
   // ── Remote agent (SSH) state ──────────────────────
   const [agentMode, setAgentMode] = useState<'local' | 'remote'>('local')
@@ -485,20 +488,22 @@ export default function CodeTaskPage() {
     return h
   }, [session?.accessToken, ghToken])
 
-  const loadRepoTree = useCallback(async () => {
+  const loadRepoTree = useCallback(async (branchOverride?: string) => {
     if (!task?.repo_url || !session?.accessToken) {
       setRepoTree([])
       return
     }
     setRepoLoading(true)
     try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/tree`, {
+      const params = branchOverride ? `?ref=${encodeURIComponent(branchOverride)}` : ''
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/tree${params}`, {
         headers: repoHeaders(),
       })
       if (!r.ok) throw new Error(await r.text())
       const data = await r.json()
       const tree = buildFileTreeFromFlat((data.tree || []) as RepoTreeItem[])
       setRepoTree(tree)
+      if (data.branch) setCurrentBranch(data.branch)
     } catch (e) {
       console.error('load repo tree failed', e)
       setRepoTree([])
@@ -510,6 +515,21 @@ export default function CodeTaskPage() {
   useEffect(() => {
     void loadRepoTree()
   }, [loadRepoTree])
+
+  // Load branches list
+  useEffect(() => {
+    if (!task?.repo_url || !session?.accessToken) return
+    fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/branches`, { headers: repoHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.branches) {
+          setRepoBranches(data.branches)
+          setDefaultBranch(data.default_branch || 'main')
+          if (!currentBranch) setCurrentBranch(data.default_branch || 'main')
+        }
+      })
+      .catch(() => {})
+  }, [task?.repo_url, session?.accessToken, taskId])
 
   const linkRepo = async () => {
     if (!task?.id) return
@@ -786,7 +806,8 @@ export default function CodeTaskPage() {
       setModifiedContent('// Loading file content...')
       setIsModified(false)
       try {
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}`, {
+        const branchParam = currentBranch ? `?ref=${encodeURIComponent(currentBranch)}` : ''
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(node.path)}${branchParam}`, {
           headers: repoHeaders(),
         })
         if (!r.ok) throw new Error(await r.text())
@@ -1521,8 +1542,31 @@ export default function CodeTaskPage() {
           {task?.repo_url ? (
             <>
               <div className="mb-2 rounded border border-emerald-200 bg-emerald-50 p-2 text-[10px] text-emerald-700">
-                <div className="font-semibold">{task.repo_url}</div>
-                <div>branch: {task.repo_branch || 'main'}{task.repo_path ? ` · path: ${task.repo_path}` : ''}</div>
+                <div className="font-semibold truncate" title={task.repo_url}>{task.repo_url.replace('https://github.com/', '')}</div>
+                <div className="mt-1 flex items-center gap-1">
+                  <span>🌿</span>
+                  <select
+                    className="rounded border border-emerald-300 bg-white px-1 py-0.5 text-[10px] font-medium text-emerald-800 focus:outline-none"
+                    value={currentBranch}
+                    onChange={(e) => {
+                      const b = e.target.value
+                      setCurrentBranch(b)
+                      setSelectedFile(null)
+                      setOpenFiles([])
+                      setFileContent('')
+                      setModifiedContent('')
+                      setIsModified(false)
+                      void loadRepoTree(b)
+                    }}
+                  >
+                    {repoBranches.length > 0 ? repoBranches.map(b => (
+                      <option key={b} value={b}>{b}{b === defaultBranch ? ' ✦' : ''}</option>
+                    )) : (
+                      <option value={currentBranch || 'main'}>{currentBranch || 'main'}</option>
+                    )}
+                  </select>
+                  {task.repo_path && <span className="text-emerald-500">· {task.repo_path}</span>}
+                </div>
               </div>
               <div className="mb-2 space-y-1">
                 <div className="flex gap-1">
