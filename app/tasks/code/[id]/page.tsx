@@ -1338,8 +1338,106 @@ export default function CodeTaskPage() {
     if (!text) { setOutlineSymbols([]); return }
     const syms: OutlineSymbol[] = []
     const lines = text.split('\n')
+    const lang = selectedFile ? langFromPath(selectedFile.path) : ''
+
     lines.forEach((line: string, i: number) => {
-      // JS/TS
+      const trimmed = line.trimStart()
+      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) return
+
+      // ── Markdown ──
+      if (lang === 'markdown') {
+        const md = line.match(/^(#{1,6})\s+(.+)/)
+        if (md) syms.push({ name: md[2].trim(), kind: `H${md[1].length}`, line: i + 1 })
+        return
+      }
+      // ── CSS/SCSS ──
+      if (lang === 'css' || lang === 'scss') {
+        const sel = line.match(/^([.#@][\w-][^\{]*)\s*\{/)
+        if (sel) syms.push({ name: sel[1].trim(), kind: 'Property', line: i + 1 })
+        return
+      }
+      // ── Python ──
+      if (lang === 'python') {
+        const py = line.match(/^(\s*)(class|def|async def)\s+(\w+)/)
+        if (py) syms.push({ name: py[3], kind: py[2].includes('class') ? 'Class' : 'Function', line: i + 1 })
+        return
+      }
+      // ── Go ──
+      if (lang === 'go') {
+        const goFunc = line.match(/^func\s+(\(.*?\)\s+)?(\w+)/)
+        const goType = line.match(/^type\s+(\w+)\s+(struct|interface)/)
+        if (goFunc) syms.push({ name: goFunc[2], kind: 'Function', line: i + 1 })
+        else if (goType) syms.push({ name: goType[1], kind: goType[2] === 'interface' ? 'Interface' : 'Struct', line: i + 1 })
+        return
+      }
+      // ── Rust ──
+      if (lang === 'rust') {
+        const rustFn = line.match(/^\s*(pub\s+)?(async\s+)?fn\s+(\w+)/)
+        const rustStruct = line.match(/^\s*(pub\s+)?struct\s+(\w+)/)
+        const rustEnum = line.match(/^\s*(pub\s+)?enum\s+(\w+)/)
+        const rustTrait = line.match(/^\s*(pub\s+)?trait\s+(\w+)/)
+        const rustImpl = line.match(/^\s*impl(<.*?>)?\s+(\w+)/)
+        if (rustFn) syms.push({ name: rustFn[3], kind: 'Function', line: i + 1 })
+        else if (rustStruct) syms.push({ name: rustStruct[2], kind: 'Struct', line: i + 1 })
+        else if (rustEnum) syms.push({ name: rustEnum[2], kind: 'Enum', line: i + 1 })
+        else if (rustTrait) syms.push({ name: rustTrait[2], kind: 'Interface', line: i + 1 })
+        else if (rustImpl) syms.push({ name: `impl ${rustImpl[2]}`, kind: 'Class', line: i + 1 })
+        return
+      }
+      // ── Java/Kotlin/C# ──
+      if (lang === 'java' || lang === 'kotlin' || lang === 'csharp') {
+        const jc = line.match(/^\s*(public|private|protected)?\s*(static\s+)?(abstract\s+)?(class|interface|enum)\s+(\w+)/)
+        const jm = line.match(/^\s*(public|private|protected)\s+(static\s+)?(async\s+)?[\w<>\[\]]+\s+(\w+)\s*\(/)
+        if (jc) syms.push({ name: jc[5], kind: jc[4] === 'enum' ? 'Enum' : jc[4] === 'interface' ? 'Interface' : 'Class', line: i + 1 })
+        else if (jm) syms.push({ name: jm[4], kind: 'Method', line: i + 1 })
+        return
+      }
+      // ── C/C++ ──
+      if (lang === 'c' || lang === 'cpp') {
+        // Preprocessor macros
+        const define = line.match(/^\s*#define\s+(\w+)/)
+        if (define) { syms.push({ name: define[1], kind: 'Constant', line: i + 1 }); return }
+        // Namespace
+        const ns = line.match(/^\s*namespace\s+(\w+)/)
+        if (ns) { syms.push({ name: ns[1], kind: 'Namespace', line: i + 1 }); return }
+        // Class/struct forward declarations (skip single-line forward decls: `class Foo;`)
+        const classDecl = line.match(/^\s*(class|struct)\s+(\w+)\s*[:{]/)
+        if (classDecl) { syms.push({ name: classDecl[2], kind: classDecl[1] === 'struct' ? 'Struct' : 'Class', line: i + 1 }); return }
+        // Enum
+        const enumDecl = line.match(/^\s*enum\s+(class\s+)?(\w+)/)
+        if (enumDecl) { syms.push({ name: enumDecl[2], kind: 'Enum', line: i + 1 }); return }
+        // Typedef / using alias
+        const td = line.match(/^\s*typedef\s+.*\s+(\w+)\s*;/)
+        const usingAlias = line.match(/^\s*using\s+(\w+)\s*=/)
+        if (td) { syms.push({ name: td[1], kind: 'Type', line: i + 1 }); return }
+        if (usingAlias) { syms.push({ name: usingAlias[1], kind: 'Type', line: i + 1 }); return }
+        // Template line — skip, the next line will have the actual declaration
+        if (line.match(/^\s*template\s*</)) return
+        // Function/method definitions: return_type [Class::]name(...)
+        // Match: optional qualifiers, return type (with possible template/pointer/ref), optional scope, name, open paren
+        const funcMatch = line.match(/^\s*(?:(?:static|inline|virtual|explicit|constexpr|extern|friend)\s+)*(?:const\s+)?(?:[\w:]+(?:\s*<[^>]*>)?(?:\s*[*&]+\s*|\s+))(?:[\w]+::)*(\w+)\s*\(/)
+        // Also match constructor/destructor: ClassName::ClassName( or ClassName::~ClassName(
+        const ctorDtor = line.match(/^\s*(?:[\w]+::)?(~?\w+)\s*\([^)]*\)\s*(?::\s|{|$)/)
+        // Simple C-style: `type name(` at start of line (not indented much = top-level)
+        const cSimple = line.match(/^(\w[\w*& ]*?)\s+(\w+)\s*\([^;]*$/)
+        if (funcMatch && !line.match(/^\s*(if|else|for|while|switch|return|case|delete|new)\b/)) {
+          syms.push({ name: funcMatch[1], kind: 'Function', line: i + 1 })
+        } else if (ctorDtor && line.includes('(') && !line.match(/^\s*(if|else|for|while|switch|return)\b/)) {
+          // Only if it looks like a constructor/destructor definition (has `{` or `:` initializer)
+          if (line.match(/\)\s*(:\s|{|const)/)) {
+            syms.push({ name: ctorDtor[1], kind: 'Function', line: i + 1 })
+          }
+        } else if (cSimple && !line.includes(';') && !line.match(/^\s*(if|else|for|while|switch|return|#|\/\/|typedef|using)\b/)) {
+          // C-style function: `int main(int argc, char** argv) {`
+          const name = cSimple[2]
+          // Skip common false positives
+          if (!['if', 'else', 'for', 'while', 'switch', 'return', 'sizeof', 'typeof', 'defined'].includes(name)) {
+            syms.push({ name, kind: 'Function', line: i + 1 })
+          }
+        }
+        return
+      }
+      // ── JS/TS (default) ──
       const fn = line.match(/^\s*(export\s+)?(async\s+)?function\s+(\w+)/)
       const cls = line.match(/^\s*(export\s+)?(default\s+)?(abstract\s+)?class\s+(\w+)/)
       const iface = line.match(/^\s*(export\s+)?interface\s+(\w+)/)
@@ -1347,34 +1445,7 @@ export default function CodeTaskPage() {
       const constFn = line.match(/^\s*(export\s+)?const\s+(\w+)\s*=\s*(async\s+)?(\([^)]*\)|[a-zA-Z_]\w*)\s*=>/)
       const constFn2 = line.match(/^\s*(export\s+)?const\s+(\w+)\s*=\s*(async\s+)?function/)
       const enumDecl = line.match(/^\s*(export\s+)?enum\s+(\w+)/)
-      // React component: const X = React.memo / forwardRef / styled
       const reactComp = line.match(/^\s*(export\s+)?const\s+(\w+)\s*[:=]\s*(React\.)?(memo|forwardRef|styled|lazy)/)
-      // Python
-      const pyDef = line.match(/^(class|def|async def)\s+(\w+)/)
-      // Go
-      const goFunc = line.match(/^func\s+(\(.*?\)\s+)?(\w+)/)
-      // Rust
-      const rustFn = line.match(/^\s*(pub\s+)?(async\s+)?fn\s+(\w+)/)
-      const rustStruct = line.match(/^\s*(pub\s+)?struct\s+(\w+)/)
-      const rustEnum = line.match(/^\s*(pub\s+)?enum\s+(\w+)/)
-      const rustTrait = line.match(/^\s*(pub\s+)?trait\s+(\w+)/)
-      const rustImpl = line.match(/^\s*impl(<.*?>)?\s+(\w+)/)
-      // Java/Kotlin/C#
-      const javaClass = line.match(/^\s*(public|private|protected)?\s*(static\s+)?(abstract\s+)?(class|interface|enum)\s+(\w+)/)
-      const javaMethod = line.match(/^\s*(public|private|protected)\s+(static\s+)?(async\s+)?[\w<>\[\]]+\s+(\w+)\s*\(/)
-      // C/C++
-      const cppClass = line.match(/^\s*(class|struct)\s+(\w+)/)
-      const cppNamespace = line.match(/^\s*namespace\s+(\w+)/)
-      const cppFunc = line.match(/^[\w:*&<>\s]+?\s+(\w+)\s*\([^)]*\)\s*(const\s*)?\{?\s*$/)
-      const cppEnum = line.match(/^\s*enum\s+(class\s+)?(\w+)/)
-      const cppTypedef = line.match(/^\s*typedef\s+.*\s+(\w+)\s*;/)
-      const cppDefine = line.match(/^\s*#define\s+(\w+)/)
-      const cppTemplate = line.match(/^\s*template\s*</)
-      // CSS
-      const cssSelector = line.match(/^([.#][\w-]+)\s*\{/)
-      // Markdown
-      const mdHeading = line.match(/^(#{1,6})\s+(.+)/)
-
       if (fn) syms.push({ name: fn[3], kind: 'Function', line: i + 1 })
       else if (cls) syms.push({ name: cls[4], kind: 'Class', line: i + 1 })
       else if (iface) syms.push({ name: iface[2], kind: 'Interface', line: i + 1 })
@@ -1383,26 +1454,9 @@ export default function CodeTaskPage() {
       else if (constFn) syms.push({ name: constFn[2], kind: 'Function', line: i + 1 })
       else if (constFn2) syms.push({ name: constFn2[2], kind: 'Function', line: i + 1 })
       else if (reactComp) syms.push({ name: reactComp[2], kind: 'Class', line: i + 1 })
-      else if (pyDef) syms.push({ name: pyDef[2], kind: pyDef[1].includes('class') ? 'Class' : 'Function', line: i + 1 })
-      else if (goFunc) syms.push({ name: goFunc[2], kind: 'Function', line: i + 1 })
-      else if (rustFn) syms.push({ name: rustFn[3], kind: 'Function', line: i + 1 })
-      else if (rustStruct) syms.push({ name: rustStruct[2], kind: 'Struct', line: i + 1 })
-      else if (rustEnum) syms.push({ name: rustEnum[2], kind: 'Enum', line: i + 1 })
-      else if (rustTrait) syms.push({ name: rustTrait[2], kind: 'Interface', line: i + 1 })
-      else if (rustImpl) syms.push({ name: `impl ${rustImpl[2]}`, kind: 'Class', line: i + 1 })
-      else if (javaClass) syms.push({ name: javaClass[5], kind: javaClass[4] === 'enum' ? 'Enum' : javaClass[4] === 'interface' ? 'Interface' : 'Class', line: i + 1 })
-      else if (javaMethod) syms.push({ name: javaMethod[4], kind: 'Method', line: i + 1 })
-      else if (cppNamespace) syms.push({ name: cppNamespace[1], kind: 'Namespace', line: i + 1 })
-      else if (cppEnum) syms.push({ name: cppEnum[2], kind: 'Enum', line: i + 1 })
-      else if (cppClass) syms.push({ name: cppClass[2], kind: cppClass[1] === 'struct' ? 'Struct' : 'Class', line: i + 1 })
-      else if (cppTypedef) syms.push({ name: cppTypedef[1], kind: 'Type', line: i + 1 })
-      else if (cppDefine) syms.push({ name: cppDefine[1], kind: 'Constant', line: i + 1 })
-      else if (!cppTemplate && cppFunc && !line.match(/^\s*(if|else|for|while|switch|return|#|\/\/)/)) syms.push({ name: cppFunc[1], kind: 'Function', line: i + 1 })
-      else if (cssSelector) syms.push({ name: cssSelector[1], kind: 'Property', line: i + 1 })
-      else if (mdHeading) syms.push({ name: mdHeading[2].trim(), kind: `H${mdHeading[1].length}` as string, line: i + 1 })
     })
     setOutlineSymbols(syms)
-  }, [modifiedContent])
+  }, [modifiedContent, selectedFile])
 
   // Refresh outline when file content settles
   useEffect(() => {
