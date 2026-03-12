@@ -422,22 +422,25 @@ export default function TasksPage() {
     const ok = window.confirm(`确认取消任务「${task.title}」吗？取消后任务和关联 Topic 都会消失。`)
     if (!ok) return
 
-    // Use task's created_by as agent_id for permission (user who created can delete)
-    const deleteAgentId = task.created_by || actorSource(session) || selectedAgentId || 'reviewer'
-    const response = await fetch(
-      `${CLIENT_WTT_API_BASE}/tasks/${task.id}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`,
-      {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-      }
+    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+    let response = await fetch(
+      `${CLIENT_WTT_API_BASE}/tasks/${task.id}?delete_topic=true`,
+      { method: 'DELETE', headers }
     )
+
+    if (!response.ok && response.status === 403 && selectedAgentId) {
+      const confirmDelegate = window.confirm(`当前登录用户无权直接取消。是否确认代替 ${selectedAgentId} 执行取消？`)
+      if (confirmDelegate) {
+        response = await fetch(
+          `${CLIENT_WTT_API_BASE}/tasks/${task.id}?delete_topic=true&acting_as_agent_id=${encodeURIComponent(selectedAgentId)}`,
+          { method: 'DELETE', headers }
+        )
+      }
+    }
 
     if (!response.ok) {
       const txt = await response.text()
-      try {
-        const detail = JSON.parse(txt)?.detail || txt
-        alert(`取消任务失败: ${detail}`)
-      } catch { alert(`取消任务失败: ${txt || response.status}`) }
+      alert(`Cancel Task failed: ${txt || response.status}`)
       return
     }
 
@@ -479,30 +482,86 @@ export default function TasksPage() {
     if (!selectedTaskIds.length) return alert('请先勾选任务')
     if (!confirm(`确认取消已勾选 ${selectedTaskIds.length} 个任务？将同时删除关联Topic。`)) return
     const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
-    const results = await Promise.allSettled(
-      selectedTaskIds.map((id) => {
-        const task = tasks.find(t => t.id === id)
-        const deleteAgentId = task?.created_by || actorSource(session) || selectedAgentId || 'reviewer'
-        return fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`, {
+
+    const firstPass = await Promise.allSettled(
+      selectedTaskIds.map((id) =>
+        fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?delete_topic=true`, {
           method: 'DELETE',
           headers,
         })
-      })
+      )
     )
-    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
+
+    let delegatedTried = false
+    if (selectedAgentId) {
+      const failed403 = firstPass
+        .map((r, i) => ({ r, id: selectedTaskIds[i] }))
+        .filter((x) => x.r.status === 'fulfilled' && !x.r.value.ok && x.r.value.status === 403)
+        .map((x) => x.id)
+
+      if (failed403.length > 0) {
+        const confirmDelegate = confirm(`有 ${failed403.length} 个任务当前登录用户无权直接取消。是否确认代替 ${selectedAgentId} 执行取消？`)
+        if (confirmDelegate) {
+          delegatedTried = true
+          await Promise.allSettled(
+            failed403.map((id) =>
+              fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?delete_topic=true&acting_as_agent_id=${encodeURIComponent(selectedAgentId)}`, {
+                method: 'DELETE',
+                headers,
+              })
+            )
+          )
+        }
+      }
+    }
+
+    // Refresh counts after possible delegated retries
+    const finalPass = await Promise.allSettled(
+      selectedTaskIds.map((id) =>
+        fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}`, { method: 'GET', headers })
+      )
+    )
+
+    // task deleted => GET not ok(404); task cancelled => GET ok with status=cancelled
+    let ok = 0
+    for (const r of finalPass) {
+      if (r.status !== 'fulfilled') continue
+      if (!r.value.ok) {
+        if (r.value.status === 404) ok += 1
+        continue
+      }
+      try {
+        const data = await r.value.json()
+        if (data?.status === 'cancelled') ok += 1
+      } catch {
+        // ignore
+      }
+    }
+
     setSelectedTaskIds([])
     await mutateTasks()
     await mutateSubscribedTopics()
-    alert(`批量取消完成：成功 ${ok} / ${results.length}`)
+    alert(`批量取消完成：成功 ${ok} / ${selectedTaskIds.length}${delegatedTried ? '（含代操作）' : ''}`)
   }
 
   const leaveTopicFromSidebar = async (topicId: string) => {
     if (!confirm('Leave this topic?')) return
 
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+    let response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      headers,
     })
+
+    if (!response.ok && response.status === 403 && selectedAgentId) {
+      const confirmDelegate = confirm(`当前登录用户无权直接 leave。是否确认代替 ${selectedAgentId} 执行 leave？`)
+      if (confirmDelegate) {
+        response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave?acting_as_agent_id=${encodeURIComponent(selectedAgentId)}`, {
+          method: 'POST',
+          headers,
+        })
+      }
+    }
 
     if (!response.ok) {
       const txt = await response.text()
@@ -514,19 +573,27 @@ export default function TasksPage() {
   }
 
   const deleteTopicFromSidebar = async (topicId: string) => {
-    if (!confirm('确认删除此 Topic？(软删除)')) return
+    if (!confirm('Delete this topic? (soft delete)')) return
 
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+    let response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      headers,
     })
+
+    if (!response.ok && response.status === 403 && selectedAgentId) {
+      const confirmDelegate = confirm(`当前登录用户无权直接删除。是否确认代替 ${selectedAgentId} 执行删除？`)
+      if (confirmDelegate) {
+        response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}?acting_as_agent_id=${encodeURIComponent(selectedAgentId)}`, {
+          method: 'DELETE',
+          headers,
+        })
+      }
+    }
 
     if (!response.ok) {
       const txt = await response.text()
-      try {
-        const detail = JSON.parse(txt)?.detail || txt
-        alert(`删除Topic失败: ${detail}`)
-      } catch { alert(`删除Topic失败: ${txt || response.status}`) }
+      alert(`Delete topic failed: ${txt || response.status}`)
       return
     }
 

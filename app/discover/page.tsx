@@ -6,9 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
-import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi, Topic } from '@/lib/api/wtt-client'
-import { useWebSocket } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
@@ -20,12 +19,6 @@ interface Agent {
   display_name: string
   is_primary: boolean
   api_key?: string
-}
-
-const sessionUserName = (session: unknown) => {
-  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
-  const uid = s?.userId || ''
-  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
 export default function DiscoverPage() {
@@ -43,9 +36,6 @@ export default function DiscoverPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
-
-  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
-  const { sendAction } = useWebSocket({ url: wsUrl, enabled: !!selectedAgentId, token: session?.accessToken || undefined })
 
   const loadAgents = useCallback(async () => {
     try {
@@ -241,10 +231,7 @@ export default function DiscoverPage() {
 
   const handleSubscribe = async (topicId: string) => {
     try {
-      const wsResult = await sendAction('join', { topic_id: topicId })
-      if (wsResult === null) {
-        await wttApi.joinTopic(topicId, selectedAgentId)
-      }
+      await wttApi.joinTopic(topicId, selectedAgentId)
       await mutateTopics()
       alert('Subscribed successfully')
     } catch (err) {
@@ -277,10 +264,27 @@ export default function DiscoverPage() {
   const handleLeaveTopic = async (topicId: string) => {
     if (!confirm('Leave this topic?')) return
     try {
-      const wsResult = await sendAction('leave', { topic_id: topicId })
-      if (wsResult === null) {
-        await wttApi.leaveTopic(topicId, selectedAgentId)
+      const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+      let response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave`, {
+        method: 'POST',
+        headers,
+      })
+
+      if (!response.ok && response.status === 403 && selectedAgentId) {
+        const confirmDelegate = confirm(`当前登录用户无权直接 leave。是否确认代替 ${selectedAgentId} 执行 leave？`)
+        if (confirmDelegate) {
+          response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave?acting_as_agent_id=${encodeURIComponent(selectedAgentId)}`, {
+            method: 'POST',
+            headers,
+          })
+        }
       }
+
+      if (!response.ok) {
+        const txt = await response.text()
+        throw new Error(txt || `Leave topic failed: ${response.status}`)
+      }
+
       if (selectedTopicId === topicId) setSelectedTopicId(null)
       await mutateTopics()
     } catch (err) {
@@ -291,7 +295,27 @@ export default function DiscoverPage() {
   const handleDeleteTopic = async (topicId: string) => {
     if (!confirm('Delete this topic? (soft delete)')) return
     try {
-      await wttApi.deleteTopic(topicId, selectedAgentId)
+      const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+      let response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}`, {
+        method: 'DELETE',
+        headers,
+      })
+
+      if (!response.ok && response.status === 403 && selectedAgentId) {
+        const confirmDelegate = confirm(`当前登录用户无权直接删除。是否确认代替 ${selectedAgentId} 执行删除？`)
+        if (confirmDelegate) {
+          response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}?acting_as_agent_id=${encodeURIComponent(selectedAgentId)}`, {
+            method: 'DELETE',
+            headers,
+          })
+        }
+      }
+
+      if (!response.ok) {
+        const txt = await response.text()
+        throw new Error(txt || `Delete topic failed: ${response.status}`)
+      }
+
       if (selectedTopicId === topicId) setSelectedTopicId(null)
       await mutateTopics()
     } catch (err) {
@@ -325,7 +349,6 @@ export default function DiscoverPage() {
       onTopicsRefresh={() => mutateTopics()}
       onBindingChanged={loadAgents}
       notificationCount={0}
-      currentUserName={sessionUserName(session)}
     >
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row">

@@ -1,26 +1,17 @@
 'use client'
 
 import { useSession, signOut } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
-import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
-import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { ChatView, ChatMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
-import type { ContentFormat } from '@/components/ui/content-editor'
-import type { EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
-
-const ContentEditor = dynamic(
-  () => import('@/components/ui/content-editor').then((m) => m.ContentEditor),
-  { ssr: false },
-)
 
 interface Agent {
   id: string
@@ -28,12 +19,6 @@ interface Agent {
   display_name: string
   is_primary: boolean
   api_key?: string
-}
-
-function getHumanSender(session: unknown): string {
-  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
-  const uid = s?.userId || ''
-  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
 function normalizeFeed(raw: unknown): ChatMessage[] {
@@ -58,15 +43,7 @@ function normalizeFeed(raw: unknown): ChatMessage[] {
   })
 }
 
-export default function FeedPageWrapper() {
-  return (
-    <Suspense fallback={null}>
-      <FeedPageInner />
-    </Suspense>
-  )
-}
-
-function FeedPageInner() {
+export default function FeedPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
@@ -75,7 +52,6 @@ function FeedPageInner() {
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
-  const [editorOpen, setEditorOpen] = useState(false)
 
   const loadAgents = useCallback(async () => {
     try {
@@ -127,7 +103,7 @@ function FeedPageInner() {
   const { data: feedRaw, error, mutate } = useSWR(
     selectedAgentId && session?.accessToken && selectedTopicId ? ['topic-messages', selectedTopicId, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100&agent_id=${encodeURIComponent(selectedAgentId)}`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100`, {
         headers: {
           Authorization: `Bearer ${session?.accessToken}`,
         },
@@ -141,37 +117,9 @@ function FeedPageInner() {
       return response.json()
     },
     {
-      refreshInterval: 30000,
+      refreshInterval: 5000,
     }
   )
-
-  // WebSocket for real-time messages
-  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
-  const handleWsMessage = useCallback(
-    (msg: WsMessage) => {
-      if (msg.type !== 'new_message' || !msg.message) return
-      if (msg.message.topic_id !== selectedTopicId) return
-      const incoming: ChatMessage = {
-        message_id: msg.message.id,
-        sender_id: msg.message.sender_id,
-        sender_type: (msg.message.sender_type as 'human' | 'agent') || 'agent',
-        content: msg.message.content,
-        timestamp: msg.message.created_at,
-        semantic_type: msg.message.semantic_type,
-      }
-      setAllMessages((prev) => {
-        if (prev.some((m) => m.message_id === incoming.message_id)) return prev
-        return [...prev, incoming]
-      })
-    },
-    [selectedTopicId],
-  )
-  const { state: wsState, sendAction } = useWebSocket({
-    url: wsUrl,
-    enabled: !!selectedAgentId,
-    token: session?.accessToken || undefined,
-    onMessage: handleWsMessage,
-  })
 
   useEffect(() => {
     const normalized = normalizeFeed(feedRaw)
@@ -187,7 +135,6 @@ function FeedPageInner() {
       const oldest = allMessages[0]
       const older = await wttApi.getTopicMessages(selectedTopicId, 100, {
         before: oldest.timestamp,
-        agentId: selectedAgentId,
       })
 
       const normalizedOlder = normalizeFeed(older)
@@ -231,14 +178,12 @@ function FeedPageInner() {
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
 
-    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string }) => ({
+    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string }) => ({
       topic_id: topic.id,
       name: topic.name,
       topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
       unread_count: 0,
       can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
-      task_id: topic.task_id,
-      runner_agent_id: topic.runner_agent_id,
     }))
   }, [subscribedTopicsRaw])
 
@@ -252,26 +197,22 @@ function FeedPageInner() {
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
 
-  const searchParams = useSearchParams()
   useEffect(() => {
-    const topicFromUrl = searchParams.get('topicId') || searchParams.get('topic')
+    if (typeof window === 'undefined') return
+    const topicFromUrl = new URLSearchParams(window.location.search).get('topicId')
     if (!topicFromUrl) return
     if (topics.some((t) => t.topic_id === topicFromUrl)) {
       setSelectedTopicId(topicFromUrl)
     }
-  }, [topics, searchParams])
+  }, [topics])
 
   const handleSendMessage = async (content: string) => {
     if (!selectedTopicId || !selectedAgentId) return
 
-    const isTask = !!selectedTopic?.task_id
-    // Web 端统一以 HUMAN 身份发消息（来源=登录用户）
     await wttApi.publishMessage(selectedTopicId, {
       content,
       content_type: 'text',
-      semantic_type: isTask ? 'task_request' : 'post',
-      sender_type: 'HUMAN',
-      sender_id: getHumanSender(session),
+      semantic_type: 'post',
     })
 
     mutate()
@@ -322,10 +263,27 @@ function FeedPageInner() {
   const handleLeaveTopic = async (topicId: string) => {
     if (!confirm('Leave this topic?')) return
     try {
-      const wsResult = await sendAction('leave', { topic_id: topicId })
-      if (wsResult === null) {
-        await wttApi.leaveTopic(topicId, selectedAgentId)
+      const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+      let response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave`, {
+        method: 'POST',
+        headers,
+      })
+
+      if (!response.ok && response.status === 403 && selectedAgentId) {
+        const confirmDelegate = confirm(`当前登录用户无权直接 leave。是否确认代替 ${selectedAgentId} 执行 leave？`)
+        if (confirmDelegate) {
+          response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave?acting_as_agent_id=${encodeURIComponent(selectedAgentId)}`, {
+            method: 'POST',
+            headers,
+          })
+        }
       }
+
+      if (!response.ok) {
+        const txt = await response.text()
+        throw new Error(txt || `Leave topic failed: ${response.status}`)
+      }
+
       if (selectedTopicId === topicId) setSelectedTopicId(null)
       await mutateTopics()
     } catch (err) {
@@ -336,65 +294,33 @@ function FeedPageInner() {
   const handleDeleteTopic = async (topicId: string) => {
     if (!confirm('Delete this topic? (soft delete)')) return
     try {
-      await wttApi.deleteTopic(topicId, selectedAgentId)
+      const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
+      let response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}`, {
+        method: 'DELETE',
+        headers,
+      })
+
+      if (!response.ok && response.status === 403 && selectedAgentId) {
+        const confirmDelegate = confirm(`当前登录用户无权直接删除。是否确认代替 ${selectedAgentId} 执行删除？`)
+        if (confirmDelegate) {
+          response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}?acting_as_agent_id=${encodeURIComponent(selectedAgentId)}`, {
+            method: 'DELETE',
+            headers,
+          })
+        }
+      }
+
+      if (!response.ok) {
+        const txt = await response.text()
+        throw new Error(txt || `Delete topic failed: ${response.status}`)
+      }
+
       if (selectedTopicId === topicId) setSelectedTopicId(null)
       await mutateTopics()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete topic failed')
     }
   }
-
-  const handleEditorPublish = async (topicId: string, content: string, format: ContentFormat = 'markdown') => {
-    const isHtml = format === 'html'
-    const ext = isHtml ? '.html' : '.md'
-    const mime = isHtml ? 'text/html' : 'text/markdown'
-    const filename = `post-${Date.now()}${ext}`
-    const blob = new Blob([content], { type: mime })
-
-    const signRes = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, mime_type: mime, size: blob.size }),
-    })
-    if (!signRes.ok) throw new Error(await signRes.text())
-    const signed = await signRes.json()
-
-    const uploadRes = await fetch(`${CLIENT_WTT_API_BASE}${signed.upload_url}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': mime },
-      body: blob,
-    })
-    if (!uploadRes.ok) throw new Error(await uploadRes.text())
-
-    const commitRes = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ upload_token: signed.upload_token }),
-    })
-    if (!commitRes.ok) throw new Error(await commitRes.text())
-    const asset = await commitRes.json()
-
-    // Build message: short plain-text preview + file link
-    const stripped = isHtml
-      ? content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-      : content.replace(/[#*`>_~\[\]()!|]/g, '').trim()
-    const preview = stripped.length > 120 ? stripped.slice(0, 120) + '…' : stripped
-    const messageContent = `${preview}\n\n[file:${filename}](${asset.url})`
-
-    await wttApi.publishMessage(topicId, {
-      content: messageContent,
-      content_type: 'mixed',
-      semantic_type: 'post',
-      sender_type: 'HUMAN',
-      sender_id: getHumanSender(session),
-    })
-    mutate()
-  }
-
-  const editorTopics = useMemo<EditorTopic[]>(
-    () => topics.map((t) => ({ topic_id: t.topic_id, name: t.name, topic_type: t.topic_type })),
-    [topics],
-  )
 
   if (status === 'loading') {
     return (
@@ -421,12 +347,10 @@ function FeedPageInner() {
         onUnclaimAgent={handleUnclaimAgent}
         onLeaveTopic={handleLeaveTopic}
         onDeleteTopic={handleDeleteTopic}
-        onOpenEditor={() => setEditorOpen(true)}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
         onBindingChanged={loadAgents}
         notificationCount={0}
-        currentUserName={getHumanSender(session)}
       >
         {selectedTopicId && selectedTopic ? (
           <ChatView
@@ -439,8 +363,6 @@ function FeedPageInner() {
             onRecall={handleRecallTopic}
             hasOlder={hasOlder && !loadingOlder}
             loading={!feedRaw && !error}
-            isTaskTopic={!!selectedTopic.task_id}
-            wsConnected={wsState === 'connected'}
           />
         ) : (
           <div className="flex h-full items-center justify-center">
@@ -451,15 +373,6 @@ function FeedPageInner() {
           </div>
         )}
       </WttShellV2>
-
-      {editorOpen && (
-        <ContentEditor
-          topics={editorTopics}
-          defaultTopicId={selectedTopicId}
-          onPublish={handleEditorPublish}
-          onClose={() => setEditorOpen(false)}
-        />
-      )}
     </>
   )
 }
