@@ -616,11 +616,10 @@ export default function PipelinesPage() {
       body: JSON.stringify({
         trigger_agent_id: actorSource(session, selectedAgentId) || 'pipeline-runner',
         pipeline_id: editingPipelineId || undefined,
-        force_all: true,
       }),
     })
     const j = await r.json()
-    alert(`Pipeline started: ${j.count || 0} tasks`)
+    alert(`Pipeline started: ${j.count || 0} tasks (dependency order)`)
     mutateGraph()
   }
 
