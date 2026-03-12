@@ -54,7 +54,6 @@ interface TaskDraft extends Partial<TaskNode> {
   dependencies?: string
   timeout_minutes?: number | null
   tags?: string
-  _committedAs?: string
 }
 
 interface ChatMessage {
@@ -250,43 +249,20 @@ export default function PipelinesPage() {
   /* ─── draft (unsaved) nodes on canvas ─── */
   const [draftNodes, setDraftNodes] = useState<Record<string, TaskDraft & { _shape: NodeShape }>>({})
   const allNodes: TaskNode[] = useMemo(() => {
-    const realIds = new Set(nodes.map(n => n.id))
-    // Exclude committed drafts whose real node is already in nodes
-    const drafts: TaskNode[] = Object.entries(draftNodes)
-      .filter(([, d]) => !d._committedAs || !realIds.has(d._committedAs))
-      .map(([id, d]) => ({
-        id,
-        title: d.title || 'Untitled',
-        description: d.description,
-        status: 'todo' as const,
-        owner_agent_id: d.owner_agent_id,
-        runner_agent_id: d.runner_agent_id,
-      }))
+    const drafts: TaskNode[] = Object.entries(draftNodes).map(([id, d]) => ({
+      id,
+      title: d.title || 'Untitled',
+      description: d.description,
+      status: 'todo' as const,
+      owner_agent_id: d.owner_agent_id,
+      runner_agent_id: d.runner_agent_id,
+    }))
     return [...nodes, ...drafts]
-  }, [nodes, draftNodes])
-
-  // Auto-cleanup committed drafts once real node appears in nodes
-  useEffect(() => {
-    const realIds = new Set(nodes.map(n => n.id))
-    const toRemove = Object.entries(draftNodes)
-      .filter(([, d]) => d._committedAs && realIds.has(d._committedAs))
-      .map(([id]) => id)
-    if (toRemove.length === 0) return
-    setDraftNodes((prev) => {
-      const next = { ...prev }
-      toRemove.forEach(id => delete next[id])
-      return next
-    })
-    setPositions((prev: Record<string, NodeMeta>) => {
-      const next = { ...prev }
-      toRemove.forEach(id => delete next[id])
-      return next
-    })
   }, [nodes, draftNodes])
 
   // Sync taskDraft edits back into draftNodes so canvas reflects live changes
   useEffect(() => {
-    if (!selectedTaskId || !draftNodes[selectedTaskId] || draftNodes[selectedTaskId]._committedAs) return
+    if (!selectedTaskId || !draftNodes[selectedTaskId]) return
     const d = draftNodes[selectedTaskId]
     if (d.title !== taskDraft.title || d.description !== taskDraft.description ||
         d.owner_agent_id !== taskDraft.owner_agent_id || d.runner_agent_id !== taskDraft.runner_agent_id) {
@@ -543,33 +519,49 @@ export default function PipelinesPage() {
     })
     if (!r.ok) { alert(`Create task failed: ${(await r.json().catch(() => ({}))).detail || r.statusText}`); return }
     const j = await r.json()
-    // Set position for the real node ID
+
+    // Copy draft position to real node ID, remove draft position
     const pos = positions[draftId]
-    setPositions((prev: Record<string, NodeMeta>) => ({
-      ...prev,
-      [j.id]: pos || { x: 80, y: 80, shape: draft._shape },
-    }))
-    // Commit local edges involving this draft to the API
+    setPositions((prev: Record<string, NodeMeta>) => {
+      const next: Record<string, NodeMeta> = { ...prev, [j.id]: pos || { x: 80, y: 80, shape: draft._shape } }
+      delete next[draftId]
+      return next
+    })
+
+    // Commit local edges involving this draft to the API (fire-and-forget)
     const draftEdges = localEdges.filter(e => e.task_id === draftId || e.depends_on_task_id === draftId)
     for (const le of draftEdges) {
       const realFrom = le.depends_on_task_id === draftId ? j.id : le.depends_on_task_id
       const realTo = le.task_id === draftId ? j.id : le.task_id
       if (realFrom.startsWith('draft-') || realTo.startsWith('draft-')) continue
-      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${realTo}/dependencies`, {
+      fetch(`${CLIENT_WTT_API_BASE}/tasks/${realTo}/dependencies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify({ depends_on_task_id: realFrom, mode: 'p2p', required: true }),
       }).catch(() => {})
     }
-    // Mark draft as committed — useEffect will clean it up when real node appears in nodes
-    setDraftNodes((prev) => ({ ...prev, [draftId]: { ...prev[draftId], _committedAs: j.id } }))
-    // Remap local edges from draft ID to real ID (keep them until API edges arrive via SWR)
+
+    // Remap local edges from draft ID to real ID
     setLocalEdges((prev) => prev.map(e => ({
       ...e,
       task_id: e.task_id === draftId ? j.id : e.task_id,
       depends_on_task_id: e.depends_on_task_id === draftId ? j.id : e.depends_on_task_id,
     })))
-    await mutateGraph()
+
+    // Remove draft immediately
+    setDraftNodes((prev) => { const next = { ...prev }; delete next[draftId]; return next })
+
+    // CRITICAL: Optimistic SWR update — inject new node into cache SYNCHRONOUSLY
+    // This guarantees the real node appears in `nodes` in the SAME render cycle
+    // that the draft is removed, so the node never disappears from the canvas.
+    await mutateGraph(
+      (current: { nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] } | undefined) => {
+        if (!current) return { nodes: [j], edges: [] }
+        return { ...current, nodes: [...current.nodes, j] }
+      },
+      { revalidate: true },
+    )
+
     setSelectedTaskId(j.id)
   }
 
