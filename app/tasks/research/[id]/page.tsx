@@ -61,6 +61,35 @@ const parseAuthors = (raw: string): string => {
   return raw
 }
 
+// ── Citation Hover Preview Component ──────────────────
+const CitationText = ({ text, papers }: { text: string; papers: Paper[] }) => {
+  const parts = text.split(/(\[\d+\])/)
+  return (
+    <span>
+      {parts.map((part, i) => {
+        const match = part.match(/^\[(\d+)\]$/)
+        if (match) {
+          const idx = parseInt(match[1]) - 1
+          const paper = papers[idx]
+          if (paper) {
+            return (
+              <span key={i} className="relative group cursor-help text-indigo-500 font-medium">
+                {part}
+                <span className="absolute bottom-full left-0 mb-1 hidden group-hover:block w-64 rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-600 shadow-lg z-50">
+                  <p className="font-medium text-slate-800">{paper.title}</p>
+                  {paper.year && <p className="text-slate-400">{paper.year}</p>}
+                  {paper.authors && <p className="text-slate-400 truncate">{parseAuthors(paper.authors)}</p>}
+                </span>
+              </span>
+            )
+          }
+        }
+        return <span key={i}>{part}</span>
+      })}
+    </span>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────
 export default function ResearchTaskPage() {
   const { data: session, status } = useSession()
@@ -80,7 +109,7 @@ export default function ResearchTaskPage() {
 
   // Center panel
   const [centerTab, setCenterTab] = useState<'read' | 'write' | 'export'>('read')
-  const [readingLevel, setReadingLevel] = useState<1 | 2 | 3 | 4>(2)
+  const [readingLevel, setReadingLevel] = useState<1 | 2 | 3 | 4 | 5>(2)
   const [writeContent, setWriteContent] = useState('')
 
   // Chat
@@ -105,6 +134,23 @@ export default function ResearchTaskPage() {
   // Export state
   const [exportTemplate, setExportTemplate] = useState('academic')
   const [exporting, setExporting] = useState(false)
+  const [selectedExportPapers, setSelectedExportPapers] = useState<Set<string>>(new Set())
+  const [exportLang, setExportLang] = useState<'en' | 'zh'>('en')
+  const [includeAbstracts, setIncludeAbstracts] = useState(true)
+  const [includeAnalysis, setIncludeAnalysis] = useState(true)
+
+  // Search filters
+  const [yearFrom, setYearFrom] = useState<string>('')
+  const [yearTo, setYearTo] = useState<string>('')
+  const [sortBy, setSortBy] = useState('created_at')
+  const [useFts, setUseFts] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+
+  // Citation panel
+  const [citationTab, setCitationTab] = useState<'refs' | 'cited'>('refs')
+
+  // Insert feedback
+  const [insertFeedback, setInsertFeedback] = useState<string | null>(null)
 
   // ── Drag-and-drop ────────────────────────────────────
   const [dragOver, setDragOver] = useState(false)
@@ -124,10 +170,14 @@ export default function ResearchTaskPage() {
   )
 
   const { data: papersData, mutate: mutatePapers } = useSWR(
-    session?.accessToken ? [`research-papers-${taskId}`, session.accessToken, searchQuery] : null,
+    session?.accessToken ? [`research-papers-${taskId}`, session.accessToken, searchQuery, yearFrom, yearTo, sortBy, useFts] : null,
     async () => {
       const q = searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ''
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers?limit=200${q}`, { headers: authHeaders() })
+      const yf = yearFrom ? `&year_from=${encodeURIComponent(yearFrom)}` : ''
+      const yt = yearTo ? `&year_to=${encodeURIComponent(yearTo)}` : ''
+      const s = sortBy !== 'created_at' ? `&sort=${encodeURIComponent(sortBy)}` : ''
+      const fts = useFts && searchQuery ? '&fts=true' : ''
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers?limit=200${q}${yf}${yt}${s}${fts}`, { headers: authHeaders() })
       if (!r.ok) return { papers: [], total: 0 }
       return r.json()
     },
@@ -141,6 +191,18 @@ export default function ResearchTaskPage() {
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}`, { headers: authHeaders() })
       if (!r.ok) return null
+      return r.json()
+    },
+  )
+
+  const { data: citationsData, mutate: mutateCitations } = useSWR(
+    selectedPaperId && session?.accessToken && readingLevel === 5
+      ? [`paper-citations-${selectedPaperId}-${citationTab}`, session.accessToken]
+      : null,
+    async () => {
+      const direction = citationTab === 'refs' ? 'references' : 'cited_by'
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}/citations?direction=${direction}`, { headers: authHeaders() })
+      if (!r.ok) return []
       return r.json()
     },
   )
@@ -339,6 +401,8 @@ export default function ResearchTaskPage() {
       translate: selectedPaperFull?.abstract
         ? `请将以下摘要翻译成中文，保留学术术语：\n\n${selectedPaperFull.abstract}`
         : '请帮我翻译选中论文的摘要。',
+      draft: `请帮我起草一篇研究论文章节。以下是可用的论文素材：\n${allPapersList}\n\n请根据这些论文的核心发现，生成一个结构化的章节草稿，包含：引言、方法概述、主要发现、讨论。`,
+      cite: `请将以下论文按照标准学术格式（APA或IEEE）生成参考文献列表：\n${allPapersList}`,
     }
     const prompt = prompts[action]
     if (prompt) sendMessage(prompt)
@@ -357,6 +421,10 @@ export default function ResearchTaskPage() {
           title: task?.title || 'Research Report',
           template: exportTemplate,
           include_content: agentMessages.slice(0, 20000) || undefined,
+          paper_ids: selectedExportPapers.size > 0 ? Array.from(selectedExportPapers) : undefined,
+          lang: exportLang,
+          include_abstracts: includeAbstracts,
+          include_analysis: includeAnalysis,
         }),
       })
       if (!r.ok) throw new Error(await r.text())
@@ -376,7 +444,8 @@ export default function ResearchTaskPage() {
 
   const exportBibtex = async () => {
     try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/export/bibtex`, { headers: authHeaders() })
+      const paperIds = selectedExportPapers.size > 0 ? `&paper_ids=${Array.from(selectedExportPapers).join(',')}` : ''
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/export/bibtex?x=1${paperIds}`, { headers: authHeaders() })
       if (!r.ok) throw new Error(await r.text())
       const blob = await r.blob()
       const url = URL.createObjectURL(blob)
@@ -467,29 +536,80 @@ export default function ResearchTaskPage() {
         {/* ═══ LEFT: Library Panel ═══ */}
         <div className="flex flex-col border-r border-slate-200 overflow-hidden" style={{ width: leftW }}>
           {/* Search + Import */}
-          <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5">
-            <input
-              className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none"
-              placeholder="🔍 Search papers..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="shrink-0 rounded bg-indigo-500 px-2 py-1 text-[11px] text-white hover:bg-indigo-600 disabled:opacity-50"
-              title="Import PDF, Markdown, BibTeX"
-            >
-              {uploading ? '⏳' : '+ Import'}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pdf,.md,.txt,.tex,.bib,.csv,.json,.xml"
-              className="hidden"
-              onChange={handleFileInput}
-            />
+          <div className="border-b border-slate-200 bg-slate-50 px-2 py-1.5">
+            <div className="flex items-center gap-1">
+              <input
+                className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none"
+                placeholder="🔍 Search papers..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`shrink-0 rounded border px-1.5 py-1 text-[11px] transition-colors ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-white text-slate-500 hover:text-slate-700'}`}
+                title="Toggle filters"
+              >
+                ⚙
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="shrink-0 rounded bg-indigo-500 px-2 py-1 text-[11px] text-white hover:bg-indigo-600 disabled:opacity-50"
+                title="Import PDF, Markdown, BibTeX"
+              >
+                {uploading ? '⏳' : '+ Import'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.md,.txt,.tex,.bib,.csv,.json,.xml"
+                className="hidden"
+                onChange={handleFileInput}
+              />
+            </div>
+            {showFilters && (
+              <div className="mt-1.5 space-y-1.5 rounded border border-slate-200 bg-white p-2">
+                <div className="flex items-center gap-1">
+                  <label className="text-[10px] text-slate-500 w-10 shrink-0">Year</label>
+                  <input
+                    className="w-16 rounded border border-slate-200 px-1.5 py-0.5 text-[11px] focus:border-indigo-400 focus:outline-none"
+                    placeholder="From"
+                    value={yearFrom}
+                    onChange={(e) => setYearFrom(e.target.value)}
+                  />
+                  <span className="text-[10px] text-slate-400">–</span>
+                  <input
+                    className="w-16 rounded border border-slate-200 px-1.5 py-0.5 text-[11px] focus:border-indigo-400 focus:outline-none"
+                    placeholder="To"
+                    value={yearTo}
+                    onChange={(e) => setYearTo(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <label className="text-[10px] text-slate-500 w-10 shrink-0">Sort</label>
+                  <select
+                    className="flex-1 rounded border border-slate-200 px-1.5 py-0.5 text-[11px]"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="created_at">Date added</option>
+                    <option value="title">Title</option>
+                    <option value="year">Year</option>
+                    <option value="citation_count">Citations</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useFts}
+                    onChange={(e) => setUseFts(e.target.checked)}
+                    className="rounded border-slate-300"
+                  />
+                  <span className="text-[10px] text-slate-600">Full-text search</span>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* Paper list */}
@@ -592,12 +712,18 @@ export default function ResearchTaskPage() {
                     key={l}
                     onClick={() => setReadingLevel(l)}
                     className={`rounded px-1.5 py-0.5 text-[10px] ${
-                      readingLevel >= l ? 'bg-indigo-100 text-indigo-600 font-medium' : 'text-slate-400 hover:text-slate-600'
+                      readingLevel >= l && readingLevel < 5 ? 'bg-indigo-100 text-indigo-600 font-medium' : 'text-slate-400 hover:text-slate-600'
                     }`}
                   >
                     L{l}
                   </button>
                 ))}
+                <button
+                  onClick={() => setReadingLevel(5)}
+                  className={`rounded px-1.5 py-0.5 text-[10px] ${readingLevel === 5 ? 'bg-violet-100 text-violet-600 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  📚 Citations
+                </button>
               </div>
             )}
           </div>
@@ -665,7 +791,7 @@ export default function ResearchTaskPage() {
                     )}
 
                     {/* Notes section */}
-                    {readingLevel >= 2 && (
+                    {readingLevel >= 2 && readingLevel < 5 && (
                       <div className="rounded-lg border border-amber-100 bg-amber-50/30 p-4">
                         <h2 className="text-sm font-semibold text-amber-700 mb-2">📝 Notes</h2>
                         <textarea
@@ -681,6 +807,71 @@ export default function ResearchTaskPage() {
                             })
                           }}
                         />
+                      </div>
+                    )}
+
+                    {/* L5: Citations panel */}
+                    {readingLevel === 5 && (
+                      <div className="rounded-lg border border-violet-200 bg-violet-50/30 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-sm font-semibold text-violet-700">📚 Citations</h2>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}/resolve-citations`, {
+                                  method: 'POST',
+                                  headers: authHeaders(),
+                                })
+                                mutateCitations()
+                              } catch { /* ignore */ }
+                            }}
+                            className="rounded bg-violet-500 px-2 py-0.5 text-[10px] text-white hover:bg-violet-600"
+                          >
+                            🔍 Resolve Citations
+                          </button>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => setCitationTab('refs')}
+                            className={`rounded px-2 py-0.5 text-[11px] font-medium ${citationTab === 'refs' ? 'bg-violet-100 text-violet-700' : 'text-slate-500 hover:text-slate-700'}`}
+                          >
+                            References
+                          </button>
+                          <button
+                            onClick={() => setCitationTab('cited')}
+                            className={`rounded px-2 py-0.5 text-[11px] font-medium ${citationTab === 'cited' ? 'bg-violet-100 text-violet-700' : 'text-slate-500 hover:text-slate-700'}`}
+                          >
+                            Cited By
+                          </button>
+                        </div>
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                          {Array.isArray(citationsData) && citationsData.length > 0 ? (
+                            citationsData.map((c: Record<string, string | number | null>, i: number) => {
+                              const matchedPaper = papers.find(p => p.doi && c.doi && p.doi === c.doi)
+                              return (
+                                <div key={i} className="rounded border border-slate-200 bg-white p-2 text-xs">
+                                  <p className="font-medium text-slate-700 leading-tight">{c.title || 'Unknown title'}</p>
+                                  <div className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-400">
+                                    {c.authors && <span className="truncate max-w-[200px]">{String(c.authors)}</span>}
+                                    {c.year && <><span>·</span><span>{c.year}</span></>}
+                                  </div>
+                                  {matchedPaper && (
+                                    <button
+                                      onClick={() => { setSelectedPaperId(matchedPaper.id); setReadingLevel(2) }}
+                                      className="mt-1 text-[10px] text-indigo-500 hover:underline"
+                                    >
+                                      📄 View in library
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })
+                          ) : (
+                            <p className="text-xs text-slate-400 py-4 text-center">
+                              {citationsData === undefined ? 'Loading...' : 'No citations found. Click "Resolve Citations" to extract them.'}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -720,21 +911,83 @@ export default function ResearchTaskPage() {
               <div className="p-6 max-w-2xl mx-auto space-y-6">
                 <h2 className="text-lg font-bold text-slate-700">📤 Export Research</h2>
 
+                {/* Paper selection */}
+                {papers.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-slate-700">📋 Select Papers to Export</h3>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setSelectedExportPapers(new Set(papers.map(p => p.id)))}
+                          className="text-[10px] text-indigo-500 hover:underline"
+                        >Select all</button>
+                        <span className="text-[10px] text-slate-300">|</span>
+                        <button
+                          onClick={() => setSelectedExportPapers(new Set())}
+                          className="text-[10px] text-indigo-500 hover:underline"
+                        >Clear</button>
+                      </div>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {papers.map((p) => (
+                        <label key={p.id} className="flex items-center gap-2 cursor-pointer rounded px-1.5 py-0.5 hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={selectedExportPapers.has(p.id)}
+                            onChange={(e) => {
+                              const next = new Set(selectedExportPapers)
+                              if (e.target.checked) next.add(p.id); else next.delete(p.id)
+                              setSelectedExportPapers(next)
+                            }}
+                            className="rounded border-slate-300"
+                          />
+                          <span className="text-xs text-slate-700 truncate">{p.title || 'Untitled'}</span>
+                          {p.year && <span className="text-[10px] text-slate-400 shrink-0">({p.year})</span>}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400">{selectedExportPapers.size || papers.length} papers will be exported{selectedExportPapers.size === 0 ? ' (all)' : ''}</p>
+                  </div>
+                )}
+
                 {/* PPT Export */}
                 <div className="rounded-xl border border-slate-200 p-4 space-y-3">
                   <h3 className="text-sm font-semibold text-slate-700">📊 PowerPoint Presentation</h3>
                   <p className="text-xs text-slate-500">Generate a PPT from your papers and Agent analysis</p>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-slate-500">Template:</label>
-                    <select
-                      className="rounded border border-slate-200 px-2 py-1 text-xs"
-                      value={exportTemplate}
-                      onChange={(e) => setExportTemplate(e.target.value)}
-                    >
-                      <option value="academic">🎓 Academic</option>
-                      <option value="business">💼 Business</option>
-                      <option value="minimal">◻️ Minimal</option>
-                    </select>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-slate-500">Template:</label>
+                      <select
+                        className="rounded border border-slate-200 px-2 py-1 text-xs"
+                        value={exportTemplate}
+                        onChange={(e) => setExportTemplate(e.target.value)}
+                      >
+                        <option value="academic">🎓 Academic</option>
+                        <option value="business">💼 Business</option>
+                        <option value="minimal">◻️ Minimal</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-slate-500">Language:</label>
+                      <select
+                        className="rounded border border-slate-200 px-2 py-1 text-xs"
+                        value={exportLang}
+                        onChange={(e) => setExportLang(e.target.value as 'en' | 'zh')}
+                      >
+                        <option value="en">🇺🇸 English</option>
+                        <option value="zh">🇨🇳 中文</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={includeAbstracts} onChange={(e) => setIncludeAbstracts(e.target.checked)} className="rounded border-slate-300" />
+                      <span className="text-xs text-slate-600">Include abstracts</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={includeAnalysis} onChange={(e) => setIncludeAnalysis(e.target.checked)} className="rounded border-slate-300" />
+                      <span className="text-xs text-slate-600">Include Agent analysis</span>
+                    </label>
                   </div>
                   <button
                     onClick={exportPptx}
@@ -778,7 +1031,6 @@ export default function ResearchTaskPage() {
                     onClick={() => {
                       const content = writeContent || chatMessages.filter(m => m.role === 'assistant').map(m => m.content).join('\n\n')
                       if (!content) { alert('Write something first'); return }
-                      // Copy to clipboard for now
                       navigator.clipboard.writeText(content)
                       alert('Content copied! Go to Feed → Write to publish.')
                     }}
@@ -816,6 +1068,8 @@ export default function ResearchTaskPage() {
               { key: 'compare', label: '📊 Compare', tip: 'Compare all papers' },
               { key: 'gap', label: '🔍 Gap Analysis', tip: 'Find research gaps' },
               { key: 'translate', label: '🌐 Translate', tip: 'Translate abstract' },
+              { key: 'draft', label: '📄 Draft', tip: 'Draft a paper section' },
+              { key: 'cite', label: '📎 Format Refs', tip: 'Format references in standard style' },
             ].map(({ key, label, tip }) => (
               <button
                 key={key}
@@ -847,8 +1101,24 @@ export default function ResearchTaskPage() {
                     ? 'border border-indigo-200 bg-indigo-50/80 text-slate-800 rounded-tr-md'
                     : 'border border-slate-200 bg-white text-slate-700 rounded-tl-md'
                 }`}>
-                  <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                  <div className="whitespace-pre-wrap break-words">
+                    {msg.role === 'assistant' ? <CitationText text={msg.content} papers={papers} /> : msg.content}
+                  </div>
                   <p className="mt-1 text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                  {msg.role === 'assistant' && (
+                    <button
+                      onClick={() => {
+                        setWriteContent(prev => prev ? prev + '\n\n---\n\n' + msg.content : msg.content)
+                        setCenterTab('write')
+                        setInsertFeedback(msg.id)
+                        setTimeout(() => setInsertFeedback(null), 1500)
+                      }}
+                      className="mt-1 text-[10px] text-indigo-400 hover:text-indigo-600"
+                      title="Insert into editor"
+                    >
+                      {insertFeedback === msg.id ? '✅ Inserted!' : '📝 Insert to Editor'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
