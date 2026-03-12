@@ -834,7 +834,7 @@ export default function CodeTaskPage() {
 
   // ── Save file ──────────────────────────────────────
   const saveFile = async () => {
-    if (!isModified) return
+    if (!isModified || !selectedFile?.path) return
     if (selectedFile?.handle) {
       // Local filesystem save
       try {
@@ -847,11 +847,59 @@ export default function CodeTaskPage() {
       } catch (e) {
         alert(`Save failed: ${e instanceof Error ? e.message : 'unknown'}`)
       }
-    } else if (selectedFile?.path) {
-      // GitHub mode: save to in-memory pending edits buffer
-      setPendingEdits(prev => ({ ...prev, [selectedFile.path]: modifiedContent }))
-      setFileContent(modifiedContent)
-      setIsModified(false)
+    } else if (task?.repo_url && session?.accessToken) {
+      // GitHub mode: save file to remote edit branch
+      setSaving(true)
+      try {
+        let branch = editBranch
+        if (!branch) {
+          // Auto-create edit branch
+          branch = `wtt-edit-${Date.now()}`
+          const brResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/branch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+            body: JSON.stringify({ branch_name: branch }),
+          })
+          if (!brResp.ok) throw new Error(await brResp.text())
+          setEditBranch(branch)
+        }
+        // Save file to branch
+        const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/file/${encodeURIComponent(selectedFile.path)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+          body: JSON.stringify({ content: modifiedContent, branch, message: `Update ${selectedFile.path}` }),
+        })
+        if (!resp.ok) throw new Error(await resp.text())
+        setFileContent(modifiedContent)
+        setIsModified(false)
+        setSavedFiles(prev => { const s = new Set(Array.from(prev)); s.add(selectedFile.path); return s })
+      } catch (e) {
+        alert(`Save failed: ${e instanceof Error ? e.message : 'unknown'}`)
+      } finally {
+        setSaving(false)
+      }
+    }
+  }
+
+  const createPR = async () => {
+    if (!editBranch || savedFiles.size === 0 || !session?.accessToken) return
+    const title = prompt('PR title:', `WTT edit: ${Array.from(savedFiles).map(f => f.split('/').pop()).join(', ')}`)
+    if (!title) return
+    try {
+      const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/repo/pull`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ title, head: editBranch, body: `Modified files:\n${Array.from(savedFiles).map(f => `- ${f}`).join('\n')}` }),
+      })
+      if (!resp.ok) throw new Error(await resp.text())
+      const data = await resp.json()
+      alert(`PR #${data.number} created!`)
+      setEditBranch(null)
+      setSavedFiles(new Set())
+      void fetchPulls()
+      setRightTab('prs')
+    } catch (e) {
+      alert(`Create PR failed: ${e instanceof Error ? e.message : 'unknown'}`)
     }
   }
 
@@ -1063,8 +1111,10 @@ export default function CodeTaskPage() {
   useEffect(() => { localStorage.setItem('code-task-theme', pageTheme) }, [pageTheme])
 
   // ── Unsaved edits buffer (GitHub mode) ──────────────
-  const [pendingEdits, setPendingEdits] = useState<Record<string, string>>({})
-  const hasPendingEdits = Object.keys(pendingEdits).length > 0
+  const [editBranch, setEditBranch] = useState<string | null>(null)
+  const [savedFiles, setSavedFiles] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+  const hasSavedEdits = savedFiles.size > 0
 
   // ── Send chat message ──────────────────────────────
   const [awaitingAgent, setAwaitingAgent] = useState(false)
@@ -1679,9 +1729,10 @@ export default function CodeTaskPage() {
                     <span className={`text-[10px] ${tc.textMuted}`}>{langFromPath(selectedFile.path)}</span>
                     {/* Modified indicator */}
                     {isModified && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Unsaved changes" />}
-                    {hasPendingEdits && (
-                      <span className={`text-[10px] ${tc.accent} font-medium`} title={`${Object.keys(pendingEdits).length} file(s) modified`}>
-                        ● {Object.keys(pendingEdits).length} pending
+                    {saving && <span className={`text-[10px] ${tc.accent} animate-pulse`}>Saving...</span>}
+                    {hasSavedEdits && (
+                      <span className={`text-[10px] ${tc.accent} font-medium`} title={`Branch: ${editBranch}\n${Array.from(savedFiles).join('\n')}`}>
+                        🌿 {savedFiles.size} saved on {editBranch}
                       </span>
                     )}
                   </div>
@@ -1719,35 +1770,22 @@ export default function CodeTaskPage() {
                       }}
                     />
                     {isModified && (
-                      <div className="absolute bottom-2 right-[calc(33%+12px)] z-10">
-                        <button onClick={saveFile} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-indigo-600">
-                          💾 Save (⌘S)
+                      <div className="absolute bottom-2 right-[calc(33%+12px)] z-10 flex items-center gap-2">
+                        <button onClick={saveFile} disabled={saving} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-indigo-600 disabled:opacity-50">
+                          {saving ? '⏳ Saving...' : '💾 Save (⌘S)'}
                         </button>
                       </div>
                     )}
-                    {hasPendingEdits && !isModified && (
+                    {hasSavedEdits && !isModified && (
                       <div className="absolute bottom-2 right-[calc(33%+12px)] z-10 flex items-center gap-2">
                         <span className="rounded-lg bg-slate-800/80 px-2 py-1 text-[11px] text-white">
-                          {Object.keys(pendingEdits).length} file(s) modified
+                          🌿 {savedFiles.size} file(s) on {editBranch}
                         </span>
                         <button
-                          onClick={() => {
-                            const summary = Object.entries(pendingEdits).map(([path, content]) =>
-                              `[FILE] ${path}\n\`\`\`\n${content}\n\`\`\``
-                            ).join('\n\n')
-                            setChatInput(`Please commit these changes:\n\n${summary}`)
-                            setRightTab('chat')
-                            setPendingEdits({})
-                          }}
+                          onClick={createPR}
                           className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white shadow-lg hover:bg-emerald-600"
                         >
-                          📤 Send to Agent
-                        </button>
-                        <button
-                          onClick={() => setPendingEdits({})}
-                          className="rounded-lg bg-red-500/80 px-2 py-1.5 text-xs text-white shadow-lg hover:bg-red-600"
-                        >
-                          ✕ Discard
+                          🔀 Create PR
                         </button>
                       </div>
                     )}
