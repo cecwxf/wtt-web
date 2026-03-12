@@ -4,7 +4,7 @@
 
 ### 1. 数据库迁移（成功）
 - ✅ users 表：添加 OAuth 字段（github_id, google_id, twitter_id）
-- ✅ claim_codes 表：创建成功
+- ✅ claim_codes 表： 创建成功
 - ✅ user_agent_bindings 表：添加 is_primary 字段
 
 ### 2. 代码更新（成功）
