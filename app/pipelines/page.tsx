@@ -428,9 +428,9 @@ export default function PipelinesPage() {
   }
 
   /* ─── task / node CRUD ─── */
-  const createTaskAt = async (x: number, y: number, shape: NodeShape = 'rect') => {
-    const title = prompt('Node title')?.trim()
-    if (!title) return
+  const createTaskAt = async (x: number, y: number, shape: NodeShape = 'rect', autoTitle?: string) => {
+    const shapeLabel = shape === 'rect' ? 'Task' : shape === 'circle' ? 'Decision' : shape === 'ellipse' ? 'Start/End' : shape === 'diamond' ? 'Condition' : shape === 'hexagon' ? 'Process' : 'Node'
+    const title = autoTitle || `New ${shapeLabel} ${nodes.length + 1}`
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
@@ -451,6 +451,7 @@ export default function PipelinesPage() {
     setPositions((prev) => ({ ...prev, [j.id]: { x, y, shape } }))
     await mutateGraph()
     setSelectedTaskId(j.id)
+    setRightTab('detail')
   }
 
   const saveTaskDetail = async () => {
