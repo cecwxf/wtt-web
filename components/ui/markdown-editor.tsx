@@ -82,7 +82,7 @@ type ViewMode = 'edit' | 'split' | 'preview'
 /*  Toolbar actions                                                    */
 /* ------------------------------------------------------------------ */
 
-interface ToolbarAction {
+export interface ToolbarAction {
   icon: React.ReactNode
   label: string
   shortcut?: string
@@ -117,7 +117,7 @@ function prefixLine(ta: HTMLTextAreaElement, prefix: string) {
   ta.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-function buildActions(): ToolbarAction[] {
+export function buildActions(): ToolbarAction[] {
   return [
     { icon: <Heading1 className="h-4 w-4" />, label: 'Heading 1', shortcut: 'Ctrl+1', action: (ta) => prefixLine(ta, '# ') },
     { icon: <Heading2 className="h-4 w-4" />, label: 'Heading 2', shortcut: 'Ctrl+2', action: (ta) => prefixLine(ta, '## ') },
@@ -147,7 +147,7 @@ function buildActions(): ToolbarAction[] {
 /*  Keyboard shortcut handler                                          */
 /* ------------------------------------------------------------------ */
 
-function handleEditorKeyDown(
+export function handleEditorKeyDown(
   e: KeyboardEvent<HTMLTextAreaElement>,
   actions: ToolbarAction[],
 ) {
@@ -233,7 +233,7 @@ function processHighlights(content: string): string {
 /*  File import helpers                                                */
 /* ------------------------------------------------------------------ */
 
-function readMarkdownFile(file: File): Promise<string> {
+export function readMarkdownFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result as string)
@@ -242,7 +242,7 @@ function readMarkdownFile(file: File): Promise<string> {
   })
 }
 
-function isMarkdownFile(file: File): boolean {
+export function isMarkdownFile(file: File): boolean {
   const name = file.name.toLowerCase()
   return name.endsWith('.md') || name.endsWith('.markdown') || name.endsWith('.mdx') || name.endsWith('.txt')
 }
@@ -251,7 +251,7 @@ function isMarkdownFile(file: File): boolean {
 /*  Toolbar Component                                                  */
 /* ------------------------------------------------------------------ */
 
-function Toolbar({
+export function EditorToolbar({
   actions,
   textareaRef,
   viewMode,
@@ -321,7 +321,7 @@ function Toolbar({
 /*  Preview Component                                                  */
 /* ------------------------------------------------------------------ */
 
-function MarkdownPreview({ content }: { content: string }) {
+export function MarkdownPreview({ content }: { content: string }) {
   const processed = useMemo(() => processHighlights(content), [content])
 
   return (
@@ -542,7 +542,7 @@ export function MarkdownEditor({ topics, defaultTopicId, onPublish, onClose }: M
       </div>
 
       {/* Toolbar */}
-      <Toolbar
+      <EditorToolbar
         actions={actions}
         textareaRef={textareaRef}
         viewMode={viewMode}

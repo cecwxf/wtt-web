@@ -36,7 +36,7 @@ function cleanPdfText(text: string | null | undefined): string {
   return s.trim()
 }
 
-const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
+import { buildActions, handleEditorKeyDown, EditorToolbar, MarkdownPreview, isMarkdownFile, readMarkdownFile } from '@/components/ui/markdown-editor'
 
 // ── Types ──────────────────────────────────────────────
 interface Agent {
@@ -142,7 +142,14 @@ export default function ResearchTaskPage() {
   const [centerTab, setCenterTab] = useState<'read' | 'write' | 'export'>('read')
   const [readingLevel, setReadingLevel] = useState<1 | 2 | 3 | 4 | 5>(2)
   const [l4View, setL4View] = useState<'native' | 'text'>('native')
-  const [writeContent, setWriteContent] = useState('')
+  const [writeContent, setWriteContent] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem(`research-write-${params.id}`) || ''
+    return ''
+  })
+  const [writeViewMode, setWriteViewMode] = useState<'edit' | 'split' | 'preview'>('split')
+  const writeTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const writeFileRef = useRef<HTMLInputElement>(null)
+  const writeActions = useMemo(() => buildActions(), [])
 
   // Chat
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
@@ -156,6 +163,7 @@ export default function ResearchTaskPage() {
   const [quoteBtn, setQuoteBtn] = useState<{ x: number; y: number; text: string } | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; text: string } | null>(null)
   const [notesOpen, setNotesOpen] = useState(false)
+  const [noteDialog, setNoteDialog] = useState<{ quote: string; comment: string } | null>(null)
 
   // Resize
   const [leftW, setLeftW] = useState(() => {
@@ -296,6 +304,13 @@ export default function ResearchTaskPage() {
     }
   }, [leftW, rightW])
 
+  // Write content auto-save
+  useEffect(() => {
+    if (typeof window !== 'undefined' && taskId) {
+      localStorage.setItem(`research-write-${taskId}`, writeContent)
+    }
+  }, [writeContent, taskId])
+
   // Resize handlers
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -370,15 +385,21 @@ export default function ResearchTaskPage() {
     }, 100)
   }
 
-  const addToNotes = async (text: string) => {
-    if (!selectedPaperId) return
+  const addToNotes = (text: string) => {
     setCtxMenu(null)
     setQuoteBtn(null)
     window.getSelection()?.removeAllRanges()
+    setNoteDialog({ quote: text, comment: '' })
+  }
+
+  const saveNote = async () => {
+    if (!selectedPaperId || !noteDialog) return
     const timestamp = new Date().toLocaleString()
-    const entry = `\n---\n📌 ${timestamp}\n> ${text.split('\n').join('\n> ')}\n`
-    const current = selectedPaperFull?.notes || ''
-    const updated = current + entry
+    const parts = [`\n---\n📌 ${timestamp}`]
+    if (noteDialog.quote) parts.push(`> ${noteDialog.quote.split('\n').join('\n> ')}`)
+    if (noteDialog.comment.trim()) parts.push(`\n${noteDialog.comment.trim()}`)
+    const entry = parts.join('\n') + '\n'
+    const updated = (selectedPaperFull?.notes || '') + entry
     try {
       await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/${selectedPaperId}`, {
         method: 'PATCH',
@@ -388,6 +409,7 @@ export default function ResearchTaskPage() {
       mutatePapers()
       setNotesOpen(true)
     } catch {}
+    setNoteDialog(null)
   }
 
   const startResize = (which: 'left' | 'right', e: React.MouseEvent) => {
@@ -1159,23 +1181,88 @@ export default function ResearchTaskPage() {
               </div>
             )}
 
+            {/* Add to Notes dialog */}
+            {noteDialog && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30" onClick={() => setNoteDialog(null)}>
+                <div className="bg-white rounded-xl shadow-2xl w-[480px] max-w-[90vw] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                  <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-700">📝 Add Note</h3>
+                    <button onClick={() => setNoteDialog(null)} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+                  </div>
+                  <div className="px-5 py-4 space-y-3">
+                    {noteDialog.quote && (
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-600 max-h-32 overflow-y-auto">
+                        <p className="text-[10px] text-slate-400 mb-1 font-medium">Selected text:</p>
+                        <p className="italic leading-relaxed">{noteDialog.quote}</p>
+                      </div>
+                    )}
+                    <textarea
+                      autoFocus
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none resize-none"
+                      rows={4}
+                      placeholder="Write your thoughts, annotations..."
+                      value={noteDialog.comment}
+                      onChange={(e) => setNoteDialog({ ...noteDialog, comment: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNote() } }}
+                    />
+                    <p className="text-[10px] text-slate-400">⌘/Ctrl + Enter to save</p>
+                  </div>
+                  <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+                    <button onClick={() => setNoteDialog(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+                    <button
+                      onClick={saveNote}
+                      disabled={!noteDialog.comment.trim() && !noteDialog.quote}
+                      className="px-4 py-1.5 text-xs font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-lg disabled:opacity-50"
+                    >Save Note</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {centerTab === 'write' && (
               <div className="flex flex-col h-full">
-                <MonacoEditor
-                  height="100%"
-                  language="markdown"
-                  theme="vs"
-                  value={writeContent}
-                  onChange={(v) => setWriteContent(v || '')}
-                  options={{
-                    minimap: { enabled: false },
-                    wordWrap: 'on',
-                    fontSize: 14,
-                    lineNumbers: 'off',
-                    padding: { top: 16 },
-                    scrollBeyondLastLine: false,
+                <EditorToolbar
+                  actions={writeActions}
+                  textareaRef={writeTextareaRef}
+                  viewMode={writeViewMode}
+                  onViewModeChange={setWriteViewMode}
+                  onImport={() => writeFileRef.current?.click()}
+                />
+                <input
+                  ref={writeFileRef}
+                  type="file"
+                  accept=".md,.markdown,.mdx,.txt"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (file && isMarkdownFile(file)) {
+                      const text = await readMarkdownFile(file)
+                      setWriteContent(prev => prev ? `${prev}\n\n${text}` : text)
+                    }
+                    e.currentTarget.value = ''
                   }}
                 />
+                <div className="flex flex-1 overflow-hidden min-h-0">
+                  {writeViewMode !== 'preview' && (
+                    <textarea
+                      ref={writeTextareaRef}
+                      className={`${writeViewMode === 'split' ? 'w-1/2 border-r border-slate-200' : 'w-full'} resize-none p-4 text-sm text-slate-700 font-mono leading-relaxed focus:outline-none`}
+                      placeholder="Start writing your research notes, literature review, analysis..."
+                      value={writeContent}
+                      onChange={(e) => setWriteContent(e.target.value)}
+                      onKeyDown={(e) => handleEditorKeyDown(e, writeActions)}
+                    />
+                  )}
+                  {writeViewMode !== 'edit' && (
+                    <div className={`${writeViewMode === 'split' ? 'w-1/2' : 'w-full'} overflow-y-auto`}>
+                      <MarkdownPreview content={writeContent} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-slate-200 px-3 py-1 text-[10px] text-slate-400">
+                  <span>{writeContent.trim() ? `${writeContent.trim().split(/\s+/).length} words · ${writeContent.length} chars` : 'Empty'}</span>
+                  <span className="text-green-500">✓ Auto-saved</span>
+                </div>
               </div>
             )}
 
