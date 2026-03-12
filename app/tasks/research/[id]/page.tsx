@@ -52,7 +52,7 @@ export default function ResearchTaskPage() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: task } = useSWR(
+  const { data: task, mutate: mutateTask } = useSWR(
     session?.accessToken ? [`task-${taskId}`, session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, {
@@ -234,6 +234,30 @@ export default function ResearchTaskPage() {
           <button onClick={() => router.push('/tasks')} className="text-sm text-indigo-500 hover:underline">← Tasks</button>
           <span className="text-sm font-semibold text-slate-700">{task?.title || 'Research Task'}</span>
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">📄 Research</span>
+          {task?.status && (
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+              task.status === 'doing' ? 'bg-amber-100 text-amber-700' :
+              task.status === 'done' ? 'bg-green-100 text-green-700' :
+              task.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+              'bg-slate-100 text-slate-500'
+            }`}>{task.status === 'doing' ? '⚡ Running' : task.status === 'done' ? '✅ Done' : task.status === 'cancelled' ? '🚫 Cancelled' : task.status}</span>
+          )}
+          {task?.status && task.status !== 'done' && task.status !== 'cancelled' && (
+            <button
+              onClick={async () => {
+                if (!confirm('Cancel this task?')) return
+                try {
+                  const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/cancel`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                  })
+                  if (!r.ok) throw new Error(await r.text())
+                  await mutateTask()
+                } catch (e) { alert(`Cancel failed: ${e instanceof Error ? e.message : 'unknown'}`) }
+              }}
+              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-500 hover:bg-red-50 hover:text-red-700"
+            >✕ Cancel</button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {agents.length > 1 && (
