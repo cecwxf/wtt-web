@@ -379,7 +379,11 @@ export default function PipelinesPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
       body: JSON.stringify({ name }),
     })
-    if (!r.ok) { alert(`Create failed: ${(await r.text()) || r.status}`); return }
+    if (!r.ok) {
+      const body = await r.json().catch(() => null)
+      alert(body?.detail || `Create failed: ${r.statusText}`)
+      return
+    }
     const j = await r.json()
     await mutatePipelines()
     setEditingPipelineId(j.id)
