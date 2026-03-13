@@ -22,6 +22,8 @@ interface TaskItem {
   title: string
   description?: string
   task_type: string
+  task_mode?: string
+  pipeline_id?: string
   priority: 'P0' | 'P1' | 'P2' | 'P3'
   status: 'todo' | 'doing' | 'review' | 'done' | 'blocked'
   owner_agent_id?: string
@@ -144,7 +146,7 @@ export default function TasksPage() {
   const { data: tasksRaw, mutate: mutateTasks } = useSWR(
     selectedAgentId && session?.accessToken ? ['tasks', selectedAgentId, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks?task_mode=single&owner_agent_id=${encodeURIComponent(selectedAgentId)}&limit=500`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks?owner_agent_id=${encodeURIComponent(selectedAgentId)}&limit=500`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!response.ok) throw new Error('Failed to load tasks')
@@ -849,6 +851,7 @@ export default function TasksPage() {
                       <div className="mb-1 flex items-center gap-2">
                         {task.task_type === 'code' && <span className="shrink-0 rounded bg-cyan-100 px-1 text-[10px] font-medium text-cyan-700">💻</span>}
                         {task.task_type === 'research' && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700">📄</span>}
+                        {task.task_mode === 'pipeline' && <span className="shrink-0 rounded bg-violet-100 px-1 text-[10px] font-medium text-violet-700">🔗 Pipeline</span>}
                         <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
                       </div>
                       <div className="mt-2 flex items-center justify-between">
