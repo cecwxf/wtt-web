@@ -290,6 +290,35 @@ function FeedPageInner() {
     }
   }, [topics, searchParams])
 
+  // Quick-create a General Task with no title (defaults to "New Task")
+  const handleQuickCreateTask = async () => {
+    if (!selectedAgentId || !session?.accessToken) return
+    try {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({
+          title: 'New Task',
+          task_type: 'general',
+          priority: 'P2',
+          status: 'todo',
+          owner_agent_id: selectedAgentId,
+          runner_agent_id: selectedAgentId,
+          created_by: selectedAgentId,
+        }),
+      })
+      if (!r.ok) { alert('Failed to create task'); return }
+      const task = await r.json()
+      // Refresh topic list and select the new task's topic
+      await mutateTopics()
+      if (task.topic_id) {
+        setSelectedTopicId(task.topic_id)
+      }
+    } catch {
+      alert('Failed to create task')
+    }
+  }
+
   const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig) => {
     if (!selectedTopicId || !selectedAgentId) return
 
@@ -311,6 +340,20 @@ function FeedPageInner() {
       sender_id: getHumanSender(session),
       ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     })
+
+    // Auto-rename task if title is still "New Task" (ChatGPT-style)
+    if (isTask && selectedTopic?.name === 'New Task' && selectedTopic.task_id) {
+      const trimmed = content.replace(/\n/g, ' ').trim()
+      const newTitle = trimmed.length > 40 ? trimmed.slice(0, 40) + '…' : trimmed
+      try {
+        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopic.task_id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+          body: JSON.stringify({ title: newTitle }),
+        })
+        mutateTopics()
+      } catch { /* ignore rename failure */ }
+    }
 
     mutate()
   }
@@ -446,6 +489,7 @@ function FeedPageInner() {
         onLeaveTopic={handleLeaveTopic}
         onDeleteTopic={handleDeleteTopic}
         onOpenEditor={() => setEditorOpen(true)}
+        onQuickCreateTask={handleQuickCreateTask}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
         onBindingChanged={loadAgents}
@@ -490,13 +534,15 @@ function FeedPageInner() {
                 {[
                   { type: 'code', icon: '💻', label: 'New Code Task', desc: 'AI-assisted coding with repo context', gradient: 'from-indigo-500 to-blue-600', ring: 'ring-indigo-400/30', bg: 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950 dark:to-blue-950', border: 'border-indigo-200/80 dark:border-indigo-800/50' },
                   { type: 'research', icon: '🔬', label: 'New Research Task', desc: 'Deep analysis & report generation', gradient: 'from-emerald-500 to-teal-600', ring: 'ring-emerald-400/30', bg: 'bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950', border: 'border-emerald-200/80 dark:border-emerald-700/60' },
-                  { type: 'general', icon: '📋', label: 'New General Task', desc: 'Planning, writing & data processing', gradient: 'from-amber-500 to-orange-600', ring: 'ring-amber-400/30', bg: 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950', border: 'border-amber-200/80 dark:border-amber-700/60' },
+                  { type: 'general', icon: '💬', label: 'New Chat', desc: 'Quick chat — title auto-generated', gradient: 'from-amber-500 to-orange-600', ring: 'ring-amber-400/30', bg: 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950', border: 'border-amber-200/80 dark:border-amber-700/60' },
                   { type: 'pipeline', icon: '🔗', label: 'New Pipeline', desc: 'Multi-step DAG with auto-execution', gradient: 'from-purple-500 to-fuchsia-600', ring: 'ring-purple-400/30', bg: 'bg-gradient-to-r from-purple-50 to-fuchsia-50 dark:from-purple-950 dark:to-fuchsia-950', border: 'border-purple-200/80 dark:border-purple-700/60' },
                 ].map((item) => (
                   <button
                     key={item.type}
                     onClick={async () => {
                       if (item.type === 'pipeline') { router.push('/pipelines'); return }
+                      // General tasks: instant create with "New Task" title (ChatGPT-style)
+                      if (item.type === 'general') { handleQuickCreateTask(); return }
                       const title = prompt(`${item.label}\n\nEnter task title:`)
                       if (!title?.trim()) return
                       try {

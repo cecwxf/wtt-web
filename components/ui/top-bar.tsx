@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, FileEdit, Home, KanbanSquare, Workflow, Sun, Moon } from 'lucide-react'
+import { Bell, FileEdit, Home, KanbanSquare, Plus, Workflow, Sun, Moon } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
@@ -15,7 +15,7 @@ interface TopBarProps {
   userMenu?: React.ReactNode
 }
 
-export function TopBar({ onSelectTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, userMenu }: TopBarProps) {
+export function TopBar({ onSelectTopic, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, userMenu }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const { theme, setTheme } = useTheme()
 
@@ -58,6 +58,17 @@ export function TopBar({ onSelectTopic, onOpenEditor, hideCreateTopic, notificat
           >
             <FileEdit className="h-4 w-4" />
             <span className="hidden sm:inline">Editor</span>
+          </button>
+        )}
+
+        {!hideCreateTopic && onCreateTopic && (
+          <button
+            onClick={onCreateTopic}
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-200"
+            title="Create Topic"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Topic</span>
           </button>
         )}
 

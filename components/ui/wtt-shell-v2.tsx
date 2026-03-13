@@ -24,6 +24,7 @@ interface WttShellV2Props {
   onLeaveTopic?: (topicId: string) => void
   onDeleteTopic?: (topicId: string) => void
   onOpenEditor?: () => void
+  onQuickCreateTask?: () => void
   notificationCount?: number
   hideTopics?: boolean
   hideCreateTopic?: boolean
@@ -48,6 +49,7 @@ export function WttShellV2({
   onLeaveTopic,
   onDeleteTopic,
   onOpenEditor,
+  onQuickCreateTask,
   notificationCount = 0,
   hideTopics = false,
   hideCreateTopic = false,
@@ -149,7 +151,7 @@ export function WttShellV2({
                 onSelectTopic={onTopicChange}
                 onLeaveTopic={onLeaveTopic}
                 onDeleteTopic={onDeleteTopic}
-                onCreateChat={hideCreateTopic ? undefined : () => setCreateTopicOpen(true)}
+                onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
                 agentName={selectedAgent?.display_name}
               />
             )}
