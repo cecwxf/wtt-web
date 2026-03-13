@@ -464,7 +464,7 @@ export default function PipelinesPage() {
 
   const deletePipeline = async (p: Pipeline) => {
     if (p.id === 'default') return
-    if (!confirm(`Delete pipeline "${p.name}"? Tasks will move to default.`)) return
+    if (!confirm(`Delete pipeline "${p.name}" and all its tasks? This cannot be undone.`)) return
     await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines/${p.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
