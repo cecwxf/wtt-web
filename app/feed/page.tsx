@@ -238,7 +238,7 @@ function FeedPageInner() {
       topic_id: topic.id,
       name: topic.name,
       topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
-      unread_count: 0,
+      unread_count: Number((topic as Record<string, unknown>).unread_count || 0),
       can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
       task_id: topic.task_id,
       task_type: topic.task_type as 'code' | 'research' | 'general' | 'pipeline' | undefined,
@@ -261,6 +261,33 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
+
+  const shouldShowDiscussMembers = !!selectedTopic && selectedTopic.topic_type !== 'broadcast' && !selectedTopic.task_id
+  const { data: topicMembersRaw } = useSWR(
+    shouldShowDiscussMembers && selectedTopicId && session?.accessToken
+      ? ['topic-members', selectedTopicId, session.accessToken]
+      : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/members`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!response.ok) return []
+      return response.json()
+    },
+    { refreshInterval: 0 }
+  )
+
+  const topicMembers = useMemo(() => {
+    if (!Array.isArray(topicMembersRaw)) return []
+    return topicMembersRaw
+      .map((m) => (m && typeof m === 'object' ? (m as Record<string, unknown>) : null))
+      .filter(Boolean)
+      .map((m) => ({
+        agent_id: String((m as Record<string, unknown>).agent_id || ''),
+        display_name: String((m as Record<string, unknown>).display_name || (m as Record<string, unknown>).agent_id || ''),
+      }))
+      .filter((m) => m.agent_id)
+  }, [topicMembersRaw])
 
   // Auto-create P2P topic for each claimed agent (if not exists)
   const p2pInitRef = useRef(new Set<string>())
@@ -537,6 +564,13 @@ function FeedPageInner() {
                 isTaskTopic={!!selectedTopic.task_id}
                 taskType={selectedTopic.task_type || null}
                 wsConnected={wsState === 'connected'}
+                extraHeaderActions={
+                  shouldShowDiscussMembers ? (
+                    <div className="rounded border border-slate-200 dark:border-zinc-600 px-2 py-1 text-[11px] text-slate-500 dark:text-zinc-300">
+                      Members: {topicMembers.length > 0 ? topicMembers.map((m) => m.display_name).join(', ') : '—'}
+                    </div>
+                  ) : undefined
+                }
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center text-slate-400">

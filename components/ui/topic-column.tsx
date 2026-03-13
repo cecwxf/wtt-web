@@ -102,13 +102,13 @@ export function TopicColumn({
 
   const groupedTopics = useMemo(() => {
     const order: TopicGroupKey[] = ['p2p', 'task', 'discuss', 'subscriber']
-    const byGroup = new Map<TopicGroupKey, TopicItem[]>()
+    const byGroup = new Map<TopicGroupKey, Array<TopicItem & { __idx: number }>>()
     for (const group of order) byGroup.set(group, [])
 
-    for (const topic of topics) {
+    topics.forEach((topic, idx) => {
       const group = getTopicGroup(topic)
-      byGroup.get(group)?.push(topic)
-    }
+      byGroup.get(group)?.push({ ...(topic as TopicItem), __idx: idx })
+    })
 
     for (const group of order) {
       const rows = byGroup.get(group) || []
@@ -117,7 +117,14 @@ export function TopicColumn({
         const bp = pinnedTopicIds.includes(b.topic_id)
         if (ap && !bp) return -1
         if (!ap && bp) return 1
-        return 0
+
+        const au = Number(a.unread_count || 0)
+        const bu = Number(b.unread_count || 0)
+        if (au > 0 && bu <= 0) return -1
+        if (au <= 0 && bu > 0) return 1
+        if (bu !== au) return bu - au
+
+        return a.__idx - b.__idx
       })
       byGroup.set(group, rows)
     }
@@ -199,15 +206,16 @@ export function TopicColumn({
                       <p className="truncate text-sm font-medium">{topic.name}</p>
                     </div>
                     {isPinned && <Pin className="h-3 w-3 shrink-0 text-amber-500" />}
-                    {topic.unread_count && topic.unread_count > 0 ? (
-                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-500 px-1 text-[9px] font-semibold text-white">
-                        {topic.unread_count}
-                      </span>
-                    ) : null}
                     <span className="text-slate-400">
                       <MoreVertical className="h-4 w-4" />
                     </span>
                   </button>
+
+                  {topic.unread_count && topic.unread_count > 0 ? (
+                    <span className="pointer-events-none absolute bottom-1.5 right-7 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-semibold leading-none text-white shadow">
+                      {topic.unread_count > 99 ? '99+' : topic.unread_count}
+                    </span>
+                  ) : null}
 
                   {isMenuOpen && (
                     <>

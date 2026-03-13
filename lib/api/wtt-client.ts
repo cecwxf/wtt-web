@@ -167,6 +167,10 @@ class WTTApiClient {
     return this.request<Topic[]>('/topics/subscribed')
   }
 
+  async getTopicMembers(topicId: string): Promise<Array<{ agent_id: string; display_name?: string; role?: string }>> {
+    return this.request(`/topics/${topicId}/members`)
+  }
+
   // Messages
   async publishMessage(
     topicId: string,
