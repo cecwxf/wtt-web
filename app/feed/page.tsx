@@ -77,6 +77,8 @@ function FeedPageInner() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [showTaskSidebar, setShowTaskSidebar] = useState(true)
+  // Track newly created task that needs rename on first message
+  const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
 
   const loadAgents = useCallback(async () => {
     try {
@@ -309,6 +311,10 @@ function FeedPageInner() {
       })
       if (!r.ok) { alert('Failed to create task'); return }
       const task = await r.json()
+      // Track for auto-rename on first message
+      if (task.id && task.topic_id) {
+        pendingRenameTaskRef.current = { taskId: task.id, topicId: task.topic_id }
+      }
       // Refresh topic list and select the new task's topic
       await mutateTopics()
       if (task.topic_id) {
@@ -341,18 +347,19 @@ function FeedPageInner() {
       ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     })
 
-    // Auto-rename task if title is still "New Task" (ChatGPT-style)
-    if (isTask && selectedTopic?.task_id && selectedTopic.name.includes('New Task')) {
-      const trimmed = content.replace(/\n/g, ' ').trim()
-      const newTitle = trimmed.slice(0, 10)
+    // Auto-rename task on first message (ChatGPT-style)
+    const pending = pendingRenameTaskRef.current
+    if (pending && pending.topicId === selectedTopicId) {
+      pendingRenameTaskRef.current = null
+      const newTitle = content.replace(/\n/g, ' ').trim().slice(0, 10) || 'Task'
       try {
-        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopic.task_id}`, {
+        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${pending.taskId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
           body: JSON.stringify({ title: newTitle }),
         })
         mutateTopics()
-      } catch { /* ignore rename failure */ }
+      } catch { /* ignore */ }
     }
 
     mutate()
