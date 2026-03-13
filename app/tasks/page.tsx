@@ -802,6 +802,7 @@ export default function TasksPage() {
       onTopicsRefresh={() => mutateSubscribedTopics()}
       onLogout={() => signOut({ callbackUrl: '/login' })}
       currentUserName={actorSource(session)}
+      hideTopics
       hideCreateTopic
     >
       <div className="h-full p-4 text-slate-800">

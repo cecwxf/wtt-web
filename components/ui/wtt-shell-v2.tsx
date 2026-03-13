@@ -154,7 +154,7 @@ export function WttShellV2({
             )}
           </div>
 
-          <main className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/30 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
+          <main className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/30 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900">
             {children}
           </main>
         </div>

@@ -354,6 +354,39 @@ export function ChatView({
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const prevMsgCountRef = useRef(0)
+  const initialScrollDoneRef = useRef(false)
+
+  // Scroll to bottom on initial load and topic change
+  useEffect(() => {
+    initialScrollDoneRef.current = false
+    prevMsgCountRef.current = 0
+  }, [topicName])
+
+  useEffect(() => {
+    if (!initialScrollDoneRef.current && messages.length > 0 && scrollRef.current) {
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
+      })
+      initialScrollDoneRef.current = true
+      prevMsgCountRef.current = messages.length
+    }
+  }, [messages.length])
+
+  // Auto-scroll when new messages are appended (not when older are prepended)
+  useEffect(() => {
+    if (!initialScrollDoneRef.current) return
+    if (messages.length > prevMsgCountRef.current && scrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150
+      if (isNearBottom) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+        })
+      }
+    }
+    prevMsgCountRef.current = messages.length
+  }, [messages.length])
 
   useEffect(() => {
     try {
