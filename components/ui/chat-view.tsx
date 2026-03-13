@@ -18,7 +18,7 @@ export interface ChatMessage {
 
 export interface ChatModelConfig {
   model: string
-  reasoningEffort: 'low' | 'medium' | 'high'
+  reasoningEffort: 'off' | 'low' | 'medium' | 'high'
 }
 
 const AVAILABLE_MODELS = [
@@ -26,6 +26,7 @@ const AVAILABLE_MODELS = [
 ]
 
 const REASONING_EFFORTS = [
+  { id: 'off', label: 'Off', icon: '💤' },
   { id: 'low', label: 'Low', icon: '⚡' },
   { id: 'medium', label: 'Medium', icon: '⚖️' },
   { id: 'high', label: 'High', icon: '🧠' },
@@ -33,7 +34,7 @@ const REASONING_EFFORTS = [
 
 export type TaskType = 'code' | 'research' | 'general' | 'pipeline' | null
 
-const DEFAULT_EFFORT_BY_TASK: Record<string, 'low' | 'medium' | 'high'> = {
+const DEFAULT_EFFORT_BY_TASK: Record<string, 'off' | 'low' | 'medium' | 'high'> = {
   code: 'high',
   research: 'high',
   general: 'low',
@@ -336,7 +337,7 @@ export function ChatView({
   taskType = null,
   wsConnected = false,
 }: ChatViewProps) {
-  const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'low'
+  const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [awaitingAgent, setAwaitingAgent] = useState(false)
@@ -344,7 +345,7 @@ export function ChatView({
   const [uploading, setUploading] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id)
-  const [reasoningEffort, setReasoningEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort)
+  const [reasoningEffort, setReasoningEffort] = useState<'off' | 'low' | 'medium' | 'high'>(defaultEffort)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
