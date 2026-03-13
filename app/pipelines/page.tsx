@@ -215,7 +215,7 @@ export default function PipelinesPage() {
       return r.json()
     }
   )
-  const pipelines: Pipeline[] = useMemo(() => (Array.isArray(pipelinesRaw) ? pipelinesRaw : []), [pipelinesRaw])
+  const pipelines: Pipeline[] = useMemo(() => (Array.isArray(pipelinesRaw) ? pipelinesRaw : []).filter(p => p.id !== 'default'), [pipelinesRaw])
 
   /* ─── pipeline running state ─── */
   const [pipelineRunning, setPipelineRunning] = useState(false)
