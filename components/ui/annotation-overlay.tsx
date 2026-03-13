@@ -17,11 +17,13 @@ type AnnotationItem = {
 interface AnnotationOverlayProps {
   storageKey: string
   className?: string
+  /** Ref to the scrollable parent — canvas will match its scrollWidth × scrollHeight */
+  scrollContainerRef?: React.RefObject<HTMLElement | null>
 }
 
 const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#000000']
 
-export default function AnnotationOverlay({ storageKey, className }: AnnotationOverlayProps) {
+export default function AnnotationOverlay({ storageKey, className, scrollContainerRef }: AnnotationOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [tool, setTool] = useState<Tool>('select')
@@ -78,22 +80,36 @@ export default function AnnotationOverlay({ storageKey, className }: AnnotationO
     persist(next)
   }, [history, historyIdx, persist])
 
-  // Resize canvas to match container
-  useEffect(() => {
+  // Resize canvas to match the FULL scroll content of the container (not just viewport)
+  const syncCanvasSize = useCallback(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
     if (!canvas || !container) return
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      canvas.width = width
-      canvas.height = height
-    })
-    ro.observe(container)
-    return () => ro.disconnect()
-  }, [])
+    const scrollEl = scrollContainerRef?.current || container.parentElement
+    if (!scrollEl) return
+    const w = scrollEl.scrollWidth
+    const h = scrollEl.scrollHeight
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w
+      canvas.height = h
+    }
+  }, [scrollContainerRef])
+
+  useEffect(() => {
+    syncCanvasSize()
+    const el = scrollContainerRef?.current || containerRef.current?.parentElement
+    if (!el) return
+    const ro = new ResizeObserver(() => syncCanvasSize())
+    ro.observe(el)
+    // Also watch child mutations (content loaded later, e.g. PDF pages)
+    const mo = new MutationObserver(() => setTimeout(syncCanvasSize, 100))
+    mo.observe(el, { childList: true, subtree: true })
+    return () => { ro.disconnect(); mo.disconnect() }
+  }, [syncCanvasSize, scrollContainerRef])
 
   // Redraw all annotations
   useEffect(() => {
+    syncCanvasSize()
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -266,10 +282,10 @@ export default function AnnotationOverlay({ storageKey, className }: AnnotationO
   ]
 
   return (
-    <div ref={containerRef} className={`absolute inset-0 ${className || ''}`} style={{ pointerEvents: tool === 'select' ? 'none' : 'auto' }}>
+    <div ref={containerRef} className={`absolute top-0 left-0 w-full ${className || ''}`} style={{ pointerEvents: tool === 'select' ? 'none' : 'auto', height: canvasRef.current?.height || '100%' }}>
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 z-10"
+        className="absolute top-0 left-0 z-10"
         style={{ cursor: tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair' }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -295,8 +311,8 @@ export default function AnnotationOverlay({ storageKey, className }: AnnotationO
         </div>
       )}
 
-      {/* Floating annotation toolbar */}
-      <div className="absolute left-2 top-2 z-20 flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/95 px-1 py-1 shadow-lg backdrop-blur" style={{ pointerEvents: 'auto' }}>
+      {/* Floating annotation toolbar — stays visible during scroll */}
+      <div className="sticky left-2 top-2 z-30 inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/95 px-1 py-1 shadow-lg backdrop-blur" style={{ pointerEvents: 'auto' }}>
         {!showToolbar ? (
           <button onClick={() => setShowToolbar(true)} className="rounded px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100" title="Show annotation tools">
             🖊️ Annotate

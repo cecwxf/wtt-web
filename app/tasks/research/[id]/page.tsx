@@ -161,6 +161,7 @@ export default function ResearchTaskPage() {
 
   // Quote-to-chat & context menu
   const readerRef = useRef<HTMLDivElement>(null)
+  const l4ScrollRef = useRef<HTMLDivElement>(null)
   const [quoteBtn, setQuoteBtn] = useState<{ x: number; y: number; text: string } | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; text: string } | null>(null)
   const [notesOpen, setNotesOpen] = useState(false)
@@ -1119,7 +1120,7 @@ export default function ResearchTaskPage() {
                             </button>
                           </div>
                         </div>
-                        <div className={l4Fullscreen ? 'relative flex-1 overflow-auto p-2 min-h-0' : 'relative'}>
+                        <div ref={l4ScrollRef} className={l4Fullscreen ? 'relative flex-1 overflow-auto p-2 min-h-0' : 'relative overflow-auto max-h-[75vh]'}>
                         {l4View === 'native' ? (
                           (() => {
                             const ct = (selectedPaperFull.content_type || '').toLowerCase()
@@ -1129,7 +1130,7 @@ export default function ResearchTaskPage() {
                             }
                             if (ct === 'md' || ct === 'markdown' || /\.md$/i.test(url)) {
                               return (
-                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[75vh]`}>
+                                <div className={`prose prose-sm max-w-none text-slate-700`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {selectedPaperFull.content_markdown || ''}
                                   </ReactMarkdown>
@@ -1138,14 +1139,14 @@ export default function ResearchTaskPage() {
                             }
                             if (ct === 'bib' || /\.bib$/i.test(url)) {
                               return (
-                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap max-h-[75vh]`}>
+                                <pre className={`rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
                             }
                             if (['txt', 'tex', 'latex'].includes(ct) || /\.(txt|tex|latex)$/i.test(url)) {
                               return (
-                                <pre className={`overflow-auto rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap max-h-[75vh]`}>
+                                <pre className={`rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
@@ -1153,7 +1154,7 @@ export default function ResearchTaskPage() {
                             // Fallback
                             if (selectedPaperFull.content_markdown) {
                               return (
-                                <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[75vh]`}>
+                                <div className={`prose prose-sm max-w-none text-slate-700`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {cleanPdfText(selectedPaperFull.content_markdown)}
                                   </ReactMarkdown>
@@ -1163,13 +1164,13 @@ export default function ResearchTaskPage() {
                             return <PdfViewer url={url} expanded={l4Fullscreen} />
                           })()
                         ) : (
-                          <div className={`prose prose-sm max-w-none text-slate-700 overflow-y-auto max-h-[75vh]`}>
+                          <div className={`prose prose-sm max-w-none text-slate-700`}>
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {cleanPdfText(selectedPaperFull.content_markdown || '')}
                             </ReactMarkdown>
                           </div>
                         )}
-                        <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} />
+                        <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} scrollContainerRef={l4ScrollRef} />
                         </div>
                       </div>
                     )}
