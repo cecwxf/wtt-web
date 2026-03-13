@@ -18,22 +18,27 @@ export interface ChatMessage {
 
 export interface ChatModelConfig {
   model: string
-  thinkingMode: 'normal' | 'extended'
+  reasoningEffort: 'low' | 'medium' | 'high'
 }
 
 const AVAILABLE_MODELS = [
-  { id: 'claude-sonnet-4', label: 'Claude Sonnet 4' },
-  { id: 'claude-opus-4', label: 'Claude Opus 4' },
-  { id: 'gpt-4o', label: 'GPT-4o' },
-  { id: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-  { id: 'deepseek-r1', label: 'DeepSeek R1' },
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { id: 'openai-codex/gpt-5.3-codex', label: 'GPT-5.3 Codex' },
 ]
 
-const THINKING_MODES = [
-  { id: 'normal', label: 'Normal' },
-  { id: 'extended', label: 'Extended Thinking' },
-]
+const REASONING_EFFORTS = [
+  { id: 'low', label: 'Low', icon: '⚡' },
+  { id: 'medium', label: 'Medium', icon: '⚖️' },
+  { id: 'high', label: 'High', icon: '🧠' },
+] as const
+
+export type TaskType = 'code' | 'research' | 'general' | 'pipeline' | null
+
+const DEFAULT_EFFORT_BY_TASK: Record<string, 'low' | 'medium' | 'high'> = {
+  code: 'high',
+  research: 'high',
+  general: 'low',
+  pipeline: 'low',
+}
 
 interface ChatViewProps {
   topicName: string
@@ -46,6 +51,7 @@ interface ChatViewProps {
   loading?: boolean
   extraHeaderActions?: React.ReactNode
   isTaskTopic?: boolean
+  taskType?: TaskType
   wsConnected?: boolean
 }
 
@@ -327,8 +333,10 @@ export function ChatView({
   loading,
   extraHeaderActions,
   isTaskTopic = false,
+  taskType = null,
   wsConnected = false,
 }: ChatViewProps) {
+  const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'low'
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [awaitingAgent, setAwaitingAgent] = useState(false)
@@ -336,7 +344,7 @@ export function ChatView({
   const [uploading, setUploading] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id)
-  const [thinkingMode, setThinkingMode] = useState<'normal' | 'extended'>('normal')
+  const [reasoningEffort, setReasoningEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
@@ -381,14 +389,13 @@ export function ChatView({
   const handleSend = async () => {
     if (!draft.trim()) return
 
-    const modelConfig: ChatModelConfig = { model: selectedModel, thinkingMode }
+    const modelConfig: ChatModelConfig = { model: selectedModel, reasoningEffort }
     let content = draft.trim()
 
     // Prepend model info on the first message in this session
     if (isFirstMessage) {
       const modelLabel = AVAILABLE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel
-      const modeLabel = thinkingMode === 'extended' ? 'Extended Thinking' : 'Normal'
-      content = `[Model: ${modelLabel} | Mode: ${modeLabel}]\n\n${content}`
+      content = `[Model: ${modelLabel} | Effort: ${reasoningEffort}]\n\n${content}`
       setIsFirstMessage(false)
     }
 
@@ -878,7 +885,7 @@ export function ChatView({
       )}
 
       <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4">
-        {/* Model & Thinking mode selector */}
+        {/* Model & Reasoning effort selector */}
         <div className="mb-2 flex items-center gap-2 text-[11px]">
           <div className="relative">
             <button
@@ -912,17 +919,17 @@ export function ChatView({
           </div>
 
           <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 overflow-hidden">
-            {THINKING_MODES.map(m => (
+            {REASONING_EFFORTS.map(e => (
               <button
-                key={m.id}
-                onClick={() => setThinkingMode(m.id as 'normal' | 'extended')}
+                key={e.id}
+                onClick={() => setReasoningEffort(e.id)}
                 className={`px-2.5 py-1.5 text-[11px] transition ${
-                  thinkingMode === m.id
+                  reasoningEffort === e.id
                     ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-medium'
                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
                 }`}
               >
-                {m.id === 'extended' ? '🧠 ' : ''}{m.label}
+                {e.icon} {e.label}
               </button>
             ))}
           </div>

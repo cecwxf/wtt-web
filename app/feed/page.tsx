@@ -232,13 +232,14 @@ function FeedPageInner() {
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
 
-    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string }) => ({
+    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string }) => ({
       topic_id: topic.id,
       name: topic.name,
       topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
       unread_count: 0,
       can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
       task_id: topic.task_id,
+      task_type: topic.task_type as 'code' | 'research' | 'general' | 'pipeline' | undefined,
       runner_agent_id: topic.runner_agent_id,
     }))
     // Pin P2P topics at top
@@ -457,6 +458,7 @@ function FeedPageInner() {
                 hasOlder={hasOlder && !loadingOlder}
                 loading={!feedRaw && !error}
                 isTaskTopic={!!selectedTopic.task_id}
+                taskType={selectedTopic.task_type || null}
                 wsConnected={wsState === 'connected'}
               />
             ) : (

@@ -10,6 +10,7 @@ export interface TopicItem {
   unread_count?: number
   can_delete?: boolean
   task_id?: string
+  task_type?: 'code' | 'research' | 'general' | 'pipeline'
   runner_agent_id?: string
 }
 
