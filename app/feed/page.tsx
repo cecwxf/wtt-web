@@ -351,7 +351,9 @@ function FeedPageInner() {
     const pending = pendingRenameTaskRef.current
     if (pending && pending.topicId === selectedTopicId) {
       pendingRenameTaskRef.current = null
-      const newTitle = content.replace(/\n/g, ' ').trim().slice(0, 10) || 'Task'
+      // Strip model config prefix like "[Model: xxx | Effort: xxx]\n\n" or "[Switched → ...]"
+      const userText = content.replace(/^\[(?:Model|Switched)[^\]]*\]\s*/i, '').replace(/\n/g, ' ').trim()
+      const newTitle = userText.slice(0, 10) || 'Task'
       try {
         await fetch(`${CLIENT_WTT_API_BASE}/tasks/${pending.taskId}`, {
           method: 'PATCH',
