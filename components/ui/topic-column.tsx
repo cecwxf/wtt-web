@@ -108,32 +108,29 @@ export function TopicColumn({
               </button>
 
               {isMenuOpen && (
-                <div className="absolute right-1 top-11 z-30 w-36 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-                  <button
-                    className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-100"
-                    onClick={() => {
-                      setMenuFor(null)
-                      onLeaveTopic?.(topic.topic_id)
-                    }}
-                  >
-                    Leave Topic
-                  </button>
-                  <button
-                    className="w-full rounded px-2 py-1.5 text-left text-xs text-red-500 hover:bg-slate-100"
-                    onClick={() => {
-                      setMenuFor(null)
-                      onDeleteTopic?.(topic.topic_id)
-                    }}
-                  >
-                    Delete Topic
-                  </button>
-                  <button
-                    className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-400 hover:bg-slate-100"
-                    onClick={() => setMenuFor(null)}
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setMenuFor(null)} />
+                  <div className="absolute right-1 top-11 z-30 w-36 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                    <button
+                      className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-100"
+                      onClick={() => {
+                        setMenuFor(null)
+                        onLeaveTopic?.(topic.topic_id)
+                      }}
+                    >
+                      Leave Topic
+                    </button>
+                    <button
+                      className="w-full rounded px-2 py-1.5 text-left text-xs text-red-500 hover:bg-slate-100"
+                      onClick={() => {
+                        setMenuFor(null)
+                        onDeleteTopic?.(topic.topic_id)
+                      }}
+                    >
+                      Delete Topic
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )
