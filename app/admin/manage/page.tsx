@@ -56,29 +56,23 @@ export default function AdminManagePage() {
   const loadAll = async () => {
     if (!session?.accessToken) return
     try {
-      const [aRes, tRes, kRes] = await Promise.all([
-        fetch(`${CLIENT_WTT_API_BASE}/agents/my`, { headers }),
-        fetch(`${CLIENT_WTT_API_BASE}/topics/`, { headers }),
-        fetch(`${CLIENT_WTT_API_BASE}/tasks?limit=500`, { headers }),
-      ])
+      const adminRes = await fetch(`${CLIENT_WTT_API_BASE}/manager/admin/overview?limit=800`, { headers })
+      if (!adminRes.ok) {
+        throw new Error(`admin overview failed: ${adminRes.status}`)
+      }
+      const data = await adminRes.json()
 
-      const a = aRes.ok ? await aRes.json() : []
-      const normalizedAgents = Array.isArray(a)
-        ? a
-            .map((x) => ({
-              agent_id: String(x?.agent_id || ''),
-              display_name: String(x?.display_name || x?.agent_id || ''),
-            }))
-            .filter((x) => x.agent_id)
+      const normalizedAgents = Array.isArray(data?.agents)
+        ? data.agents
+            .map((x: unknown) => String(x || '').trim())
+            .filter(Boolean)
+            .map((id: string) => ({ agent_id: id, display_name: id }))
         : []
       setAgents(normalizedAgents)
       setSelectedAgentId((prev) => prev || normalizedAgents[0]?.agent_id || '')
 
-      const t = tRes.ok ? await tRes.json() : []
-      setTopics(Array.isArray(t) ? t : [])
-
-      const k = kRes.ok ? await kRes.json() : []
-      setTasks(Array.isArray(k) ? k : [])
+      setTopics(Array.isArray(data?.topics) ? data.topics : [])
+      setTasks(Array.isArray(data?.tasks) ? data.tasks : [])
     } catch {
       // ignore
     }
@@ -114,7 +108,7 @@ export default function AdminManagePage() {
   }
 
   const bulkDeleteTopics = async () => {
-    if (!selectedTopicIds.length || !selectedAgentId) return
+    if (!selectedTopicIds.length) return
     const ack = prompt(`将删除 ${selectedTopicIds.length} 个 topic。请输入 DELETE 确认：`)
     if (ack !== 'DELETE') return
 
@@ -122,7 +116,7 @@ export default function AdminManagePage() {
     try {
       await Promise.allSettled(
         selectedTopicIds.map((id) =>
-          fetch(`${CLIENT_WTT_API_BASE}/topics/${id}?agent_id=${encodeURIComponent(selectedAgentId)}`, {
+          fetch(`${CLIENT_WTT_API_BASE}/manager/admin/topics/${id}`, {
             method: 'DELETE',
             headers,
           })
@@ -136,7 +130,7 @@ export default function AdminManagePage() {
   }
 
   const bulkDeleteTasks = async () => {
-    if (!selectedTaskIds.length || !selectedAgentId) return
+    if (!selectedTaskIds.length) return
     const ack = prompt(`将取消/删除 ${selectedTaskIds.length} 个 task（含关联topic删除）。请输入 DELETE 确认：`)
     if (ack !== 'DELETE') return
 
@@ -144,13 +138,10 @@ export default function AdminManagePage() {
     try {
       await Promise.allSettled(
         selectedTaskIds.map((id) =>
-          fetch(
-            `${CLIENT_WTT_API_BASE}/tasks/${id}?delete_topic=true&agent_id=${encodeURIComponent(selectedAgentId)}`,
-            {
-              method: 'DELETE',
-              headers,
-            }
-          )
+          fetch(`${CLIENT_WTT_API_BASE}/manager/admin/tasks/${id}?delete_topic=true`, {
+            method: 'DELETE',
+            headers,
+          })
         )
       )
       setSelectedTaskIds([])
@@ -164,7 +155,8 @@ export default function AdminManagePage() {
     <div className="mx-auto max-w-7xl p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Admin / Manage Cleanup</h1>
       <p className="text-sm text-slate-500">
-        登录方式：先访问 <span className="font-mono">/login</span> 登录，再进入此页面执行批量清理测试 topic/task。
+        登录方式：先访问 <span className="font-mono">/login</span> 登录，再进入此页面执行批量清理。
+        注意：此页需要后端配置管理员白名单（环境变量 <span className="font-mono">WTT_ADMIN_USER_IDS</span>）。
       </p>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
