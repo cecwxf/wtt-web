@@ -149,6 +149,7 @@ export function WttShellV2({
                 onSelectTopic={onTopicChange}
                 onLeaveTopic={onLeaveTopic}
                 onDeleteTopic={onDeleteTopic}
+                onCreateChat={hideCreateTopic ? undefined : () => setCreateTopicOpen(true)}
                 agentName={selectedAgent?.display_name}
               />
             )}

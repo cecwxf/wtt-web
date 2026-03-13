@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, Hash, Lock, MoreVertical, Pin, Users } from 'lucide-react'
+import { Bot, Hash, Lock, MessageSquarePlus, MoreVertical, Pin, Users } from 'lucide-react'
 import { useState } from 'react'
 
 export interface TopicItem {
@@ -20,6 +20,7 @@ interface TopicColumnProps {
   onSelectTopic: (topicId: string | null) => void
   onLeaveTopic?: (topicId: string) => void
   onDeleteTopic?: (topicId: string) => void
+  onCreateChat?: () => void
   agentName?: string
 }
 
@@ -41,6 +42,7 @@ export function TopicColumn({
   onSelectTopic,
   onLeaveTopic,
   onDeleteTopic,
+  onCreateChat,
   agentName,
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -54,6 +56,16 @@ export function TopicColumn({
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
+        {onCreateChat && (
+          <button
+            onClick={onCreateChat}
+            className="mb-2 flex w-full items-center gap-2 rounded-lg border border-dashed border-indigo-300 dark:border-indigo-700 px-2 py-2.5 text-left text-sm font-medium text-indigo-500 dark:text-indigo-400 transition hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
+          >
+            <MessageSquarePlus className="h-4 w-4 shrink-0" />
+            <span className="truncate">Create Chat</span>
+          </button>
+        )}
+
         <button
           onClick={() => onSelectTopic(null)}
           className={`mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left transition ${
