@@ -490,35 +490,52 @@ function FeedPageInner() {
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 4l6 6M10 4l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                 </button>
               </div>
-              <div className="flex-1 space-y-2 overflow-y-auto p-3">
-                <button onClick={() => router.push('/tasks?create=code')} className="group flex w-full items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40 hover:shadow-sm">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-indigo-100 text-base group-hover:bg-indigo-200">💻</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-700">Code Task</p>
-                    <p className="mt-0.5 text-[10px] leading-snug text-slate-400">AI-assisted coding with repo</p>
-                  </div>
-                </button>
-                <button onClick={() => router.push('/tasks?create=research')} className="group flex w-full items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50/40 hover:shadow-sm">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-base group-hover:bg-emerald-200">🔬</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-700">Research Task</p>
-                    <p className="mt-0.5 text-[10px] leading-snug text-slate-400">Paper analysis & review</p>
-                  </div>
-                </button>
-                <button onClick={() => router.push('/tasks?create=general')} className="group flex w-full items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-left transition hover:border-amber-200 hover:bg-amber-50/40 hover:shadow-sm">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-100 text-base group-hover:bg-amber-200">📋</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-700">General Task</p>
-                    <p className="mt-0.5 text-[10px] leading-snug text-slate-400">Flexible task with any agent</p>
-                  </div>
-                </button>
-                <button onClick={() => router.push('/pipelines')} className="group flex w-full items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-left transition hover:border-purple-200 hover:bg-purple-50/40 hover:shadow-sm">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-purple-100 text-base group-hover:bg-purple-200">🔗</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-700">Pipeline Task</p>
-                    <p className="mt-0.5 text-[10px] leading-snug text-slate-400">Multi-step DAG workflow</p>
-                  </div>
-                </button>
+              <div className="flex-1 space-y-3 overflow-y-auto p-3">
+                {[
+                  { type: 'code', icon: '💻', label: 'New Code Task', desc: 'AI-assisted coding with repository context. Agent writes, reviews, and commits code.', gradient: 'from-indigo-500 to-blue-600', bg: 'bg-indigo-50', border: 'border-indigo-200', hover: 'hover:border-indigo-400 hover:shadow-indigo-100' },
+                  { type: 'research', icon: '🔬', label: 'New Research Task', desc: 'Deep-dive analysis, paper review, and structured report generation.', gradient: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-50', border: 'border-emerald-200', hover: 'hover:border-emerald-400 hover:shadow-emerald-100' },
+                  { type: 'general', icon: '📋', label: 'New General Task', desc: 'Flexible task for any agent — planning, writing, data processing, and more.', gradient: 'from-amber-500 to-orange-600', bg: 'bg-amber-50', border: 'border-amber-200', hover: 'hover:border-amber-400 hover:shadow-amber-100' },
+                  { type: 'pipeline', icon: '🔗', label: 'New Pipeline', desc: 'Multi-step DAG workflow — chain tasks with dependencies and auto-execution.', gradient: 'from-purple-500 to-fuchsia-600', bg: 'bg-purple-50', border: 'border-purple-200', hover: 'hover:border-purple-400 hover:shadow-purple-100' },
+                ].map((item) => (
+                  <button
+                    key={item.type}
+                    onClick={async () => {
+                      if (item.type === 'pipeline') { router.push('/pipelines'); return }
+                      const title = prompt(`${item.label}\n\nEnter task title:`)
+                      if (!title?.trim()) return
+                      try {
+                        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                          body: JSON.stringify({
+                            title: title.trim(),
+                            task_type: item.type,
+                            priority: 'P2',
+                            status: 'todo',
+                            owner_agent_id: selectedAgentId || undefined,
+                            runner_agent_id: selectedAgentId || undefined,
+                            created_by: selectedAgentId || undefined,
+                          }),
+                        })
+                        if (!r.ok) { alert('Failed to create task'); return }
+                        const task = await r.json()
+                        if (item.type === 'code') router.push(`/tasks/code/${task.id}`)
+                        else if (item.type === 'research') router.push(`/tasks/research/${task.id}`)
+                        else router.push('/tasks')
+                      } catch { alert('Failed to create task') }
+                    }}
+                    className={`group flex w-full items-start gap-3 rounded-xl border ${item.border} ${item.bg} p-4 text-left transition-all ${item.hover} hover:shadow-md`}
+                  >
+                    <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${item.gradient} text-lg shadow-sm`}>
+                      <span className="drop-shadow">{item.icon}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-800">{item.label}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{item.desc}</p>
+                    </div>
+                    <svg className="mt-1 shrink-0 text-slate-300 opacity-0 transition group-hover:opacity-100" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
