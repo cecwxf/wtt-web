@@ -44,6 +44,29 @@ body {
   --tw-prose-td-borders: #1e293b;
 }
 
+/*
+ * Global dark-mode color overrides.
+ * These ensure text-slate-700/800/900 and bg-white/bg-slate-50
+ * remain readable without adding dark: to every single className.
+ */
+@layer utilities {
+  .dark .text-slate-900 { color: #e2e8f0; }
+  .dark .text-slate-800 { color: #cbd5e1; }
+  .dark .text-slate-700 { color: #94a3b8; }
+  .dark .text-slate-600 { color: #94a3b8; }
+
+  .dark .bg-white { background-color: #0f172a; }
+  .dark .bg-slate-50 { background-color: #1e293b; }
+  .dark .bg-slate-100 { background-color: #1e293b; }
+  .dark .border-slate-200 { border-color: #334155; }
+  .dark .border-slate-100 { border-color: #1e293b; }
+
+  .dark .hover\:text-slate-900:hover { color: #f1f5f9; }
+  .dark .hover\:text-slate-800:hover { color: #e2e8f0; }
+  .dark .hover\:bg-slate-50:hover { background-color: #1e293b; }
+  .dark .hover\:bg-slate-100:hover { background-color: #334155; }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Obsidian-style Callouts                                            */
 /* ------------------------------------------------------------------ */

@@ -42,7 +42,6 @@ interface ChatViewProps {
   onSendMessage: (content: string, modelConfig?: ChatModelConfig) => Promise<void>
   onLoadOlder?: () => Promise<void>
   onExport?: (format: 'md' | 'pdf' | 'docx') => void
-  onRecall?: () => Promise<void>
   hasOlder?: boolean
   loading?: boolean
   extraHeaderActions?: React.ReactNode
@@ -324,7 +323,6 @@ export function ChatView({
   onSendMessage,
   onLoadOlder,
   onExport,
-  onRecall,
   hasOlder = false,
   loading,
   extraHeaderActions,
@@ -577,7 +575,6 @@ export function ChatView({
                 </div>
               )}
             </div>
-            <button onClick={() => onRecall?.()} className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-500 hover:bg-indigo-100">Recall</button>
           </div>
         </div>
       </div>

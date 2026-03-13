@@ -312,20 +312,6 @@ function FeedPageInner() {
     window.open(u, '_blank', 'noopener,noreferrer')
   }
 
-  const handleRecallTopic = async () => {
-    if (!selectedTopicId) return
-    const r = await fetch(`${CLIENT_WTT_API_BASE}/memory/recall/export`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic_id: selectedTopicId, mode: 'distilled', target_path: 'memory/recall-memory.md', limit: 200 }),
-    })
-    if (!r.ok) {
-      alert(`Recall failed: ${await r.text()}`)
-      return
-    }
-    alert('Recall exported to memory.md')
-  }
-
   const handleRenameAgent = async (agentId: string, currentName: string) => {
     const next = prompt('New agent name', currentName)
     if (!next || next.trim() === currentName) return
@@ -468,7 +454,6 @@ function FeedPageInner() {
                 onSendMessage={handleSendMessage}
                 onLoadOlder={loadOlderMessages}
                 onExport={handleExportTopic}
-                onRecall={handleRecallTopic}
                 hasOlder={hasOlder && !loadingOlder}
                 loading={!feedRaw && !error}
                 isTaskTopic={!!selectedTopic.task_id}
@@ -493,10 +478,10 @@ function FeedPageInner() {
               </div>
               <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
                 {[
-                  { type: 'code', icon: '💻', label: 'New Code Task', desc: 'AI-assisted coding with repo context', gradient: 'from-indigo-500 to-blue-600', ring: 'ring-indigo-400/30', bg: 'bg-gradient-to-r from-indigo-50 to-blue-50', border: 'border-indigo-200/80' },
-                  { type: 'research', icon: '🔬', label: 'New Research Task', desc: 'Deep analysis & report generation', gradient: 'from-emerald-500 to-teal-600', ring: 'ring-emerald-400/30', bg: 'bg-gradient-to-r from-emerald-50 to-teal-50', border: 'border-emerald-200/80' },
-                  { type: 'general', icon: '📋', label: 'New General Task', desc: 'Planning, writing & data processing', gradient: 'from-amber-500 to-orange-600', ring: 'ring-amber-400/30', bg: 'bg-gradient-to-r from-amber-50 to-orange-50', border: 'border-amber-200/80' },
-                  { type: 'pipeline', icon: '🔗', label: 'New Pipeline', desc: 'Multi-step DAG with auto-execution', gradient: 'from-purple-500 to-fuchsia-600', ring: 'ring-purple-400/30', bg: 'bg-gradient-to-r from-purple-50 to-fuchsia-50', border: 'border-purple-200/80' },
+                  { type: 'code', icon: '💻', label: 'New Code Task', desc: 'AI-assisted coding with repo context', gradient: 'from-indigo-500 to-blue-600', ring: 'ring-indigo-400/30', bg: 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950 dark:to-blue-950', border: 'border-indigo-200/80 dark:border-indigo-700/60' },
+                  { type: 'research', icon: '🔬', label: 'New Research Task', desc: 'Deep analysis & report generation', gradient: 'from-emerald-500 to-teal-600', ring: 'ring-emerald-400/30', bg: 'bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950', border: 'border-emerald-200/80 dark:border-emerald-700/60' },
+                  { type: 'general', icon: '📋', label: 'New General Task', desc: 'Planning, writing & data processing', gradient: 'from-amber-500 to-orange-600', ring: 'ring-amber-400/30', bg: 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950', border: 'border-amber-200/80 dark:border-amber-700/60' },
+                  { type: 'pipeline', icon: '🔗', label: 'New Pipeline', desc: 'Multi-step DAG with auto-execution', gradient: 'from-purple-500 to-fuchsia-600', ring: 'ring-purple-400/30', bg: 'bg-gradient-to-r from-purple-50 to-fuchsia-50 dark:from-purple-950 dark:to-fuchsia-950', border: 'border-purple-200/80 dark:border-purple-700/60' },
                 ].map((item) => (
                   <button
                     key={item.type}
