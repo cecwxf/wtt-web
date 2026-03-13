@@ -350,16 +350,20 @@ export default function PipelinesPage() {
 
   const selected = useMemo(() => allNodes.find((n) => n.id === selectedTaskId) || null, [allNodes, selectedTaskId])
   const isDraft = selectedTaskId ? !!draftNodes[selectedTaskId] : false
+  // Sync taskDraft only when selection changes (not on every content change)
+  const prevSelectedIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!selectedTaskId) return
+    if (!selectedTaskId || selectedTaskId === prevSelectedIdRef.current) return
+    prevSelectedIdRef.current = selectedTaskId
     const draft = draftNodes[selectedTaskId]
     if (draft) {
       setTaskDraft(draft as TaskDraft)
-    } else if (selected) {
-      setTaskDraft(selected as TaskDraft)
+    } else {
+      const node = allNodes.find(n => n.id === selectedTaskId)
+      if (node) setTaskDraft(node as TaskDraft)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, selectedTaskId])
+  }, [selectedTaskId])
 
   /* ─── timeline for selected node ─── */
   const { data: timelineRaw } = useSWR(
