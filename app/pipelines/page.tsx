@@ -815,6 +815,7 @@ export default function PipelinesPage() {
             content,
             content_type: 'text',
             semantic_type: 'post',
+            sender_type: 'HUMAN',
           }),
         })
         if (p2pR.ok) {
