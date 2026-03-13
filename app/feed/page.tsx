@@ -290,11 +290,18 @@ function FeedPageInner() {
     }
   }, [topics, searchParams])
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleSendMessage = async (content: string, _modelConfig?: ChatModelConfig) => {
+  const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig) => {
     if (!selectedTopicId || !selectedAgentId) return
 
     const isTask = !!selectedTopic?.task_id
+    // Build metadata with model config so the agent knows which model/mode to use
+    const metadata: Record<string, unknown> = {}
+    if (modelConfig) {
+      metadata.model_config = {
+        model: modelConfig.model,
+        reasoning_effort: modelConfig.reasoningEffort,
+      }
+    }
     // Web 端统一以 HUMAN 身份发消息（来源=登录用户）
     await wttApi.publishMessage(selectedTopicId, {
       content,
@@ -302,6 +309,7 @@ function FeedPageInner() {
       semantic_type: isTask ? 'task_request' : 'post',
       sender_type: 'HUMAN',
       sender_id: getHumanSender(session),
+      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     })
 
     mutate()

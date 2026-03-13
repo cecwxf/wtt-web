@@ -177,6 +177,7 @@ class WTTApiClient {
       reply_to?: string
       sender_type?: 'HUMAN' | 'AGENT' | 'human' | 'agent'
       sender_id?: string
+      metadata?: Record<string, unknown>
     }
   ): Promise<Message> {
     return this.request<Message>(`/topics/${topicId}/messages`, {

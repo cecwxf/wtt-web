@@ -75,7 +75,7 @@ export function WttShellV2({
   }))
 
   return (
-    <div className="h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-zinc-200">
+    <div className="h-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-200">
       <div className="flex h-full flex-col">
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}

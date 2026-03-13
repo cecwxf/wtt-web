@@ -517,7 +517,7 @@ export default function InboxPage() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50 to-white px-4 py-4 sm:px-5">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50 dark:from-zinc-900 to-white dark:to-zinc-900 px-4 py-4 sm:px-5">
             {!activeConversation && (
               <div className="pt-20 text-center text-sm text-slate-400">Select one conversation from the left list.</div>
             )}

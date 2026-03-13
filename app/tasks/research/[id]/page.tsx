@@ -693,7 +693,7 @@ export default function ResearchTaskPage() {
   // ── Render ───────────────────────────────────────────
   if (status === 'loading') {
     return (
-      <div className="flex h-screen items-center justify-center bg-white">
+      <div className="flex h-screen items-center justify-center bg-white dark:bg-zinc-900">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
           <p className="mt-3 text-sm text-slate-400">Loading session…</p>
@@ -703,19 +703,19 @@ export default function ResearchTaskPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-white">
+    <div className="flex h-screen flex-col bg-white dark:bg-zinc-900">
       {/* Top bar */}
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-4">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/tasks')} className="text-sm text-indigo-500 hover:underline">← Tasks</button>
-          <span className="text-sm font-semibold text-slate-700 max-w-[300px] truncate">{task?.title || 'Research Task'}</span>
+          <span className="text-sm font-semibold text-slate-700 dark:text-zinc-200 max-w-[300px] truncate">{task?.title || 'Research Task'}</span>
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">📄 Research</span>
           {task?.status && (
             <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
               task.status === 'doing' ? 'bg-amber-100 text-amber-700' :
               task.status === 'done' ? 'bg-green-100 text-green-700' :
               task.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-              'bg-slate-100 text-slate-500'
+              'bg-slate-100 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400'
             }`}>{task.status === 'doing' ? '⚡ Running' : task.status === 'done' ? '✅ Done' : task.status === 'cancelled' ? '🚫 Cancelled' : task.status}</span>
           )}
           {task?.status && task.status !== 'done' && task.status !== 'cancelled' && (
@@ -735,10 +735,10 @@ export default function ResearchTaskPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-slate-400">{papers.length} papers</span>
+          <span className="text-[10px] text-slate-400 dark:text-zinc-500">{papers.length} papers</span>
           {agents.length > 1 && (
             <select
-              className="rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+              className="rounded border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs"
               value={selectedAgentId}
               onChange={(e) => setSelectedAgentId(e.target.value)}
             >
@@ -753,11 +753,11 @@ export default function ResearchTaskPage() {
 
         {/* ═══ PROJECT DIRECTORY ═══ */}
         {!l4Fullscreen && (
-          <div className={`flex flex-col border-r border-slate-200 bg-slate-50/80 transition-all ${projectsCollapsed ? 'w-10' : 'w-48'}`}>
+          <div className={`flex flex-col border-r border-slate-200 dark:border-zinc-700 bg-slate-50/80 dark:bg-zinc-800/80 transition-all ${projectsCollapsed ? 'w-10' : 'w-48'}`}>
             {projectsCollapsed ? (
               <button
                 onClick={() => { setProjectsCollapsed(false); localStorage.setItem('research-projects-collapsed', 'false') }}
-                className="flex h-full w-full flex-col items-center pt-3 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="flex h-full w-full flex-col items-center pt-3 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
                 title="Expand projects"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -765,15 +765,15 @@ export default function ResearchTaskPage() {
               </button>
             ) : (
               <>
-                <div className="flex items-center justify-between border-b border-slate-200 px-2 py-1.5">
-                  <span className="text-[11px] font-bold text-slate-600">📁 Projects</span>
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-700 px-2 py-1.5">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-300">📁 Projects</span>
                   <div className="flex items-center gap-0.5">
                     <button onClick={createProject} className="rounded p-1 text-indigo-500 hover:bg-indigo-50" title="New Project">
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 3v8M3 7h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                     </button>
                     <button
                       onClick={() => { setProjectsCollapsed(true); localStorage.setItem('research-projects-collapsed', 'true') }}
-                      className="rounded p-1 text-slate-400 hover:bg-slate-100" title="Collapse"
+                      className="rounded p-1 text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700" title="Collapse"
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M8 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
@@ -794,8 +794,8 @@ export default function ResearchTaskPage() {
                       }}
                       className={`group mb-0.5 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition ${
                         p.id === taskId
-                          ? 'bg-indigo-100 text-indigo-700 font-semibold'
-                          : 'text-slate-600 hover:bg-slate-100'
+                          ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold'
+                          : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700'
                       }`}
                       title={`${p.title}\nDouble-click to rename · Right-click for options`}
                     >
@@ -804,12 +804,12 @@ export default function ResearchTaskPage() {
                       <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-medium ${
                         p.status === 'doing' ? 'bg-amber-100 text-amber-600' :
                         p.status === 'done' ? 'bg-green-100 text-green-600' :
-                        'bg-slate-200 text-slate-500'
+                        'bg-slate-200 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400'
                       }`}>{p.status}</span>
                     </div>
                   ))}
                   {projects.length === 0 && (
-                    <p className="px-2 py-4 text-center text-[10px] text-slate-400">No projects yet</p>
+                    <p className="px-2 py-4 text-center text-[10px] text-slate-400 dark:text-zinc-500">No projects yet</p>
                   )}
                 </div>
               </>
@@ -819,19 +819,19 @@ export default function ResearchTaskPage() {
 
         {/* ═══ LEFT: Library Panel ═══ */}
         {!l4Fullscreen && (<>
-        <div className="flex flex-col border-r border-slate-200 overflow-hidden" style={{ width: leftW }}>
+        <div className="flex flex-col border-r border-slate-200 dark:border-zinc-700 overflow-hidden" style={{ width: leftW }}>
           {/* Search + Import */}
-          <div className="border-b border-slate-200 bg-slate-50 px-2 py-1.5">
+          <div className="border-b border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-1.5">
             <div className="flex items-center gap-1">
               <input
-                className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none"
+                className="flex-1 rounded border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none"
                 placeholder="🔍 Search papers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`shrink-0 rounded border px-1.5 py-1 text-[11px] transition-colors ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-white text-slate-500 hover:text-slate-700'}`}
+                className={`shrink-0 rounded border px-1.5 py-1 text-[11px] transition-colors ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300'}`}
                 title="Toggle filters"
               >
                 ⚙
@@ -854,27 +854,27 @@ export default function ResearchTaskPage() {
               />
             </div>
             {showFilters && (
-              <div className="mt-1.5 space-y-1.5 rounded border border-slate-200 bg-white p-2">
+              <div className="mt-1.5 space-y-1.5 rounded border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 p-2">
                 <div className="flex items-center gap-1">
-                  <label className="text-[10px] text-slate-500 w-10 shrink-0">Year</label>
+                  <label className="text-[10px] text-slate-500 dark:text-zinc-400 w-10 shrink-0">Year</label>
                   <input
-                    className="w-16 rounded border border-slate-200 px-1.5 py-0.5 text-[11px] focus:border-indigo-400 focus:outline-none"
+                    className="w-16 rounded border border-slate-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 px-1.5 py-0.5 text-[11px] focus:border-indigo-400 focus:outline-none"
                     placeholder="From"
                     value={yearFrom}
                     onChange={(e) => setYearFrom(e.target.value)}
                   />
                   <span className="text-[10px] text-slate-400">–</span>
                   <input
-                    className="w-16 rounded border border-slate-200 px-1.5 py-0.5 text-[11px] focus:border-indigo-400 focus:outline-none"
+                    className="w-16 rounded border border-slate-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 px-1.5 py-0.5 text-[11px] focus:border-indigo-400 focus:outline-none"
                     placeholder="To"
                     value={yearTo}
                     onChange={(e) => setYearTo(e.target.value)}
                   />
                 </div>
                 <div className="flex items-center gap-1">
-                  <label className="text-[10px] text-slate-500 w-10 shrink-0">Sort</label>
+                  <label className="text-[10px] text-slate-500 dark:text-zinc-400 w-10 shrink-0">Sort</label>
                   <select
-                    className="flex-1 rounded border border-slate-200 px-1.5 py-0.5 text-[11px]"
+                    className="flex-1 rounded border border-slate-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 px-1.5 py-0.5 text-[11px]"
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
                   >
@@ -889,7 +889,7 @@ export default function ResearchTaskPage() {
                     type="checkbox"
                     checked={useFts}
                     onChange={(e) => setUseFts(e.target.checked)}
-                    className="rounded border-slate-300"
+                    className="rounded border-slate-300 dark:border-zinc-600"
                   />
                   <span className="text-[10px] text-slate-600">Full-text search</span>
                 </label>
@@ -931,14 +931,14 @@ export default function ResearchTaskPage() {
                     className={`group cursor-pointer rounded-lg border p-2 transition-colors ${
                       selectedPaperId === p.id
                         ? 'border-indigo-300 bg-indigo-50'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        : 'border-slate-200 dark:border-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600 hover:bg-slate-50 dark:hover:bg-zinc-800'
                     }`}
                   >
                     <div className="flex items-start gap-1.5">
                       <span className="mt-0.5 text-sm">{paperIcon(p.content_type)}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-slate-700 leading-tight line-clamp-2">{p.title || 'Untitled'}</p>
-                        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-400">
+                        <p className="text-[12px] font-medium text-slate-700 dark:text-zinc-200 leading-tight line-clamp-2">{p.title || 'Untitled'}</p>
+                        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-400 dark:text-zinc-500">
                           {p.year && <span>{p.year}</span>}
                           {p.journal && <><span>·</span><span className="truncate max-w-[100px]">{p.journal}</span></>}
                           {p.citation_count > 0 && <><span>·</span><span>🔗{p.citation_count}</span></>}
@@ -949,7 +949,7 @@ export default function ResearchTaskPage() {
                         {p.tags && (
                           <div className="mt-1 flex flex-wrap gap-0.5">
                             {p.tags.split(',').filter(Boolean).map((t, i) => (
-                              <span key={i} className="rounded bg-slate-100 px-1 py-0 text-[9px] text-slate-500">{t.trim()}</span>
+                              <span key={i} className="rounded bg-slate-100 dark:bg-zinc-700 px-1 py-0 text-[9px] text-slate-500 dark:text-zinc-400">{t.trim()}</span>
                             ))}
                           </div>
                         )}
@@ -977,14 +977,14 @@ export default function ResearchTaskPage() {
         {/* ═══ CENTER: Reader / Writer / Export ═══ */}
         <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
           {/* Tab bar */}
-          <div className="flex h-9 items-center justify-between border-b border-slate-200 bg-slate-50 px-3">
+          <div className="flex h-9 items-center justify-between border-b border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-3">
             <div className="flex items-center gap-1">
               {(['read', 'write', 'export'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setCenterTab(tab)}
                   className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                    centerTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    centerTab === tab ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
                   {tab === 'read' ? '📖 Read' : tab === 'write' ? '✏️ Write' : '📤 Export'}
@@ -1021,8 +1021,8 @@ export default function ResearchTaskPage() {
                 {selectedPaperFull ? (
                   <div className="max-w-4xl mx-auto space-y-4">
                     {/* L1: Metadata Card */}
-                    <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5">
-                      <h1 className="text-lg font-bold text-slate-800 leading-snug">{selectedPaperFull.title || 'Untitled'}</h1>
+                    <div className="rounded-xl border border-slate-200 dark:border-zinc-700 bg-gradient-to-br from-slate-50 dark:from-zinc-800 to-white dark:to-zinc-800 p-5">
+                      <h1 className="text-lg font-bold text-slate-800 dark:text-zinc-100 leading-snug">{selectedPaperFull.title || 'Untitled'}</h1>
                       <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-500">
                         {selectedPaperFull.authors && <span>👤 {parseAuthors(selectedPaperFull.authors)}</span>}
                         {selectedPaperFull.year && <span>📅 {selectedPaperFull.year}</span>}
@@ -1090,8 +1090,8 @@ export default function ResearchTaskPage() {
                     {/* L4: Full Document — native format based on content_type */}
                     {readingLevel >= 4 && selectedPaperFull.source_url && (
                       <div className={l4Fullscreen
-                        ? 'fixed inset-0 z-50 bg-white flex flex-col'
-                        : 'rounded-lg border border-slate-200 bg-white p-4'
+                        ? 'fixed inset-0 z-50 bg-white dark:bg-zinc-900 flex flex-col'
+                        : 'rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4'
                       }>
                         <div className={`flex items-center justify-between ${l4Fullscreen ? 'px-4 py-2 border-b border-slate-200 shrink-0' : 'mb-2'}`}>
                           <h2 className="text-sm font-semibold text-slate-600">📄 Full Document</h2>
@@ -1310,7 +1310,7 @@ export default function ResearchTaskPage() {
             {/* Right-click context menu */}
             {ctxMenu && (
               <div
-                className="fixed z-[100] rounded-lg bg-white border border-slate-200 shadow-xl py-1 min-w-[160px]"
+                className="fixed z-[100] rounded-lg bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 shadow-xl py-1 min-w-[160px]"
                 style={{ left: ctxMenu.x, top: ctxMenu.y }}
                 onMouseDown={(e) => e.preventDefault()}
               >
@@ -1333,21 +1333,21 @@ export default function ResearchTaskPage() {
             {/* Add to Notes dialog */}
             {noteDialog && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30" onClick={() => setNoteDialog(null)}>
-                <div className="bg-white rounded-xl shadow-2xl w-[480px] max-w-[90vw] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                  <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-700">📝 Add Note</h3>
+                <div className="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl w-[480px] max-w-[90vw] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                  <div className="px-5 py-3 border-b border-slate-100 dark:border-zinc-700 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200">📝 Add Note</h3>
                     <button onClick={() => setNoteDialog(null)} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
                   </div>
                   <div className="px-5 py-4 space-y-3">
                     {noteDialog.quote && (
-                      <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-600 max-h-32 overflow-y-auto">
+                      <div className="rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 px-3 py-2 text-xs text-slate-600 max-h-32 overflow-y-auto">
                         <p className="text-[10px] text-slate-400 mb-1 font-medium">Selected text:</p>
                         <p className="italic leading-relaxed">{noteDialog.quote}</p>
                       </div>
                     )}
                     <textarea
                       autoFocus
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none resize-none"
+                      className="w-full rounded-lg border border-slate-200 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none resize-none"
                       rows={4}
                       placeholder="Write your thoughts, annotations..."
                       value={noteDialog.comment}
@@ -1447,7 +1447,7 @@ export default function ResearchTaskPage() {
                               if (e.target.checked) next.add(p.id); else next.delete(p.id)
                               setSelectedExportPapers(next)
                             }}
-                            className="rounded border-slate-300"
+                            className="rounded border-slate-300 dark:border-zinc-600"
                           />
                           <span className="text-xs text-slate-700 truncate">{p.title || 'Untitled'}</span>
                           {p.year && <span className="text-[10px] text-slate-400 shrink-0">({p.year})</span>}
@@ -1466,7 +1466,7 @@ export default function ResearchTaskPage() {
                     <div className="flex items-center gap-2">
                       <label className="text-xs text-slate-500">Template:</label>
                       <select
-                        className="rounded border border-slate-200 px-2 py-1 text-xs"
+                        className="rounded border border-slate-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs"
                         value={exportTemplate}
                         onChange={(e) => setExportTemplate(e.target.value)}
                       >
@@ -1478,7 +1478,7 @@ export default function ResearchTaskPage() {
                     <div className="flex items-center gap-2">
                       <label className="text-xs text-slate-500">Language:</label>
                       <select
-                        className="rounded border border-slate-200 px-2 py-1 text-xs"
+                        className="rounded border border-slate-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs"
                         value={exportLang}
                         onChange={(e) => setExportLang(e.target.value as 'en' | 'zh')}
                       >
@@ -1489,11 +1489,11 @@ export default function ResearchTaskPage() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="checkbox" checked={includeAbstracts} onChange={(e) => setIncludeAbstracts(e.target.checked)} className="rounded border-slate-300" />
+                      <input type="checkbox" checked={includeAbstracts} onChange={(e) => setIncludeAbstracts(e.target.checked)} className="rounded border-slate-300 dark:border-zinc-600" />
                       <span className="text-xs text-slate-600">Include abstracts</span>
                     </label>
                     <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="checkbox" checked={includeAnalysis} onChange={(e) => setIncludeAnalysis(e.target.checked)} className="rounded border-slate-300" />
+                      <input type="checkbox" checked={includeAnalysis} onChange={(e) => setIncludeAnalysis(e.target.checked)} className="rounded border-slate-300 dark:border-zinc-600" />
                       <span className="text-xs text-slate-600">Include Agent analysis</span>
                     </label>
                   </div>
@@ -1559,7 +1559,7 @@ export default function ResearchTaskPage() {
         />
 
         {/* ═══ RIGHT: AI Chat Panel ═══ */}
-        <div className="flex flex-col border-l border-slate-200 overflow-hidden" style={{ width: rightW }}>
+        <div className="flex flex-col border-l border-slate-200 dark:border-zinc-700 overflow-hidden" style={{ width: rightW }}>
           {/* Chat header */}
           <div className="flex h-9 items-center justify-between border-b border-slate-200 bg-slate-50 px-3">
             <span className="text-[11px] font-semibold text-slate-600">🤖 Research Assistant</span>
@@ -1569,7 +1569,7 @@ export default function ResearchTaskPage() {
           </div>
 
           {/* Quick actions */}
-          <div className="flex flex-wrap gap-1 border-b border-slate-100 bg-slate-50/50 px-2 py-1.5">
+          <div className="flex flex-wrap gap-1 border-b border-slate-100 bg-slate-50/50 dark:bg-zinc-800/50 px-2 py-1.5">
             {[
               { key: 'summarize', label: '📋 Summarize', tip: 'Summarize selected paper' },
               { key: 'review', label: '📝 Literature Review', tip: 'Generate review from all papers' },

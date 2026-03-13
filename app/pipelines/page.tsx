@@ -1179,7 +1179,7 @@ export default function PipelinesPage() {
         {editingPipelineId && (
           <>
             {/* top toolbar */}
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-2">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-700 bg-slate-50/80 dark:bg-zinc-800/80 px-4 py-2">
               <div className="flex items-center gap-3">
                 <button onClick={() => { setEditingPipelineId(null); setSelectedTaskId(null); setSelectedTaskIds([]); setConnectFromId(null) }} className="rounded p-1 text-slate-500 hover:bg-slate-200" title="Back to list">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>

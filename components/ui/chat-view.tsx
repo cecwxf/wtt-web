@@ -348,6 +348,8 @@ export function ChatView({
   const [reasoningEffort, setReasoningEffort] = useState<'off' | 'low' | 'medium' | 'high'>(defaultEffort)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
+  // Track the last-sent model config to detect changes mid-conversation
+  const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -393,12 +395,20 @@ export function ChatView({
     const modelConfig: ChatModelConfig = { model: selectedModel, reasoningEffort }
     let content = draft.trim()
 
-    // Prepend model info on the first message in this session
-    if (isFirstMessage) {
-      const modelLabel = AVAILABLE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel
-      content = `[Model: ${modelLabel} | Effort: ${reasoningEffort}]\n\n${content}`
-      setIsFirstMessage(false)
+    const modelLabel = AVAILABLE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel
+    const lastCfg = lastSentConfigRef.current
+    const configChanged = lastCfg && (lastCfg.model !== selectedModel || lastCfg.effort !== reasoningEffort)
+
+    // Prepend model info on the first message OR when config changes mid-conversation
+    if (isFirstMessage || configChanged) {
+      const prefix = configChanged
+        ? `[Switched → Model: ${modelLabel} | Effort: ${reasoningEffort}]`
+        : `[Model: ${modelLabel} | Effort: ${reasoningEffort}]`
+      content = `${prefix}\n\n${content}`
+      if (isFirstMessage) setIsFirstMessage(false)
     }
+
+    lastSentConfigRef.current = { model: selectedModel, effort: reasoningEffort }
 
     setSending(true)
     try {
