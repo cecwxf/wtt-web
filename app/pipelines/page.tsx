@@ -26,6 +26,7 @@ interface TaskNode {
   status: 'todo' | 'doing' | 'review' | 'done' | 'blocked'
   owner_agent_id?: string
   runner_agent_id?: string
+  created_by?: string
   topic_id?: string
   output?: string
 }
@@ -607,7 +608,9 @@ export default function PipelinesPage() {
       return
     }
     if (!confirm('Delete this node?')) return
-    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}`, {
+    const node = nodes.find(n => n.id === taskId)
+    const deleteAgentId = node?.created_by || actorSource(session, selectedAgentId) || selectedAgentId || 'reviewer'
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
     })
@@ -685,7 +688,13 @@ export default function PipelinesPage() {
     if (ids.length === 0) return
     if (!confirm(`Delete ${ids.length} node(s)?`)) return
     for (const id of ids) {
-      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}`, {
+      if (draftNodes[id]) {
+        setDraftNodes((prev) => { const n = { ...prev }; delete n[id]; return n })
+        continue
+      }
+      const node = nodes.find(n => n.id === id)
+      const deleteAgentId = node?.created_by || actorSource(session, selectedAgentId) || selectedAgentId || 'reviewer'
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
       })
@@ -705,7 +714,8 @@ export default function PipelinesPage() {
     if (allNodes.length === 0) return
     if (!confirm(`Clear all ${allNodes.length} nodes from this pipeline?`)) return
     for (const n of nodes) {
-      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${n.id}`, {
+      const deleteAgentId = n.created_by || actorSource(session, selectedAgentId) || selectedAgentId || 'reviewer'
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${n.id}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
       })
