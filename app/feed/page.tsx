@@ -342,9 +342,9 @@ function FeedPageInner() {
     })
 
     // Auto-rename task if title is still "New Task" (ChatGPT-style)
-    if (isTask && selectedTopic?.name === 'New Task' && selectedTopic.task_id) {
+    if (isTask && selectedTopic?.task_id && selectedTopic.name.includes('New Task')) {
       const trimmed = content.replace(/\n/g, ' ').trim()
-      const newTitle = trimmed.length > 40 ? trimmed.slice(0, 40) + '…' : trimmed
+      const newTitle = trimmed.slice(0, 10)
       try {
         await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopic.task_id}`, {
           method: 'PATCH',
