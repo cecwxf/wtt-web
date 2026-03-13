@@ -76,6 +76,7 @@ function FeedPageInner() {
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [showTaskSidebar, setShowTaskSidebar] = useState(true)
 
   const loadAgents = useCallback(async () => {
     try {
@@ -455,50 +456,81 @@ function FeedPageInner() {
         notificationCount={0}
         currentUserName={getHumanSender(session)}
       >
-        {selectedTopicId && selectedTopic ? (
-          <ChatView
-            topicName={selectedTopic.name}
-            messages={allMessages}
-            currentAgentId={selectedAgentId}
-            onSendMessage={handleSendMessage}
-            onLoadOlder={loadOlderMessages}
-            onExport={handleExportTopic}
-            onRecall={handleRecallTopic}
-            hasOlder={hasOlder && !loadingOlder}
-            loading={!feedRaw && !error}
-            isTaskTopic={!!selectedTopic.task_id}
-            wsConnected={wsState === 'connected'}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-6 px-8">
-            <div className="text-center">
-              <p className="text-lg text-slate-400">Select a topic to start chatting</p>
-              <p className="mt-2 text-sm text-slate-400">Or create a new task below</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4 w-full max-w-lg">
-              <button onClick={() => router.push('/tasks?create=code')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-indigo-300 hover:shadow-md">
-                <span className="text-2xl">💻</span>
-                <span className="text-sm font-semibold text-slate-700">New Code Task</span>
-                <span className="text-[11px] text-slate-400">AI-assisted coding with repo integration</span>
-              </button>
-              <button onClick={() => router.push('/tasks?create=research')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md">
-                <span className="text-2xl">🔬</span>
-                <span className="text-sm font-semibold text-slate-700">New Research Task</span>
-                <span className="text-[11px] text-slate-400">Paper analysis & literature review</span>
-              </button>
-              <button onClick={() => router.push('/tasks?create=general')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md">
-                <span className="text-2xl">📋</span>
-                <span className="text-sm font-semibold text-slate-700">New General Task</span>
-                <span className="text-[11px] text-slate-400">Flexible task with any agent</span>
-              </button>
-              <button onClick={() => router.push('/pipelines')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-purple-300 hover:shadow-md">
-                <span className="text-2xl">🔗</span>
-                <span className="text-sm font-semibold text-slate-700">New Pipeline Task</span>
-                <span className="text-[11px] text-slate-400">Multi-step workflow with DAG</span>
-              </button>
-            </div>
+        <div className="flex h-full">
+          {/* Main content area */}
+          <div className="min-w-0 flex-1">
+            {selectedTopicId && selectedTopic ? (
+              <ChatView
+                topicName={selectedTopic.name}
+                messages={allMessages}
+                currentAgentId={selectedAgentId}
+                onSendMessage={handleSendMessage}
+                onLoadOlder={loadOlderMessages}
+                onExport={handleExportTopic}
+                onRecall={handleRecallTopic}
+                hasOlder={hasOlder && !loadingOlder}
+                loading={!feedRaw && !error}
+                isTaskTopic={!!selectedTopic.task_id}
+                wsConnected={wsState === 'connected'}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center text-slate-400">
+                <p className="text-lg">Select a topic to start chatting</p>
+                <p className="mt-1 text-sm">Choose from the topic list or create a new task →</p>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Right sidebar — Task shortcuts */}
+          {showTaskSidebar ? (
+            <div className="flex w-56 flex-col border-l border-slate-200 bg-white">
+              <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                <span className="text-xs font-semibold text-slate-500">Quick Create</span>
+                <button onClick={() => setShowTaskSidebar(false)} className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Close">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 4l6 6M10 4l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                </button>
+              </div>
+              <div className="flex-1 space-y-2 overflow-y-auto p-3">
+                <button onClick={() => router.push('/tasks?create=code')} className="group flex w-full items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40 hover:shadow-sm">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-indigo-100 text-base group-hover:bg-indigo-200">💻</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700">Code Task</p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-slate-400">AI-assisted coding with repo</p>
+                  </div>
+                </button>
+                <button onClick={() => router.push('/tasks?create=research')} className="group flex w-full items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50/40 hover:shadow-sm">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-base group-hover:bg-emerald-200">🔬</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700">Research Task</p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-slate-400">Paper analysis & review</p>
+                  </div>
+                </button>
+                <button onClick={() => router.push('/tasks?create=general')} className="group flex w-full items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-left transition hover:border-amber-200 hover:bg-amber-50/40 hover:shadow-sm">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-100 text-base group-hover:bg-amber-200">📋</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700">General Task</p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-slate-400">Flexible task with any agent</p>
+                  </div>
+                </button>
+                <button onClick={() => router.push('/pipelines')} className="group flex w-full items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-left transition hover:border-purple-200 hover:bg-purple-50/40 hover:shadow-sm">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-purple-100 text-base group-hover:bg-purple-200">🔗</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700">Pipeline Task</p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-slate-400">Multi-step DAG workflow</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowTaskSidebar(true)}
+              className="flex w-8 items-start justify-center border-l border-slate-200 bg-white pt-3 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+              title="Open task shortcuts"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            </button>
+          )}
+        </div>
       </WttShellV2>
 
       {editorOpen && (
