@@ -262,7 +262,7 @@ function FeedPageInner() {
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
 
-  const shouldShowDiscussMembers = !!selectedTopic && selectedTopic.topic_type !== 'broadcast' && !selectedTopic.task_id
+  const shouldShowDiscussMembers = !!selectedTopic && ['discussion', 'collaborative'].includes(selectedTopic.topic_type) && !selectedTopic.task_id
   const { data: topicMembersRaw } = useSWR(
     shouldShowDiscussMembers && selectedTopicId && session?.accessToken
       ? ['topic-members', selectedTopicId, session.accessToken]
