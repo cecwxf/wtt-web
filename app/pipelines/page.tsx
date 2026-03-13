@@ -350,20 +350,18 @@ export default function PipelinesPage() {
 
   const selected = useMemo(() => allNodes.find((n) => n.id === selectedTaskId) || null, [allNodes, selectedTaskId])
   const isDraft = selectedTaskId ? !!draftNodes[selectedTaskId] : false
-  // Sync taskDraft only when selection changes (not on every content change)
-  const prevSelectedIdRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (!selectedTaskId || selectedTaskId === prevSelectedIdRef.current) return
-    prevSelectedIdRef.current = selectedTaskId
-    const draft = draftNodes[selectedTaskId]
+
+  // Helper: sync taskDraft from a node/draft when selection changes
+  const syncDraftForNode = useCallback((nodeId: string) => {
+    const draft = draftNodes[nodeId]
     if (draft) {
       setTaskDraft(draft as TaskDraft)
     } else {
-      const node = allNodes.find(n => n.id === selectedTaskId)
+      const node = nodes.find(n => n.id === nodeId)
       if (node) setTaskDraft(node as TaskDraft)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTaskId])
+  }, [nodes, draftNodes])
 
   /* ─── timeline for selected node ─── */
   const { data: timelineRaw } = useSWR(
@@ -564,6 +562,7 @@ export default function PipelinesPage() {
     )
 
     setSelectedTaskId(j.id)
+    setTaskDraft(j as TaskDraft)
   }
 
   const saveTaskDetail = async () => {
@@ -643,6 +642,7 @@ export default function PipelinesPage() {
     setPositions((prev) => ({ ...prev, [j.id]: { x: (meta?.x || 40) + 30, y: (meta?.y || 40) + 30, shape: meta?.shape || 'rect', color: meta?.color, label: meta?.label } }))
     await mutateGraph()
     setSelectedTaskId(j.id)
+    setTaskDraft(j as TaskDraft)
   }
 
   /* ─── edge CRUD ─── */
@@ -955,6 +955,7 @@ export default function PipelinesPage() {
     const wasEmpty = !selectedTaskId
     setSelectedTaskId(nodeId)
     setSelectedTaskIds([])
+    if (nodeId !== selectedTaskId) syncDraftForNode(nodeId)
     if (wasEmpty) setRightTab('detail')
   }
 
@@ -1401,7 +1402,7 @@ export default function PipelinesPage() {
                         <button
                           onMouseDown={(e) => {
                             if (e.button === 2) return
-                            setSelectedTaskId(n.id)
+                            if (n.id !== selectedTaskId) { setSelectedTaskId(n.id); syncDraftForNode(n.id) }
                             const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
                             setDraggingId(n.id)
                             setDragOffset({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom })
@@ -1409,7 +1410,7 @@ export default function PipelinesPage() {
                           onClick={(e) => onNodeClick(e, n.id)}
                           onContextMenu={(e) => {
                             e.preventDefault()
-                            setSelectedTaskId(n.id)
+                            if (n.id !== selectedTaskId) { setSelectedTaskId(n.id); syncDraftForNode(n.id) }
                             setContextMenu({ x: e.clientX, y: e.clientY, nodeId: n.id })
                           }}
                           className={[
