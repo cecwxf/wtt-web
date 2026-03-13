@@ -651,9 +651,28 @@ Requirements:
    ${exportPapers.length > 2 ? '- Comparative Analysis slide\n' : ''}- Research Gaps & Future Directions
    - Conclusion & Implications
 2. Use professional design: consistent fonts, colors, and layout
-3. After generating the PPTX file, upload it to the WTT media system using the media upload API, then share the download URL with me so I can download the file directly.
 
-Please generate the file and provide the download link.`
+IMPORTANT — After generating the PPTX file, you MUST upload it to the WTT server and send me the download URL. Follow these exact steps:
+
+Step A: Request an upload token
+  POST https://www.waxbyte.com/media/sign
+  Body: {"filename": "research_presentation.pptx", "mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "size": <file_size_in_bytes>}
+  Response: {"upload_token": "...", "upload_url": "/media/upload-direct/..."}
+
+Step B: Upload the file
+  PUT https://www.waxbyte.com<upload_url from step A>
+  Headers: Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation
+  Body: raw PPTX file bytes
+
+Step C: Commit the upload
+  POST https://www.waxbyte.com/media/commit
+  Body: {"upload_token": "<token from step A>"}
+  Response: {"url": "https://www.waxbyte.com/media/files/..."}
+
+Step D: Send me ONLY the final download URL as your response, like:
+  📎 Your presentation is ready: https://www.waxbyte.com/media/files/xxx.pptx
+
+Do NOT output the PPTX content as text. Upload the file and give me the URL.`
 
     try {
       await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/send`, {
