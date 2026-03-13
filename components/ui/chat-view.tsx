@@ -16,11 +16,30 @@ export interface ChatMessage {
   semantic_type?: string
 }
 
+export interface ChatModelConfig {
+  model: string
+  thinkingMode: 'normal' | 'extended'
+}
+
+const AVAILABLE_MODELS = [
+  { id: 'claude-sonnet-4', label: 'Claude Sonnet 4' },
+  { id: 'claude-opus-4', label: 'Claude Opus 4' },
+  { id: 'gpt-4o', label: 'GPT-4o' },
+  { id: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+  { id: 'deepseek-r1', label: 'DeepSeek R1' },
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+]
+
+const THINKING_MODES = [
+  { id: 'normal', label: 'Normal' },
+  { id: 'extended', label: 'Extended Thinking' },
+]
+
 interface ChatViewProps {
   topicName: string
   messages: ChatMessage[]
   currentAgentId: string
-  onSendMessage: (content: string) => Promise<void>
+  onSendMessage: (content: string, modelConfig?: ChatModelConfig) => Promise<void>
   onLoadOlder?: () => Promise<void>
   onExport?: (format: 'md' | 'pdf' | 'docx') => void
   onRecall?: () => Promise<void>
@@ -318,6 +337,10 @@ export function ChatView({
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id)
+  const [thinkingMode, setThinkingMode] = useState<'normal' | 'extended'>('normal')
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const [isFirstMessage, setIsFirstMessage] = useState(true)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -360,9 +383,20 @@ export function ChatView({
   const handleSend = async () => {
     if (!draft.trim()) return
 
+    const modelConfig: ChatModelConfig = { model: selectedModel, thinkingMode }
+    let content = draft.trim()
+
+    // Prepend model info on the first message in this session
+    if (isFirstMessage) {
+      const modelLabel = AVAILABLE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel
+      const modeLabel = thinkingMode === 'extended' ? 'Extended Thinking' : 'Normal'
+      content = `[Model: ${modelLabel} | Mode: ${modeLabel}]\n\n${content}`
+      setIsFirstMessage(false)
+    }
+
     setSending(true)
     try {
-      await onSendMessage(draft.trim())
+      await onSendMessage(content, modelConfig)
       setDraft('')
       if (isTaskTopic) setAwaitingAgent(true)
     } catch (error) {
@@ -582,7 +616,7 @@ export function ChatView({
 
             <div className="space-y-2">
               {group.messages.map((message) => {
-                const isMine = message.sender_id === currentAgentId
+                const isMine = message.sender_type === 'human'
 
                 return (
                   <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
@@ -847,6 +881,56 @@ export function ChatView({
       )}
 
       <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4">
+        {/* Model & Thinking mode selector */}
+        <div className="mb-2 flex items-center gap-2 text-[11px]">
+          <div className="relative">
+            <button
+              onClick={() => setModelMenuOpen(!modelMenuOpen)}
+              onBlur={() => setTimeout(() => setModelMenuOpen(false), 150)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+            >
+              <span className="text-[10px]">🤖</span>
+              <span className="font-medium">{AVAILABLE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+              <span className="text-slate-400">▾</span>
+            </button>
+            {modelMenuOpen && (
+              <div className="absolute bottom-full left-0 mb-1 z-30 min-w-[180px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
+                {AVAILABLE_MODELS.map(m => (
+                  <button
+                    key={m.id}
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => { setSelectedModel(m.id); setModelMenuOpen(false) }}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
+                      selectedModel === m.id
+                        ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-medium'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {selectedModel === m.id && <span className="text-indigo-500">✓</span>}
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 overflow-hidden">
+            {THINKING_MODES.map(m => (
+              <button
+                key={m.id}
+                onClick={() => setThinkingMode(m.id as 'normal' | 'extended')}
+                className={`px-2.5 py-1.5 text-[11px] transition ${
+                  thinkingMode === m.id
+                    ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-medium'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                {m.id === 'extended' ? '🧠 ' : ''}{m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-2">
           <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
             <Paperclip className="h-4 w-4" />

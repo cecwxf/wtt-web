@@ -9,7 +9,7 @@ import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
-import { ChatView, ChatMessage } from '@/components/ui/chat-view'
+import { ChatView, ChatMessage, ChatModelConfig } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
@@ -289,7 +289,8 @@ function FeedPageInner() {
     }
   }, [topics, searchParams])
 
-  const handleSendMessage = async (content: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleSendMessage = async (content: string, _modelConfig?: ChatModelConfig) => {
     if (!selectedTopicId || !selectedAgentId) return
 
     const isTask = !!selectedTopic?.task_id
