@@ -153,6 +153,7 @@ export function WttShellV2({
                 onDeleteTopic={onDeleteTopic}
                 onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
                 agentName={selectedAgent?.display_name}
+                pinScopeKey={selectedAgentId}
               />
             )}
           </div>
