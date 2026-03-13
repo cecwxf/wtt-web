@@ -599,7 +599,7 @@ export function ChatView({
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/50 to-white dark:from-slate-900/50 dark:to-slate-950 px-4 py-4 sm:px-5"
+        className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/50 to-white dark:from-zinc-900/50 dark:to-zinc-950 px-4 py-4 sm:px-5"
       >
         <div className="mb-3 flex justify-center">
           <button
@@ -625,7 +625,7 @@ export function ChatView({
           <div key={group.label} className="mb-4">
             <div className="mb-3 flex items-center gap-3">
               <div className="h-px flex-1 bg-white/10" />
-              <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] text-slate-400">{group.label}</span>
+              <span className="rounded-full bg-slate-50 dark:bg-zinc-800 px-3 py-1 text-[11px] text-slate-400 dark:text-zinc-500">{group.label}</span>
               <div className="h-px flex-1 bg-white/10" />
             </div>
 
@@ -752,7 +752,7 @@ export function ChatView({
                               <a
                                 href={fileBlock.url}
                                 download={fname}
-                                className="flex items-center gap-3 border-t border-slate-100 bg-slate-50/80 px-4 py-2.5 text-sm transition-colors hover:bg-slate-100"
+                                className="flex items-center gap-3 border-t border-slate-100 dark:border-zinc-700 bg-slate-50/80 dark:bg-zinc-800/80 px-4 py-2.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-zinc-700"
                               >
                                 <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xs font-bold ${isMdFile ? 'bg-indigo-500/15 text-indigo-500' : 'bg-orange-500/15 text-orange-500'}`}>
                                   {isMdFile ? '.md' : '.html'}
@@ -793,7 +793,7 @@ export function ChatView({
                                 }
                                 if (isMd) {
                                   return (
-                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100/80 text-slate-700' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'}`}>
+                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-100/80 dark:hover:bg-indigo-950/30 text-slate-700 dark:text-zinc-300' : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300'}`}>
                                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-500 text-xs font-bold">.md</span>
                                       <span className="min-w-0 flex-1">
                                         <span className="block truncate font-medium">{fname}</span>
@@ -805,7 +805,7 @@ export function ChatView({
                                 const isHtml = /\.html?(\?|$)/i.test(fname) || /\.html?(\?|$)/i.test(url)
                                 if (isHtml) {
                                   return (
-                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100/80 text-slate-700' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'}`}>
+                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-100/80 dark:hover:bg-indigo-950/30 text-slate-700 dark:text-zinc-300' : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300'}`}>
                                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-orange-500 text-xs font-bold">.html</span>
                                       <span className="min-w-0 flex-1">
                                         <span className="block truncate font-medium">{fname}</span>
@@ -832,7 +832,7 @@ export function ChatView({
                                 const pv = block.url ? previewCache[block.url]?.data : undefined
                                 if (pv && (pv.title || pv.description || pv.image)) {
                                   return (
-                                    <div key={bi} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                    <div key={bi} className="rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 p-2">
                                       {pv.image && (
                                         <a href={block.url} target="_blank" rel="noreferrer" className="mb-2 block">
                                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -851,7 +851,7 @@ export function ChatView({
                               }
                               if (block.kind === 'preview') {
                                 return (
-                                  <div key={bi} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                  <div key={bi} className="rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 p-2">
                                     {block.image && (
                                       <a href={block.url} target="_blank" rel="noreferrer" className="mb-2 block">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -885,13 +885,13 @@ export function ChatView({
       </div>
 
       {awaitingAgent && isTaskTopic && (
-        <div className="flex items-center gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-2.5">
+        <div className="flex items-center gap-3 border-t border-slate-100 dark:border-zinc-700 bg-slate-50/50 dark:bg-zinc-800/50 px-4 py-2.5">
           <div className="flex items-center gap-1">
             <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:0ms]" />
             <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:150ms]" />
             <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:300ms]" />
           </div>
-          <span className="text-xs text-slate-500">Agent thinking…</span>
+          <span className="text-xs text-slate-500 dark:text-zinc-400">Agent thinking…</span>
         </div>
       )}
 

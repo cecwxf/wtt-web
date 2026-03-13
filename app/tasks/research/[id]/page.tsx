@@ -104,7 +104,7 @@ const CitationText = ({ text, papers }: { text: string; papers: Paper[] }) => {
             return (
               <span key={i} className="relative group cursor-help text-indigo-500 font-medium">
                 {part}
-                <span className="absolute bottom-full left-0 mb-1 hidden group-hover:block w-64 rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-600 shadow-lg z-50">
+                <span className="absolute bottom-full left-0 mb-1 hidden group-hover:block w-64 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-2 text-xs text-slate-600 dark:text-zinc-300 shadow-lg z-50">
                   <p className="font-medium text-slate-800">{paper.title}</p>
                   {paper.year && <p className="text-slate-400">{paper.year}</p>}
                   {paper.authors && <p className="text-slate-400 truncate">{parseAuthors(paper.authors)}</p>}
@@ -891,7 +891,7 @@ export default function ResearchTaskPage() {
                     onChange={(e) => setUseFts(e.target.checked)}
                     className="rounded border-slate-300 dark:border-zinc-600"
                   />
-                  <span className="text-[10px] text-slate-600">Full-text search</span>
+                  <span className="text-[10px] text-slate-600 dark:text-zinc-400">Full-text search</span>
                 </label>
               </div>
             )}
@@ -909,17 +909,17 @@ export default function ResearchTaskPage() {
                 {papers.length === 0 ? (
                   <>
                     <p className="text-4xl">📚</p>
-                    <p className="text-sm text-slate-500">No papers yet</p>
+                    <p className="text-sm text-slate-500 dark:text-zinc-400">No papers yet</p>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white hover:bg-indigo-600"
                     >
                       Import Papers
                     </button>
-                    <p className="text-[11px] text-slate-400">Drop PDF, MD, or BibTeX files here</p>
+                    <p className="text-[11px] text-slate-400 dark:text-zinc-500">Drop PDF, MD, or BibTeX files here</p>
                   </>
                 ) : (
-                  <p className="text-sm text-slate-400">No matching papers</p>
+                  <p className="text-sm text-slate-400 dark:text-zinc-500">No matching papers</p>
                 )}
               </div>
             ) : (
@@ -1069,8 +1069,8 @@ export default function ResearchTaskPage() {
 
                     {/* L2: Abstract */}
                     {readingLevel >= 2 && selectedPaperFull.abstract && (
-                      <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4">
-                        <h2 className="text-sm font-semibold text-blue-700 mb-2">📋 Abstract</h2>
+                      <div className="rounded-lg border border-blue-100 dark:border-blue-800/30 bg-blue-50/50 dark:bg-blue-950/20 p-4">
+                        <h2 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">📋 Abstract</h2>
                         <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanPdfText(selectedPaperFull.abstract)}</ReactMarkdown>
                         </div>
@@ -1079,8 +1079,8 @@ export default function ResearchTaskPage() {
 
                     {/* L3: Conclusion */}
                     {readingLevel >= 3 && selectedPaperFull.conclusion && (
-                      <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-4">
-                        <h2 className="text-sm font-semibold text-emerald-700 mb-2">🎯 Conclusion</h2>
+                      <div className="rounded-lg border border-emerald-100 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-950/20 p-4">
+                        <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-2">🎯 Conclusion</h2>
                         <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanPdfText(selectedPaperFull.conclusion)}</ReactMarkdown>
                         </div>
@@ -1093,7 +1093,7 @@ export default function ResearchTaskPage() {
                         ? 'fixed inset-0 z-50 bg-white dark:bg-zinc-900 flex flex-col'
                         : 'rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4'
                       }>
-                        <div className={`flex items-center justify-between ${l4Fullscreen ? 'px-4 py-2 border-b border-slate-200 shrink-0' : 'mb-2'}`}>
+                        <div className={`flex items-center justify-between ${l4Fullscreen ? 'px-4 py-2 border-b border-slate-200 dark:border-zinc-700 shrink-0' : 'mb-2'}`}>
                           <h2 className="text-sm font-semibold text-slate-600">📄 Full Document</h2>
                           <div className="flex gap-1 items-center">
                             <button
@@ -1234,13 +1234,13 @@ export default function ResearchTaskPage() {
                         <div className="flex gap-1">
                           <button
                             onClick={() => setCitationTab('refs')}
-                            className={`rounded px-2 py-0.5 text-[11px] font-medium ${citationTab === 'refs' ? 'bg-violet-100 text-violet-700' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`rounded px-2 py-0.5 text-[11px] font-medium ${citationTab === 'refs' ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             References
                           </button>
                           <button
                             onClick={() => setCitationTab('cited')}
-                            className={`rounded px-2 py-0.5 text-[11px] font-medium ${citationTab === 'cited' ? 'bg-violet-100 text-violet-700' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`rounded px-2 py-0.5 text-[11px] font-medium ${citationTab === 'cited' ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             Cited By
                           </button>
@@ -1251,7 +1251,7 @@ export default function ResearchTaskPage() {
                               const matchedPaper = papers.find(p => p.doi && c.doi && p.doi === c.doi)
                               return (
                                 <div key={i} className="rounded border border-slate-200 bg-white p-2 text-xs">
-                                  <p className="font-medium text-slate-700 leading-tight">{c.title || 'Unknown title'}</p>
+                                  <p className="font-medium text-slate-700 dark:text-zinc-200 leading-tight">{c.title || 'Unknown title'}</p>
                                   <div className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-400">
                                     {c.authors && <span className="truncate max-w-[200px]">{String(c.authors)}</span>}
                                     {c.year && <><span>·</span><span>{c.year}</span></>}
@@ -1316,7 +1316,7 @@ export default function ResearchTaskPage() {
               >
                 <button
                   onClick={() => quoteToChat(ctxMenu.text)}
-                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2"
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2"
                 >💬 Quote to Chat</button>
                 <button
                   onClick={() => addToNotes(ctxMenu.text)}
