@@ -12,6 +12,7 @@ import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 
 const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer'), { ssr: false })
+const AnnotationOverlay = dynamic(() => import('@/components/ui/annotation-overlay'), { ssr: false })
 
 /** Rewrite legacy http://170.106.109.4:8000 URLs to HTTPS domain */
 function fixMediaUrl(url: string | null | undefined): string {
@@ -993,7 +994,7 @@ export default function ResearchTaskPage() {
                             </button>
                           </div>
                         </div>
-                        <div className={l4Fullscreen ? 'flex-1 overflow-auto p-2 min-h-0' : ''}>
+                        <div className={l4Fullscreen ? 'relative flex-1 overflow-auto p-2 min-h-0' : 'relative'}>
                         {l4View === 'native' ? (
                           (() => {
                             const ct = (selectedPaperFull.content_type || '').toLowerCase()
@@ -1043,6 +1044,7 @@ export default function ResearchTaskPage() {
                             </ReactMarkdown>
                           </div>
                         )}
+                        <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} />
                         </div>
                       </div>
                     )}
