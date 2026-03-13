@@ -270,11 +270,11 @@ function FeedPageInner() {
       const hasP2p = topics.some(t => t.topic_type === 'p2p' && (t.name.includes(aid) || t.name.includes(humanSender)))
       if (hasP2p) { p2pInitRef.current.add(aid); continue }
       p2pInitRef.current.add(aid)
-      // Fire-and-forget: create P2P topic via /messages/p2p
+      // Silently create P2P topic — no visible system message
       fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(humanSender)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-        body: JSON.stringify({ target_agent_id: aid, content: `[System] P2P channel established with ${agent.display_name || aid}`, content_type: 'text', semantic_type: 'system' }),
+        body: JSON.stringify({ target_agent_id: aid, content: '[system:p2p_init]', content_type: 'text', semantic_type: 'system' }),
       }).then(() => mutateTopics()).catch(() => {})
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -462,7 +462,7 @@ function FeedPageInner() {
             {selectedTopicId && selectedTopic ? (
               <ChatView
                 topicName={selectedTopic.name}
-                messages={allMessages}
+                messages={allMessages.filter(m => !m.content.includes('[system:p2p_init]') && !m.content.includes('[System] P2P channel established'))}
                 currentAgentId={selectedAgentId}
                 onSendMessage={handleSendMessage}
                 onLoadOlder={loadOlderMessages}
