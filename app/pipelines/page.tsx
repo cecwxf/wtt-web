@@ -1149,10 +1149,10 @@ export default function PipelinesPage() {
                       <button
                         onClick={async (e) => {
                           e.stopPropagation()
-                          const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipeline/execute`, {
+                          if (!confirm(`ReRun pipeline "${p.name}"? All tasks will be reset to todo and re-executed.`)) return
+                          const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines/${p.id}/rerun`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                            body: JSON.stringify({ trigger_agent_id: actorSource(session, selectedAgentId) || 'pipeline-runner', pipeline_id: p.id }),
+                            headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
                           })
                           if (r.ok) { const j = await r.json(); alert(`Pipeline ReRun started: ${j.count || 0} tasks`); mutatePipelines() }
                           else alert('ReRun failed')
