@@ -120,6 +120,14 @@ export function WttShellV2({
                   >
                     API & MCP
                   </button>
+                  <button
+                    onClick={() => {
+                      window.location.href = '/admin/manage'
+                    }}
+                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 dark:text-zinc-300 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
+                  >
+                    Manage Cleanup
+                  </button>
                   <div className="my-1 h-px bg-slate-200 dark:bg-zinc-600" />
                   <button
                     onClick={onLogout}
