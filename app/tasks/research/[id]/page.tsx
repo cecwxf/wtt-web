@@ -637,42 +637,52 @@ export default function ResearchTaskPage() {
     const lang = exportLang === 'zh' ? '中文' : 'English'
     const templateDesc = exportTemplate === 'academic' ? 'academic/scholarly' : exportTemplate === 'business' ? 'business/corporate' : 'clean/minimal'
 
-    const prompt = `Please generate a professional PowerPoint presentation (PPTX) based on these ${exportPapers.length} research papers. Language: ${lang}. Style: ${templateDesc}.
+    const prompt = `Generate a visually rich, NotebookLM-quality PowerPoint (PPTX) for these ${exportPapers.length} research papers. Language: ${lang}. Style: ${templateDesc}.
 
 PAPERS:
 ${paperSummaries}
 
-Requirements:
-1. Create a polished, visually appealing PPTX file with:
-   - Title slide with research topic, paper count, and date
-   - Executive Summary of key findings
-   - Research Landscape overview (themes, trends)
-   - One "Key Findings" slide per paper (3-5 bullets with specific data/metrics)
-   ${exportPapers.length > 2 ? '- Comparative Analysis slide\n' : ''}- Research Gaps & Future Directions
-   - Conclusion & Implications
-2. Use professional design: consistent fonts, colors, and layout
+═══ SLIDE STRUCTURE ═══
+1. **Title Slide** — Research topic, paper count, date. Use a gradient background (dark blue → teal) with large bold title.
+2. **Table of Contents** — Visual agenda with numbered items and accent icons/emoji.
+3. **Executive Summary** — 3-4 key takeaways in colored card-style boxes (each box a rounded rectangle shape with icon + text).
+4. **Research Landscape** — A visual diagram showing research themes and their relationships. Use python-pptx shapes (RoundedRectangle, arrows/connectors) to draw a mind-map or cluster diagram. Color-code each theme differently.
+5. **Timeline / Chronology** — If papers span multiple years, create a horizontal timeline using shapes (circles for milestones connected by lines), showing evolution of the field.
+6. **Per-Paper "Key Findings" slides** — For each paper:
+   - Left 60%: 3-5 bullet points with specific data, metrics, percentages
+   - Right 40%: A visual element — a mini chart (bar/pie via python-pptx chart API), a comparison table, or a diagram illustrating the paper's core contribution
+   - Use a colored sidebar accent strip on the left edge
+7. ${exportPapers.length > 2 ? `**Comparative Analysis** — Create a formatted TABLE (python-pptx Table shape) comparing all papers across dimensions (Method, Dataset, Key Result, Limitation). Use alternating row colors and bold headers.\n8. ` : ''}**Research Gaps & Future Directions** — Visual roadmap using a horizontal process flow (shapes: rounded rectangles connected by arrows). Each step = one gap/opportunity with a short label.
+${exportPapers.length > 2 ? '9' : '8'}. **Conclusion** — Summary with 3 large "stat cards" (big number + label in colored boxes) and 2-3 implication bullets.
 
-IMPORTANT — After generating the PPTX file, you MUST upload it to the WTT server and send me the download URL. Follow these exact steps:
+═══ VISUAL DESIGN RULES ═══
+- Use python-pptx to programmatically create ALL visual elements — do NOT rely on text-only slides
+- Color palette: Pick a harmonious 4-color palette (e.g., #1B2A4A dark navy, #2196F3 blue, #26A69A teal, #FF7043 coral accent)
+- Every slide MUST have at least one non-text visual element: a shape, chart, table, diagram, or colored box
+- Charts: Use python-pptx chart API (BarChart, PieChart, LineChart) for any quantitative data — performance comparisons, accuracy numbers, dataset sizes
+- Diagrams: Use grouped shapes (MSO_SHAPE.ROUNDED_RECTANGLE, CHEVRON, OVAL) with connectors to illustrate processes, architectures, or relationships
+- Tables: Use the Table shape with header row styling, alternating row fills, and proper cell padding
+- Typography: Title 28-32pt bold, subtitle 18-20pt, body 14-16pt. Consistent font throughout (Calibri or similar)
+- Add subtle decorative elements: thin colored lines as dividers, small colored circles as bullet markers, accent bars
+- Slide numbers in bottom-right corner
+- White or very light background for content slides; dark gradient for title/section dividers
 
-Step A: Request an upload token
-  POST https://www.waxbyte.com/media/sign
-  Body: {"filename": "research_presentation.pptx", "mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "size": <file_size_in_bytes>}
-  Response: {"upload_token": "...", "upload_url": "/media/upload-direct/..."}
+═══ UPLOAD INSTRUCTIONS ═══
+After generating the PPTX, upload it to WTT and send me the download URL:
 
-Step B: Upload the file
-  PUT https://www.waxbyte.com<upload_url from step A>
-  Headers: Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation
-  Body: raw PPTX file bytes
+Step A: POST https://www.waxbyte.com/media/sign
+  Body: {"filename": "research_presentation.pptx", "mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "size": <file_size_bytes>}
 
-Step C: Commit the upload
-  POST https://www.waxbyte.com/media/commit
-  Body: {"upload_token": "<token from step A>"}
-  Response: {"url": "https://www.waxbyte.com/media/files/..."}
+Step B: PUT https://www.waxbyte.com{upload_url from step A}
+  Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation
+  Body: raw PPTX bytes
 
-Step D: Send me ONLY the final download URL as your response, like:
-  📎 Your presentation is ready: https://www.waxbyte.com/media/files/xxx.pptx
+Step C: POST https://www.waxbyte.com/media/commit
+  Body: {"upload_token": "<token>"}
 
-Do NOT output the PPTX content as text. Upload the file and give me the URL.`
+Step D: Reply with ONLY: 📎 Your presentation is ready: <download_url>
+
+Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
 
     try {
       await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/send`, {
