@@ -183,14 +183,8 @@ export default function ResearchTaskPage() {
 
   // Export state
   const [exportTemplate, setExportTemplate] = useState('academic')
-  const [exporting, setExporting] = useState(false)
   const [selectedExportPapers, setSelectedExportPapers] = useState<Set<string>>(new Set())
   const [exportLang, setExportLang] = useState<'en' | 'zh'>('en')
-  const includeAbstracts = true
-  const includeAnalysis = true
-  const [aiSlides, setAiSlides] = useState<Array<{ title: string; bullets: string[]; notes?: string }>>([])
-  const [aiSlidesGenerating, setAiSlidesGenerating] = useState(false)
-  const [aiSlidesReady, setAiSlidesReady] = useState(false)
 
   // Search filters
   const [yearFrom, setYearFrom] = useState<string>('')
@@ -622,11 +616,12 @@ export default function ResearchTaskPage() {
   // ── Export ───────────────────────────────────────────
 
   // Step 1: Ask Agent to generate structured slide content
-  const generateAiSlides = async () => {
+  // AI PPT: send prompt to Agent, Agent generates PPTX and uploads to WTT, returns download URL in chat
+  const [pptGenerating, setPptGenerating] = useState(false)
+
+  const generateAiPpt = async () => {
     if (!task?.topic_id || papers.length === 0) return
-    setAiSlidesGenerating(true)
-    setAiSlidesReady(false)
-    setAiSlides([])
+    setPptGenerating(true)
 
     const exportPapers = selectedExportPapers.size > 0
       ? papers.filter(p => selectedExportPapers.has(p.id))
@@ -635,33 +630,31 @@ export default function ResearchTaskPage() {
     const paperSummaries = exportPapers.map((p, i) => {
       let s = `${i + 1}. "${p.title || 'Untitled'}" (${p.year || 'N/A'})`
       if (p.authors) s += `\n   Authors: ${p.authors}`
-      if (p.abstract) s += `\n   Abstract: ${p.abstract.slice(0, 400)}`
+      if (p.abstract) s += `\n   Abstract: ${p.abstract.slice(0, 500)}`
       return s
     }).join('\n\n')
 
     const lang = exportLang === 'zh' ? '中文' : 'English'
+    const templateDesc = exportTemplate === 'academic' ? 'academic/scholarly' : exportTemplate === 'business' ? 'business/corporate' : 'clean/minimal'
 
-    const prompt = `You are a presentation designer. Based on these ${exportPapers.length} research papers, generate a professional slide deck outline in ${lang}.
+    const prompt = `Please generate a professional PowerPoint presentation (PPTX) based on these ${exportPapers.length} research papers. Language: ${lang}. Style: ${templateDesc}.
 
 PAPERS:
 ${paperSummaries}
 
-Generate a JSON array of slides. Each slide has: "title" (string), "bullets" (array of 3-5 concise points), and optional "notes" (speaker notes).
+Requirements:
+1. Create a polished, visually appealing PPTX file with:
+   - Title slide with research topic, paper count, and date
+   - Executive Summary of key findings
+   - Research Landscape overview (themes, trends)
+   - One "Key Findings" slide per paper (3-5 bullets with specific data/metrics)
+   ${exportPapers.length > 2 ? '- Comparative Analysis slide\n' : ''}- Research Gaps & Future Directions
+   - Conclusion & Implications
+2. Use professional design: consistent fonts, colors, and layout
+3. After generating the PPTX file, upload it to the WTT media system using the media upload API, then share the download URL with me so I can download the file directly.
 
-Required slides:
-1. Title slide (research topic as title, subtitle with paper count and date)
-2. Executive Summary (key findings across all papers)
-3. Research Landscape (how papers relate, themes, trends)
-4-N. One "Key Findings" slide per paper (3-5 bullet points each, focus on methodology, results, contribution)
-${exportPapers.length > 2 ? `${exportPapers.length + 3}. Comparative Analysis (strengths, weaknesses, methodology differences)\n` : ''}${exportPapers.length + (exportPapers.length > 2 ? 4 : 3)}. Research Gaps & Future Directions
-${exportPapers.length + (exportPapers.length > 2 ? 5 : 4)}. Conclusion & Implications
+Please generate the file and provide the download link.`
 
-Make bullets insightful and specific — not generic. Use data, metrics, and specific findings from the papers.
-
-Respond with ONLY the JSON array, no markdown fences. Example:
-[{"title":"...", "bullets":["...","..."], "notes":"..."}]`
-
-    // Send to Agent via chat
     try {
       await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/send`, {
         method: 'POST',
@@ -671,85 +664,14 @@ Respond with ONLY the JSON array, no markdown fences. Example:
           sender_type: 'HUMAN',
           semantic_type: 'command',
           auto_run: task?.status === 'todo',
-          metadata: { purpose: 'slide_generation' },
+          metadata: { purpose: 'ppt_generation' },
         }),
       })
       mutateMessages()
-
-      // Poll for Agent response (check every 3s, max 120s)
-      let attempts = 0
-      const maxAttempts = 40
-      const pollInterval = setInterval(async () => {
-        attempts++
-        try {
-          const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/messages?limit=5`, { headers: authHeaders() })
-          if (r.ok) {
-            const msgs = await r.json()
-            const latest = (Array.isArray(msgs) ? msgs : msgs.messages || [])
-              .filter((m: ChatMsg) => m.role === 'assistant')
-              .pop()
-            if (latest?.content) {
-              // Try to parse JSON from Agent response
-              const jsonMatch = latest.content.match(/\[[\s\S]*\]/)
-              if (jsonMatch) {
-                try {
-                  const parsed = JSON.parse(jsonMatch[0])
-                  if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].title) {
-                    setAiSlides(parsed)
-                    setAiSlidesReady(true)
-                    setAiSlidesGenerating(false)
-                    clearInterval(pollInterval)
-                    mutateMessages()
-                    return
-                  }
-                } catch { /* not valid JSON yet */ }
-              }
-            }
-          }
-        } catch { /* ignore */ }
-        if (attempts >= maxAttempts) {
-          clearInterval(pollInterval)
-          setAiSlidesGenerating(false)
-          alert('Agent is still processing. Check the chat panel for the response, then try again.')
-        }
-      }, 3000)
     } catch (e) {
-      setAiSlidesGenerating(false)
       alert(`Failed: ${e instanceof Error ? e.message : 'unknown'}`)
-    }
-  }
-
-  // Step 2: Download PPTX with AI-generated or basic content
-  const exportPptx = async () => {
-    setExporting(true)
-    try {
-      const agentMessages = chatMessages.filter(m => m.role === 'assistant').map(m => m.content).join('\n\n')
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/export/pptx`, {
-        method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: task?.title || 'Research Report',
-          template: exportTemplate,
-          include_content: agentMessages.slice(0, 20000) || undefined,
-          paper_ids: selectedExportPapers.size > 0 ? Array.from(selectedExportPapers) : undefined,
-          lang: exportLang,
-          include_abstracts: includeAbstracts,
-          include_analysis: includeAnalysis,
-          ai_slides: aiSlidesReady ? aiSlides : undefined,
-        }),
-      })
-      if (!r.ok) throw new Error(await r.text())
-      const blob = await r.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${(task?.title || 'research').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}.pptx`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      alert(`Export failed: ${e instanceof Error ? e.message : 'unknown'}`)
     } finally {
-      setExporting(false)
+      setPptGenerating(false)
     }
   }
 
@@ -1565,26 +1487,19 @@ Respond with ONLY the JSON array, no markdown fences. Example:
 
                 {/* AI-Powered Presentation */}
                 <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-gradient-to-br from-indigo-50/50 to-violet-50/30 dark:from-indigo-950/20 dark:to-violet-950/10 p-5 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
-                        🤖 AI-Powered Presentation
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-                        Agent analyzes your papers, extracts key findings, and generates a structured slide deck — like NotebookLM
-                      </p>
-                    </div>
-                    {aiSlidesReady && (
-                      <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                        ✓ {aiSlides.length} slides ready
-                      </span>
-                    )}
+                  <div>
+                    <h3 className="text-sm font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                      🤖 AI-Powered Presentation
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                      Agent analyzes your papers, generates a polished PPTX, uploads it, and sends you a download link in the chat
+                    </p>
                   </div>
 
                   {/* Options row */}
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-500 dark:text-zinc-400">Template:</label>
+                      <label className="text-xs text-slate-500 dark:text-zinc-400">Style:</label>
                       <select
                         className="rounded border border-slate-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs"
                         value={exportTemplate}
@@ -1608,69 +1523,22 @@ Respond with ONLY the JSON array, no markdown fences. Example:
                     </div>
                   </div>
 
-                  {/* Step 1: Generate */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={generateAiSlides}
-                      disabled={aiSlidesGenerating || papers.length === 0}
-                      className="rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-indigo-600 hover:to-violet-600 disabled:opacity-50 transition-all"
-                    >
-                      {aiSlidesGenerating ? (
-                        <span className="flex items-center gap-2">
-                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                          Agent analyzing papers...
-                        </span>
-                      ) : aiSlidesReady ? '🔄 Regenerate Slides' : '🤖 Step 1: Generate AI Slides'}
-                    </button>
-                    {!aiSlidesReady && !aiSlidesGenerating && (
-                      <span className="text-[10px] text-slate-400 dark:text-zinc-500">Agent will analyze all papers and create a structured outline</span>
-                    )}
-                  </div>
-
-                  {/* AI Slide Preview */}
-                  {aiSlidesReady && aiSlides.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-medium text-slate-600 dark:text-zinc-300">📑 Slide Preview — {aiSlides.length} slides generated:</p>
-                      <div className="max-h-60 overflow-y-auto space-y-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2">
-                        {aiSlides.map((slide, i) => (
-                          <div key={i} className="rounded-lg border border-slate-100 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <span className="flex h-5 w-5 items-center justify-center rounded bg-indigo-100 dark:bg-indigo-900/40 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">{i + 1}</span>
-                              <span className="text-xs font-semibold text-slate-700 dark:text-zinc-200 truncate">{slide.title}</span>
-                            </div>
-                            {slide.bullets?.length > 0 && (
-                              <ul className="mt-1 ml-7 space-y-0.5">
-                                {slide.bullets.slice(0, 3).map((b, j) => (
-                                  <li key={j} className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">• {b}</li>
-                                ))}
-                                {slide.bullets.length > 3 && (
-                                  <li className="text-[10px] text-slate-400 dark:text-zinc-500">+ {slide.bullets.length - 3} more...</li>
-                                )}
-                              </ul>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Step 2: Download */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      onClick={exportPptx}
-                      disabled={exporting || papers.length === 0}
-                      className={`rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 transition-all ${
-                        aiSlidesReady
-                          ? 'bg-emerald-500 hover:bg-emerald-600'
-                          : 'bg-slate-400 dark:bg-zinc-600 hover:bg-slate-500 dark:hover:bg-zinc-500'
-                      }`}
-                    >
-                      {exporting ? '⏳ Building PPTX...' : aiSlidesReady ? '⬇️ Step 2: Download AI Slides' : '⬇️ Download Basic PPTX'}
-                    </button>
-                    {!aiSlidesReady && (
-                      <span className="text-[10px] text-slate-400 dark:text-zinc-500">or generate AI slides first for a polished deck</span>
-                    )}
-                  </div>
+                  {/* Generate button */}
+                  <button
+                    onClick={generateAiPpt}
+                    disabled={pptGenerating || papers.length === 0}
+                    className="w-full rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:from-indigo-600 hover:to-violet-600 disabled:opacity-50 transition-all"
+                  >
+                    {pptGenerating ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        Sending to Agent...
+                      </span>
+                    ) : '🤖 Generate AI Presentation'}
+                  </button>
+                  <p className="text-[10px] text-slate-400 dark:text-zinc-500 text-center">
+                    Agent will generate PPTX and send the download URL in the chat panel →
+                  </p>
                 </div>
 
                 {/* BibTeX Export */}
