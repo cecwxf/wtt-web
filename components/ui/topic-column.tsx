@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, Hash, Lock, MoreVertical, Users } from 'lucide-react'
+import { Bot, Hash, Lock, MoreVertical, Pin, Users } from 'lucide-react'
 import { useState } from 'react'
 
 export interface TopicItem {
@@ -71,11 +71,12 @@ export function TopicColumn({
           const isSelected = topic.topic_id === selectedTopicId
           const Icon = getTopicIcon(topic.topic_type, !!topic.task_id)
           const isMenuOpen = menuFor === topic.topic_id
+          const isP2P = topic.topic_type === 'p2p'
 
           return (
             <div
               key={topic.topic_id}
-              className={`relative mt-1 rounded-lg ${isSelected ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
+              className={`relative mt-1 rounded-lg ${isP2P ? 'border border-indigo-100 bg-indigo-50/40' : ''} ${isSelected ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
               onContextMenu={(e) => {
                 e.preventDefault()
                 setMenuFor(topic.topic_id)
@@ -84,13 +85,18 @@ export function TopicColumn({
               <button
                 onClick={() => onSelectTopic(topic.topic_id)}
                 className={`flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left transition ${
-                  isSelected ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'
+                  isSelected
+                    ? isP2P ? 'text-indigo-700' : 'text-indigo-600'
+                    : isP2P ? 'text-indigo-600 hover:text-indigo-800' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                <Icon className={`h-4 w-4 shrink-0 ${isP2P ? 'text-indigo-500' : ''}`} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{topic.name}</p>
+                  <p className={`truncate text-sm ${isP2P ? 'font-bold' : 'font-medium'}`}>{topic.name}</p>
                 </div>
+                {isP2P && (
+                  <Pin className="h-3 w-3 shrink-0 rotate-45 text-indigo-400" />
+                )}
                 {topic.unread_count && topic.unread_count > 0 ? (
                   <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-500 px-1 text-[9px] font-semibold text-white">
                     {topic.unread_count}
