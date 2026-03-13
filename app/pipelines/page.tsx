@@ -190,6 +190,7 @@ export default function PipelinesPage() {
 
   /* ─── mode: list vs editor ─── */
   const [editingPipelineId, setEditingPipelineId] = useState<string | null>(null)
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null)
 
   /* ─── pipeline list data ─── */
   const { data: pipelinesRaw, mutate: mutatePipelines } = useSWR(
@@ -1124,8 +1125,13 @@ export default function PipelinesPage() {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {pipelines.map((p) => (
-                <div key={p.id} className="group rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-indigo-400 hover:shadow-md">
-                  <button onClick={() => setEditingPipelineId(p.id)} className="w-full text-left">
+                <div
+                  key={p.id}
+                  onClick={() => setSelectedPipelineId(selectedPipelineId === p.id ? null : p.id)}
+                  onDoubleClick={() => setEditingPipelineId(p.id)}
+                  className={`group cursor-pointer rounded-xl border p-4 transition hover:border-indigo-400 hover:shadow-md ${selectedPipelineId === p.id ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-300' : 'border-slate-200 bg-slate-50'}`}
+                >
+                  <div className="w-full text-left">
                     <p className="text-sm font-semibold">{p.name}</p>
                     <p className="mt-1 text-xs text-slate-500">{p.description || 'No description'}</p>
                     <div className="mt-3 flex flex-wrap gap-1 text-[10px]">
@@ -1135,16 +1141,33 @@ export default function PipelinesPage() {
                       <span className="rounded border border-green-400 px-1.5 py-0.5 text-green-600">done {p.stats?.done ?? 0}</span>
                       <span className="rounded border border-red-400 px-1.5 py-0.5 text-red-500">blocked {p.stats?.blocked ?? 0}</span>
                     </div>
-                  </button>
-                  <div className="mt-3 flex gap-1 border-t border-slate-100 pt-2">
-                    <button onClick={() => toggleAutoReview(p)} className="rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">AutoReview: {p.auto_review ?? true ? 'ON' : 'OFF'}</button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-slate-100 pt-2">
+                    <button onClick={(e) => { e.stopPropagation(); setEditingPipelineId(p.id) }} className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-600 hover:bg-indigo-100">▶ Open</button>
+                    <button onClick={(e) => { e.stopPropagation(); toggleAutoReview(p) }} className="rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">AutoReview: {p.auto_review ?? true ? 'ON' : 'OFF'}</button>
+                    {selectedPipelineId === p.id && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipeline/execute`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                            body: JSON.stringify({ trigger_agent_id: actorSource(session, selectedAgentId) || 'pipeline-runner', pipeline_id: p.id }),
+                          })
+                          if (r.ok) { const j = await r.json(); alert(`Pipeline ReRun started: ${j.count || 0} tasks`); mutatePipelines() }
+                          else alert('ReRun failed')
+                        }}
+                        className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-600 hover:bg-amber-100"
+                      >↻ ReRun Pipeline</button>
+                    )}
                     {p.id !== 'default' && (
                       <>
-                        <button onClick={() => renamePipeline(p)} className="rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">Rename</button>
-                        <button onClick={() => deletePipeline(p)} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-500 hover:bg-red-50">Delete</button>
+                        <button onClick={(e) => { e.stopPropagation(); renamePipeline(p) }} className="rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100">Rename</button>
+                        <button onClick={(e) => { e.stopPropagation(); deletePipeline(p) }} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-500 hover:bg-red-50">Delete</button>
                       </>
                     )}
                   </div>
+                  <p className="mt-2 text-center text-[9px] text-slate-400 opacity-0 group-hover:opacity-100 transition">double-click to open editor</p>
                 </div>
               ))}
               {pipelines.length === 0 && <p className="text-sm text-slate-500">No pipelines yet. Create one to get started.</p>}
