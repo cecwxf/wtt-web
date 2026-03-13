@@ -197,6 +197,12 @@ export default function ResearchTaskPage() {
   // Citation panel
   const [citationTab, setCitationTab] = useState<'refs' | 'cited'>('refs')
 
+  // Project directory
+  const [projectsCollapsed, setProjectsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('research-projects-collapsed') === 'true'
+    return false
+  })
+
   // Insert feedback
   const [insertFeedback, setInsertFeedback] = useState<string | null>(null)
 
@@ -216,6 +222,59 @@ export default function ResearchTaskPage() {
       return r.json()
     },
   )
+
+  // Fetch all research tasks as "projects"
+  type ProjectItem = { id: string; title: string; status: string; paper_count?: number; updated_at?: string }
+  const { data: projectsRaw, mutate: mutateProjects } = useSWR(
+    session?.accessToken && selectedAgentId ? ['research-projects', session.accessToken, selectedAgentId] : null,
+    async () => {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks?task_type=research&agent_id=${encodeURIComponent(selectedAgentId)}&limit=200`, { headers: authHeaders() })
+      if (!r.ok) return []
+      const data = await r.json()
+      return (data.tasks || data || []) as ProjectItem[]
+    },
+    { refreshInterval: 60000, keepPreviousData: true },
+  )
+  const projects: ProjectItem[] = useMemo(() => (projectsRaw || []).filter((p: ProjectItem) => p.id !== 'default'), [projectsRaw])
+
+  const createProject = async () => {
+    const title = prompt('New Research Project name:')
+    if (!title?.trim()) return
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ title: title.trim(), task_type: 'research', priority: 'P2', status: 'todo', owner_agent_id: selectedAgentId, runner_agent_id: selectedAgentId, created_by: selectedAgentId }),
+    })
+    if (!r.ok) { alert('Failed to create project'); return }
+    const t = await r.json()
+    mutateProjects()
+    router.push(`/tasks/research/${t.id}`)
+  }
+
+  const renameProject = async (pid: string, currentTitle: string) => {
+    const title = prompt('Rename project:', currentTitle)
+    if (!title?.trim() || title.trim() === currentTitle) return
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${pid}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ title: title.trim() }),
+    })
+    mutateProjects()
+    if (pid === taskId) mutateTask()
+  }
+
+  const deleteProject = async (pid: string) => {
+    if (!confirm('Delete this project and all its papers?')) return
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${pid}?agent_id=${encodeURIComponent(selectedAgentId)}&delete_topic=true`, {
+      method: 'DELETE', headers: authHeaders(),
+    })
+    mutateProjects()
+    if (pid === taskId && projects.length > 1) {
+      const other = projects.find(p => p.id !== pid)
+      if (other) router.push(`/tasks/research/${other.id}`)
+      else router.push('/tasks')
+    }
+  }
 
   const { data: papersData, mutate: mutatePapers } = useSWR(
     session?.accessToken ? [`research-papers-${taskId}`, session.accessToken, searchQuery, yearFrom, yearTo, sortBy, useFts] : null,
@@ -690,6 +749,72 @@ export default function ResearchTaskPage() {
 
       {/* Three-panel area */}
       <div className="flex flex-1 overflow-hidden">
+
+        {/* ═══ PROJECT DIRECTORY ═══ */}
+        {!l4Fullscreen && (
+          <div className={`flex flex-col border-r border-slate-200 bg-slate-50/80 transition-all ${projectsCollapsed ? 'w-10' : 'w-48'}`}>
+            {projectsCollapsed ? (
+              <button
+                onClick={() => { setProjectsCollapsed(false); localStorage.setItem('research-projects-collapsed', 'false') }}
+                className="flex h-full w-full flex-col items-center pt-3 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                title="Expand projects"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span className="mt-2 text-[9px] font-medium" style={{ writingMode: 'vertical-rl' }}>Projects</span>
+              </button>
+            ) : (
+              <>
+                <div className="flex items-center justify-between border-b border-slate-200 px-2 py-1.5">
+                  <span className="text-[11px] font-bold text-slate-600">📁 Projects</span>
+                  <div className="flex items-center gap-0.5">
+                    <button onClick={createProject} className="rounded p-1 text-indigo-500 hover:bg-indigo-50" title="New Project">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 3v8M3 7h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                    </button>
+                    <button
+                      onClick={() => { setProjectsCollapsed(true); localStorage.setItem('research-projects-collapsed', 'true') }}
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100" title="Collapse"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M8 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-1">
+                  {projects.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => { if (p.id !== taskId) router.push(`/tasks/research/${p.id}`) }}
+                      onDoubleClick={() => renameProject(p.id, p.title)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        const action = confirm(`Rename "${p.title}"?\n\nOK = Rename\nCancel = Delete`) 
+                          ? () => renameProject(p.id, p.title) 
+                          : () => deleteProject(p.id)
+                        action()
+                      }}
+                      className={`group mb-0.5 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition ${
+                        p.id === taskId
+                          ? 'bg-indigo-100 text-indigo-700 font-semibold'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                      title={`${p.title}\nDouble-click to rename · Right-click for options`}
+                    >
+                      <span className="shrink-0 text-xs">{p.id === taskId ? '📂' : '📁'}</span>
+                      <span className="flex-1 truncate text-[11px]">{p.title}</span>
+                      <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-medium ${
+                        p.status === 'doing' ? 'bg-amber-100 text-amber-600' :
+                        p.status === 'done' ? 'bg-green-100 text-green-600' :
+                        'bg-slate-200 text-slate-500'
+                      }`}>{p.status}</span>
+                    </div>
+                  ))}
+                  {projects.length === 0 && (
+                    <p className="px-2 py-4 text-center text-[10px] text-slate-400">No projects yet</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* ═══ LEFT: Library Panel ═══ */}
         {!l4Fullscreen && (<>
