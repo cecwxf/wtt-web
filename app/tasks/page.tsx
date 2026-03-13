@@ -1009,6 +1009,24 @@ export default function TasksPage() {
                       >↩ Reject / 补充</button>
                     </div>
                   )}
+                  {(selectedTask.status === 'done' || selectedTask.status === 'blocked') && (
+                    <div className="mt-2">
+                      <button
+                        onClick={async () => {
+                          const t = prompt('ReRun times (1-10)', '1')
+                          if (!t) return
+                          const n = Math.max(1, Math.min(10, parseInt(t) || 1))
+                          const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/rerun?times=${n}`, {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                          })
+                          if (r.ok) mutateTasks()
+                          else alert('ReRun failed')
+                        }}
+                        className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                      >↻ ReRun</button>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

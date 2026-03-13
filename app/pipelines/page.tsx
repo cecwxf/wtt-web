@@ -636,6 +636,16 @@ export default function PipelinesPage() {
     setTaskDraft(j as TaskDraft)
   }
 
+  /* ─── rerun task ─── */
+  const rerunTask = async (taskId: string, times: number = 1) => {
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/rerun?times=${times}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    })
+    if (!r.ok) { alert('ReRun failed'); return }
+    await mutateGraph()
+  }
+
   /* ─── edge CRUD ─── */
   const addDependencyByIds = async (fromId: string, toId: string, style: LineStyle = 'solid') => {
     if (!fromId || !toId || fromId === toId) return
@@ -1675,6 +1685,14 @@ export default function PipelinesPage() {
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-semibold text-slate-500">Node Detail</p>
                           <div className="flex gap-2">
+                            {!isDraft && (selected.status === 'done' || selected.status === 'review' || selected.status === 'blocked') && (
+                              <button onClick={() => {
+                                const t = prompt('ReRun times (1-10)', '1')
+                                if (!t) return
+                                const n = Math.max(1, Math.min(10, parseInt(t) || 1))
+                                rerunTask(selected.id, n)
+                              }} className="text-[10px] text-amber-500 hover:text-amber-700">↻ ReRun</button>
+                            )}
                             <button onClick={duplicateTask} className="text-[10px] text-indigo-400 hover:text-indigo-600">Duplicate</button>
                             <button onClick={() => deleteTask(selected.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
                           </div>
