@@ -471,16 +471,16 @@ function FeedPageInner() {
 
           {/* Right sidebar — Task shortcuts */}
           {showTaskSidebar ? (
-            <div className="flex w-72 flex-col border-l border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
-                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">⚡ Quick Create</span>
-                <button onClick={() => setShowTaskSidebar(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-white" title="Close">
+            <div className="flex w-72 flex-col border-l border-slate-200 dark:border-zinc-700 bg-slate-50/50 dark:bg-zinc-900/50">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3">
+                <span className="text-sm font-bold text-slate-700 dark:text-zinc-200">⚡ Quick Create</span>
+                <button onClick={() => setShowTaskSidebar(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-600 dark:hover:text-zinc-100" title="Close">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 4l6 6M10 4l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                 </button>
               </div>
               <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
                 {[
-                  { type: 'code', icon: '💻', label: 'New Code Task', desc: 'AI-assisted coding with repo context', gradient: 'from-indigo-500 to-blue-600', ring: 'ring-indigo-400/30', bg: 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950 dark:to-blue-950', border: 'border-indigo-200/80 dark:border-indigo-700/60' },
+                  { type: 'code', icon: '💻', label: 'New Code Task', desc: 'AI-assisted coding with repo context', gradient: 'from-indigo-500 to-blue-600', ring: 'ring-indigo-400/30', bg: 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950 dark:to-blue-950', border: 'border-indigo-200/80 dark:border-indigo-800/50' },
                   { type: 'research', icon: '🔬', label: 'New Research Task', desc: 'Deep analysis & report generation', gradient: 'from-emerald-500 to-teal-600', ring: 'ring-emerald-400/30', bg: 'bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950', border: 'border-emerald-200/80 dark:border-emerald-700/60' },
                   { type: 'general', icon: '📋', label: 'New General Task', desc: 'Planning, writing & data processing', gradient: 'from-amber-500 to-orange-600', ring: 'ring-amber-400/30', bg: 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950', border: 'border-amber-200/80 dark:border-amber-700/60' },
                   { type: 'pipeline', icon: '🔗', label: 'New Pipeline', desc: 'Multi-step DAG with auto-execution', gradient: 'from-purple-500 to-fuchsia-600', ring: 'ring-purple-400/30', bg: 'bg-gradient-to-r from-purple-50 to-fuchsia-50 dark:from-purple-950 dark:to-fuchsia-950', border: 'border-purple-200/80 dark:border-purple-700/60' },
@@ -518,8 +518,8 @@ function FeedPageInner() {
                       <span className="drop-shadow-sm">{item.icon}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-slate-800 dark:text-slate-100">{item.label}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{item.desc}</p>
+                      <p className="text-[13px] font-bold text-slate-800 dark:text-zinc-100">{item.label}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-zinc-400">{item.desc}</p>
                     </div>
                     <svg className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </button>
@@ -529,7 +529,7 @@ function FeedPageInner() {
           ) : (
             <button
               onClick={() => setShowTaskSidebar(true)}
-              className="flex w-8 items-start justify-center border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pt-3 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-white"
+              className="flex w-8 items-start justify-center border-l border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 pt-3 text-slate-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-600 dark:hover:text-zinc-100"
               title="Open task shortcuts"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>

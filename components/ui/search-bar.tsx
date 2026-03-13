@@ -143,7 +143,7 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, 
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 px-10 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-indigo-500"
+        className="w-full rounded-full border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-10 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none focus:border-indigo-500"
       />
       {query && (
         <button
@@ -155,7 +155,7 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, 
       )}
 
       {showResults && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[480px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[480px] overflow-y-auto rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg">
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-indigo-500" />
