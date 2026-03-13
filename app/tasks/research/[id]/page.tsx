@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer'), { ssr: false })
 const AnnotationOverlay = dynamic(() => import('@/components/ui/annotation-overlay'), { ssr: false })
@@ -736,6 +737,7 @@ export default function ResearchTaskPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-slate-400 dark:text-zinc-500">{papers.length} papers</span>
+          <ThemeToggle />
           {agents.length > 1 && (
             <select
               className="rounded border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs"
@@ -984,7 +986,7 @@ export default function ResearchTaskPage() {
                   key={tab}
                   onClick={() => setCenterTab(tab)}
                   className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                    centerTab === tab ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    centerTab === tab ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200'
                   }`}
                 >
                   {tab === 'read' ? '📖 Read' : tab === 'write' ? '✏️ Write' : '📤 Export'}
@@ -998,7 +1000,7 @@ export default function ResearchTaskPage() {
                     key={l}
                     onClick={() => setReadingLevel(l)}
                     className={`rounded px-1.5 py-0.5 text-[10px] ${
-                      readingLevel >= l && readingLevel < 5 ? 'bg-indigo-100 text-indigo-600 font-medium' : 'text-slate-400 hover:text-slate-600'
+                      readingLevel >= l && readingLevel < 5 ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-medium' : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300'
                     }`}
                   >
                     L{l}
@@ -1006,7 +1008,7 @@ export default function ResearchTaskPage() {
                 ))}
                 <button
                   onClick={() => setReadingLevel(5)}
-                  className={`rounded px-1.5 py-0.5 text-[10px] ${readingLevel === 5 ? 'bg-violet-100 text-violet-600 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`rounded px-1.5 py-0.5 text-[10px] ${readingLevel === 5 ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 font-medium' : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300'}`}
                 >
                   📚 Citations
                 </button>
@@ -1061,7 +1063,7 @@ export default function ResearchTaskPage() {
                       {selectedPaperFull.tags && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {selectedPaperFull.tags.split(',').filter(Boolean).map((t: string, i: number) => (
-                            <span key={i} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-600">{t.trim()}</span>
+                            <span key={i} className="rounded-full bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 text-[11px] text-indigo-600 dark:text-indigo-300">{t.trim()}</span>
                           ))}
                         </div>
                       )}
@@ -1071,7 +1073,7 @@ export default function ResearchTaskPage() {
                     {readingLevel >= 2 && selectedPaperFull.abstract && (
                       <div className="rounded-lg border border-blue-100 dark:border-blue-800/30 bg-blue-50/50 dark:bg-blue-950/20 p-4">
                         <h2 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">📋 Abstract</h2>
-                        <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                        <div className="prose prose-sm max-w-none text-slate-700 dark:text-zinc-200 leading-relaxed">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanPdfText(selectedPaperFull.abstract)}</ReactMarkdown>
                         </div>
                       </div>
@@ -1081,7 +1083,7 @@ export default function ResearchTaskPage() {
                     {readingLevel >= 3 && selectedPaperFull.conclusion && (
                       <div className="rounded-lg border border-emerald-100 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-950/20 p-4">
                         <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-2">🎯 Conclusion</h2>
-                        <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                        <div className="prose prose-sm max-w-none text-slate-700 dark:text-zinc-200 leading-relaxed">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanPdfText(selectedPaperFull.conclusion)}</ReactMarkdown>
                         </div>
                       </div>
@@ -1094,26 +1096,26 @@ export default function ResearchTaskPage() {
                         : 'rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4'
                       }>
                         <div className={`flex items-center justify-between ${l4Fullscreen ? 'px-4 py-2 border-b border-slate-200 dark:border-zinc-700 shrink-0' : 'mb-2'}`}>
-                          <h2 className="text-sm font-semibold text-slate-600">📄 Full Document</h2>
+                          <h2 className="text-sm font-semibold text-slate-600 dark:text-zinc-300">📄 Full Document</h2>
                           <div className="flex gap-1 items-center">
                             <button
                               onClick={() => setL4View('native')}
-                              className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'native' ? 'bg-slate-200 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                              className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'native' ? 'bg-slate-200 dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 font-medium' : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300'}`}
                             >
                               📑 Original
                             </button>
                             {selectedPaperFull.content_markdown && (
                               <button
                                 onClick={() => setL4View('text')}
-                                className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'text' ? 'bg-slate-200 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                                className={`rounded px-2 py-0.5 text-[10px] ${l4View === 'text' ? 'bg-slate-200 dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 font-medium' : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300'}`}
                               >
                                 📝 Extracted Text
                               </button>
                             )}
-                            <span className="mx-1 text-slate-300">|</span>
+                            <span className="mx-1 text-slate-300 dark:text-zinc-600">|</span>
                             <button
                               onClick={() => setL4Fullscreen(!l4Fullscreen)}
-                              className="rounded px-2 py-0.5 text-[10px] text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                              className="rounded px-2 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700"
                               title={l4Fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                             >
                               {l4Fullscreen ? '⊘ Exit' : '⛶ Expand'}
@@ -1131,7 +1133,7 @@ export default function ResearchTaskPage() {
                             }
                             if (ct === 'md' || ct === 'markdown' || /\.md$/i.test(url)) {
                               return (
-                                <div className={`prose prose-sm max-w-none text-slate-700`}>
+                                <div className={`prose prose-sm max-w-none text-slate-700 dark:text-zinc-200`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {selectedPaperFull.content_markdown || ''}
                                   </ReactMarkdown>
@@ -1140,14 +1142,14 @@ export default function ResearchTaskPage() {
                             }
                             if (ct === 'bib' || /\.bib$/i.test(url)) {
                               return (
-                                <pre className={`rounded bg-slate-50 p-3 text-xs text-slate-600 font-mono whitespace-pre-wrap`}>
+                                <pre className={`rounded bg-slate-50 dark:bg-zinc-800 p-3 text-xs text-slate-600 dark:text-zinc-300 font-mono whitespace-pre-wrap`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
                             }
                             if (['txt', 'tex', 'latex'].includes(ct) || /\.(txt|tex|latex)$/i.test(url)) {
                               return (
-                                <pre className={`rounded bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap`}>
+                                <pre className={`rounded bg-slate-50 dark:bg-zinc-800 p-3 text-sm text-slate-700 dark:text-zinc-200 whitespace-pre-wrap`}>
                                   {selectedPaperFull.content_markdown || ''}
                                 </pre>
                               )
@@ -1155,7 +1157,7 @@ export default function ResearchTaskPage() {
                             // Fallback
                             if (selectedPaperFull.content_markdown) {
                               return (
-                                <div className={`prose prose-sm max-w-none text-slate-700`}>
+                                <div className={`prose prose-sm max-w-none text-slate-700 dark:text-zinc-200`}>
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {cleanPdfText(selectedPaperFull.content_markdown)}
                                   </ReactMarkdown>
@@ -1165,7 +1167,7 @@ export default function ResearchTaskPage() {
                             return <PdfViewer url={url} expanded={l4Fullscreen} />
                           })()
                         ) : (
-                          <div className={`prose prose-sm max-w-none text-slate-700`}>
+                          <div className={`prose prose-sm max-w-none text-slate-700 dark:text-zinc-200`}>
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {cleanPdfText(selectedPaperFull.content_markdown || '')}
                             </ReactMarkdown>
@@ -1179,17 +1181,17 @@ export default function ResearchTaskPage() {
 
                     {/* Notes indicator — collapsible, shows saved highlights */}
                     {selectedPaperFull.notes && (
-                      <div className="rounded-lg border border-amber-100 bg-amber-50/30">
+                      <div className="rounded-lg border border-amber-100 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/20">
                         <button
                           onClick={() => setNotesOpen(!notesOpen)}
-                          className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50/50"
+                          className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-950/30"
                         >
                           <span>📝 Notes ({selectedPaperFull.notes.split('📌').length - 1})</span>
                           <span className="text-xs">{notesOpen ? '▼' : '▶'}</span>
                         </button>
                         {notesOpen && (
                           <div className="px-4 pb-3 space-y-2 max-h-60 overflow-y-auto">
-                            <div className="prose prose-sm max-w-none text-slate-600">
+                            <div className="prose prose-sm max-w-none text-slate-600 dark:text-zinc-300">
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                 {selectedPaperFull.notes}
                               </ReactMarkdown>
@@ -1320,12 +1322,12 @@ export default function ResearchTaskPage() {
                 >💬 Quote to Chat</button>
                 <button
                   onClick={() => addToNotes(ctxMenu.text)}
-                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-600 flex items-center gap-2"
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-2"
                 >📝 Add to Notes</button>
-                <div className="border-t border-slate-100 my-0.5" />
+                <div className="border-t border-slate-100 dark:border-zinc-700 my-0.5" />
                 <button
                   onClick={() => { navigator.clipboard.writeText(ctxMenu.text); setCtxMenu(null) }}
-                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 flex items-center gap-2"
                 >📋 Copy</button>
               </div>
             )}
@@ -1336,11 +1338,11 @@ export default function ResearchTaskPage() {
                 <div className="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl w-[480px] max-w-[90vw] overflow-hidden" onClick={(e) => e.stopPropagation()}>
                   <div className="px-5 py-3 border-b border-slate-100 dark:border-zinc-700 flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200">📝 Add Note</h3>
-                    <button onClick={() => setNoteDialog(null)} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+                    <button onClick={() => setNoteDialog(null)} className="text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 text-lg">✕</button>
                   </div>
                   <div className="px-5 py-4 space-y-3">
                     {noteDialog.quote && (
-                      <div className="rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 px-3 py-2 text-xs text-slate-600 max-h-32 overflow-y-auto">
+                      <div className="rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 px-3 py-2 text-xs text-slate-600 dark:text-zinc-400 max-h-32 overflow-y-auto">
                         <p className="text-[10px] text-slate-400 mb-1 font-medium">Selected text:</p>
                         <p className="italic leading-relaxed">{noteDialog.quote}</p>
                       </div>
@@ -1357,7 +1359,7 @@ export default function ResearchTaskPage() {
                     <p className="text-[10px] text-slate-400">⌘/Ctrl + Enter to save</p>
                   </div>
                   <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
-                    <button onClick={() => setNoteDialog(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+                    <button onClick={() => setNoteDialog(null)} className="px-3 py-1.5 text-xs text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 rounded-lg">Cancel</button>
                     <button
                       onClick={saveNote}
                       disabled={!noteDialog.comment.trim() && !noteDialog.quote}
@@ -1395,7 +1397,7 @@ export default function ResearchTaskPage() {
                   {writeViewMode !== 'preview' && (
                     <textarea
                       ref={writeTextareaRef}
-                      className={`${writeViewMode === 'split' ? 'w-1/2 border-r border-slate-200' : 'w-full'} resize-none p-4 text-sm text-slate-700 font-mono leading-relaxed focus:outline-none`}
+                      className={`${writeViewMode === 'split' ? 'w-1/2 border-r border-slate-200 dark:border-zinc-700' : 'w-full'} resize-none p-4 text-sm text-slate-700 dark:text-zinc-200 dark:bg-zinc-900 font-mono leading-relaxed focus:outline-none`}
                       placeholder="Start writing your research notes, literature review, analysis..."
                       value={writeContent}
                       onChange={(e) => setWriteContent(e.target.value)}
@@ -1408,7 +1410,7 @@ export default function ResearchTaskPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center justify-between border-t border-slate-200 px-3 py-1 text-[10px] text-slate-400">
+                <div className="flex items-center justify-between border-t border-slate-200 dark:border-zinc-700 px-3 py-1 text-[10px] text-slate-400 dark:text-zinc-500">
                   <span>{writeContent.trim() ? `${writeContent.trim().split(/\s+/).length} words · ${writeContent.length} chars` : 'Empty'}</span>
                   <span className="text-green-500">✓ Auto-saved</span>
                 </div>
@@ -1417,13 +1419,13 @@ export default function ResearchTaskPage() {
 
             {centerTab === 'export' && (
               <div className="p-6 max-w-2xl mx-auto space-y-6">
-                <h2 className="text-lg font-bold text-slate-700">📤 Export Research</h2>
+                <h2 className="text-lg font-bold text-slate-700 dark:text-zinc-200">📤 Export Research</h2>
 
                 {/* Paper selection */}
                 {papers.length > 0 && (
-                  <div className="rounded-xl border border-slate-200 p-4 space-y-2">
+                  <div className="rounded-xl border border-slate-200 dark:border-zinc-700 p-4 space-y-2">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-slate-700">📋 Select Papers to Export</h3>
+                      <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200">📋 Select Papers to Export</h3>
                       <div className="flex gap-1">
                         <button
                           onClick={() => setSelectedExportPapers(new Set(papers.map(p => p.id)))}
@@ -1449,7 +1451,7 @@ export default function ResearchTaskPage() {
                             }}
                             className="rounded border-slate-300 dark:border-zinc-600"
                           />
-                          <span className="text-xs text-slate-700 truncate">{p.title || 'Untitled'}</span>
+                          <span className="text-xs text-slate-700 dark:text-zinc-200 truncate">{p.title || 'Untitled'}</span>
                           {p.year && <span className="text-[10px] text-slate-400 shrink-0">({p.year})</span>}
                         </label>
                       ))}
@@ -1459,12 +1461,12 @@ export default function ResearchTaskPage() {
                 )}
 
                 {/* PPT Export */}
-                <div className="rounded-xl border border-slate-200 p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">📊 PowerPoint Presentation</h3>
-                  <p className="text-xs text-slate-500">Generate a PPT from your papers and Agent analysis</p>
+                <div className="rounded-xl border border-slate-200 dark:border-zinc-700 p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200">📊 PowerPoint Presentation</h3>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">Generate a PPT from your papers and Agent analysis</p>
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-500">Template:</label>
+                      <label className="text-xs text-slate-500 dark:text-zinc-400">Template:</label>
                       <select
                         className="rounded border border-slate-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs"
                         value={exportTemplate}
@@ -1476,7 +1478,7 @@ export default function ResearchTaskPage() {
                       </select>
                     </div>
                     <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-500">Language:</label>
+                      <label className="text-xs text-slate-500 dark:text-zinc-400">Language:</label>
                       <select
                         className="rounded border border-slate-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs"
                         value={exportLang}
@@ -1490,11 +1492,11 @@ export default function ResearchTaskPage() {
                   <div className="flex flex-wrap gap-3">
                     <label className="flex items-center gap-1.5 cursor-pointer">
                       <input type="checkbox" checked={includeAbstracts} onChange={(e) => setIncludeAbstracts(e.target.checked)} className="rounded border-slate-300 dark:border-zinc-600" />
-                      <span className="text-xs text-slate-600">Include abstracts</span>
+                      <span className="text-xs text-slate-600 dark:text-zinc-300">Include abstracts</span>
                     </label>
                     <label className="flex items-center gap-1.5 cursor-pointer">
                       <input type="checkbox" checked={includeAnalysis} onChange={(e) => setIncludeAnalysis(e.target.checked)} className="rounded border-slate-300 dark:border-zinc-600" />
-                      <span className="text-xs text-slate-600">Include Agent analysis</span>
+                      <span className="text-xs text-slate-600 dark:text-zinc-300">Include Agent analysis</span>
                     </label>
                   </div>
                   <button
@@ -1507,9 +1509,9 @@ export default function ResearchTaskPage() {
                 </div>
 
                 {/* BibTeX Export */}
-                <div className="rounded-xl border border-slate-200 p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">📚 BibTeX</h3>
-                  <p className="text-xs text-slate-500">Export reference list for LaTeX</p>
+                <div className="rounded-xl border border-slate-200 dark:border-zinc-700 p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200">📚 BibTeX</h3>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">Export reference list for LaTeX</p>
                   <button
                     onClick={exportBibtex}
                     disabled={papers.length === 0}
@@ -1520,21 +1522,21 @@ export default function ResearchTaskPage() {
                 </div>
 
                 {/* Markdown Export */}
-                <div className="rounded-xl border border-slate-200 p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">📝 Markdown</h3>
-                  <p className="text-xs text-slate-500">Export your writing or Agent responses as Markdown</p>
+                <div className="rounded-xl border border-slate-200 dark:border-zinc-700 p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200">📝 Markdown</h3>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">Export your writing or Agent responses as Markdown</p>
                   <button
                     onClick={exportMarkdown}
-                    className="rounded-lg bg-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-700"
+                    className="rounded-lg bg-slate-600 dark:bg-zinc-600 px-4 py-2 text-sm text-white hover:bg-slate-700 dark:hover:bg-zinc-500"
                   >
                     ⬇️ Download .md
                   </button>
                 </div>
 
                 {/* Publish to Topic */}
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-indigo-700">🚀 Publish to Topic</h3>
-                  <p className="text-xs text-slate-500">Share your research findings to a WTT topic</p>
+                <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">🚀 Publish to Topic</h3>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">Share your research findings to a WTT topic</p>
                   <button
                     onClick={() => {
                       const content = writeContent || chatMessages.filter(m => m.role === 'assistant').map(m => m.content).join('\n\n')
@@ -1561,15 +1563,15 @@ export default function ResearchTaskPage() {
         {/* ═══ RIGHT: AI Chat Panel ═══ */}
         <div className="flex flex-col border-l border-slate-200 dark:border-zinc-700 overflow-hidden" style={{ width: rightW }}>
           {/* Chat header */}
-          <div className="flex h-9 items-center justify-between border-b border-slate-200 bg-slate-50 px-3">
-            <span className="text-[11px] font-semibold text-slate-600">🤖 Research Assistant</span>
+          <div className="flex h-9 items-center justify-between border-b border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-3">
+            <span className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">🤖 Research Assistant</span>
             {task?.runner_agent_id && (
-              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] text-indigo-600 truncate max-w-[120px]">{task.runner_agent_id}</span>
+              <span className="rounded bg-indigo-100 dark:bg-indigo-900/40 px-1.5 py-0.5 text-[10px] text-indigo-600 dark:text-indigo-300 truncate max-w-[120px]">{task.runner_agent_id}</span>
             )}
           </div>
 
           {/* Quick actions */}
-          <div className="flex flex-wrap gap-1 border-b border-slate-100 bg-slate-50/50 dark:bg-zinc-800/50 px-2 py-1.5">
+          <div className="flex flex-wrap gap-1 border-b border-slate-100 dark:border-zinc-700 bg-slate-50/50 dark:bg-zinc-800/50 px-2 py-1.5">
             {[
               { key: 'summarize', label: '📋 Summarize', tip: 'Summarize selected paper' },
               { key: 'review', label: '📝 Literature Review', tip: 'Generate review from all papers' },
@@ -1584,7 +1586,7 @@ export default function ResearchTaskPage() {
                 onClick={() => quickAction(key)}
                 disabled={sending}
                 title={tip}
-                className="rounded bg-white border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50 transition-colors"
+                className="rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-600 px-2 py-0.5 text-[10px] text-slate-600 dark:text-zinc-300 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50 transition-colors"
               >
                 {label}
               </button>
@@ -1606,8 +1608,8 @@ export default function ResearchTaskPage() {
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[90%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${
                   msg.role === 'user'
-                    ? 'border border-indigo-200 bg-indigo-50/80 text-slate-800 rounded-tr-md'
-                    : 'border border-slate-200 bg-white text-slate-700 rounded-tl-md'
+                    ? 'border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/80 dark:bg-indigo-950/30 text-slate-800 dark:text-zinc-200 rounded-tr-md'
+                    : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-tl-md'
                 }`}>
                   <div className="whitespace-pre-wrap break-words">
                     {msg.role === 'assistant' ? <CitationText text={msg.content} papers={papers} /> : (stripFileTokens(msg.content) || msg.content)}

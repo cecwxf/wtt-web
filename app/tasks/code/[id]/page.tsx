@@ -10,6 +10,7 @@ import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { buildWttUserSourceFlow } from '@/lib/wtt-info-flow'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -2188,6 +2189,7 @@ export default function CodeTaskPage() {
           )}
           <button onClick={linkRepo} disabled={repoLinking} className={`rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1 text-xs ${tc.textMuted} disabled:opacity-50`}>{repoLinking ? 'Linking...' : 'Link Repo'}</button>
           {!task?.repo_url && <button onClick={createRepo} disabled={repoCreating} className="rounded-lg bg-emerald-500 px-3 py-1 text-xs text-white disabled:opacity-50">{repoCreating ? 'Creating...' : 'Create Repo'}</button>}
+          <ThemeToggle />
         </div>
       </div>
 

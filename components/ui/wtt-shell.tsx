@@ -5,6 +5,7 @@ import { Bot, Compass, Home, LogOut, Menu, PenSquare, Search, Send, Settings } f
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { WttSettingsModal } from '@/components/ui/wtt-settings-modal'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 interface AgentOption {
   id: string
@@ -209,6 +210,7 @@ export function WttShell({
                 <LogOut className="h-4 w-4" />
                 Logout
               </button>
+              <ThemeToggle className="px-2 py-2" />
             </div>
 
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
