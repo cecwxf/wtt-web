@@ -138,18 +138,6 @@ const lineStrokeAttrs = (style: LineStyle) => {
 }
 
 /* node color presets */
-const NODE_COLORS = [
-  { value: '', label: 'Auto (status)' },
-  { value: '#eef2ff', label: 'Indigo' },
-  { value: '#ecfdf5', label: 'Green' },
-  { value: '#fffbeb', label: 'Amber' },
-  { value: '#fef2f2', label: 'Red' },
-  { value: '#f0f9ff', label: 'Sky' },
-  { value: '#faf5ff', label: 'Purple' },
-  { value: '#fff7ed', label: 'Orange' },
-  { value: '#f0fdf4', label: 'Lime' },
-]
-
 /* ─── SVG clip paths for special shapes ─── */
 function DiamondClip({ id, s }: { id: string; s: number }) {
   const half = s / 2
@@ -1692,151 +1680,11 @@ export default function PipelinesPage() {
                           </div>
                         </div>
 
-                        {/* topo level badge */}
-                        {dagAnalysis && (
-                          <div className="flex items-center gap-2 text-[10px]">
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">Level {dagAnalysis.nodeLevel.get(selected.id) ?? '?'}</span>
-                            {dagAnalysis.criticalPath.has(selected.id) && <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-500">Critical Path</span>}
-                            {dagAnalysis.parallelGroups.some(g => g.includes(selected.id)) && <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-500">Parallel</span>}
-                          </div>
-                        )}
-
                         <input value={taskDraft.title || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold" placeholder="Title" />
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[9px] text-slate-400">Status</label>
-                            <select value={taskDraft.status || 'todo'} onChange={(e) => setTaskDraft((d) => ({ ...d, status: e.target.value as TaskNode['status'] }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                              <option value="todo">todo</option><option value="doing">doing</option><option value="review">review</option><option value="done">done</option><option value="blocked">blocked</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-slate-400">Shape</label>
-                            <select
-                              value={positions[selected.id]?.shape || 'rect'}
-                              onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], shape: e.target.value as NodeShape } }))}
-                              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                            >
-                              <option value="rect">Rectangle (Task)</option>
-                              <option value="circle">Circle (Decision)</option>
-                              <option value="ellipse">Ellipse (Start/End)</option>
-                              <option value="diamond">Diamond (Condition)</option>
-                              <option value="parallelogram">Parallelogram (I/O)</option>
-                              <option value="hexagon">Hexagon (Subprocess)</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[9px] text-slate-400">Task Type</label>
-                            <select value={taskDraft.task_type || 'feature'} onChange={(e) => setTaskDraft((d) => ({ ...d, task_type: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                              <option value="feature">Feature</option>
-                              <option value="bug">Bug Fix</option>
-                              <option value="research">Research</option>
-                              <option value="refactor">Refactor</option>
-                              <option value="test">Test</option>
-                              <option value="deploy">Deploy</option>
-                              <option value="review">Review</option>
-                              <option value="documentation">Documentation</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-slate-400">Priority</label>
-                            <select value={taskDraft.priority || 'P2'} onChange={(e) => setTaskDraft((d) => ({ ...d, priority: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                              <option value="P0">P0 (Critical)</option>
-                              <option value="P1">P1 (High)</option>
-                              <option value="P2">P2 (Medium)</option>
-                              <option value="P3">P3 (Low)</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[9px] text-slate-400">Exec Mode</label>
-                            <select value={taskDraft.exec_mode || 'reasoning'} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                              <option value="reasoning">Reasoning</option>
-                              <option value="coding">Coding</option>
-                              <option value="search">Search</option>
-                              <option value="human">Human Review</option>
-                              <option value="api_call">API Call</option>
-                              <option value="mixed">Mixed</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-slate-400">Estimate (hours)</label>
-                            <input type="number" min="0" step="0.5" value={taskDraft.estimate_hours ?? ''} onChange={(e) => setTaskDraft((d) => ({ ...d, estimate_hours: e.target.value ? parseFloat(e.target.value) : null }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. 2" />
-                          </div>
-                        </div>
-
-                        {/* owner + runner (dropdown) */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[9px] text-slate-400">Owner Agent</label>
-                            <select value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs">
-                              <option value="">— select —</option>
-                              {agents.map(a => <option key={a.agent_id} value={a.agent_id}>{a.display_name || a.agent_id}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-slate-400">Runner Agent</label>
-                            <select
-                              value={taskDraft.runner_agent_id || ''}
-                              onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))}
-                              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                              style={taskDraft.runner_agent_id && involvedAgents.includes(taskDraft.runner_agent_id) ? { borderColor: agentColor(taskDraft.runner_agent_id, involvedAgents) } : {}}
-                            >
-                              <option value="">— select —</option>
-                              {agents.map(a => (
-                                <option key={a.agent_id} value={a.agent_id}>
-                                  {a.display_name || a.agent_id}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* node visual */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[9px] text-slate-400">Node Color</label>
-                            <select
-                              value={positions[selected.id]?.color || ''}
-                              onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], color: e.target.value || undefined } }))}
-                              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                            >
-                              {NODE_COLORS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-slate-400">Tag / Label</label>
-                            <input
-                              value={positions[selected.id]?.label || ''}
-                              onChange={(e) => setPositions((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], label: e.target.value || undefined } }))}
-                              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="e.g. v2.0"
-                            />
-                          </div>
-                        </div>
 
                         <div>
                           <label className="text-[9px] text-slate-400">Description</label>
-                          <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} className="min-h-16 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="What this node does..." />
-                        </div>
-
-                        <div>
-                          <label className="text-[9px] text-slate-400">Acceptance Criteria</label>
-                          <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="How to verify completion..." />
-                        </div>
-
-                        <div>
-                          <label className="text-[9px] text-slate-400">Input / Output Specification</label>
-                          <textarea value={taskDraft.dependencies || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, dependencies: e.target.value }))} className="min-h-12 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Input: camera_frame (image)&#10;Output: obstacle_list (json)" />
-                        </div>
-
-                        <div>
-                          <label className="text-[9px] text-slate-400">Notes</label>
-                          <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} className="min-h-10 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Additional notes..." />
+                          <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} className="min-h-[200px] w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs leading-relaxed" placeholder="Describe what this node should do, inputs, outputs, acceptance criteria..." />
                         </div>
 
                         {/* Output (read-only for committed tasks) */}
