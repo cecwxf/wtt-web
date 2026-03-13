@@ -1,6 +1,6 @@
 'use client'
 
-import { Menu, Settings } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { AgentColumn, AgentItem } from './agent-column'
@@ -158,16 +158,6 @@ export function WttShellV2({
           <main className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/30 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900">
             {children}
           </main>
-        </div>
-
-        <div className="absolute bottom-4 left-4">
-          <button
-            onClick={() => openSettings('profile')}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-slate-500 dark:text-zinc-300 shadow-lg transition hover:text-slate-900 dark:hover:text-zinc-100"
-          >
-            <Settings className="h-4 w-4" />
-            <span>Settings</span>
-          </button>
         </div>
       </div>
 

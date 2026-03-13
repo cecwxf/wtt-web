@@ -195,22 +195,24 @@ export function WttShell({
 
               {topActions}
 
-              <button
-                onClick={() => openSettings('profile')}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </button>
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <button
+                  onClick={() => openSettings('profile')}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </button>
 
-              <button
-                onClick={onLogout}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </button>
-              <ThemeToggle className="px-2 py-2" />
+                <button
+                  onClick={onLogout}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </div>
             </div>
 
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
