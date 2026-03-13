@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, FileEdit, PenSquare, KanbanSquare, Workflow, Sun, Moon } from 'lucide-react'
+import { Bell, FileEdit, Home, PenSquare, KanbanSquare, Workflow, Sun, Moon } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
@@ -21,6 +21,14 @@ export function TopBar({ onSelectTopic, onCreateTopic, onOpenEditor, hideCreateT
 
   return (
     <header className="flex h-[60px] items-center gap-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4">
+      <Link
+        href="/feed"
+        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-indigo-600 dark:text-indigo-400 transition hover:bg-indigo-50 dark:hover:bg-indigo-900/40"
+        title="Home"
+      >
+        <Home className="h-5 w-5" />
+      </Link>
+
       <SearchBar onSelectTopic={onSelectTopic} />
 
       <div className="ml-auto flex items-center gap-2">

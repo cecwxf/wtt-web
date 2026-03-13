@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { Bot, Bell, Brush, KeyRound, Lock, RefreshCw, User, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 type SettingsPage = 'profile' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
@@ -12,14 +12,6 @@ interface AgentOption {
   agent_id: string
   display_name: string
   is_primary: boolean
-}
-
-interface ManagerDelegation {
-  id: string
-  manager_agent_id: string
-  target_agent_id: string
-  can_publish: boolean
-  can_p2p: boolean
 }
 
 interface WttSettingsModalProps {
@@ -65,112 +57,6 @@ export function WttSettingsModal({
   const [claiming, setClaiming] = useState(false)
   const [claimError, setClaimError] = useState('')
   const [claimSuccess, setClaimSuccess] = useState('')
-
-  const [managerAgentId, setManagerAgentId] = useState('')
-  const [targetAgentId, setTargetAgentId] = useState('')
-  const [delegations, setDelegations] = useState<ManagerDelegation[]>([])
-  const [managerMsg, setManagerMsg] = useState('')
-
-  useEffect(() => {
-    if (!open) return
-    if (!managerAgentId && agents.length > 0) {
-      setManagerAgentId(agents[0].agent_id)
-      setTargetAgentId(agents[1]?.agent_id || agents[0].agent_id)
-    }
-  }, [open, agents, managerAgentId])
-
-  const loadDelegations = async (managerId: string) => {
-    if (!managerId) {
-      setDelegations([])
-      return
-    }
-    try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/manager/delegations?manager_agent_id=${encodeURIComponent(managerId)}`)
-      if (!r.ok) {
-        setDelegations([])
-        return
-      }
-      const rows = await r.json()
-      setDelegations(Array.isArray(rows) ? rows : [])
-    } catch {
-      setDelegations([])
-    }
-  }
-
-  useEffect(() => {
-    if (!open || activePage !== 'binding') return
-    if (!managerAgentId) return
-    loadDelegations(managerAgentId)
-  }, [open, activePage, managerAgentId])
-
-  const grantManager = async () => {
-    if (!managerAgentId || !targetAgentId) {
-      setManagerMsg('请选择管家和被代理 Agent')
-      return
-    }
-    const r = await fetch(`${CLIENT_WTT_API_BASE}/manager/delegations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        manager_agent_id: managerAgentId,
-        target_agent_id: targetAgentId,
-        can_publish: true,
-        can_p2p: true,
-      }),
-    })
-    if (!r.ok) {
-      setManagerMsg(`授权失败: ${await r.text()}`)
-      return
-    }
-    setManagerMsg('授权成功：管家可代理该 Agent 全部功能')
-    loadDelegations(managerAgentId)
-  }
-
-  const grantManagerForAll = async () => {
-    if (!managerAgentId) {
-      setManagerMsg('请先选择管家 Agent')
-      return
-    }
-
-    const targets = agents.filter((a) => a.agent_id !== managerAgentId)
-    if (targets.length === 0) {
-      setManagerMsg('没有可授权的其他 Agent')
-      return
-    }
-
-    let ok = 0
-    let fail = 0
-    for (const t of targets) {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/manager/delegations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          manager_agent_id: managerAgentId,
-          target_agent_id: t.agent_id,
-          can_publish: true,
-          can_p2p: true,
-        }),
-      })
-      if (r.ok) ok += 1
-      else fail += 1
-    }
-
-    setManagerMsg(`批量授权完成：成功 ${ok}，失败 ${fail}`)
-    loadDelegations(managerAgentId)
-  }
-
-  const removeManager = async (targetId: string) => {
-    const r = await fetch(
-      `${CLIENT_WTT_API_BASE}/manager/delegations?manager_agent_id=${encodeURIComponent(managerAgentId)}&target_agent_id=${encodeURIComponent(targetId)}`,
-      { method: 'DELETE' }
-    )
-    if (!r.ok) {
-      setManagerMsg(`移除失败: ${await r.text()}`)
-      return
-    }
-    setManagerMsg('已移除授权')
-    loadDelegations(managerAgentId)
-  }
 
   const handleClaim = async () => {
     const code = claimCode.trim()
@@ -283,12 +169,35 @@ export function WttSettingsModal({
           {activePage === 'profile' && (
             <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">Profile</p>
+                <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">Account</p>
+                {session?.user?.image && (
+                  <div className="mb-3 flex items-center gap-3">
+                    <img src={session.user.image} alt="avatar" className="h-14 w-14 rounded-full border-2 border-indigo-200" />
+                    <div>
+                      <p className="text-base font-semibold text-slate-800">{session.user.name || 'WTT User'}</p>
+                      {session.user.email && <p className="text-xs text-slate-400">{session.user.email}</p>}
+                    </div>
+                  </div>
+                )}
+                {!session?.user?.image && (
+                  <div className="mb-3">
+                    <p className="text-base font-semibold text-slate-800">{session?.user?.name || 'WTT User'}</p>
+                    {session?.user?.email && <p className="text-xs text-slate-400">{session.user.email}</p>}
+                  </div>
+                )}
                 <label className="block">
                   <span className="mb-2 block text-sm text-slate-500">Display Name</span>
                   <input
-                    defaultValue={selectedAgent?.display_name ?? 'WTT User'}
+                    defaultValue={session?.user?.name || 'WTT User'}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                  />
+                </label>
+                <label className="mt-3 block">
+                  <span className="mb-2 block text-sm text-slate-500">Email</span>
+                  <input
+                    defaultValue={session?.user?.email || ''}
+                    disabled
+                    className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 outline-none"
                   />
                 </label>
                 <label className="mt-3 block">
@@ -299,6 +208,12 @@ export function WttSettingsModal({
                     className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                 </label>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">Linked Agent</p>
+                <p className="text-sm text-slate-600">
+                  {selectedAgent ? `${selectedAgent.display_name} (${selectedAgentId})` : '未绑定 Agent'}
+                </p>
               </div>
             </div>
           )}
@@ -331,67 +246,6 @@ export function WttSettingsModal({
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">绑定状态</p>
                 <p className="mt-1 text-sm text-slate-400">已绑定 Agent 数量：{agents.length}</p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">Agent 管家（简化模式）</p>
-                <p className="mt-1 text-sm text-slate-400">1) 选择一个管家 Agent 2) 授权代理某个 Agent 全部功能（发布 + P2P）</p>
-
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <select
-                    value={managerAgentId}
-                    onChange={(e) => setManagerAgentId(e.target.value)}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
-                  >
-                    {agents.map((a) => (
-                      <option key={`m-${a.agent_id}`} value={a.agent_id}>{a.display_name} ({a.agent_id})</option>
-                    ))}
-                  </select>
-                  <select
-                    value={targetAgentId}
-                    onChange={(e) => setTargetAgentId(e.target.value)}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
-                  >
-                    {agents.map((a) => (
-                      <option key={`t-${a.agent_id}`} value={a.agent_id}>{a.display_name} ({a.agent_id})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    onClick={grantManager}
-                    className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
-                  >
-                    授权管家
-                  </button>
-                  <button
-                    onClick={grantManagerForAll}
-                    className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
-                  >
-                    设为全部 Agent 管家
-                  </button>
-                  <button
-                    onClick={() => loadDelegations(managerAgentId)}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 hover:text-slate-900"
-                  >
-                    刷新
-                  </button>
-                </div>
-
-                {managerMsg && <p className="mt-2 text-sm text-indigo-500">{managerMsg}</p>}
-
-                <div className="mt-3 space-y-2">
-                  {delegations.length === 0 && <p className="text-xs text-slate-400">暂无授权</p>}
-                  {delegations.map((d) => (
-                    <div key={d.id} className="flex items-center justify-between rounded border border-slate-200 px-3 py-2">
-                      <div className="text-xs text-slate-600">{d.manager_agent_id} → {d.target_agent_id}（全功能）</div>
-                      <button onClick={() => removeManager(d.target_agent_id)} className="rounded bg-red-600/20 px-2 py-1 text-xs text-red-600">
-                        取消
-                      </button>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )}
