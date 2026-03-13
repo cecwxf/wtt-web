@@ -27,6 +27,7 @@ interface TaskNode {
   owner_agent_id?: string
   runner_agent_id?: string
   topic_id?: string
+  output?: string
 }
 
 interface TaskEdge {
@@ -203,9 +204,12 @@ export default function PipelinesPage() {
 
   /* ─── pipeline list data ─── */
   const { data: pipelinesRaw, mutate: mutatePipelines } = useSWR(
-    session?.accessToken ? ['pipelines-page', session.accessToken] : null,
+    session?.accessToken && selectedAgentId ? ['pipelines-page', session.accessToken, selectedAgentId] : null,
     async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines`, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
+      const url = selectedAgentId
+        ? `${CLIENT_WTT_API_BASE}/tasks/pipelines?creator_agent_id=${encodeURIComponent(selectedAgentId)}`
+        : `${CLIENT_WTT_API_BASE}/tasks/pipelines`
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
       if (!r.ok) return []
       return r.json()
     }
@@ -249,30 +253,20 @@ export default function PipelinesPage() {
   /* ─── draft (unsaved) nodes on canvas ─── */
   const [draftNodes, setDraftNodes] = useState<Record<string, TaskDraft & { _shape: NodeShape }>>({})
   const allNodes: TaskNode[] = useMemo(() => {
-    const drafts: TaskNode[] = Object.entries(draftNodes).map(([id, d]) => ({
-      id,
-      title: d.title || 'Untitled',
-      description: d.description,
-      status: 'todo' as const,
-      owner_agent_id: d.owner_agent_id,
-      runner_agent_id: d.runner_agent_id,
-    }))
+    const drafts: TaskNode[] = Object.entries(draftNodes).map(([id, d]) => {
+      // For the currently selected draft, use live taskDraft values (avoids useEffect sync + flicker)
+      const isEditing = id === selectedTaskId
+      return {
+        id,
+        title: (isEditing ? taskDraft.title : d.title) || 'Untitled',
+        description: isEditing ? taskDraft.description : d.description,
+        status: 'todo' as const,
+        owner_agent_id: isEditing ? taskDraft.owner_agent_id : d.owner_agent_id,
+        runner_agent_id: isEditing ? taskDraft.runner_agent_id : d.runner_agent_id,
+      }
+    })
     return [...nodes, ...drafts]
-  }, [nodes, draftNodes])
-
-  // Sync taskDraft edits back into draftNodes so canvas reflects live changes
-  useEffect(() => {
-    if (!selectedTaskId || !draftNodes[selectedTaskId]) return
-    const d = draftNodes[selectedTaskId]
-    if (d.title !== taskDraft.title || d.description !== taskDraft.description ||
-        d.owner_agent_id !== taskDraft.owner_agent_id || d.runner_agent_id !== taskDraft.runner_agent_id) {
-      setDraftNodes((prev) => ({
-        ...prev,
-        [selectedTaskId]: { ...prev[selectedTaskId], title: taskDraft.title, description: taskDraft.description, owner_agent_id: taskDraft.owner_agent_id, runner_agent_id: taskDraft.runner_agent_id },
-      }))
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskDraft.title, taskDraft.description, taskDraft.owner_agent_id, taskDraft.runner_agent_id, selectedTaskId])
+  }, [nodes, draftNodes, selectedTaskId, taskDraft.title, taskDraft.description, taskDraft.owner_agent_id, taskDraft.runner_agent_id])
 
   /* ─── drag-to-connect state ─── */
   const [dragLine, setDragLine] = useState<{ fromId: string; fromX: number; fromY: number; toX: number; toY: number } | null>(null)
@@ -299,8 +293,11 @@ export default function PipelinesPage() {
   const [chatSending, setChatSending] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  /* ─── P2P topic between user and agent ─── */
-  const [agentP2pTopicId, setAgentP2pTopicId] = useState<string | null>(null)
+  /* ─── P2P topics: per-agent map of topic IDs ─── */
+  const [agentP2pTopics, setAgentP2pTopics] = useState<Record<string, string>>({})
+  const [chatAgentId, setChatAgentId] = useState<string>(selectedAgentId || '')
+  useEffect(() => { if (selectedAgentId && !chatAgentId) setChatAgentId(selectedAgentId) }, [selectedAgentId, chatAgentId])
+  const agentP2pTopicId = chatAgentId ? (agentP2pTopics[chatAgentId] || null) : null
 
   /* ─── pipeline + selected node topic for chat ─── */
   const editingPipeline = pipelines.find((p) => p.id === editingPipelineId)
@@ -439,7 +436,7 @@ export default function PipelinesPage() {
     const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, creator_agent_id: selectedAgentId || undefined }),
     })
     if (!r.ok) {
       const body = await r.json().catch(() => null)
@@ -801,15 +798,16 @@ export default function PipelinesPage() {
 
     try {
       let topicId = activeChatTopicId
+      const targetAgent = chatAgentId || selectedAgentId
 
-      if (chatTarget === 'agent' && !topicId && selectedAgentId) {
+      if (chatTarget === 'agent' && !topicId && targetAgent) {
         // Use /messages/p2p — auto-creates P2P topic + sends first message
         const userActor = actorSource(session, selectedAgentId)
         const p2pR = await fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(userActor)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
           body: JSON.stringify({
-            target_agent_id: selectedAgentId,
+            target_agent_id: targetAgent,
             content,
             content_type: 'text',
             semantic_type: 'post',
@@ -818,7 +816,7 @@ export default function PipelinesPage() {
         if (p2pR.ok) {
           const res = await p2pR.json()
           topicId = res.topic_id
-          setAgentP2pTopicId(topicId!)
+          setAgentP2pTopics(prev => ({ ...prev, [targetAgent]: topicId! }))
           await mutateChat()
         } else {
           const errTxt = await p2pR.text().catch(() => '')
@@ -1448,6 +1446,7 @@ export default function PipelinesPage() {
                                   · {n.runner_agent_id?.slice(0, 10) || '-'}
                                 </p>
                                 <div className="flex items-center gap-0.5">
+                                  {n.output && <span className="rounded bg-emerald-100 px-0.5 text-[7px] text-emerald-600" title={n.output.slice(0, 200)}>📤</span>}
                                   {dagAnalysis?.criticalPath.has(n.id) && <span className="rounded bg-red-100 px-0.5 text-[7px] text-red-500">CP</span>}
                                   {meta.label && <span className="rounded bg-indigo-100 px-1 text-[8px] text-indigo-600">{meta.label}</span>}
                                 </div>
@@ -1538,8 +1537,19 @@ export default function PipelinesPage() {
                         onClick={() => setChatTarget('agent')}
                         className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition ${chatTarget === 'agent' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                       >
-                        🤖 {selectedAgentId ? selectedAgentId.slice(0, 14) : 'Agent'}
+                        🤖 Agent
                       </button>
+                      {chatTarget === 'agent' && involvedAgents.length > 0 && (
+                        <select
+                          value={chatAgentId}
+                          onChange={(e) => setChatAgentId(e.target.value)}
+                          className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-600"
+                        >
+                          {involvedAgents.map(a => (
+                            <option key={a} value={a}>{a.slice(0, 20)}</option>
+                          ))}
+                        </select>
+                      )}
                       {selected && (
                         <button
                           onClick={() => setChatTarget('node')}
@@ -1592,7 +1602,7 @@ export default function PipelinesPage() {
                         <div className="flex h-full flex-col items-center justify-center text-slate-400">
                           {chatTarget === 'agent' ? (
                             <>
-                              <p className="text-xs">💬 Chat with {selectedAgentId?.slice(0, 16) || 'agent'}</p>
+                              <p className="text-xs">💬 Chat with {chatAgentId?.slice(0, 16) || selectedAgentId?.slice(0, 16) || 'agent'}</p>
                               <p className="mt-1 text-[10px]">Send a message to start a P2P conversation. The agent can help you create nodes, parse dependencies, and generate the pipeline.</p>
                             </>
                           ) : (
@@ -1812,6 +1822,32 @@ export default function PipelinesPage() {
                           <label className="text-[9px] text-slate-400">Notes</label>
                           <textarea value={taskDraft.notes || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, notes: e.target.value }))} className="min-h-10 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs" placeholder="Additional notes..." />
                         </div>
+
+                        {/* Output (read-only for committed tasks) */}
+                        {!isDraft && selected.output && (
+                          <div className="rounded border border-emerald-200 bg-emerald-50 p-2">
+                            <label className="text-[9px] font-medium text-emerald-600">📤 Task Output</label>
+                            <p className="mt-1 whitespace-pre-wrap text-[11px] leading-snug text-slate-700">{selected.output}</p>
+                          </div>
+                        )}
+
+                        {/* Upstream outputs (inputs for this node) */}
+                        {(() => {
+                          const inEdges = allEdges.filter(e => e.task_id === selected.id)
+                          const upOuts = inEdges.map(e => allNodes.find(n => n.id === e.depends_on_task_id)).filter(n => n?.output)
+                          if (upOuts.length === 0) return null
+                          return (
+                            <div className="rounded border border-blue-200 bg-blue-50 p-2">
+                              <label className="text-[9px] font-medium text-blue-600">📥 Upstream Outputs (Inputs)</label>
+                              {upOuts.map(n => (
+                                <div key={n!.id} className="mt-1">
+                                  <p className="text-[9px] font-medium text-slate-500">{n!.title}</p>
+                                  <p className="whitespace-pre-wrap text-[10px] leading-snug text-slate-600">{n!.output!.slice(0, 500)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })()}
 
                         <button onClick={saveTaskDetail} className={`w-full rounded border px-2 py-1.5 text-xs font-medium ${isDraft ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>{isDraft ? '✓ Create Task' : 'Save Node'}</button>
 

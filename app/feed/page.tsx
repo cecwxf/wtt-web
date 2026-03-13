@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
@@ -231,7 +231,7 @@ function FeedPageInner() {
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
 
-    return subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string }) => ({
+    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string }) => ({
       topic_id: topic.id,
       name: topic.name,
       topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
@@ -240,6 +240,12 @@ function FeedPageInner() {
       task_id: topic.task_id,
       runner_agent_id: topic.runner_agent_id,
     }))
+    // Pin P2P topics at top
+    return mapped.sort((a, b) => {
+      if (a.topic_type === 'p2p' && b.topic_type !== 'p2p') return -1
+      if (a.topic_type !== 'p2p' && b.topic_type === 'p2p') return 1
+      return 0
+    })
   }, [subscribedTopicsRaw])
 
   const agentItems = useMemo<AgentItem[]>(() => {
@@ -251,6 +257,27 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
+
+  // Auto-create P2P topic for each claimed agent (if not exists)
+  const p2pInitRef = useRef(new Set<string>())
+  useEffect(() => {
+    if (!selectedAgentId || !session?.accessToken || !topics) return
+    const humanSender = getHumanSender(session)
+    for (const agent of agents) {
+      const aid = agent.agent_id
+      if (p2pInitRef.current.has(aid)) continue
+      const hasP2p = topics.some(t => t.topic_type === 'p2p' && (t.name.includes(aid) || t.name.includes(humanSender)))
+      if (hasP2p) { p2pInitRef.current.add(aid); continue }
+      p2pInitRef.current.add(aid)
+      // Fire-and-forget: create P2P topic via /messages/p2p
+      fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(humanSender)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ target_agent_id: aid, content: `[System] P2P channel established with ${agent.display_name || aid}`, content_type: 'text', semantic_type: 'system' }),
+      }).then(() => mutateTopics()).catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agents, topics, selectedAgentId, session?.accessToken])
 
   const searchParams = useSearchParams()
   useEffect(() => {
@@ -443,10 +470,32 @@ function FeedPageInner() {
             wsConnected={wsState === 'connected'}
           />
         ) : (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex h-full flex-col items-center justify-center gap-6 px-8">
             <div className="text-center">
               <p className="text-lg text-slate-400">Select a topic to start chatting</p>
-              <p className="mt-2 text-sm text-slate-400">Choose a topic from the left sidebar</p>
+              <p className="mt-2 text-sm text-slate-400">Or create a new task below</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 w-full max-w-lg">
+              <button onClick={() => router.push('/tasks?create=code')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-indigo-300 hover:shadow-md">
+                <span className="text-2xl">💻</span>
+                <span className="text-sm font-semibold text-slate-700">New Code Task</span>
+                <span className="text-[11px] text-slate-400">AI-assisted coding with repo integration</span>
+              </button>
+              <button onClick={() => router.push('/tasks?create=research')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md">
+                <span className="text-2xl">🔬</span>
+                <span className="text-sm font-semibold text-slate-700">New Research Task</span>
+                <span className="text-[11px] text-slate-400">Paper analysis & literature review</span>
+              </button>
+              <button onClick={() => router.push('/tasks?create=general')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md">
+                <span className="text-2xl">📋</span>
+                <span className="text-sm font-semibold text-slate-700">New General Task</span>
+                <span className="text-[11px] text-slate-400">Flexible task with any agent</span>
+              </button>
+              <button onClick={() => router.push('/pipelines')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-purple-300 hover:shadow-md">
+                <span className="text-2xl">🔗</span>
+                <span className="text-sm font-semibold text-slate-700">New Pipeline Task</span>
+                <span className="text-[11px] text-slate-400">Multi-step workflow with DAG</span>
+              </button>
             </div>
           </div>
         )}
