@@ -317,6 +317,7 @@ export function ChatView({
   const [awaitingAgent, setAwaitingAgent] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -519,10 +520,30 @@ export function ChatView({
           </div>
           <div className="flex items-center gap-1">
             {extraHeaderActions}
-            <button onClick={() => onExport?.('md')} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500">MD</button>
-            <button onClick={() => onExport?.('pdf')} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500">PDF</button>
-            <button onClick={() => onExport?.('docx')} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500">DOCX</button>
-            <button onClick={() => onRecall?.()} className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-500">Recall</button>
+            <div className="relative">
+              <button
+                onClick={() => setExportOpen(!exportOpen)}
+                onBlur={() => setTimeout(() => setExportOpen(false), 150)}
+                className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+              >
+                <Download size={12} /> Export ▾
+              </button>
+              {exportOpen && (
+                <div className="absolute right-0 top-full mt-1 z-30 min-w-[120px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                  {(['md', 'pdf', 'docx'] as const).map(fmt => (
+                    <button
+                      key={fmt}
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => { onExport?.(fmt); setExportOpen(false) }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                    >
+                      {fmt === 'md' ? '📝' : fmt === 'pdf' ? '📄' : '📑'} {fmt.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={() => onRecall?.()} className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-500 hover:bg-indigo-100">Recall</button>
           </div>
         </div>
       </div>
