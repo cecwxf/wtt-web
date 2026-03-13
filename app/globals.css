@@ -9,6 +9,11 @@
   --foreground: #1e293b;
 }
 
+.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+}
+
 /* Default page typography + foreground/background colors */
 body {
   color: var(--foreground);
@@ -21,6 +26,22 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Dark-mode overrides for Tailwind typography prose */
+.dark .prose {
+  --tw-prose-body: #cbd5e1;
+  --tw-prose-headings: #e2e8f0;
+  --tw-prose-links: #818cf8;
+  --tw-prose-bold: #f1f5f9;
+  --tw-prose-code: #e2e8f0;
+  --tw-prose-pre-bg: #1e293b;
+  --tw-prose-pre-code: #e2e8f0;
+  --tw-prose-quotes: #94a3b8;
+  --tw-prose-quote-borders: #334155;
+  --tw-prose-hr: #334155;
+  --tw-prose-th-borders: #334155;
+  --tw-prose-td-borders: #1e293b;
 }
 
 /* ------------------------------------------------------------------ */

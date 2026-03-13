@@ -45,8 +45,8 @@ export function TopicColumn({
   const [menuFor, setMenuFor] = useState<string | null>(null)
 
   return (
-    <div className="flex h-full w-[250px] flex-col border-r border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-3 py-3">
+    <div className="flex h-full w-[250px] flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+      <div className="border-b border-slate-200 dark:border-slate-700 px-3 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           {agentName ? `${agentName}'s Topics` : 'Topics'}
         </p>

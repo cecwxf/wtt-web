@@ -29,21 +29,21 @@ export function AgentColumn({
   const [menuFor, setMenuFor] = useState<string | null>(null)
 
   return (
-    <div className="flex h-full w-[200px] flex-col border-r border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-3 py-3">
+    <div className="flex h-full w-[200px] flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+      <div className="border-b border-slate-200 dark:border-slate-700 px-3 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Agents</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {currentUserName && (
-          <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2.5">
+          <div className="mb-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-2.5">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 dark:bg-slate-600 text-white">
                 <User className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">{currentUserName}</p>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Logged-in User</p>
+                <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{currentUserName}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Logged-in User</p>
               </div>
             </div>
           </div>

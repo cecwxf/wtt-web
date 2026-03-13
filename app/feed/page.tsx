@@ -483,10 +483,10 @@ function FeedPageInner() {
 
           {/* Right sidebar — Task shortcuts */}
           {showTaskSidebar ? (
-            <div className="flex w-72 flex-col border-l border-slate-200 bg-slate-50/50">
-              <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
-                <span className="text-sm font-bold text-slate-700">⚡ Quick Create</span>
-                <button onClick={() => setShowTaskSidebar(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Close">
+            <div className="flex w-72 flex-col border-l border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">⚡ Quick Create</span>
+                <button onClick={() => setShowTaskSidebar(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-white" title="Close">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 4l6 6M10 4l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                 </button>
               </div>
@@ -530,8 +530,8 @@ function FeedPageInner() {
                       <span className="drop-shadow-sm">{item.icon}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-slate-800">{item.label}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">{item.desc}</p>
+                      <p className="text-[13px] font-bold text-slate-800 dark:text-slate-100">{item.label}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{item.desc}</p>
                     </div>
                     <svg className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </button>
@@ -541,7 +541,7 @@ function FeedPageInner() {
           ) : (
             <button
               onClick={() => setShowTaskSidebar(true)}
-              className="flex w-8 items-start justify-center border-l border-slate-200 bg-white pt-3 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+              className="flex w-8 items-start justify-center border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pt-3 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-white"
               title="Open task shortcuts"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>

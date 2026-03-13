@@ -504,10 +504,10 @@ export function ChatView({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-slate-200 px-5 py-4">
+      <div className="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="truncate text-lg font-semibold">{topicName}</h2>
+            <h2 className="truncate text-lg font-semibold dark:text-slate-100">{topicName}</h2>
             <p className="mt-1 text-xs text-slate-400">
               {messages.length} messages loaded
               {wsConnected && (
@@ -524,18 +524,18 @@ export function ChatView({
               <button
                 onClick={() => setExportOpen(!exportOpen)}
                 onBlur={() => setTimeout(() => setExportOpen(false), 150)}
-                className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                className="flex items-center gap-1 rounded border border-slate-200 dark:border-slate-600 px-2 py-1 text-[11px] text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-white"
               >
                 <Download size={12} /> Export ▾
               </button>
               {exportOpen && (
-                <div className="absolute right-0 top-full mt-1 z-30 min-w-[120px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                <div className="absolute right-0 top-full mt-1 z-30 min-w-[120px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
                   {(['md', 'pdf', 'docx'] as const).map(fmt => (
                     <button
                       key={fmt}
                       onMouseDown={e => e.preventDefault()}
                       onClick={() => { onExport?.(fmt); setExportOpen(false) }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-white"
                     >
                       {fmt === 'md' ? '📝' : fmt === 'pdf' ? '📄' : '📑'} {fmt.toUpperCase()}
                     </button>
@@ -550,13 +550,13 @@ export function ChatView({
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/50 to-white px-4 py-4 sm:px-5"
+        className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/50 to-white dark:from-slate-900/50 dark:to-slate-950 px-4 py-4 sm:px-5"
       >
         <div className="mb-3 flex justify-center">
           <button
             onClick={handleLoadOlder}
             disabled={!hasOlder || loadingOlder}
-            className="rounded-full border border-slate-200 bg-slate-50/85 px-3 py-1 text-xs text-slate-500 disabled:opacity-40"
+            className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50/85 dark:bg-slate-800/85 px-3 py-1 text-xs text-slate-500 disabled:opacity-40"
           >
             {loadingOlder ? 'Loading history...' : hasOlder ? 'Load older messages' : 'No older messages'}
           </button>
@@ -589,8 +589,8 @@ export function ChatView({
                     <div
                       className={`max-w-[82%] rounded-2xl px-5 py-3.5 text-[14px] leading-relaxed tracking-[-0.01em] ${
                         isMine
-                          ? 'border border-indigo-200 bg-indigo-50/80 text-slate-800'
-                          : 'border border-slate-200 bg-white text-slate-700'
+                          ? 'border border-indigo-200 dark:border-indigo-700 bg-indigo-50/80 dark:bg-indigo-900/40 text-slate-800 dark:text-slate-200'
+                          : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
                     >
                       {!isMine && <p className="mb-1 text-xs font-semibold text-indigo-600">{message.sender_display_name || message.sender_id}</p>}
@@ -846,15 +846,15 @@ export function ChatView({
         </div>
       )}
 
-      <div className="border-t border-slate-200 bg-white p-3 sm:p-4">
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2">
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+      <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4">
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-2">
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
             <Paperclip className="h-4 w-4" />
           </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
             <ImageIcon className="h-4 w-4" />
           </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
             <Mic className="h-4 w-4" />
           </button>
 
@@ -864,7 +864,7 @@ export function ChatView({
             onKeyDown={handleKeyDown}
             placeholder={`Message ${topicName}...`}
             rows={1}
-            className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 outline-none"
+            className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none"
           />
           <button
             onClick={handleSend}

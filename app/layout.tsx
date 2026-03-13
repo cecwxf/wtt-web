@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { NextAuthProvider } from "@/lib/session-provider";
+import { ThemeProvider } from "@/lib/theme-provider";
 
 // Register local variable fonts and expose them via CSS variables.
 const geistSans = localFont({
@@ -29,14 +30,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
         {/* Keep auth providers at the root so all pages/components can access session and user state. */}
         <NextAuthProvider>
           <AuthProvider>
             {children}
           </AuthProvider>
         </NextAuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
