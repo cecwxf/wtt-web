@@ -17,13 +17,13 @@ type AnnotationItem = {
 interface AnnotationOverlayProps {
   storageKey: string
   className?: string
-  /** Ref to the scrollable parent — canvas will match its scrollWidth × scrollHeight */
+  /** @deprecated No longer needed — canvas sizes to parent relative wrapper */
   scrollContainerRef?: React.RefObject<HTMLElement | null>
 }
 
 const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#000000']
 
-export default function AnnotationOverlay({ storageKey, className, scrollContainerRef }: AnnotationOverlayProps) {
+export default function AnnotationOverlay({ storageKey, className }: AnnotationOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [tool, setTool] = useState<Tool>('select')
@@ -80,32 +80,29 @@ export default function AnnotationOverlay({ storageKey, className, scrollContain
     persist(next)
   }, [history, historyIdx, persist])
 
-  // Resize canvas to match the FULL scroll content of the container (not just viewport)
+  // Resize canvas to match the inner relative wrapper (which has the full content height)
   const syncCanvasSize = useCallback(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
     if (!canvas || !container) return
-    const scrollEl = scrollContainerRef?.current || container.parentElement
-    if (!scrollEl) return
-    const w = scrollEl.scrollWidth
-    const h = scrollEl.scrollHeight
+    const w = container.offsetWidth
+    const h = container.offsetHeight
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w
       canvas.height = h
     }
-  }, [scrollContainerRef])
+  }, [])
 
   useEffect(() => {
     syncCanvasSize()
-    const el = scrollContainerRef?.current || containerRef.current?.parentElement
+    const el = containerRef.current
     if (!el) return
     const ro = new ResizeObserver(() => syncCanvasSize())
     ro.observe(el)
-    // Also watch child mutations (content loaded later, e.g. PDF pages)
-    const mo = new MutationObserver(() => setTimeout(syncCanvasSize, 100))
+    const mo = new MutationObserver(() => setTimeout(syncCanvasSize, 200))
     mo.observe(el, { childList: true, subtree: true })
     return () => { ro.disconnect(); mo.disconnect() }
-  }, [syncCanvasSize, scrollContainerRef])
+  }, [syncCanvasSize])
 
   // Redraw all annotations
   useEffect(() => {
@@ -282,90 +279,93 @@ export default function AnnotationOverlay({ storageKey, className, scrollContain
   ]
 
   return (
-    <div ref={containerRef} className={`absolute top-0 left-0 w-full ${className || ''}`} style={{ pointerEvents: tool === 'select' ? 'none' : 'auto', height: canvasRef.current?.height || '100%' }}>
-      <canvas
-        ref={canvasRef}
-        className="absolute top-0 left-0 z-10"
-        style={{ cursor: tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair' }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      />
-
-      {/* Text input popup */}
-      {textInput && (
-        <div className="absolute z-20 rounded-lg border border-slate-300 bg-white p-2 shadow-xl" style={{ left: textInput.x, top: textInput.y }}>
-          <input
-            autoFocus
-            value={textValue}
-            onChange={e => setTextValue(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') confirmText(); if (e.key === 'Escape') setTextInput(null) }}
-            className="w-48 rounded border border-slate-200 px-2 py-1 text-sm"
-            placeholder="Type annotation..."
-          />
-          <div className="mt-1 flex gap-1">
-            <button onClick={confirmText} className="rounded bg-indigo-500 px-2 py-0.5 text-[10px] text-white">Add</button>
-            <button onClick={() => setTextInput(null)} className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {/* Floating annotation toolbar — stays visible during scroll */}
-      <div className="sticky left-2 top-2 z-30 inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/95 px-1 py-1 shadow-lg backdrop-blur" style={{ pointerEvents: 'auto' }}>
-        {!showToolbar ? (
-          <button onClick={() => setShowToolbar(true)} className="rounded px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100" title="Show annotation tools">
-            🖊️ Annotate
-          </button>
-        ) : (
-          <>
-            {tools.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTool(t.id)}
-                className={`rounded px-1.5 py-1 text-sm transition ${tool === t.id ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300' : 'text-slate-600 hover:bg-slate-100'}`}
-                title={t.label}
+    <>
+      {/* Toolbar — in normal flow, sticky so it stays visible during scroll */}
+      <div className="sticky top-0 left-0 z-30 p-2" style={{ pointerEvents: 'auto', marginBottom: '-40px' }}>
+        <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/95 px-1 py-1 shadow-lg backdrop-blur">
+          {!showToolbar ? (
+            <button onClick={() => setShowToolbar(true)} className="rounded px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100" title="Show annotation tools">
+              🖊️ Annotate
+            </button>
+          ) : (
+            <>
+              {tools.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setTool(t.id)}
+                  className={`rounded px-1.5 py-1 text-sm transition ${tool === t.id ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300' : 'text-slate-600 hover:bg-slate-100'}`}
+                  title={t.label}
+                >
+                  {t.icon}
+                </button>
+              ))}
+              <span className="mx-0.5 h-5 w-px bg-slate-200" />
+              {COLORS.map(c => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={`h-5 w-5 rounded-full border-2 transition ${color === c ? 'border-slate-700 scale-110' : 'border-transparent hover:border-slate-300'}`}
+                  style={{ backgroundColor: c }}
+                  title={c}
+                />
+              ))}
+              <span className="mx-0.5 h-5 w-px bg-slate-200" />
+              <select
+                value={lineWidth}
+                onChange={e => setLineWidth(+e.target.value)}
+                className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-600"
+                title="Line width"
               >
-                {t.icon}
-              </button>
-            ))}
-            <span className="mx-0.5 h-5 w-px bg-slate-200" />
-            {COLORS.map(c => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={`h-5 w-5 rounded-full border-2 transition ${color === c ? 'border-slate-700 scale-110' : 'border-transparent hover:border-slate-300'}`}
-                style={{ backgroundColor: c }}
-                title={c}
-              />
-            ))}
-            <span className="mx-0.5 h-5 w-px bg-slate-200" />
-            <select
-              value={lineWidth}
-              onChange={e => setLineWidth(+e.target.value)}
-              className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-600"
-              title="Line width"
-            >
-              <option value={1}>Thin</option>
-              <option value={2}>Medium</option>
-              <option value={4}>Thick</option>
-              <option value={6}>Bold</option>
-            </select>
-            <span className="mx-0.5 h-5 w-px bg-slate-200" />
-            <button onClick={undo} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100" title="Undo (Ctrl+Z)">↩</button>
-            <button onClick={redo} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100" title="Redo">↪</button>
-            <button onClick={clearAll} className="rounded px-1.5 py-1 text-xs text-red-400 hover:bg-red-50" title="Clear all">🗑</button>
-            <button onClick={() => { setShowToolbar(false); setTool('select') }} className="rounded px-1.5 py-1 text-xs text-slate-400 hover:bg-slate-100" title="Close toolbar">✕</button>
-          </>
+                <option value={1}>Thin</option>
+                <option value={2}>Medium</option>
+                <option value={4}>Thick</option>
+                <option value={6}>Bold</option>
+              </select>
+              <span className="mx-0.5 h-5 w-px bg-slate-200" />
+              <button onClick={undo} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100" title="Undo">↩</button>
+              <button onClick={redo} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100" title="Redo">↪</button>
+              <button onClick={clearAll} className="rounded px-1.5 py-1 text-xs text-red-400 hover:bg-red-50" title="Clear all">🗑</button>
+              <button onClick={() => { setShowToolbar(false); setTool('select') }} className="rounded px-1.5 py-1 text-xs text-slate-400 hover:bg-slate-100" title="Close toolbar">✕</button>
+            </>
+          )}
+        </div>
+        {annotations.length > 0 && !showToolbar && (
+          <span className="ml-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 shadow">
+            {annotations.length} annotation{annotations.length !== 1 ? 's' : ''}
+          </span>
         )}
       </div>
 
-      {/* Annotation count badge */}
-      {annotations.length > 0 && !showToolbar && (
-        <div className="absolute right-2 top-2 z-20 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 shadow" style={{ pointerEvents: 'auto' }}>
-          {annotations.length} annotation{annotations.length !== 1 ? 's' : ''}
-        </div>
-      )}
-    </div>
+      {/* Canvas overlay — absolute over the relative content wrapper */}
+      <div ref={containerRef} className={`absolute inset-0 ${className || ''}`} style={{ pointerEvents: tool === 'select' ? 'none' : 'auto' }}>
+        <canvas
+          ref={canvasRef}
+          className="absolute top-0 left-0 z-10"
+          style={{ cursor: tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair' }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        />
+
+        {/* Text input popup */}
+        {textInput && (
+          <div className="absolute z-20 rounded-lg border border-slate-300 bg-white p-2 shadow-xl" style={{ left: textInput.x, top: textInput.y }}>
+            <input
+              autoFocus
+              value={textValue}
+              onChange={e => setTextValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmText(); if (e.key === 'Escape') setTextInput(null) }}
+              className="w-48 rounded border border-slate-200 px-2 py-1 text-sm"
+              placeholder="Type annotation..."
+            />
+            <div className="mt-1 flex gap-1">
+              <button onClick={confirmText} className="rounded bg-indigo-500 px-2 py-0.5 text-[10px] text-white">Add</button>
+              <button onClick={() => setTextInput(null)} className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500">Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   )
 }

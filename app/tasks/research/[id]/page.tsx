@@ -1120,7 +1120,8 @@ export default function ResearchTaskPage() {
                             </button>
                           </div>
                         </div>
-                        <div ref={l4ScrollRef} className={l4Fullscreen ? 'relative flex-1 overflow-auto p-2 min-h-0' : 'relative overflow-auto max-h-[75vh]'}>
+                        <div ref={l4ScrollRef} className={l4Fullscreen ? 'flex-1 overflow-auto p-2 min-h-0' : 'overflow-auto max-h-[75vh]'}>
+                        <div className="relative min-h-full">
                         {l4View === 'native' ? (
                           (() => {
                             const ct = (selectedPaperFull.content_type || '').toLowerCase()
@@ -1171,6 +1172,7 @@ export default function ResearchTaskPage() {
                           </div>
                         )}
                         <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} scrollContainerRef={l4ScrollRef} />
+                        </div>
                         </div>
                       </div>
                     )}
