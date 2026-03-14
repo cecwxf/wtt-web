@@ -920,6 +920,7 @@ export default function TasksPage() {
 
         {/* Task type filter tabs + mode filter */}
         <div className="mb-3 flex items-center gap-1">
+          <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Type</span>
           {([
             ['all', '📋 All', null],
             ['general', '💬 General', null],
@@ -927,7 +928,7 @@ export default function TasksPage() {
             ['research', '📄 Research', 'amber'],
           ] as const).map(([key, label]) => {
             const count = tasks.filter(t => {
-              if (!t.topic_id && !subscribedTopicSet.has(t.topic_id || '')) return false
+              if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
               if (taskModeFilter === 'pipeline' && (t.task_mode || 'single') !== 'pipeline') return false
               if (taskModeFilter === 'single' && (t.task_mode || 'single') !== 'single') return false
               if (key === 'all') return true
@@ -952,12 +953,20 @@ export default function TasksPage() {
 
           {/* Mode filter separator + buttons */}
           <span className="mx-1 text-slate-300">|</span>
+          <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Mode</span>
           {([
-            ['all', '🗂 All Mode'],
+            ['all', '🗂 All'],
             ['single', '⚡ Single'],
             ['pipeline', '🔗 Pipeline'],
           ] as const).map(([key, label]) => {
             const count = tasks.filter(t => {
+              if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
+              // Cross-apply type filter
+              if (taskTypeFilter !== 'all') {
+                if (taskTypeFilter === 'general') {
+                  if (t.task_type && t.task_type !== 'general' && t.task_type !== 'feature' && t.task_type !== 'common') return false
+                } else if (t.task_type !== taskTypeFilter) return false
+              }
               if (key === 'all') return true
               if (key === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
               return (t.task_mode || 'single') === 'single'
@@ -1015,6 +1024,18 @@ export default function TasksPage() {
                         {task.task_type === 'research' && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700">📄</span>}
                         {task.task_mode === 'pipeline' && <span className="shrink-0 rounded bg-violet-100 px-1 text-[10px] font-medium text-violet-700">🔗 Pipeline</span>}
                         <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
+                        {task.topic_id && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); router.push(`/feed?topicId=${task.topic_id}`) }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(`/feed?topicId=${task.topic_id}`) } }}
+                            className="ml-auto shrink-0 rounded px-1 py-px text-[10px] text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 cursor-pointer"
+                            title="View in Feed"
+                          >
+                            📡
+                          </span>
+                        )}
                       </div>
                       {/* Token & timing badges */}
                       {(tokenStats[task.id] || task.started_at) && (
@@ -1117,15 +1138,6 @@ export default function TasksPage() {
                     selectedTask.status === 'blocked' ? 'bg-red-100 text-red-600' :
                     'bg-slate-200 text-slate-600'
                   }`}>{selectedTask.status}</span>
-                  {selectedTask?.topic_id && (
-                    <button
-                      onClick={() => router.push(`/feed?topicId=${selectedTask.topic_id}`)}
-                      className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium text-indigo-500 hover:bg-indigo-50 border border-indigo-200"
-                      title="View in Feed"
-                    >
-                      📡 Feed
-                    </button>
-                  )}
                   {(selectedTask.status === 'done' || selectedTask.status === 'blocked' || selectedTask.status === 'review') && (
                     <button
                       onClick={async () => {
