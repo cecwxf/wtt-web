@@ -2156,22 +2156,6 @@ export default function CodeTaskPage() {
               'bg-slate-100 text-slate-500'
             }`}>{task.status === 'doing' ? '⚡ Running' : task.status === 'done' ? '✅ Done' : task.status === 'cancelled' ? '🚫 Cancelled' : task.status}</span>
           )}
-          {task?.status && task.status !== 'done' && task.status !== 'cancelled' && (
-            <button
-              onClick={async () => {
-                if (!confirm('Cancel this task?')) return
-                try {
-                  const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/cancel`, {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                  })
-                  if (!r.ok) throw new Error(await r.text())
-                  await mutateTask()
-                } catch (e) { alert(`Cancel failed: ${e instanceof Error ? e.message : 'unknown'}`) }
-              }}
-              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-500 hover:bg-red-50 hover:text-red-700"
-            >✕ Cancel</button>
-          )}
         </div>
         <div className="flex items-center gap-2">
           {agents.length > 1 && (

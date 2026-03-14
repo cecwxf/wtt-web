@@ -167,7 +167,7 @@ export default function ResearchTaskPage() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; text: string | null } | null>(null)
   const [notesOpen, setNotesOpen] = useState(false)
   const [noteDialog, setNoteDialog] = useState<{ quote: string; comment: string } | null>(null)
-  const [showAnnotationTools, setShowAnnotationTools] = useState(false)
+  const [showAnnotationTools, setShowAnnotationTools] = useState(0)
 
   // Resize
   const [leftW, setLeftW] = useState(() => {
@@ -774,21 +774,6 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
               'bg-slate-100 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400'
             }`}>{task.status === 'doing' ? '⚡ Running' : task.status === 'done' ? '✅ Done' : task.status === 'cancelled' ? '🚫 Cancelled' : task.status}</span>
           )}
-          {task?.status && task.status !== 'done' && task.status !== 'cancelled' && (
-            <button
-              onClick={async () => {
-                if (!confirm('Cancel this task?')) return
-                try {
-                  const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/cancel`, {
-                    method: 'POST', headers: authHeaders(),
-                  })
-                  if (!r.ok) throw new Error(await r.text())
-                  await mutateTask()
-                } catch (e) { alert(`Cancel failed: ${e instanceof Error ? e.message : 'unknown'}`) }
-              }}
-              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-500 hover:bg-red-50"
-            >✕ Cancel</button>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-slate-400 dark:text-zinc-500">{papers.length} papers</span>
@@ -1393,7 +1378,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                   </>
                 )}
                 <button
-                  onClick={() => { setShowAnnotationTools(true); setCtxMenu(null) }}
+                  onClick={() => { setShowAnnotationTools(prev => prev + 1); setCtxMenu(null) }}
                   className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-600 dark:hover:text-violet-400 flex items-center gap-2"
                 >🖊️ Annotate</button>
                 <button

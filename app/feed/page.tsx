@@ -305,6 +305,31 @@ function FeedPageInner() {
 
   const discussMemberCount = useMemo(() => topicMembers.length, [topicMembers])
 
+  // Recent tasks for sidebar shortcuts
+  const { data: recentTasksRaw } = useSWR(
+    session?.accessToken ? ['recent-tasks', session.accessToken] : null,
+    async () => {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks?limit=10&sort=updated_at&order=desc`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!r.ok) return []
+      return r.json()
+    },
+    { refreshInterval: 30000 }
+  )
+  const recentTasks = useMemo(() => {
+    if (!Array.isArray(recentTasksRaw)) return []
+    return recentTasksRaw
+      .filter((t: Record<string, unknown>) => t && t.status !== 'cancelled' && t.task_type !== 'general')
+      .slice(0, 6)
+      .map((t: Record<string, unknown>) => ({
+        id: String(t.id || ''),
+        title: String(t.title || 'Untitled'),
+        task_type: String(t.task_type || 'general'),
+        status: String(t.status || 'todo'),
+      }))
+  }, [recentTasksRaw])
+
   useEffect(() => {
     setMembersOpen(false)
   }, [selectedTopicId])
@@ -683,6 +708,38 @@ function FeedPageInner() {
                   </button>
                 ))}
               </div>
+
+              {/* Recent Tasks shortcuts */}
+              {recentTasks.length > 0 && (
+                <div className="border-t border-slate-200 dark:border-zinc-700 px-4 py-3">
+                  <p className="mb-2 text-[11px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">Recent Tasks</p>
+                  <div className="space-y-1">
+                    {recentTasks.map((t) => {
+                      const icon = t.task_type === 'code' ? '💻' : t.task_type === 'research' ? '🔬' : t.task_type === 'pipeline' ? '🔗' : '📋'
+                      const href = t.task_type === 'code' ? `/tasks/code/${t.id}`
+                        : t.task_type === 'research' ? `/tasks/research/${t.id}`
+                        : t.task_type === 'pipeline' ? '/pipelines'
+                        : `/tasks`
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => router.push(href)}
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-zinc-700 transition"
+                        >
+                          <span className="text-xs">{icon}</span>
+                          <span className="flex-1 truncate text-[11px] text-slate-700 dark:text-zinc-300">{t.title}</span>
+                          <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-medium ${
+                            t.status === 'doing' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' :
+                            t.status === 'done' ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400' :
+                            t.status === 'review' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400' :
+                            'bg-slate-100 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400'
+                          }`}>{t.status}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <button
