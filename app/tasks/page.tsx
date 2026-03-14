@@ -113,6 +113,7 @@ export default function TasksPage() {
   const [queueIndicator, setQueueIndicator] = useState(false)
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
+  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code'>('all')
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const loadAgents = useCallback(async () => {
@@ -174,10 +175,15 @@ export default function TasksPage() {
     return set
   }, [subscribedTopicsRaw])
 
-  // Only show tasks whose topic is still subscribed (or tasks without topic binding)
+  // Only show tasks whose topic is still subscribed (or tasks without topic binding), filtered by type
   const visibleTasks: TaskItem[] = useMemo(
-    () => tasks.filter((t) => !t.topic_id || subscribedTopicSet.has(t.topic_id)),
-    [tasks, subscribedTopicSet]
+    () => tasks.filter((t) => {
+      if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
+      if (taskTypeFilter === 'all') return true
+      if (taskTypeFilter === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
+      return t.task_type === taskTypeFilter
+    }),
+    [tasks, subscribedTopicSet, taskTypeFilter]
   )
 
   // Worker (sub-agent) grouping — same as feed page
@@ -884,7 +890,38 @@ export default function TasksPage() {
           </div>
         </div>
 
-        <div className="grid h-[calc(100%-52px)] grid-cols-[1fr_380px] gap-3">
+        {/* Task type filter tabs */}
+        <div className="mb-3 flex items-center gap-1">
+          {([
+            ['all', '📋 All', null],
+            ['general', '💬 General', null],
+            ['code', '💻 Code', 'cyan'],
+            ['research', '📄 Research', 'amber'],
+          ] as const).map(([key, label]) => {
+            const count = tasks.filter(t => {
+              if (!t.topic_id && !subscribedTopicSet.has(t.topic_id || '')) return false
+              if (key === 'all') return true
+              if (key === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
+              return t.task_type === key
+            }).length
+            const isActive = taskTypeFilter === key
+            return (
+              <button
+                key={key}
+                onClick={() => setTaskTypeFilter(key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  isActive
+                    ? 'bg-indigo-500 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                }`}
+              >
+                {label} <span className={`ml-1 ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>({count})</span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="grid h-[calc(100%-88px)] grid-cols-[1fr_380px] gap-3">
           <div className="grid min-h-0 grid-cols-5 gap-3">
             {columns.map((col) => (
               <div key={col} className="flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-2 overflow-hidden">
