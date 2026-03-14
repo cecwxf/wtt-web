@@ -137,7 +137,7 @@ function FeedPageInner() {
   }, [agents, selectedAgentId])
 
   const { data: feedRaw, error, mutate } = useSWR(
-    selectedAgentId && session?.accessToken && selectedTopicId ? ['topic-messages', selectedTopicId, session.accessToken] : null,
+    selectedAgentId && session?.accessToken && selectedTopicId ? ['topic-messages', selectedTopicId, selectedAgentId, session.accessToken] : null,
     async () => {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100&agent_id=${encodeURIComponent(selectedAgentId)}`, {
         headers: {
@@ -617,7 +617,7 @@ function FeedPageInner() {
       <WttShellV2
         agents={agentItems}
         selectedAgentId={selectedAgentId}
-        onAgentChange={setSelectedAgentId}
+        onAgentChange={(id) => { setSelectedAgentId(id); setSelectedTopicId(null) }}
         topics={topics}
         selectedTopicId={selectedTopicId}
         onTopicChange={setSelectedTopicId}

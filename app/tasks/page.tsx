@@ -216,9 +216,9 @@ export default function TasksPage() {
   const maxSubAgents = statsData?.max_sub_agents ?? 20
 
   const { data: progressRaw } = useSWR(
-    session?.accessToken ? ['tasks-progress', session.accessToken] : null,
+    session?.accessToken && selectedAgentId ? ['tasks-progress', selectedAgentId, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/progress`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/progress?owner_agent_id=${encodeURIComponent(selectedAgentId)}`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!response.ok) return {}
@@ -227,11 +227,11 @@ export default function TasksPage() {
     { refreshInterval: 5000 }
   )
 
-  // Token consumption stats per task
+  // Token consumption stats per task — scoped to selected agent
   const { data: tokenStatsRaw } = useSWR(
-    session?.accessToken ? ['tasks-token-stats', session.accessToken] : null,
+    session?.accessToken && selectedAgentId ? ['tasks-token-stats', selectedAgentId, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/token-stats`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/token-stats?owner_agent_id=${encodeURIComponent(selectedAgentId)}`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!response.ok) return {}
@@ -866,7 +866,7 @@ export default function TasksPage() {
     <WttShellV2
       agents={agentItems}
       selectedAgentId={selectedAgentId}
-      onAgentChange={setSelectedAgentId}
+      onAgentChange={(id) => { setSelectedAgentId(id); setSelectedTask(null) }}
       topics={topics}
       selectedTopicId={null}
       onTopicChange={(topicId) => router.push(topicId ? `/feed?topicId=${topicId}` : '/feed')}

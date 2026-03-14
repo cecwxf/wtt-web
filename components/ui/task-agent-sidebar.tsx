@@ -38,9 +38,11 @@ export function TaskAgentSidebar({
     return res.json()
   }, [session?.accessToken])
 
-  // Fetch recent tasks for worker grouping
+  // Fetch recent tasks for worker grouping — scoped to selected agent
   const { data: tasksData } = useSWR(
-    session?.accessToken ? `${CLIENT_WTT_API_BASE}/tasks?limit=50&sort=updated_at&order=desc` : null,
+    session?.accessToken && selectedAgentId
+      ? `${CLIENT_WTT_API_BASE}/tasks?owner_agent_id=${encodeURIComponent(selectedAgentId)}&limit=50&sort=updated_at&order=desc`
+      : null,
     fetcher,
     { refreshInterval: 30_000 },
   )
