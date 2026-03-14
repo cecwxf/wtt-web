@@ -926,7 +926,7 @@ export default function TasksPage() {
                         <div className="mb-1 flex items-center gap-1.5 flex-wrap">
                           {tokenStats[task.id] && tokenStats[task.id].estimated_tokens > 0 && (
                             <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 px-1 py-px text-[9px] font-medium text-emerald-600 dark:text-emerald-400" title={`${tokenStats[task.id].estimated_tokens.toLocaleString()} tokens (${tokenStats[task.id].message_count} msgs)`}>
-                              🪙 {formatTokens(tokenStats[task.id].estimated_tokens)}
+                              🪙 Token Cost: {formatTokens(tokenStats[task.id].estimated_tokens)}
                             </span>
                           )}
                           {task.started_at && (task.completed_at || task.status === 'doing') && (

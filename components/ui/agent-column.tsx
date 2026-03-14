@@ -300,7 +300,7 @@ export function AgentColumn({
                   })}
                   {/* Capacity indicator */}
                   <p className="px-2 pt-0.5 text-[9px] text-slate-300 dark:text-zinc-600">
-                    {totalCount}/{maxSubAgents} · {maxSubAgents - totalCount} slots available
+                    {totalCount}/{maxSubAgents} Tasks/Workers …
                   </p>
                 </div>
               )}
