@@ -148,7 +148,7 @@ export function AgentColumn({
           const tasks = agentSubAgents?.[agent.agent_id] ?? []
           // Use real backend stats if available, else fall back to local task list
           const stats = agentStats?.[agent.agent_id]
-          const activeCount = stats?.active ?? tasks.filter(t => t.status === 'doing' || t.status === 'review').length
+          const activeCount = stats?.active ?? tasks.filter(t => t.status === 'doing').length
           const totalCount = stats?.total ?? tasks.length
 
           return (
@@ -207,7 +207,7 @@ export function AgentColumn({
                     {!isExpanded && totalCount > 0 && (
                       <div className="mt-1 flex flex-wrap gap-[3px]">
                         {tasks.slice(0, maxSubAgents).map((t) => {
-                          const isTaskActive = t.status === 'doing' || t.status === 'review'
+                          const isTaskActive = t.status === 'doing'
                           return (
                             <span
                               key={t.id}
@@ -261,7 +261,7 @@ export function AgentColumn({
                     <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-zinc-500 italic">No workers yet</p>
                   )}
                   {tasks.slice(0, maxSubAgents).map((t) => {
-                    const isActive = t.status === 'doing' || t.status === 'review'
+                    const isActive = t.status === 'doing'
                     const isDone = t.status === 'done'
                     const href = t.task_type === 'code' ? `/tasks/code/${t.id}`
                       : t.task_type === 'research' ? `/tasks/research/${t.id}`
