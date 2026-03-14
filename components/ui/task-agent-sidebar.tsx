@@ -70,6 +70,11 @@ export function TaskAgentSidebar({
     return statsData.agents
   }, [statsData])
 
+  const onlineAgentIds = useMemo(() => {
+    const arr: string[] = statsData?.online_agents ?? []
+    return new Set(arr)
+  }, [statsData])
+
   const maxSubAgents = statsData?.max_sub_agents ?? 20
 
   if (collapsed) {
@@ -117,6 +122,7 @@ export function TaskAgentSidebar({
         agentSubAgents={agentSubAgents}
         maxSubAgents={maxSubAgents}
         agentStats={agentStats}
+        onlineAgentIds={onlineAgentIds}
       />
     </div>
   )

@@ -32,6 +32,7 @@ interface WttShellV2Props {
   agentSubAgents?: AgentSubAgentMap
   maxSubAgents?: number
   agentStats?: AgentStatsMap
+  onlineAgentIds?: Set<string>
   children: ReactNode
 }
 
@@ -60,6 +61,7 @@ export function WttShellV2({
   agentSubAgents,
   maxSubAgents,
   agentStats,
+  onlineAgentIds,
   children,
 }: WttShellV2Props) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -159,6 +161,7 @@ export function WttShellV2({
               agentSubAgents={agentSubAgents}
               maxSubAgents={maxSubAgents}
               agentStats={agentStats}
+              onlineAgentIds={onlineAgentIds}
             />
 
             {!hideTopics && (

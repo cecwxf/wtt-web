@@ -209,6 +209,10 @@ export default function TasksPage() {
     { refreshInterval: 30_000 }
   )
   const agentStats = useMemo<AgentStatsMap>(() => statsData?.agents ?? {}, [statsData])
+  const onlineAgentIds = useMemo(() => {
+    const arr: string[] = statsData?.online_agents ?? []
+    return new Set(arr)
+  }, [statsData])
   const maxSubAgents = statsData?.max_sub_agents ?? 20
 
   const { data: progressRaw } = useSWR(
@@ -874,6 +878,7 @@ export default function TasksPage() {
       agentSubAgents={agentSubAgents}
       maxSubAgents={maxSubAgents}
       agentStats={agentStats}
+      onlineAgentIds={onlineAgentIds}
       hideTopics
       hideCreateTopic
     >

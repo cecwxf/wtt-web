@@ -35,6 +35,7 @@ interface AgentColumnProps {
   agentSubAgents?: AgentSubAgentMap
   maxSubAgents?: number
   agentStats?: AgentStatsMap
+  onlineAgentIds?: Set<string>
 }
 
 const ICON_MAP: [RegExp, string][] = [
@@ -103,6 +104,7 @@ export function AgentColumn({
   agentSubAgents,
   maxSubAgents = 20,
   agentStats,
+  onlineAgentIds,
 }: AgentColumnProps) {
   const router = useRouter()
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -150,6 +152,7 @@ export function AgentColumn({
           const stats = agentStats?.[agent.agent_id]
           const activeCount = stats?.active ?? tasks.filter(t => t.status === 'doing').length
           const totalCount = stats?.total ?? tasks.length
+          const isOnline = onlineAgentIds?.has(agent.agent_id) ?? false
 
           return (
             <div
@@ -193,6 +196,15 @@ export function AgentColumn({
                     }`}
                   >
                     {agentIcon}
+                    {/* Online/offline indicator */}
+                    <span
+                      className={`absolute -bottom-0.5 -left-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-900 ${
+                        isOnline
+                          ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.5)]'
+                          : 'bg-slate-300 dark:bg-zinc-600'
+                      }`}
+                      title={isOnline ? 'Online' : 'Offline'}
+                    />
                     {/* Active pulse badge on icon */}
                     {activeCount > 0 && (
                       <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-indigo-500 text-[7px] font-bold text-white ring-2 ring-white dark:ring-zinc-900">

@@ -374,6 +374,10 @@ function FeedPageInner() {
   )
   const maxSubAgents = (agentStatsRaw as Record<string, unknown>)?.max_sub_agents as number | undefined ?? 20
   const agentStats = (agentStatsRaw as Record<string, unknown>)?.agents as Record<string, { total: number; active: number; done: number; todo: number }> | undefined
+  const onlineAgentIds = useMemo(() => {
+    const arr = (agentStatsRaw as Record<string, unknown>)?.online_agents as string[] | undefined
+    return new Set(arr ?? [])
+  }, [agentStatsRaw])
 
   useEffect(() => {
     setMembersOpen(false)
@@ -631,6 +635,7 @@ function FeedPageInner() {
         agentSubAgents={agentSubAgents}
         maxSubAgents={maxSubAgents}
         agentStats={agentStats ?? undefined}
+        onlineAgentIds={onlineAgentIds}
       >
         <div className="flex h-full">
           {/* Main content area */}
