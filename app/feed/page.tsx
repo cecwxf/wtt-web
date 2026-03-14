@@ -50,6 +50,7 @@ function normalizeFeed(raw: unknown): ChatMessage[] {
     return {
       message_id: String(data.message_id ?? data.id ?? `msg-${index}`),
       sender_id: String(data.sender_id ?? 'unknown'),
+      sender_display_name: data.sender_display_name ? String(data.sender_display_name) : undefined,
       sender_type: (data.sender_type === 'human' ? 'human' : 'agent') as 'human' | 'agent',
       content: String(data.content ?? ''),
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
@@ -108,6 +109,13 @@ function FeedPageInner() {
     }
   }, [session?.accessToken])
 
+  // Lookup map: agent_id → display_name (for enriching chat messages)
+  const agentNameMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const a of agents) map[a.agent_id] = a.display_name
+    return map
+  }, [agents])
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
@@ -158,6 +166,7 @@ function FeedPageInner() {
       const incoming: ChatMessage = {
         message_id: msg.message.id,
         sender_id: msg.message.sender_id,
+        sender_display_name: (msg.message as Record<string, string>).sender_display_name || agentNameMap[msg.message.sender_id] || undefined,
         sender_type: (msg.message.sender_type as 'human' | 'agent') || 'agent',
         content: msg.message.content,
         timestamp: msg.message.created_at,
@@ -168,7 +177,7 @@ function FeedPageInner() {
         return [...prev, incoming]
       })
     },
-    [selectedTopicId],
+    [selectedTopicId, agentNameMap],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,

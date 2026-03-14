@@ -75,6 +75,7 @@ interface ChatMsg {
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: string
+  sender_display_name?: string
 }
 
 // ── Helpers ────────────────────────────────────────────
@@ -335,6 +336,7 @@ export default function ResearchTaskPage() {
       role: m.sender_id === selectedAgentId ? 'user' : 'assistant',
       content: m.content,
       timestamp: m.timestamp,
+      sender_display_name: m.sender_display_name || agents.find(a => a.agent_id === m.sender_id)?.display_name || m.sender_id,
     }))
     setChatMessages(mapped)
   }, [topicMessages, selectedAgentId])
@@ -1676,6 +1678,9 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                     ? 'border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/80 dark:bg-indigo-950/30 text-slate-800 dark:text-zinc-200 rounded-tr-md'
                     : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-tl-md'
                 }`}>
+                  {msg.sender_display_name && (
+                    <p className={`mb-0.5 text-[10px] font-semibold ${msg.role === 'user' ? 'text-indigo-500' : 'text-emerald-500'}`}>{msg.sender_display_name}</p>
+                  )}
                   <div className="whitespace-pre-wrap break-words">
                     {msg.role === 'assistant' ? <CitationText text={msg.content} papers={papers} /> : (stripFileTokens(msg.content) || msg.content)}
                   </div>

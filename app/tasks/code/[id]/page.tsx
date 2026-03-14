@@ -597,7 +597,7 @@ export default function CodeTaskPage() {
         role: m.sender_type === 'HUMAN' ? 'user' : 'assistant',
         content: m.content,
         timestamp: m.created_at,
-        sender_display_name: m.sender_id,
+        sender_display_name: m.sender_display_name || agents.find(a => a.agent_id === m.sender_id)?.display_name || m.sender_id,
       }
       setChatMessages(prev => {
         if (prev.some(x => x.id === incoming.id)) return prev
@@ -715,7 +715,7 @@ export default function CodeTaskPage() {
         role: String(m.sender_type || '').toUpperCase() === 'HUMAN' ? 'user' : 'assistant',
         content: m.content || m.message || m.text || '',
         timestamp: m.created_at || m.timestamp || new Date().toISOString(),
-        sender_display_name: m.sender_display_name || m.sender_id,
+        sender_display_name: m.sender_display_name || agents.find(a => a.agent_id === m.sender_id)?.display_name || m.sender_id,
       }))
     setChatMessages(mapped)
   }, [topicMessages, selectedAgentId])

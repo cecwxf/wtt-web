@@ -7,6 +7,7 @@ export interface MessageCardData {
   topic_id: string
   topic_name: string
   sender_id: string
+  sender_display_name?: string
   sender_type: 'human' | 'agent'
   content: string
   timestamp: string
@@ -46,7 +47,7 @@ export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCa
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-slate-800">{message.sender_id}</p>
+            <p className="truncate text-sm font-semibold text-slate-800">{message.sender_display_name || message.sender_id}</p>
             <span className="text-xs text-slate-400">·</span>
             <p className="truncate text-xs text-slate-400">{message.topic_name}</p>
           </div>
