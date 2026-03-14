@@ -77,6 +77,7 @@ function FeedPageInner() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [showTaskSidebar, setShowTaskSidebar] = useState(true)
+  const [membersOpen, setMembersOpen] = useState(false)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
 
@@ -303,6 +304,10 @@ function FeedPageInner() {
   }, [topicMembersRaw])
 
   const discussMemberCount = useMemo(() => topicMembers.length, [topicMembers])
+
+  useEffect(() => {
+    setMembersOpen(false)
+  }, [selectedTopicId])
 
   // Auto-create P2P topic for each claimed agent (if not exists)
   const p2pInitRef = useRef(new Set<string>())
@@ -581,18 +586,33 @@ function FeedPageInner() {
                 wsConnected={wsState === 'connected'}
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-800/80 px-2.5 py-1.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-zinc-700 text-[11px] font-semibold text-slate-500 dark:text-zinc-300">
-                        👥
-                      </div>
-                      <div className="leading-tight">
-                        <div className="max-w-[220px] truncate text-[12px] font-semibold text-slate-700 dark:text-zinc-200">
-                          {selectedTopic?.name || 'Discuss Topic'}
+                    <div className="relative">
+                      <button
+                        onClick={() => setMembersOpen((v) => !v)}
+                        onBlur={() => setTimeout(() => setMembersOpen(false), 150)}
+                        className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-2 py-1 text-[11px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
+                        title="Topic members"
+                      >
+                        👥 Members ({discussMemberCount}) ▾
+                      </button>
+                      {membersOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-30 min-w-[220px] max-w-[320px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                          {topicMembers.length > 0 ? (
+                            topicMembers.map((m) => (
+                              <div
+                                key={m.agent_id}
+                                className="px-3 py-1.5 text-xs text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-zinc-700 last:border-b-0"
+                                title={m.agent_id}
+                              >
+                                <div className="truncate font-medium">{m.display_name}</div>
+                                <div className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{m.agent_id}</div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-xs text-slate-400">No members</div>
+                          )}
                         </div>
-                        <div className="text-[11px] text-slate-500 dark:text-zinc-400">
-                          {discussMemberCount} members
-                        </div>
-                      </div>
+                      )}
                     </div>
                   ) : undefined
                 }
