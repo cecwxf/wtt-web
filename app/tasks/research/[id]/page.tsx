@@ -1221,6 +1221,8 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                             </ReactMarkdown>
                           </div>
                         )}
+                        {/* Annotation overlay — inside L4 scrollable content so drawings align with document */}
+                        <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} showToolbar={showAnnotationTools} toolbarAnchor={annotationAnchor} />
                         </div>
                         </div>
                       </div>
@@ -1324,8 +1326,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                         </div>
                       </div>
                     )}
-                    {/* Annotation overlay — available at all reading levels */}
-                    <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} showToolbar={showAnnotationTools} toolbarAnchor={annotationAnchor} />
+                    {/* Annotation overlay removed from here — now inside L4 content wrapper */}
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center text-slate-400 min-h-[400px]">

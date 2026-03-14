@@ -60,6 +60,12 @@ const formatDuration = (ms: number) => {
   return `${minutes}m`
 }
 
+const formatTokens = (n: number) => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
+}
+
 const arcPath = (cx: number, cy: number, r: number, start: number, end: number) => {
   const x1 = cx + r * Math.cos(start)
   const y1 = cy + r * Math.sin(start)
@@ -211,6 +217,23 @@ export default function TasksPage() {
     { refreshInterval: 5000 }
   )
 
+  // Token consumption stats per task
+  const { data: tokenStatsRaw } = useSWR(
+    session?.accessToken ? ['tasks-token-stats', session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/token-stats`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!response.ok) return {}
+      return response.json()
+    },
+    { refreshInterval: 30_000 }
+  )
+  const tokenStats = useMemo<Record<string, { total_chars: number; estimated_tokens: number; message_count: number }>>(() => {
+    if (!tokenStatsRaw || typeof tokenStatsRaw !== 'object') return {}
+    return tokenStatsRaw as Record<string, { total_chars: number; estimated_tokens: number; message_count: number }>
+  }, [tokenStatsRaw])
+
   const { data: timelineRaw } = useSWR(
     selectedTask?.topic_id && session?.accessToken ? ['task-timeline', selectedTask.topic_id, session.accessToken, selectedAgentId] : null,
     async () => {
@@ -295,9 +318,11 @@ export default function TasksPage() {
     const now = Date.now()
     const rows = visibleTasks
       .map((task) => {
-        const start = toMs(task.started_at) ?? toMs(task.created_at) ?? toMs(task.updated_at)
+        // Only count doing→review time: started_at (entering doing) to completed_at (entering review)
+        const start = toMs(task.started_at)
         if (!start) return null
-        const end = toMs(task.completed_at) ?? (task.status === 'done' ? toMs(task.updated_at) : null) ?? now
+        const end = toMs(task.completed_at) ?? (task.status === 'doing' ? now : null)
+        if (!end) return null
         const durationMs = Math.max(0, end - start)
         return {
           id: task.id,
@@ -896,6 +921,21 @@ export default function TasksPage() {
                         {task.task_mode === 'pipeline' && <span className="shrink-0 rounded bg-violet-100 px-1 text-[10px] font-medium text-violet-700">🔗 Pipeline</span>}
                         <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
                       </div>
+                      {/* Token & timing badges */}
+                      {(tokenStats[task.id] || task.started_at) && (
+                        <div className="mb-1 flex items-center gap-1.5 flex-wrap">
+                          {tokenStats[task.id] && tokenStats[task.id].estimated_tokens > 0 && (
+                            <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 px-1 py-px text-[9px] font-medium text-emerald-600 dark:text-emerald-400" title={`${tokenStats[task.id].estimated_tokens.toLocaleString()} tokens (${tokenStats[task.id].message_count} msgs)`}>
+                              🪙 {formatTokens(tokenStats[task.id].estimated_tokens)}
+                            </span>
+                          )}
+                          {task.started_at && (task.completed_at || task.status === 'doing') && (
+                            <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 dark:bg-blue-950/30 px-1 py-px text-[9px] font-medium text-blue-600 dark:text-blue-400" title={`Execution time (doing→review)`}>
+                              ⏱ {formatDuration(Math.max(0, (toMs(task.completed_at) ?? Date.now()) - (toMs(task.started_at) ?? 0)))}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="mt-2 flex items-center justify-between">
                         <div className="h-1.5 flex-1 rounded bg-slate-200">
                           <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
@@ -936,11 +976,37 @@ export default function TasksPage() {
                       ))}
                     </div>
                   </div>
-                  <p className="mt-1 text-[10px] text-slate-500">按任务执行时长占比统计（进行中任务按当前时间持续累计）</p>
+                  <p className="mt-1 text-[10px] text-slate-500">按任务执行时长占比统计（doing→review，进行中任务按当前时间持续累计）</p>
                 </>
               ) : (
-                <p className="mt-1 text-[11px] text-slate-400">暂无可统计的执行时长</p>
+                <p className="mt-1 text-[11px] text-slate-400">暂无可统计的执行时长（需有doing→review记录）</p>
               )}
+              {/* Token consumption summary below pie chart */}
+              {(() => {
+                const tokenEntries = visibleTasks
+                  .filter(t => tokenStats[t.id] && tokenStats[t.id].estimated_tokens > 0)
+                  .map(t => ({ id: t.id, title: t.title, ...tokenStats[t.id] }))
+                  .sort((a, b) => b.estimated_tokens - a.estimated_tokens)
+                  .slice(0, 8)
+                const totalTokens = tokenEntries.reduce((s, e) => s + e.estimated_tokens, 0)
+                if (tokenEntries.length === 0) return null
+                return (
+                  <div className="mt-2 border-t border-slate-200 dark:border-zinc-700 pt-2">
+                    <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1">🪙 Token消耗（Top 8）  总计: {formatTokens(totalTokens)}</p>
+                    <div className="space-y-0.5 max-h-24 overflow-auto">
+                      {tokenEntries.map((entry) => (
+                        <div key={entry.id} className="flex items-center gap-1 text-[10px] text-slate-600 dark:text-zinc-400">
+                          <div className="h-1.5 flex-1 rounded bg-slate-200 dark:bg-zinc-700">
+                            <div className="h-1.5 rounded bg-emerald-400 dark:bg-emerald-600 transition-all" style={{ width: `${Math.max(2, (entry.estimated_tokens / (tokenEntries[0]?.estimated_tokens || 1)) * 100)}%` }} />
+                          </div>
+                          <span className="shrink-0 w-12 text-right font-medium text-emerald-600 dark:text-emerald-400">{formatTokens(entry.estimated_tokens)}</span>
+                          <span className="shrink-0 truncate max-w-[80px]" title={entry.title}>{entry.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             <h2 className="mb-2 shrink-0 text-sm font-semibold">Messages</h2>
