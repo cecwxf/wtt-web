@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
+import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-column'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { analyzeDAG, agentColor, agentBgColor, type DAGAnalysis } from '@/lib/dag-analysis'
@@ -30,6 +31,7 @@ interface TaskNode {
   created_by?: string
   topic_id?: string
   output?: string
+  task_type?: string
 }
 
 interface TaskEdge {
@@ -240,6 +242,41 @@ export default function PipelinesPage() {
     token: session?.accessToken || undefined,
     onMessage: handleWsMessage,
   })
+
+  /* ─── agent stats / online status (sync with feed & tasks sidebar) ─── */
+  const { data: statsData } = useSWR(
+    session?.accessToken ? `${CLIENT_WTT_API_BASE}/agents/stats` : null,
+    async (url: string) => {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
+      if (!r.ok) return null
+      return r.json()
+    },
+    { refreshInterval: 30_000 },
+  )
+  const agentStats = useMemo<AgentStatsMap>(() => statsData?.agents ?? {}, [statsData])
+  const onlineAgentIds = useMemo(() => new Set<string>(statsData?.online_agents ?? []), [statsData])
+  const maxSubAgents = statsData?.max_sub_agents ?? 20
+
+  // Build agentSubAgents from pipeline graph nodes
+  const agentSubAgents = useMemo<AgentSubAgentMap>(() => {
+    const map: AgentSubAgentMap = {}
+    for (const n of nodes) {
+      const aid = n.owner_agent_id || n.runner_agent_id
+      if (!aid) continue
+      if (!map[aid]) map[aid] = []
+      map[aid].push({ id: n.id, title: n.title || 'Untitled', task_type: n.task_type || 'general', status: n.status || 'todo' })
+    }
+    return map
+  }, [nodes])
+
+  const loadAgents = useCallback(async () => {
+    if (!session?.accessToken) return
+    const r = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, { headers: { Authorization: `Bearer ${session.accessToken}` } })
+    if (!r.ok) return
+    const list = normalizeAndFilterAgents(await r.json()).map((x) => ({ agent_id: x.agent_id, display_name: x.display_name }))
+    setAgents(list)
+    if (!selectedAgentId && list[0]) setSelectedAgentId(list[0].agent_id)
+  }, [session?.accessToken, selectedAgentId])
 
   /* ─── canvas state ─── */
   const [positions, setPositions] = useState<Record<string, NodeMeta>>({})
@@ -1121,12 +1158,17 @@ export default function PipelinesPage() {
     <WttShellV2
       agents={agents.map((a) => ({ ...a, unread_count: 0 }))}
       selectedAgentId={selectedAgentId}
-      onAgentChange={setSelectedAgentId}
+      onAgentChange={(id) => { setSelectedAgentId(id); setEditingPipelineId(null) }}
       topics={[]}
       selectedTopicId={null}
       onTopicChange={() => {}}
       onLogout={() => signOut({ callbackUrl: '/login' })}
       currentUserName={actorSource(session, '')}
+      agentSubAgents={agentSubAgents}
+      maxSubAgents={maxSubAgents}
+      agentStats={agentStats}
+      onlineAgentIds={onlineAgentIds}
+      onBindingChanged={loadAgents}
       hideTopics
       hideCreateTopic
     >
