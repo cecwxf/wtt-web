@@ -4,10 +4,11 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
+import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-column'
 
 interface Agent {
@@ -165,6 +166,23 @@ export default function TasksPage() {
   )
 
   const tasks: TaskItem[] = useMemo(() => (Array.isArray(tasksRaw) ? tasksRaw : []), [tasksRaw])
+
+  /* ─── WebSocket for real-time task status updates ─── */
+  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  const handleWsTaskStatus = useCallback(
+    (msg: WsMessage) => {
+      if (msg.type === 'task_status') {
+        mutateTasks()
+      }
+    },
+    [mutateTasks],
+  )
+  useWebSocket({
+    url: wsUrl,
+    enabled: !!selectedAgentId,
+    token: session?.accessToken || undefined,
+    onMessage: handleWsTaskStatus,
+  })
 
   const subscribedTopicSet = useMemo(() => {
     const set = new Set<string>()
