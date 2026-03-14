@@ -11,6 +11,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { buildWttUserSourceFlow } from '@/lib/wtt-info-flow'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -2158,15 +2159,6 @@ export default function CodeTaskPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {agents.length > 1 && (
-            <select
-              className={`rounded border ${tc.border} ${tc.inputBg} px-2 py-1 text-xs ${tc.text}`}
-              value={selectedAgentId}
-              onChange={(e) => setSelectedAgentId(e.target.value)}
-            >
-              {agents.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>)}
-            </select>
-          )}
           <span className="rounded bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">🐙 GitHub Repo Mode</span>
           {task?.repo_url && (
             <button onClick={() => void loadRepoTree()} className={`rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1 text-xs ${tc.textMuted}`}>{repoLoading ? '...' : 'Refresh Tree'}</button>
@@ -2177,8 +2169,16 @@ export default function CodeTaskPage() {
         </div>
       </div>
 
-      {/* Main area: file tree | editor | chat */}
+      {/* Main area: agent sidebar | file tree | editor | chat */}
       <div className="flex flex-1 overflow-hidden">
+        {/* Agent sidebar */}
+        <TaskAgentSidebar
+          agents={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={setSelectedAgentId}
+          currentUserName={session?.user?.name ?? undefined}
+          defaultCollapsed
+        />
         {/* File tree panel */}
         <div className={`shrink-0 overflow-y-auto border-r ${tc.border} ${tc.surface} p-2`} style={{ width: `${leftPanelWidth}px` }}>
           {task?.repo_url ? (

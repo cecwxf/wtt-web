@@ -699,6 +699,22 @@ function FeedPageInner() {
                 </button>
               </div>
               <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
+                {/* Agent selector for task ownership */}
+                {agents.length > 1 && (
+                  <div className="mb-1 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2">
+                    <p className="mb-1.5 text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-wide">Owner Agent</p>
+                    <select
+                      value={selectedAgentId}
+                      onChange={(e) => setSelectedAgentId(e.target.value)}
+                      className="w-full rounded-md border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-700 px-2 py-1.5 text-xs font-medium text-slate-700 dark:text-zinc-200 focus:ring-1 focus:ring-indigo-400"
+                    >
+                      {agents.map((a) => (
+                        <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-[9px] text-slate-400 dark:text-zinc-500">Tasks created below belong to this agent only</p>
+                  </div>
+                )}
                 {[
                   { type: 'code', icon: '💻', label: 'New Code Task', desc: 'AI-assisted coding with repo context', gradient: 'from-indigo-500 to-blue-600', ring: 'ring-indigo-400/30', bg: 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950 dark:to-blue-950', border: 'border-indigo-200/80 dark:border-indigo-800/50' },
                   { type: 'research', icon: '🔬', label: 'New Research Task', desc: 'Deep analysis & report generation', gradient: 'from-emerald-500 to-teal-600', ring: 'ring-emerald-400/30', bg: 'bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950', border: 'border-emerald-200/80 dark:border-emerald-700/60' },

@@ -8,6 +8,7 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
+import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-column'
 
 interface Agent {
   id: string
@@ -172,6 +173,31 @@ export default function TasksPage() {
     () => tasks.filter((t) => !t.topic_id || subscribedTopicSet.has(t.topic_id)),
     [tasks, subscribedTopicSet]
   )
+
+  // Worker (sub-agent) grouping — same as feed page
+  const agentSubAgents = useMemo<AgentSubAgentMap>(() => {
+    const map: AgentSubAgentMap = {}
+    for (const t of tasks) {
+      const aid = t.owner_agent_id || t.runner_agent_id
+      if (!aid) continue
+      if (!map[aid]) map[aid] = []
+      map[aid].push({ id: t.id, title: t.title || 'Untitled', task_type: t.task_type || 'general', status: t.status || 'todo' })
+    }
+    return map
+  }, [tasks])
+
+  // Agent stats from backend
+  const { data: statsData } = useSWR(
+    session?.accessToken ? `${CLIENT_WTT_API_BASE}/agents/stats` : null,
+    async (url: string) => {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
+      if (!r.ok) return null
+      return r.json()
+    },
+    { refreshInterval: 30_000 }
+  )
+  const agentStats = useMemo<AgentStatsMap>(() => statsData?.agents ?? {}, [statsData])
+  const maxSubAgents = statsData?.max_sub_agents ?? 20
 
   const { data: progressRaw } = useSWR(
     session?.accessToken ? ['tasks-progress', session.accessToken] : null,
@@ -814,6 +840,9 @@ export default function TasksPage() {
       onTopicsRefresh={() => mutateSubscribedTopics()}
       onLogout={() => signOut({ callbackUrl: '/login' })}
       currentUserName={actorSource(session)}
+      agentSubAgents={agentSubAgents}
+      maxSubAgents={maxSubAgents}
+      agentStats={agentStats}
       hideTopics
       hideCreateTopic
     >

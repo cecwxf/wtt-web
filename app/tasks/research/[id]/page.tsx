@@ -11,6 +11,7 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 
 const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer'), { ssr: false })
 const AnnotationOverlay = dynamic(() => import('@/components/ui/annotation-overlay'), { ssr: false })
@@ -778,20 +779,20 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-slate-400 dark:text-zinc-500">{papers.length} papers</span>
           <ThemeToggle />
-          {agents.length > 1 && (
-            <select
-              className="rounded border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 dark:text-zinc-200 px-2 py-1 text-xs"
-              value={selectedAgentId}
-              onChange={(e) => setSelectedAgentId(e.target.value)}
-            >
-              {agents.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>)}
-            </select>
-          )}
         </div>
       </div>
 
       {/* Three-panel area */}
       <div className="flex flex-1 overflow-hidden">
+
+        {/* Agent sidebar */}
+        <TaskAgentSidebar
+          agents={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={setSelectedAgentId}
+          currentUserName={session?.user?.name ?? undefined}
+          defaultCollapsed
+        />
 
         {/* ═══ PROJECT DIRECTORY ═══ */}
         {!l4Fullscreen && (
