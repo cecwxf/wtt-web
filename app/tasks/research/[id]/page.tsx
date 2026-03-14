@@ -1146,7 +1146,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                     {/* L4: Full Document — native format based on content_type */}
                     {readingLevel >= 4 && selectedPaperFull.source_url && (
                       <div className={l4Fullscreen
-                        ? 'fixed inset-0 z-50 bg-white dark:bg-zinc-900 flex flex-col'
+                        ? 'absolute inset-0 z-20 bg-white dark:bg-zinc-900 flex flex-col'
                         : 'rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4'
                       }>
                         <div className={`flex items-center justify-between ${l4Fullscreen ? 'px-4 py-2 border-b border-slate-200 dark:border-zinc-700 shrink-0' : 'mb-2'}`}>
