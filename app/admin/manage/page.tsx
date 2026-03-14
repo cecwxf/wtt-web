@@ -70,7 +70,7 @@ export default function AdminManagePage() {
             .map((id: string) => ({ agent_id: id, display_name: id }))
         : []
       setAgents(normalizedAgents)
-      setSelectedAgentId((prev) => (prev && normalizedAgents.some((a) => a.agent_id === prev) ? prev : ''))
+      setSelectedAgentId((prev) => (prev && normalizedAgents.some((a: { agent_id: string }) => a.agent_id === prev) ? prev : ''))
 
       setTopics(Array.isArray(data?.topics) ? data.topics : [])
       setTasks(Array.isArray(data?.tasks) ? data.tasks : [])
