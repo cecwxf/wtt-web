@@ -4,6 +4,7 @@ export interface RawAgentLike {
   display_name?: string
   is_primary?: boolean
   api_key?: string
+  invite_code?: string
 }
 
 export interface NormalizedAgent {
@@ -12,6 +13,7 @@ export interface NormalizedAgent {
   display_name: string
   is_primary: boolean
   api_key?: string
+  invite_code?: string
 }
 
 export function shouldHideDefaultAgent(agent: { agent_id: string; display_name: string; is_primary: boolean }) {
@@ -41,6 +43,7 @@ export function normalizeAndFilterAgents(raw: unknown): NormalizedAgent[] {
       display_name: String(data.display_name ?? agentId),
       is_primary: Boolean(data.is_primary),
       api_key: typeof data.api_key === 'string' ? data.api_key : undefined,
+      invite_code: typeof data.invite_code === 'string' ? data.invite_code : undefined,
     }
     return agent
   })

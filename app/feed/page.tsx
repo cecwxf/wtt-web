@@ -28,6 +28,7 @@ interface Agent {
   display_name: string
   is_primary: boolean
   api_key?: string
+  invite_code?: string
 }
 
 function getHumanSender(session: unknown): string {
