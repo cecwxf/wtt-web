@@ -114,8 +114,7 @@ export default function TasksPage() {
   const [queueIndicator, setQueueIndicator] = useState(false)
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
-  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code'>('all')
-  const [taskModeFilter, setTaskModeFilter] = useState<'all' | 'single' | 'pipeline'>('all')
+  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code' | 'pipeline'>('all')
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const loadAgents = useCallback(async () => {
@@ -194,19 +193,18 @@ export default function TasksPage() {
     return set
   }, [subscribedTopicsRaw])
 
-  // Only show tasks whose topic is still subscribed (or tasks without topic binding), filtered by type and mode
+  // Only show tasks whose topic is still subscribed (or tasks without topic binding), filtered by type
   const visibleTasks: TaskItem[] = useMemo(
     () => tasks.filter((t) => {
       if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
-      // Mode filter
-      if (taskModeFilter === 'pipeline' && (t.task_mode || 'single') !== 'pipeline') return false
-      if (taskModeFilter === 'single' && (t.task_mode || 'single') !== 'single') return false
+      // Pipeline filter (mode-based)
+      if (taskTypeFilter === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
       // Type filter
       if (taskTypeFilter === 'all') return true
       if (taskTypeFilter === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
       return t.task_type === taskTypeFilter
     }),
-    [tasks, subscribedTopicSet, taskTypeFilter, taskModeFilter]
+    [tasks, subscribedTopicSet, taskTypeFilter]
   )
 
   // Worker (sub-agent) grouping — same as feed page
@@ -918,20 +916,19 @@ export default function TasksPage() {
           </div>
         </div>
 
-        {/* Task type filter tabs + mode filter */}
+        {/* Task type filter tabs (unified: type + pipeline) */}
         <div className="mb-3 flex items-center gap-1">
-          <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Type</span>
           {([
-            ['all', '📋 All', null],
-            ['general', '💬 General', null],
-            ['code', '💻 Code', 'cyan'],
-            ['research', '📄 Research', 'amber'],
+            ['all', '📋 All'],
+            ['general', '💬 General'],
+            ['code', '💻 Code'],
+            ['research', '📄 Research'],
+            ['pipeline', '🔗 Pipeline'],
           ] as const).map(([key, label]) => {
             const count = tasks.filter(t => {
               if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
-              if (taskModeFilter === 'pipeline' && (t.task_mode || 'single') !== 'pipeline') return false
-              if (taskModeFilter === 'single' && (t.task_mode || 'single') !== 'single') return false
               if (key === 'all') return true
+              if (key === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
               if (key === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
               return t.task_type === key
             }).length
@@ -942,47 +939,11 @@ export default function TasksPage() {
                 onClick={() => setTaskTypeFilter(key)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                   isActive
-                    ? 'bg-indigo-500 text-white shadow-sm'
+                    ? key === 'pipeline' ? 'bg-violet-500 text-white shadow-sm' : 'bg-indigo-500 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
                 }`}
               >
-                {label} <span className={`ml-1 ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>({count})</span>
-              </button>
-            )
-          })}
-
-          {/* Mode filter separator + buttons */}
-          <span className="mx-1 text-slate-300">|</span>
-          <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Mode</span>
-          {([
-            ['all', '🗂 All'],
-            ['single', '⚡ Single'],
-            ['pipeline', '🔗 Pipeline'],
-          ] as const).map(([key, label]) => {
-            const count = tasks.filter(t => {
-              if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
-              // Cross-apply type filter
-              if (taskTypeFilter !== 'all') {
-                if (taskTypeFilter === 'general') {
-                  if (t.task_type && t.task_type !== 'general' && t.task_type !== 'feature' && t.task_type !== 'common') return false
-                } else if (t.task_type !== taskTypeFilter) return false
-              }
-              if (key === 'all') return true
-              if (key === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
-              return (t.task_mode || 'single') === 'single'
-            }).length
-            const isActive = taskModeFilter === key
-            return (
-              <button
-                key={`mode-${key}`}
-                onClick={() => setTaskModeFilter(key)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                  isActive
-                    ? 'bg-violet-500 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
-                }`}
-              >
-                {label} <span className={`ml-1 ${isActive ? 'text-violet-200' : 'text-slate-400'}`}>({count})</span>
+                {label} <span className={`ml-1 ${isActive ? (key === 'pipeline' ? 'text-violet-200' : 'text-indigo-200') : 'text-slate-400'}`}>({count})</span>
               </button>
             )
           })}
@@ -1024,19 +985,21 @@ export default function TasksPage() {
                         {task.task_type === 'research' && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700">📄</span>}
                         {task.task_mode === 'pipeline' && <span className="shrink-0 rounded bg-violet-100 px-1 text-[10px] font-medium text-violet-700">🔗 Pipeline</span>}
                         <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
-                        {task.topic_id && (
+                      </div>
+                      {task.topic_id && (
+                        <div className="mb-1">
                           <span
                             role="button"
                             tabIndex={0}
                             onClick={(e) => { e.stopPropagation(); router.push(`/feed?topicId=${task.topic_id}`) }}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(`/feed?topicId=${task.topic_id}`) } }}
-                            className="ml-auto shrink-0 rounded px-1 py-px text-[10px] text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100 hover:border-indigo-300 cursor-pointer transition"
                             title="View in Feed"
                           >
-                            📡
+                            📡 Feed
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                       {/* Token & timing badges */}
                       {(tokenStats[task.id] || task.started_at) && (
                         <div className="mb-1 flex items-center gap-1.5 flex-wrap">
