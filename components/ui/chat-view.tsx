@@ -126,6 +126,31 @@ function parseTaskContent(content: string): ParsedTask {
   return { isTask: true, kind, taskId, sessionId, runner, executor, progress, body, assetUrl, assetPath }
 }
 
+/** Strip the ASCII box-drawing metadata blocks (┌─ 来源标识/任务信息 … └──)
+ *  and return extracted key–value pairs + cleaned body. */
+export interface MetaBlock { label: string; entries: Record<string, string> }
+export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: string } {
+  const meta: MetaBlock[] = []
+  // Match ┌─ <label> ─…\n │ lines…\n └─…\n  (greedy per-block)
+  const cleaned = content.replace(
+    /┌─\s*(.+?)\s*─+\n((?:│[^\n]*\n?)*)└─+\n?/g,
+    (_match, label: string, inner: string) => {
+      const entries: Record<string, string> = {}
+      for (const line of inner.split('\n')) {
+        const trimmed = line.replace(/^│\s*/, '').trim()
+        if (!trimmed) continue
+        // "Key: Value" or "key=value" patterns
+        const kv = trimmed.match(/^(.+?)[:：]\s*(.+)$/) || trimmed.match(/^(.+?)=(.+)$/)
+        if (kv) entries[kv[1].trim()] = kv[2].trim()
+        else entries[trimmed] = ''
+      }
+      meta.push({ label: label.trim(), entries })
+      return ''
+    }
+  )
+  return { meta, body: cleaned.trim() }
+}
+
 /** Rewrite absolute backend media URLs to go through the Next.js proxy so
  *  HTTPS pages can load HTTP resources without mixed-content blocking. */
 function proxyUrl(url: string): string {
@@ -760,7 +785,9 @@ export function ChatView({
                           )
                         }
 
-                        const blocks = parseRichBlocks(message.content || '')
+                        // Strip ASCII box-drawing metadata blocks and render as styled cards
+                        const { meta, body: cleanContent } = stripMetaBlocks(message.content || '')
+                        const blocks = parseRichBlocks(cleanContent)
 
                         // Detect document message pattern: plain text preview + .md/.html file
                         const docFileIdx = blocks.findIndex(
@@ -801,6 +828,27 @@ export function ChatView({
 
                         return (
                           <div className="space-y-3">
+                            {/* Structured metadata cards (extracted from ASCII blocks) */}
+                            {meta.length > 0 && (
+                              <div className="space-y-1.5">
+                                {meta.map((m, mi) => {
+                                  const entries = Object.entries(m.entries).filter(([, v]) => v !== '')
+                                  if (entries.length === 0) return null
+                                  return (
+                                    <div key={mi} className="rounded-lg border border-slate-200/80 dark:border-zinc-700/60 bg-gradient-to-r from-slate-50/80 to-white dark:from-zinc-800/60 dark:to-zinc-800/30 px-3 py-2">
+                                      <div className="grid gap-x-4 gap-y-0.5" style={{ gridTemplateColumns: 'auto 1fr' }}>
+                                        {entries.map(([k, v]) => (
+                                          <div key={k} className="contents text-[12px]">
+                                            <span className="text-slate-400 dark:text-zinc-500 whitespace-nowrap">{k}</span>
+                                            <span className="text-slate-600 dark:text-zinc-300 font-medium truncate">{v}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
                             {blocks.map((block, bi) => {
                               if (block.kind === 'image') {
                                 return <ThumbnailImage key={bi} url={block.url} isMine={isMine} />

@@ -12,6 +12,7 @@ import { buildWttUserSourceFlow } from '@/lib/wtt-info-flow'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
+import { stripMetaBlocks } from '@/components/ui/chat-view'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -2764,15 +2765,37 @@ export default function CodeTaskPage() {
                 {chatMessages.map((msg) => {
                   const patch = msg.role === 'assistant' ? extractFilePatch(msg.content) : null
                   const allPatches = msg.role === 'assistant' ? extractAllPatches(msg.content) : []
+                  const { meta: msgMeta, body: cleanBody } = stripMetaBlocks(msg.content || '')
+                  const displayContent = stripFileTokens(cleanBody) || cleanBody
                   return (
                     <div key={msg.id} className={`rounded-lg border ${tc.border} ${tc.activeBg} px-3 py-2 text-[13px] leading-relaxed ${tc.text}`}>
                       <div className="mb-1 flex items-center justify-between">
                         <p className={`text-[11px] font-semibold ${msg.role === 'user' ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                          {msg.role === 'user' ? `来自WTT User: ${msg.sender_display_name || 'User'}` : `来自Agent: ${msg.sender_display_name || 'Agent'}`}
+                          {msg.role === 'user' ? (msg.sender_display_name || 'User') : (msg.sender_display_name || 'Agent')}
                         </p>
                         <p className={`text-[10px] ${tc.textMuted}`}>{new Date(msg.timestamp).toLocaleTimeString()}</p>
                       </div>
-                      <div className="whitespace-pre-wrap break-words">{stripFileTokens(msg.content) || msg.content}</div>
+                      {msgMeta.length > 0 && (
+                        <div className="mb-2 space-y-1">
+                          {msgMeta.map((m, mi) => {
+                            const entries = Object.entries(m.entries).filter(([, v]) => v !== '')
+                            if (entries.length === 0) return null
+                            return (
+                              <div key={mi} className={`rounded-md border ${tc.border} px-2 py-1.5`}>
+                                <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: 'auto 1fr' }}>
+                                  {entries.map(([k, v]) => (
+                                    <div key={k} className="contents text-[11px]">
+                                      <span className={tc.textMuted}>{k}</span>
+                                      <span className="font-medium truncate">{v}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <div className="whitespace-pre-wrap break-words">{displayContent}</div>
                       <FileAttachmentPreview content={msg.content} />
                       {allPatches.length > 1 ? (
                         <div className="mt-2 flex items-center gap-2">

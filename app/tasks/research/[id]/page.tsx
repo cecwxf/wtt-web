@@ -12,6 +12,7 @@ import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
+import { stripMetaBlocks } from '@/components/ui/chat-view'
 
 const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer'), { ssr: false })
 const AnnotationOverlay = dynamic(() => import('@/components/ui/annotation-overlay'), { ssr: false })
@@ -170,6 +171,7 @@ export default function ResearchTaskPage() {
   const [notesOpen, setNotesOpen] = useState(false)
   const [noteDialog, setNoteDialog] = useState<{ quote: string; comment: string } | null>(null)
   const [showAnnotationTools, setShowAnnotationTools] = useState(0)
+  const [annotationAnchor, setAnnotationAnchor] = useState<{ x: number; y: number } | null>(null)
 
   // Resize
   const [leftW, setLeftW] = useState(() => {
@@ -1323,7 +1325,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                       </div>
                     )}
                     {/* Annotation overlay — available at all reading levels */}
-                    <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} showToolbar={showAnnotationTools} />
+                    <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} showToolbar={showAnnotationTools} toolbarAnchor={annotationAnchor} />
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center text-slate-400 min-h-[400px]">
@@ -1381,7 +1383,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                   </>
                 )}
                 <button
-                  onClick={() => { setShowAnnotationTools(prev => prev + 1); setCtxMenu(null) }}
+                  onClick={() => { setAnnotationAnchor(ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : null); setShowAnnotationTools(prev => prev + 1); setCtxMenu(null) }}
                   className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-600 dark:hover:text-violet-400 flex items-center gap-2"
                 >🖊️ Annotate</button>
                 <button
@@ -1671,7 +1673,9 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                 </div>
               </div>
             )}
-            {chatMessages.map((msg) => (
+            {chatMessages.map((msg) => {
+              const { meta: msgMeta, body: cleanBody } = stripMetaBlocks(msg.content || '')
+              return (
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[90%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${
                   msg.role === 'user'
@@ -1681,8 +1685,28 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                   {msg.sender_display_name && (
                     <p className={`mb-0.5 text-[10px] font-semibold ${msg.role === 'user' ? 'text-indigo-500' : 'text-emerald-500'}`}>{msg.sender_display_name}</p>
                   )}
+                  {msgMeta.length > 0 && (
+                    <div className="mb-1.5 space-y-1">
+                      {msgMeta.map((m, mi) => {
+                        const entries = Object.entries(m.entries).filter(([, v]) => v !== '')
+                        if (entries.length === 0) return null
+                        return (
+                          <div key={mi} className="rounded-md border border-slate-200/60 dark:border-zinc-700/40 bg-slate-50/60 dark:bg-zinc-900/30 px-2 py-1">
+                            <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: 'auto 1fr' }}>
+                              {entries.map(([k, v]) => (
+                                <div key={k} className="contents text-[11px]">
+                                  <span className="text-slate-400 dark:text-zinc-500 whitespace-nowrap">{k}</span>
+                                  <span className="font-medium truncate">{v}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                   <div className="whitespace-pre-wrap break-words">
-                    {msg.role === 'assistant' ? <CitationText text={msg.content} papers={papers} /> : (stripFileTokens(msg.content) || msg.content)}
+                    {msg.role === 'assistant' ? <CitationText text={cleanBody} papers={papers} /> : (stripFileTokens(cleanBody) || cleanBody)}
                   </div>
                   <FileAttachmentPreview content={msg.content} />
                   <p className="mt-1 text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
@@ -1702,7 +1726,8 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                   )}
                 </div>
               </div>
-            ))}
+              )
+            })}
             <div ref={chatEndRef} />
           </div>
 

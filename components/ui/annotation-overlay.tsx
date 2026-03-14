@@ -19,15 +19,18 @@ interface AnnotationOverlayProps {
   className?: string
   /** Increment to open the toolbar (counter-based trigger) */
   showToolbar?: number
+  /** Position hint for the floating toolbar (viewport coords from right-click) */
+  toolbarAnchor?: { x: number; y: number } | null
   /** @deprecated No longer needed — canvas sizes to parent relative wrapper */
   scrollContainerRef?: React.RefObject<HTMLElement | null>
 }
 
 const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#000000']
 
-export default function AnnotationOverlay({ storageKey, className, showToolbar: showToolbarTrigger }: AnnotationOverlayProps) {
+export default function AnnotationOverlay({ storageKey, className, showToolbar: showToolbarTrigger, toolbarAnchor }: AnnotationOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
   const [tool, setTool] = useState<Tool>('select')
   const [color, setColor] = useState('#ef4444')
   const [lineWidth, setLineWidth] = useState(2)
@@ -39,14 +42,16 @@ export default function AnnotationOverlay({ storageKey, className, showToolbar: 
   const [showToolbar, setShowToolbar] = useState(false)
   const [history, setHistory] = useState<AnnotationItem[][]>([])
   const [historyIdx, setHistoryIdx] = useState(-1)
+  const [anchorPos, setAnchorPos] = useState<{ x: number; y: number } | null>(null)
 
   // Open toolbar when external trigger increments
   useEffect(() => {
     if (showToolbarTrigger && showToolbarTrigger > 0) {
       setShowToolbar(true)
       setTool('pen')
+      if (toolbarAnchor) setAnchorPos(toolbarAnchor)
     }
-  }, [showToolbarTrigger])
+  }, [showToolbarTrigger, toolbarAnchor])
 
   // Load annotations from localStorage
   useEffect(() => {
@@ -290,11 +295,18 @@ export default function AnnotationOverlay({ storageKey, className, showToolbar: 
 
   return (
     <>
-      {/* Toolbar — in normal flow, sticky so it stays visible during scroll */}
-      <div className="sticky top-0 left-0 z-30 p-2" style={{ pointerEvents: 'auto', marginBottom: '-40px' }}>
-        <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/95 px-1 py-1 shadow-lg backdrop-blur">
+      {/* Toolbar — floats near right-click when anchorPos provided, otherwise sticky top */}
+      <div
+        ref={toolbarRef}
+        className={anchorPos && showToolbar ? 'fixed z-[110] p-1' : 'sticky top-0 left-0 z-30 p-2'}
+        style={anchorPos && showToolbar
+          ? { left: Math.max(8, Math.min(anchorPos.x - 200, window.innerWidth - 500)), top: Math.max(8, anchorPos.y - 44), pointerEvents: 'auto' }
+          : { pointerEvents: 'auto', marginBottom: '-40px' }
+        }
+      >
+        <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white/95 dark:bg-zinc-800/95 px-1 py-1 shadow-lg backdrop-blur">
           {!showToolbar ? (
-            <button onClick={() => setShowToolbar(true)} className="rounded px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100" title="Show annotation tools">
+            <button onClick={() => setShowToolbar(true)} className="rounded px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-700" title="Show annotation tools">
               🖊️ Annotate
             </button>
           ) : (
@@ -303,27 +315,27 @@ export default function AnnotationOverlay({ storageKey, className, showToolbar: 
                 <button
                   key={t.id}
                   onClick={() => setTool(t.id)}
-                  className={`rounded px-1.5 py-1 text-sm transition ${tool === t.id ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`rounded px-1.5 py-1 text-sm transition ${tool === t.id ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300 dark:bg-indigo-900/50 dark:text-indigo-300' : 'text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-700'}`}
                   title={t.label}
                 >
                   {t.icon}
                 </button>
               ))}
-              <span className="mx-0.5 h-5 w-px bg-slate-200" />
+              <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-zinc-700" />
               {COLORS.map(c => (
                 <button
                   key={c}
                   onClick={() => setColor(c)}
-                  className={`h-5 w-5 rounded-full border-2 transition ${color === c ? 'border-slate-700 scale-110' : 'border-transparent hover:border-slate-300'}`}
+                  className={`h-5 w-5 rounded-full border-2 transition ${color === c ? 'border-slate-700 dark:border-white scale-110' : 'border-transparent hover:border-slate-300'}`}
                   style={{ backgroundColor: c }}
                   title={c}
                 />
               ))}
-              <span className="mx-0.5 h-5 w-px bg-slate-200" />
+              <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-zinc-700" />
               <select
                 value={lineWidth}
                 onChange={e => setLineWidth(+e.target.value)}
-                className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-600"
+                className="rounded border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-1 py-0.5 text-[10px] text-slate-600 dark:text-zinc-400"
                 title="Line width"
               >
                 <option value={1}>Thin</option>
@@ -331,11 +343,11 @@ export default function AnnotationOverlay({ storageKey, className, showToolbar: 
                 <option value={4}>Thick</option>
                 <option value={6}>Bold</option>
               </select>
-              <span className="mx-0.5 h-5 w-px bg-slate-200" />
-              <button onClick={undo} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100" title="Undo">↩</button>
-              <button onClick={redo} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100" title="Redo">↪</button>
-              <button onClick={clearAll} className="rounded px-1.5 py-1 text-xs text-red-400 hover:bg-red-50" title="Clear all">🗑</button>
-              <button onClick={() => { setShowToolbar(false); setTool('select') }} className="rounded px-1.5 py-1 text-xs text-slate-400 hover:bg-slate-100" title="Close toolbar">✕</button>
+              <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-zinc-700" />
+              <button onClick={undo} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-700" title="Undo">↩</button>
+              <button onClick={redo} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-700" title="Redo">↪</button>
+              <button onClick={clearAll} className="rounded px-1.5 py-1 text-xs text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30" title="Clear all">🗑</button>
+              <button onClick={() => { setShowToolbar(false); setTool('select'); setAnchorPos(null) }} className="rounded px-1.5 py-1 text-xs text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-700" title="Close toolbar">✕</button>
             </>
           )}
         </div>
