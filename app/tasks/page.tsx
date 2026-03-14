@@ -157,6 +157,22 @@ export default function TasksPage() {
 
   const tasks: TaskItem[] = useMemo(() => (Array.isArray(tasksRaw) ? tasksRaw : []), [tasksRaw])
 
+  const subscribedTopicSet = useMemo(() => {
+    const set = new Set<string>()
+    if (Array.isArray(subscribedTopicsRaw)) {
+      for (const t of subscribedTopicsRaw as { id?: string }[]) {
+        if (t?.id) set.add(String(t.id))
+      }
+    }
+    return set
+  }, [subscribedTopicsRaw])
+
+  // Only show tasks whose topic is still subscribed (or tasks without topic binding)
+  const visibleTasks: TaskItem[] = useMemo(
+    () => tasks.filter((t) => !t.topic_id || subscribedTopicSet.has(t.topic_id)),
+    [tasks, subscribedTopicSet]
+  )
+
   const { data: progressRaw } = useSWR(
     session?.accessToken ? ['tasks-progress', session.accessToken] : null,
     async () => {
@@ -209,16 +225,21 @@ export default function TasksPage() {
 
   useEffect(() => {
     if (selectedTask) {
-      const fresh = tasks.find((t) => t.id === selectedTask.id) || selectedTask
+      const fresh = visibleTasks.find((t) => t.id === selectedTask.id)
+      if (!fresh) {
+        setSelectedTask(null)
+        setTaskDraft({})
+        return
+      }
       setSelectedTask(fresh)
       setTaskDraft(fresh)
     }
-  }, [tasks, selectedTask])
+  }, [visibleTasks, selectedTask])
 
   useEffect(() => {
-    const taskSet = new Set(tasks.map((t) => t.id))
+    const taskSet = new Set(visibleTasks.map((t) => t.id))
     setSelectedTaskIds((prev) => prev.filter((id) => taskSet.has(id)))
-  }, [tasks])
+  }, [visibleTasks])
 
   useEffect(() => {
     if (!taskContextMenu) return
@@ -238,15 +259,15 @@ export default function TasksPage() {
 
   const grouped = useMemo(() => {
     const map: Record<string, TaskItem[]> = { todo: [], doing: [], review: [], done: [], blocked: [] }
-    for (const t of tasks) {
+    for (const t of visibleTasks) {
       if (t.status in map) map[t.status].push(t)
     }
     return map
-  }, [tasks])
+  }, [visibleTasks])
 
   const taskDurationSummary = useMemo(() => {
     const now = Date.now()
-    const rows = tasks
+    const rows = visibleTasks
       .map((task) => {
         const start = toMs(task.started_at) ?? toMs(task.created_at) ?? toMs(task.updated_at)
         if (!start) return null
@@ -282,7 +303,7 @@ export default function TasksPage() {
     })
 
     return { totalMs, slices }
-  }, [tasks])
+  }, [visibleTasks])
 
   const taskProgressMap = useMemo(() => {
     const map: Record<string, number> = {}
@@ -295,7 +316,7 @@ export default function TasksPage() {
       }
     }
 
-    for (const task of tasks) {
+    for (const task of visibleTasks) {
       if (task.status === 'done') {
         map[task.id] = 100
         continue
@@ -306,7 +327,7 @@ export default function TasksPage() {
     }
 
     return map
-  }, [tasks, progressRaw])
+  }, [visibleTasks, progressRaw])
 
   const topics = useMemo(() => {
     const topicMap = new Map<string, { topic_id: string; name: string; topic_type: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'; unread_count: number; can_delete: boolean }>()
@@ -327,21 +348,8 @@ export default function TasksPage() {
       }
     }
 
-    // 2. Ensure task-linked topics always appear (even if agent not subscribed)
-    for (const task of tasks) {
-      if (task.topic_id && !topicMap.has(task.topic_id)) {
-        topicMap.set(task.topic_id, {
-          topic_id: task.topic_id,
-          name: task.title,
-          topic_type: 'discussion',
-          unread_count: 0,
-          can_delete: !!task.created_by && task.created_by === actorSource(session),
-        })
-      }
-    }
-
     return Array.from(topicMap.values())
-  }, [subscribedTopicsRaw, tasks, session])
+  }, [subscribedTopicsRaw])
 
   const agentItems = useMemo(() => {
     return agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name, unread_count: 0 }))
