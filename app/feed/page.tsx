@@ -471,21 +471,12 @@ function FeedPageInner() {
       })
     }
 
-    // Auto-rename task on first message (ChatGPT-style)
+    // Auto-rename is now handled by the backend on first send.
+    // Just clear the pending ref and refresh topics to pick up the new title.
     const pending = pendingRenameTaskRef.current
     if (pending && pending.topicId === selectedTopicId) {
       pendingRenameTaskRef.current = null
-      // Strip model config prefix like "[Model: xxx | Effort: xxx]\n\n" or "[Switched → ...]"
-      const userText = content.replace(/^\[(?:Model|Switched)[^\]]*\]\s*/i, '').replace(/\n/g, ' ').trim()
-      const newTitle = userText.slice(0, 10) || 'Task'
-      try {
-        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${pending.taskId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-          body: JSON.stringify({ title: newTitle }),
-        })
-        mutateTopics()
-      } catch { /* ignore */ }
+      mutateTopics()
     }
 
     mutate()
