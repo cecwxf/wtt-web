@@ -330,6 +330,34 @@ function FeedPageInner() {
       }))
   }, [recentTasksRaw])
 
+  // Compute active sub-agents per agent from tasks + topics
+  const activeSubAgents = useMemo(() => {
+    const map: Record<string, Set<string>> = {}
+    // From recentTasksRaw (all agents)
+    if (Array.isArray(recentTasksRaw)) {
+      for (const t of recentTasksRaw) {
+        const raw = t as Record<string, unknown>
+        if (!raw || raw.status === 'cancelled') continue
+        const agentId = String(raw.owner_agent_id || raw.runner_agent_id || '')
+        const taskType = String(raw.task_type || '')
+        if (agentId && taskType && taskType !== 'general' && taskType !== 'feature') {
+          if (!map[agentId]) map[agentId] = new Set()
+          map[agentId].add(taskType)
+        }
+      }
+    }
+    // From current topics (selected agent)
+    for (const t of topics) {
+      if (!t.task_type || t.task_type === 'general') continue
+      const agentId = t.runner_agent_id || selectedAgentId
+      if (agentId) {
+        if (!map[agentId]) map[agentId] = new Set()
+        map[agentId].add(t.task_type)
+      }
+    }
+    return map
+  }, [recentTasksRaw, topics, selectedAgentId])
+
   useEffect(() => {
     setMembersOpen(false)
   }, [selectedTopicId])
@@ -592,6 +620,7 @@ function FeedPageInner() {
         onBindingChanged={loadAgents}
         notificationCount={0}
         currentUserName={getHumanSender(session)}
+        activeSubAgents={activeSubAgents}
       >
         <div className="flex h-full">
           {/* Main content area */}
