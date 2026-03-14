@@ -21,7 +21,9 @@ export interface AgentSubAgentMap {
   [agentId: string]: SubAgentTask[]
 }
 
-const MAX_SUB_AGENTS = 20
+export interface AgentStatsMap {
+  [agentId: string]: { total: number; active: number; done: number; todo: number }
+}
 
 interface AgentColumnProps {
   agents: AgentItem[]
@@ -31,6 +33,8 @@ interface AgentColumnProps {
   onUnclaimAgent?: (agentId: string) => void
   currentUserName?: string
   agentSubAgents?: AgentSubAgentMap
+  maxSubAgents?: number
+  agentStats?: AgentStatsMap
 }
 
 const ICON_MAP: [RegExp, string][] = [
@@ -97,6 +101,8 @@ export function AgentColumn({
   onUnclaimAgent,
   currentUserName,
   agentSubAgents,
+  maxSubAgents = 20,
+  agentStats,
 }: AgentColumnProps) {
   const router = useRouter()
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -140,8 +146,10 @@ export function AgentColumn({
           const isExpanded = expandedAgents.has(agent.agent_id)
           const agentIcon = getAgentIcon(agent.display_name)
           const tasks = agentSubAgents?.[agent.agent_id] ?? []
-          const activeCount = tasks.filter(t => t.status === 'doing' || t.status === 'review').length
-          const totalCount = tasks.length
+          // Use real backend stats if available, else fall back to local task list
+          const stats = agentStats?.[agent.agent_id]
+          const activeCount = stats?.active ?? tasks.filter(t => t.status === 'doing' || t.status === 'review').length
+          const totalCount = stats?.total ?? tasks.length
 
           return (
             <div
@@ -178,13 +186,19 @@ export function AgentColumn({
                   }`}
                 >
                   <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl transition-all ${
+                    className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl transition-all ${
                       isSelected
                         ? 'bg-indigo-100 dark:bg-indigo-900/50 shadow-sm ring-1 ring-indigo-200 dark:ring-indigo-800'
                         : 'bg-slate-100 dark:bg-zinc-800'
                     }`}
                   >
                     {agentIcon}
+                    {/* Active pulse badge on icon */}
+                    {activeCount > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-indigo-500 text-[7px] font-bold text-white ring-2 ring-white dark:ring-zinc-900">
+                        {activeCount}
+                      </span>
+                    )}
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -192,27 +206,36 @@ export function AgentColumn({
                     {/* Compact sub-agent dot grid (collapsed view) */}
                     {!isExpanded && totalCount > 0 && (
                       <div className="mt-1 flex flex-wrap gap-[3px]">
-                        {tasks.slice(0, MAX_SUB_AGENTS).map((t) => (
-                          <span
-                            key={t.id}
-                            title={`${t.title} (${t.status})`}
-                            className={`inline-block h-[6px] w-[6px] rounded-full transition ${getStatusColor(t.status)} ${
-                              (t.status === 'doing' || t.status === 'review') ? 'ring-1 ' + getStatusRing(t.status) : ''
-                            }`}
-                          />
-                        ))}
-                        {/* Empty slots */}
-                        {Array.from({ length: Math.max(0, Math.min(MAX_SUB_AGENTS, 8) - totalCount) }).map((_, i) => (
+                        {tasks.slice(0, maxSubAgents).map((t) => {
+                          const isTaskActive = t.status === 'doing' || t.status === 'review'
+                          return (
+                            <span
+                              key={t.id}
+                              title={`${t.title} (${t.status})`}
+                              className={`inline-block rounded-full transition ${getStatusColor(t.status)} ${
+                                isTaskActive
+                                  ? 'h-[8px] w-[8px] ring-1 ' + getStatusRing(t.status) + ' shadow-[0_0_4px_rgba(99,102,241,0.4)]'
+                                  : 'h-[6px] w-[6px]'
+                              }`}
+                            />
+                          )
+                        })}
+                        {/* Empty slots (show up to a few to hint at capacity) */}
+                        {Array.from({ length: Math.max(0, Math.min(6, maxSubAgents - totalCount)) }).map((_, i) => (
                           <span
                             key={`empty-${i}`}
-                            className="inline-block h-[6px] w-[6px] rounded-full bg-slate-100 dark:bg-zinc-700"
+                            className="inline-block h-[5px] w-[5px] rounded-full bg-slate-100 dark:bg-zinc-700/50"
                           />
                         ))}
                       </div>
                     )}
-                    {!isExpanded && totalCount > 0 && (
+                    {!isExpanded && (
                       <p className="mt-0.5 text-[9px] text-slate-400 dark:text-zinc-500">
-                        {activeCount > 0 ? `${activeCount} active · ` : ''}{totalCount}/{MAX_SUB_AGENTS}
+                        {activeCount > 0
+                          ? <><span className="font-semibold text-indigo-500 dark:text-indigo-400">{activeCount} active</span> · </>
+                          : null
+                        }
+                        {totalCount}/{maxSubAgents} sub-agents
                       </p>
                     )}
                     {agent.unread_count && agent.unread_count > 0 ? (
@@ -237,7 +260,7 @@ export function AgentColumn({
                   {tasks.length === 0 && (
                     <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-zinc-500 italic">No sub-agents yet</p>
                   )}
-                  {tasks.slice(0, MAX_SUB_AGENTS).map((t) => {
+                  {tasks.slice(0, maxSubAgents).map((t) => {
                     const isActive = t.status === 'doing' || t.status === 'review'
                     const isDone = t.status === 'done'
                     const href = t.task_type === 'code' ? `/tasks/code/${t.id}`
@@ -248,35 +271,37 @@ export function AgentColumn({
                       <button
                         key={t.id}
                         onClick={() => router.push(href)}
-                        className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition hover:bg-white/80 dark:hover:bg-zinc-700/50 ${
-                          isActive ? 'bg-white/60 dark:bg-zinc-700/30' : ''
+                        className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition ${
+                          isActive
+                            ? 'bg-indigo-50/80 dark:bg-indigo-950/30 ring-1 ring-indigo-200/60 dark:ring-indigo-800/40'
+                            : 'hover:bg-white/80 dark:hover:bg-zinc-700/50'
                         }`}
                         title={`${t.title} — ${t.status}`}
                       >
-                        <span className={`text-[11px] transition ${isDone ? 'opacity-40' : isActive ? '' : 'opacity-60'}`}>
+                        <span className={`text-[11px] transition ${
+                          isActive ? 'drop-shadow-[0_0_2px_rgba(99,102,241,0.5)]' : isDone ? 'opacity-30' : 'opacity-50'
+                        }`}>
                           {agentIcon}
                         </span>
                         <span className={`flex-1 truncate text-[11px] font-medium ${
                           isActive
-                            ? 'text-slate-700 dark:text-zinc-200'
+                            ? 'text-indigo-700 dark:text-indigo-300'
                             : isDone
                               ? 'text-slate-400 dark:text-zinc-500 line-through'
                               : 'text-slate-500 dark:text-zinc-400'
                         }`}>
                           {t.title}
                         </span>
-                        <span className={`shrink-0 h-[6px] w-[6px] rounded-full ${getStatusColor(t.status)} ${
-                          isActive ? 'ring-1 ' + getStatusRing(t.status) : ''
+                        <span className={`shrink-0 rounded-full ${getStatusColor(t.status)} ${
+                          isActive ? 'h-[7px] w-[7px] ring-1 ' + getStatusRing(t.status) : 'h-[5px] w-[5px]'
                         }`} />
                       </button>
                     )
                   })}
-                  {/* Empty slot indicator */}
-                  {totalCount < MAX_SUB_AGENTS && (
-                    <p className="px-2 pt-0.5 text-[9px] text-slate-300 dark:text-zinc-600">
-                      {MAX_SUB_AGENTS - totalCount} slots available
-                    </p>
-                  )}
+                  {/* Capacity indicator */}
+                  <p className="px-2 pt-0.5 text-[9px] text-slate-300 dark:text-zinc-600">
+                    {totalCount}/{maxSubAgents} · {maxSubAgents - totalCount} slots available
+                  </p>
                 </div>
               )}
 

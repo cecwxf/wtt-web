@@ -340,18 +340,31 @@ function FeedPageInner() {
         const agentId = String(raw.owner_agent_id || raw.runner_agent_id || '')
         if (!agentId) continue
         if (!map[agentId]) map[agentId] = []
-        if (map[agentId].length < 20) {
-          map[agentId].push({
-            id: String(raw.id || ''),
-            title: String(raw.title || 'Untitled'),
-            task_type: String(raw.task_type || 'general'),
-            status: String(raw.status || 'todo'),
-          })
-        }
+        map[agentId].push({
+          id: String(raw.id || ''),
+          title: String(raw.title || 'Untitled'),
+          task_type: String(raw.task_type || 'general'),
+          status: String(raw.status || 'todo'),
+        })
       }
     }
     return map
   }, [recentTasksRaw])
+
+  // Fetch real agent capacity & stats from backend
+  const { data: agentStatsRaw } = useSWR(
+    session?.accessToken ? ['agent-stats', session.accessToken] : null,
+    async () => {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/agents/stats`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!r.ok) return null
+      return r.json()
+    },
+    { refreshInterval: 30000 }
+  )
+  const maxSubAgents = (agentStatsRaw as Record<string, unknown>)?.max_sub_agents as number | undefined ?? 20
+  const agentStats = (agentStatsRaw as Record<string, unknown>)?.agents as Record<string, { total: number; active: number; done: number; todo: number }> | undefined
 
   useEffect(() => {
     setMembersOpen(false)
@@ -616,6 +629,8 @@ function FeedPageInner() {
         notificationCount={0}
         currentUserName={getHumanSender(session)}
         agentSubAgents={agentSubAgents}
+        maxSubAgents={maxSubAgents}
+        agentStats={agentStats ?? undefined}
       >
         <div className="flex h-full">
           {/* Main content area */}
