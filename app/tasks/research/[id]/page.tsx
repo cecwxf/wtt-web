@@ -164,9 +164,10 @@ export default function ResearchTaskPage() {
   const readerRef = useRef<HTMLDivElement>(null)
   const l4ScrollRef = useRef<HTMLDivElement>(null)
   const [quoteBtn, setQuoteBtn] = useState<{ x: number; y: number; text: string } | null>(null)
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; text: string | null } | null>(null)
   const [notesOpen, setNotesOpen] = useState(false)
   const [noteDialog, setNoteDialog] = useState<{ quote: string; comment: string } | null>(null)
+  const [showAnnotationTools, setShowAnnotationTools] = useState(false)
 
   // Resize
   const [leftW, setLeftW] = useState(() => {
@@ -415,12 +416,12 @@ export default function ResearchTaskPage() {
       })
     }
     const handleContextMenu = (e: MouseEvent) => {
+      if (!readerRef.current?.contains(e.target as Node)) return
       const sel = window.getSelection()
-      if (!sel || sel.isCollapsed || !sel.toString().trim()) return
-      const node = sel.anchorNode
-      if (!node || !readerRef.current?.contains(node)) return
+      const hasText = sel && !sel.isCollapsed && sel.toString().trim()
+      // Show context menu with text actions (if text selected) or annotation-only
       e.preventDefault()
-      setCtxMenu({ x: e.clientX, y: e.clientY, text: sel.toString().trim() })
+      setCtxMenu({ x: e.clientX, y: e.clientY, text: hasText ? sel!.toString().trim() : null })
       setQuoteBtn(null)
     }
     const dismissCtx = () => setCtxMenu(null)
@@ -1075,7 +1076,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
             {centerTab === 'read' && (
               <div ref={readerRef} className="p-4 relative">
                 {selectedPaperFull ? (
-                  <div className="max-w-4xl mx-auto space-y-4">
+                  <div className="max-w-4xl mx-auto space-y-4 relative">
                     {/* L1: Metadata Card */}
                     <div className="rounded-xl border border-slate-200 dark:border-zinc-700 bg-gradient-to-br from-slate-50 dark:from-zinc-800 to-white dark:to-zinc-800 p-5">
                       <h1 className="text-lg font-bold text-slate-800 dark:text-zinc-100 leading-snug">{selectedPaperFull.title || 'Untitled'}</h1>
@@ -1230,7 +1231,6 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                             </ReactMarkdown>
                           </div>
                         )}
-                        <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} scrollContainerRef={l4ScrollRef} />
                         </div>
                         </div>
                       </div>
@@ -1334,6 +1334,8 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                         </div>
                       </div>
                     )}
+                    {/* Annotation overlay — available at all reading levels */}
+                    <AnnotationOverlay storageKey={`paper-${selectedPaperFull.id}`} showToolbar={showAnnotationTools} />
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center text-slate-400 min-h-[400px]">
@@ -1373,19 +1375,31 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                 style={{ left: ctxMenu.x, top: ctxMenu.y }}
                 onMouseDown={(e) => e.preventDefault()}
               >
+                {ctxMenu.text && (
+                  <>
+                    <button
+                      onClick={() => quoteToChat(ctxMenu.text!)}
+                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2"
+                    >💬 Quote to Chat</button>
+                    <button
+                      onClick={() => addToNotes(ctxMenu.text!)}
+                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-2"
+                    >📝 Add to Notes</button>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(ctxMenu.text!); setCtxMenu(null) }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 flex items-center gap-2"
+                    >📋 Copy</button>
+                    <div className="border-t border-slate-100 dark:border-zinc-700 my-0.5" />
+                  </>
+                )}
                 <button
-                  onClick={() => quoteToChat(ctxMenu.text)}
-                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2"
-                >💬 Quote to Chat</button>
+                  onClick={() => { setShowAnnotationTools(true); setCtxMenu(null) }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-600 dark:hover:text-violet-400 flex items-center gap-2"
+                >🖊️ Annotate</button>
                 <button
-                  onClick={() => addToNotes(ctxMenu.text)}
-                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-2"
-                >📝 Add to Notes</button>
-                <div className="border-t border-slate-100 dark:border-zinc-700 my-0.5" />
-                <button
-                  onClick={() => { navigator.clipboard.writeText(ctxMenu.text); setCtxMenu(null) }}
-                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 flex items-center gap-2"
-                >📋 Copy</button>
+                  onClick={() => { setCenterTab('write'); setCtxMenu(null) }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-2"
+                >✏️ Edit Document</button>
               </div>
             )}
 

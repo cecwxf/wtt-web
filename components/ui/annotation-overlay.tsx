@@ -17,13 +17,15 @@ type AnnotationItem = {
 interface AnnotationOverlayProps {
   storageKey: string
   className?: string
+  /** When true, auto-expand the toolbar */
+  showToolbar?: boolean
   /** @deprecated No longer needed — canvas sizes to parent relative wrapper */
   scrollContainerRef?: React.RefObject<HTMLElement | null>
 }
 
 const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#000000']
 
-export default function AnnotationOverlay({ storageKey, className }: AnnotationOverlayProps) {
+export default function AnnotationOverlay({ storageKey, className, showToolbar: showToolbarProp }: AnnotationOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [tool, setTool] = useState<Tool>('select')
@@ -37,6 +39,11 @@ export default function AnnotationOverlay({ storageKey, className }: AnnotationO
   const [showToolbar, setShowToolbar] = useState(false)
   const [history, setHistory] = useState<AnnotationItem[][]>([])
   const [historyIdx, setHistoryIdx] = useState(-1)
+
+  // Sync external showToolbar prop
+  useEffect(() => {
+    if (showToolbarProp) setShowToolbar(true)
+  }, [showToolbarProp])
 
   // Load annotations from localStorage
   useEffect(() => {
