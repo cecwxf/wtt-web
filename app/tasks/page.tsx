@@ -518,10 +518,9 @@ export default function TasksPage() {
     const ok = window.confirm(`确认取消任务「${task.title}」吗？取消后任务和关联 Topic 都会消失。`)
     if (!ok) return
 
-    // Use task's created_by as agent_id for permission (user who created can delete)
-    const deleteAgentId = task.created_by || actorSource(session) || selectedAgentId || 'reviewer'
+    const actingAgent = task.owner_agent_id || selectedAgentId
     const response = await fetch(
-      `${CLIENT_WTT_API_BASE}/tasks/${task.id}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`,
+      `${CLIENT_WTT_API_BASE}/tasks/${task.id}?acting_as_agent_id=${encodeURIComponent(actingAgent)}&delete_topic=true`,
       {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
@@ -579,8 +578,8 @@ export default function TasksPage() {
     const results = await Promise.allSettled(
       selectedTaskIds.map((id) => {
         const task = tasks.find(t => t.id === id)
-        const deleteAgentId = task?.created_by || actorSource(session) || selectedAgentId || 'reviewer'
-        return fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`, {
+        const actingAgent = task?.owner_agent_id || selectedAgentId
+        return fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?acting_as_agent_id=${encodeURIComponent(actingAgent)}&delete_topic=true`, {
           method: 'DELETE',
           headers,
         })

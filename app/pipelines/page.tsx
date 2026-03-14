@@ -654,8 +654,8 @@ export default function PipelinesPage() {
     }
     if (!confirm('Delete this node?')) return
     const node = nodes.find(n => n.id === taskId)
-    const deleteAgentId = node?.created_by || actorSource(session, selectedAgentId) || selectedAgentId || 'reviewer'
-    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`, {
+    const actingAgent = node?.owner_agent_id || selectedAgentId
+    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}?acting_as_agent_id=${encodeURIComponent(actingAgent)}&delete_topic=true`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
     })
@@ -748,8 +748,8 @@ export default function PipelinesPage() {
         continue
       }
       const node = nodes.find(n => n.id === id)
-      const deleteAgentId = node?.created_by || actorSource(session, selectedAgentId) || selectedAgentId || 'reviewer'
-      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`, {
+      const actingAgent = node?.owner_agent_id || selectedAgentId
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?acting_as_agent_id=${encodeURIComponent(actingAgent)}&delete_topic=true`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
       })
@@ -769,8 +769,8 @@ export default function PipelinesPage() {
     if (allNodes.length === 0) return
     if (!confirm(`Clear all ${allNodes.length} nodes from this pipeline?`)) return
     for (const n of nodes) {
-      const deleteAgentId = n.created_by || actorSource(session, selectedAgentId) || selectedAgentId || 'reviewer'
-      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${n.id}?agent_id=${encodeURIComponent(deleteAgentId)}&delete_topic=true`, {
+      const actingAgent = n.owner_agent_id || selectedAgentId
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${n.id}?acting_as_agent_id=${encodeURIComponent(actingAgent)}&delete_topic=true`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
       })
