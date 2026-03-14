@@ -1101,25 +1101,23 @@ export default function TasksPage() {
                     selectedTask.status === 'blocked' ? 'bg-red-100 text-red-600' :
                     'bg-slate-200 text-slate-600'
                   }`}>{selectedTask.status}</span>
-                  {(selectedTask.status === 'done' || selectedTask.status === 'blocked' || selectedTask.status === 'review') && (
-                    <button
-                      onClick={async () => {
-                        const t = prompt('ReRun times (1-10)', '1')
-                        if (!t) return
-                        const n = Math.max(1, Math.min(10, parseInt(t) || 1))
-                        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/rerun?times=${n}`, {
-                          method: 'POST',
-                          headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                        })
-                        if (r.ok) mutateTasks()
-                        else alert('ReRun failed')
-                      }}
-                      className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-amber-600 hover:bg-amber-50 border border-amber-300"
-                      title="Re-run this task"
-                    >
-                      ↻ ReRun
-                    </button>
-                  )}
+                  <button
+                    onClick={async () => {
+                      const t = prompt('ReRun times (1-10)', '1')
+                      if (!t) return
+                      const n = Math.max(1, Math.min(10, parseInt(t) || 1))
+                      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/rerun?times=${n}`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                      })
+                      if (r.ok) mutateTasks()
+                      else alert('ReRun failed')
+                    }}
+                    className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-amber-600 hover:bg-amber-50 border border-amber-300"
+                    title="Re-run this task"
+                  >
+                    ↻ ReRun
+                  </button>
                   <div className="flex gap-1">
                     <button
                       className={`rounded-md px-2 py-0.5 text-[10px] ${(selectedTask.exec_mode || 'reasoning') !== 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
