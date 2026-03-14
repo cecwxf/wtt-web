@@ -1,7 +1,8 @@
 'use client'
 
 import { ChevronDown, ChevronRight, MoreVertical, User } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 export interface AgentItem {
   agent_id: string
@@ -9,9 +10,18 @@ export interface AgentItem {
   unread_count?: number
 }
 
-export interface AgentActiveSubAgents {
-  [agentId: string]: Set<string>
+export interface SubAgentTask {
+  id: string
+  title: string
+  task_type: string
+  status: string
 }
+
+export interface AgentSubAgentMap {
+  [agentId: string]: SubAgentTask[]
+}
+
+const MAX_SUB_AGENTS = 20
 
 interface AgentColumnProps {
   agents: AgentItem[]
@@ -20,14 +30,8 @@ interface AgentColumnProps {
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   currentUserName?: string
-  activeSubAgents?: AgentActiveSubAgents
+  agentSubAgents?: AgentSubAgentMap
 }
-
-const SUB_AGENTS = [
-  { type: 'code', icon: '💻', label: 'Code' },
-  { type: 'research', icon: '🔬', label: 'Research' },
-  { type: 'pipeline', icon: '🔗', label: 'Pipeline' },
-] as const
 
 const ICON_MAP: [RegExp, string][] = [
   [/lobster|龙虾|虾/i, '🦞'],
@@ -66,9 +70,23 @@ function getAgentIcon(name: string): string {
   return '🤖'
 }
 
-function getMiniIcon(name: string): string {
-  const main = getAgentIcon(name)
-  return main === '🤖' ? '🔹' : main
+function getStatusColor(status: string) {
+  switch (status) {
+    case 'doing': return 'bg-indigo-400 dark:bg-indigo-500'
+    case 'review': return 'bg-amber-400 dark:bg-amber-500'
+    case 'done': return 'bg-emerald-400 dark:bg-emerald-500'
+    case 'todo': return 'bg-slate-300 dark:bg-zinc-500'
+    default: return 'bg-slate-200 dark:bg-zinc-600'
+  }
+}
+
+function getStatusRing(status: string) {
+  switch (status) {
+    case 'doing': return 'ring-indigo-300 dark:ring-indigo-600'
+    case 'review': return 'ring-amber-300 dark:ring-amber-600'
+    case 'done': return 'ring-emerald-300 dark:ring-emerald-600'
+    default: return ''
+  }
 }
 
 export function AgentColumn({
@@ -78,8 +96,9 @@ export function AgentColumn({
   onRenameAgent,
   onUnclaimAgent,
   currentUserName,
-  activeSubAgents,
+  agentSubAgents,
 }: AgentColumnProps) {
+  const router = useRouter()
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
 
@@ -91,16 +110,6 @@ export function AgentColumn({
       return next
     })
   }
-
-  const agentSubCounts = useMemo(() => {
-    const map: Record<string, number> = {}
-    if (!activeSubAgents) return map
-    for (const agent of agents) {
-      const s = activeSubAgents[agent.agent_id]
-      map[agent.agent_id] = s ? s.size : 0
-    }
-    return map
-  }, [agents, activeSubAgents])
 
   return (
     <div className="flex h-full w-[200px] flex-col border-r border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
@@ -130,9 +139,9 @@ export function AgentColumn({
           const isMenuOpen = menuFor === agent.agent_id
           const isExpanded = expandedAgents.has(agent.agent_id)
           const agentIcon = getAgentIcon(agent.display_name)
-          const miniIcon = getMiniIcon(agent.display_name)
-          const activeSet = activeSubAgents?.[agent.agent_id]
-          const activeCount = agentSubCounts[agent.agent_id] || 0
+          const tasks = agentSubAgents?.[agent.agent_id] ?? []
+          const activeCount = tasks.filter(t => t.status === 'doing' || t.status === 'review').length
+          const totalCount = tasks.length
 
           return (
             <div
@@ -152,7 +161,7 @@ export function AgentColumn({
                 <button
                   onClick={() => toggleExpand(agent.agent_id)}
                   className="shrink-0 pl-1.5 pr-0.5 py-3 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
-                  title={isExpanded ? 'Collapse' : 'Expand sub-agents'}
+                  title={isExpanded ? 'Collapse' : `Expand ${totalCount} sub-agents`}
                 >
                   {isExpanded
                     ? <ChevronDown className="h-3 w-3" />
@@ -180,9 +189,30 @@ export function AgentColumn({
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-semibold leading-tight">{agent.display_name}</p>
-                    {activeCount > 0 && (
-                      <p className="mt-0.5 text-[10px] text-slate-400 dark:text-zinc-500">
-                        {activeCount} active sub-agent{activeCount > 1 ? 's' : ''}
+                    {/* Compact sub-agent dot grid (collapsed view) */}
+                    {!isExpanded && totalCount > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-[3px]">
+                        {tasks.slice(0, MAX_SUB_AGENTS).map((t) => (
+                          <span
+                            key={t.id}
+                            title={`${t.title} (${t.status})`}
+                            className={`inline-block h-[6px] w-[6px] rounded-full transition ${getStatusColor(t.status)} ${
+                              (t.status === 'doing' || t.status === 'review') ? 'ring-1 ' + getStatusRing(t.status) : ''
+                            }`}
+                          />
+                        ))}
+                        {/* Empty slots */}
+                        {Array.from({ length: Math.max(0, Math.min(MAX_SUB_AGENTS, 8) - totalCount) }).map((_, i) => (
+                          <span
+                            key={`empty-${i}`}
+                            className="inline-block h-[6px] w-[6px] rounded-full bg-slate-100 dark:bg-zinc-700"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {!isExpanded && totalCount > 0 && (
+                      <p className="mt-0.5 text-[9px] text-slate-400 dark:text-zinc-500">
+                        {activeCount > 0 ? `${activeCount} active · ` : ''}{totalCount}/{MAX_SUB_AGENTS}
                       </p>
                     )}
                     {agent.unread_count && agent.unread_count > 0 ? (
@@ -201,32 +231,52 @@ export function AgentColumn({
                 </button>
               </div>
 
-              {/* Expanded sub-agents */}
+              {/* Expanded: each task as a sub-agent */}
               {isExpanded && (
-                <div className="pb-1.5 pl-6 pr-2">
-                  {SUB_AGENTS.map((sub) => {
-                    const isActive = !!activeSet?.has(sub.type)
+                <div className="pb-2 pl-5 pr-2 space-y-0.5">
+                  {tasks.length === 0 && (
+                    <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-zinc-500 italic">No sub-agents yet</p>
+                  )}
+                  {tasks.slice(0, MAX_SUB_AGENTS).map((t) => {
+                    const isActive = t.status === 'doing' || t.status === 'review'
+                    const isDone = t.status === 'done'
+                    const href = t.task_type === 'code' ? `/tasks/code/${t.id}`
+                      : t.task_type === 'research' ? `/tasks/research/${t.id}`
+                      : t.task_type === 'pipeline' ? '/pipelines'
+                      : `/tasks`
                     return (
-                      <div
-                        key={sub.type}
-                        className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] transition ${
-                          isActive
-                            ? 'text-slate-700 dark:text-zinc-200 bg-white/80 dark:bg-zinc-700/50 shadow-[0_0.5px_2px_rgba(0,0,0,0.06)]'
-                            : 'text-slate-350 dark:text-zinc-600'
+                      <button
+                        key={t.id}
+                        onClick={() => router.push(href)}
+                        className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition hover:bg-white/80 dark:hover:bg-zinc-700/50 ${
+                          isActive ? 'bg-white/60 dark:bg-zinc-700/30' : ''
                         }`}
+                        title={`${t.title} — ${t.status}`}
                       >
-                        <span className={`text-sm ${isActive ? '' : 'grayscale opacity-40'}`}>
-                          {isActive ? miniIcon : sub.icon}
+                        <span className={`text-[11px] transition ${isDone ? 'opacity-40' : isActive ? '' : 'opacity-60'}`}>
+                          {agentIcon}
                         </span>
-                        <span className={`font-medium ${isActive ? '' : 'opacity-40'}`}>
-                          {sub.label}
+                        <span className={`flex-1 truncate text-[11px] font-medium ${
+                          isActive
+                            ? 'text-slate-700 dark:text-zinc-200'
+                            : isDone
+                              ? 'text-slate-400 dark:text-zinc-500 line-through'
+                              : 'text-slate-500 dark:text-zinc-400'
+                        }`}>
+                          {t.title}
                         </span>
-                        {isActive && (
-                          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.5)]" />
-                        )}
-                      </div>
+                        <span className={`shrink-0 h-[6px] w-[6px] rounded-full ${getStatusColor(t.status)} ${
+                          isActive ? 'ring-1 ' + getStatusRing(t.status) : ''
+                        }`} />
+                      </button>
                     )
                   })}
+                  {/* Empty slot indicator */}
+                  {totalCount < MAX_SUB_AGENTS && (
+                    <p className="px-2 pt-0.5 text-[9px] text-slate-300 dark:text-zinc-600">
+                      {MAX_SUB_AGENTS - totalCount} slots available
+                    </p>
+                  )}
                 </div>
               )}
 

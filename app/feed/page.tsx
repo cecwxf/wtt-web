@@ -309,7 +309,7 @@ function FeedPageInner() {
   const { data: recentTasksRaw } = useSWR(
     session?.accessToken ? ['recent-tasks', session.accessToken] : null,
     async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks?limit=10&sort=updated_at&order=desc`, {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks?limit=50&sort=updated_at&order=desc`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!r.ok) return []
@@ -330,33 +330,28 @@ function FeedPageInner() {
       }))
   }, [recentTasksRaw])
 
-  // Compute active sub-agents per agent from tasks + topics
-  const activeSubAgents = useMemo(() => {
-    const map: Record<string, Set<string>> = {}
-    // From recentTasksRaw (all agents)
+  // Build sub-agent map: each task = 1 sub-agent, grouped by owner agent
+  const agentSubAgents = useMemo(() => {
+    const map: Record<string, { id: string; title: string; task_type: string; status: string }[]> = {}
     if (Array.isArray(recentTasksRaw)) {
       for (const t of recentTasksRaw) {
         const raw = t as Record<string, unknown>
         if (!raw || raw.status === 'cancelled') continue
         const agentId = String(raw.owner_agent_id || raw.runner_agent_id || '')
-        const taskType = String(raw.task_type || '')
-        if (agentId && taskType && taskType !== 'general' && taskType !== 'feature') {
-          if (!map[agentId]) map[agentId] = new Set()
-          map[agentId].add(taskType)
+        if (!agentId) continue
+        if (!map[agentId]) map[agentId] = []
+        if (map[agentId].length < 20) {
+          map[agentId].push({
+            id: String(raw.id || ''),
+            title: String(raw.title || 'Untitled'),
+            task_type: String(raw.task_type || 'general'),
+            status: String(raw.status || 'todo'),
+          })
         }
       }
     }
-    // From current topics (selected agent)
-    for (const t of topics) {
-      if (!t.task_type || t.task_type === 'general') continue
-      const agentId = t.runner_agent_id || selectedAgentId
-      if (agentId) {
-        if (!map[agentId]) map[agentId] = new Set()
-        map[agentId].add(t.task_type)
-      }
-    }
     return map
-  }, [recentTasksRaw, topics, selectedAgentId])
+  }, [recentTasksRaw])
 
   useEffect(() => {
     setMembersOpen(false)
@@ -620,7 +615,7 @@ function FeedPageInner() {
         onBindingChanged={loadAgents}
         notificationCount={0}
         currentUserName={getHumanSender(session)}
-        activeSubAgents={activeSubAgents}
+        agentSubAgents={agentSubAgents}
       >
         <div className="flex h-full">
           {/* Main content area */}

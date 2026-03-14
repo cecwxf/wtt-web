@@ -3,7 +3,7 @@
 import { Menu } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { AgentColumn, AgentItem, AgentActiveSubAgents } from './agent-column'
+import { AgentColumn, AgentItem, AgentSubAgentMap } from './agent-column'
 import { TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
@@ -29,7 +29,7 @@ interface WttShellV2Props {
   hideTopics?: boolean
   hideCreateTopic?: boolean
   currentUserName?: string
-  activeSubAgents?: AgentActiveSubAgents
+  agentSubAgents?: AgentSubAgentMap
   children: ReactNode
 }
 
@@ -55,7 +55,7 @@ export function WttShellV2({
   hideTopics = false,
   hideCreateTopic = false,
   currentUserName,
-  activeSubAgents,
+  agentSubAgents,
   children,
 }: WttShellV2Props) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -152,7 +152,7 @@ export function WttShellV2({
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
               currentUserName={currentUserName}
-              activeSubAgents={activeSubAgents}
+              agentSubAgents={agentSubAgents}
             />
 
             {!hideTopics && (
