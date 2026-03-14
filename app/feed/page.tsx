@@ -302,6 +302,23 @@ function FeedPageInner() {
       .filter((m) => m.agent_id)
   }, [topicMembersRaw])
 
+  const discussMemberStats = useMemo(() => {
+    const total = topicMembers.length
+    if (!selectedTopicId || total === 0) return { total, online: 0 }
+
+    const memberIds = new Set(topicMembers.map((m) => m.agent_id))
+    const cutoff = Date.now() - 5 * 60 * 1000
+    const active = new Set<string>()
+
+    for (const msg of allMessages) {
+      const ts = Date.parse(msg.timestamp)
+      if (!Number.isFinite(ts) || ts < cutoff) continue
+      if (memberIds.has(msg.sender_id)) active.add(msg.sender_id)
+    }
+
+    return { total, online: active.size }
+  }, [topicMembers, allMessages, selectedTopicId])
+
   // Auto-create P2P topic for each claimed agent (if not exists)
   const p2pInitRef = useRef(new Set<string>())
   useEffect(() => {
@@ -579,8 +596,18 @@ function FeedPageInner() {
                 wsConnected={wsState === 'connected'}
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (
-                    <div className="rounded border border-slate-200 dark:border-zinc-600 px-2 py-1 text-[11px] text-slate-500 dark:text-zinc-300">
-                      Members: {topicMembers.length > 0 ? topicMembers.map((m) => m.display_name).join(', ') : '—'}
+                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-800/80 px-2.5 py-1.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-zinc-700 text-[11px] font-semibold text-slate-500 dark:text-zinc-300">
+                        👥
+                      </div>
+                      <div className="leading-tight">
+                        <div className="max-w-[220px] truncate text-[12px] font-semibold text-slate-700 dark:text-zinc-200">
+                          {selectedTopic?.name || 'Discuss Topic'}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-zinc-400">
+                          {discussMemberStats.total} members, {discussMemberStats.online} online
+                        </div>
+                      </div>
                     </div>
                   ) : undefined
                 }
