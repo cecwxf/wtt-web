@@ -12,6 +12,7 @@ export interface TopicItem {
   task_id?: string
   task_type?: 'code' | 'research' | 'general' | 'pipeline'
   runner_agent_id?: string
+  is_default_p2p?: boolean
 }
 
 interface TopicColumnProps {
@@ -113,8 +114,13 @@ export function TopicColumn({
     for (const group of order) {
       const rows = byGroup.get(group) || []
       rows.sort((a, b) => {
-        const ap = pinnedTopicIds.includes(a.topic_id)
-        const bp = pinnedTopicIds.includes(b.topic_id)
+        const aDefaultP2P = !!a.is_default_p2p
+        const bDefaultP2P = !!b.is_default_p2p
+        if (aDefaultP2P && !bDefaultP2P) return -1
+        if (!aDefaultP2P && bDefaultP2P) return 1
+
+        const ap = aDefaultP2P || pinnedTopicIds.includes(a.topic_id)
+        const bp = bDefaultP2P || pinnedTopicIds.includes(b.topic_id)
         if (ap && !bp) return -1
         if (!ap && bp) return 1
 
@@ -182,7 +188,7 @@ export function TopicColumn({
               const isSelected = topic.topic_id === selectedTopicId
               const Icon = getTopicIcon(topic.topic_type, !!topic.task_id)
               const isMenuOpen = menuFor === topic.topic_id
-              const isPinned = pinnedTopicIds.includes(topic.topic_id)
+              const isPinned = !!topic.is_default_p2p || pinnedTopicIds.includes(topic.topic_id)
 
               return (
                 <div
@@ -203,7 +209,7 @@ export function TopicColumn({
                   >
                     <Icon className={`h-4 w-4 shrink-0 ${isPinned ? 'text-amber-500' : ''}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{topic.name}</p>
+                      <p className="truncate text-sm font-medium">{topic.is_default_p2p ? `【P2P】${topic.name}` : topic.name}</p>
                     </div>
                     {isPinned && <Pin className="h-3 w-3 shrink-0 text-amber-500" />}
                     <span className="text-slate-400">
@@ -222,13 +228,14 @@ export function TopicColumn({
                       <div className="fixed inset-0 z-20" onClick={() => setMenuFor(null)} />
                       <div className="absolute right-1 top-11 z-30 w-36 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1 shadow-lg">
                         <button
-                          className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
+                          className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                          disabled={!!topic.is_default_p2p}
                           onClick={() => {
                             togglePinTopic(topic.topic_id)
                             setMenuFor(null)
                           }}
                         >
-                          {isPinned ? '📌 取消置顶' : '📌 置顶'}
+                          {topic.is_default_p2p ? '📌 默认置顶' : isPinned ? '📌 取消置顶' : '📌 置顶'}
                         </button>
                         <button
                           className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"

@@ -233,24 +233,37 @@ function FeedPageInner() {
 
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
+    const humanSender = getHumanSender(session)
 
-    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string }) => ({
-      topic_id: topic.id,
-      name: topic.name,
-      topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
-      unread_count: Number((topic as Record<string, unknown>).unread_count || 0),
-      can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
-      task_id: topic.task_id,
-      task_type: topic.task_type as 'code' | 'research' | 'general' | 'pipeline' | undefined,
-      runner_agent_id: topic.runner_agent_id,
-    }))
-    // Pin P2P topics at top
+    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string }) => {
+      const topicType = (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
+      const isDefaultP2P =
+        topicType === 'p2p' &&
+        !!selectedAgentId &&
+        topic.name.includes(selectedAgentId) &&
+        topic.name.includes(humanSender)
+
+      return {
+        topic_id: topic.id,
+        name: topic.name,
+        topic_type: topicType,
+        unread_count: Number((topic as Record<string, unknown>).unread_count || 0),
+        can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
+        task_id: topic.task_id,
+        task_type: topic.task_type as 'code' | 'research' | 'general' | 'pipeline' | undefined,
+        runner_agent_id: topic.runner_agent_id,
+        is_default_p2p: isDefaultP2P,
+      }
+    })
+
     return mapped.sort((a, b) => {
+      if (a.is_default_p2p && !b.is_default_p2p) return -1
+      if (!a.is_default_p2p && b.is_default_p2p) return 1
       if (a.topic_type === 'p2p' && b.topic_type !== 'p2p') return -1
       if (a.topic_type !== 'p2p' && b.topic_type === 'p2p') return 1
       return 0
     })
-  }, [subscribedTopicsRaw])
+  }, [subscribedTopicsRaw, selectedAgentId, session])
 
   const agentItems = useMemo<AgentItem[]>(() => {
     return agents.map((agent) => ({

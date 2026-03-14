@@ -330,7 +330,8 @@ export default function TasksPage() {
   }, [visibleTasks, progressRaw])
 
   const topics = useMemo(() => {
-    const topicMap = new Map<string, { topic_id: string; name: string; topic_type: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'; unread_count: number; can_delete: boolean }>()
+    const topicMap = new Map<string, { topic_id: string; name: string; topic_type: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'; unread_count: number; can_delete: boolean; is_default_p2p?: boolean }>()
+    const human = actorSource(session)
 
     // 1. Add subscribed topics
     if (Array.isArray(subscribedTopicsRaw)) {
@@ -338,18 +339,21 @@ export default function TasksPage() {
         let displayName = topic.name
         const taskPrefixMatch = displayName.match(/^TASK-[a-f0-9]{8}\s+(.+)$/i)
         if (taskPrefixMatch) displayName = taskPrefixMatch[1]
+        const topicType = (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
+        const isDefaultP2P = topicType === 'p2p' && !!selectedAgentId && displayName.includes(selectedAgentId) && displayName.includes(human)
         topicMap.set(topic.id, {
           topic_id: topic.id,
           name: displayName,
-          topic_type: (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative',
+          topic_type: topicType,
           unread_count: 0,
           can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
+          is_default_p2p: isDefaultP2P,
         })
       }
     }
 
     return Array.from(topicMap.values())
-  }, [subscribedTopicsRaw])
+  }, [subscribedTopicsRaw, selectedAgentId, session])
 
   const agentItems = useMemo(() => {
     return agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name, unread_count: 0 }))
