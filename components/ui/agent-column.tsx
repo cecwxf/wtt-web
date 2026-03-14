@@ -169,7 +169,7 @@ export function AgentColumn({
                 <button
                   onClick={() => toggleExpand(agent.agent_id)}
                   className="shrink-0 pl-1.5 pr-0.5 py-3 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
-                  title={isExpanded ? 'Collapse' : `Expand ${totalCount} sub-agents`}
+                  title={isExpanded ? 'Collapse' : `Expand ${totalCount} workers`}
                 >
                   {isExpanded
                     ? <ChevronDown className="h-3 w-3" />
@@ -235,7 +235,7 @@ export function AgentColumn({
                           ? <><span className="font-semibold text-indigo-500 dark:text-indigo-400">{activeCount} active</span> · </>
                           : null
                         }
-                        {totalCount}/{maxSubAgents} sub-agents
+                        {totalCount}/{maxSubAgents} workers
                       </p>
                     )}
                     {agent.unread_count && agent.unread_count > 0 ? (
@@ -254,11 +254,11 @@ export function AgentColumn({
                 </button>
               </div>
 
-              {/* Expanded: each task as a sub-agent */}
+              {/* Expanded: each task as a worker */}
               {isExpanded && (
                 <div className="pb-2 pl-5 pr-2 space-y-0.5">
                   {tasks.length === 0 && (
-                    <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-zinc-500 italic">No sub-agents yet</p>
+                    <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-zinc-500 italic">No workers yet</p>
                   )}
                   {tasks.slice(0, maxSubAgents).map((t) => {
                     const isActive = t.status === 'doing' || t.status === 'review'
@@ -276,7 +276,7 @@ export function AgentColumn({
                             ? 'bg-indigo-50/80 dark:bg-indigo-950/30 ring-1 ring-indigo-200/60 dark:ring-indigo-800/40'
                             : 'hover:bg-white/80 dark:hover:bg-zinc-700/50'
                         }`}
-                        title={`${t.title} — ${t.status}`}
+                        title={`worker@${t.title} — ${t.status}`}
                       >
                         <span className={`text-[11px] transition ${
                           isActive ? 'drop-shadow-[0_0_2px_rgba(99,102,241,0.5)]' : isDone ? 'opacity-30' : 'opacity-50'
@@ -290,7 +290,7 @@ export function AgentColumn({
                               ? 'text-slate-400 dark:text-zinc-500 line-through'
                               : 'text-slate-500 dark:text-zinc-400'
                         }`}>
-                          {t.title}
+                          <span className={`${isActive ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-zinc-500'}`}>worker@</span>{t.title}
                         </span>
                         <span className={`shrink-0 rounded-full ${getStatusColor(t.status)} ${
                           isActive ? 'h-[7px] w-[7px] ring-1 ' + getStatusRing(t.status) : 'h-[5px] w-[5px]'
