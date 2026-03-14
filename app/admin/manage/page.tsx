@@ -15,6 +15,7 @@ interface TopicRow {
   name: string
   type: string
   creator_agent_id?: string
+  member_agent_ids?: string[]
   my_role?: string
   task_id?: string | null
   is_active?: boolean
@@ -69,7 +70,7 @@ export default function AdminManagePage() {
             .map((id: string) => ({ agent_id: id, display_name: id }))
         : []
       setAgents(normalizedAgents)
-      setSelectedAgentId((prev) => prev || normalizedAgents[0]?.agent_id || '')
+      setSelectedAgentId((prev) => (prev && normalizedAgents.some((a) => a.agent_id === prev) ? prev : ''))
 
       setTopics(Array.isArray(data?.topics) ? data.topics : [])
       setTasks(Array.isArray(data?.tasks) ? data.tasks : [])
@@ -86,18 +87,23 @@ export default function AdminManagePage() {
   const filteredTopics = useMemo(() => {
     const q = keyword.trim().toLowerCase()
     return topics.filter((t) => {
-      if (!q) return true
-      return `${t.name} ${t.id} ${t.creator_agent_id || ''} ${t.type || ''}`.toLowerCase().includes(q)
+      const byKeyword = !q || `${t.name} ${t.id} ${t.creator_agent_id || ''} ${(t.member_agent_ids || []).join(' ')} ${t.type || ''}`.toLowerCase().includes(q)
+      if (!byKeyword) return false
+      if (!selectedAgentId) return true
+      const members = Array.isArray(t.member_agent_ids) ? t.member_agent_ids : []
+      return t.creator_agent_id === selectedAgentId || members.includes(selectedAgentId)
     })
-  }, [topics, keyword])
+  }, [topics, keyword, selectedAgentId])
 
   const filteredTasks = useMemo(() => {
     const q = keyword.trim().toLowerCase()
     return tasks.filter((t) => {
-      if (!q) return true
-      return `${t.title} ${t.id} ${t.created_by || ''} ${t.status || ''}`.toLowerCase().includes(q)
+      const byKeyword = !q || `${t.title} ${t.id} ${t.created_by || ''} ${t.status || ''} ${t.owner_agent_id || ''} ${t.runner_agent_id || ''}`.toLowerCase().includes(q)
+      if (!byKeyword) return false
+      if (!selectedAgentId) return true
+      return t.created_by === selectedAgentId || t.owner_agent_id === selectedAgentId || t.runner_agent_id === selectedAgentId
     })
-  }, [tasks, keyword])
+  }, [tasks, keyword, selectedAgentId])
 
   const toggleTopic = (id: string) => {
     setSelectedTopicIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -171,6 +177,7 @@ export default function AdminManagePage() {
           onChange={(e) => setSelectedAgentId(e.target.value)}
           className="rounded border border-slate-300 px-3 py-2 text-sm"
         >
+          <option value="">All agents</option>
           {agents.map((a) => (
             <option key={a.agent_id} value={a.agent_id}>
               {a.display_name} ({a.agent_id})
@@ -198,7 +205,7 @@ export default function AdminManagePage() {
                 <input type="checkbox" checked={selectedTopicIds.includes(t.id)} onChange={() => toggleTopic(t.id)} />
                 <div className="min-w-0">
                   <div className="truncate font-medium">{t.name}</div>
-                  <div className="text-xs text-slate-500 truncate">{t.id} · {t.type} · creator {t.creator_agent_id || '-'}</div>
+                  <div className="text-xs text-slate-500 truncate">{t.id} · {t.type} · creator {t.creator_agent_id || '-'} · members {(t.member_agent_ids || []).length}</div>
                 </div>
               </label>
             ))}
