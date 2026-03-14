@@ -302,22 +302,7 @@ function FeedPageInner() {
       .filter((m) => m.agent_id)
   }, [topicMembersRaw])
 
-  const discussMemberStats = useMemo(() => {
-    const total = topicMembers.length
-    if (!selectedTopicId || total === 0) return { total, online: 0 }
-
-    const memberIds = new Set(topicMembers.map((m) => m.agent_id))
-    const cutoff = Date.now() - 5 * 60 * 1000
-    const active = new Set<string>()
-
-    for (const msg of allMessages) {
-      const ts = Date.parse(msg.timestamp)
-      if (!Number.isFinite(ts) || ts < cutoff) continue
-      if (memberIds.has(msg.sender_id)) active.add(msg.sender_id)
-    }
-
-    return { total, online: active.size }
-  }, [topicMembers, allMessages, selectedTopicId])
+  const discussMemberCount = useMemo(() => topicMembers.length, [topicMembers])
 
   // Auto-create P2P topic for each claimed agent (if not exists)
   const p2pInitRef = useRef(new Set<string>())
@@ -605,7 +590,7 @@ function FeedPageInner() {
                           {selectedTopic?.name || 'Discuss Topic'}
                         </div>
                         <div className="text-[11px] text-slate-500 dark:text-zinc-400">
-                          {discussMemberStats.total} members, {discussMemberStats.online} online
+                          {discussMemberCount} members
                         </div>
                       </div>
                     </div>
