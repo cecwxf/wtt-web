@@ -114,6 +114,7 @@ export default function TasksPage() {
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
   const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code'>('all')
+  const [taskModeFilter, setTaskModeFilter] = useState<'all' | 'single' | 'pipeline'>('all')
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const loadAgents = useCallback(async () => {
@@ -175,15 +176,19 @@ export default function TasksPage() {
     return set
   }, [subscribedTopicsRaw])
 
-  // Only show tasks whose topic is still subscribed (or tasks without topic binding), filtered by type
+  // Only show tasks whose topic is still subscribed (or tasks without topic binding), filtered by type and mode
   const visibleTasks: TaskItem[] = useMemo(
     () => tasks.filter((t) => {
       if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
+      // Mode filter
+      if (taskModeFilter === 'pipeline' && (t.task_mode || 'single') !== 'pipeline') return false
+      if (taskModeFilter === 'single' && (t.task_mode || 'single') !== 'single') return false
+      // Type filter
       if (taskTypeFilter === 'all') return true
       if (taskTypeFilter === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
       return t.task_type === taskTypeFilter
     }),
-    [tasks, subscribedTopicSet, taskTypeFilter]
+    [tasks, subscribedTopicSet, taskTypeFilter, taskModeFilter]
   )
 
   // Worker (sub-agent) grouping — same as feed page
@@ -895,7 +900,7 @@ export default function TasksPage() {
           </div>
         </div>
 
-        {/* Task type filter tabs */}
+        {/* Task type filter tabs + mode filter */}
         <div className="mb-3 flex items-center gap-1">
           {([
             ['all', '📋 All', null],
@@ -905,6 +910,8 @@ export default function TasksPage() {
           ] as const).map(([key, label]) => {
             const count = tasks.filter(t => {
               if (!t.topic_id && !subscribedTopicSet.has(t.topic_id || '')) return false
+              if (taskModeFilter === 'pipeline' && (t.task_mode || 'single') !== 'pipeline') return false
+              if (taskModeFilter === 'single' && (t.task_mode || 'single') !== 'single') return false
               if (key === 'all') return true
               if (key === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
               return t.task_type === key
@@ -921,6 +928,34 @@ export default function TasksPage() {
                 }`}
               >
                 {label} <span className={`ml-1 ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>({count})</span>
+              </button>
+            )
+          })}
+
+          {/* Mode filter separator + buttons */}
+          <span className="mx-1 text-slate-300">|</span>
+          {([
+            ['all', '🗂 All Mode'],
+            ['single', '⚡ Single'],
+            ['pipeline', '🔗 Pipeline'],
+          ] as const).map(([key, label]) => {
+            const count = tasks.filter(t => {
+              if (key === 'all') return true
+              if (key === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
+              return (t.task_mode || 'single') === 'single'
+            }).length
+            const isActive = taskModeFilter === key
+            return (
+              <button
+                key={`mode-${key}`}
+                onClick={() => setTaskModeFilter(key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  isActive
+                    ? 'bg-violet-500 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                }`}
+              >
+                {label} <span className={`ml-1 ${isActive ? 'text-violet-200' : 'text-slate-400'}`}>({count})</span>
               </button>
             )
           })}
