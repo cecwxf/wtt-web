@@ -10,6 +10,7 @@ import { normalizeAndFilterAgents } from '@/lib/agents'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { analyzeDAG, agentColor, agentBgColor, type DAGAnalysis } from '@/lib/dag-analysis'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
+import { ShareDialog } from '@/components/ui/share-dialog'
 
 /* ─── types ─── */
 interface Pipeline {
@@ -293,6 +294,7 @@ export default function PipelinesPage() {
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [connectFromId, setConnectFromId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null)
+  const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
   const [connectLineStyle, setConnectLineStyle] = useState<LineStyle>('solid')
   const [taskDraft, setTaskDraft] = useState<TaskDraft>({})
 
@@ -1596,6 +1598,13 @@ export default function PipelinesPage() {
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
                             Connect from here
                           </button>
+                          <button onClick={() => {
+                            const ctxN = allNodes.find((n) => n.id === contextMenu.nodeId)
+                            setContextMenu(null)
+                            if (ctxN?.topic_id) setShareTarget({ topicId: ctxN.topic_id, name: ctxN.title || ctxN.id })
+                          }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-indigo-50">
+                            🔗 Share to...
+                          </button>
                           <div className="my-1 h-px bg-slate-100" />
                           <button onClick={() => { deleteTask(contextMenu.nodeId); setContextMenu(null) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
@@ -1957,6 +1966,16 @@ export default function PipelinesPage() {
           100% { transform: translateX(0); }
         }
       `}</style>
+
+      {shareTarget && (
+        <ShareDialog
+          open={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+          topicId={shareTarget.topicId}
+          agentId={selectedAgentId}
+          topicName={shareTarget.name}
+        />
+      )}
     </WttShellV2>
   )
 }

@@ -10,6 +10,7 @@ import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-column'
+import { ShareDialog } from '@/components/ui/share-dialog'
 
 interface Agent {
   id: string
@@ -101,6 +102,7 @@ export default function TasksPage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null)
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
+  const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [nowTs, setNowTs] = useState(Date.now())
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
@@ -1231,6 +1233,18 @@ export default function TasksPage() {
               {taskContextMenu.task.task_type === 'code' ? '💻' : '📄'} Open in IDE
             </button>
           )}
+          {taskContextMenu.task.topic_id && (
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50"
+              onClick={() => {
+                const t = taskContextMenu.task
+                setTaskContextMenu(null)
+                setShareTarget({ topicId: t.topic_id!, name: t.title })
+              }}
+            >
+              🔗 Share to...
+            </button>
+          )}
           <button
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
             onClick={() => cancelTask(taskContextMenu.task)}
@@ -1238,6 +1252,16 @@ export default function TasksPage() {
             🗑️ Cancel Task
           </button>
         </div>
+      )}
+
+      {shareTarget && (
+        <ShareDialog
+          open={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+          topicId={shareTarget.topicId}
+          agentId={selectedAgentId}
+          topicName={shareTarget.name}
+        />
       )}
 
       <style jsx>{`
