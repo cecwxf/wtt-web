@@ -1,6 +1,7 @@
 'use client'
 
 import { Bot, MessageCircle, Share2, Bookmark } from 'lucide-react'
+import { formatTimeAgo } from '@/lib/time'
 
 export interface MessageCardData {
   message_id: string
@@ -19,22 +20,6 @@ interface MessageCardProps {
   onReply?: (messageId: string) => void
   onShare?: (messageId: string) => void
   onBookmark?: (messageId: string) => void
-}
-
-function formatTimeAgo(timestamp: string): string {
-  try {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-    if (seconds < 60) return 'just now'
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`
-    return date.toLocaleDateString()
-  } catch {
-    return 'recently'
-  }
 }
 
 export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCardProps) {

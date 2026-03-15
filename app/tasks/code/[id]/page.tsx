@@ -13,6 +13,7 @@ import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachme
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks } from '@/components/ui/chat-view'
+import { formatTime, formatDateGroup } from '@/lib/time'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -2773,7 +2774,7 @@ export default function CodeTaskPage() {
                         <p className={`text-[11px] font-semibold ${msg.role === 'user' ? 'text-emerald-600' : 'text-indigo-600'}`}>
                           {msg.role === 'user' ? (msg.sender_display_name || 'User') : (msg.sender_display_name || 'Agent')}
                         </p>
-                        <p className={`text-[10px] ${tc.textMuted}`}>{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                        <p className={`text-[10px] ${tc.textMuted}`}>{formatTime(msg.timestamp)}</p>
                       </div>
                       {msgMeta.length > 0 && (
                         <div className="mb-2 space-y-1">
@@ -2915,7 +2916,7 @@ export default function CodeTaskPage() {
                           }}>{label.name}</span>
                         ))}
                       </div>
-                      <p className={`mt-0.5 text-[10px] ${tc.textMuted}`}>by {issue.user?.login} · {new Date(issue.created_at).toLocaleDateString()}</p>
+                      <p className={`mt-0.5 text-[10px] ${tc.textMuted}`}>by {issue.user?.login} · {formatDateGroup(issue.created_at)}</p>
                     </div>
                     <span className={`text-[10px] ${tc.textMuted}`}>{expandedIssue === issue.number ? '▼' : '▶'}</span>
                   </button>
@@ -2929,7 +2930,7 @@ export default function CodeTaskPage() {
                           <p className={`text-[10px] font-semibold ${tc.textMuted}`}>💬 Comments ({issueComments.length})</p>
                           {issueComments.map((c) => (
                             <div key={c.id} className={`rounded border ${tc.border} ${tc.activeBg} p-1.5`}>
-                              <p className={`text-[10px] font-medium ${tc.textMuted}`}>{c.user?.login} · {new Date(c.created_at).toLocaleDateString()}</p>
+                              <p className={`text-[10px] font-medium ${tc.textMuted}`}>{c.user?.login} · {formatDateGroup(c.created_at)}</p>
                               <p className={`mt-0.5 text-[11px] ${tc.textMuted} whitespace-pre-wrap max-h-24 overflow-y-auto`}>{c.body}</p>
                             </div>
                           ))}

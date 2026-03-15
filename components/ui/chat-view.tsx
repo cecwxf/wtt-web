@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
+import { formatTime, formatDateGroup } from '@/lib/time'
 
 export interface ChatMessage {
   message_id: string
@@ -54,15 +55,6 @@ interface ChatViewProps {
   isTaskTopic?: boolean
   taskType?: TaskType
   wsConnected?: boolean
-}
-
-function formatTime(timestamp: string): string {
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return '--:--'
-  }
 }
 
 type ParsedRich =
@@ -252,33 +244,6 @@ function parseRichBlocks(content: string): ParsedRich[] {
   }
 
   return blocks.length > 0 ? blocks : [{ kind: 'plain', text: content }]
-}
-
-function formatDateGroup(timestamp: string): string {
-  try {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const yesterday = new Date(now)
-    yesterday.setDate(now.getDate() - 1)
-
-    const isToday =
-      date.getFullYear() === now.getFullYear() &&
-      date.getMonth() === now.getMonth() &&
-      date.getDate() === now.getDate()
-
-    if (isToday) return 'Today'
-
-    const isYesterday =
-      date.getFullYear() === yesterday.getFullYear() &&
-      date.getMonth() === yesterday.getMonth() &&
-      date.getDate() === yesterday.getDate()
-
-    if (isYesterday) return 'Yesterday'
-
-    return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch {
-    return 'Unknown Date'
-  }
 }
 
 function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {

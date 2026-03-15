@@ -8,6 +8,7 @@ import { Send } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
 import { WttShell } from '@/components/ui/wtt-shell'
+import { formatSmartTime, formatDateGroup } from '@/lib/time'
 
 
 interface Agent {
@@ -87,48 +88,6 @@ function normalizeFeed(raw: unknown): InboxMessage[] {
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
     }
   })
-}
-
-function formatTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '--:--'
-
-  const now = new Date()
-  const sameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-
-  if (sameDay) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-
-  return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
-}
-
-function formatDateGroup(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Unknown Date'
-
-  const now = new Date()
-  const yesterday = new Date(now)
-  yesterday.setDate(now.getDate() - 1)
-
-  const isToday =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-
-  if (isToday) return 'Today'
-
-  const isYesterday =
-    date.getFullYear() === yesterday.getFullYear() &&
-    date.getMonth() === yesterday.getMonth() &&
-    date.getDate() === yesterday.getDate()
-
-  if (isYesterday) return 'Yesterday'
-
-  return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 function topicSymbol(name: string): string {
@@ -471,7 +430,7 @@ export default function InboxPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-sm font-semibold text-slate-800">{conv.topicName}</p>
-                      <span className="shrink-0 text-[11px] text-slate-400">{formatTime(conv.lastTimestamp)}</span>
+                      <span className="shrink-0 text-[11px] text-slate-400">{formatSmartTime(conv.lastTimestamp)}</span>
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       <span
@@ -548,7 +507,7 @@ export default function InboxPage() {
                           {!mine && <p className="mb-1 text-xs font-semibold text-indigo-600">{message.senderId}</p>}
                           <p>{message.content || '(empty message)'}</p>
                           <div className={`mt-2 text-[10px] ${mine ? 'text-white/65' : 'text-slate-400'}`}>
-                            {formatTime(message.timestamp)}
+                            {formatSmartTime(message.timestamp)}
                             {message.semanticType ? ` · ${message.semanticType}` : ''}
                           </div>
                         </div>

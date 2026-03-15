@@ -13,6 +13,7 @@ import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachme
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks } from '@/components/ui/chat-view'
+import { formatTime, formatFullDateTime } from '@/lib/time'
 
 const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer'), { ssr: false })
 const AnnotationOverlay = dynamic(() => import('@/components/ui/annotation-overlay'), { ssr: false })
@@ -467,7 +468,7 @@ export default function ResearchTaskPage() {
 
   const saveNote = async () => {
     if (!selectedPaperId || !noteDialog) return
-    const timestamp = new Date().toLocaleString()
+    const timestamp = formatFullDateTime(new Date().toISOString())
     const parts = [`\n---\n📌 ${timestamp}`]
     if (noteDialog.quote) parts.push(`> ${noteDialog.quote.split('\n').join('\n> ')}`)
     if (noteDialog.comment.trim()) parts.push(`\n${noteDialog.comment.trim()}`)
@@ -1710,7 +1711,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                     {msg.role === 'assistant' ? <CitationText text={cleanBody} papers={papers} /> : (stripFileTokens(cleanBody) || cleanBody)}
                   </div>
                   <FileAttachmentPreview content={msg.content} />
-                  <p className="mt-1 text-[10px] text-slate-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{formatTime(msg.timestamp)}</p>
                   {msg.role === 'assistant' && (
                     <button
                       onClick={() => {

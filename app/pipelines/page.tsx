@@ -11,6 +11,7 @@ import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { analyzeDAG, agentColor, agentBgColor, type DAGAnalysis } from '@/lib/dag-analysis'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { ShareDialog } from '@/components/ui/share-dialog'
+import { formatTime } from '@/lib/time'
 
 /* ─── types ─── */
 interface Pipeline {
@@ -1742,7 +1743,7 @@ export default function PipelinesPage() {
                                       ▶ Apply Pipeline Actions
                                     </button>
                                   )}
-                                  {m.created_at && <p className={`mt-1 text-[8px] ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>{new Date(m.created_at).toLocaleTimeString()}</p>}
+                                  {m.created_at && <p className={`mt-1 text-[8px] ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>{formatTime(m.created_at)}</p>}
                                 </div>
                               </div>
                             )
