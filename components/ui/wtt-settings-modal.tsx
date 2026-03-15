@@ -69,6 +69,8 @@ export function WttSettingsModal({
   // Rotate invite code
   const [rotatingAgent, setRotatingAgent] = useState<string | null>(null)
   const [copiedAgent, setCopiedAgent] = useState<string | null>(null)
+  // Locally generated invite codes (shown immediately after generate)
+  const [localInviteCodes, setLocalInviteCodes] = useState<Record<string, string>>({})
 
   const handleClaim = async () => {
     const code = claimCode.trim()
@@ -161,10 +163,17 @@ export function WttSettingsModal({
         headers: { Authorization: `Bearer ${token}` },
       })
       if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        if (data.invite_code) {
+          setLocalInviteCodes((prev) => ({ ...prev, [agentId]: data.invite_code }))
+        }
         onBindingChanged?.()
+      } else {
+        const err = await response.json().catch(() => ({ detail: 'Failed' }))
+        alert(err.detail || 'Failed to generate invite code')
       }
     } catch {
-      // ignore
+      alert('Network error')
     } finally {
       setRotatingAgent(null)
     }
@@ -365,7 +374,9 @@ export function WttSettingsModal({
                 <p className="mt-1 text-xs text-slate-400">生成一次性邀请码，分享给他人即可让对方添加你的 Agent。每个邀请码仅可使用一次。</p>
 
                 <div className="mt-3 space-y-2">
-                  {agents.map((agent) => (
+                  {agents.map((agent) => {
+                    const activeCode = localInviteCodes[agent.agent_id] || (agent.invite_status === 'active' ? agent.invite_code : null)
+                    return (
                     <div key={agent.agent_id} className="rounded-lg border border-slate-200 bg-white p-3">
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
@@ -376,11 +387,11 @@ export function WttSettingsModal({
                           <p className="mt-0.5 truncate text-xs text-slate-400">{agent.agent_id}</p>
                         </div>
                       </div>
-                      {agent.invite_code && agent.invite_status === 'active' ? (
+                      {activeCode ? (
                         <div className="mt-2 flex items-center gap-2">
-                          <code className="flex-1 truncate rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-600 font-mono border border-emerald-200">{agent.invite_code}</code>
+                          <code className="flex-1 truncate rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-600 font-mono border border-emerald-200">{activeCode}</code>
                           <button
-                            onClick={() => handleCopyInvite(agent.agent_id, agent.invite_code!)}
+                            onClick={() => handleCopyInvite(agent.agent_id, activeCode)}
                             className="shrink-0 rounded border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-indigo-600"
                             title="复制邀请码"
                           >
@@ -393,7 +404,7 @@ export function WttSettingsModal({
                         </div>
                       ) : (
                         <div className="mt-2 flex items-center gap-2">
-                          <span className="text-xs text-slate-400">暂无有效邀请码</span>
+                          <span className="text-xs text-slate-400">暂无有效邀请码，点击下方按钮生成</span>
                         </div>
                       )}
                       <button
@@ -404,7 +415,8 @@ export function WttSettingsModal({
                         {rotatingAgent === agent.agent_id ? '生成中...' : '🔄 生成新邀请码（旧码作废）'}
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                   {agents.length === 0 && (
                     <p className="py-4 text-center text-sm text-slate-400">暂无绑定的 Agent</p>
                   )}
