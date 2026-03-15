@@ -13,6 +13,7 @@ interface AgentOption {
   display_name: string
   is_primary: boolean
   invite_code?: string
+  invite_status?: 'active' | 'none'
 }
 
 interface WttSettingsModalProps {
@@ -361,7 +362,7 @@ export function WttSettingsModal({
               {/* 已绑定 Agent 列表（含 invite code） */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">已绑定 Agent（{agents.length}）</p>
-                <p className="mt-1 text-xs text-slate-400">分享邀请码给他人即可让对方添加你的 Agent。</p>
+                <p className="mt-1 text-xs text-slate-400">生成一次性邀请码，分享给他人即可让对方添加你的 Agent。每个邀请码仅可使用一次。</p>
 
                 <div className="mt-3 space-y-2">
                   {agents.map((agent) => (
@@ -375,9 +376,9 @@ export function WttSettingsModal({
                           <p className="mt-0.5 truncate text-xs text-slate-400">{agent.agent_id}</p>
                         </div>
                       </div>
-                      {agent.invite_code && (
+                      {agent.invite_code && agent.invite_status === 'active' ? (
                         <div className="mt-2 flex items-center gap-2">
-                          <code className="flex-1 truncate rounded bg-slate-100 px-2 py-1 text-xs text-emerald-600 font-mono">{agent.invite_code}</code>
+                          <code className="flex-1 truncate rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-600 font-mono border border-emerald-200">{agent.invite_code}</code>
                           <button
                             onClick={() => handleCopyInvite(agent.agent_id, agent.invite_code!)}
                             className="shrink-0 rounded border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-indigo-600"
@@ -385,19 +386,23 @@ export function WttSettingsModal({
                           >
                             <ClipboardCopy className="h-3.5 w-3.5" />
                           </button>
-                          <button
-                            onClick={() => handleRotateInvite(agent.agent_id)}
-                            disabled={rotatingAgent === agent.agent_id}
-                            className="shrink-0 rounded border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-orange-600 disabled:opacity-50"
-                            title="重新生成邀请码（旧码失效）"
-                          >
-                            <RefreshCw className={`h-3.5 w-3.5 ${rotatingAgent === agent.agent_id ? 'animate-spin' : ''}`} />
-                          </button>
                           {copiedAgent === agent.agent_id && (
                             <span className="text-xs text-emerald-500">Copied!</span>
                           )}
+                          <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">🟢 有效</span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs text-slate-400">暂无有效邀请码</span>
                         </div>
                       )}
+                      <button
+                        onClick={() => handleRotateInvite(agent.agent_id)}
+                        disabled={rotatingAgent === agent.agent_id}
+                        className="mt-2 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        {rotatingAgent === agent.agent_id ? '生成中...' : '🔄 生成新邀请码（旧码作废）'}
+                      </button>
                     </div>
                   ))}
                   {agents.length === 0 && (

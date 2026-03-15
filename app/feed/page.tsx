@@ -29,6 +29,7 @@ interface Agent {
   is_primary: boolean
   api_key?: string
   invite_code?: string
+  invite_status?: 'active' | 'none'
 }
 
 function getHumanSender(session: unknown): string {
