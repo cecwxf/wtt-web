@@ -71,6 +71,9 @@ export function WttSettingsModal({
   const [copiedAgent, setCopiedAgent] = useState<string | null>(null)
   // Locally generated invite codes (shown immediately after generate)
   const [localInviteCodes, setLocalInviteCodes] = useState<Record<string, string>>({})
+  // Reset agent token
+  const [resettingToken, setResettingToken] = useState<string | null>(null)
+  const [agentTokens, setAgentTokens] = useState<Record<string, string>>({})
 
   const handleClaim = async () => {
     const code = claimCode.trim()
@@ -184,6 +187,33 @@ export function WttSettingsModal({
       setCopiedAgent(agentId)
       setTimeout(() => setCopiedAgent(null), 2000)
     })
+  }
+
+  const handleResetToken = async (agentId: string) => {
+    const token = session?.accessToken as string | undefined
+    if (!token) return
+    const ok = confirm('重置 Agent Token 后，旧 token 立即失效。\n你需要将新 token 更新到 skill 的 .env 中。\n确定继续？')
+    if (!ok) return
+    setResettingToken(agentId)
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/reset-token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        if (data.agent_token) {
+          setAgentTokens((prev) => ({ ...prev, [agentId]: data.agent_token }))
+        }
+      } else {
+        const err = await response.json().catch(() => ({ detail: 'Failed' }))
+        alert(err.detail || 'Failed to reset token')
+      }
+    } catch {
+      alert('Network error')
+    } finally {
+      setResettingToken(null)
+    }
   }
 
   if (!open) return null
@@ -414,6 +444,30 @@ export function WttSettingsModal({
                       >
                         {rotatingAgent === agent.agent_id ? '生成中...' : '🔄 生成新邀请码（旧码作废）'}
                       </button>
+                      {/* Reset agent token */}
+                      {agentTokens[agent.agent_id] ? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <code className="flex-1 truncate rounded bg-amber-50 px-2 py-1 text-xs text-amber-700 font-mono border border-amber-200">{agentTokens[agent.agent_id]}</code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(agentTokens[agent.agent_id])
+                              alert('Token 已复制！请立即粘贴到 skill 的 .env 中的 WTT_AGENT_TOKEN')
+                            }}
+                            className="shrink-0 rounded border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-amber-600"
+                            title="复制 Token"
+                          >
+                            <ClipboardCopy className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleResetToken(agent.agent_id)}
+                          disabled={resettingToken === agent.agent_id}
+                          className="mt-2 w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          {resettingToken === agent.agent_id ? '重置中...' : '🔑 重置 Agent Token'}
+                        </button>
+                      )}
                     </div>
                     )
                   })}
