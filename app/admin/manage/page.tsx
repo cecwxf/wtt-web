@@ -43,6 +43,7 @@ export default function AdminManagePage() {
   const [keyword, setKeyword] = useState('')
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -113,6 +114,32 @@ export default function AdminManagePage() {
     setSelectedTaskIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
+  const toggleAgent = (id: string) => {
+    setSelectedAgentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  const bulkDeleteAgents = async () => {
+    if (!selectedAgentIds.length) return
+    const ack = prompt(`将删除 ${selectedAgentIds.length} 个 agent 绑定/成员关系。请输入 DELETE 确认：`)
+    if (ack !== 'DELETE') return
+
+    setBusy(true)
+    try {
+      await Promise.allSettled(
+        selectedAgentIds.map((id) =>
+          fetch(`${CLIENT_WTT_API_BASE}/manager/admin/agents/${id}?hard=true`, {
+            method: 'DELETE',
+            headers,
+          })
+        )
+      )
+      setSelectedAgentIds([])
+      await loadAll()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const bulkDeleteTopics = async () => {
     if (!selectedTopicIds.length) return
     const ack = prompt(`将删除 ${selectedTopicIds.length} 个 topic。请输入 DELETE 确认：`)
@@ -122,7 +149,7 @@ export default function AdminManagePage() {
     try {
       await Promise.allSettled(
         selectedTopicIds.map((id) =>
-          fetch(`${CLIENT_WTT_API_BASE}/manager/admin/topics/${id}`, {
+          fetch(`${CLIENT_WTT_API_BASE}/manager/admin/topics/${id}?hard=true`, {
             method: 'DELETE',
             headers,
           })
@@ -144,7 +171,7 @@ export default function AdminManagePage() {
     try {
       await Promise.allSettled(
         selectedTaskIds.map((id) =>
-          fetch(`${CLIENT_WTT_API_BASE}/manager/admin/tasks/${id}?delete_topic=true`, {
+          fetch(`${CLIENT_WTT_API_BASE}/manager/admin/tasks/${id}?delete_topic=true&hard=true`, {
             method: 'DELETE',
             headers,
           })
@@ -185,6 +212,30 @@ export default function AdminManagePage() {
           ))}
         </select>
         <button onClick={loadAll} className="rounded bg-slate-900 text-white px-3 py-2 text-sm">刷新</button>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-medium">Agents ({agents.length})</h2>
+          <button
+            onClick={bulkDeleteAgents}
+            disabled={busy || !selectedAgentIds.length}
+            className="rounded bg-red-600 disabled:opacity-40 text-white px-3 py-1.5 text-sm"
+          >
+            删除选中 Agents ({selectedAgentIds.length})
+          </button>
+        </div>
+        <div className="max-h-[220px] overflow-auto space-y-2">
+          {agents.map((a) => (
+            <label key={a.agent_id} className="flex items-start gap-2 rounded border border-slate-200 p-2 text-sm">
+              <input type="checkbox" checked={selectedAgentIds.includes(a.agent_id)} onChange={() => toggleAgent(a.agent_id)} />
+              <div className="min-w-0">
+                <div className="truncate font-medium">{a.display_name}</div>
+                <div className="text-xs text-slate-500 truncate">{a.agent_id}</div>
+              </div>
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
