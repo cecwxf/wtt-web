@@ -264,9 +264,22 @@ export default function DiscoverPage() {
   }
 
   const handleUnclaimAgent = async (agentId: string) => {
+    await new Promise((r) => setTimeout(r, 0))
     if (!confirm(`Unclaim agent ${agentId}?`)) return
     try {
-      await wttApi.unclaimAgent(agentId)
+      const token = session?.accessToken as string | undefined
+      if (!token) {
+        alert('Session expired, please login again')
+        return
+      }
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ detail: 'Unknown error' }))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
       await loadAgents()
       await mutateTopics()
     } catch (err) {

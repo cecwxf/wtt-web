@@ -515,6 +515,8 @@ function FeedPageInner() {
   }
 
   const handleUnclaimAgent = async (agentId: string) => {
+    // Defer confirm to next tick so the menu close render completes first
+    await new Promise((r) => setTimeout(r, 0))
     if (!confirm(`Unclaim agent ${agentId}?`)) return
     try {
       const token = session?.accessToken as string | undefined
