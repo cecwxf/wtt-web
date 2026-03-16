@@ -339,6 +339,7 @@ export default function DiscoverPage() {
       onBindingChanged={loadAgents}
       notificationCount={0}
       currentUserName={sessionUserName(session)}
+      userToken={session?.accessToken as string | undefined}
     >
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row">

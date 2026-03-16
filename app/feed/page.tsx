@@ -652,6 +652,7 @@ function FeedPageInner() {
         maxSubAgents={maxSubAgents}
         agentStats={agentStats ?? undefined}
         onlineAgentIds={onlineAgentIds}
+        userToken={session?.accessToken as string | undefined}
       >
         <div className="flex h-full">
           {/* Main content area */}

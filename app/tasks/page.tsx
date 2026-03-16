@@ -901,6 +901,7 @@ export default function TasksPage() {
       maxSubAgents={maxSubAgents}
       agentStats={agentStats}
       onlineAgentIds={onlineAgentIds}
+      userToken={session?.accessToken as string | undefined}
       hideTopics
       hideCreateTopic
     >

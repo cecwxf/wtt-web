@@ -33,6 +33,7 @@ interface WttShellV2Props {
   maxSubAgents?: number
   agentStats?: AgentStatsMap
   onlineAgentIds?: Set<string>
+  userToken?: string
   children: ReactNode
 }
 
@@ -62,6 +63,7 @@ export function WttShellV2({
   maxSubAgents,
   agentStats,
   onlineAgentIds,
+  userToken,
   children,
 }: WttShellV2Props) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -199,6 +201,7 @@ export function WttShellV2({
         onClose={() => setCreateTopicOpen(false)}
         creatorAgentId={selectedAgentId}
         agentOptions={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
+        userToken={userToken}
         onSuccess={() => {
           onTopicsRefresh?.()
         }}

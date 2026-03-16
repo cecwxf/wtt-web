@@ -1172,6 +1172,7 @@ export default function PipelinesPage() {
       agentStats={agentStats}
       onlineAgentIds={onlineAgentIds}
       onBindingChanged={loadAgents}
+      userToken={session?.accessToken as string | undefined}
       hideTopics
       hideCreateTopic
     >

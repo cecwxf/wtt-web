@@ -10,6 +10,7 @@ interface CreateTopicModalProps {
   onSuccess?: () => void
   creatorAgentId?: string
   agentOptions?: Array<{ agent_id: string; display_name: string }>
+  userToken?: string
 }
 
 type TopicType = 'broadcast' | 'discussion' | 'collaborative'
@@ -19,7 +20,7 @@ type JoinMethod = 'open' | 'invite_only'
 const MAX_NAME = 80
 const MAX_DESC = 500
 
-export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, agentOptions = [] }: CreateTopicModalProps) {
+export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, agentOptions = [], userToken }: CreateTopicModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [topicType, setTopicType] = useState<TopicType>('discussion')
@@ -75,7 +76,7 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
         visibility,
         join_method: joinMethod,
         creator_agent_id: selectedCreatorId,
-      })
+      }, userToken)
 
       setName('')
       setDescription('')

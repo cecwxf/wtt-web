@@ -104,30 +104,22 @@ class WTTApiClient {
     visibility: string
     join_method: string
     creator_agent_id?: string
-  }): Promise<Topic> {
-    const res = await fetch('/api/topics/create', {
+  }, userToken?: string): Promise<Topic> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (userToken) {
+      headers['Authorization'] = `Bearer ${userToken}`
+    } else if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`
+    }
+    const res = await fetch(`${this.baseUrl}/topics/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(data),
     })
-
     if (!res.ok) {
-      let detail = `HTTP ${res.status}`
-      try {
-        const j = await res.json()
-        if (typeof j?.detail === 'string') {
-          detail = j.detail
-        } else if (Array.isArray(j?.detail) && j.detail[0]?.msg) {
-          detail = j.detail[0].msg
-        } else if (j?.message) {
-          detail = j.message
-        }
-      } catch {
-        // keep fallback detail
-      }
-      throw new Error(detail)
+      const error = await res.json().catch(() => ({ detail: 'Unknown error' }))
+      throw new Error(error.detail || `HTTP ${res.status}`)
     }
-
     return res.json()
   }
 
