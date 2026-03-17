@@ -124,7 +124,7 @@ export interface MetaBlock { label: string; entries: Record<string, string> }
 export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: string } {
   const meta: MetaBlock[] = []
   // Match ┌─ <label> ─…\n │ lines…\n └─…\n  (greedy per-block)
-  const cleaned = content.replace(
+  let cleaned = content.replace(
     /┌─\s*(.+?)\s*─+\n((?:│[^\n]*\n?)*)└─+\n?/g,
     (_match, label: string, inner: string) => {
       const entries: Record<string, string> = {}
@@ -140,6 +140,8 @@ export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: str
       return ''
     }
   )
+  // Strip inline [Model: ... | Effort: ...] and [Switched → Model: ...] tags
+  cleaned = cleaned.replace(/\[(Switched\s*→\s*)?Model:\s*[^\]]*\]\s*/g, '')
   return { meta, body: cleaned.trim() }
 }
 
@@ -416,22 +418,10 @@ export function ChatView({
     if (!draft.trim()) return
 
     const modelConfig: ChatModelConfig = { model: selectedModel, reasoningEffort }
-    let content = draft.trim()
-
-    const modelLabel = AVAILABLE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel
-    const lastCfg = lastSentConfigRef.current
-    const configChanged = lastCfg && (lastCfg.model !== selectedModel || lastCfg.effort !== reasoningEffort)
-
-    // Prepend model info on the first message OR when config changes mid-conversation
-    if (isFirstMessage || configChanged) {
-      const prefix = configChanged
-        ? `[Switched → Model: ${modelLabel} | Effort: ${reasoningEffort}]`
-        : `[Model: ${modelLabel} | Effort: ${reasoningEffort}]`
-      content = `${prefix}\n\n${content}`
-      if (isFirstMessage) setIsFirstMessage(false)
-    }
+    const content = draft.trim()
 
     lastSentConfigRef.current = { model: selectedModel, effort: reasoningEffort }
+    if (isFirstMessage) setIsFirstMessage(false)
 
     setSending(true)
     try {
