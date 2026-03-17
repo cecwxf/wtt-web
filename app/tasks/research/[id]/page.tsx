@@ -12,7 +12,7 @@ import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
-import { stripMetaBlocks } from '@/components/ui/chat-view'
+import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { formatTime, formatFullDateTime } from '@/lib/time'
 
@@ -1680,7 +1680,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                 </div>
               </div>
             )}
-            {chatMessages.map((msg) => {
+            {chatMessages.filter(m => !isProgressMessage(m.content)).map((msg) => {
               const { meta: msgMeta, body: cleanBody } = stripMetaBlocks(msg.content || '')
               return (
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>

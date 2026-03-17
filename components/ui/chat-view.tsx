@@ -26,6 +26,28 @@ const AVAILABLE_MODELS = [
   { id: 'openai-codex/gpt-5.3-codex', label: 'GPT-5.3 Codex' },
 ]
 
+/**
+ * Detect progress/status messages that should be hidden from the Talk feed.
+ * These are intermediate updates (reasoning running, queue position, plan details)
+ * — only the final result should be visible to users.
+ */
+const PROGRESS_PATTERNS = [
+  /^Time:\s*\d{1,2}:\d{2}:\d{2}\s*\n\s*Progress:\s*\d+%/m,       // Time: HH:MM:SS\nProgress: N%
+  /^Status:\s*\[Task:/m,                                            // Status: [Task: xxx] ...
+  /^\[STATUS\]\s*(Started|Completed)/m,                             // [STATUS] Started/Completed
+  /^Plan Mode result:/m,                                            // Plan mode phase listing
+  /^Plan Mode结果/m,                                                // Plan mode failure (Chinese)
+  /^Progress:\s*\d+%\s*$/m,                                        // Standalone "Progress: N%"
+  /^\[TASK_STATUS\]/m,                                              // Structured [TASK_STATUS] progress
+  /^\[TASK_RUN\]/m,                                                 // Task dispatch metadata
+]
+
+export function isProgressMessage(content: string): boolean {
+  if (!content) return false
+  const c = content.trim()
+  return PROGRESS_PATTERNS.some(p => p.test(c))
+}
+
 const REASONING_EFFORTS = [
   { id: 'off', label: 'Off', icon: '💤' },
   { id: 'low', label: 'Low', icon: '⚡' },
@@ -554,8 +576,10 @@ export function ChatView({
     }
   }, [messages, previewCache])
 
+  const visibleMessages = messages.filter(m => !isProgressMessage(m.content))
+
   const groupedMessages: Array<{ label: string; messages: ChatMessage[] }> = []
-  messages.forEach((message) => {
+  visibleMessages.forEach((message) => {
     const label = formatDateGroup(message.timestamp)
     const lastGroup = groupedMessages[groupedMessages.length - 1]
     if (!lastGroup || lastGroup.label !== label) {

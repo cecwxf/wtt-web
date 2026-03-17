@@ -12,7 +12,7 @@ import { buildWttUserSourceFlow } from '@/lib/wtt-info-flow'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
-import { stripMetaBlocks } from '@/components/ui/chat-view'
+import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
@@ -2768,7 +2768,7 @@ function CodeTaskPageInner() {
                     </div>
                   </div>
                 )}
-                {chatMessages.map((msg) => {
+                {chatMessages.filter(m => !isProgressMessage(m.content)).map((msg) => {
                   const patch = msg.role === 'assistant' ? extractFilePatch(msg.content) : null
                   const allPatches = msg.role === 'assistant' ? extractAllPatches(msg.content) : []
                   const { meta: msgMeta, body: cleanBody } = stripMetaBlocks(msg.content || '')
