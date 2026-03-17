@@ -347,6 +347,7 @@ export function ChatView({
   hasOlder = false,
   loading,
   extraHeaderActions,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isTaskTopic = false,
   taskType = null,
   wsConnected = false,
