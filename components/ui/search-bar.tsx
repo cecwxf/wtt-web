@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { wttApi } from '@/lib/api/wtt-client'
 import type { Topic } from '@/lib/api/wtt-client'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 interface TaskResult {
   id: string
@@ -27,9 +28,10 @@ interface PipelineResult {
 interface SearchBarProps {
   onSelectTopic?: (topicId: string) => void
   placeholder?: string
+  agentId?: string
 }
 
-export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, pipelines...' }: SearchBarProps) {
+export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, pipelines...', agentId = '' }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [topics, setTopics] = useState<Topic[]>([])
   const [tasks, setTasks] = useState<TaskResult[]>([])
@@ -94,13 +96,13 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, 
   const handleSelectTask = (taskId: string) => {
     setShowResults(false)
     setQuery('')
-    router.push(`/tasks?highlight=${taskId}`)
+    router.push(buildAgentUrl('/tasks', agentId, { highlight: taskId }))
   }
 
   const handleSelectPipeline = (pipelineId: string) => {
     setShowResults(false)
     setQuery('')
-    router.push(`/pipelines?edit=${pipelineId}`)
+    router.push(buildAgentUrl('/pipelines', agentId, { edit: pipelineId }))
   }
 
   const handleClear = () => {

@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
 import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN, WS_BASE_URL } from '@/lib/api/base-url'
@@ -14,6 +14,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks } from '@/components/ui/chat-view'
 import { formatTime, formatDateGroup } from '@/lib/time'
+import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -465,14 +466,18 @@ function FileTreeNode({
 }
 
 // ── Main Page ──────────────────────────────────────────
-export default function CodeTaskPage() {
+export default function CodeTaskPageWrapper() {
+  return <Suspense fallback={null}><CodeTaskPageInner /></Suspense>
+}
+
+function CodeTaskPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const params = useParams()
   const taskId = params.id as string
 
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [fileTree, setFileTree] = useState<FileNode[]>([])
   const [selectedFile, setSelectedFile] = useState<FileNode | null>(null)
   const [fileContent, setFileContent] = useState('')
@@ -2148,7 +2153,7 @@ export default function CodeTaskPage() {
       {/* Top bar */}
       <div className={`flex h-11 shrink-0 items-center justify-between border-b ${tc.border} ${tc.surface} px-4`}>
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/tasks')} className="text-sm text-indigo-500 hover:underline">← Tasks</button>
+          <button onClick={() => router.push(buildAgentUrl('/tasks', selectedAgentId))} className="text-sm text-indigo-500 hover:underline">← Tasks</button>
           <span className={`text-sm font-semibold ${tc.text}`}>{task?.title || 'Code Task'}</span>
           <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium text-cyan-700">💻 Code</span>
           {task?.status && (

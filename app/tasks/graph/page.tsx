@@ -2,11 +2,12 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { normalizeAndFilterAgents } from '@/lib/agents'
+import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 interface TaskNode {
   id: string
@@ -39,12 +40,16 @@ const actorSource = (session: unknown, selectedAgentId: string) => {
   return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : selectedAgentId || 'user')
 }
 
-export default function TasksGraphPage() {
+export default function TasksGraphPageWrapper() {
+  return <Suspense fallback={null}><TasksGraphPageInner /></Suspense>
+}
+
+function TasksGraphPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [depFromId, setDepFromId] = useState('')
   const [depToId, setDepToId] = useState('')
   const [agents, setAgents] = useState<Array<{ agent_id: string; display_name: string }>>([])
@@ -587,8 +592,8 @@ export default function TasksGraphPage() {
                   </div>
                 </div>
 
-                <button className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs" onClick={() => router.push('/tasks')}>Open in Tasks Board</button>
-                {selected.topic_id && <button className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs" onClick={() => router.push(`/feed?topicId=${selected.topic_id}`)}>Open Topic Feed</button>}
+                <button className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs" onClick={() => router.push(buildAgentUrl('/tasks', selectedAgentId))}>Open in Tasks Board</button>
+                {selected.topic_id && <button className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs" onClick={() => router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: selected.topic_id! }))}>Open Topic Feed</button>}
               </div>
             ) : (
               <p className="text-xs text-slate-500">Select a node</p>

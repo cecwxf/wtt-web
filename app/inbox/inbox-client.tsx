@@ -2,13 +2,14 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { Send } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
 import { WttShell } from '@/components/ui/wtt-shell'
 import { formatSmartTime, formatDateGroup } from '@/lib/time'
+import { useAgentId } from '@/lib/hooks/use-agent-id'
 
 
 interface Agent {
@@ -106,12 +107,16 @@ function conversationKind(topicId: string, topicName: string): 'topic' | 'p2p' |
   return 'topic'
 }
 
-export default function InboxPage() {
+export default function InboxPageWrapper() {
+  return <Suspense fallback={null}><InboxPageInner /></Suspense>
+}
+
+function InboxPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const accessToken = session?.accessToken as string | undefined
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [activeTopicId, setActiveTopicId] = useState('')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -146,7 +151,9 @@ export default function InboxPage() {
         const fallback = primary ?? list[0]
 
         if (fallback) {
-          setSelectedAgentId(fallback.agent_id)
+          if (!selectedAgentId || !list.some((a) => a.agent_id === selectedAgentId)) {
+            setSelectedAgentId(fallback.agent_id)
+          }
           if (fallback.api_key) {
             wttApi.setToken(fallback.api_key)
           }

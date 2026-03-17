@@ -16,6 +16,7 @@ import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 import type { ContentFormat } from '@/components/ui/content-editor'
 import type { EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
+import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 const ContentEditor = dynamic(
   () => import('@/components/ui/content-editor').then((m) => m.ContentEditor),
@@ -73,7 +74,7 @@ function FeedPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [hasOlder, setHasOlder] = useState(false)
@@ -101,7 +102,10 @@ function FeedPageInner() {
       const fallback = list[0]
 
       if (fallback) {
-        setSelectedAgentId((prev) => (prev && list.some((a) => a.agent_id === prev) ? prev : fallback.agent_id))
+        // Only override if current selection is empty or no longer valid
+        if (!selectedAgentId || !list.some((a) => a.agent_id === selectedAgentId)) {
+          setSelectedAgentId(fallback.agent_id)
+        }
         if (fallback.api_key) {
           wttApi.setToken(fallback.api_key)
         }
@@ -628,7 +632,7 @@ function FeedPageInner() {
 
   return (
     <>
-      <KeyboardShortcuts onDiscover={() => router.push('/discover')} />
+      <KeyboardShortcuts onDiscover={() => router.push(buildAgentUrl('/discover', selectedAgentId))} />
 
       <WttShellV2
         agents={agentItems}
@@ -746,7 +750,7 @@ function FeedPageInner() {
                   <button
                     key={item.type}
                     onClick={async () => {
-                      if (item.type === 'pipeline') { router.push('/pipelines'); return }
+                      if (item.type === 'pipeline') { router.push(buildAgentUrl('/pipelines', selectedAgentId)); return }
                       // General tasks: instant create with "New Task" title (ChatGPT-style)
                       if (item.type === 'general') { handleQuickCreateTask(); return }
                       const title = prompt(`${item.label}\n\nEnter task title:`)
@@ -767,9 +771,9 @@ function FeedPageInner() {
                         })
                         if (!r.ok) { alert('Failed to create task'); return }
                         const task = await r.json()
-                        if (item.type === 'code') router.push(`/tasks/code/${task.id}`)
-                        else if (item.type === 'research') router.push(`/tasks/research/${task.id}`)
-                        else router.push('/tasks')
+                        if (item.type === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
+                        else if (item.type === 'research') router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
+                        else router.push(buildAgentUrl('/tasks', selectedAgentId))
                       } catch { alert('Failed to create task') }
                     }}
                     className={`group flex w-full items-center gap-3 rounded-xl border ${item.border} ${item.bg} px-4 py-5 text-left shadow-sm transition-all hover:shadow-lg hover:ring-2 ${item.ring} hover:-translate-y-0.5 active:translate-y-0`}
@@ -793,10 +797,13 @@ function FeedPageInner() {
                   <div className="space-y-1">
                     {recentTasks.map((t) => {
                       const icon = t.task_type === 'code' ? '💻' : t.task_type === 'research' ? '🔬' : t.task_type === 'pipeline' ? '🔗' : '📋'
-                      const href = t.task_type === 'code' ? `/tasks/code/${t.id}`
+                      const href = buildAgentUrl(
+                        t.task_type === 'code' ? `/tasks/code/${t.id}`
                         : t.task_type === 'research' ? `/tasks/research/${t.id}`
                         : t.task_type === 'pipeline' ? '/pipelines'
-                        : `/tasks`
+                        : `/tasks`,
+                        selectedAgentId
+                      )
                       return (
                         <button
                           key={t.id}

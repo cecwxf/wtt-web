@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight, MoreVertical, User } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 export interface AgentItem {
   agent_id: string
@@ -275,10 +276,13 @@ export function AgentColumn({
                   {tasks.slice(0, maxSubAgents).map((t) => {
                     const isActive = t.status === 'doing'
                     const isDone = t.status === 'done'
-                    const href = t.task_type === 'code' ? `/tasks/code/${t.id}`
+                    const href = buildAgentUrl(
+                      t.task_type === 'code' ? `/tasks/code/${t.id}`
                       : t.task_type === 'research' ? `/tasks/research/${t.id}`
                       : t.task_type === 'pipeline' ? '/pipelines'
-                      : `/tasks`
+                      : `/tasks`,
+                      selectedAgentId
+                    )
                     return (
                       <button
                         key={t.id}

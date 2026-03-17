@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-column'
@@ -12,6 +12,7 @@ import { analyzeDAG, agentColor, agentBgColor, type DAGAnalysis } from '@/lib/da
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { formatTime } from '@/lib/time'
+import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 /* ─── types ─── */
 interface Pipeline {
@@ -172,12 +173,16 @@ function ParaClip({ id, w, h }: { id: string; w: number; h: number }) {
 }
 
 /* ─── page component ─── */
-export default function PipelinesPage() {
+export default function PipelinesPageWrapper() {
+  return <Suspense fallback={null}><PipelinesPageInner /></Suspense>
+}
+
+function PipelinesPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
   const [agents, setAgents] = useState<Array<{ agent_id: string; display_name: string }>>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
 
   useEffect(() => { if (status === 'unauthenticated') router.push('/login') }, [status, router])
 
@@ -1884,8 +1889,8 @@ export default function PipelinesPage() {
                         </div>
 
                         <div className="flex gap-2">
-                          <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push('/tasks')}>Tasks Board</button>
-                          {selected.topic_id && <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push(`/feed?topicId=${selected.topic_id}`)}>Topic Feed</button>}
+                          <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push(buildAgentUrl('/tasks', selectedAgentId))}>Tasks Board</button>
+                          {selected.topic_id && <button className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-100" onClick={() => router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: selected.topic_id! }))}>Topic Feed</button>}
                         </div>
 
                         <p className="text-[9px] text-slate-400">ID: {selected.id}</p>

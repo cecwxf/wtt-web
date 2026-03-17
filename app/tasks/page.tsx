@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
@@ -11,6 +11,7 @@ import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachme
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-column'
 import { ShareDialog } from '@/components/ui/share-dialog'
+import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 interface Agent {
   id: string
@@ -92,11 +93,15 @@ const fallbackProgressByStatus = (status: TaskItem['status']) => {
   return 0
 }
 
-export default function TasksPage() {
+export default function TasksPageWrapper() {
+  return <Suspense fallback={null}><TasksPageInner /></Suspense>
+}
+
+function TasksPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   const [taskDraft, setTaskDraft] = useState<Partial<TaskItem>>({})
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -491,9 +496,9 @@ export default function TasksPage() {
 
         // Navigate to the appropriate task page
         if (newTaskType === 'code') {
-          router.push(`/tasks/code/${real.id}`)
+          router.push(buildAgentUrl(`/tasks/code/${real.id}`, selectedAgentId))
         } else if (newTaskType === 'research') {
-          router.push(`/tasks/research/${real.id}`)
+          router.push(buildAgentUrl(`/tasks/research/${real.id}`, selectedAgentId))
         }
       } else {
         mutateTasks()
@@ -891,7 +896,7 @@ export default function TasksPage() {
       onAgentChange={(id) => { setSelectedAgentId(id); setSelectedTask(null) }}
       topics={topics}
       selectedTopicId={null}
-      onTopicChange={(topicId) => router.push(topicId ? `/feed?topicId=${topicId}` : '/feed')}
+      onTopicChange={(topicId) => router.push(buildAgentUrl('/feed', selectedAgentId, topicId ? { topicId } : undefined))}
       onLeaveTopic={leaveTopicFromSidebar}
       onDeleteTopic={deleteTopicFromSidebar}
       onTopicsRefresh={() => mutateSubscribedTopics()}
@@ -973,8 +978,8 @@ export default function TasksPage() {
                         }
                       }}
                       onDoubleClick={() => {
-                        if (task.task_type === 'code') router.push(`/tasks/code/${task.id}`)
-                        else if (task.task_type === 'research') router.push(`/tasks/research/${task.id}`)
+                        if (task.task_type === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
+                        else if (task.task_type === 'research') router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
                       }}
                       onContextMenu={(e) => {
                         e.preventDefault()
@@ -993,8 +998,8 @@ export default function TasksPage() {
                           <span
                             role="button"
                             tabIndex={0}
-                            onClick={(e) => { e.stopPropagation(); router.push(`/feed?topicId=${task.topic_id}`) }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(`/feed?topicId=${task.topic_id}`) } }}
+                            onClick={(e) => { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) } }}
                             className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100 hover:border-indigo-300 cursor-pointer transition"
                             title="View in Feed"
                           >
@@ -1227,8 +1232,8 @@ export default function TasksPage() {
               onClick={() => {
                 const t = taskContextMenu.task
                 setTaskContextMenu(null)
-                if (t.task_type === 'code') router.push(`/tasks/code/${t.id}`)
-                else router.push(`/tasks/research/${t.id}`)
+                if (t.task_type === 'code') router.push(buildAgentUrl(`/tasks/code/${t.id}`, selectedAgentId))
+                else router.push(buildAgentUrl(`/tasks/research/${t.id}`, selectedAgentId))
               }}
             >
               {taskContextMenu.task.task_type === 'code' ? '💻' : '📄'} Open in IDE

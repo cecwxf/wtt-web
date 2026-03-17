@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
@@ -13,6 +13,7 @@ import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { normalizeAndFilterAgents } from '@/lib/agents'
+import { useAgentId } from '@/lib/hooks/use-agent-id'
 
 interface Agent {
   id: string
@@ -28,7 +29,11 @@ const sessionUserName = (session: unknown) => {
   return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
-export default function DiscoverPage() {
+export default function DiscoverPageWrapper() {
+  return <Suspense fallback={null}><DiscoverPageInner /></Suspense>
+}
+
+function DiscoverPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
@@ -41,7 +46,7 @@ export default function DiscoverPage() {
   const [typeFilter] = useState<'all' | 'broadcast' | 'discussion' | 'collaborative'>('all')
   const [joinFilter] = useState<'all' | 'open' | 'invite_only'>('all')
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
 
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
@@ -64,7 +69,9 @@ export default function DiscoverPage() {
       const fallback = list[0]
 
       if (fallback) {
-        setSelectedAgentId((prev) => (prev && list.some((a) => a.agent_id === prev) ? prev : fallback.agent_id))
+        if (!selectedAgentId || !list.some((a) => a.agent_id === selectedAgentId)) {
+          setSelectedAgentId(fallback.agent_id)
+        }
         if (fallback.api_key) {
           wttApi.setToken(fallback.api_key)
         }

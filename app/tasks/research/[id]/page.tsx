@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
 import ReactMarkdown from 'react-markdown'
@@ -13,6 +13,7 @@ import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachme
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks } from '@/components/ui/chat-view'
+import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { formatTime, formatFullDateTime } from '@/lib/time'
 
 const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer'), { ssr: false })
@@ -125,7 +126,11 @@ const CitationText = ({ text, papers }: { text: string; papers: Paper[] }) => {
 }
 
 // ── Main Component ─────────────────────────────────────
-export default function ResearchTaskPage() {
+export default function ResearchTaskPageWrapper() {
+  return <Suspense fallback={null}><ResearchTaskPageInner /></Suspense>
+}
+
+function ResearchTaskPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const params = useParams()
@@ -136,7 +141,7 @@ export default function ResearchTaskPage() {
 
   // Agent
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
 
   // Papers
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null)
@@ -253,7 +258,7 @@ export default function ResearchTaskPage() {
     if (!r.ok) { alert('Failed to create project'); return }
     const t = await r.json()
     mutateProjects()
-    router.push(`/tasks/research/${t.id}`)
+    router.push(buildAgentUrl(`/tasks/research/${t.id}`, selectedAgentId))
   }
 
   const renameProject = async (pid: string, currentTitle: string) => {
@@ -276,8 +281,8 @@ export default function ResearchTaskPage() {
     mutateProjects()
     if (pid === taskId && projects.length > 1) {
       const other = projects.find(p => p.id !== pid)
-      if (other) router.push(`/tasks/research/${other.id}`)
-      else router.push('/tasks')
+      if (other) router.push(buildAgentUrl(`/tasks/research/${other.id}`, selectedAgentId))
+      else router.push(buildAgentUrl('/tasks', selectedAgentId))
     }
   }
 
@@ -769,7 +774,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
       {/* Top bar */}
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/tasks')} className="text-sm text-indigo-500 hover:underline">← Tasks</button>
+          <button onClick={() => router.push(buildAgentUrl('/tasks', selectedAgentId))} className="text-sm text-indigo-500 hover:underline">← Tasks</button>
           <span className="text-sm font-semibold text-slate-700 dark:text-zinc-200 max-w-[300px] truncate">{task?.title || 'Research Task'}</span>
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">📄 Research</span>
           {task?.status && (
@@ -831,7 +836,7 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                   {projects.map((p) => (
                     <div
                       key={p.id}
-                      onClick={() => { if (p.id !== taskId) router.push(`/tasks/research/${p.id}`) }}
+                      onClick={() => { if (p.id !== taskId) router.push(buildAgentUrl(`/tasks/research/${p.id}`, selectedAgentId)) }}
                       onDoubleClick={() => renameProject(p.id, p.title)}
                       onContextMenu={(e) => {
                         e.preventDefault()

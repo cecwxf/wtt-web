@@ -5,7 +5,7 @@ export function buildWttUserSourceFlow(senderName: string, content: string): str
   const normalizedSender = senderName.trim() || 'User'
   return [
     SOURCE_FLOW_HEADER,
-    `│ 来自WTT User: ${normalizedSender}`,
+    `│ ${normalizedSender}`,
     SOURCE_FLOW_FOOTER,
     content,
   ].join('\n')

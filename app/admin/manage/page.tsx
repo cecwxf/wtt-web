@@ -2,8 +2,9 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { useAgentId } from '@/lib/hooks/use-agent-id'
 
 interface AgentBinding {
   agent_id: string
@@ -32,12 +33,16 @@ interface TaskRow {
   runner_agent_id?: string
 }
 
-export default function AdminManagePage() {
+export default function AdminManagePageWrapper() {
+  return <Suspense fallback={null}><AdminManagePageInner /></Suspense>
+}
+
+function AdminManagePageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
   const [agents, setAgents] = useState<AgentBinding[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [topics, setTopics] = useState<TopicRow[]>([])
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [keyword, setKeyword] = useState('')
@@ -71,7 +76,9 @@ export default function AdminManagePage() {
             .map((id: string) => ({ agent_id: id, display_name: id }))
         : []
       setAgents(normalizedAgents)
-      setSelectedAgentId((prev) => (prev && normalizedAgents.some((a: { agent_id: string }) => a.agent_id === prev) ? prev : ''))
+      if (selectedAgentId && !normalizedAgents.some((a: { agent_id: string }) => a.agent_id === selectedAgentId)) {
+        setSelectedAgentId('')
+      }
 
       setTopics(Array.isArray(data?.topics) ? data.topics : [])
       setTasks(Array.isArray(data?.tasks) ? data.tasks : [])

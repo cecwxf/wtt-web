@@ -95,6 +95,7 @@ export function WttShellV2({
           onOpenEditor={onOpenEditor}
           hideCreateTopic={hideCreateTopic}
           notificationCount={notificationCount}
+          agentId={selectedAgentId}
           userMenu={
             <div className="relative">
               <button
