@@ -354,7 +354,7 @@ export function ChatView({
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
-  const [awaitingAgent, setAwaitingAgent] = useState(false)
+
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -449,7 +449,6 @@ export function ChatView({
     try {
       await onSendMessage(content, modelConfig)
       setDraft('')
-      if (isTaskTopic) setAwaitingAgent(true)
     } catch (error) {
       console.error('Failed to send message:', error)
       alert(error instanceof Error ? error.message : 'Failed to send message')
@@ -458,15 +457,6 @@ export function ChatView({
     }
   }
 
-  // Clear thinking indicator when a new agent message arrives
-  useEffect(() => {
-    if (!awaitingAgent || !isTaskTopic) return
-    const visibleMsgs = messages.filter(m => !isProgressMessage(m.content))
-    const lastVisible = visibleMsgs[visibleMsgs.length - 1]
-    if (lastVisible && lastVisible.sender_type === 'agent') {
-      setAwaitingAgent(false)
-    }
-  }, [messages, awaitingAgent, isTaskTopic])
 
   const uploadAssetAndInsert = async (file: File) => {
     setUploading(true)
@@ -945,16 +935,6 @@ export function ChatView({
         ))}
       </div>
 
-      {awaitingAgent && isTaskTopic && (
-        <div className="flex items-center gap-3 border-t border-slate-100 dark:border-zinc-700 bg-slate-50/50 dark:bg-zinc-800/50 px-4 py-2.5">
-          <div className="flex items-center gap-1">
-            <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:0ms]" />
-            <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:150ms]" />
-            <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:300ms]" />
-          </div>
-          <span className="text-xs text-slate-500 dark:text-zinc-400">Agent thinking…</span>
-        </div>
-      )}
 
       <div className="border-t border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 sm:p-4">
         {/* Model & Reasoning effort selector */}
