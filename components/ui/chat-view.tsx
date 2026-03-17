@@ -40,6 +40,7 @@ const PROGRESS_PATTERNS = [
   /^Progress:\s*\d+%\s*$/m,                                        // Standalone "Progress: N%"
   /^\[TASK_STATUS\]/m,                                              // Structured [TASK_STATUS] progress
   /^\[TASK_RUN\]/m,                                                 // Task dispatch metadata
+  /^🤔\s*Agent thinking/m,                                         // Agent thinking placeholder
 ]
 
 export function isProgressMessage(content: string): boolean {
@@ -671,7 +672,12 @@ export function ChatView({
                           : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'
                       } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
                     >
-                      {!isMine && <p className="mb-1 text-xs font-semibold text-indigo-600">{message.sender_display_name || message.sender_id}</p>}
+                      {!isMine && (() => {
+                        let label = message.sender_display_name || message.sender_id || ''
+                        // Strip verbose prefixes — just show the name
+                        label = label.replace(/^Agent\s+/i, '').replace(/^WTT[\s-]*User\s*/i, '').trim()
+                        return label ? <p className="mb-1 text-xs font-semibold text-indigo-600">{label}</p> : null
+                      })()}
                       {(() => {
                         const task = parseTaskContent(message.content || '')
                         if (task.isTask) {
@@ -756,8 +762,8 @@ export function ChatView({
                           )
                         }
 
-                        // Strip ASCII box-drawing metadata blocks and render as styled cards
-                        const { meta, body: cleanContent } = stripMetaBlocks(message.content || '')
+                        // Strip ASCII box-drawing metadata blocks
+                        const { body: cleanContent } = stripMetaBlocks(message.content || '')
                         const blocks = parseRichBlocks(cleanContent)
 
                         // Detect document message pattern: plain text preview + .md/.html file
@@ -799,27 +805,6 @@ export function ChatView({
 
                         return (
                           <div className="space-y-3">
-                            {/* Structured metadata cards (extracted from ASCII blocks) */}
-                            {meta.length > 0 && (
-                              <div className="space-y-1.5">
-                                {meta.map((m, mi) => {
-                                  const entries = Object.entries(m.entries).filter(([, v]) => v !== '')
-                                  if (entries.length === 0) return null
-                                  return (
-                                    <div key={mi} className="rounded-lg border border-slate-200/80 dark:border-zinc-700/60 bg-gradient-to-r from-slate-50/80 to-white dark:from-zinc-800/60 dark:to-zinc-800/30 px-3 py-2">
-                                      <div className="grid gap-x-4 gap-y-0.5" style={{ gridTemplateColumns: 'auto 1fr' }}>
-                                        {entries.map(([k, v]) => (
-                                          <div key={k} className="contents text-[12px]">
-                                            <span className="text-slate-400 dark:text-zinc-500 whitespace-nowrap">{k}</span>
-                                            <span className="text-slate-600 dark:text-zinc-300 font-medium truncate">{v}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
                             {blocks.map((block, bi) => {
                               if (block.kind === 'image') {
                                 return <ThumbnailImage key={bi} url={block.url} isMine={isMine} />
