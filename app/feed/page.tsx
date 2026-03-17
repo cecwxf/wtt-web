@@ -199,6 +199,16 @@ function FeedPageInner() {
     setHasOlder(normalized.length >= 100)
   }, [feedRaw, selectedTopicId])
 
+  // Enrich messages: replace raw agent_id fallback with display_name from agentNameMap
+  const enrichedMessages = useMemo(() => {
+    return allMessages.map(m => {
+      if (m.sender_display_name && m.sender_display_name !== m.sender_id) return m
+      const name = agentNameMap[m.sender_id]
+      if (name) return { ...m, sender_display_name: name }
+      return m
+    })
+  }, [allMessages, agentNameMap])
+
   const loadOlderMessages = useCallback(async () => {
     if (!selectedTopicId || loadingOlder || allMessages.length === 0) return
     setLoadingOlder(true)
@@ -664,7 +674,7 @@ function FeedPageInner() {
             {selectedTopicId && selectedTopic ? (
               <ChatView
                 topicName={selectedTopic.name}
-                messages={allMessages.filter(m => !m.content.includes('[system:p2p_init]') && !m.content.includes('[System] P2P channel established'))}
+                messages={enrichedMessages.filter(m => !m.content.includes('[system:p2p_init]') && !m.content.includes('[System] P2P channel established'))}
                 currentAgentId={selectedAgentId}
                 onSendMessage={handleSendMessage}
                 onLoadOlder={loadOlderMessages}
