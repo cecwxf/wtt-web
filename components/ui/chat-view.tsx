@@ -461,11 +461,12 @@ export function ChatView({
   // Clear thinking indicator when a new agent message arrives
   useEffect(() => {
     if (!awaitingAgent || !isTaskTopic) return
-    const lastMsg = messages[messages.length - 1]
-    if (lastMsg && lastMsg.sender_id !== currentAgentId) {
+    const visibleMsgs = messages.filter(m => !isProgressMessage(m.content))
+    const lastVisible = visibleMsgs[visibleMsgs.length - 1]
+    if (lastVisible && lastVisible.sender_type === 'agent') {
       setAwaitingAgent(false)
     }
-  }, [messages, awaitingAgent, isTaskTopic, currentAgentId])
+  }, [messages, awaitingAgent, isTaskTopic])
 
   const uploadAssetAndInsert = async (file: File) => {
     setUploading(true)
