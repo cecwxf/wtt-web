@@ -192,10 +192,31 @@ function FeedPageInner() {
     onMessage: handleWsMessage,
   })
 
+  const prevTopicRef = useRef(selectedTopicId)
   useEffect(() => {
     const normalized = normalizeFeed(feedRaw)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-    setAllMessages(normalized)
+    const topicChanged = prevTopicRef.current !== selectedTopicId
+    prevTopicRef.current = selectedTopicId
+    if (topicChanged || normalized.length === 0) {
+      // Full replace on topic switch or empty data
+      setAllMessages(normalized)
+    } else {
+      setAllMessages((prev) => {
+        if (prev.length === 0) return normalized
+        // Merge: preserve DOM/scroll position during polling refreshes
+        const existingIds = new Set(prev.map(m => m.message_id))
+        const newMsgs = normalized.filter(m => !existingIds.has(m.message_id))
+        if (newMsgs.length === 0 && prev.length === normalized.length) return prev
+        const normalizedMap = new Map(normalized.map(m => [m.message_id, m]))
+        const merged = prev
+          .filter(m => normalizedMap.has(m.message_id))
+          .map(m => normalizedMap.get(m.message_id)!)
+        for (const m of newMsgs) merged.push(m)
+        merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        return merged
+      })
+    }
     setHasOlder(normalized.length >= 100)
   }, [feedRaw, selectedTopicId])
 
