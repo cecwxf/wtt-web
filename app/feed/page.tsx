@@ -58,6 +58,11 @@ function normalizeFeed(raw: unknown): ChatMessage[] {
       content: String(data.content ?? ''),
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
       semantic_type: String(data.semantic_type ?? ''),
+      task_id: data.task_id ? String(data.task_id) : undefined,
+      task_status: data.task_status ? String(data.task_status) : undefined,
+      task_title: data.task_title ? String(data.task_title) : undefined,
+      runner_agent_id: data.runner_agent_id ? String(data.runner_agent_id) : undefined,
+      exec_mode: data.exec_mode ? String(data.exec_mode) : undefined,
     }
   })
 }

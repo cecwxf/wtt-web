@@ -15,6 +15,11 @@ export interface ChatMessage {
   content: string
   timestamp: string
   semantic_type?: string
+  task_id?: string
+  task_status?: string
+  task_title?: string
+  runner_agent_id?: string
+  exec_mode?: string
 }
 
 export interface ChatModelConfig {
@@ -920,6 +925,58 @@ export function ChatView({
           </div>
         ))}
       </div>
+
+      {/* Task status bar — shows current task status from the latest message with task info */}
+      {(() => {
+        const lastTaskMsg = [...messages].reverse().find(m => m.task_status)
+        if (!lastTaskMsg?.task_status) return null
+        const status = lastTaskMsg.task_status
+        const statusConfig: Record<string, { label: string; color: string; bg: string; icon: string; animate?: boolean }> = {
+          todo:    { label: 'Todo',    color: 'text-slate-500',  bg: 'bg-slate-100 dark:bg-zinc-700',   icon: '○' },
+          doing:   { label: 'Doing',   color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-950/30',  icon: '◉', animate: true },
+          review:  { label: 'Review',  color: 'text-sky-600',    bg: 'bg-sky-50 dark:bg-sky-950/30',    icon: '◎' },
+          done:    { label: 'Done',    color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: '●' },
+          blocked: { label: 'Blocked', color: 'text-red-500',    bg: 'bg-red-50 dark:bg-red-950/30',    icon: '✕' },
+        }
+        const cfg = statusConfig[status] || statusConfig.todo
+        const steps = ['todo', 'doing', 'review', 'done']
+        const currentIdx = steps.indexOf(status)
+
+        return (
+          <div className={`mx-3 mb-1 rounded-lg ${cfg.bg} border border-slate-200/60 dark:border-zinc-700/60 px-4 py-2.5`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`text-sm ${cfg.color} ${cfg.animate ? 'animate-pulse' : ''}`}>{cfg.icon}</span>
+                <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
+                {lastTaskMsg.task_title && (
+                  <span className="text-xs text-slate-400 dark:text-zinc-500 truncate max-w-[200px]">· {lastTaskMsg.task_title}</span>
+                )}
+              </div>
+              {lastTaskMsg.runner_agent_id && (
+                <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">{lastTaskMsg.runner_agent_id.slice(0, 12)}</span>
+              )}
+            </div>
+            {/* Step progress dots */}
+            {status !== 'blocked' && (
+              <div className="flex items-center gap-1 mt-2">
+                {steps.map((s, i) => {
+                  const isActive = i === currentIdx
+                  const isPast = i < currentIdx
+                  const stepCfg = statusConfig[s] || statusConfig.todo
+                  return (
+                    <div key={s} className="flex items-center gap-1 flex-1">
+                      <div className={`h-1.5 flex-1 rounded-full transition-all ${
+                        isPast || isActive ? 'bg-current ' + stepCfg.color : 'bg-slate-200 dark:bg-zinc-600'
+                      } ${isActive && cfg.animate ? 'animate-pulse' : ''}`} />
+                      {i < steps.length - 1 && <div className="w-0.5" />}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
 
       <div className="border-t border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 sm:p-4">
