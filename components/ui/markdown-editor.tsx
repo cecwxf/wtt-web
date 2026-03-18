@@ -40,6 +40,7 @@ import {
 } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { CircularProgress } from './circular-progress'
 // DOMPurify loaded lazily — the module is browser-only
 let _purify: { sanitize: (dirty: string, cfg?: Record<string, unknown>) => string } | null = null
 function getPurify() {
@@ -620,7 +621,11 @@ export function MarkdownEditor({ topics, defaultTopicId, onPublish, onClose }: M
             disabled={publishing || !content.trim() || !selectedTopicId}
             className="flex items-center gap-2 rounded-lg bg-indigo-500 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Send className="h-4 w-4" />
+            {publishing ? (
+              <CircularProgress progress={-1} size={16} strokeWidth={2} color="#fff" trackColor="rgba(255,255,255,0.3)" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
             {publishing ? 'Publishing...' : 'Publish'}
           </button>
         </div>

@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
+import { CircularProgress } from '@/components/ui/circular-progress'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
@@ -147,6 +148,8 @@ function ResearchTaskPageInner() {
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [uploadPct, setUploadPct] = useState(-1)
+  const [uploadCount, setUploadCount] = useState({ done: 0, total: 0 })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Center panel
@@ -501,21 +504,38 @@ function ResearchTaskPageInner() {
 
   // ── Paper Upload ─────────────────────────────────────
   const uploadFiles = async (files: FileList | File[]) => {
+    const fileArr = Array.from(files)
     setUploading(true)
-    for (const file of Array.from(files)) {
+    setUploadCount({ done: 0, total: fileArr.length })
+    setUploadPct(0)
+    for (let fi = 0; fi < fileArr.length; fi++) {
+      const file = fileArr[fi]
+      setUploadCount({ done: fi, total: fileArr.length })
       try {
         const formData = new FormData()
         formData.append('file', file)
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/upload`, {
-          method: 'POST',
-          headers: authHeaders(),
-          body: formData,
+        // Use XHR for progress tracking
+        const result = await new Promise<Response>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', `${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/upload`)
+          const hdrs = authHeaders()
+          for (const [k, v] of Object.entries(hdrs)) xhr.setRequestHeader(k, v)
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const filePct = Math.round((e.loaded / e.total) * 100)
+              const overallPct = Math.round(((fi + filePct / 100) / fileArr.length) * 100)
+              setUploadPct(overallPct)
+            }
+          }
+          xhr.onload = () => resolve(new Response(xhr.responseText, { status: xhr.status }))
+          xhr.onerror = () => reject(new Error('Network error'))
+          xhr.send(formData)
         })
-        if (!r.ok) {
-          console.error('Upload failed:', await r.text())
+        if (!result.ok) {
+          console.error('Upload failed:', await result.text())
           continue
         }
-        const paper = await r.json()
+        const paper = await result.json()
 
         // Notify agent via task topic
         if (task?.topic_id) {
@@ -543,6 +563,8 @@ function ResearchTaskPageInner() {
       }
     }
     setUploading(false)
+    setUploadPct(-1)
+    setUploadCount({ done: 0, total: 0 })
     mutatePapers()
     mutateMessages()
   }
@@ -892,10 +914,15 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="shrink-0 rounded bg-indigo-500 px-2 py-1 text-[11px] text-white hover:bg-indigo-600 disabled:opacity-50"
+                className="shrink-0 rounded bg-indigo-500 px-2 py-1 text-[11px] text-white hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-1.5"
                 title="Import PDF, Markdown, BibTeX"
               >
-                {uploading ? '⏳' : '+ Import'}
+                {uploading ? (
+                  <>
+                    <CircularProgress progress={uploadPct} size={14} strokeWidth={2} color="#fff" trackColor="rgba(255,255,255,0.3)" />
+                    <span>{uploadCount.total > 1 ? `${uploadCount.done + 1}/${uploadCount.total}` : `${Math.max(0, uploadPct)}%`}</span>
+                  </>
+                ) : '+ Import'}
               </button>
               <input
                 ref={fileInputRef}

@@ -43,6 +43,7 @@ import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
 import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
+import { CircularProgress } from './circular-progress'
 import TextAlign from '@tiptap/extension-text-align'
 
 import type { EditorTopic } from './markdown-editor'
@@ -592,7 +593,11 @@ export function RichTextEditor({ topics, defaultTopicId, onPublish, onClose }: R
             disabled={publishing || !hasContent || !selectedTopicId}
             className="flex items-center gap-2 rounded-lg bg-indigo-500 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Send className="h-4 w-4" />
+            {publishing ? (
+              <CircularProgress progress={-1} size={16} strokeWidth={2} color="#fff" trackColor="rgba(255,255,255,0.3)" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
             {publishing ? 'Publishing...' : 'Publish'}
           </button>
         </div>

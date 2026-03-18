@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { Paperclip } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CircularProgress } from './circular-progress'
 
 export interface UploadedAsset {
   url: string
@@ -20,15 +21,41 @@ interface ChatFileUploadProps {
   className?: string
 }
 
+function uploadWithProgress(url: string, method: string, headers: Record<string, string>, body: Blob | File): Promise<{ ok: boolean; text: () => Promise<string>; json: () => Promise<unknown> }> & { onProgress: (cb: (pct: number) => void) => void } {
+  let progressCb: ((pct: number) => void) | null = null
+  const promise = new Promise<{ ok: boolean; text: () => Promise<string>; json: () => Promise<unknown> }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(method, url)
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && progressCb) progressCb(Math.round((e.loaded / e.total) * 100))
+    }
+    xhr.onload = () => {
+      const responseText = xhr.responseText
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        text: async () => responseText,
+        json: async () => JSON.parse(responseText),
+      })
+    }
+    xhr.onerror = () => reject(new Error('Network error'))
+    xhr.send(body)
+  }) as Promise<{ ok: boolean; text: () => Promise<string>; json: () => Promise<unknown> }> & { onProgress: (cb: (pct: number) => void) => void }
+  promise.onProgress = (cb) => { progressCb = cb }
+  return promise
+}
+
 export function ChatFileUpload({ onUploaded, disabled, compact, className }: ChatFileUploadProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
+  const [uploadPct, setUploadPct] = useState(-1) // -1 = indeterminate
 
   const upload = useCallback(async (file: File) => {
     if (!file) return
     setUploading(true)
-    setUploadProgress(`Uploading ${file.name}...`)
+    setUploadProgress(`Signing...`)
+    setUploadPct(-1)
     try {
       // Step 1: Sign
       const signRes = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
@@ -39,17 +66,22 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
       if (!signRes.ok) throw new Error(await signRes.text())
       const signed = await signRes.json()
 
-      // Step 2: Upload
-      setUploadProgress(`Uploading ${file.name}... (${(file.size / 1024).toFixed(0)} KB)`)
-      const uploadRes = await fetch(`${CLIENT_WTT_API_BASE}${signed.upload_url}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
-      })
+      // Step 2: Upload with XHR for progress
+      setUploadProgress(`Uploading...`)
+      setUploadPct(0)
+      const uploadReq = uploadWithProgress(
+        `${CLIENT_WTT_API_BASE}${signed.upload_url}`,
+        'PUT',
+        { 'Content-Type': file.type || 'application/octet-stream' },
+        file,
+      )
+      uploadReq.onProgress((pct) => setUploadPct(pct))
+      const uploadRes = await uploadReq
       if (!uploadRes.ok) throw new Error(await uploadRes.text())
 
       // Step 3: Commit
       setUploadProgress('Finalizing...')
+      setUploadPct(-1)
       const commitRes = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,6 +115,7 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
     } finally {
       setUploading(false)
       setUploadProgress('')
+      setUploadPct(-1)
     }
   }, [onUploaded])
 
@@ -96,9 +129,10 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
     ? 'p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-40'
     : 'p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-40'
   const iconSize = compact ? 'h-3.5 w-3.5' : 'h-4 w-4'
+  const progressSize = compact ? 16 : 20
 
   return (
-    <div className={`flex items-center gap-0.5 ${className || ''}`}>
+    <div className={`flex items-center gap-1 ${className || ''}`}>
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
@@ -107,7 +141,14 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
         title="Attach file"
       >
         {uploading ? (
-          <span className={`${compact ? 'text-[10px]' : 'text-xs'} text-amber-500`}>⏳</span>
+          <CircularProgress
+            progress={uploadPct}
+            size={progressSize}
+            strokeWidth={2}
+            color="#f59e0b"
+            trackColor="rgba(245,158,11,0.15)"
+            label={uploadPct >= 0 ? `${uploadPct}` : undefined}
+          />
         ) : (
           <Paperclip className={iconSize} />
         )}
