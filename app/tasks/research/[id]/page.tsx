@@ -10,9 +10,9 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
-import { CircularProgress } from '@/components/ui/circular-progress'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
+import { CircularProgress } from '@/components/ui/circular-progress'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { formatTime, formatFullDateTime } from '@/lib/time'
@@ -148,8 +148,7 @@ function ResearchTaskPageInner() {
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [uploadPct, setUploadPct] = useState(-1)
-  const [uploadCount, setUploadCount] = useState({ done: 0, total: 0 })
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; pct: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Center panel
@@ -506,43 +505,41 @@ function ResearchTaskPageInner() {
   const uploadFiles = async (files: FileList | File[]) => {
     const fileArr = Array.from(files)
     setUploading(true)
-    setUploadCount({ done: 0, total: fileArr.length })
-    setUploadPct(0)
-    for (let fi = 0; fi < fileArr.length; fi++) {
-      const file = fileArr[fi]
-      setUploadCount({ done: fi, total: fileArr.length })
+    setUploadProgress({ current: 0, total: fileArr.length, pct: 0 })
+    for (let i = 0; i < fileArr.length; i++) {
+      const file = fileArr[i]
+      setUploadProgress({ current: i + 1, total: fileArr.length, pct: 0 })
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        // Use XHR for progress tracking
-        const result = await new Promise<Response>((resolve, reject) => {
+        // Use XHR for progress tracking on FormData upload
+        const paper: Record<string, unknown> = await new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest()
+          xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+              setUploadProgress(prev => prev ? { ...prev, pct: Math.round((e.loaded / e.total) * 100) } : prev)
+            }
+          })
+          xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try { resolve(JSON.parse(xhr.responseText)) } catch { resolve({}) }
+            } else {
+              reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`))
+            }
+          })
+          xhr.addEventListener('error', () => reject(new Error('Upload failed')))
           xhr.open('POST', `${CLIENT_WTT_API_BASE}/tasks/${taskId}/research/papers/upload`)
           const hdrs = authHeaders()
-          for (const [k, v] of Object.entries(hdrs)) xhr.setRequestHeader(k, v)
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              const filePct = Math.round((e.loaded / e.total) * 100)
-              const overallPct = Math.round(((fi + filePct / 100) / fileArr.length) * 100)
-              setUploadPct(overallPct)
-            }
-          }
-          xhr.onload = () => resolve(new Response(xhr.responseText, { status: xhr.status }))
-          xhr.onerror = () => reject(new Error('Network error'))
+          Object.entries(hdrs).forEach(([k, v]) => { if (k.toLowerCase() !== 'content-type') xhr.setRequestHeader(k, v as string) })
+          const formData = new FormData()
+          formData.append('file', file)
           xhr.send(formData)
         })
-        if (!result.ok) {
-          console.error('Upload failed:', await result.text())
-          continue
-        }
-        const paper = await result.json()
 
         // Notify agent via task topic
         if (task?.topic_id) {
-          const paperTitle = paper.title || file.name
-          const paperUrl = paper.source_url || ''
+          const paperTitle = (paper.title as string) || file.name
+          const paperUrl = (paper.source_url as string) || ''
           const paperDoi = paper.doi ? ` | DOI: ${paper.doi}` : ''
-          const paperAuthors = paper.authors ? ` | Authors: ${parseAuthors(paper.authors)}` : ''
+          const paperAuthors = paper.authors ? ` | Authors: ${parseAuthors(paper.authors as string)}` : ''
           const paperYear = paper.year ? ` (${paper.year})` : ''
           const msg = `[📄 Paper Imported] ${paperTitle}${paperYear}${paperAuthors}${paperDoi}\nFile: ${paperUrl}\n\nPlease analyze this paper and provide key insights.`
 
@@ -563,8 +560,7 @@ function ResearchTaskPageInner() {
       }
     }
     setUploading(false)
-    setUploadPct(-1)
-    setUploadCount({ done: 0, total: 0 })
+    setUploadProgress(null)
     mutatePapers()
     mutateMessages()
   }
@@ -919,8 +915,8 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
               >
                 {uploading ? (
                   <>
-                    <CircularProgress progress={uploadPct} size={14} strokeWidth={2} color="#fff" trackColor="rgba(255,255,255,0.3)" />
-                    <span>{uploadCount.total > 1 ? `${uploadCount.done + 1}/${uploadCount.total}` : `${Math.max(0, uploadPct)}%`}</span>
+                    <CircularProgress value={uploadProgress?.pct} size={14} strokeWidth={2} color="#fff" trackColor="rgba(255,255,255,0.3)" />
+                    <span>{uploadProgress ? `${uploadProgress.current}/${uploadProgress.total}` : '…'}</span>
                   </>
                 ) : '+ Import'}
               </button>

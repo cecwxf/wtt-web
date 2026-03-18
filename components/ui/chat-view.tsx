@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 import { formatTime, formatDateGroup } from '@/lib/time'
+import { CircularProgress } from '@/components/ui/circular-progress'
 
 export interface ChatMessage {
   message_id: string
@@ -364,6 +365,7 @@ export function ChatView({
 
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | undefined>(undefined)
   const [exportOpen, setExportOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id)
   const [reasoningEffort, setReasoningEffort] = useState<'off' | 'low' | 'medium' | 'high'>(defaultEffort)
@@ -467,6 +469,7 @@ export function ChatView({
 
   const uploadAssetAndInsert = async (file: File) => {
     setUploading(true)
+    setUploadProgress(0)
     try {
       const sign = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
         method: 'POST',
@@ -476,13 +479,23 @@ export function ChatView({
       if (!sign.ok) throw new Error(await sign.text())
       const signed = await sign.json()
 
-      const upload = await fetch(`${CLIENT_WTT_API_BASE}${signed.upload_url}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
+      // Use XHR for upload progress tracking
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 90))
+        })
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve()
+          else reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`))
+        })
+        xhr.addEventListener('error', () => reject(new Error('Upload failed')))
+        xhr.open('PUT', `${CLIENT_WTT_API_BASE}${signed.upload_url}`)
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+        xhr.send(file)
       })
-      if (!upload.ok) throw new Error(await upload.text())
 
+      setUploadProgress(95)
       const commit = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -490,6 +503,7 @@ export function ChatView({
       })
       if (!commit.ok) throw new Error(await commit.text())
       const asset = await commit.json()
+      setUploadProgress(100)
 
       const isImage = file.type.startsWith('image/')
       const isAudio = file.type.startsWith('audio/')
@@ -508,6 +522,7 @@ export function ChatView({
       alert(e instanceof Error ? e.message : 'Upload failed')
     } finally {
       setUploading(false)
+      setUploadProgress(undefined)
     }
   }
 
@@ -1083,7 +1098,12 @@ export function ChatView({
           </div>
         )}
 
-        {(uploading || loadingOlder) && <p className="mt-2 text-xs text-slate-400">{uploading ? 'Uploading media…' : 'Loading history…'}</p>}
+        {(uploading || loadingOlder) && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+            {uploading && <CircularProgress value={uploadProgress} size={20} strokeWidth={2.5} />}
+            <span>{uploading ? `Uploading${uploadProgress !== undefined ? ` ${uploadProgress}%` : '…'}` : 'Loading history…'}</span>
+          </div>
+        )}
       </div>
     </div>
   )
