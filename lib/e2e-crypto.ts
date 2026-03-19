@@ -8,7 +8,7 @@
 const PBKDF2_ITERATIONS = 310_000;
 const KEY_LENGTH = 32; // 256 bits
 const NONCE_LENGTH = 16; // AES-CTR counter block
-const SALT_PREFIX = "wtt-e2e:";
+const SALT_PREFIX = "wtt-e2e-shared";
 const STORAGE_KEY = "wtt-e2e-key"; // localStorage key for cached derived key
 
 function utf8Encode(str: string): Uint8Array {
@@ -20,12 +20,13 @@ function utf8Decode(buf: Uint8Array): string {
 }
 
 /**
- * Derive a 256-bit key from password + agentId using PBKDF2-SHA256.
+ * Derive a 256-bit key from password using PBKDF2-SHA256.
+ * agentId is accepted but ignored — same password always yields same key.
  * This is slow (~310K iterations) — cache the result.
  */
-export async function deriveKey(password: string, agentId: string): Promise<Uint8Array> {
+export async function deriveKey(password: string, _agentId?: string): Promise<Uint8Array> {
   const enc = utf8Encode(password);
-  const salt = utf8Encode(SALT_PREFIX + agentId);
+  const salt = utf8Encode(SALT_PREFIX);
   const baseKey = await crypto.subtle.importKey("raw", enc as BufferSource, "PBKDF2", false, [
     "deriveBits",
   ]);
