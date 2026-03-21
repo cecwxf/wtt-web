@@ -458,7 +458,7 @@ export function ChatView({
         case '/models': {
           const res = await fetch(`${apiBase}/workers/models/available`)
           const data = await res.json()
-          setSlashResult('🤖 Available models:\n' + (data.models || []).map((m: { name: string; id: string }) => `  • ${m.name} (${m.id})`).join('\n'))
+          setSlashResult('🤖 Available models:\n' + (data.models || []).map((m: { label: string; id: string }) => `  • ${m.label} (${m.id})`).join('\n'))
           return
         }
         case '/workers': {
@@ -588,16 +588,13 @@ export function ChatView({
     if (content.startsWith('/')) {
       setDraft('')
       setSlashOpen(false)
-      const parts = content.match(/^(\/[\w\s]+?)(?:\s+(.*))?$/)
-      if (parts) {
-        const cmd = parts[1].trim().toLowerCase()
-        // Find matching command (longest match first)
-        const match = SLASH_COMMANDS.sort((a, b) => b.cmd.length - a.cmd.length).find(c => cmd.startsWith(c.cmd))
-        if (match) {
-          const remainder = content.slice(match.cmd.length).trim()
-          await executeSlashCommand(match.cmd, remainder)
-          return
-        }
+      // Match against known commands (longest first to handle "/new code task" before "/new task")
+      const sorted = [...SLASH_COMMANDS].sort((a, b) => b.cmd.length - a.cmd.length)
+      const match = sorted.find(c => content.toLowerCase() === c.cmd || content.toLowerCase().startsWith(c.cmd + ' '))
+      if (match) {
+        const remainder = content.slice(match.cmd.length).trim()
+        await executeSlashCommand(match.cmd, remainder)
+        return
       }
       setSlashResult(`⚠️ Unknown command: ${content.split(' ')[0]}. Type /help for available commands.`)
       return
@@ -713,7 +710,7 @@ export function ChatView({
           setDraft(selected.cmd + ' ')
           setSlashOpen(false)
         }
-        if (e.key === 'Tab') return
+        return
       }
       if (e.key === 'Escape') {
         setSlashOpen(false)
