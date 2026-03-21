@@ -298,7 +298,7 @@ function FeedPageInner() {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
     const humanSender = getHumanSender(session)
 
-    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string }) => {
+    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; last_activity_at?: string }) => {
       const topicType = (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
       const isDefaultP2P =
         topicType === 'p2p' &&
@@ -316,14 +316,19 @@ function FeedPageInner() {
         task_type: topic.task_type as 'code' | 'research' | 'general' | 'pipeline' | undefined,
         runner_agent_id: topic.runner_agent_id,
         is_default_p2p: isDefaultP2P,
+        last_activity_at: topic.last_activity_at || '',
       }
     })
 
     return mapped.sort((a, b) => {
+      // Default P2P always pinned at top
       if (a.is_default_p2p && !b.is_default_p2p) return -1
       if (!a.is_default_p2p && b.is_default_p2p) return 1
-      if (a.topic_type === 'p2p' && b.topic_type !== 'p2p') return -1
-      if (a.topic_type !== 'p2p' && b.topic_type === 'p2p') return 1
+      // Then sort by most recent activity
+      if (a.last_activity_at && b.last_activity_at) {
+        const diff = new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime()
+        if (diff !== 0) return diff
+      }
       return 0
     })
   }, [subscribedTopicsRaw, selectedAgentId, session])

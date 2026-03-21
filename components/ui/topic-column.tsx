@@ -13,6 +13,7 @@ export interface TopicItem {
   task_type?: 'code' | 'research' | 'general' | 'pipeline'
   runner_agent_id?: string
   is_default_p2p?: boolean
+  last_activity_at?: string
 }
 
 interface TopicColumnProps {

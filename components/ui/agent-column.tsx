@@ -179,7 +179,7 @@ export function AgentColumn({
           model_config: {},
         }),
       })
-      if (res.ok) fetchWorkers(agentId)
+      if (res.ok) await fetchWorkers(agentId)
     } catch {
       // silently ignore network errors
     } finally {
