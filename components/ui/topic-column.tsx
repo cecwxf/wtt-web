@@ -64,6 +64,10 @@ function getGroupLabel(group: TopicGroupKey): string {
   }
 }
 
+function stripTaskPrefix(name: string): string {
+  return name.replace(/^TASK-[a-f0-9]{8}\s*/i, '')
+}
+
 export function TopicColumn({
   topics,
   selectedTopicId,
@@ -287,6 +291,7 @@ export function TopicColumn({
               const Icon = getTopicIcon(topic.topic_type, !!topic.task_id)
               const isMenuOpen = menuFor === topic.topic_id
               const isPinned = !!topic.is_default_p2p || pinnedTopicIds.includes(topic.topic_id)
+              const displayName = topicAliases[topic.topic_id] || (topic.task_id ? stripTaskPrefix(topic.name) : topic.name)
 
               return (
                 <div
@@ -329,7 +334,7 @@ export function TopicColumn({
                         />
                       ) : (
                         <p className="truncate text-sm font-medium">
-                          {topic.is_default_p2p ? `【P2P】${topicAliases[topic.topic_id] || topic.name}` : (topicAliases[topic.topic_id] || topic.name)}
+                          {topic.is_default_p2p ? `【P2P】${displayName}` : displayName}
                         </p>
                       )}
                     </div>

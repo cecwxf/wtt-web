@@ -200,6 +200,7 @@ export function WttShellV2({
               agentStats={agentStats}
               onlineAgentIds={onlineAgentIds}
               onQuickCreate={onQuickCreateTask}
+              userToken={userToken}
             />
 
             {!hideTopics && (

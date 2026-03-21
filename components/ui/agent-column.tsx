@@ -50,6 +50,7 @@ interface AgentColumnProps {
   agentStats?: AgentStatsMap
   onlineAgentIds?: Set<string>
   onQuickCreate?: (type: 'code' | 'research' | 'general' | 'pipeline') => void
+  userToken?: string
 }
 
 const ICON_MAP: [RegExp, string][] = [
@@ -128,6 +129,7 @@ export function AgentColumn({
   agentStats,
   onlineAgentIds,
   onQuickCreate,
+  userToken,
 }: AgentColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
@@ -416,10 +418,12 @@ export function AgentColumn({
                           className="group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 hover:bg-white/80 dark:hover:bg-zinc-700/50 cursor-pointer"
                           onClick={async () => {
                             if (renamingWorker?.id === w.id) return
+                            const sessionHeaders: Record<string, string> = {}
+                            if (userToken) sessionHeaders['Authorization'] = `Bearer ${userToken}`
                             if (w.topic_id && onSelectWorkerTopic) {
                               // Still fetch session to get worker_md context
                               try {
-                                const res = await fetch(`${API_BASE}/workers/${w.id}/session`, { method: 'POST', credentials: 'include' })
+                                const res = await fetch(`${API_BASE}/workers/${w.id}/session`, { method: 'POST', credentials: 'include', headers: sessionHeaders })
                                 if (res.ok) {
                                   const data = await res.json()
                                   onSelectWorkerTopic(w.topic_id, {
@@ -437,7 +441,7 @@ export function AgentColumn({
                             }
                             // Ensure session topic exists
                             try {
-                              const res = await fetch(`${API_BASE}/workers/${w.id}/session`, { method: 'POST', credentials: 'include' })
+                              const res = await fetch(`${API_BASE}/workers/${w.id}/session`, { method: 'POST', credentials: 'include', headers: sessionHeaders })
                               if (res.ok) {
                                 const data = await res.json()
                                 if (data.topic_id) {
