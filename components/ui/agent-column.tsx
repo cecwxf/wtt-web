@@ -2,6 +2,7 @@
 
 import { ChevronDown, ChevronRight, MoreVertical, Plus, Trash2, Edit3, User } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 export interface AgentItem {
   agent_id: string
@@ -110,7 +111,7 @@ function getWorkerIcon(index: number): string {
   return WORKER_ICONS[index % WORKER_ICONS.length]
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_WTT_API_URL || ''
+const API_BASE = CLIENT_WTT_API_BASE
 
 export function AgentColumn({
   agents,
@@ -138,7 +139,7 @@ export function AgentColumn({
 
   const fetchWorkers = useCallback(async (agentId: string) => {
     try {
-      const res = await fetch(`${API_BASE}/workers?agent_id=${agentId}`)
+      const res = await fetch(`${API_BASE}/workers?agent_id=${agentId}`, { credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
         setWorkersByAgent(prev => ({ ...prev, [agentId]: data }))
@@ -171,6 +172,7 @@ export function AgentColumn({
       const res = await fetch(`${API_BASE}/workers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           agent_id: agentId,
           name: newWorkerName.trim(),
@@ -195,6 +197,7 @@ export function AgentColumn({
       await fetch(`${API_BASE}/workers/${workerId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ name: newName.trim() }),
       })
       fetchWorkers(agentId)
@@ -205,7 +208,7 @@ export function AgentColumn({
   const handleDeleteWorker = async (workerId: string, agentId: string) => {
     if (!confirm('Delete this worker?')) return
     try {
-      await fetch(`${API_BASE}/workers/${workerId}`, { method: 'DELETE' })
+      await fetch(`${API_BASE}/workers/${workerId}`, { method: 'DELETE', credentials: 'include' })
       fetchWorkers(agentId)
     } catch {}
     setWorkerMenuFor(null)
@@ -216,7 +219,7 @@ export function AgentColumn({
     setWorkerMenuFor(null)
     setPersonaLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/workers/${worker.id}/persona`)
+      const res = await fetch(`${API_BASE}/workers/${worker.id}/persona`, { credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
         setPersonaMd(data.persona_md || '')
@@ -232,6 +235,7 @@ export function AgentColumn({
       await fetch(`${API_BASE}/workers/${worker.id}/persona`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ persona_md: personaMd }),
       })
       fetchWorkers(agentId)

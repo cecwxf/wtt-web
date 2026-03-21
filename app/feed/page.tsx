@@ -181,10 +181,26 @@ function FeedPageInner() {
 
   // WebSocket for real-time messages
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  const subscribedTopicsRef = useRef<{ raw: unknown[] | null; mutate: (data?: unknown, revalidate?: boolean) => void }>({ raw: null, mutate: () => {} })
   const handleWsMessage = useCallback(
     (msg: WsMessage) => {
       if (msg.type !== 'new_message' || !msg.message) return
-      if (msg.message.topic_id !== selectedTopicId) return
+      const incomingTopicId = msg.message.topic_id
+
+      // Bump activity for the topic that received the message (optimistic sort)
+      const { raw, mutate: mutateSubs } = subscribedTopicsRef.current
+      if (raw && Array.isArray(raw)) {
+        const now = new Date().toISOString()
+        mutateSubs(
+          raw.map((t) => {
+            const rec = t as Record<string, unknown>
+            return rec.id === incomingTopicId ? { ...rec, last_activity_at: now } : t
+          }),
+          false,
+        )
+      }
+
+      if (incomingTopicId !== selectedTopicId) return
       const incoming: ChatMessage = {
         message_id: msg.message.id,
         sender_id: msg.message.sender_id,
@@ -293,6 +309,11 @@ function FeedPageInner() {
       refreshInterval: 10000,
     }
   )
+
+  // Keep ref in sync for WS handler (avoids circular dependency)
+  useEffect(() => {
+    subscribedTopicsRef.current = { raw: subscribedTopicsRaw ?? null, mutate: mutateTopics }
+  }, [subscribedTopicsRaw, mutateTopics])
 
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
@@ -586,6 +607,18 @@ function FeedPageInner() {
         sender_id: getHumanSender(session),
         ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
       })
+    }
+
+    // Optimistically bump topic to top of activity sort
+    if (subscribedTopicsRaw && Array.isArray(subscribedTopicsRaw)) {
+      const now = new Date().toISOString()
+      mutateTopics(
+        subscribedTopicsRaw.map((t) => {
+          const rec = t as Record<string, unknown>
+          return rec.id === selectedTopicId ? { ...rec, last_activity_at: now } : t
+        }),
+        false
+      )
     }
 
     mutate()
