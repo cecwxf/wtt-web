@@ -76,12 +76,13 @@ export default function FeedPageWrapper() {
 }
 
 // Inline member row with alias editing
-function MemberRow({ member, topicId, accessToken, isSelf, onAliasUpdated }: {
+function MemberRow({ member, topicId, accessToken, isSelf, onAliasUpdated, onRequestPrivateDiscuss }: {
   member: { agent_id: string; display_name: string; alias: string }
   topicId: string
   accessToken: string
   isSelf: boolean
   onAliasUpdated: () => void
+  onRequestPrivateDiscuss?: (targetAgentId: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [aliasVal, setAliasVal] = useState(member.alias || member.display_name)
@@ -118,13 +119,24 @@ function MemberRow({ member, topicId, accessToken, isSelf, onAliasUpdated }: {
         <div className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{member.agent_id}</div>
       </div>
       {!isSelf && !editing && (
-        <button
-          onClick={(e) => { e.stopPropagation(); setEditing(true) }}
-          className="shrink-0 rounded bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400 transition hover:bg-slate-200 dark:hover:bg-zinc-600"
-          title={`Rename ${member.display_name} in this topic`}
-        >
-          ✏️
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {onRequestPrivateDiscuss && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRequestPrivateDiscuss(member.agent_id) }}
+              className="rounded bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400 transition hover:bg-slate-200 dark:hover:bg-zinc-600"
+              title={`Request private discuss with ${member.display_name}`}
+            >
+              💬
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+            className="rounded bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400 transition hover:bg-slate-200 dark:hover:bg-zinc-600"
+            title={`Rename ${member.display_name} in this topic`}
+          >
+            ✏️
+          </button>
+        </div>
       )}
     </div>
   )
@@ -406,7 +418,7 @@ function FeedPageInner() {
     const humanSender = getHumanSender(session)
 
     const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; last_activity_at?: string }) => {
-      const topicType = (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
+      const topicType = ((topic.type || 'discussion').toLowerCase()) as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
       const isDefaultP2P =
         topicType === 'p2p' &&
         !!selectedAgentId &&
@@ -909,6 +921,34 @@ function FeedPageInner() {
     mutateTopics().then(() => setSelectedTopicId(topicId))
   }
 
+  const handleRequestPrivateDiscuss = async (targetAgentId: string) => {
+    if (!session?.accessToken) return
+    const humanSender = getHumanSender(session)
+    const fromUserId = wttUserId || humanSender
+    try {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({
+          from_user_id: fromUserId,
+          from_agent_id: selectedAgentId,
+          target_agent_id: targetAgentId,
+          request_type: 'discuss',
+          topic_name: `${humanSender} & ${targetAgentId}`,
+          message: `Private discuss request from ${humanSender}`,
+        }),
+      })
+      if (res.ok) {
+        alert('Private discuss request sent!')
+      } else {
+        const err = await res.json().catch(() => ({ detail: 'Failed' }))
+        alert(err.detail || 'Failed to send request')
+      }
+    } catch {
+      alert('Network error')
+    }
+  }
+
   const handleAcceptP2PRequest = async (requestId: string) => {
     if (!session?.accessToken) return
     const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests/${requestId}/accept`, {
@@ -1076,6 +1116,7 @@ function FeedPageInner() {
                                   accessToken={session?.accessToken as string}
                                   isSelf={m.agent_id === selectedAgentId || m.agent_id === getHumanSender(session)}
                                   onAliasUpdated={() => mutateMembers()}
+                                  onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
                                 />
                               ))
                             ) : (
