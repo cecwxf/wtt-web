@@ -37,7 +37,7 @@ interface WttShellV2Props {
   onQuickCreateTask?: (type?: 'code' | 'research' | 'general' | 'pipeline') => void
   onSubscribeTopic?: (topicId: string) => Promise<void>
   onCreateP2P?: (targetAgentId: string) => Promise<void>
-  onSelectWorkerTopic?: (topicId: string) => void
+  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean }) => void
   subscribedTopicIds?: string[]
   notificationCount?: number
   p2pRequests?: P2PRequest[]

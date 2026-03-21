@@ -100,6 +100,14 @@ function FeedPageInner() {
   const [membersOpen, setMembersOpen] = useState(false)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
+  // Track active worker session context for persona injection
+  const activeWorkerSessionRef = useRef<{
+    workerId: string
+    personaMd: string
+    workerMd: string
+    isFirstSession: boolean
+    topicId: string
+  } | null>(null)
 
   const loadAgents = useCallback(async () => {
     try {
@@ -316,14 +324,15 @@ function FeedPageInner() {
   }, [subscribedTopicsRaw, mutateTopics])
 
   // Poll pending P2P requests for notifications
+  // session.userId is the WTT backend UUID; session.user.id may not be set by NextAuth
+  const wttUserId = (session as Record<string, unknown> | null)?.userId as string | undefined
   const { data: p2pRequests, mutate: mutateP2pRequests } = useSWR(
-    session?.accessToken && session?.user?.id
-      ? ['p2p-requests', session.user.id, session.accessToken]
+    session?.accessToken && wttUserId
+      ? ['p2p-requests', wttUserId, session.accessToken]
       : null,
     async () => {
-      const userId = (session?.user as Record<string, unknown>)?.id || ''
-      if (!userId) return []
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests/for-user?user_id=${encodeURIComponent(String(userId))}&status=pending`, {
+      if (!wttUserId) return []
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests/for-user?user_id=${encodeURIComponent(wttUserId)}&status=pending`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
       })
       if (!res.ok) return []
@@ -599,6 +608,39 @@ function FeedPageInner() {
       }
     }
 
+    // Check if this is a first-time worker session — inject persona.md as system context
+    const ws = activeWorkerSessionRef.current
+    let augmentedContent = content
+    if (ws && ws.topicId === selectedTopicId && ws.isFirstSession && ws.personaMd) {
+      const personaPrompt = [
+        `[Worker Persona — please read and internalize this as your identity]`,
+        ws.personaMd,
+        `---`,
+        `Based on the persona above, please introduce yourself briefly and confirm your skills and role. The user's message follows:`,
+        ``,
+        content,
+      ].join('\n')
+      augmentedContent = personaPrompt
+      // Mark as no longer first session (won't re-inject)
+      activeWorkerSessionRef.current = { ...ws, isFirstSession: false }
+      // Persist worker.md with persona content so future sessions have context
+      fetch(`${CLIENT_WTT_API_BASE}/workers/${ws.workerId}/worker-md`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify({ worker_md: ws.personaMd }),
+      }).catch(() => {})
+    } else if (ws && ws.topicId === selectedTopicId && ws.workerMd) {
+      // Subsequent session — add worker.md as context if messages are empty (session start)
+      if (allMessages.length === 0) {
+        augmentedContent = [
+          `[Worker Context — your persistent memory and skills]`,
+          ws.workerMd,
+          `---`,
+          content,
+        ].join('\n')
+      }
+    }
+
     if (isTask && selectedTopic?.task_id) {
       // Use task chat/send endpoint — it handles auto_run (todo→doing) automatically
       const sendResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopic.task_id}/chat/send`, {
@@ -618,9 +660,9 @@ function FeedPageInner() {
         await mutateTopics()
       }
     } else {
-      // Regular topic — use publishMessage
+      // Regular topic — use publishMessage (may include worker persona context)
       await wttApi.publishMessage(selectedTopicId, {
-        content,
+        content: augmentedContent,
         content_type: 'text',
         semantic_type: 'post',
         sender_type: 'HUMAN',
@@ -723,12 +765,13 @@ function FeedPageInner() {
   const handleCreateP2P = async (targetAgentId: string) => {
     if (!session?.accessToken) return
     const humanSender = getHumanSender(session)
+    const fromUserId = wttUserId || humanSender
     // Send a P2P request instead of directly creating a topic
     const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
       body: JSON.stringify({
-        from_user_id: humanSender,
+        from_user_id: fromUserId,
         from_agent_id: selectedAgentId,
         target_agent_id: targetAgentId,
         message: `P2P chat request from ${humanSender}`,
@@ -741,8 +784,10 @@ function FeedPageInner() {
     alert('P2P request sent! The target user will see it in their notifications.')
   }
 
-  const handleSelectWorkerTopic = (topicId: string) => {
-    // Subscribe to the worker session topic if not already, then select it
+  const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean }) => {
+    if (workerSession) {
+      activeWorkerSessionRef.current = { ...workerSession, topicId }
+    }
     mutateTopics().then(() => setSelectedTopicId(topicId))
   }
 

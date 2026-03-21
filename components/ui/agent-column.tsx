@@ -43,7 +43,7 @@ interface AgentColumnProps {
   onSelectAgent: (agentId: string) => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
-  onSelectWorkerTopic?: (topicId: string) => void
+  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean }) => void
   currentUserName?: string
   agentSubAgents?: AgentSubAgentMap
   maxSubAgents?: number
@@ -407,6 +407,20 @@ export function AgentColumn({
                           onClick={async () => {
                             if (renamingWorker?.id === w.id) return
                             if (w.topic_id && onSelectWorkerTopic) {
+                              // Still fetch session to get worker_md context
+                              try {
+                                const res = await fetch(`${API_BASE}/workers/${w.id}/session`, { method: 'POST', credentials: 'include' })
+                                if (res.ok) {
+                                  const data = await res.json()
+                                  onSelectWorkerTopic(w.topic_id, {
+                                    workerId: w.id,
+                                    personaMd: data.persona_md || '',
+                                    workerMd: data.worker_md || '',
+                                    isFirstSession: data.is_first_session ?? false,
+                                  })
+                                  return
+                                }
+                              } catch { /* fallback below */ }
                               onSelectWorkerTopic(w.topic_id)
                               return
                             }
@@ -416,12 +430,16 @@ export function AgentColumn({
                               if (res.ok) {
                                 const data = await res.json()
                                 if (data.topic_id) {
-                                  // Update local worker state with new topic_id
                                   setWorkersByAgent(prev => {
                                     const agentWorkers = prev[agent.agent_id] || []
                                     return { ...prev, [agent.agent_id]: agentWorkers.map(wk => wk.id === w.id ? { ...wk, topic_id: data.topic_id } : wk) }
                                   })
-                                  onSelectWorkerTopic?.(data.topic_id)
+                                  onSelectWorkerTopic?.(data.topic_id, {
+                                    workerId: w.id,
+                                    personaMd: data.persona_md || '',
+                                    workerMd: data.worker_md || '',
+                                    isFirstSession: data.is_first_session ?? false,
+                                  })
                                 }
                               }
                             } catch { /* ignore */ }
