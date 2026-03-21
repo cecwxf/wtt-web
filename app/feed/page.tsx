@@ -447,7 +447,24 @@ function FeedPageInner() {
     if (!selectedAgentId || !session?.accessToken) return
     const taskType = type ?? 'general'
 
-    if (taskType === 'pipeline') { router.push(buildAgentUrl('/pipelines', selectedAgentId)); return }
+    if (taskType === 'pipeline') {
+      const title = prompt('New Pipeline\n\nEnter pipeline name:')
+      if (!title?.trim()) return
+      try {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/pipelines`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+          body: JSON.stringify({
+            name: title.trim(),
+            owner_agent_id: selectedAgentId,
+          }),
+        })
+        if (!r.ok) { alert('Failed to create pipeline'); return }
+        const pipeline = await r.json()
+        router.push(buildAgentUrl(`/pipelines/${pipeline.id}`, selectedAgentId))
+      } catch { alert('Failed to create pipeline') }
+      return
+    }
 
     if (taskType === 'code' || taskType === 'research') {
       const label = taskType === 'code' ? 'New Code Task' : 'New Research Task'
