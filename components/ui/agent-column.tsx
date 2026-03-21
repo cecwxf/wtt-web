@@ -1,9 +1,7 @@
 'use client'
 
 import { ChevronDown, ChevronRight, MoreVertical, Plus, Settings, Trash2, Edit3, User } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import { buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 export interface AgentItem {
   agent_id: string
@@ -127,7 +125,6 @@ export function AgentColumn({
   onlineAgentIds,
   onQuickCreate,
 }: AgentColumnProps) {
-  const router = useRouter()
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
   const [workersByAgent, setWorkersByAgent] = useState<Record<string, WorkerItem[]>>({})
@@ -462,55 +459,7 @@ export function AgentColumn({
                     </>
                   )}
 
-                  {/* Tasks section */}
-                  {tasks.length > 0 && (
-                    <>
-                      <p className="px-2 pt-1.5 pb-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                        Tasks
-                      </p>
-                      {tasks.slice(0, maxSubAgents).map((t) => {
-                        const isActive = t.status === 'doing'
-                        const isDone = t.status === 'done'
-                        const href = buildAgentUrl(
-                          t.task_type === 'code' ? `/tasks/code/${t.id}`
-                          : t.task_type === 'research' ? `/tasks/research/${t.id}`
-                          : t.task_type === 'pipeline' ? '/pipelines'
-                          : `/tasks`,
-                          selectedAgentId
-                        )
-                        return (
-                          <button
-                            key={t.id}
-                            onClick={() => router.push(href)}
-                            className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition ${
-                              isActive
-                                ? 'bg-indigo-50/80 dark:bg-indigo-950/30 ring-1 ring-indigo-200/60 dark:ring-indigo-800/40'
-                                : 'hover:bg-white/80 dark:hover:bg-zinc-700/50'
-                            }`}
-                            title={`${t.title} — ${t.status}`}
-                          >
-                            <span className={`text-[11px] transition ${
-                              isActive ? 'drop-shadow-[0_0_2px_rgba(99,102,241,0.5)]' : isDone ? 'opacity-30' : 'opacity-50'
-                            }`}>
-                              {agentIcon}
-                            </span>
-                            <span className={`flex-1 truncate text-[11px] font-medium ${
-                              isActive
-                                ? 'text-indigo-700 dark:text-indigo-300'
-                                : isDone
-                                  ? 'text-slate-400 dark:text-zinc-500 line-through'
-                                  : 'text-slate-500 dark:text-zinc-400'
-                            }`}>
-                              {t.title}
-                            </span>
-                            <span className={`shrink-0 rounded-full ${getStatusColor(t.status)} ${
-                              isActive ? 'h-[7px] w-[7px] ring-1 ' + getStatusRing(t.status) : 'h-[5px] w-[5px]'
-                            }`} />
-                          </button>
-                        )
-                      })}
-                    </>
-                  )}
+                  {/* Tasks section removed — tasks are managed in dedicated pages */}
 
                   {/* Add Worker inline form */}
                   {addingWorkerFor === agent.agent_id ? (
