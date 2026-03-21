@@ -16,6 +16,7 @@ interface TaskNode {
   owner_agent_id?: string
   runner_agent_id?: string
   topic_id?: string
+  worker_id?: string
 }
 
 interface TaskEdge {
@@ -63,7 +64,7 @@ function TasksGraphPageInner() {
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [selectedPipelineId, setSelectedPipelineId] = useState('default')
   const [connectFromId, setConnectFromId] = useState<string | null>(null)
-  const [taskDraft, setTaskDraft] = useState<Partial<TaskNode & { description?: string; priority?: string; exec_mode?: string; acceptance?: string; notes?: string }>>({})
+  const [taskDraft, setTaskDraft] = useState<Partial<TaskNode & { description?: string; priority?: string; exec_mode?: string; acceptance?: string; notes?: string; worker_id?: string }>>({})
   const canvasRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -81,6 +82,19 @@ function TasksGraphPageInner() {
     }
     load()
   }, [session?.accessToken, selectedAgentId])
+
+  // Fetch workers for the worker selector in node detail
+  const [workers, setWorkers] = useState<Array<{ id: string; name: string; agent_id: string }>>([])
+  useEffect(() => {
+    if (!session?.accessToken) return
+    const load = async () => {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/workers`, { headers: { Authorization: `Bearer ${session.accessToken}` } })
+      if (!r.ok) return
+      const data = await r.json()
+      if (Array.isArray(data)) setWorkers(data.map((w: { id: string; name: string; agent_id: string }) => ({ id: w.id, name: w.name, agent_id: w.agent_id })))
+    }
+    load()
+  }, [session?.accessToken])
 
   const { data: pipelinesRaw, mutate: mutatePipelines } = useSWR(
     session?.accessToken ? ['pipelines', session.accessToken] : null,
@@ -289,6 +303,7 @@ function TasksGraphPageInner() {
         status: taskDraft.status,
         owner_agent_id: taskDraft.owner_agent_id,
         runner_agent_id: taskDraft.runner_agent_id,
+        worker_id: taskDraft.worker_id || null,
         description: taskDraft.description,
         acceptance: taskDraft.acceptance,
         notes: taskDraft.notes,
@@ -552,6 +567,10 @@ function TasksGraphPageInner() {
                   <input value={taskDraft.exec_mode || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, exec_mode: e.target.value }))} placeholder="exec_mode" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
                   <input value={taskDraft.owner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, owner_agent_id: e.target.value }))} placeholder="owner agent" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
                   <input value={taskDraft.runner_agent_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, runner_agent_id: e.target.value }))} placeholder="runner agent" className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
+                  <select value={taskDraft.worker_id || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, worker_id: e.target.value || undefined }))} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs col-span-2">
+                    <option value="">No worker</option>
+                    {workers.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.agent_id.slice(0, 12)})</option>)}
+                  </select>
                 </div>
                 <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} placeholder="description" className="min-h-14 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
                 <textarea value={taskDraft.acceptance || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, acceptance: e.target.value }))} placeholder="acceptance" className="min-h-12 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs" />
