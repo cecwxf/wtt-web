@@ -126,6 +126,9 @@ function parseTaskContent(content: string): ParsedTask {
   const c = (content || '').replace(/\\n/g, '\n')
   if (!c.includes('[TASK_')) return { isTask: false }
 
+  // [TASK_INPUT] and [TASK_REQUEST] are operational/status messages — never render as task cards
+  if (c.includes('[TASK_INPUT]') || c.includes('[TASK_REQUEST]')) return { isTask: false }
+
   const pick = (re: RegExp) => (c.match(re)?.[1] || '').trim()
   const taskId = pick(/task_id=([^\s\n]+)/)
   const sessionId = pick(/session_id=([^\s\n]+)/)

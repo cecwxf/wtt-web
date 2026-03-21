@@ -542,7 +542,7 @@ function FeedPageInner() {
         body: JSON.stringify({
           content,
           sender_type: 'HUMAN',
-          semantic_type: 'task_request',
+          semantic_type: 'post',
           auto_run: true,
           ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
         }),
