@@ -153,6 +153,9 @@ function FeedPageInner() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
+  const [inviteMemberOpen, setInviteMemberOpen] = useState(false)
+  const [inviteAgentId, setInviteAgentId] = useState('')
+  const [invitingMember, setInvitingMember] = useState(false)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
   // Track active worker session context for persona injection
@@ -876,6 +879,29 @@ function FeedPageInner() {
     alert('Discussion invite sent! The target agent owner will see it in their notifications.')
   }
 
+  const handleInviteMember = async (agentId: string) => {
+    if (!session?.accessToken || !selectedTopicId) return
+    setInvitingMember(true)
+    try {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/join?agent_id=${encodeURIComponent(agentId)}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      })
+      if (res.ok) {
+        mutateMembers()
+        setInviteAgentId('')
+        setInviteMemberOpen(false)
+      } else {
+        const err = await res.json().catch(() => ({ detail: 'Failed' }))
+        alert(err.detail || 'Failed to add member')
+      }
+    } catch {
+      alert('Network error')
+    } finally {
+      setInvitingMember(false)
+    }
+  }
+
   const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean }) => {
     if (workerSession) {
       activeWorkerSessionRef.current = { ...workerSession, personaChanged: workerSession.personaChanged ?? false, topicId }
@@ -1055,6 +1081,39 @@ function FeedPageInner() {
                             ) : (
                               <div className="px-3 py-2 text-xs text-slate-400">No members</div>
                             )}
+                            {/* Invite member */}
+                            <div className="border-t border-slate-100 dark:border-zinc-700 px-3 py-1.5">
+                              {inviteMemberOpen ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={inviteAgentId}
+                                    onChange={(e) => setInviteAgentId(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && inviteAgentId.trim()) handleInviteMember(inviteAgentId.trim())
+                                      if (e.key === 'Escape') { setInviteMemberOpen(false); setInviteAgentId('') }
+                                    }}
+                                    placeholder="Agent ID..."
+                                    className="flex-1 bg-transparent text-xs text-slate-700 dark:text-zinc-200 placeholder:text-slate-400 outline-none border-b border-indigo-400"
+                                  />
+                                  <button
+                                    onClick={() => { if (inviteAgentId.trim()) handleInviteMember(inviteAgentId.trim()) }}
+                                    disabled={!inviteAgentId.trim() || invitingMember}
+                                    className="rounded bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-indigo-600 disabled:opacity-50"
+                                  >
+                                    {invitingMember ? '...' : 'Add'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setInviteMemberOpen(true)}
+                                  className="flex items-center gap-1 text-[11px] font-medium text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition"
+                                >
+                                  <span className="text-sm">+</span> Invite Member
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </>
                       )}

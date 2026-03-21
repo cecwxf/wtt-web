@@ -77,12 +77,16 @@ export function TopicColumn({
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [pinnedTopicIds, setPinnedTopicIds] = useState<string[]>([])
+  const [topicAliases, setTopicAliases] = useState<Record<string, string>>({})
+  const [renamingTopicId, setRenamingTopicId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   // Discuss topic request form
   const [showDiscussForm, setShowDiscussForm] = useState(false)
   const [discussAgentId, setDiscussAgentId] = useState('')
   const [discussTopicName, setDiscussTopicName] = useState('')
   const [creatingDiscuss, setCreatingDiscuss] = useState(false)
 
+  // Load pinned topics
   useEffect(() => {
     const key = `wtt:pinned-topics:${pinScopeKey || 'default'}`
     try {
@@ -97,6 +101,29 @@ export function TopicColumn({
       setPinnedTopicIds([])
     }
   }, [pinScopeKey])
+
+  // Load local topic aliases
+  useEffect(() => {
+    const key = `wtt:topic-aliases:${pinScopeKey || 'default'}`
+    try {
+      const raw = localStorage.getItem(key)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed === 'object') setTopicAliases(parsed as Record<string, string>)
+      }
+    } catch { /* ignore */ }
+  }, [pinScopeKey])
+
+  const saveTopicAlias = (topicId: string, alias: string) => {
+    const key = `wtt:topic-aliases:${pinScopeKey || 'default'}`
+    setTopicAliases(prev => {
+      const next = { ...prev }
+      if (alias.trim()) next[topicId] = alias.trim()
+      else delete next[topicId]
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
 
   const togglePinTopic = (topicId: string) => {
     const key = `wtt:pinned-topics:${pinScopeKey || 'default'}`
@@ -280,7 +307,31 @@ export function TopicColumn({
                   >
                     <Icon className={`h-4 w-4 shrink-0 ${isPinned ? 'text-amber-500' : ''}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{topic.is_default_p2p ? `【P2P】${topic.name}` : topic.name}</p>
+                      {renamingTopicId === topic.topic_id ? (
+                        <input
+                          type="text"
+                          autoFocus
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              saveTopicAlias(topic.topic_id, renameValue)
+                              setRenamingTopicId(null)
+                            }
+                            if (e.key === 'Escape') setRenamingTopicId(null)
+                          }}
+                          onBlur={() => {
+                            saveTopicAlias(topic.topic_id, renameValue)
+                            setRenamingTopicId(null)
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full bg-transparent text-sm font-medium text-slate-700 dark:text-zinc-200 outline-none border-b border-indigo-400"
+                        />
+                      ) : (
+                        <p className="truncate text-sm font-medium">
+                          {topic.is_default_p2p ? `【P2P】${topicAliases[topic.topic_id] || topic.name}` : (topicAliases[topic.topic_id] || topic.name)}
+                        </p>
+                      )}
                     </div>
                     {isPinned && <Pin className="h-3 w-3 shrink-0 text-amber-500" />}
                     <span className="text-slate-400">
@@ -308,6 +359,27 @@ export function TopicColumn({
                         >
                           {topic.is_default_p2p ? '📌 默认置顶' : isPinned ? '📌 取消置顶' : '📌 置顶'}
                         </button>
+                        <button
+                          className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
+                          onClick={() => {
+                            setMenuFor(null)
+                            setRenameValue(topicAliases[topic.topic_id] || topic.name)
+                            setRenamingTopicId(topic.topic_id)
+                          }}
+                        >
+                          ✏️ Rename (local)
+                        </button>
+                        {topicAliases[topic.topic_id] && (
+                          <button
+                            className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
+                            onClick={() => {
+                              setMenuFor(null)
+                              saveTopicAlias(topic.topic_id, '')
+                            }}
+                          >
+                            🔄 Reset Name
+                          </button>
+                        )}
                         <button
                           className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
                           onClick={() => {

@@ -150,12 +150,22 @@ export function AgentColumn({
     } catch {}
   }, [])
 
-  // Fetch workers when an agent is expanded
+  // Fetch workers for ALL agents on mount and periodically
+  useEffect(() => {
+    if (agents.length === 0) return
+    agents.forEach(a => fetchWorkers(a.agent_id))
+    const interval = setInterval(() => {
+      agents.forEach(a => fetchWorkers(a.agent_id))
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [agents, fetchWorkers])
+
+  // Also fetch when an agent is expanded (immediate refresh)
   useEffect(() => {
     expandedAgents.forEach(agentId => {
-      if (!workersByAgent[agentId]) fetchWorkers(agentId)
+      fetchWorkers(agentId)
     })
-  }, [expandedAgents, fetchWorkers, workersByAgent])
+  }, [expandedAgents, fetchWorkers])
 
   const toggleExpand = (agentId: string) => {
     setExpandedAgents(prev => {
@@ -372,7 +382,7 @@ export function AgentColumn({
                           ? <><span className="font-semibold text-indigo-500 dark:text-indigo-400">{activeCount} active</span> · </>
                           : null
                         }
-                        {workers.length} workers · {totalCount} tasks
+                        {workers.length} worker{workers.length !== 1 ? 's' : ''}
                       </p>
                     )}
                     {agent.unread_count && agent.unread_count > 0 ? (
@@ -542,7 +552,7 @@ export function AgentColumn({
                   )}
 
                   <p className="px-2 pt-1 text-[9px] text-slate-300 dark:text-zinc-600">
-                    {workers.length} workers · {totalCount} tasks
+                    {workers.length} worker{workers.length !== 1 ? 's' : ''}
                   </p>
                 </div>
               )}
