@@ -7,6 +7,16 @@ import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
 import { buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
+interface P2PRequestItem {
+  id: string
+  from_user_id: string
+  from_agent_id: string
+  target_agent_id: string
+  status: string
+  message: string
+  created_at: string
+}
+
 interface TopBarProps {
   onSelectTopic?: (topicId: string) => void
   onSubscribeTopic?: (topicId: string) => Promise<void>
@@ -15,11 +25,14 @@ interface TopBarProps {
   onOpenEditor?: () => void
   hideCreateTopic?: boolean
   notificationCount?: number
+  p2pRequests?: P2PRequestItem[]
+  onAcceptP2PRequest?: (requestId: string) => Promise<void>
+  onRejectP2PRequest?: (requestId: string) => Promise<void>
   userMenu?: React.ReactNode
   agentId?: string
 }
 
-export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, userMenu, agentId = '' }: TopBarProps) {
+export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, agentId = '' }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const { theme, setTheme } = useTheme()
 
@@ -91,10 +104,48 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-12 z-20 w-80 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow-lg">
-              <p className="mb-2 text-sm font-semibold dark:text-zinc-200">Notifications</p>
-              <p className="text-xs text-slate-400">No new notifications</p>
-            </div>
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowNotifications(false)} />
+              <div className="absolute right-0 top-12 z-20 w-96 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow-lg">
+                <p className="mb-3 text-sm font-semibold dark:text-zinc-200">Notifications</p>
+                {p2pRequests.length > 0 ? (
+                  <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                    {p2pRequests.map((req) => (
+                      <div key={req.id} className="rounded-lg border border-slate-100 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 p-3">
+                        <p className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                          🤝 P2P Chat Request
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
+                          <span className="font-medium text-indigo-600 dark:text-indigo-400">{req.from_user_id}</span> wants to chat with <span className="font-medium">{req.target_agent_id}</span>
+                        </p>
+                        {req.message && (
+                          <p className="mt-1 text-[10px] text-slate-400 italic truncate">{req.message}</p>
+                        )}
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={async () => {
+                              await onAcceptP2PRequest?.(req.id)
+                              setShowNotifications(false)
+                            }}
+                            className="flex-1 rounded-md bg-green-500 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-green-600"
+                          >
+                            ✓ Accept
+                          </button>
+                          <button
+                            onClick={() => onRejectP2PRequest?.(req.id)}
+                            className="flex-1 rounded-md bg-slate-200 dark:bg-zinc-700 px-3 py-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-300 transition hover:bg-slate-300 dark:hover:bg-zinc-600"
+                          >
+                            ✕ Decline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">No new notifications</p>
+                )}
+              </div>
+            </>
           )}
         </div>
 

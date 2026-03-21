@@ -34,6 +34,7 @@ export interface WorkerItem {
   personality: string
   model_config: Record<string, string>
   status: string
+  topic_id?: string
 }
 
 interface AgentColumnProps {
@@ -42,6 +43,7 @@ interface AgentColumnProps {
   onSelectAgent: (agentId: string) => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
+  onSelectWorkerTopic?: (topicId: string) => void
   currentUserName?: string
   agentSubAgents?: AgentSubAgentMap
   maxSubAgents?: number
@@ -119,6 +121,7 @@ export function AgentColumn({
   onSelectAgent,
   onRenameAgent,
   onUnclaimAgent,
+  onSelectWorkerTopic,
   currentUserName,
   agentSubAgents,
   maxSubAgents = 20,
@@ -401,6 +404,28 @@ export function AgentColumn({
                         <div
                           key={w.id}
                           className="group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 hover:bg-white/80 dark:hover:bg-zinc-700/50 cursor-pointer"
+                          onClick={async () => {
+                            if (renamingWorker?.id === w.id) return
+                            if (w.topic_id && onSelectWorkerTopic) {
+                              onSelectWorkerTopic(w.topic_id)
+                              return
+                            }
+                            // Ensure session topic exists
+                            try {
+                              const res = await fetch(`${API_BASE}/workers/${w.id}/session`, { method: 'POST', credentials: 'include' })
+                              if (res.ok) {
+                                const data = await res.json()
+                                if (data.topic_id) {
+                                  // Update local worker state with new topic_id
+                                  setWorkersByAgent(prev => {
+                                    const agentWorkers = prev[agent.agent_id] || []
+                                    return { ...prev, [agent.agent_id]: agentWorkers.map(wk => wk.id === w.id ? { ...wk, topic_id: data.topic_id } : wk) }
+                                  })
+                                  onSelectWorkerTopic?.(data.topic_id)
+                                }
+                              }
+                            } catch { /* ignore */ }
+                          }}
                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setWorkerMenuFor(w.id) }}
                         >
                           {renamingWorker?.id === w.id ? (

@@ -315,6 +315,24 @@ function FeedPageInner() {
     subscribedTopicsRef.current = { raw: subscribedTopicsRaw ?? null, mutate: mutateTopics }
   }, [subscribedTopicsRaw, mutateTopics])
 
+  // Poll pending P2P requests for notifications
+  const { data: p2pRequests, mutate: mutateP2pRequests } = useSWR(
+    session?.accessToken && session?.user?.id
+      ? ['p2p-requests', session.user.id, session.accessToken]
+      : null,
+    async () => {
+      const userId = (session?.user as Record<string, unknown>)?.id || ''
+      if (!userId) return []
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests/for-user?user_id=${encodeURIComponent(String(userId))}&status=pending`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!res.ok) return []
+      return res.json()
+    },
+    { refreshInterval: 30000 }
+  )
+  const pendingP2pCount = Array.isArray(p2pRequests) ? p2pRequests.length : 0
+
   const topics = useMemo<TopicItem[]>(() => {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
     const humanSender = getHumanSender(session)
@@ -705,25 +723,50 @@ function FeedPageInner() {
   const handleCreateP2P = async (targetAgentId: string) => {
     if (!session?.accessToken) return
     const humanSender = getHumanSender(session)
-    const res = await fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(humanSender)}`, {
+    // Send a P2P request instead of directly creating a topic
+    const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-      body: JSON.stringify({ target_agent_id: targetAgentId, content: `[P2P request from ${humanSender}]`, content_type: 'text', semantic_type: 'system' }),
+      body: JSON.stringify({
+        from_user_id: humanSender,
+        from_agent_id: selectedAgentId,
+        target_agent_id: targetAgentId,
+        message: `P2P chat request from ${humanSender}`,
+      }),
     })
-    if (!res.ok) throw new Error('Failed to create P2P conversation')
-    await mutateTopics()
-    // Try to select the new P2P topic
-    const refreshed = await mutateTopics()
-    if (Array.isArray(refreshed)) {
-      const newP2p = refreshed.find((t: Record<string, unknown>) => {
-        const tp = String(t.type || t.topic_type || '')
-        return tp === 'p2p' && (String(t.name || '').includes(targetAgentId) || String(t.name || '').includes(humanSender))
-      })
-      if (newP2p) {
-        const id = String(newP2p.id || newP2p.topic_id || '')
-        if (id) setSelectedTopicId(id)
-      }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed' }))
+      throw new Error(err.detail || 'Failed to send P2P request')
     }
+    alert('P2P request sent! The target user will see it in their notifications.')
+  }
+
+  const handleSelectWorkerTopic = (topicId: string) => {
+    // Subscribe to the worker session topic if not already, then select it
+    mutateTopics().then(() => setSelectedTopicId(topicId))
+  }
+
+  const handleAcceptP2PRequest = async (requestId: string) => {
+    if (!session?.accessToken) return
+    const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests/${requestId}/accept`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    })
+    if (res.ok) {
+      const data = await res.json()
+      await mutateTopics()
+      await mutateP2pRequests()
+      if (data.topic_id) setSelectedTopicId(data.topic_id)
+    }
+  }
+
+  const handleRejectP2PRequest = async (requestId: string) => {
+    if (!session?.accessToken) return
+    await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests/${requestId}/reject`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    })
+    await mutateP2pRequests()
   }
 
   const handleEditorPublish = async (topicId: string, content: string, format: ContentFormat = 'markdown') => {
@@ -811,7 +854,11 @@ function FeedPageInner() {
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
         onBindingChanged={loadAgents}
-        notificationCount={0}
+        notificationCount={pendingP2pCount}
+        p2pRequests={Array.isArray(p2pRequests) ? p2pRequests : []}
+        onAcceptP2PRequest={handleAcceptP2PRequest}
+        onRejectP2PRequest={handleRejectP2PRequest}
+        onSelectWorkerTopic={handleSelectWorkerTopic}
         currentUserName={getHumanSender(session)}
         agentSubAgents={agentSubAgents}
         maxSubAgents={maxSubAgents}

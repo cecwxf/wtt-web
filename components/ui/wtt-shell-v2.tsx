@@ -9,6 +9,16 @@ import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
 
+interface P2PRequest {
+  id: string
+  from_user_id: string
+  from_agent_id: string
+  target_agent_id: string
+  status: string
+  message: string
+  created_at: string
+}
+
 interface WttShellV2Props {
   agents: AgentItem[]
   selectedAgentId: string
@@ -27,8 +37,12 @@ interface WttShellV2Props {
   onQuickCreateTask?: (type?: 'code' | 'research' | 'general' | 'pipeline') => void
   onSubscribeTopic?: (topicId: string) => Promise<void>
   onCreateP2P?: (targetAgentId: string) => Promise<void>
+  onSelectWorkerTopic?: (topicId: string) => void
   subscribedTopicIds?: string[]
   notificationCount?: number
+  p2pRequests?: P2PRequest[]
+  onAcceptP2PRequest?: (requestId: string) => Promise<void>
+  onRejectP2PRequest?: (requestId: string) => Promise<void>
   hideTopics?: boolean
   hideCreateTopic?: boolean
   currentUserName?: string
@@ -60,8 +74,12 @@ export function WttShellV2({
   onQuickCreateTask,
   onSubscribeTopic,
   onCreateP2P,
+  onSelectWorkerTopic,
   subscribedTopicIds,
   notificationCount = 0,
+  p2pRequests = [],
+  onAcceptP2PRequest,
+  onRejectP2PRequest,
   hideTopics = false,
   hideCreateTopic = false,
   currentUserName,
@@ -103,6 +121,9 @@ export function WttShellV2({
           onOpenEditor={onOpenEditor}
           hideCreateTopic={hideCreateTopic}
           notificationCount={notificationCount}
+          p2pRequests={p2pRequests}
+          onAcceptP2PRequest={onAcceptP2PRequest}
+          onRejectP2PRequest={onRejectP2PRequest}
           agentId={selectedAgentId}
           userMenu={
             <div className="relative">
@@ -168,6 +189,7 @@ export function WttShellV2({
               onSelectAgent={onAgentChange}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
+              onSelectWorkerTopic={onSelectWorkerTopic}
               currentUserName={currentUserName}
               agentSubAgents={agentSubAgents}
               maxSubAgents={maxSubAgents}
