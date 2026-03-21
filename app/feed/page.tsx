@@ -354,6 +354,8 @@ function FeedPageInner() {
     })
   }, [subscribedTopicsRaw, selectedAgentId, session])
 
+  const subscribedTopicIds = useMemo(() => topics.map(t => t.topic_id), [topics])
+
   const agentItems = useMemo<AgentItem[]>(() => {
     return agents.map((agent) => ({
       agent_id: agent.agent_id,
@@ -691,6 +693,39 @@ function FeedPageInner() {
     }
   }
 
+  const handleSubscribeTopic = async (topicId: string) => {
+    if (!selectedAgentId || !session?.accessToken) return
+    const wsResult = await sendAction('join', { topic_id: topicId })
+    if (wsResult === null) {
+      await wttApi.joinTopic(topicId, selectedAgentId)
+    }
+    await mutateTopics()
+  }
+
+  const handleCreateP2P = async (targetAgentId: string) => {
+    if (!session?.accessToken) return
+    const humanSender = getHumanSender(session)
+    const res = await fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(humanSender)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+      body: JSON.stringify({ target_agent_id: targetAgentId, content: `[P2P request from ${humanSender}]`, content_type: 'text', semantic_type: 'system' }),
+    })
+    if (!res.ok) throw new Error('Failed to create P2P conversation')
+    await mutateTopics()
+    // Try to select the new P2P topic
+    const refreshed = await mutateTopics()
+    if (Array.isArray(refreshed)) {
+      const newP2p = refreshed.find((t: Record<string, unknown>) => {
+        const tp = String(t.type || t.topic_type || '')
+        return tp === 'p2p' && (String(t.name || '').includes(targetAgentId) || String(t.name || '').includes(humanSender))
+      })
+      if (newP2p) {
+        const id = String(newP2p.id || newP2p.topic_id || '')
+        if (id) setSelectedTopicId(id)
+      }
+    }
+  }
+
   const handleEditorPublish = async (topicId: string, content: string, format: ContentFormat = 'markdown') => {
     const isHtml = format === 'html'
     const ext = isHtml ? '.html' : '.md'
@@ -768,6 +803,9 @@ function FeedPageInner() {
         onUnclaimAgent={handleUnclaimAgent}
         onLeaveTopic={handleLeaveTopic}
         onDeleteTopic={handleDeleteTopic}
+        onSubscribeTopic={handleSubscribeTopic}
+        onCreateP2P={handleCreateP2P}
+        subscribedTopicIds={subscribedTopicIds}
         onOpenEditor={() => setEditorOpen(true)}
         onQuickCreateTask={handleQuickCreateTask}
         onLogout={() => signOut({ callbackUrl: '/login' })}
@@ -809,29 +847,48 @@ function FeedPageInner() {
                     <div className="relative">
                       <button
                         onClick={() => setMembersOpen((v) => !v)}
-                        onBlur={() => setTimeout(() => setMembersOpen(false), 150)}
                         className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-2 py-1 text-[11px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
                         title="Topic members"
                       >
                         👥 Members ({discussMemberCount}) ▾
                       </button>
                       {membersOpen && (
-                        <div className="absolute right-0 top-full mt-1 z-30 min-w-[220px] max-w-[320px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
-                          {topicMembers.length > 0 ? (
-                            topicMembers.map((m) => (
-                              <div
-                                key={m.agent_id}
-                                className="px-3 py-1.5 text-xs text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-zinc-700 last:border-b-0"
-                                title={m.agent_id}
-                              >
-                                <div className="truncate font-medium">{m.display_name}</div>
-                                <div className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{m.agent_id}</div>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="px-3 py-2 text-xs text-slate-400">No members</div>
-                          )}
-                        </div>
+                        <>
+                          <div className="fixed inset-0 z-20" onClick={() => setMembersOpen(false)} />
+                          <div className="absolute right-0 top-full mt-1 z-30 min-w-[260px] max-w-[360px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                            {topicMembers.length > 0 ? (
+                              topicMembers.map((m) => (
+                                <div
+                                  key={m.agent_id}
+                                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-zinc-700 last:border-b-0"
+                                  title={m.agent_id}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate font-medium">{m.display_name}</div>
+                                    <div className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{m.agent_id}</div>
+                                  </div>
+                                  {m.agent_id !== selectedAgentId && m.agent_id !== getHumanSender(session) && (
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation()
+                                        try {
+                                          await handleCreateP2P(m.agent_id)
+                                          setMembersOpen(false)
+                                        } catch { /* ignore */ }
+                                      }}
+                                      className="shrink-0 rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 transition hover:bg-indigo-500/20"
+                                      title={`Start P2P chat with ${m.display_name}`}
+                                    >
+                                      💬 P2P
+                                    </button>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="px-3 py-2 text-xs text-slate-400">No members</div>
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   ) : undefined

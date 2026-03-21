@@ -9,6 +9,8 @@ import { buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 interface TopBarProps {
   onSelectTopic?: (topicId: string) => void
+  onSubscribeTopic?: (topicId: string) => Promise<void>
+  subscribedTopicIds?: string[]
   onCreateTopic?: () => void
   onOpenEditor?: () => void
   hideCreateTopic?: boolean
@@ -17,7 +19,7 @@ interface TopBarProps {
   agentId?: string
 }
 
-export function TopBar({ onSelectTopic, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, userMenu, agentId = '' }: TopBarProps) {
+export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, userMenu, agentId = '' }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const { theme, setTheme } = useTheme()
 
@@ -31,7 +33,7 @@ export function TopBar({ onSelectTopic, onCreateTopic, onOpenEditor, hideCreateT
         <Home className="h-5 w-5" />
       </Link>
 
-      <SearchBar onSelectTopic={onSelectTopic} agentId={agentId} />
+      <SearchBar onSelectTopic={onSelectTopic} onSubscribeTopic={onSubscribeTopic} subscribedTopicIds={subscribedTopicIds} agentId={agentId} />
 
       <div className="ml-auto flex items-center gap-2">
         <Link

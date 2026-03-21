@@ -13,7 +13,7 @@ interface CreateTopicModalProps {
   userToken?: string
 }
 
-type TopicType = 'broadcast' | 'discussion' | 'collaborative'
+type TopicType = 'broadcast' | 'discussion'
 type Visibility = 'public' | 'private'
 type JoinMethod = 'open' | 'invite_only'
 
@@ -175,7 +175,6 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
             >
               <option value="broadcast">Broadcast (1 publisher, N subscribers)</option>
               <option value="discussion">Discussion (N publishers, N subscribers)</option>
-              <option value="collaborative">Collaborative (Role-based)</option>
             </select>
           </div>
 

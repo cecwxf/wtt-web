@@ -23,6 +23,8 @@ interface TopicColumnProps {
   onLeaveTopic?: (topicId: string) => void
   onDeleteTopic?: (topicId: string) => void
   onQuickCreateTask?: () => void
+  onCreateP2P?: (targetAgentId: string) => Promise<void>
+  onRequestP2P?: (targetAgentId: string, fromTopicId: string) => Promise<void>
   agentName?: string
   pinScopeKey?: string
 }
@@ -68,11 +70,16 @@ export function TopicColumn({
   onLeaveTopic,
   onDeleteTopic,
   onQuickCreateTask,
+  onCreateP2P,
+  // onRequestP2P reserved for future use
   agentName,
   pinScopeKey,
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [pinnedTopicIds, setPinnedTopicIds] = useState<string[]>([])
+  const [showP2PInput, setShowP2PInput] = useState(false)
+  const [p2pTargetId, setP2pTargetId] = useState('')
+  const [creatingP2P, setCreatingP2P] = useState(false)
 
   useEffect(() => {
     const key = `wtt:pinned-topics:${pinScopeKey || 'default'}`
@@ -100,6 +107,21 @@ export function TopicColumn({
       }
       return next
     })
+  }
+
+  const handleCreateP2P = async () => {
+    const target = p2pTargetId.trim()
+    if (!target || !onCreateP2P) return
+    setCreatingP2P(true)
+    try {
+      await onCreateP2P(target)
+      setP2pTargetId('')
+      setShowP2PInput(false)
+    } catch {
+      // error handled by caller
+    } finally {
+      setCreatingP2P(false)
+    }
   }
 
   const groupedTopics = useMemo(() => {
@@ -182,9 +204,38 @@ export function TopicColumn({
 
         {groupedTopics.map(({ group, items }) => (
           <div key={group} className="mb-1">
-            <div className="mx-1 mb-1 rounded-md bg-slate-50/70 px-2 py-1 text-[11px] font-medium text-slate-400">
-              {getGroupLabel(group)}
+            <div className="mx-1 mb-1 flex items-center justify-between rounded-md bg-slate-50/70 dark:bg-zinc-800/50 px-2 py-1">
+              <span className="text-[11px] font-medium text-slate-400">{getGroupLabel(group)}</span>
+              {group === 'p2p' && onCreateP2P && (
+                <button
+                  onClick={() => setShowP2PInput(!showP2PInput)}
+                  className="rounded p-0.5 text-slate-400 transition hover:bg-slate-200 dark:hover:bg-zinc-700 hover:text-indigo-500"
+                  title="Start P2P chat"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
+            {group === 'p2p' && showP2PInput && (
+              <div className="mx-1 mb-2 flex items-center gap-1.5 rounded-md border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-zinc-800 px-2 py-1.5">
+                <input
+                  type="text"
+                  value={p2pTargetId}
+                  onChange={(e) => setP2pTargetId(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreateP2P(); if (e.key === 'Escape') { setShowP2PInput(false); setP2pTargetId('') } }}
+                  placeholder="Agent ID..."
+                  autoFocus
+                  className="min-w-0 flex-1 bg-transparent text-xs text-slate-700 dark:text-zinc-300 placeholder:text-slate-400 outline-none"
+                />
+                <button
+                  onClick={handleCreateP2P}
+                  disabled={!p2pTargetId.trim() || creatingP2P}
+                  className="shrink-0 rounded bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-50"
+                >
+                  {creatingP2P ? '...' : 'Chat'}
+                </button>
+              </div>
+            )}
             {items.map((topic) => {
               const isSelected = topic.topic_id === selectedTopicId
               const Icon = getTopicIcon(topic.topic_type, !!topic.task_id)

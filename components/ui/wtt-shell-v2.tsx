@@ -25,6 +25,9 @@ interface WttShellV2Props {
   onDeleteTopic?: (topicId: string) => void
   onOpenEditor?: () => void
   onQuickCreateTask?: (type?: 'code' | 'research' | 'general' | 'pipeline') => void
+  onSubscribeTopic?: (topicId: string) => Promise<void>
+  onCreateP2P?: (targetAgentId: string) => Promise<void>
+  subscribedTopicIds?: string[]
   notificationCount?: number
   hideTopics?: boolean
   hideCreateTopic?: boolean
@@ -55,6 +58,9 @@ export function WttShellV2({
   onDeleteTopic,
   onOpenEditor,
   onQuickCreateTask,
+  onSubscribeTopic,
+  onCreateP2P,
+  subscribedTopicIds,
   notificationCount = 0,
   hideTopics = false,
   hideCreateTopic = false,
@@ -91,6 +97,8 @@ export function WttShellV2({
       <div className="flex h-full flex-col">
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}
+          onSubscribeTopic={onSubscribeTopic}
+          subscribedTopicIds={subscribedTopicIds}
           onCreateTopic={() => setCreateTopicOpen(true)}
           onOpenEditor={onOpenEditor}
           hideCreateTopic={hideCreateTopic}
@@ -176,6 +184,7 @@ export function WttShellV2({
                 onLeaveTopic={onLeaveTopic}
                 onDeleteTopic={onDeleteTopic}
                 onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
+                onCreateP2P={onCreateP2P}
                 agentName={selectedAgent?.display_name}
                 pinScopeKey={selectedAgentId}
               />

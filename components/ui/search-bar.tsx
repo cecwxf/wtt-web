@@ -27,11 +27,13 @@ interface PipelineResult {
 
 interface SearchBarProps {
   onSelectTopic?: (topicId: string) => void
+  onSubscribeTopic?: (topicId: string) => Promise<void>
+  subscribedTopicIds?: string[]
   placeholder?: string
   agentId?: string
 }
 
-export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, pipelines...', agentId = '' }: SearchBarProps) {
+export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds = [], placeholder = 'Search topics, tasks, pipelines...', agentId = '' }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [topics, setTopics] = useState<Topic[]>([])
   const [tasks, setTasks] = useState<TaskResult[]>([])
@@ -87,10 +89,31 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, 
     return () => clearTimeout(debounceTimer)
   }, [query])
 
+  const [subscribingId, setSubscribingId] = useState<string | null>(null)
+  const subscribedSet = new Set(subscribedTopicIds)
+
   const handleSelectTopic = (topicId: string) => {
-    setShowResults(false)
-    setQuery('')
-    onSelectTopic?.(topicId)
+    if (subscribedSet.has(topicId)) {
+      setShowResults(false)
+      setQuery('')
+      onSelectTopic?.(topicId)
+    }
+  }
+
+  const handleSubscribeTopic = async (e: React.MouseEvent, topicId: string) => {
+    e.stopPropagation()
+    if (!onSubscribeTopic) return
+    setSubscribingId(topicId)
+    try {
+      await onSubscribeTopic(topicId)
+      setShowResults(false)
+      setQuery('')
+      onSelectTopic?.(topicId)
+    } catch {
+      // error handled by caller
+    } finally {
+      setSubscribingId(null)
+    }
   }
 
   const handleSelectTask = (taskId: string) => {
@@ -178,26 +201,39 @@ export function SearchBar({ onSelectTopic, placeholder = 'Search topics, tasks, 
                   Topics ({topics.length})
                 </span>
               </div>
-              {topics.map((topic) => (
+              {topics.map((topic) => {
+                const isSub = subscribedSet.has(topic.id)
+                return (
                 <button
                   key={topic.id}
                   onClick={() => handleSelectTopic(topic.id)}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50"
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50 dark:hover:bg-zinc-700 ${!isSub ? 'cursor-default' : ''}`}
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-xs">
                     {topic.type === 'broadcast' ? '📢' : topic.type === 'p2p' ? '🔒' : '💬'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-800">{topic.name}</p>
+                    <p className="truncate text-sm font-medium text-slate-800 dark:text-zinc-200">{topic.name}</p>
                     {topic.description && (
                       <p className="truncate text-xs text-slate-400">{topic.description}</p>
                     )}
                   </div>
-                  <span className="shrink-0 rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-indigo-600">
-                    {topic.type}
-                  </span>
+                  {isSub ? (
+                    <span className="shrink-0 rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-green-600">
+                      Joined
+                    </span>
+                  ) : (
+                    <button
+                      onClick={(e) => handleSubscribeTopic(e, topic.id)}
+                      disabled={subscribingId === topic.id}
+                      className="shrink-0 rounded-md bg-indigo-500 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-50"
+                    >
+                      {subscribingId === topic.id ? '...' : topic.type === 'broadcast' ? 'Subscribe' : 'Join'}
+                    </button>
+                  )}
                 </button>
-              ))}
+                )
+              })}
             </div>
           )}
 
