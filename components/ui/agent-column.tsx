@@ -135,6 +135,8 @@ export function AgentColumn({
   const [addingWorkerFor, setAddingWorkerFor] = useState<string | null>(null)
   const [newWorkerName, setNewWorkerName] = useState('')
   const [renamingWorker, setRenamingWorker] = useState<{ id: string; name: string } | null>(null)
+  const [editingConfig, setEditingConfig] = useState<{ worker: WorkerItem; agentId: string } | null>(null)
+  const [configDraft, setConfigDraft] = useState({ personality: '', skills: '', model: '', reasoning: 'off' })
 
   const fetchWorkers = useCallback(async (agentId: string) => {
     try {
@@ -204,6 +206,39 @@ export function AgentColumn({
       fetchWorkers(agentId)
     } catch {}
     setWorkerMenuFor(null)
+  }
+
+  const openConfigEditor = (worker: WorkerItem, agentId: string) => {
+    setEditingConfig({ worker, agentId })
+    setConfigDraft({
+      personality: worker.personality || '',
+      skills: (worker.skills_config || []).join(', '),
+      model: worker.model_config?.model || '',
+      reasoning: worker.model_config?.reasoning_effort || 'off',
+    })
+    setWorkerMenuFor(null)
+  }
+
+  const saveWorkerConfig = async () => {
+    if (!editingConfig) return
+    const { worker, agentId } = editingConfig
+    const skills = configDraft.skills.split(',').map(s => s.trim()).filter(Boolean)
+    const mc: Record<string, string> = {}
+    if (configDraft.model) mc.model = configDraft.model
+    if (configDraft.reasoning !== 'off') mc.reasoning_effort = configDraft.reasoning
+    try {
+      await fetch(`${API_BASE}/workers/${worker.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personality: configDraft.personality,
+          skills_config: skills,
+          model_config: mc,
+        }),
+      })
+      fetchWorkers(agentId)
+    } catch {}
+    setEditingConfig(null)
   }
 
   // Close menus on outside click
@@ -410,7 +445,7 @@ export function AgentColumn({
                               </button>
                               <button
                                 className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[11px] text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
-                                onClick={() => { setWorkerMenuFor(null) }}
+                                onClick={() => openConfigEditor(w, agent.agent_id)}
                               >
                                 <Settings className="h-3 w-3" /> Edit Config
                               </button>
@@ -568,6 +603,82 @@ export function AgentColumn({
                 <span className="truncate">{item.label}</span>
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Worker Config Editor Modal */}
+      {editingConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setEditingConfig(null)}>
+          <div className="w-[340px] rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-zinc-100">⚙️ Worker Config</h3>
+              <button onClick={() => setEditingConfig(null)} className="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mb-3 truncate">👷 {editingConfig.worker.name}</p>
+
+            <div className="space-y-2.5">
+              <div>
+                <label className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Personality</label>
+                <textarea
+                  value={configDraft.personality}
+                  onChange={e => setConfigDraft(d => ({ ...d, personality: e.target.value }))}
+                  className="mt-0.5 w-full rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 min-h-[60px] outline-none resize-none"
+                  placeholder="Describe the worker's personality and behavior..."
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Skills (comma-separated)</label>
+                <input
+                  value={configDraft.skills}
+                  onChange={e => setConfigDraft(d => ({ ...d, skills: e.target.value }))}
+                  className="mt-0.5 w-full rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 outline-none"
+                  placeholder="python, typescript, research..."
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Default Model</label>
+                <input
+                  value={configDraft.model}
+                  onChange={e => setConfigDraft(d => ({ ...d, model: e.target.value }))}
+                  className="mt-0.5 w-full rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 outline-none"
+                  placeholder="anthropic/claude-sonnet-4"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Reasoning Effort</label>
+                <div className="mt-0.5 flex rounded border border-slate-200 dark:border-zinc-700 overflow-hidden">
+                  {['off', 'low', 'medium', 'high'].map(level => (
+                    <button
+                      key={level}
+                      onClick={() => setConfigDraft(d => ({ ...d, reasoning: level }))}
+                      className={`flex-1 py-1.5 text-[10px] font-medium transition ${
+                        configDraft.reasoning === level
+                          ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400'
+                          : 'text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-700'
+                      }`}
+                    >
+                      {level === 'off' ? '💤' : level === 'low' ? '⚡' : level === 'medium' ? '⚖️' : '🧠'} {level.charAt(0).toUpperCase() + level.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={saveWorkerConfig}
+                className="flex-1 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-600 transition"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setEditingConfig(null)}
+                className="rounded-lg border border-slate-200 dark:border-zinc-700 px-3 py-2 text-xs text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 transition"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

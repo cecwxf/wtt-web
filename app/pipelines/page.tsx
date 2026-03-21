@@ -62,6 +62,8 @@ interface TaskDraft extends Partial<TaskNode> {
   dependencies?: string
   timeout_minutes?: number | null
   tags?: string
+  worker_id?: string
+  model_config?: { model?: string; reasoning_effort?: string }
 }
 
 interface ChatMessage {
@@ -303,6 +305,27 @@ function PipelinesPageInner() {
   const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
   const [connectLineStyle, setConnectLineStyle] = useState<LineStyle>('solid')
   const [taskDraft, setTaskDraft] = useState<TaskDraft>({})
+  const [availableModels, setAvailableModels] = useState<Array<{ id: string; label: string; supports_reasoning?: boolean }>>([])
+  const [agentWorkers, setAgentWorkers] = useState<Array<{ id: string; name: string; model_config?: Record<string, string> }>>([])
+  const [workerDropOpen, setWorkerDropOpen] = useState(false)
+  const [modelDropOpen, setModelDropOpen] = useState(false)
+
+  // Fetch available models
+  useEffect(() => {
+    fetch(`${CLIENT_WTT_API_BASE}/workers/models/available`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.models) setAvailableModels(d.models) })
+      .catch(() => {})
+  }, [])
+
+  // Fetch workers for current agent
+  useEffect(() => {
+    if (!selectedAgentId) return
+    fetch(`${CLIENT_WTT_API_BASE}/workers?agent_id=${selectedAgentId}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setAgentWorkers(d))
+      .catch(() => {})
+  }, [selectedAgentId])
 
   /* ─── draft (unsaved) nodes on canvas ─── */
   const [draftNodes, setDraftNodes] = useState<Record<string, TaskDraft & { _shape: NodeShape }>>({})
@@ -568,6 +591,8 @@ function PipelinesPageInner() {
         acceptance: taskDraft.acceptance,
         notes: taskDraft.notes,
         exec_mode: taskDraft.exec_mode,
+        worker_id: taskDraft.worker_id || undefined,
+        model_config: taskDraft.model_config || undefined,
       }),
     })
     if (!r.ok) { alert(`Create task failed: ${(await r.json().catch(() => ({}))).detail || r.statusText}`); return }
@@ -645,6 +670,8 @@ function PipelinesPageInner() {
         due_at: taskDraft.due_at || null,
         estimate_hours: taskDraft.estimate_hours ?? null,
         dependencies: taskDraft.dependencies || null,
+        worker_id: taskDraft.worker_id || null,
+        model_config: taskDraft.model_config || null,
       }),
     })
     if (!r.ok) { alert(`Save failed: ${(await r.text()) || r.status}`); return }
@@ -1804,6 +1831,100 @@ function PipelinesPageInner() {
                           <label className="text-[9px] text-slate-400">Description</label>
                           <textarea value={taskDraft.description || ''} onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))} className="min-h-[200px] w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs leading-relaxed" placeholder="Describe what this node should do, inputs, outputs, acceptance criteria..." />
                         </div>
+
+                        {/* Worker & Model selectors */}
+                        <div className="flex gap-2">
+                          {/* Worker selector */}
+                          <div className="flex-1 relative">
+                            <label className="text-[9px] text-slate-400">Worker</label>
+                            <button
+                              onClick={() => { setWorkerDropOpen(!workerDropOpen); setModelDropOpen(false) }}
+                              onBlur={() => setTimeout(() => setWorkerDropOpen(false), 150)}
+                              className="flex w-full items-center justify-between rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                            >
+                              <span className="truncate">{agentWorkers.find(w => w.id === taskDraft.worker_id)?.name || 'Default (no worker)'}</span>
+                              <span className="text-slate-400 ml-1">▾</span>
+                            </button>
+                            {workerDropOpen && (
+                              <div className="absolute top-full left-0 mt-0.5 z-40 w-full max-h-[160px] overflow-y-auto rounded border border-slate-200 bg-white shadow-lg py-0.5">
+                                <button
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => { setTaskDraft(d => ({ ...d, worker_id: undefined })); setWorkerDropOpen(false) }}
+                                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-slate-50 ${!taskDraft.worker_id ? 'text-indigo-600 font-medium' : 'text-slate-600'}`}
+                                >
+                                  Default (no worker)
+                                </button>
+                                {agentWorkers.map(w => (
+                                  <button
+                                    key={w.id}
+                                    onMouseDown={e => e.preventDefault()}
+                                    onClick={() => { setTaskDraft(d => ({ ...d, worker_id: w.id })); setWorkerDropOpen(false) }}
+                                    className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-slate-50 ${taskDraft.worker_id === w.id ? 'text-indigo-600 font-medium bg-indigo-50' : 'text-slate-600'}`}
+                                  >
+                                    👷 {w.name}
+                                  </button>
+                                ))}
+                                {agentWorkers.length === 0 && <p className="px-2 py-1 text-[10px] text-slate-400 italic">No workers — add via sidebar</p>}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Model selector */}
+                          <div className="flex-1 relative">
+                            <label className="text-[9px] text-slate-400">Model</label>
+                            <button
+                              onClick={() => { setModelDropOpen(!modelDropOpen); setWorkerDropOpen(false) }}
+                              onBlur={() => setTimeout(() => setModelDropOpen(false), 150)}
+                              className="flex w-full items-center justify-between rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                            >
+                              <span className="truncate">{availableModels.find(m => m.id === taskDraft.model_config?.model)?.label || 'Default'}</span>
+                              <span className="text-slate-400 ml-1">▾</span>
+                            </button>
+                            {modelDropOpen && (
+                              <div className="absolute top-full left-0 mt-0.5 z-40 w-full max-h-[200px] overflow-y-auto rounded border border-slate-200 bg-white shadow-lg py-0.5">
+                                <button
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => { setTaskDraft(d => ({ ...d, model_config: undefined })); setModelDropOpen(false) }}
+                                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-slate-50 ${!taskDraft.model_config?.model ? 'text-indigo-600 font-medium' : 'text-slate-600'}`}
+                                >
+                                  Default
+                                </button>
+                                {availableModels.map(m => (
+                                  <button
+                                    key={m.id}
+                                    onMouseDown={e => e.preventDefault()}
+                                    onClick={() => { setTaskDraft(d => ({ ...d, model_config: { ...d.model_config, model: m.id } })); setModelDropOpen(false) }}
+                                    className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-slate-50 ${taskDraft.model_config?.model === m.id ? 'text-indigo-600 font-medium bg-indigo-50' : 'text-slate-600'}`}
+                                  >
+                                    🤖 {m.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Reasoning effort selector (if model supports it) */}
+                        {taskDraft.model_config?.model && (
+                          <div>
+                            <label className="text-[9px] text-slate-400">Reasoning Effort</label>
+                            <div className="flex rounded border border-slate-200 overflow-hidden mt-0.5">
+                              {(['off', 'low', 'medium', 'high'] as const).map(level => (
+                                <button
+                                  key={level}
+                                  onClick={() => setTaskDraft(d => ({ ...d, model_config: { ...d.model_config, reasoning_effort: level } }))}
+                                  className={`flex-1 py-1.5 text-[10px] font-medium transition ${
+                                    (taskDraft.model_config?.reasoning_effort || 'off') === level
+                                      ? 'bg-indigo-50 text-indigo-600'
+                                      : 'text-slate-500 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  {level === 'off' ? '💤' : level === 'low' ? '⚡' : level === 'medium' ? '⚖️' : '🧠'} {level.charAt(0).toUpperCase() + level.slice(1)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Output (read-only for committed tasks) */}
                         {!isDraft && selected.output && (
