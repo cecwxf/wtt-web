@@ -43,7 +43,7 @@ interface AgentColumnProps {
   onSelectAgent: (agentId: string) => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
-  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean }) => void
+  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean; taskId?: string }) => void
   currentUserName?: string
   agentSubAgents?: AgentSubAgentMap
   maxSubAgents?: number
@@ -426,12 +426,13 @@ export function AgentColumn({
                                 const res = await fetch(`${API_BASE}/workers/${w.id}/session`, { method: 'POST', credentials: 'include', headers: sessionHeaders })
                                 if (res.ok) {
                                   const data = await res.json()
-                                  onSelectWorkerTopic(w.topic_id, {
+                                  onSelectWorkerTopic(data.topic_id || w.topic_id, {
                                     workerId: w.id,
                                     personaMd: data.persona_md || '',
                                     workerMd: data.worker_md || '',
                                     isFirstSession: data.is_first_session ?? false,
                                     personaChanged: data.persona_changed ?? false,
+                                    taskId: data.task_id || undefined,
                                   })
                                   return
                                 }
@@ -455,6 +456,7 @@ export function AgentColumn({
                                     workerMd: data.worker_md || '',
                                     isFirstSession: data.is_first_session ?? false,
                                     personaChanged: data.persona_changed ?? false,
+                                    taskId: data.task_id || undefined,
                                   })
                                 }
                               }

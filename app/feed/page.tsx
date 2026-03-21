@@ -76,10 +76,8 @@ export default function FeedPageWrapper() {
 }
 
 // Inline member row
-function MemberRow({ member, topicId, accessToken, isSelf, onRequestPrivateDiscuss }: {
+function MemberRow({ member, isSelf, onRequestPrivateDiscuss }: {
   member: { agent_id: string; display_name: string }
-  topicId: string
-  accessToken: string
   isSelf: boolean
   onRequestPrivateDiscuss?: (targetAgentId: string, targetDisplayName: string) => void
 }) {
@@ -690,7 +688,7 @@ function FeedPageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify({
-          content,
+          content: augmentedContent,
           sender_type: 'HUMAN',
           semantic_type: 'post',
           auto_run: true,
@@ -873,11 +871,25 @@ function FeedPageInner() {
     }
   }
 
-  const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean }) => {
+  const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean; taskId?: string }) => {
     if (workerSession) {
       activeWorkerSessionRef.current = { ...workerSession, personaChanged: workerSession.personaChanged ?? false, topicId }
     }
-    mutateTopics().then(() => setSelectedTopicId(topicId))
+    mutateTopics().then(() => {
+      // Attach task_id to the topic in subscribedTopicsRaw so handleSendMessage routes via task chat
+      if (workerSession?.taskId && subscribedTopicsRaw && Array.isArray(subscribedTopicsRaw)) {
+        const updated = subscribedTopicsRaw.map((t: Record<string, unknown>) =>
+          String(t.id) === topicId ? { ...t, task_id: workerSession.taskId } : t
+        )
+        // Check if topic exists in subscribed list; if not, add it
+        const found = updated.some((t: Record<string, unknown>) => String(t.id) === topicId)
+        if (!found) {
+          updated.unshift({ id: topicId, name: `Worker`, type: 'P2P', task_id: workerSession.taskId, last_activity_at: new Date().toISOString() })
+        }
+        mutateTopics(updated, false)
+      }
+      setSelectedTopicId(topicId)
+    })
   }
 
   const handleRequestPrivateDiscuss = async (targetAgentId: string, targetDisplayName?: string) => {
@@ -1072,8 +1084,6 @@ function FeedPageInner() {
                                 <MemberRow
                                   key={m.agent_id}
                                   member={m}
-                                  topicId={selectedTopicId!}
-                                  accessToken={session?.accessToken as string}
                                   isSelf={m.agent_id === selectedAgentId || m.agent_id === getHumanSender(session)}
                                   onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
                                 />
