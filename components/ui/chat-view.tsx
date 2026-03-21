@@ -1,7 +1,7 @@
 'use client'
 
 import { Download, Image as ImageIcon, Mic, Paperclip, Send } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
@@ -92,6 +92,11 @@ const DEFAULT_EFFORT_BY_TASK: Record<string, 'off' | 'low' | 'medium' | 'high'> 
   pipeline: 'low',
 }
 
+export interface MentionableAgent {
+  agent_id: string
+  display_name: string
+}
+
 interface ChatViewProps {
   topicName: string
   messages: ChatMessage[]
@@ -107,6 +112,8 @@ interface ChatViewProps {
   wsConnected?: boolean
   accessToken?: string
   onTaskCreated?: () => void
+  topicMembers?: MentionableAgent[]
+  topicType?: string
 }
 
 type ParsedRich =
@@ -386,6 +393,8 @@ export function ChatView({
   wsConnected = false,
   accessToken,
   onTaskCreated,
+  topicMembers = [],
+  topicType,
 }: ChatViewProps) {
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
@@ -414,6 +423,21 @@ export function ChatView({
   const [slashFilter, setSlashFilter] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
   const [slashResult, setSlashResult] = useState<string | null>(null)
+
+  // @mention autocomplete state
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const [mentionStartPos, setMentionStartPos] = useState(-1)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const filteredMembers = useMemo(() => {
+    if (!mentionQuery) return topicMembers
+    const q = mentionQuery.toLowerCase()
+    return topicMembers.filter(m =>
+      m.display_name.toLowerCase().includes(q) || m.agent_id.toLowerCase().includes(q)
+    )
+  }, [topicMembers, mentionQuery])
 
   // Fetch available models from API
   useEffect(() => {
@@ -462,7 +486,44 @@ export function ChatView({
     } else {
       setSlashOpen(false)
     }
-  }, [])
+
+    // @mention detection: find @ followed by word characters near cursor
+    const textarea = textareaRef.current
+    if (textarea && topicMembers.length > 0) {
+      const cursorPos = textarea.selectionStart
+      const textUpToCursor = value.slice(0, cursorPos)
+      const atMatch = textUpToCursor.match(/@([\w\-.]*)$/)
+      if (atMatch) {
+        setMentionOpen(true)
+        setMentionQuery(atMatch[1])
+        setMentionStartPos(cursorPos - atMatch[0].length)
+        setMentionIndex(0)
+      } else {
+        setMentionOpen(false)
+        setMentionQuery('')
+        setMentionStartPos(-1)
+      }
+    }
+  }, [topicMembers])
+
+  const insertMention = useCallback((member: MentionableAgent) => {
+    const textarea = textareaRef.current
+    if (!textarea || mentionStartPos < 0) return
+    const before = draft.slice(0, mentionStartPos)
+    const after = draft.slice(textarea.selectionStart)
+    const mention = `@${member.display_name} `
+    const newDraft = before + mention + after
+    setDraft(newDraft)
+    setMentionOpen(false)
+    setMentionQuery('')
+    setMentionStartPos(-1)
+    // Restore cursor position after React re-render
+    const newCursorPos = mentionStartPos + mention.length
+    requestAnimationFrame(() => {
+      textarea.focus()
+      textarea.setSelectionRange(newCursorPos, newCursorPos)
+    })
+  }, [draft, mentionStartPos])
 
   const executeSlashCommand = useCallback(async (cmd: string, args: string) => {
     const apiBase = CLIENT_WTT_API_BASE
@@ -723,6 +784,29 @@ export function ChatView({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // @mention autocomplete keyboard navigation
+    if (mentionOpen && filteredMembers.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex(i => (i + 1) % filteredMembers.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex(i => (i - 1 + filteredMembers.length) % filteredMembers.length)
+        return
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault()
+        const selected = filteredMembers[mentionIndex]
+        if (selected) insertMention(selected)
+        return
+      }
+      if (e.key === 'Escape') {
+        setMentionOpen(false)
+        return
+      }
+    }
     if (slashOpen && filteredCommands.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -1292,6 +1376,30 @@ export function ChatView({
             </div>
           )}
 
+          {/* @mention autocomplete */}
+          {mentionOpen && filteredMembers.length > 0 && (
+            <div className="absolute bottom-full left-0 mb-1 w-full max-w-sm z-40 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg max-h-48 overflow-y-auto">
+              {filteredMembers.map((m, i) => (
+                <button
+                  key={m.agent_id}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => insertMention(m)}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
+                    i === mentionIndex
+                      ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400'
+                      : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+                    {m.display_name.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="font-medium">{m.display_name}</span>
+                  <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500 font-mono truncate max-w-[120px]">{m.agent_id.slice(0, 8)}…</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-2">
           <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100">
             <Paperclip className="h-4 w-4" />
@@ -1304,10 +1412,11 @@ export function ChatView({
           </button>
 
           <textarea
+            ref={textareaRef}
             value={draft}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Message ${topicName}… (type / for commands)`}
+            placeholder={topicType === 'discussion' ? `Message ${topicName}… (type @ to mention)` : `Message ${topicName}… (type / for commands)`}
             rows={1}
             className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none"
           />

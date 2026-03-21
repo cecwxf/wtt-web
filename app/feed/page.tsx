@@ -742,6 +742,8 @@ function FeedPageInner() {
                 wsConnected={wsState === 'connected'}
                 accessToken={session?.accessToken as string | undefined}
                 onTaskCreated={() => mutateRecentTasks()}
+                topicMembers={topicMembers}
+                topicType={selectedTopic.topic_type}
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (
                     <div className="relative">
