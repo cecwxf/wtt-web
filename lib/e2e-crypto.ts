@@ -24,7 +24,7 @@ function utf8Decode(buf: Uint8Array): string {
  * agentId is accepted but ignored — same password always yields same key.
  * This is slow (~310K iterations) — cache the result.
  */
-export async function deriveKey(password: string, _agentId?: string): Promise<Uint8Array> {
+export async function deriveKey(password: string, _agentId?: string): Promise<Uint8Array> { // eslint-disable-line @typescript-eslint/no-unused-vars
   const enc = utf8Encode(password);
   const salt = utf8Encode(SALT_PREFIX);
   const baseKey = await crypto.subtle.importKey("raw", enc as BufferSource, "PBKDF2", false, [

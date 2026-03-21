@@ -85,7 +85,6 @@ function FeedPageInner() {
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
-  const [showTaskSidebar, setShowTaskSidebar] = useState(true)
   const [membersOpen, setMembersOpen] = useState(false)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
@@ -368,18 +367,6 @@ function FeedPageInner() {
     },
     { refreshInterval: 30000 }
   )
-  const recentTasks = useMemo(() => {
-    if (!Array.isArray(recentTasksRaw)) return []
-    return recentTasksRaw
-      .filter((t: Record<string, unknown>) => t && t.status !== 'cancelled' && t.task_type !== 'general')
-      .slice(0, 6)
-      .map((t: Record<string, unknown>) => ({
-        id: String(t.id || ''),
-        title: String(t.title || 'Untitled'),
-        task_type: String(t.task_type || 'general'),
-        status: String(t.status || 'todo'),
-      }))
-  }, [recentTasksRaw])
 
   // Build sub-agent map: each task = 1 sub-agent, grouped by owner agent
   const agentSubAgents = useMemo(() => {
@@ -456,8 +443,39 @@ function FeedPageInner() {
   }, [topics, searchParams])
 
   // Quick-create a General Task with no title (defaults to "New Task")
-  const handleQuickCreateTask = async () => {
+  const handleQuickCreateTask = async (type?: 'code' | 'research' | 'general' | 'pipeline') => {
     if (!selectedAgentId || !session?.accessToken) return
+    const taskType = type ?? 'general'
+
+    if (taskType === 'pipeline') { router.push(buildAgentUrl('/pipelines', selectedAgentId)); return }
+
+    if (taskType === 'code' || taskType === 'research') {
+      const label = taskType === 'code' ? 'New Code Task' : 'New Research Task'
+      const title = prompt(`${label}\n\nEnter task title:`)
+      if (!title?.trim()) return
+      try {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+          body: JSON.stringify({
+            title: title.trim(),
+            task_type: taskType,
+            priority: 'P2',
+            status: 'todo',
+            owner_agent_id: selectedAgentId || undefined,
+            runner_agent_id: selectedAgentId || undefined,
+            created_by: selectedAgentId || undefined,
+          }),
+        })
+        if (!r.ok) { alert('Failed to create task'); return }
+        const task = await r.json()
+        if (taskType === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
+        else router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
+      } catch { alert('Failed to create task') }
+      return
+    }
+
+    // General: instant create with auto-rename
     try {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
         method: 'POST',
@@ -474,11 +492,9 @@ function FeedPageInner() {
       })
       if (!r.ok) { alert('Failed to create task'); return }
       const task = await r.json()
-      // Track for auto-rename on first message
       if (task.id && task.topic_id) {
         pendingRenameTaskRef.current = { taskId: task.id, topicId: task.topic_id }
       }
-      // Refresh topic list and select the new task's topic
       await mutateTopics()
       if (task.topic_id) {
         setSelectedTopicId(task.topic_id)
@@ -746,130 +762,11 @@ function FeedPageInner() {
             ) : (
               <div className="flex h-full flex-col items-center justify-center text-slate-400">
                 <p className="text-lg">Select a topic to start chatting</p>
-                <p className="mt-1 text-sm">Choose from the topic list or create a new task →</p>
+                <p className="mt-1 text-sm">Choose from the topic list or create a new task</p>
               </div>
             )}
           </div>
 
-          {/* Right sidebar — Task shortcuts */}
-          {showTaskSidebar ? (
-            <div className="flex w-72 flex-col border-l border-slate-200 dark:border-zinc-700 bg-slate-50/50 dark:bg-zinc-900/50">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3">
-                <span className="text-sm font-bold text-slate-700 dark:text-zinc-200">⚡ Quick Create</span>
-                <button onClick={() => setShowTaskSidebar(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-600 dark:hover:text-zinc-100" title="Close">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 4l6 6M10 4l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                </button>
-              </div>
-              <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
-                {/* Agent selector for task ownership */}
-                {agents.length > 1 && (
-                  <div className="mb-1 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2">
-                    <p className="mb-1.5 text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-wide">Owner Agent</p>
-                    <select
-                      value={selectedAgentId}
-                      onChange={(e) => setSelectedAgentId(e.target.value)}
-                      className="w-full rounded-md border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-700 px-2 py-1.5 text-xs font-medium text-slate-700 dark:text-zinc-200 focus:ring-1 focus:ring-indigo-400"
-                    >
-                      {agents.map((a) => (
-                        <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-[9px] text-slate-400 dark:text-zinc-500">Tasks created below belong to this agent only</p>
-                  </div>
-                )}
-                {[
-                  { type: 'code', icon: '💻', label: 'New Code Task', desc: 'AI-assisted coding with repo context', gradient: 'from-indigo-500 to-blue-600', ring: 'ring-indigo-400/30', bg: 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950 dark:to-blue-950', border: 'border-indigo-200/80 dark:border-indigo-800/50' },
-                  { type: 'research', icon: '🔬', label: 'New Research Task', desc: 'Deep analysis & report generation', gradient: 'from-emerald-500 to-teal-600', ring: 'ring-emerald-400/30', bg: 'bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950', border: 'border-emerald-200/80 dark:border-emerald-700/60' },
-                  { type: 'general', icon: '💬', label: 'New Chat', desc: 'Quick chat — title auto-generated', gradient: 'from-amber-500 to-orange-600', ring: 'ring-amber-400/30', bg: 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950', border: 'border-amber-200/80 dark:border-amber-700/60' },
-                  { type: 'pipeline', icon: '🔗', label: 'New Pipeline', desc: 'Multi-step DAG with auto-execution', gradient: 'from-purple-500 to-fuchsia-600', ring: 'ring-purple-400/30', bg: 'bg-gradient-to-r from-purple-50 to-fuchsia-50 dark:from-purple-950 dark:to-fuchsia-950', border: 'border-purple-200/80 dark:border-purple-700/60' },
-                ].map((item) => (
-                  <button
-                    key={item.type}
-                    onClick={async () => {
-                      if (item.type === 'pipeline') { router.push(buildAgentUrl('/pipelines', selectedAgentId)); return }
-                      // General tasks: instant create with "New Task" title (ChatGPT-style)
-                      if (item.type === 'general') { handleQuickCreateTask(); return }
-                      const title = prompt(`${item.label}\n\nEnter task title:`)
-                      if (!title?.trim()) return
-                      try {
-                        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                          body: JSON.stringify({
-                            title: title.trim(),
-                            task_type: item.type,
-                            priority: 'P2',
-                            status: 'todo',
-                            owner_agent_id: selectedAgentId || undefined,
-                            runner_agent_id: selectedAgentId || undefined,
-                            created_by: selectedAgentId || undefined,
-                          }),
-                        })
-                        if (!r.ok) { alert('Failed to create task'); return }
-                        const task = await r.json()
-                        if (item.type === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
-                        else if (item.type === 'research') router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
-                        else router.push(buildAgentUrl('/tasks', selectedAgentId))
-                      } catch { alert('Failed to create task') }
-                    }}
-                    className={`group flex w-full items-center gap-3 rounded-xl border ${item.border} ${item.bg} px-4 py-5 text-left shadow-sm transition-all hover:shadow-lg hover:ring-2 ${item.ring} hover:-translate-y-0.5 active:translate-y-0`}
-                  >
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${item.gradient} text-xl shadow`}>
-                      <span className="drop-shadow-sm">{item.icon}</span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-slate-800 dark:text-zinc-100">{item.label}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-zinc-400">{item.desc}</p>
-                    </div>
-                    <svg className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  </button>
-                ))}
-              </div>
-
-              {/* Recent Tasks shortcuts */}
-              {recentTasks.length > 0 && (
-                <div className="border-t border-slate-200 dark:border-zinc-700 px-4 py-3">
-                  <p className="mb-2 text-[11px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">Recent Tasks</p>
-                  <div className="space-y-1">
-                    {recentTasks.map((t) => {
-                      const icon = t.task_type === 'code' ? '💻' : t.task_type === 'research' ? '🔬' : t.task_type === 'pipeline' ? '🔗' : '📋'
-                      const href = buildAgentUrl(
-                        t.task_type === 'code' ? `/tasks/code/${t.id}`
-                        : t.task_type === 'research' ? `/tasks/research/${t.id}`
-                        : t.task_type === 'pipeline' ? '/pipelines'
-                        : `/tasks`,
-                        selectedAgentId
-                      )
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() => router.push(href)}
-                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-zinc-700 transition"
-                        >
-                          <span className="text-xs">{icon}</span>
-                          <span className="flex-1 truncate text-[11px] text-slate-700 dark:text-zinc-300">{t.title}</span>
-                          <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-medium ${
-                            t.status === 'doing' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' :
-                            t.status === 'done' ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400' :
-                            t.status === 'review' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400' :
-                            'bg-slate-100 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400'
-                          }`}>{t.status}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowTaskSidebar(true)}
-              className="flex w-8 items-start justify-center border-l border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 pt-3 text-slate-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-600 dark:hover:text-zinc-100"
-              title="Open task shortcuts"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-            </button>
-          )}
         </div>
       </WttShellV2>
 

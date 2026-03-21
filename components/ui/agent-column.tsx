@@ -37,6 +37,7 @@ interface AgentColumnProps {
   maxSubAgents?: number
   agentStats?: AgentStatsMap
   onlineAgentIds?: Set<string>
+  onQuickCreate?: (type: 'code' | 'research' | 'general' | 'pipeline') => void
 }
 
 const ICON_MAP: [RegExp, string][] = [
@@ -106,6 +107,7 @@ export function AgentColumn({
   maxSubAgents = 20,
   agentStats,
   onlineAgentIds,
+  onQuickCreate,
 }: AgentColumnProps) {
   const router = useRouter()
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -354,6 +356,31 @@ export function AgentColumn({
           )
         })}
       </div>
+
+      {/* Quick Create — compact buttons pinned at bottom */}
+      {onQuickCreate && (
+        <div className="border-t border-slate-200 dark:border-zinc-700 px-2 py-2 space-y-1">
+          <p className="px-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Quick Create</p>
+          <div className="grid grid-cols-2 gap-1">
+            {([
+              { type: 'general' as const, icon: '💬', label: 'Chat' },
+              { type: 'code' as const, icon: '💻', label: 'Code' },
+              { type: 'research' as const, icon: '🔬', label: 'Research' },
+              { type: 'pipeline' as const, icon: '🔗', label: 'Pipeline' },
+            ]).map((item) => (
+              <button
+                key={item.type}
+                onClick={() => onQuickCreate(item.type)}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5 text-left text-[11px] font-medium text-slate-600 dark:text-zinc-300 transition hover:bg-slate-50 dark:hover:bg-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600 active:scale-95"
+                title={`New ${item.label}`}
+              >
+                <span className="text-xs">{item.icon}</span>
+                <span className="truncate">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

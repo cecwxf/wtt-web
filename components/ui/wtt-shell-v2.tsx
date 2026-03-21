@@ -24,7 +24,7 @@ interface WttShellV2Props {
   onLeaveTopic?: (topicId: string) => void
   onDeleteTopic?: (topicId: string) => void
   onOpenEditor?: () => void
-  onQuickCreateTask?: () => void
+  onQuickCreateTask?: (type?: 'code' | 'research' | 'general' | 'pipeline') => void
   notificationCount?: number
   hideTopics?: boolean
   hideCreateTopic?: boolean
@@ -165,6 +165,7 @@ export function WttShellV2({
               maxSubAgents={maxSubAgents}
               agentStats={agentStats}
               onlineAgentIds={onlineAgentIds}
+              onQuickCreate={onQuickCreateTask}
             />
 
             {!hideTopics && (
