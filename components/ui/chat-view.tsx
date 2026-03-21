@@ -518,7 +518,9 @@ export function ChatView({
     if (!textarea || mentionStartPos < 0) return
     const before = draft.slice(0, mentionStartPos)
     const after = draft.slice(textarea.selectionStart)
-    const mention = `@${member.display_name} `
+    // Always use agent_id in the message for backend @mention matching,
+    // even when the user selected an alias/display_name from autocomplete
+    const mention = `@${member.agent_id} `
     const newDraft = before + mention + after
     setDraft(newDraft)
     setMentionOpen(false)
