@@ -589,7 +589,12 @@ export function ChatView({
     }
   }, [messages, previewCache])
 
-  const visibleMessages = messages.filter(m => !isProgressMessage(m.content))
+  // Filter out status-stream messages (TASK_REQUEST, SYSTEM, NOTIFICATION)
+  // These are operational/status messages; only show user input + agent replies
+  const STATUS_SEMANTIC_TYPES = new Set(['task_request', 'TASK_REQUEST', 'system', 'SYSTEM', 'notification', 'NOTIFICATION'])
+  const visibleMessages = messages.filter(m =>
+    !isProgressMessage(m.content) && !STATUS_SEMANTIC_TYPES.has(m.semantic_type || '')
+  )
 
   const groupedMessages: Array<{ label: string; messages: ChatMessage[] }> = []
   visibleMessages.forEach((message) => {
@@ -930,7 +935,6 @@ export function ChatView({
                       })()}
                       <div className={`mt-2 text-[10px] ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>
                         {formatTime(message.timestamp)}
-                        {message.semantic_type && ` · ${message.semantic_type}`}
                       </div>
                     </div>
                   </div>

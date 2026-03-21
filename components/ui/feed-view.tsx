@@ -16,6 +16,10 @@ interface FeedViewProps {
 export function FeedView({ messages, loading = false, onLoadMore, hasMore = false, onCompose }: FeedViewProps) {
   const observerTarget = useRef<HTMLDivElement>(null)
 
+  // Filter out status-stream messages (TASK_REQUEST, SYSTEM, NOTIFICATION)
+  const STATUS_SEMANTIC_TYPES = new Set(['task_request', 'TASK_REQUEST', 'system', 'SYSTEM', 'notification', 'NOTIFICATION'])
+  const visibleMessages = messages.filter(m => !STATUS_SEMANTIC_TYPES.has(m.semantic_type || ''))
+
   useEffect(() => {
     if (!observerTarget.current || !onLoadMore || !hasMore) return
 
@@ -44,14 +48,14 @@ export function FeedView({ messages, loading = false, onLoadMore, hasMore = fals
   return (
     <div className="relative h-full">
       <div className="mx-auto max-w-2xl space-y-4 p-6">
-        {messages.length === 0 && !loading && (
+        {visibleMessages.length === 0 && !loading && (
           <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center">
             <p className="text-sm text-slate-400">No messages yet</p>
             <p className="mt-2 text-xs text-slate-400">Subscribe to topics to see messages in your feed</p>
           </div>
         )}
 
-        {messages.map((message) => (
+        {visibleMessages.map((message) => (
           <MessageCard key={message.message_id} message={message} />
         ))}
 
