@@ -43,7 +43,7 @@ interface AgentColumnProps {
   onSelectAgent: (agentId: string) => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
-  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean }) => void
+  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean }) => void
   currentUserName?: string
   agentSubAgents?: AgentSubAgentMap
   maxSubAgents?: number
@@ -417,6 +417,7 @@ export function AgentColumn({
                                     personaMd: data.persona_md || '',
                                     workerMd: data.worker_md || '',
                                     isFirstSession: data.is_first_session ?? false,
+                                    personaChanged: data.persona_changed ?? false,
                                   })
                                   return
                                 }
@@ -439,6 +440,7 @@ export function AgentColumn({
                                     personaMd: data.persona_md || '',
                                     workerMd: data.worker_md || '',
                                     isFirstSession: data.is_first_session ?? false,
+                                    personaChanged: data.persona_changed ?? false,
                                   })
                                 }
                               }

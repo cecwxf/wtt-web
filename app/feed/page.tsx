@@ -75,6 +75,61 @@ export default function FeedPageWrapper() {
   )
 }
 
+// Inline member row with alias editing
+function MemberRow({ member, topicId, accessToken, isSelf, onAliasUpdated }: {
+  member: { agent_id: string; display_name: string; alias: string }
+  topicId: string
+  accessToken: string
+  isSelf: boolean
+  onAliasUpdated: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [aliasVal, setAliasVal] = useState(member.alias || member.display_name)
+
+  const saveAlias = async () => {
+    const newAlias = aliasVal.trim()
+    try {
+      await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/members/alias`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ agent_id: member.agent_id, alias: newAlias }),
+      })
+      onAliasUpdated()
+    } catch { /* ignore */ }
+    setEditing(false)
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-zinc-700 last:border-b-0" title={member.agent_id}>
+      <div className="min-w-0 flex-1">
+        {editing ? (
+          <input
+            type="text"
+            value={aliasVal}
+            onChange={(e) => setAliasVal(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveAlias(); if (e.key === 'Escape') setEditing(false) }}
+            onBlur={saveAlias}
+            autoFocus
+            className="w-full bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-200 outline-none border-b border-indigo-400"
+          />
+        ) : (
+          <div className="truncate font-medium">{member.display_name}</div>
+        )}
+        <div className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{member.agent_id}</div>
+      </div>
+      {!isSelf && !editing && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+          className="shrink-0 rounded bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400 transition hover:bg-slate-200 dark:hover:bg-zinc-600"
+          title={`Rename ${member.display_name} in this topic`}
+        >
+          ✏️
+        </button>
+      )}
+    </div>
+  )
+}
+
 function FeedPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -106,6 +161,7 @@ function FeedPageInner() {
     personaMd: string
     workerMd: string
     isFirstSession: boolean
+    personaChanged: boolean
     topicId: string
   } | null>(null)
 
@@ -401,7 +457,7 @@ function FeedPageInner() {
   }, [topics, selectedTopicId, setSelectedTopicId])
 
   const shouldShowDiscussMembers = !!selectedTopic && ['discussion', 'collaborative'].includes(selectedTopic.topic_type) && !selectedTopic.task_id
-  const { data: topicMembersRaw } = useSWR(
+  const { data: topicMembersRaw, mutate: mutateMembers } = useSWR(
     shouldShowDiscussMembers && selectedTopicId && session?.accessToken
       ? ['topic-members', selectedTopicId, session.accessToken]
       : null,
@@ -423,6 +479,7 @@ function FeedPageInner() {
       .map((m) => ({
         agent_id: String((m as Record<string, unknown>).agent_id || ''),
         display_name: String((m as Record<string, unknown>).display_name || (m as Record<string, unknown>).agent_id || ''),
+        alias: String((m as Record<string, unknown>).alias || ''),
       }))
       .filter((m) => m.agent_id)
   }, [topicMembersRaw])
@@ -609,21 +666,33 @@ function FeedPageInner() {
     }
 
     // Check if this is a first-time worker session — inject persona.md as system context
+    // Also re-inject if persona.md has changed since last injection
     const ws = activeWorkerSessionRef.current
     let augmentedContent = content
-    if (ws && ws.topicId === selectedTopicId && ws.isFirstSession && ws.personaMd) {
-      const personaPrompt = [
-        `[Worker Persona — please read and internalize this as your identity]`,
-        ws.personaMd,
-        `---`,
-        `Based on the persona above, please introduce yourself briefly and confirm your skills and role. The user's message follows:`,
-        ``,
-        content,
-      ].join('\n')
+    if (ws && ws.topicId === selectedTopicId && (ws.isFirstSession || ws.personaChanged) && ws.personaMd) {
+      const isReinject = ws.personaChanged && !ws.isFirstSession
+      const personaPrompt = isReinject
+        ? [
+            `[Worker Persona Updated — please re-read and update your identity]`,
+            ws.personaMd,
+            `---`,
+            `Your persona has been updated. Please acknowledge the changes and adjust accordingly. The user's message follows:`,
+            ``,
+            content,
+          ].join('\n')
+        : [
+            `[Worker Persona — please read and internalize this as your identity]`,
+            ws.personaMd,
+            `---`,
+            `Based on the persona above, please introduce yourself briefly and confirm your skills and role. The user's message follows:`,
+            ``,
+            content,
+          ].join('\n')
       augmentedContent = personaPrompt
-      // Mark as no longer first session (won't re-inject)
-      activeWorkerSessionRef.current = { ...ws, isFirstSession: false }
+      // Mark as no longer first session / persona change handled
+      activeWorkerSessionRef.current = { ...ws, isFirstSession: false, personaChanged: false }
       // Persist worker.md with persona content so future sessions have context
+      // Also updates persona_hash on backend to mark injection done
       fetch(`${CLIENT_WTT_API_BASE}/workers/${ws.workerId}/worker-md`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
@@ -807,9 +876,9 @@ function FeedPageInner() {
     alert('Discussion invite sent! The target agent owner will see it in their notifications.')
   }
 
-  const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean }) => {
+  const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean }) => {
     if (workerSession) {
-      activeWorkerSessionRef.current = { ...workerSession, topicId }
+      activeWorkerSessionRef.current = { ...workerSession, personaChanged: workerSession.personaChanged ?? false, topicId }
     }
     mutateTopics().then(() => setSelectedTopicId(topicId))
   }
@@ -971,34 +1040,17 @@ function FeedPageInner() {
                       {membersOpen && (
                         <>
                           <div className="fixed inset-0 z-20" onClick={() => setMembersOpen(false)} />
-                          <div className="absolute right-0 top-full mt-1 z-30 min-w-[260px] max-w-[360px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                          <div className="absolute right-0 top-full mt-1 z-30 min-w-[280px] max-w-[380px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
                             {topicMembers.length > 0 ? (
                               topicMembers.map((m) => (
-                                <div
+                                <MemberRow
                                   key={m.agent_id}
-                                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-zinc-700 last:border-b-0"
-                                  title={m.agent_id}
-                                >
-                                  <div className="min-w-0 flex-1">
-                                    <div className="truncate font-medium">{m.display_name}</div>
-                                    <div className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{m.agent_id}</div>
-                                  </div>
-                                  {m.agent_id !== selectedAgentId && m.agent_id !== getHumanSender(session) && (
-                                    <button
-                                      onClick={async (e) => {
-                                        e.stopPropagation()
-                                        try {
-                                          await handleCreateP2P(m.agent_id)
-                                          setMembersOpen(false)
-                                        } catch { /* ignore */ }
-                                      }}
-                                      className="shrink-0 rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 transition hover:bg-indigo-500/20"
-                                      title={`Start P2P chat with ${m.display_name}`}
-                                    >
-                                      💬 P2P
-                                    </button>
-                                  )}
-                                </div>
+                                  member={m}
+                                  topicId={selectedTopicId!}
+                                  accessToken={session?.accessToken as string}
+                                  isSelf={m.agent_id === selectedAgentId || m.agent_id === getHumanSender(session)}
+                                  onAliasUpdated={() => mutateMembers()}
+                                />
                               ))
                             ) : (
                               <div className="px-3 py-2 text-xs text-slate-400">No members</div>

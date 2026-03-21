@@ -40,7 +40,7 @@ interface WttShellV2Props {
   onSubscribeTopic?: (topicId: string) => Promise<void>
   onCreateP2P?: (targetAgentId: string) => Promise<void>
   onRequestDiscuss?: (targetAgentId: string, topicName: string) => Promise<void>
-  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean }) => void
+  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean }) => void
   subscribedTopicIds?: string[]
   notificationCount?: number
   p2pRequests?: P2PRequest[]
