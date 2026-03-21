@@ -105,6 +105,8 @@ interface ChatViewProps {
   isTaskTopic?: boolean
   taskType?: TaskType
   wsConnected?: boolean
+  accessToken?: string
+  onTaskCreated?: () => void
 }
 
 type ParsedRich =
@@ -382,6 +384,8 @@ export function ChatView({
   isTaskTopic = false,
   taskType = null,
   wsConnected = false,
+  accessToken,
+  onTaskCreated,
 }: ChatViewProps) {
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
@@ -395,6 +399,7 @@ export function ChatView({
   const [selectedModel, setSelectedModel] = useState(FALLBACK_MODELS[0].id)
   const [reasoningEffort, setReasoningEffort] = useState<'off' | 'low' | 'medium' | 'high'>(defaultEffort)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const modelMenuRef = useRef<HTMLDivElement>(null)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
@@ -418,9 +423,9 @@ export function ChatView({
         if (res.ok) {
           const data = await res.json()
           if (data.models?.length > 0) {
-            const models: ModelOption[] = data.models.map((m: { id: string; name: string; supports_reasoning?: boolean }) => ({
+            const models: ModelOption[] = data.models.map((m: { id: string; label: string; supports_reasoning?: boolean }) => ({
               id: m.id,
-              label: m.name,
+              label: m.label,
               supports_reasoning: m.supports_reasoning ?? true,
             }))
             setAvailableModels(models)
@@ -430,6 +435,18 @@ export function ChatView({
     }
     fetchModels()
   }, [])
+
+  // Close model menu on click outside
+  useEffect(() => {
+    if (!modelMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setModelMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [modelMenuOpen])
 
   // Slash command filtering
   const filteredCommands = slashFilter
@@ -478,14 +495,26 @@ export function ChatView({
         case '/new research task': {
           const taskType = cmd.includes('code') ? 'code' : cmd.includes('research') ? 'research' : 'general'
           const title = args.trim() || `New ${taskType} task`
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
           const res = await fetch(`${apiBase}/tasks`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, task_type: taskType, agent_id: currentAgentId }),
+            headers,
+            body: JSON.stringify({
+              title,
+              task_type: taskType,
+              task_mode: 'single',
+              priority: 'P1',
+              status: 'todo',
+              exec_mode: 'reasoning',
+              owner_agent_id: currentAgentId || undefined,
+              runner_agent_id: currentAgentId || undefined,
+            }),
           })
           if (res.ok) {
             const task = await res.json()
             setSlashResult(`✅ Created ${taskType} task: ${task.title} (${task.id})`)
+            onTaskCreated?.()
           } else {
             setSlashResult('❌ Failed to create task: ' + await res.text())
           }
@@ -493,9 +522,11 @@ export function ChatView({
         }
         case '/new topic': {
           const name = args.trim() || 'New Topic'
+          const topicHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (accessToken) topicHeaders['Authorization'] = `Bearer ${accessToken}`
           const res = await fetch(`${apiBase}/topics`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: topicHeaders,
             body: JSON.stringify({ name, type: 'discussion', visibility: 'public', creator_id: currentAgentId }),
           })
           if (res.ok) {
@@ -1190,10 +1221,9 @@ export function ChatView({
 
         {/* Model & Reasoning effort selector */}
         <div className="mb-2 flex items-center gap-2 text-[11px]">
-          <div className="relative">
+          <div className="relative" ref={modelMenuRef}>
             <button
               onClick={() => setModelMenuOpen(!modelMenuOpen)}
-              onBlur={() => setTimeout(() => setModelMenuOpen(false), 150)}
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition"
             >
               <span className="text-[10px]">🤖</span>

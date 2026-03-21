@@ -356,7 +356,7 @@ function FeedPageInner() {
   const discussMemberCount = useMemo(() => topicMembers.length, [topicMembers])
 
   // Recent tasks for sidebar shortcuts
-  const { data: recentTasksRaw } = useSWR(
+  const { data: recentTasksRaw, mutate: mutateRecentTasks } = useSWR(
     session?.accessToken ? ['recent-tasks', session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks?limit=50&sort=updated_at&order=desc`, {
@@ -740,6 +740,8 @@ function FeedPageInner() {
                 isTaskTopic={!!selectedTopic.task_id}
                 taskType={selectedTopic.task_type || null}
                 wsConnected={wsState === 'connected'}
+                accessToken={session?.accessToken as string | undefined}
+                onTaskCreated={() => mutateRecentTasks()}
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (
                     <div className="relative">
