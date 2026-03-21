@@ -203,8 +203,6 @@ function TasksPageInner() {
   // Only show tasks whose topic is still subscribed (or tasks without topic binding), filtered by type
   const visibleTasks: TaskItem[] = useMemo(
     () => tasks.filter((t) => {
-      // Hide worker-mode tasks (they appear as P2P sessions, not in task list)
-      if (t.task_mode === 'worker') return false
       if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
       // Pipeline filter (mode-based)
       if (taskTypeFilter === 'pipeline') return (t.task_mode || 'single') === 'pipeline'

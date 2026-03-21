@@ -871,23 +871,11 @@ function FeedPageInner() {
     }
   }
 
-  const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean; taskId?: string }) => {
+  const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean }) => {
     if (workerSession) {
       activeWorkerSessionRef.current = { ...workerSession, personaChanged: workerSession.personaChanged ?? false, topicId }
     }
     mutateTopics().then(() => {
-      // Attach task_id to the topic in subscribedTopicsRaw so handleSendMessage routes via task chat
-      if (workerSession?.taskId && subscribedTopicsRaw && Array.isArray(subscribedTopicsRaw)) {
-        const updated = subscribedTopicsRaw.map((t: Record<string, unknown>) =>
-          String(t.id) === topicId ? { ...t, task_id: workerSession.taskId } : t
-        )
-        // Check if topic exists in subscribed list; if not, add it
-        const found = updated.some((t: Record<string, unknown>) => String(t.id) === topicId)
-        if (!found) {
-          updated.unshift({ id: topicId, name: `Worker`, type: 'P2P', task_id: workerSession.taskId, last_activity_at: new Date().toISOString() })
-        }
-        mutateTopics(updated, false)
-      }
       setSelectedTopicId(topicId)
     })
   }
