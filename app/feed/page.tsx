@@ -75,68 +75,28 @@ export default function FeedPageWrapper() {
   )
 }
 
-// Inline member row with alias editing
-function MemberRow({ member, topicId, accessToken, isSelf, onAliasUpdated, onRequestPrivateDiscuss }: {
-  member: { agent_id: string; display_name: string; alias: string }
+// Inline member row
+function MemberRow({ member, topicId, accessToken, isSelf, onRequestPrivateDiscuss }: {
+  member: { agent_id: string; display_name: string }
   topicId: string
   accessToken: string
   isSelf: boolean
-  onAliasUpdated: () => void
-  onRequestPrivateDiscuss?: (targetAgentId: string) => void
+  onRequestPrivateDiscuss?: (targetAgentId: string, targetDisplayName: string) => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [aliasVal, setAliasVal] = useState(member.alias || member.display_name)
-
-  const saveAlias = async () => {
-    const newAlias = aliasVal.trim()
-    try {
-      await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/members/alias`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ agent_id: member.agent_id, alias: newAlias }),
-      })
-      onAliasUpdated()
-    } catch { /* ignore */ }
-    setEditing(false)
-  }
-
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-zinc-700 last:border-b-0" title={member.agent_id}>
       <div className="min-w-0 flex-1">
-        {editing ? (
-          <input
-            type="text"
-            value={aliasVal}
-            onChange={(e) => setAliasVal(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') saveAlias(); if (e.key === 'Escape') setEditing(false) }}
-            onBlur={saveAlias}
-            autoFocus
-            className="w-full bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-200 outline-none border-b border-indigo-400"
-          />
-        ) : (
-          <div className="truncate font-medium">{member.display_name}</div>
-        )}
+        <div className="truncate font-medium">{member.display_name}</div>
         <div className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{member.agent_id}</div>
       </div>
-      {!isSelf && !editing && (
-        <div className="flex items-center gap-1 shrink-0">
-          {onRequestPrivateDiscuss && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRequestPrivateDiscuss(member.agent_id) }}
-              className="rounded bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400 transition hover:bg-slate-200 dark:hover:bg-zinc-600"
-              title={`Request private discuss with ${member.display_name}`}
-            >
-              💬
-            </button>
-          )}
-          <button
-            onClick={(e) => { e.stopPropagation(); setEditing(true) }}
-            className="rounded bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400 transition hover:bg-slate-200 dark:hover:bg-zinc-600"
-            title={`Rename ${member.display_name} in this topic`}
-          >
-            ✏️
-          </button>
-        </div>
+      {!isSelf && onRequestPrivateDiscuss && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRequestPrivateDiscuss(member.agent_id, member.display_name) }}
+          className="rounded bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400 transition hover:bg-slate-200 dark:hover:bg-zinc-600 shrink-0"
+          title={`Request private discuss with ${member.display_name}`}
+        >
+          💬
+        </button>
       )}
     </div>
   )
@@ -494,7 +454,6 @@ function FeedPageInner() {
       .map((m) => ({
         agent_id: String((m as Record<string, unknown>).agent_id || ''),
         display_name: String((m as Record<string, unknown>).display_name || (m as Record<string, unknown>).agent_id || ''),
-        alias: String((m as Record<string, unknown>).alias || ''),
       }))
       .filter((m) => m.agent_id)
   }, [topicMembersRaw])
@@ -921,10 +880,11 @@ function FeedPageInner() {
     mutateTopics().then(() => setSelectedTopicId(topicId))
   }
 
-  const handleRequestPrivateDiscuss = async (targetAgentId: string) => {
+  const handleRequestPrivateDiscuss = async (targetAgentId: string, targetDisplayName?: string) => {
     if (!session?.accessToken) return
     const humanSender = getHumanSender(session)
     const fromUserId = wttUserId || humanSender
+    const targetName = targetDisplayName || targetAgentId
     try {
       const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests`, {
         method: 'POST',
@@ -934,7 +894,7 @@ function FeedPageInner() {
           from_agent_id: selectedAgentId,
           target_agent_id: targetAgentId,
           request_type: 'discuss',
-          topic_name: `${humanSender} & ${targetAgentId}`,
+          topic_name: `${humanSender} & ${targetName}`,
           message: `Private discuss request from ${humanSender}`,
         }),
       })
@@ -1115,7 +1075,6 @@ function FeedPageInner() {
                                   topicId={selectedTopicId!}
                                   accessToken={session?.accessToken as string}
                                   isSelf={m.agent_id === selectedAgentId || m.agent_id === getHumanSender(session)}
-                                  onAliasUpdated={() => mutateMembers()}
                                   onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
                                 />
                               ))
