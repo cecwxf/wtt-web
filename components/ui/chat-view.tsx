@@ -1,7 +1,7 @@
 'use client'
 
 import { Download, Image as ImageIcon, Mic, Paperclip, Send } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
@@ -28,8 +28,29 @@ export interface ChatModelConfig {
   reasoningEffort: 'off' | 'low' | 'medium' | 'high'
 }
 
-const AVAILABLE_MODELS = [
-  { id: 'openai-codex/gpt-5.3-codex', label: 'GPT-5.3 Codex' },
+const FALLBACK_MODELS = [
+  { id: 'openai-codex/gpt-5.3-codex', label: 'GPT-5.3 Codex', supports_reasoning: true },
+]
+
+interface ModelOption {
+  id: string
+  label: string
+  supports_reasoning?: boolean
+}
+
+// Slash commands definition
+const SLASH_COMMANDS = [
+  { cmd: '/new task', desc: 'Create a general task', icon: '📋' },
+  { cmd: '/new code task', desc: 'Create a code task', icon: '💻' },
+  { cmd: '/new research task', desc: 'Create a research task', icon: '🔬' },
+  { cmd: '/new session', desc: 'Start a new chat session', icon: '💬' },
+  { cmd: '/new topic', desc: 'Create a new topic', icon: '📢' },
+  { cmd: '/status', desc: 'Show current task status', icon: '📊' },
+  { cmd: '/run', desc: 'Run the current task', icon: '▶️' },
+  { cmd: '/rerun', desc: 'Rerun pipeline', icon: '🔄' },
+  { cmd: '/models', desc: 'List available models', icon: '🤖' },
+  { cmd: '/workers', desc: 'List workers for agent', icon: '👷' },
+  { cmd: '/help', desc: 'Show available commands', icon: '❓' },
 ]
 
 /**
@@ -370,11 +391,11 @@ export function ChatView({
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | undefined>(undefined)
   const [exportOpen, setExportOpen] = useState(false)
-  const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id)
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>(FALLBACK_MODELS)
+  const [selectedModel, setSelectedModel] = useState(FALLBACK_MODELS[0].id)
   const [reasoningEffort, setReasoningEffort] = useState<'off' | 'low' | 'medium' | 'high'>(defaultEffort)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
-  // Track the last-sent model config to detect changes mid-conversation
   const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
@@ -382,6 +403,116 @@ export function ChatView({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevMsgCountRef = useRef(0)
   const initialScrollDoneRef = useRef(false)
+
+  // Slash command state
+  const [slashOpen, setSlashOpen] = useState(false)
+  const [slashFilter, setSlashFilter] = useState('')
+  const [slashIndex, setSlashIndex] = useState(0)
+  const [slashResult, setSlashResult] = useState<string | null>(null)
+
+  // Fetch available models from API
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const res = await fetch(`${CLIENT_WTT_API_BASE}/workers/models/available`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.models?.length > 0) {
+            const models: ModelOption[] = data.models.map((m: { id: string; name: string; supports_reasoning?: boolean }) => ({
+              id: m.id,
+              label: m.name,
+              supports_reasoning: m.supports_reasoning ?? true,
+            }))
+            setAvailableModels(models)
+          }
+        }
+      } catch {}
+    }
+    fetchModels()
+  }, [])
+
+  // Slash command filtering
+  const filteredCommands = slashFilter
+    ? SLASH_COMMANDS.filter(c => c.cmd.startsWith(slashFilter.toLowerCase()))
+    : SLASH_COMMANDS
+
+  const handleDraftChange = useCallback((value: string) => {
+    setDraft(value)
+    if (value.startsWith('/') && !value.includes('\n')) {
+      setSlashOpen(true)
+      setSlashFilter(value)
+      setSlashIndex(0)
+    } else {
+      setSlashOpen(false)
+    }
+  }, [])
+
+  const executeSlashCommand = useCallback(async (cmd: string, args: string) => {
+    const apiBase = CLIENT_WTT_API_BASE
+    setSlashResult(null)
+    try {
+      switch (cmd) {
+        case '/help':
+          setSlashResult('📋 Available commands:\n' + SLASH_COMMANDS.map(c => `  ${c.icon} ${c.cmd} — ${c.desc}`).join('\n'))
+          return
+        case '/models': {
+          const res = await fetch(`${apiBase}/workers/models/available`)
+          const data = await res.json()
+          setSlashResult('🤖 Available models:\n' + (data.models || []).map((m: { name: string; id: string }) => `  • ${m.name} (${m.id})`).join('\n'))
+          return
+        }
+        case '/workers': {
+          if (!currentAgentId) { setSlashResult('❌ No agent selected'); return }
+          const res = await fetch(`${apiBase}/workers?agent_id=${currentAgentId}`)
+          const data = await res.json()
+          if (data.length === 0) { setSlashResult('No workers found for this agent'); return }
+          setSlashResult('👷 Workers:\n' + data.map((w: { name: string; status: string }) => `  • ${w.name} (${w.status})`).join('\n'))
+          return
+        }
+        case '/status': {
+          setSlashResult('📊 Current context: Agent ' + (currentAgentId || 'none') + ', Topic: ' + topicName)
+          return
+        }
+        case '/new task':
+        case '/new code task':
+        case '/new research task': {
+          const taskType = cmd.includes('code') ? 'code' : cmd.includes('research') ? 'research' : 'general'
+          const title = args.trim() || `New ${taskType} task`
+          const res = await fetch(`${apiBase}/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, task_type: taskType, agent_id: currentAgentId }),
+          })
+          if (res.ok) {
+            const task = await res.json()
+            setSlashResult(`✅ Created ${taskType} task: ${task.title} (${task.id})`)
+          } else {
+            setSlashResult('❌ Failed to create task: ' + await res.text())
+          }
+          return
+        }
+        case '/new topic': {
+          const name = args.trim() || 'New Topic'
+          const res = await fetch(`${apiBase}/topics`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, type: 'discussion', visibility: 'public', creator_id: currentAgentId }),
+          })
+          if (res.ok) {
+            const topic = await res.json()
+            setSlashResult(`✅ Created topic: ${topic.name} (${topic.id})`)
+          } else {
+            setSlashResult('❌ Failed to create topic: ' + await res.text())
+          }
+          return
+        }
+        default:
+          setSlashResult(`⚠️ Command "${cmd}" not yet implemented`)
+      }
+    } catch (e) {
+      setSlashResult(`❌ Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    }
+  }, [currentAgentId, topicName])
 
   // Scroll to bottom on initial load and topic change
   useEffect(() => {
@@ -451,8 +582,28 @@ export function ChatView({
   const handleSend = async () => {
     if (!draft.trim()) return
 
-    const modelConfig: ChatModelConfig = { model: selectedModel, reasoningEffort }
     const content = draft.trim()
+
+    // Handle slash commands
+    if (content.startsWith('/')) {
+      setDraft('')
+      setSlashOpen(false)
+      const parts = content.match(/^(\/[\w\s]+?)(?:\s+(.*))?$/)
+      if (parts) {
+        const cmd = parts[1].trim().toLowerCase()
+        // Find matching command (longest match first)
+        const match = SLASH_COMMANDS.sort((a, b) => b.cmd.length - a.cmd.length).find(c => cmd.startsWith(c.cmd))
+        if (match) {
+          const remainder = content.slice(match.cmd.length).trim()
+          await executeSlashCommand(match.cmd, remainder)
+          return
+        }
+      }
+      setSlashResult(`⚠️ Unknown command: ${content.split(' ')[0]}. Type /help for available commands.`)
+      return
+    }
+
+    const modelConfig: ChatModelConfig = { model: selectedModel, reasoningEffort }
 
     lastSentConfigRef.current = { model: selectedModel, effort: reasoningEffort }
     if (isFirstMessage) setIsFirstMessage(false)
@@ -544,6 +695,31 @@ export function ChatView({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (slashOpen && filteredCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSlashIndex(i => (i + 1) % filteredCommands.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSlashIndex(i => (i - 1 + filteredCommands.length) % filteredCommands.length)
+        return
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault()
+        const selected = filteredCommands[slashIndex]
+        if (selected) {
+          setDraft(selected.cmd + ' ')
+          setSlashOpen(false)
+        }
+        if (e.key === 'Tab') return
+      }
+      if (e.key === 'Escape') {
+        setSlashOpen(false)
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -1002,6 +1178,19 @@ export function ChatView({
 
 
       <div className="border-t border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 sm:p-4">
+        {/* Slash command result display */}
+        {slashResult && (
+          <div className="mb-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-2 text-xs text-slate-700 dark:text-zinc-300 whitespace-pre-wrap font-mono">
+            {slashResult}
+            <button
+              className="ml-2 text-[10px] text-slate-400 hover:text-slate-600"
+              onClick={() => setSlashResult(null)}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Model & Reasoning effort selector */}
         <div className="mb-2 flex items-center gap-2 text-[11px]">
           <div className="relative">
@@ -1011,12 +1200,12 @@ export function ChatView({
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition"
             >
               <span className="text-[10px]">🤖</span>
-              <span className="font-medium">{AVAILABLE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+              <span className="font-medium">{availableModels.find(m => m.id === selectedModel)?.label || selectedModel}</span>
               <span className="text-slate-400">▾</span>
             </button>
             {modelMenuOpen && (
-              <div className="absolute bottom-full left-0 mb-1 z-30 min-w-[180px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
-                {AVAILABLE_MODELS.map(m => (
+              <div className="absolute bottom-full left-0 mb-1 z-30 min-w-[220px] max-h-[240px] overflow-y-auto rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                {availableModels.map(m => (
                   <button
                     key={m.id}
                     onMouseDown={e => e.preventDefault()}
@@ -1028,7 +1217,8 @@ export function ChatView({
                     }`}
                   >
                     {selectedModel === m.id && <span className="text-indigo-500">✓</span>}
-                    {m.label}
+                    <span>{m.label}</span>
+                    {m.supports_reasoning === false && <span className="ml-auto text-[9px] text-slate-400">no reasoning</span>}
                   </button>
                 ))}
               </div>
@@ -1052,7 +1242,30 @@ export function ChatView({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-2">
+        <div className="relative">
+          {/* Slash command autocomplete */}
+          {slashOpen && filteredCommands.length > 0 && (
+            <div className="absolute bottom-full left-0 mb-1 w-full max-w-md z-40 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+              {filteredCommands.map((c, i) => (
+                <button
+                  key={c.cmd}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setDraft(c.cmd + ' '); setSlashOpen(false) }}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
+                    i === slashIndex
+                      ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400'
+                      : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  <span>{c.icon}</span>
+                  <span className="font-medium">{c.cmd}</span>
+                  <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500">{c.desc}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-2">
           <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100">
             <Paperclip className="h-4 w-4" />
           </button>
@@ -1065,9 +1278,9 @@ export function ChatView({
 
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Message ${topicName}...`}
+            placeholder={`Message ${topicName}… (type / for commands)`}
             rows={1}
             className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none"
           />
@@ -1090,6 +1303,7 @@ export function ChatView({
               e.currentTarget.value = ''
             }}
           />
+        </div>
         </div>
 
         {recentAssets.length > 0 && (

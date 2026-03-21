@@ -1,8 +1,8 @@
 'use client'
 
-import { ChevronDown, ChevronRight, MoreVertical, User } from 'lucide-react'
+import { ChevronDown, ChevronRight, MoreVertical, Plus, Settings, Trash2, Edit3, User } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { buildAgentUrl } from '@/lib/hooks/use-agent-id'
 
 export interface AgentItem {
@@ -24,6 +24,17 @@ export interface AgentSubAgentMap {
 
 export interface AgentStatsMap {
   [agentId: string]: { total: number; active: number; done: number; todo: number }
+}
+
+export interface WorkerItem {
+  id: string
+  agent_id: string
+  name: string
+  description: string
+  skills_config: string[]
+  personality: string
+  model_config: Record<string, string>
+  status: string
 }
 
 interface AgentColumnProps {
@@ -96,6 +107,13 @@ function getStatusRing(status: string) {
   }
 }
 
+const WORKER_ICONS = ['🧑‍💻', '👷', '🔧', '🎯', '📝', '🔬', '💻', '🎨', '📊', '🛡️']
+function getWorkerIcon(index: number): string {
+  return WORKER_ICONS[index % WORKER_ICONS.length]
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_WTT_API_URL || ''
+
 export function AgentColumn({
   agents,
   selectedAgentId,
@@ -112,6 +130,28 @@ export function AgentColumn({
   const router = useRouter()
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
+  const [workersByAgent, setWorkersByAgent] = useState<Record<string, WorkerItem[]>>({})
+  const [workerMenuFor, setWorkerMenuFor] = useState<string | null>(null)
+  const [addingWorkerFor, setAddingWorkerFor] = useState<string | null>(null)
+  const [newWorkerName, setNewWorkerName] = useState('')
+  const [renamingWorker, setRenamingWorker] = useState<{ id: string; name: string } | null>(null)
+
+  const fetchWorkers = useCallback(async (agentId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/workers?agent_id=${agentId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setWorkersByAgent(prev => ({ ...prev, [agentId]: data }))
+      }
+    } catch {}
+  }, [])
+
+  // Fetch workers when an agent is expanded
+  useEffect(() => {
+    expandedAgents.forEach(agentId => {
+      if (!workersByAgent[agentId]) fetchWorkers(agentId)
+    })
+  }, [expandedAgents, fetchWorkers, workersByAgent])
 
   const toggleExpand = (agentId: string) => {
     setExpandedAgents(prev => {
@@ -121,6 +161,57 @@ export function AgentColumn({
       return next
     })
   }
+
+  const handleCreateWorker = async (agentId: string) => {
+    if (!newWorkerName.trim()) return
+    try {
+      const res = await fetch(`${API_BASE}/workers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent_id: agentId,
+          name: newWorkerName.trim(),
+          skills_config: [],
+          personality: '',
+          model_config: {},
+        }),
+      })
+      if (res.ok) {
+        setNewWorkerName('')
+        setAddingWorkerFor(null)
+        fetchWorkers(agentId)
+      }
+    } catch {}
+  }
+
+  const handleRenameWorker = async (workerId: string, newName: string, agentId: string) => {
+    if (!newName.trim()) return
+    try {
+      await fetch(`${API_BASE}/workers/${workerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim() }),
+      })
+      fetchWorkers(agentId)
+    } catch {}
+    setRenamingWorker(null)
+  }
+
+  const handleDeleteWorker = async (workerId: string, agentId: string) => {
+    if (!confirm('Delete this worker?')) return
+    try {
+      await fetch(`${API_BASE}/workers/${workerId}`, { method: 'DELETE' })
+      fetchWorkers(agentId)
+    } catch {}
+    setWorkerMenuFor(null)
+  }
+
+  // Close menus on outside click
+  useEffect(() => {
+    const handler = () => { setMenuFor(null); setWorkerMenuFor(null) }
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [])
 
   return (
     <div className="flex h-full w-[200px] flex-col border-r border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
@@ -151,7 +242,7 @@ export function AgentColumn({
           const isExpanded = expandedAgents.has(agent.agent_id)
           const agentIcon = getAgentIcon(agent.display_name)
           const tasks = agentSubAgents?.[agent.agent_id] ?? []
-          // Use real backend stats if available, else fall back to local task list
+          const workers = workersByAgent[agent.agent_id] ?? []
           const stats = agentStats?.[agent.agent_id]
           const activeCount = stats?.active ?? tasks.filter(t => t.status === 'doing').length
           const totalCount = stats?.total ?? tasks.length
@@ -175,7 +266,7 @@ export function AgentColumn({
                 <button
                   onClick={() => toggleExpand(agent.agent_id)}
                   className="shrink-0 pl-1.5 pr-0.5 py-3 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
-                  title={isExpanded ? 'Collapse' : `Expand ${totalCount} workers`}
+                  title={isExpanded ? 'Collapse' : 'Expand'}
                 >
                   {isExpanded
                     ? <ChevronDown className="h-3 w-3" />
@@ -199,7 +290,6 @@ export function AgentColumn({
                     }`}
                   >
                     {agentIcon}
-                    {/* Online/offline indicator */}
                     <span
                       className={`absolute -bottom-0.5 -left-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-900 ${
                         isOnline
@@ -208,7 +298,6 @@ export function AgentColumn({
                       }`}
                       title={isOnline ? 'Online' : 'Offline'}
                     />
-                    {/* Active pulse badge on icon */}
                     {activeCount > 0 && (
                       <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-indigo-500 text-[7px] font-bold text-white ring-2 ring-white dark:ring-zinc-900">
                         {activeCount}
@@ -218,7 +307,7 @@ export function AgentColumn({
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-semibold leading-tight">{agent.display_name}</p>
-                    {/* Compact sub-agent dot grid (collapsed view) */}
+                    {/* Compact dot grid (collapsed) */}
                     {!isExpanded && totalCount > 0 && (
                       <div className="mt-1 flex flex-wrap gap-[3px]">
                         {tasks.slice(0, maxSubAgents).map((t) => {
@@ -235,13 +324,6 @@ export function AgentColumn({
                             />
                           )
                         })}
-                        {/* Empty slots (show up to a few to hint at capacity) */}
-                        {Array.from({ length: Math.max(0, Math.min(6, maxSubAgents - totalCount)) }).map((_, i) => (
-                          <span
-                            key={`empty-${i}`}
-                            className="inline-block h-[5px] w-[5px] rounded-full bg-slate-100 dark:bg-zinc-700/50"
-                          />
-                        ))}
                       </div>
                     )}
                     {!isExpanded && (
@@ -250,7 +332,7 @@ export function AgentColumn({
                           ? <><span className="font-semibold text-indigo-500 dark:text-indigo-400">{activeCount} active</span> · </>
                           : null
                         }
-                        {totalCount}/{maxSubAgents} workers
+                        {workers.length} workers · {totalCount} tasks
                       </p>
                     )}
                     {agent.unread_count && agent.unread_count > 0 ? (
@@ -269,61 +351,169 @@ export function AgentColumn({
                 </button>
               </div>
 
-              {/* Expanded: each task as a worker */}
+              {/* Expanded: Workers list */}
               {isExpanded && (
                 <div className="pb-2 pl-5 pr-2 space-y-0.5">
-                  {tasks.length === 0 && (
-                    <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-zinc-500 italic">No workers yet</p>
+                  {/* Workers section */}
+                  {workers.length > 0 && (
+                    <>
+                      <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                        Workers
+                      </p>
+                      {workers.map((w, idx) => (
+                        <div
+                          key={w.id}
+                          className="group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 hover:bg-white/80 dark:hover:bg-zinc-700/50 cursor-pointer"
+                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setWorkerMenuFor(w.id) }}
+                        >
+                          {renamingWorker?.id === w.id ? (
+                            <input
+                              autoFocus
+                              className="flex-1 rounded border border-indigo-300 bg-white dark:bg-zinc-800 px-1.5 py-0.5 text-[11px] text-slate-700 dark:text-zinc-200 outline-none"
+                              value={renamingWorker.name}
+                              onChange={(e) => setRenamingWorker({ ...renamingWorker, name: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameWorker(w.id, renamingWorker.name, agent.agent_id)
+                                if (e.key === 'Escape') setRenamingWorker(null)
+                              }}
+                              onBlur={() => handleRenameWorker(w.id, renamingWorker.name, agent.agent_id)}
+                            />
+                          ) : (
+                            <>
+                              <span className="text-[11px]">{getWorkerIcon(idx)}</span>
+                              <span className="flex-1 truncate text-[11px] font-medium text-slate-600 dark:text-zinc-300">
+                                {w.name}
+                              </span>
+                              {w.skills_config?.length > 0 && (
+                                <span className="text-[8px] text-slate-400 dark:text-zinc-500">{w.skills_config.length} skills</span>
+                              )}
+                              <span
+                                className="invisible group-hover:visible shrink-0 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+                                onClick={(e) => { e.stopPropagation(); setWorkerMenuFor(w.id) }}
+                              >
+                                <MoreVertical className="h-3 w-3" />
+                              </span>
+                            </>
+                          )}
+
+                          {/* Worker context menu */}
+                          {workerMenuFor === w.id && (
+                            <div
+                              className="absolute right-0 top-6 z-40 w-32 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1 shadow-lg"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[11px] text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
+                                onClick={() => { setWorkerMenuFor(null); setRenamingWorker({ id: w.id, name: w.name }) }}
+                              >
+                                <Edit3 className="h-3 w-3" /> Rename
+                              </button>
+                              <button
+                                className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[11px] text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
+                                onClick={() => { setWorkerMenuFor(null) }}
+                              >
+                                <Settings className="h-3 w-3" /> Edit Config
+                              </button>
+                              <button
+                                className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[11px] text-red-500 hover:bg-slate-100 dark:hover:bg-zinc-700"
+                                onClick={() => handleDeleteWorker(w.id, agent.agent_id)}
+                              >
+                                <Trash2 className="h-3 w-3" /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </>
                   )}
-                  {tasks.slice(0, maxSubAgents).map((t) => {
-                    const isActive = t.status === 'doing'
-                    const isDone = t.status === 'done'
-                    const href = buildAgentUrl(
-                      t.task_type === 'code' ? `/tasks/code/${t.id}`
-                      : t.task_type === 'research' ? `/tasks/research/${t.id}`
-                      : t.task_type === 'pipeline' ? '/pipelines'
-                      : `/tasks`,
-                      selectedAgentId
-                    )
-                    return (
+
+                  {/* Tasks section */}
+                  {tasks.length > 0 && (
+                    <>
+                      <p className="px-2 pt-1.5 pb-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                        Tasks
+                      </p>
+                      {tasks.slice(0, maxSubAgents).map((t) => {
+                        const isActive = t.status === 'doing'
+                        const isDone = t.status === 'done'
+                        const href = buildAgentUrl(
+                          t.task_type === 'code' ? `/tasks/code/${t.id}`
+                          : t.task_type === 'research' ? `/tasks/research/${t.id}`
+                          : t.task_type === 'pipeline' ? '/pipelines'
+                          : `/tasks`,
+                          selectedAgentId
+                        )
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => router.push(href)}
+                            className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition ${
+                              isActive
+                                ? 'bg-indigo-50/80 dark:bg-indigo-950/30 ring-1 ring-indigo-200/60 dark:ring-indigo-800/40'
+                                : 'hover:bg-white/80 dark:hover:bg-zinc-700/50'
+                            }`}
+                            title={`${t.title} — ${t.status}`}
+                          >
+                            <span className={`text-[11px] transition ${
+                              isActive ? 'drop-shadow-[0_0_2px_rgba(99,102,241,0.5)]' : isDone ? 'opacity-30' : 'opacity-50'
+                            }`}>
+                              {agentIcon}
+                            </span>
+                            <span className={`flex-1 truncate text-[11px] font-medium ${
+                              isActive
+                                ? 'text-indigo-700 dark:text-indigo-300'
+                                : isDone
+                                  ? 'text-slate-400 dark:text-zinc-500 line-through'
+                                  : 'text-slate-500 dark:text-zinc-400'
+                            }`}>
+                              {t.title}
+                            </span>
+                            <span className={`shrink-0 rounded-full ${getStatusColor(t.status)} ${
+                              isActive ? 'h-[7px] w-[7px] ring-1 ' + getStatusRing(t.status) : 'h-[5px] w-[5px]'
+                            }`} />
+                          </button>
+                        )
+                      })}
+                    </>
+                  )}
+
+                  {/* Add Worker inline form */}
+                  {addingWorkerFor === agent.agent_id ? (
+                    <div className="mt-1 flex items-center gap-1 px-1">
+                      <input
+                        autoFocus
+                        className="flex-1 rounded border border-indigo-300 bg-white dark:bg-zinc-800 px-2 py-1 text-[11px] text-slate-700 dark:text-zinc-200 outline-none placeholder:text-slate-400"
+                        placeholder="Worker name…"
+                        value={newWorkerName}
+                        onChange={(e) => setNewWorkerName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleCreateWorker(agent.agent_id)
+                          if (e.key === 'Escape') { setAddingWorkerFor(null); setNewWorkerName('') }
+                        }}
+                      />
                       <button
-                        key={t.id}
-                        onClick={() => router.push(href)}
-                        className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition ${
-                          isActive
-                            ? 'bg-indigo-50/80 dark:bg-indigo-950/30 ring-1 ring-indigo-200/60 dark:ring-indigo-800/40'
-                            : 'hover:bg-white/80 dark:hover:bg-zinc-700/50'
-                        }`}
-                        title={`worker@${t.title} — ${t.status}`}
+                        className="rounded bg-indigo-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-indigo-600"
+                        onClick={() => handleCreateWorker(agent.agent_id)}
                       >
-                        <span className={`text-[11px] transition ${
-                          isActive ? 'drop-shadow-[0_0_2px_rgba(99,102,241,0.5)]' : isDone ? 'opacity-30' : 'opacity-50'
-                        }`}>
-                          {agentIcon}
-                        </span>
-                        <span className={`flex-1 truncate text-[11px] font-medium ${
-                          isActive
-                            ? 'text-indigo-700 dark:text-indigo-300'
-                            : isDone
-                              ? 'text-slate-400 dark:text-zinc-500 line-through'
-                              : 'text-slate-500 dark:text-zinc-400'
-                        }`}>
-                          <span className={`${isActive ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-zinc-500'}`}>worker@</span>{t.title}
-                        </span>
-                        <span className={`shrink-0 rounded-full ${getStatusColor(t.status)} ${
-                          isActive ? 'h-[7px] w-[7px] ring-1 ' + getStatusRing(t.status) : 'h-[5px] w-[5px]'
-                        }`} />
+                        Add
                       </button>
-                    )
-                  })}
-                  {/* Capacity indicator */}
-                  <p className="px-2 pt-0.5 text-[9px] text-slate-300 dark:text-zinc-600">
-                    {totalCount}/{maxSubAgents} Tasks/Workers …
+                    </div>
+                  ) : (
+                    <button
+                      className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition"
+                      onClick={() => setAddingWorkerFor(agent.agent_id)}
+                    >
+                      <Plus className="h-3 w-3" /> Add Worker
+                    </button>
+                  )}
+
+                  <p className="px-2 pt-1 text-[9px] text-slate-300 dark:text-zinc-600">
+                    {workers.length} workers · {totalCount} tasks
                   </p>
                 </div>
               )}
 
-              {/* Context menu */}
+              {/* Agent context menu */}
               {isMenuOpen && (
                 <div className="absolute right-1 top-12 z-30 w-36 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1 shadow-lg">
                   <button
@@ -357,7 +547,7 @@ export function AgentColumn({
         })}
       </div>
 
-      {/* Quick Create — compact buttons pinned at bottom */}
+      {/* Quick Create */}
       {onQuickCreate && (
         <div className="border-t border-slate-200 dark:border-zinc-700 px-2 py-2 space-y-1">
           <p className="px-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Quick Create</p>
