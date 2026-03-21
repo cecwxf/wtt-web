@@ -784,6 +784,29 @@ function FeedPageInner() {
     alert('P2P request sent! The target user will see it in their notifications.')
   }
 
+  const handleRequestDiscuss = async (targetAgentId: string, topicName: string) => {
+    if (!session?.accessToken) return
+    const humanSender = getHumanSender(session)
+    const fromUserId = wttUserId || humanSender
+    const res = await fetch(`${CLIENT_WTT_API_BASE}/p2p-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+      body: JSON.stringify({
+        from_user_id: fromUserId,
+        from_agent_id: selectedAgentId,
+        target_agent_id: targetAgentId,
+        request_type: 'discuss',
+        topic_name: topicName,
+        message: `Discussion topic invite from ${humanSender}`,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed' }))
+      throw new Error(err.detail || 'Failed to send discuss request')
+    }
+    alert('Discussion invite sent! The target agent owner will see it in their notifications.')
+  }
+
   const handleSelectWorkerTopic = (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean }) => {
     if (workerSession) {
       activeWorkerSessionRef.current = { ...workerSession, topicId }
@@ -893,6 +916,7 @@ function FeedPageInner() {
         onDeleteTopic={handleDeleteTopic}
         onSubscribeTopic={handleSubscribeTopic}
         onCreateP2P={handleCreateP2P}
+        onRequestDiscuss={handleRequestDiscuss}
         subscribedTopicIds={subscribedTopicIds}
         onOpenEditor={() => setEditorOpen(true)}
         onQuickCreateTask={handleQuickCreateTask}

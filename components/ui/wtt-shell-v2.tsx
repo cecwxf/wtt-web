@@ -14,6 +14,8 @@ interface P2PRequest {
   from_user_id: string
   from_agent_id: string
   target_agent_id: string
+  request_type?: string
+  topic_name?: string
   status: string
   message: string
   created_at: string
@@ -37,6 +39,7 @@ interface WttShellV2Props {
   onQuickCreateTask?: (type?: 'code' | 'research' | 'general' | 'pipeline') => void
   onSubscribeTopic?: (topicId: string) => Promise<void>
   onCreateP2P?: (targetAgentId: string) => Promise<void>
+  onRequestDiscuss?: (targetAgentId: string, topicName: string) => Promise<void>
   onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean }) => void
   subscribedTopicIds?: string[]
   notificationCount?: number
@@ -74,6 +77,7 @@ export function WttShellV2({
   onQuickCreateTask,
   onSubscribeTopic,
   onCreateP2P,
+  onRequestDiscuss,
   onSelectWorkerTopic,
   subscribedTopicIds,
   notificationCount = 0,
@@ -207,6 +211,7 @@ export function WttShellV2({
                 onDeleteTopic={onDeleteTopic}
                 onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
                 onCreateP2P={onCreateP2P}
+                onRequestDiscuss={onRequestDiscuss}
                 agentName={selectedAgent?.display_name}
                 pinScopeKey={selectedAgentId}
               />

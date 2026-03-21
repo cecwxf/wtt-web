@@ -12,6 +12,8 @@ interface P2PRequestItem {
   from_user_id: string
   from_agent_id: string
   target_agent_id: string
+  request_type?: string  // 'p2p' or 'discuss'
+  topic_name?: string
   status: string
   message: string
   created_at: string
@@ -110,14 +112,23 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
                 <p className="mb-3 text-sm font-semibold dark:text-zinc-200">Notifications</p>
                 {p2pRequests.length > 0 ? (
                   <div className="space-y-2 max-h-[320px] overflow-y-auto">
-                    {p2pRequests.map((req) => (
+                    {p2pRequests.map((req) => {
+                      const isDiscuss = req.request_type === 'discuss'
+                      return (
                       <div key={req.id} className="rounded-lg border border-slate-100 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 p-3">
                         <p className="text-xs font-medium text-slate-700 dark:text-zinc-300">
-                          🤝 P2P Chat Request
+                          {isDiscuss ? '💬 Topic Invite' : '🤝 P2P Chat Request'}
                         </p>
                         <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-                          <span className="font-medium text-indigo-600 dark:text-indigo-400">{req.from_user_id}</span> wants to chat with <span className="font-medium">{req.target_agent_id}</span>
+                          <span className="font-medium text-indigo-600 dark:text-indigo-400">{req.from_agent_id || req.from_user_id}</span>
+                          {isDiscuss
+                            ? <> invites <span className="font-medium">{req.target_agent_id}</span> to discuss</>
+                            : <> wants to chat with <span className="font-medium">{req.target_agent_id}</span></>
+                          }
                         </p>
+                        {req.topic_name && (
+                          <p className="mt-1 text-[10px] font-medium text-slate-600 dark:text-zinc-300">📋 {req.topic_name}</p>
+                        )}
                         {req.message && (
                           <p className="mt-1 text-[10px] text-slate-400 italic truncate">{req.message}</p>
                         )}
@@ -139,7 +150,8 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
                           </button>
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-slate-400">No new notifications</p>

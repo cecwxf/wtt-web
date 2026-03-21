@@ -24,7 +24,8 @@ interface TopicColumnProps {
   onDeleteTopic?: (topicId: string) => void
   onQuickCreateTask?: () => void
   onCreateP2P?: (targetAgentId: string) => Promise<void>
-  onRequestP2P?: (targetAgentId: string, fromTopicId: string) => Promise<void>
+  onRequestDiscuss?: (targetAgentId: string, topicName: string) => Promise<void>
+  onRequestMember?: (targetAgentId: string, topicId: string) => Promise<void>
   agentName?: string
   pinScopeKey?: string
 }
@@ -70,16 +71,17 @@ export function TopicColumn({
   onLeaveTopic,
   onDeleteTopic,
   onQuickCreateTask,
-  onCreateP2P,
-  // onRequestP2P reserved for future use
+  onRequestDiscuss,
   agentName,
   pinScopeKey,
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [pinnedTopicIds, setPinnedTopicIds] = useState<string[]>([])
-  const [showP2PInput, setShowP2PInput] = useState(false)
-  const [p2pTargetId, setP2pTargetId] = useState('')
-  const [creatingP2P, setCreatingP2P] = useState(false)
+  // Discuss topic request form
+  const [showDiscussForm, setShowDiscussForm] = useState(false)
+  const [discussAgentId, setDiscussAgentId] = useState('')
+  const [discussTopicName, setDiscussTopicName] = useState('')
+  const [creatingDiscuss, setCreatingDiscuss] = useState(false)
 
   useEffect(() => {
     const key = `wtt:pinned-topics:${pinScopeKey || 'default'}`
@@ -109,18 +111,20 @@ export function TopicColumn({
     })
   }
 
-  const handleCreateP2P = async () => {
-    const target = p2pTargetId.trim()
-    if (!target || !onCreateP2P) return
-    setCreatingP2P(true)
+  const handleRequestDiscuss = async () => {
+    const agent = discussAgentId.trim()
+    const name = discussTopicName.trim()
+    if (!agent || !name || !onRequestDiscuss) return
+    setCreatingDiscuss(true)
     try {
-      await onCreateP2P(target)
-      setP2pTargetId('')
-      setShowP2PInput(false)
+      await onRequestDiscuss(agent, name)
+      setDiscussAgentId('')
+      setDiscussTopicName('')
+      setShowDiscussForm(false)
     } catch {
       // error handled by caller
     } finally {
-      setCreatingP2P(false)
+      setCreatingDiscuss(false)
     }
   }
 
@@ -206,34 +210,49 @@ export function TopicColumn({
           <div key={group} className="mb-1">
             <div className="mx-1 mb-1 flex items-center justify-between rounded-md bg-slate-50/70 dark:bg-zinc-800/50 px-2 py-1">
               <span className="text-[11px] font-medium text-slate-400">{getGroupLabel(group)}</span>
-              {group === 'p2p' && onCreateP2P && (
+              {group === 'discuss' && onRequestDiscuss && (
                 <button
-                  onClick={() => setShowP2PInput(!showP2PInput)}
+                  onClick={() => setShowDiscussForm(!showDiscussForm)}
                   className="rounded p-0.5 text-slate-400 transition hover:bg-slate-200 dark:hover:bg-zinc-700 hover:text-indigo-500"
-                  title="Start P2P chat"
+                  title="Request mutual discuss topic"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
-            {group === 'p2p' && showP2PInput && (
-              <div className="mx-1 mb-2 flex items-center gap-1.5 rounded-md border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-zinc-800 px-2 py-1.5">
+            {group === 'discuss' && showDiscussForm && (
+              <div className="mx-1 mb-2 space-y-1.5 rounded-md border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-zinc-800 px-2 py-2">
                 <input
                   type="text"
-                  value={p2pTargetId}
-                  onChange={(e) => setP2pTargetId(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreateP2P(); if (e.key === 'Escape') { setShowP2PInput(false); setP2pTargetId('') } }}
-                  placeholder="Agent ID..."
+                  value={discussAgentId}
+                  onChange={(e) => setDiscussAgentId(e.target.value)}
+                  placeholder="Target Agent ID..."
                   autoFocus
-                  className="min-w-0 flex-1 bg-transparent text-xs text-slate-700 dark:text-zinc-300 placeholder:text-slate-400 outline-none"
+                  className="w-full bg-transparent text-xs text-slate-700 dark:text-zinc-300 placeholder:text-slate-400 outline-none"
                 />
-                <button
-                  onClick={handleCreateP2P}
-                  disabled={!p2pTargetId.trim() || creatingP2P}
-                  className="shrink-0 rounded bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-50"
-                >
-                  {creatingP2P ? '...' : 'Chat'}
-                </button>
+                <input
+                  type="text"
+                  value={discussTopicName}
+                  onChange={(e) => setDiscussTopicName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleRequestDiscuss(); if (e.key === 'Escape') { setShowDiscussForm(false); setDiscussAgentId(''); setDiscussTopicName('') } }}
+                  placeholder="Topic name..."
+                  className="w-full bg-transparent text-xs text-slate-700 dark:text-zinc-300 placeholder:text-slate-400 outline-none"
+                />
+                <div className="flex justify-end gap-1">
+                  <button
+                    onClick={() => { setShowDiscussForm(false); setDiscussAgentId(''); setDiscussTopicName('') }}
+                    className="rounded px-2 py-0.5 text-[10px] text-slate-400 hover:text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleRequestDiscuss}
+                    disabled={!discussAgentId.trim() || !discussTopicName.trim() || creatingDiscuss}
+                    className="rounded bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-50"
+                  >
+                    {creatingDiscuss ? '...' : 'Send Request'}
+                  </button>
+                </div>
               </div>
             )}
             {items.map((topic) => {
