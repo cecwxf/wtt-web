@@ -536,7 +536,7 @@ function FeedPageInner() {
 
     if (isTask && selectedTopic?.task_id) {
       // Use task chat/send endpoint — it handles auto_run (todo→doing) automatically
-      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopic.task_id}/chat/send`, {
+      const sendResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopic.task_id}/chat/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify({
@@ -547,6 +547,11 @@ function FeedPageInner() {
           ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
         }),
       })
+      // Force topic list refresh so auto-renamed title appears immediately
+      if (sendResp.ok) {
+        pendingRenameTaskRef.current = null
+        await mutateTopics()
+      }
     } else {
       // Regular topic — use publishMessage
       await wttApi.publishMessage(selectedTopicId, {
@@ -557,13 +562,6 @@ function FeedPageInner() {
         sender_id: getHumanSender(session),
         ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
       })
-    }
-
-    // Auto-rename is now handled by the backend on first send.
-    // Always refresh topics after task sends to pick up any title/name changes.
-    if (isTask) {
-      pendingRenameTaskRef.current = null
-      mutateTopics()
     }
 
     mutate()
