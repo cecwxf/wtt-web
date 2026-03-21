@@ -560,9 +560,8 @@ function FeedPageInner() {
     }
 
     // Auto-rename is now handled by the backend on first send.
-    // Just clear the pending ref and refresh topics to pick up the new title.
-    const pending = pendingRenameTaskRef.current
-    if (pending && pending.topicId === selectedTopicId) {
+    // Always refresh topics after task sends to pick up any title/name changes.
+    if (isTask) {
       pendingRenameTaskRef.current = null
       mutateTopics()
     }
