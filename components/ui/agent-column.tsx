@@ -371,8 +371,8 @@ export function AgentColumn({
               <button
                 key={item.type}
                 onClick={() => onQuickCreate(item.type)}
-                className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5 text-left text-[11px] font-medium text-slate-600 dark:text-zinc-300 transition hover:bg-slate-50 dark:hover:bg-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600 active:scale-95"
-                title={`New ${item.label}`}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5 text-left text-[11px] font-semibold text-slate-800 dark:text-zinc-100 transition hover:bg-slate-50 dark:hover:bg-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600 active:scale-95"
+                title={item.type === 'pipeline' ? 'Pipeline Panel' : `New ${item.label}`}
               >
                 <span className="text-xs">{item.icon}</span>
                 <span className="truncate">{item.label}</span>
