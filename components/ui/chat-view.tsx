@@ -99,6 +99,8 @@ export interface MentionableAgent {
 
 interface ChatViewProps {
   topicName: string
+  topicId?: string
+  taskId?: string
   messages: ChatMessage[]
   currentAgentId: string
   onSendMessage: (content: string, modelConfig?: ChatModelConfig) => Promise<void>
@@ -112,6 +114,7 @@ interface ChatViewProps {
   wsConnected?: boolean
   accessToken?: string
   onTaskCreated?: () => void
+  onTopicCreated?: () => void
   topicMembers?: MentionableAgent[]
   topicType?: string
 }
@@ -379,6 +382,9 @@ function ThumbnailVideo({ url, isMine }: { url: string; isMine: boolean }) {
 
 export function ChatView({
   topicName,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  topicId,
+  taskId: propTaskId,
   messages,
   currentAgentId,
   onSendMessage,
@@ -393,6 +399,7 @@ export function ChatView({
   wsConnected = false,
   accessToken,
   onTaskCreated,
+  onTopicCreated,
   topicMembers = [],
   topicType,
 }: ChatViewProps) {
@@ -593,8 +600,52 @@ export function ChatView({
           if (res.ok) {
             const topic = await res.json()
             setSlashResult(`✅ Created topic: ${topic.name} (${topic.id})`)
+            onTopicCreated?.()
           } else {
             setSlashResult('❌ Failed to create topic: ' + await res.text())
+          }
+          return
+        }
+        case '/new session': {
+          setSlashResult('💬 Starting new session — chat history cleared.')
+          return
+        }
+        case '/run': {
+          if (!propTaskId) {
+            setSlashResult('⚠️ No task selected. Switch to a task topic first.')
+            return
+          }
+          const runHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (accessToken) runHeaders['Authorization'] = `Bearer ${accessToken}`
+          const res = await fetch(`${apiBase}/tasks/${propTaskId}/run`, {
+            method: 'POST',
+            headers: runHeaders,
+            body: JSON.stringify({ runner_agent_id: currentAgentId }),
+          })
+          if (res.ok) {
+            setSlashResult(`▶️ Task ${propTaskId.slice(0, 8)}… dispatched for execution.`)
+          } else {
+            const detail = await res.text()
+            setSlashResult(`❌ Failed to run task: ${detail}`)
+          }
+          return
+        }
+        case '/rerun': {
+          if (!propTaskId) {
+            setSlashResult('⚠️ No task selected. Switch to a task topic first.')
+            return
+          }
+          const rerunHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (accessToken) rerunHeaders['Authorization'] = `Bearer ${accessToken}`
+          const res = await fetch(`${apiBase}/tasks/${propTaskId}/rerun`, {
+            method: 'POST',
+            headers: rerunHeaders,
+          })
+          if (res.ok) {
+            setSlashResult(`🔄 Task ${propTaskId.slice(0, 8)}… re-dispatched.`)
+          } else {
+            const detail = await res.text()
+            setSlashResult(`❌ Failed to rerun task: ${detail}`)
           }
           return
         }
@@ -604,7 +655,7 @@ export function ChatView({
     } catch (e) {
       setSlashResult(`❌ Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
-  }, [currentAgentId, topicName])
+  }, [currentAgentId, topicName, propTaskId, accessToken, onTaskCreated, onTopicCreated])
 
   // Scroll to bottom on initial load and topic change
   useEffect(() => {
@@ -822,8 +873,15 @@ export function ChatView({
         e.preventDefault()
         const selected = filteredCommands[slashIndex]
         if (selected) {
-          setDraft(selected.cmd + ' ')
-          setSlashOpen(false)
+          const noArgCmds = ['/help', '/status', '/models', '/workers', '/run', '/rerun', '/new session']
+          if (noArgCmds.includes(selected.cmd)) {
+            setDraft('')
+            setSlashOpen(false)
+            executeSlashCommand(selected.cmd, '')
+          } else {
+            setDraft(selected.cmd + ' ')
+            setSlashOpen(false)
+          }
         }
         return
       }
@@ -1361,7 +1419,17 @@ export function ChatView({
                 <button
                   key={c.cmd}
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => { setDraft(c.cmd + ' '); setSlashOpen(false) }}
+                  onClick={() => {
+                    const noArgCmds = ['/help', '/status', '/models', '/workers', '/run', '/rerun', '/new session']
+                    if (noArgCmds.includes(c.cmd)) {
+                      setDraft('')
+                      setSlashOpen(false)
+                      executeSlashCommand(c.cmd, '')
+                    } else {
+                      setDraft(c.cmd + ' ')
+                      setSlashOpen(false)
+                    }
+                  }}
                   className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
                     i === slashIndex
                       ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400'

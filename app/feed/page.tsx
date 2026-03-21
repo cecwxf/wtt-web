@@ -80,7 +80,19 @@ function FeedPageInner() {
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
+  const [selectedTopicId, _setSelectedTopicId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('wtt_selected_topic_id') || null
+    }
+    return null
+  })
+  const setSelectedTopicId = useCallback((id: string | null) => {
+    _setSelectedTopicId(id)
+    try {
+      if (id) localStorage.setItem('wtt_selected_topic_id', id)
+      else localStorage.removeItem('wtt_selected_topic_id')
+    } catch {}
+  }, [])
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -325,6 +337,13 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
+
+  // Clear stale persisted topic if it no longer exists in the topics list
+  useEffect(() => {
+    if (selectedTopicId && topics.length > 0 && !topics.some(t => t.topic_id === selectedTopicId)) {
+      setSelectedTopicId(null)
+    }
+  }, [topics, selectedTopicId, setSelectedTopicId])
 
   const shouldShowDiscussMembers = !!selectedTopic && ['discussion', 'collaborative'].includes(selectedTopic.topic_type) && !selectedTopic.task_id
   const { data: topicMembersRaw } = useSWR(
@@ -730,6 +749,8 @@ function FeedPageInner() {
             {selectedTopicId && selectedTopic ? (
               <ChatView
                 topicName={selectedTopic.name}
+                topicId={selectedTopic.topic_id}
+                taskId={selectedTopic.task_id}
                 messages={enrichedMessages.filter(m => !m.content.includes('[system:p2p_init]') && !m.content.includes('[System] P2P channel established'))}
                 currentAgentId={selectedAgentId}
                 onSendMessage={handleSendMessage}
@@ -742,6 +763,7 @@ function FeedPageInner() {
                 wsConnected={wsState === 'connected'}
                 accessToken={session?.accessToken as string | undefined}
                 onTaskCreated={() => mutateRecentTasks()}
+                onTopicCreated={() => mutateTopics()}
                 topicMembers={topicMembers}
                 topicType={selectedTopic.topic_type}
                 extraHeaderActions={

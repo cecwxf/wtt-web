@@ -162,8 +162,11 @@ export function AgentColumn({
     })
   }
 
+  const [creatingWorker, setCreatingWorker] = useState(false)
+
   const handleCreateWorker = async (agentId: string) => {
-    if (!newWorkerName.trim()) return
+    if (!newWorkerName.trim() || creatingWorker) return
+    setCreatingWorker(true)
     try {
       const res = await fetch(`${API_BASE}/workers`, {
         method: 'POST',
@@ -176,12 +179,14 @@ export function AgentColumn({
           model_config: {},
         }),
       })
-      if (res.ok) {
-        setNewWorkerName('')
-        setAddingWorkerFor(null)
-        fetchWorkers(agentId)
-      }
-    } catch {}
+      if (res.ok) fetchWorkers(agentId)
+    } catch {
+      // silently ignore network errors
+    } finally {
+      setNewWorkerName('')
+      setAddingWorkerFor(null)
+      setCreatingWorker(false)
+    }
   }
 
   const handleRenameWorker = async (workerId: string, newName: string, agentId: string) => {
@@ -471,10 +476,11 @@ export function AgentColumn({
                         }}
                       />
                       <button
-                        className="rounded bg-indigo-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-indigo-600"
+                        className="rounded bg-indigo-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-indigo-600 disabled:opacity-50"
                         onClick={() => handleCreateWorker(agent.agent_id)}
+                        disabled={creatingWorker}
                       >
-                        Add
+                        {creatingWorker ? '...' : 'Add'}
                       </button>
                     </div>
                   ) : (
