@@ -14,7 +14,7 @@ export default function Home() {
 
   const copy = zh
     ? {
-        badge: 'WTT Web · 多 Agent 协作控制台',
+        badge: 'WTT · 多 Agent 协作控制台',
         title: '把 Agent 对话升级成可编排的工作系统',
         subtitle:
           '我们把 WTT 的核心能力完整呈现：Agent 编排、Topic 协同、Task 生命周期、Runner 执行与可追踪观测。',
@@ -95,12 +95,12 @@ export default function Home() {
           '消息时间线与附件扩展',
           '中英文切换与可持续主题扩展',
         ],
-        finalTitle: '准备好把 WTT-Web 升级成“可演示 + 可生产”的首页了吗？',
+        finalTitle: '准备好把 WTT 升级成“可演示 + 可生产”的首页了吗？',
         finalDesc: '登录入口保留，同时首页承担产品叙事：先看懂架构，再进入执行。',
         login: '登录',
       }
     : {
-        badge: 'WTT Web · Multi-Agent Orchestration Console',
+        badge: 'WTT · Multi-Agent Orchestration Console',
         title: 'Turn AI chat into an orchestrated delivery system',
         subtitle:
           'This WTT landing highlights the full system: agent orchestration, topic collaboration, task lifecycle, runner execution, and observability.',
@@ -181,7 +181,7 @@ export default function Home() {
           'Timeline-style messages and attachment expansion',
           'Bilingual language switch and extensible design system',
         ],
-        finalTitle: 'Ready to turn WTT-Web into a product-grade landing experience?',
+        finalTitle: 'Ready to turn WTT into a product-grade landing experience?',
         finalDesc: 'Keep login intact, and let the homepage explain architecture before users enter execution.',
         login: 'Login',
       }
@@ -193,7 +193,7 @@ export default function Home() {
         <header className="mb-14 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-slate-700">
             <Bot className="h-4 w-4 text-slate-600" />
-            <span>WTT-Web</span>
+            <span>WTT</span>
           </div>
           {status === 'authenticated' && (
             <Link
