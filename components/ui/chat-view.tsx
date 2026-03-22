@@ -64,7 +64,6 @@ const SLASH_COMMANDS: SlashCommandDef[] = [
   { cmd: '/commands', desc: 'List OpenClaw commands', icon: '📚', mode: 'passthrough' },
   { cmd: '/status', desc: 'Session/runtime status card', icon: '📊', mode: 'passthrough' },
   { cmd: '/model', desc: 'Show or switch model', icon: '🤖', mode: 'passthrough' },
-  { cmd: '/models', desc: 'Model picker/aliases', icon: '🧠', mode: 'passthrough' },
   { cmd: '/skill', desc: 'Run skill by name', icon: '🧩', mode: 'passthrough' },
   { cmd: '/subagents', desc: 'List/control subagents', icon: '🛰️', mode: 'passthrough' },
   { cmd: '/acp', desc: 'ACP runtime control', icon: '🛠️', mode: 'passthrough' },
@@ -84,6 +83,13 @@ const LOCAL_NOARG_SLASH_COMMANDS = new Set([
   '/rerun',
   '/workers',
 ])
+
+const QUICK_SLASH_ACTIONS = [
+  { label: 'Status', cmd: '/status' },
+  { label: 'Commands', cmd: '/commands' },
+  { label: 'Model', cmd: '/model' },
+  { label: 'WTT Help', cmd: '/wtt help' },
+] as const
 
 /**
  * Detect progress/status messages that should be hidden from the Talk feed.
@@ -720,6 +726,21 @@ export function ChatView({
     }
   }, [currentAgentId, propTaskId, accessToken, onTaskCreated, onTopicCreated])
 
+  const sendPassthroughSlash = useCallback(async (command: string, opts?: { silent?: boolean }) => {
+    setSending(true)
+    try {
+      await onSendMessage(command)
+      if (!opts?.silent) {
+        setSlashResult(`✅ Sent ${command}`)
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Failed to send command'
+      setSlashResult(`❌ ${msg}`)
+    } finally {
+      setSending(false)
+    }
+  }, [onSendMessage])
+
   // Scroll to bottom on initial load and topic change
   useEffect(() => {
     initialScrollDoneRef.current = false
@@ -807,15 +828,7 @@ export function ChatView({
       }
 
       // Unknown slash or passthrough slash: forward to backend runtime
-      setSending(true)
-      try {
-        await onSendMessage(content)
-      } catch (error) {
-        console.error('Failed to send slash command:', error)
-        alert(error instanceof Error ? error.message : 'Failed to send command')
-      } finally {
-        setSending(false)
-      }
+      await sendPassthroughSlash(content, { silent: true })
       return
     }
 
@@ -1471,7 +1484,11 @@ export function ChatView({
                   <button
                     key={m.id}
                     onMouseDown={e => e.preventDefault()}
-                    onClick={() => { setSelectedModel(m.id); setModelMenuOpen(false) }}
+                    onClick={() => {
+                      setSelectedModel(m.id)
+                      setModelMenuOpen(false)
+                      void sendPassthroughSlash(`/model ${m.id}`, { silent: true })
+                    }}
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
                       selectedModel === m.id
                         ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 font-medium'
@@ -1491,7 +1508,10 @@ export function ChatView({
             {REASONING_EFFORTS.map(e => (
               <button
                 key={e.id}
-                onClick={() => setReasoningEffort(e.id)}
+                onClick={() => {
+                  setReasoningEffort(e.id)
+                  void sendPassthroughSlash(`/think ${e.id}`, { silent: true })
+                }}
                 className={`px-2.5 py-1.5 text-[11px] transition ${
                   reasoningEffort === e.id
                     ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 font-medium'
@@ -1502,6 +1522,20 @@ export function ChatView({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
+          {QUICK_SLASH_ACTIONS.map((action) => (
+            <button
+              key={action.cmd}
+              type="button"
+              onClick={() => void sendPassthroughSlash(action.cmd, { silent: true })}
+              className="rounded-md border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-2 py-1 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition"
+              title={action.cmd}
+            >
+              {action.label}
+            </button>
+          ))}
         </div>
 
         <div className="relative">
