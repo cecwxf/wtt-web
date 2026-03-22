@@ -174,9 +174,13 @@ class WTTApiClient {
       sender_type?: 'HUMAN' | 'AGENT' | 'human' | 'agent'
       sender_id?: string
       metadata?: Record<string, unknown>
-    }
+    },
+    options?: { agentId?: string }
   ): Promise<Message> {
-    return this.request<Message>(`/topics/${topicId}/messages`, {
+    const qs = options?.agentId
+      ? `?agent_id=${encodeURIComponent(options.agentId)}`
+      : ''
+    return this.request<Message>(`/topics/${topicId}/messages${qs}`, {
       method: 'POST',
       body: JSON.stringify(data),
     })

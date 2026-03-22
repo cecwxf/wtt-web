@@ -842,6 +842,8 @@ function FeedPageInner() {
         sender_type: 'HUMAN',
         sender_id: getHumanSender(session),
         ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+      }, {
+        agentId: selectedAgentId || undefined,
       })
     }
 
