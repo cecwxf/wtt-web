@@ -38,20 +38,52 @@ interface ModelOption {
   supports_reasoning?: boolean
 }
 
+type SlashCommandMode = 'local' | 'passthrough'
+
+type SlashCommandDef = {
+  cmd: string
+  desc: string
+  icon: string
+  mode?: SlashCommandMode
+}
+
 // Slash commands definition
-const SLASH_COMMANDS = [
-  { cmd: '/new task', desc: 'Create a general task', icon: '📋' },
-  { cmd: '/new code task', desc: 'Create a code task', icon: '💻' },
-  { cmd: '/new research task', desc: 'Create a research task', icon: '🔬' },
-  { cmd: '/new session', desc: 'Start a new chat session', icon: '💬' },
-  { cmd: '/new topic', desc: 'Create a new topic', icon: '📢' },
-  { cmd: '/status', desc: 'Show current task status', icon: '📊' },
-  { cmd: '/run', desc: 'Run the current task', icon: '▶️' },
-  { cmd: '/rerun', desc: 'Rerun pipeline', icon: '🔄' },
-  { cmd: '/models', desc: 'List available models', icon: '🤖' },
-  { cmd: '/workers', desc: 'List workers for agent', icon: '👷' },
-  { cmd: '/help', desc: 'Show available commands', icon: '❓' },
+const SLASH_COMMANDS: SlashCommandDef[] = [
+  // Local wtt-web helpers
+  { cmd: '/new task', desc: 'Create a general task', icon: '📋', mode: 'local' },
+  { cmd: '/new code task', desc: 'Create a code task', icon: '💻', mode: 'local' },
+  { cmd: '/new research task', desc: 'Create a research task', icon: '🔬', mode: 'local' },
+  { cmd: '/new session', desc: 'Start a new chat session', icon: '💬', mode: 'local' },
+  { cmd: '/new topic', desc: 'Create a new topic', icon: '📢', mode: 'local' },
+  { cmd: '/run', desc: 'Run the current task', icon: '▶️', mode: 'local' },
+  { cmd: '/rerun', desc: 'Rerun pipeline', icon: '🔄', mode: 'local' },
+  { cmd: '/workers', desc: 'List workers for agent', icon: '👷', mode: 'local' },
+
+  // OpenClaw runtime slash (pass-through to backend)
+  { cmd: '/help', desc: 'OpenClaw help', icon: '❓', mode: 'passthrough' },
+  { cmd: '/commands', desc: 'List OpenClaw commands', icon: '📚', mode: 'passthrough' },
+  { cmd: '/status', desc: 'Session/runtime status card', icon: '📊', mode: 'passthrough' },
+  { cmd: '/model', desc: 'Show or switch model', icon: '🤖', mode: 'passthrough' },
+  { cmd: '/models', desc: 'Model picker/aliases', icon: '🧠', mode: 'passthrough' },
+  { cmd: '/skill', desc: 'Run skill by name', icon: '🧩', mode: 'passthrough' },
+  { cmd: '/subagents', desc: 'List/control subagents', icon: '🛰️', mode: 'passthrough' },
+  { cmd: '/acp', desc: 'ACP runtime control', icon: '🛠️', mode: 'passthrough' },
+  { cmd: '/queue', desc: 'Queue mode config', icon: '🧵', mode: 'passthrough' },
+  { cmd: '/reasoning', desc: 'Reasoning visibility toggle', icon: '🧠', mode: 'passthrough' },
+  { cmd: '/verbose', desc: 'Verbose output toggle', icon: '🔍', mode: 'passthrough' },
+  { cmd: '/wtt', desc: 'WTT command namespace', icon: '💬', mode: 'passthrough' },
 ]
+
+const LOCAL_NOARG_SLASH_COMMANDS = new Set([
+  '/new task',
+  '/new code task',
+  '/new research task',
+  '/new session',
+  '/new topic',
+  '/run',
+  '/rerun',
+  '/workers',
+])
 
 /**
  * Detect progress/status messages that should be hidden from the Talk feed.
@@ -581,25 +613,12 @@ export function ChatView({
     setSlashResult(null)
     try {
       switch (cmd) {
-        case '/help':
-          setSlashResult('📋 Available commands:\n' + SLASH_COMMANDS.map(c => `  ${c.icon} ${c.cmd} — ${c.desc}`).join('\n'))
-          return
-        case '/models': {
-          const res = await fetch(`${apiBase}/workers/models/available`)
-          const data = await res.json()
-          setSlashResult('🤖 Available models:\n' + (data.models || []).map((m: { label: string; id: string }) => `  • ${m.label} (${m.id})`).join('\n'))
-          return
-        }
         case '/workers': {
           if (!currentAgentId) { setSlashResult('❌ No agent selected'); return }
           const res = await fetch(`${apiBase}/workers?agent_id=${currentAgentId}`)
           const data = await res.json()
           if (data.length === 0) { setSlashResult('No workers found for this agent'); return }
           setSlashResult('👷 Workers:\n' + data.map((w: { name: string; status: string }) => `  • ${w.name} (${w.status})`).join('\n'))
-          return
-        }
-        case '/status': {
-          setSlashResult('📊 Current context: Agent ' + (currentAgentId || 'none') + ', Topic: ' + topicName)
           return
         }
         case '/new task':
@@ -699,7 +718,7 @@ export function ChatView({
     } catch (e) {
       setSlashResult(`❌ Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
-  }, [currentAgentId, topicName, propTaskId, accessToken, onTaskCreated, onTopicCreated])
+  }, [currentAgentId, propTaskId, accessToken, onTaskCreated, onTopicCreated])
 
   // Scroll to bottom on initial load and topic change
   useEffect(() => {
@@ -775,15 +794,28 @@ export function ChatView({
     if (content.startsWith('/')) {
       setDraft('')
       setSlashOpen(false)
-      // Match against known commands (longest first to handle "/new code task" before "/new task")
+      setSlashResult(null)
+
       const sorted = [...SLASH_COMMANDS].sort((a, b) => b.cmd.length - a.cmd.length)
       const match = sorted.find(c => content.toLowerCase() === c.cmd || content.toLowerCase().startsWith(c.cmd + ' '))
-      if (match) {
+      const mode = match?.mode ?? 'passthrough'
+
+      if (mode === 'local' && match) {
         const remainder = content.slice(match.cmd.length).trim()
         await executeSlashCommand(match.cmd, remainder)
         return
       }
-      setSlashResult(`⚠️ Unknown command: ${content.split(' ')[0]}. Type /help for available commands.`)
+
+      // Unknown slash or passthrough slash: forward to backend runtime
+      setSending(true)
+      try {
+        await onSendMessage(content)
+      } catch (error) {
+        console.error('Failed to send slash command:', error)
+        alert(error instanceof Error ? error.message : 'Failed to send command')
+      } finally {
+        setSending(false)
+      }
       return
     }
 
@@ -917,8 +949,8 @@ export function ChatView({
         e.preventDefault()
         const selected = filteredCommands[slashIndex]
         if (selected) {
-          const noArgCmds = ['/help', '/status', '/models', '/workers', '/run', '/rerun', '/new session']
-          if (noArgCmds.includes(selected.cmd)) {
+          const mode = selected.mode ?? 'local'
+          if (mode === 'local' && LOCAL_NOARG_SLASH_COMMANDS.has(selected.cmd)) {
             setDraft('')
             setSlashOpen(false)
             executeSlashCommand(selected.cmd, '')
@@ -1481,8 +1513,8 @@ export function ChatView({
                   key={c.cmd}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    const noArgCmds = ['/help', '/status', '/models', '/workers', '/run', '/rerun', '/new session']
-                    if (noArgCmds.includes(c.cmd)) {
+                    const mode = c.mode ?? 'local'
+                    if (mode === 'local' && LOCAL_NOARG_SLASH_COMMANDS.has(c.cmd)) {
                       setDraft('')
                       setSlashOpen(false)
                       executeSlashCommand(c.cmd, '')
