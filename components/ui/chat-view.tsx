@@ -1468,7 +1468,7 @@ export function ChatView({
         )}
 
         {/* Compact control bar: model / think / quick slash */}
-        <div className="mb-2 flex items-center gap-1.5 overflow-x-auto whitespace-nowrap text-[10px] pb-1">
+        <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
           <div className="relative shrink-0" ref={modelMenuRef}>
             <button
               onClick={() => setModelMenuOpen(!modelMenuOpen)}
@@ -1480,7 +1480,7 @@ export function ChatView({
               <span className="text-slate-400">▾</span>
             </button>
             {modelMenuOpen && (
-              <div className="absolute bottom-full left-0 mb-1 z-30 min-w-[220px] max-h-[240px] overflow-y-auto rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+              <div className="absolute bottom-full left-0 mb-1 z-50 min-w-[220px] max-h-[240px] overflow-y-auto rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
                 {availableModels.map(m => (
                   <button
                     key={m.id}
