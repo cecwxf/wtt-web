@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, Image as ImageIcon, Mic, Paperclip, Send } from 'lucide-react'
+import { Download, Image as ImageIcon, MapPin, Paperclip, Send, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -90,6 +90,8 @@ const QUICK_SLASH_ACTIONS = [
   { label: 'Model', cmd: '/model' },
   { label: 'WTT Help', cmd: '/wtt help' },
 ] as const
+
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 /**
  * Detect progress/status messages that should be hidden from the Talk feed.
@@ -498,11 +500,14 @@ export function ChatView({
   const [reasoningEffort, setReasoningEffort] = useState<'off' | 'low' | 'medium' | 'high'>(defaultEffort)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const modelMenuRef = useRef<HTMLDivElement>(null)
+  const attachMenuRef = useRef<HTMLDivElement>(null)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
   const modelPrefsByTopicRef = useRef<Record<string, { model: string; effort: 'off' | 'low' | 'medium' | 'high' }>>({})
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [fileAccept, setFileAccept] = useState<string>('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevMsgCountRef = useRef(0)
@@ -584,6 +589,17 @@ export function ChatView({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [modelMenuOpen])
+
+  useEffect(() => {
+    if (!attachMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setAttachMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [attachMenuOpen])
 
   // Slash command filtering
   const filteredCommands = slashFilter
@@ -875,6 +891,11 @@ export function ChatView({
 
 
   const uploadAssetAndInsert = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      alert(`File too large. Max 100MB, got ${(file.size / (1024 * 1024)).toFixed(1)}MB`)
+      return
+    }
+
     setUploading(true)
     setUploadProgress(0)
     try {
@@ -931,6 +952,32 @@ export function ChatView({
       setUploading(false)
       setUploadProgress(undefined)
     }
+  }
+
+  const openFilePicker = (accept: string) => {
+    setFileAccept(accept)
+    setAttachMenuOpen(false)
+    requestAnimationFrame(() => fileInputRef.current?.click())
+  }
+
+  const insertLocation = () => {
+    setAttachMenuOpen(false)
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported in this browser')
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        const token = `[location](${`https://maps.google.com/?q=${latitude},${longitude}`})`
+        setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
+      },
+      (err) => {
+        alert(`Location failed: ${err.message || 'permission denied'}`)
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+    )
   }
 
   const handleLoadOlder = async () => {
@@ -1629,15 +1676,32 @@ export function ChatView({
           )}
 
           <div className="flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-2">
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100">
-            <Paperclip className="h-4 w-4" />
-          </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100">
-            <ImageIcon className="h-4 w-4" />
-          </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100">
-            <Mic className="h-4 w-4" />
-          </button>
+          <div className="relative" ref={attachMenuRef}>
+            <button
+              type="button"
+              onClick={() => setAttachMenuOpen((v) => !v)}
+              className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100"
+              title="Attach"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+            {attachMenuOpen && (
+              <div className="absolute bottom-full left-0 mb-1 z-40 w-44 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                <button type="button" onClick={() => openFilePicker('image/*')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
+                  <ImageIcon className="h-3.5 w-3.5" /> Image
+                </button>
+                <button type="button" onClick={() => openFilePicker('video/*')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
+                  <Video className="h-3.5 w-3.5" /> Video
+                </button>
+                <button type="button" onClick={() => openFilePicker('*/*')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
+                  <Paperclip className="h-3.5 w-3.5" /> File
+                </button>
+                <button type="button" onClick={insertLocation} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
+                  <MapPin className="h-3.5 w-3.5" /> Location
+                </button>
+              </div>
+            )}
+          </div>
 
           <textarea
             ref={textareaRef}
@@ -1660,6 +1724,7 @@ export function ChatView({
           <input
             ref={fileInputRef}
             type="file"
+            accept={fileAccept || undefined}
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0]
