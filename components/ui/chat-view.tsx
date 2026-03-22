@@ -500,6 +500,7 @@ export function ChatView({
   const modelMenuRef = useRef<HTMLDivElement>(null)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
+  const modelPrefsByTopicRef = useRef<Record<string, { model: string; effort: 'off' | 'low' | 'medium' | 'high' }>>({})
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -519,6 +520,8 @@ export function ChatView({
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionStartPos, setMentionStartPos] = useState(-1)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const topicPreferenceKey = topicId || taskId || `topic:${topicName}`
 
   const filteredMembers = useMemo(() => {
     if (!mentionQuery) return topicMembers
@@ -548,6 +551,27 @@ export function ChatView({
     }
     fetchModels()
   }, [])
+
+  // Keep model/think preference per topic/task/p2p session
+  useEffect(() => {
+    const saved = modelPrefsByTopicRef.current[topicPreferenceKey]
+    const preferredEffort = saved?.effort ?? ((taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off')
+
+    let preferredModel = saved?.model
+    if (!preferredModel || !availableModels.some((m) => m.id === preferredModel)) {
+      preferredModel = availableModels[0]?.id || FALLBACK_MODELS[0].id
+    }
+
+    setSelectedModel(preferredModel)
+    setReasoningEffort(preferredEffort)
+  }, [topicPreferenceKey, taskType, availableModels])
+
+  useEffect(() => {
+    modelPrefsByTopicRef.current[topicPreferenceKey] = {
+      model: selectedModel,
+      effort: reasoningEffort,
+    }
+  }, [topicPreferenceKey, selectedModel, reasoningEffort])
 
   // Close model menu on click outside
   useEffect(() => {
