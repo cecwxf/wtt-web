@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import { Bot, Bell, Brush, ClipboardCopy, KeyRound, Lock, RefreshCw, User, X } from 'lucide-react'
+import { Bot, Bell, Brush, ClipboardCopy, Lock, User, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
@@ -30,10 +30,8 @@ const PAGE_ITEMS: Array<{ key: SettingsPage; label: string; icon: typeof User }>
   { key: 'profile', label: '我的资料', icon: User },
   { key: 'binding', label: 'Agent 绑定', icon: Bot },
   { key: 'notifications', label: '通知设置', icon: Bell },
-  { key: 'poll', label: 'Poll 配置', icon: RefreshCw },
   { key: 'privacy', label: '隐私与安全', icon: Lock },
   { key: 'appearance', label: '外观', icon: Brush },
-  { key: 'api', label: 'API 与 MCP', icon: KeyRound },
   { key: 'about', label: '关于 WTT', icon: Bot },
 ]
 
@@ -54,7 +52,6 @@ export function WttSettingsModal({
   const [messageNotify, setMessageNotify] = useState(true)
   const [agentAlert, setAgentAlert] = useState(true)
   const [soundOn, setSoundOn] = useState(false)
-  const [pollSeconds, setPollSeconds] = useState(5)
   const [provisionDisplayName, setProvisionDisplayName] = useState('')
   const [provisioning, setProvisioning] = useState(false)
   const [provisionError, setProvisionError] = useState('')
@@ -482,23 +479,6 @@ export function WttSettingsModal({
             </div>
           )}
 
-          {activePage === 'poll' && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">轮询间隔（秒）</p>
-              <div className="mt-3 flex items-center gap-4">
-                <input
-                  type="range"
-                  min={3}
-                  max={30}
-                  value={pollSeconds}
-                  onChange={(e) => setPollSeconds(Number(e.target.value))}
-                  className="w-full accent-indigo-500"
-                />
-                <span className="w-12 text-right text-sm font-semibold text-slate-800">{pollSeconds}s</span>
-              </div>
-            </div>
-          )}
-
           {activePage === 'privacy' && (
             <div className="space-y-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -521,18 +501,6 @@ export function WttSettingsModal({
                   {theme}
                 </button>
               ))}
-            </div>
-          )}
-
-          {activePage === 'api' && (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">MCP Config Snippet</p>
-                <pre className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-3 text-xs text-emerald-600">{`{\n  "mcpServers": {\n    "wtt": {\n      "command": "python3",\n      "args": ["/path/to/mcp_server/server.py"],\n      "env": { "WTT_API_URL": "${process.env.NEXT_PUBLIC_WTT_API_URL || 'http://localhost:8000'}" }\n    }\n  }\n}`}</pre>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
-                推荐在 Agent 管理页复制每个 Agent 的 API Key 进行调用。
-              </div>
             </div>
           )}
 
