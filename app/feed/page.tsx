@@ -119,6 +119,7 @@ function FeedPageInner() {
     } catch {}
   }, [])
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
+  const [typingByTopic, setTypingByTopic] = useState<Record<string, { agentId: string; agentName?: string; expiresAt: number }>>({})
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -221,6 +222,39 @@ function FeedPageInner() {
   const subscribedTopicsRef = useRef<{ raw: unknown[] | null; mutate: (data?: unknown, revalidate?: boolean) => void }>({ raw: null, mutate: () => {} })
   const handleWsMessage = useCallback(
     (msg: WsMessage) => {
+      const rawEvent = msg as unknown as Record<string, unknown>
+
+      if (rawEvent.type === 'typing') {
+        const topicId = String(rawEvent.topic_id || '')
+        if (!topicId) return
+
+        const state = String(rawEvent.state || 'start').toLowerCase()
+        if (state === 'stop') {
+          setTypingByTopic((prev) => {
+            if (!prev[topicId]) return prev
+            const next = { ...prev }
+            delete next[topicId]
+            return next
+          })
+          return
+        }
+
+        const ttlMsRaw = Number(rawEvent.ttl_ms)
+        const ttlMs = Number.isFinite(ttlMsRaw) ? Math.max(1500, Math.min(30000, ttlMsRaw)) : 6000
+        const agentId = String(rawEvent.agent_id || '')
+        const agentName = String(rawEvent.agent_display_name || '') || agentNameMap[agentId] || undefined
+
+        setTypingByTopic((prev) => ({
+          ...prev,
+          [topicId]: {
+            agentId,
+            agentName,
+            expiresAt: Date.now() + ttlMs,
+          },
+        }))
+        return
+      }
+
       if (msg.type !== 'new_message' || !msg.message) return
       const incomingTopicId = msg.message.topic_id
 
@@ -247,6 +281,16 @@ function FeedPageInner() {
         timestamp: msg.message.created_at,
         semantic_type: msg.message.semantic_type,
       }
+
+      if (incoming.sender_type === 'agent') {
+        setTypingByTopic((prev) => {
+          if (!prev[incomingTopicId]) return prev
+          const next = { ...prev }
+          delete next[incomingTopicId]
+          return next
+        })
+      }
+
       setAllMessages((prev) => {
         if (prev.some((m) => m.message_id === incoming.message_id)) return prev
         return [...prev, incoming]
@@ -260,6 +304,22 @@ function FeedPageInner() {
     token: session?.accessToken || undefined,
     onMessage: handleWsMessage,
   })
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now()
+      setTypingByTopic((prev) => {
+        let changed = false
+        const next: Record<string, { agentId: string; agentName?: string; expiresAt: number }> = {}
+        for (const [topicId, v] of Object.entries(prev)) {
+          if (v.expiresAt > now) next[topicId] = v
+          else changed = true
+        }
+        return changed ? next : prev
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   const prevTopicRef = useRef(selectedTopicId)
   useEffect(() => {
@@ -421,6 +481,13 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
+  const selectedTopicTypingText = useMemo(() => {
+    if (!selectedTopicId) return null
+    const typing = typingByTopic[selectedTopicId]
+    if (!typing) return null
+    const name = typing.agentName || agentNameMap[typing.agentId] || typing.agentId || 'Agent'
+    return `${name} 正在输入...`
+  }, [selectedTopicId, typingByTopic, agentNameMap])
 
   // Clear stale persisted topic if it no longer exists in the topics list
   useEffect(() => {
@@ -1053,6 +1120,7 @@ function FeedPageInner() {
                 onTopicCreated={() => mutateTopics()}
                 topicMembers={topicMembers}
                 topicType={selectedTopic.topic_type}
+                typingIndicatorText={selectedTopicTypingText}
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (
                     <div className="relative">

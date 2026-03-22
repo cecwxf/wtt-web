@@ -201,6 +201,7 @@ interface ChatViewProps {
   onTopicCreated?: () => void
   topicMembers?: MentionableAgent[]
   topicType?: string
+  typingIndicatorText?: string | null
 }
 
 type ParsedRich =
@@ -491,6 +492,7 @@ export function ChatView({
   onTopicCreated,
   topicMembers = [],
   topicType,
+  typingIndicatorText = null,
 }: ChatViewProps) {
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
@@ -1504,6 +1506,17 @@ export function ChatView({
           </div>
         ))}
       </div>
+
+      {typingIndicatorText && (
+        <div className="mx-3 mb-2 flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400">
+          <span className="max-w-[220px] truncate">{typingIndicatorText}</span>
+          <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 dark:bg-zinc-800">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:0ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:120ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:240ms]" />
+          </div>
+        </div>
+      )}
 
       {/* Task status bar — shows current task status from the latest message with task info */}
       {(() => {
