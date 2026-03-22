@@ -43,6 +43,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'top.decline': '拒绝',
     'top.lightMode': '切换浅色模式',
     'top.darkMode': '切换深色模式',
+    'top.languageTitle': '语言',
+    'top.languageShort': '语言',
+    'top.currentLanguage': '当前语言',
+    'top.langZh': '中文',
+    'top.langEn': 'English',
 
     'shell.profile': '个人资料',
     'shell.agentBinding': 'Agent 绑定',
@@ -369,6 +374,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'top.decline': 'Decline',
     'top.lightMode': 'Switch to light mode',
     'top.darkMode': 'Switch to dark mode',
+    'top.languageTitle': 'Language',
+    'top.languageShort': 'Lang',
+    'top.currentLanguage': 'Current language',
+    'top.langZh': '中文',
+    'top.langEn': 'English',
 
     'shell.profile': 'Profile',
     'shell.agentBinding': 'Agent Binding',

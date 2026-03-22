@@ -37,8 +37,9 @@ interface TopBarProps {
 
 export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, agentId = '' }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false)
   const { theme, setTheme } = useTheme()
-  const { locale, toggleLocale, t } = useI18n()
+  const { locale, setLocale, t } = useI18n()
 
   return (
     <header className="flex h-[60px] items-center gap-4 border-b border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4">
@@ -171,14 +172,42 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
-        <button
-          onClick={toggleLocale}
-          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-2 py-2 text-xs font-semibold text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
-          title={t('lang.switchTo')}
-        >
-          <Languages className="h-3.5 w-3.5" />
-          {locale === 'zh' ? 'EN' : '中'}
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowLanguageMenu((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-2 py-2 text-xs font-semibold text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+            title={t('top.languageTitle')}
+          >
+            <Languages className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('top.languageShort')}</span>
+            <span className="rounded bg-slate-200 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-slate-700 dark:text-zinc-200">
+              {locale === 'zh' ? t('top.langZh') : t('top.langEn')}
+            </span>
+          </button>
+
+          {showLanguageMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowLanguageMenu(false)} />
+              <div className="absolute right-0 top-12 z-20 w-40 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 shadow-lg">
+                <p className="px-2 py-1 text-[11px] text-slate-400">{t('top.currentLanguage')}</p>
+                <button
+                  onClick={() => { setLocale('zh'); setShowLanguageMenu(false) }}
+                  className={`mt-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition ${locale === 'zh' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700'}`}
+                >
+                  <span>{t('top.langZh')}</span>
+                  {locale === 'zh' ? <span>✓</span> : null}
+                </button>
+                <button
+                  onClick={() => { setLocale('en'); setShowLanguageMenu(false) }}
+                  className={`mt-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition ${locale === 'en' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700'}`}
+                >
+                  <span>{t('top.langEn')}</span>
+                  {locale === 'en' ? <span>✓</span> : null}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         {userMenu}
       </div>
