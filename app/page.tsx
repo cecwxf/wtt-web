@@ -185,17 +185,17 @@ export default function Home() {
       }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-800">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.12),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(14,165,233,0.08),transparent_30%)]" />
+    <main className="min-h-screen bg-[#f8fafb] text-slate-800">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(148,163,184,0.14),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(203,213,225,0.12),transparent_30%)]" />
       <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-8">
         <header className="mb-14 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-slate-700">
-            <Bot className="h-4 w-4 text-blue-600" />
+            <Bot className="h-4 w-4 text-slate-600" />
             <span>WTT-Web</span>
           </div>
           <Link
             href={status === 'authenticated' ? '/feed' : '/login'}
-            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500"
+            className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
           >
             {copy.login}
             <ChevronRight className="h-3.5 w-3.5" />
@@ -204,7 +204,7 @@ export default function Home() {
 
         <section className="mb-12 grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-center">
           <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
               <Sparkles className="h-3.5 w-3.5" />
               {copy.badge}
             </div>
@@ -213,7 +213,7 @@ export default function Home() {
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
                 href={status === 'authenticated' ? '/feed' : '/login'}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
               >
                 {copy.ctaPrimary}
                 <ArrowRight className="h-4 w-4" />
@@ -237,7 +237,7 @@ export default function Home() {
           <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between px-1">
               <p className="text-sm font-semibold text-slate-800">{copy.heroVisualTitle}</p>
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700">Live</span>
+              <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">Live</span>
             </div>
             <div className="overflow-hidden rounded-xl border border-slate-200">
               <Image src="/landing/wtt-dashboard.svg" alt="WTT dashboard preview" width={1280} height={820} className="h-auto w-full" priority />
@@ -247,7 +247,7 @@ export default function Home() {
         </section>
 
         <section className="mb-12">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionPaired}</p>
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionPaired}</p>
           <h2 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionPairedTitle}</h2>
           <div className="space-y-4">
             {copy.pairedItems.map((item, idx) => (
@@ -263,7 +263,7 @@ export default function Home() {
                   <ul className="mt-3 space-y-2 text-sm text-slate-700">
                     {item.points.map((point) => (
                       <li key={point} className="flex items-start gap-2">
-                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500" />
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-500" />
                         <span>{point}</span>
                       </li>
                     ))}
@@ -275,12 +275,12 @@ export default function Home() {
         </section>
 
         <section className="mb-12">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionFeature}</p>
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionFeature}</p>
           <h2 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionFeatureTitle}</h2>
           <div className="grid gap-3 md:grid-cols-3">
             {[Lock, Workflow, Radar].map((Icon, i) => (
               <article key={copy.featureCards[i].title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <Icon className="mb-3 h-5 w-5 text-blue-600" />
+                <Icon className="mb-3 h-5 w-5 text-slate-600" />
                 <h3 className="mb-2 text-base font-semibold text-slate-900">{copy.featureCards[i].title}</h3>
                 <p className="text-sm leading-6 text-slate-600">{copy.featureCards[i].desc}</p>
               </article>
@@ -289,16 +289,16 @@ export default function Home() {
         </section>
 
         <section id="wtt-arch" className="mb-12 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionArch}</p>
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionArch}</p>
           <h2 className="mb-6 text-2xl font-semibold text-slate-900">{copy.sectionArchTitle}</h2>
           <div className="grid gap-4 lg:grid-cols-[1fr_1fr] lg:items-start">
             <div className="grid gap-3 md:grid-cols-2">
               {copy.archNodes.map((n, idx) => (
                 <div key={n.title} className="relative rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="mb-2 inline-flex rounded-lg bg-blue-100 px-2 py-1 text-[11px] text-blue-700">{n.title}</div>
+                  <div className="mb-2 inline-flex rounded-lg bg-slate-200 px-2 py-1 text-[11px] text-slate-700">{n.title}</div>
                   <p className="text-sm text-slate-600">{n.desc}</p>
                   {idx < copy.archNodes.length - 1 && idx % 2 === 0 && (
-                    <Cable className="absolute -right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-blue-500 md:block" />
+                    <Cable className="absolute -right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-slate-400 md:block" />
                   )}
                 </div>
               ))}
@@ -315,7 +315,7 @@ export default function Home() {
 
         <section className="mb-12 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionFlow}</p>
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionFlow}</p>
             <h3 className="mb-4 text-xl font-semibold text-slate-900">{copy.sectionFlowTitle}</h3>
             <p className="mb-2 text-xs text-slate-600">{copy.flowVisualTitle}</p>
             <div className="mb-4 overflow-hidden rounded-xl border border-slate-200">
@@ -324,7 +324,7 @@ export default function Home() {
             <div className="space-y-3">
               {copy.flow.map((f) => (
                 <div key={f.step} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="mb-1 text-xs text-blue-700">STEP {f.step}</p>
+                  <p className="mb-1 text-xs text-slate-500">STEP {f.step}</p>
                   <p className="font-medium text-slate-900">{f.title}</p>
                   <p className="mt-1 text-sm text-slate-600">{f.desc}</p>
                 </div>
@@ -333,12 +333,12 @@ export default function Home() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionCapability}</p>
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionCapability}</p>
             <h3 className="mb-4 text-xl font-semibold text-slate-900">WTT Capability</h3>
             <div className="grid gap-2">
               {copy.capabilities.map((c) => (
                 <div key={c} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
                   <span>{c}</span>
                 </div>
               ))}
@@ -347,7 +347,7 @@ export default function Home() {
         </section>
 
         <section className="mb-12">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionGallery}</p>
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionGallery}</p>
           <h3 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionGalleryTitle}</h3>
           <div className="grid gap-4 md:grid-cols-3">
             {copy.gallery.map((item) => (
@@ -364,16 +364,16 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-blue-200 bg-blue-50 p-6 text-center">
-          <div className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-            <Blocks className="h-5 w-5 text-blue-700" />
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+          <div className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+            <Blocks className="h-5 w-5 text-slate-600" />
           </div>
           <h3 className="text-xl font-semibold text-slate-900">{copy.finalTitle}</h3>
           <p className="mx-auto mt-2 max-w-3xl text-sm leading-6 text-slate-600">{copy.finalDesc}</p>
           <div className="mt-5 flex justify-center gap-3">
             <Link
               href={status === 'authenticated' ? '/feed' : '/login'}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
             >
               {copy.ctaPrimary}
               <ArrowRight className="h-4 w-4" />
