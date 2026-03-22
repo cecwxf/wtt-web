@@ -56,6 +56,20 @@ npm run build
 npm start
 ```
 
+### Slash smoke test (WTT topic)
+
+Use this to quickly verify slash command routing (`wtt-web -> wtt_service -> wtt_plugin -> OpenClaw runtime`):
+
+```bash
+WTT_API_BASE=https://www.waxbyte.com/api/v1 \
+WTT_TOKEN=<bearer_token> \
+TOPIC_ID=<topic_id> \
+TARGET_AGENT_ID=<optional_agent_id> \
+npm run smoke:slash
+```
+
+The script sends a small command batch (including `/wtt ...` and OpenClaw global slash) and waits for agent replies.
+
 ## Features
 
 ### Milestone 2: Web Client MVP

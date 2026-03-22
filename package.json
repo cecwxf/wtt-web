@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "node -r ./scripts/rename-fallback.cjs ./node_modules/next/dist/bin/next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "smoke:slash": "bash ./scripts/smoke-slash.sh"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
