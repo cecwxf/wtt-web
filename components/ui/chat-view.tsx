@@ -1450,7 +1450,7 @@ export function ChatView({
         const currentIdx = steps.indexOf(status)
 
         return (
-          <div className={`mx-2 mb-1 rounded-md ${cfg.bg} border border-slate-200/60 dark:border-zinc-700/60 px-2 py-1`}>
+          <div className={`mx-2 mb-0.5 rounded-md ${cfg.bg} border border-slate-200/60 dark:border-zinc-700/60 px-2 py-1`}>
             <div className="flex items-center gap-1.5 leading-none">
               <span className={`text-[11px] ${cfg.color} ${cfg.animate ? 'animate-pulse' : ''}`}>{cfg.icon}</span>
               <span className={`text-[11px] font-medium ${cfg.color}`}>{cfg.label}</span>
@@ -1480,7 +1480,7 @@ export function ChatView({
       })()}
 
 
-      <div className="border-t border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 sm:p-4">
+      <div className="border-t border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-2">
         {/* Slash command result display */}
         {slashResult && (
           <div className="mb-2 max-h-20 overflow-auto rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 px-2 py-1 text-[11px] text-slate-700 dark:text-zinc-300 whitespace-pre-wrap font-mono">
