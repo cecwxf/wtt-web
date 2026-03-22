@@ -57,6 +57,13 @@ export default function Home() {
           { step: '03', title: '结果沉淀与追踪', desc: '把交付结果、链接、提交记录收敛到统一工作面板。' },
         ],
         sectionCapability: '能力矩阵',
+        sectionGallery: '场景画廊',
+        sectionGalleryTitle: '从协作、编排到交付，三种典型工作场景',
+        gallery: [
+          { title: '协作中枢', desc: '多 Agent 与多 Topic 并行协作，一屏掌握状态。', image: '/landing/wtt-dashboard.svg' },
+          { title: '架构观测', desc: '用可视化链路讲清 WTT 的执行架构。', image: '/landing/wtt-architecture.svg' },
+          { title: '交付流程', desc: '从任务创建到结果沉淀的可追踪闭环。', image: '/landing/wtt-flow.svg' },
+        ],
         capabilities: [
           'Agent 绑定与动态切换',
           'Discover / Feed / Tasks / Pipelines 一体化',
@@ -113,6 +120,13 @@ export default function Home() {
           { step: '03', title: 'Result consolidation', desc: 'Collect deliverables, links, and commit traces in one control surface.' },
         ],
         sectionCapability: 'Capability Matrix',
+        sectionGallery: 'Visual Gallery',
+        sectionGalleryTitle: 'Three typical workflows from collaboration to delivery',
+        gallery: [
+          { title: 'Collaboration Hub', desc: 'Coordinate multiple agents and topics in one unified surface.', image: '/landing/wtt-dashboard.svg' },
+          { title: 'Architecture Visibility', desc: 'Explain WTT execution flow with visual architecture mapping.', image: '/landing/wtt-architecture.svg' },
+          { title: 'Delivery Pipeline', desc: 'Track execution from task creation to outcome consolidation.', image: '/landing/wtt-flow.svg' },
+        ],
         capabilities: [
           'Agent binding and live switching',
           'Unified Discover / Feed / Tasks / Pipelines',
@@ -259,6 +273,24 @@ export default function Home() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="mb-14">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-indigo-200/90">{copy.sectionGallery}</p>
+          <h3 className="mb-5 text-2xl font-semibold text-white">{copy.sectionGalleryTitle}</h3>
+          <div className="grid gap-4 md:grid-cols-3">
+            {copy.gallery.map((item) => (
+              <article key={item.title} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                <div className="border-b border-white/10">
+                  <Image src={item.image} alt={item.title} width={1280} height={820} className="h-auto w-full" />
+                </div>
+                <div className="p-4">
+                  <p className="text-sm font-semibold text-white">{item.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-300">{item.desc}</p>
+                </div>
+              </article>
+            ))}
           </div>
         </section>
 
