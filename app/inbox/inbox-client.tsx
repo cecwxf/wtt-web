@@ -10,6 +10,7 @@ import { wttApi } from '@/lib/api/wtt-client'
 import { WttShell } from '@/components/ui/wtt-shell'
 import { formatSmartTime, formatDateGroup } from '@/lib/time'
 import { useAgentId } from '@/lib/hooks/use-agent-id'
+import { useI18n } from '@/lib/i18n-provider'
 
 
 interface Agent {
@@ -114,6 +115,7 @@ export default function InboxPageWrapper() {
 function InboxPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useI18n()
   const accessToken = session?.accessToken as string | undefined
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
@@ -122,6 +124,12 @@ function InboxPageInner() {
   const [sending, setSending] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState<ConversationTab>('all')
+
+  const kindLabel = (kind: ConversationItem['kind']) => {
+    if (kind === 'p2p') return t('inbox.kindP2P')
+    if (kind === 'agent') return t('inbox.kindAgent')
+    return t('inbox.kindTopic')
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -326,7 +334,7 @@ function InboxPageInner() {
       setDraft('')
       mutate()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to send message')
+      alert(err instanceof Error ? err.message : t('inbox.sendFailed'))
     } finally {
       setSending(false)
     }
@@ -345,8 +353,8 @@ function InboxPageInner() {
   return (
     <WttShell
       activeNav="inbox"
-      pageTitle="Inbox"
-      pageSubtitle={`Agent: ${agents.find((a) => a.agent_id === selectedAgentId)?.display_name ?? 'Not selected'}`}
+      pageTitle={t('inbox.title')}
+      pageSubtitle={t('inbox.pageSubtitle', { agent: agents.find((a) => a.agent_id === selectedAgentId)?.display_name ?? t('inbox.notSelected') })}
       agents={agents}
       selectedAgentId={selectedAgentId}
       onAgentChange={setSelectedAgentId}
@@ -355,51 +363,51 @@ function InboxPageInner() {
       rightPanel={
         <div className="flex h-full flex-col">
           <div className="border-b border-slate-200 px-4 py-4">
-            <h3 className="text-sm font-semibold">Conversation Detail</h3>
+            <h3 className="text-sm font-semibold">{t('inbox.conversationDetail')}</h3>
           </div>
           <div className="space-y-3 p-4 text-sm">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Topic</p>
-              <p className="mt-1 text-slate-800">{activeConversation?.topicName ?? 'None'}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">{t('inbox.topic')}</p>
+              <p className="mt-1 text-slate-800">{activeConversation?.topicName ?? t('inbox.none')}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Messages</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">{t('inbox.messages')}</p>
               <p className="mt-1 text-slate-800">{activeConversation?.messageCount ?? 0}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Unread</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">{t('inbox.unread')}</p>
               <p className="mt-1 text-indigo-600">{activeConversation?.unread ?? 0}</p>
             </div>
           </div>
         </div>
       }
     >
-      {error && <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600">Failed to load messages.</div>}
+      {error && <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600">{t('inbox.loadFailed')}</div>}
 
       <section className="grid h-[calc(100vh-210px)] grid-cols-1 gap-4 xl:grid-cols-[320px_1fr]">
         <aside className="min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-4 py-3">
-            <p className="text-sm font-semibold">Chats</p>
+            <p className="text-sm font-semibold">{t('inbox.chats')}</p>
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search chats..."
+              placeholder={t('inbox.searchPlaceholder')}
               className="mt-3 w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500"
             />
 
             <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-slate-50 p-1">
               {(
                 [
-                  { key: 'all', label: `All ${scopedConversations.length}` },
+                  { key: 'all', label: t('inbox.tabAll', { count: scopedConversations.length }) },
                   {
                     key: 'topic',
-                    label: `Topic ${scopedConversations.filter((c) => c.kind === 'topic').length}`,
+                    label: t('inbox.tabTopic', { count: scopedConversations.filter((c) => c.kind === 'topic').length }),
                   },
                   {
                     key: 'p2p',
-                    label: `P2P ${scopedConversations.filter((c) => c.kind === 'p2p').length}`,
+                    label: t('inbox.tabP2p', { count: scopedConversations.filter((c) => c.kind === 'p2p').length }),
                   },
-                  { key: 'unread', label: `Unread ${scopedConversations.filter((c) => c.unread > 0).length}` },
+                  { key: 'unread', label: t('inbox.tabUnread', { count: scopedConversations.filter((c) => c.unread > 0).length }) },
                 ] as Array<{ key: ConversationTab; label: string }>
               ).map((tab) => (
                 <button
@@ -417,7 +425,7 @@ function InboxPageInner() {
 
           <div className="max-h-[calc(100vh-290px)] overflow-y-auto px-2 py-2">
             {filteredConversations.length === 0 && (
-              <p className="px-3 py-6 text-sm text-slate-400">No conversations yet</p>
+              <p className="px-3 py-6 text-sm text-slate-400">{t('inbox.noConversations')}</p>
             )}
 
             {filteredConversations.map((conv) => {
@@ -449,9 +457,9 @@ function InboxPageInner() {
                               : 'border-emerald-200 bg-emerald-50 text-emerald-600'
                         }`}
                       >
-                        {conv.kind}
+                        {kindLabel(conv.kind)}
                       </span>
-                      <p className="truncate text-xs text-slate-500">{conv.lastMessage || '(empty message)'}</p>
+                      <p className="truncate text-xs text-slate-500">{conv.lastMessage || t('inbox.emptyMessage')}</p>
                     </div>
                   </div>
 
@@ -473,11 +481,11 @@ function InboxPageInner() {
                 {topicSymbol(activeConversation?.topicName ?? '')}
               </div>
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold">{activeConversation?.topicName ?? 'Select a conversation'}</h2>
+                <h2 className="truncate text-sm font-semibold">{activeConversation?.topicName ?? t('inbox.selectConversation')}</h2>
                 <p className="mt-1 text-xs text-slate-400">
                   {activeConversation
-                    ? `${activeConversation.messageCount} messages · ${activeConversation.unread} unread`
-                    : 'No active conversation'}
+                    ? t('inbox.messageUnreadStat', { messages: activeConversation.messageCount, unread: activeConversation.unread })
+                    : t('inbox.noActiveConversation')}
                 </p>
               </div>
             </div>
@@ -485,11 +493,11 @@ function InboxPageInner() {
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50 dark:from-zinc-900 to-white dark:to-zinc-900 px-4 py-4 sm:px-5">
             {!activeConversation && (
-              <div className="pt-20 text-center text-sm text-slate-400">Select one conversation from the left list.</div>
+              <div className="pt-20 text-center text-sm text-slate-400">{t('inbox.selectFromLeft')}</div>
             )}
 
             {activeConversation && groupedMessages.length === 0 && (
-              <div className="pt-20 text-center text-sm text-slate-400">No messages in this conversation.</div>
+              <div className="pt-20 text-center text-sm text-slate-400">{t('inbox.noMessagesInConversation')}</div>
             )}
 
             {groupedMessages.map((group) => (
@@ -512,7 +520,7 @@ function InboxPageInner() {
                           } ${mine ? 'rounded-tr-md' : 'rounded-tl-md'}`}
                         >
                           {!mine && <p className="mb-1 text-xs font-semibold text-indigo-600">{message.senderId}</p>}
-                          <p>{message.content || '(empty message)'}</p>
+                          <p>{message.content || t('inbox.emptyMessage')}</p>
                           <div className={`mt-2 text-[10px] ${mine ? 'text-white/65' : 'text-slate-400'}`}>
                             {formatSmartTime(message.timestamp)}
                             {message.semanticType ? ` · ${message.semanticType}` : ''}
@@ -531,7 +539,7 @@ function InboxPageInner() {
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder={activeConversation ? `Message ${activeConversation.topicName}...` : 'Select conversation first'}
+                placeholder={activeConversation ? t('inbox.messageTopic', { topic: activeConversation.topicName }) : t('inbox.selectFirst')}
                 rows={1}
                 disabled={!activeConversation}
                 className="max-h-28 min-h-10 flex-1 resize-none rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 disabled:opacity-50"
@@ -540,7 +548,7 @@ function InboxPageInner() {
                 onClick={handleSend}
                 disabled={!activeConversation || sending || !draft.trim()}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="Send"
+                aria-label={t('chat.send')}
               >
                 {sending ? '...' : <Send className="h-4 w-4" />}
               </button>

@@ -14,6 +14,7 @@ import { AgentItem } from '@/components/ui/agent-column'
 import { TopicItem } from '@/components/ui/topic-column'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useAgentId } from '@/lib/hooks/use-agent-id'
+import { useI18n } from '@/lib/i18n-provider'
 
 interface Agent {
   id: string
@@ -36,6 +37,7 @@ export default function DiscoverPageWrapper() {
 function DiscoverPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useI18n()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Topic[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -172,7 +174,7 @@ function DiscoverPageInner() {
         }),
       })
       if (!r.ok) {
-        alert(`Random Talk preview failed: ${await r.text()}`)
+        alert(t('discover.randomPreviewFailed', { detail: await r.text() }))
         return
       }
       const j = await r.json()
@@ -180,7 +182,7 @@ function DiscoverPageInner() {
       setRandomTalkPreview(matched)
       setRandomTalkSelected(matched.map((m: { id: string }) => m.id))
       if (matched.length === 0) {
-        alert('No similar topics found')
+        alert(t('discover.noSimilarTopics'))
       }
     } finally {
       setRandomTalkRunning(false)
@@ -189,7 +191,7 @@ function DiscoverPageInner() {
 
   const handleExecuteRandomTalk = async () => {
     if (!selectedAgentId || !randomTalkText.trim() || randomTalkSelected.length === 0) {
-      alert('请选择至少一个 Topic')
+      alert(t('discover.pickAtLeastOneTopic'))
       return
     }
 
@@ -218,7 +220,7 @@ function DiscoverPageInner() {
       }
 
       await mutateTopics()
-      alert(`Random Talk executed: selected ${randomTalkSelected.length}, subscribed ${subscribed}, published ${published}`)
+      alert(t('discover.randomExecuted', { selected: randomTalkSelected.length, subscribed, published }))
       setRandomTalkPreview([])
       setRandomTalkSelected([])
       setRandomTalkText('')
@@ -253,29 +255,29 @@ function DiscoverPageInner() {
         await wttApi.joinTopic(topicId, selectedAgentId)
       }
       await mutateTopics()
-      alert('Subscribed successfully')
+      alert(t('discover.subscribedOk'))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to subscribe')
+      alert(err instanceof Error ? err.message : t('discover.subscribeFailed'))
     }
   }
 
   const handleRenameAgent = async (agentId: string, currentName: string) => {
-    const next = prompt('New agent name', currentName)
+    const next = prompt(t('discover.newAgentName'), currentName)
     if (!next || next.trim() === currentName) return
     try {
       await wttApi.renameAgent(agentId, next.trim())
       await loadAgents()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Rename failed')
+      alert(err instanceof Error ? err.message : t('discover.renameFailed'))
     }
   }
 
   const handleUnclaimAgent = async (agentId: string) => {
-    if (!confirm(`Unclaim agent ${agentId}?`)) return
+    if (!confirm(t('discover.unclaimConfirm', { agentId }))) return
     try {
       const token = session?.accessToken as string | undefined
       if (!token) {
-        alert('Session expired, please login again')
+        alert(t('settings.sessionExpired'))
         return
       }
       const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}`, {
@@ -288,14 +290,14 @@ function DiscoverPageInner() {
       }
       await loadAgents()
       await mutateTopics()
-      alert('Agent unclaimed')
+      alert(t('feed.agentUnclaimed'))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unclaim failed')
+      alert(err instanceof Error ? err.message : t('discover.unclaimFailed'))
     }
   }
 
   const handleLeaveTopic = async (topicId: string) => {
-    if (!confirm('Leave this topic?')) return
+    if (!confirm(t('tasks.leaveTopicConfirm'))) return
     try {
       const wsResult = await sendAction('leave', { topic_id: topicId })
       if (wsResult === null) {
@@ -304,18 +306,18 @@ function DiscoverPageInner() {
       if (selectedTopicId === topicId) setSelectedTopicId(null)
       await mutateTopics()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Leave topic failed')
+      alert(err instanceof Error ? err.message : t('discover.leaveTopicFailed'))
     }
   }
 
   const handleDeleteTopic = async (topicId: string) => {
-    if (!confirm('Delete this topic? (soft delete)')) return
+    if (!confirm(t('tasks.deleteTopicConfirm'))) return
     try {
       await wttApi.deleteTopic(topicId, selectedAgentId)
       if (selectedTopicId === topicId) setSelectedTopicId(null)
       await mutateTopics()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Delete topic failed')
+      alert(err instanceof Error ? err.message : t('discover.deleteTopicFailed'))
     }
   }
 
@@ -353,7 +355,7 @@ function DiscoverPageInner() {
           <input
             value={randomTalkText}
             onChange={(e) => setRandomTalkText(e.target.value)}
-            placeholder="Random Talk: say one sentence, auto match+subscribe+publish"
+            placeholder={t('discover.randomPlaceholder')}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500"
           />
           <button
@@ -362,13 +364,13 @@ function DiscoverPageInner() {
             disabled={randomTalkRunning || !randomTalkText.trim()}
             className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-60"
           >
-            {randomTalkRunning ? 'Matching...' : 'Random Talk Match'}
+            {randomTalkRunning ? t('discover.matching') : t('discover.randomMatch')}
           </button>
         </div>
 
         {randomTalkPreview.length > 0 && (
           <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">Matched Topics (select to execute)</p>
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t('discover.matchedTopics')}</p>
             <div className="space-y-1">
               {randomTalkPreview.map((t) => (
                 <label key={t.id} className="flex items-center gap-2 text-sm text-slate-700">
@@ -393,21 +395,21 @@ function DiscoverPageInner() {
                 disabled={randomTalkRunning || randomTalkSelected.length === 0}
                 className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
               >
-                Execute on Selected ({randomTalkSelected.length})
+                {t('discover.executeSelected', { count: randomTalkSelected.length })}
               </button>
               <button
                 type="button"
                 onClick={() => setRandomTalkSelected(randomTalkPreview.map((x) => x.id))}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500"
               >
-                Select All
+                {t('discover.selectAll')}
               </button>
               <button
                 type="button"
                 onClick={() => setRandomTalkSelected([])}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500"
               >
-                Clear
+                {t('discover.clear')}
               </button>
             </div>
           </div>
@@ -419,7 +421,7 @@ function DiscoverPageInner() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search topics by name or description"
+              placeholder={t('discover.searchPlaceholder')}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-10 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500"
             />
           </div>
@@ -427,7 +429,7 @@ function DiscoverPageInner() {
             type="submit"
             className="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600"
           >
-            {searchLoading ? 'Searching...' : 'Search'}
+            {searchLoading ? t('discover.searching') : t('discover.search')}
           </button>
           {searchQuery && (
             <button
@@ -438,7 +440,7 @@ function DiscoverPageInner() {
               }}
               className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-2.5 text-sm text-slate-500 transition hover:text-slate-900"
             >
-              Clear
+              {t('discover.clear')}
             </button>
           )}
         </form>
@@ -447,7 +449,7 @@ function DiscoverPageInner() {
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {displayTopics.length === 0 && (
           <div className="col-span-full rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm text-slate-400">
-            No topics found.
+            {t('discover.noTopics')}
           </div>
         )}
 
@@ -471,13 +473,13 @@ function DiscoverPageInner() {
                 href={`/topics/${topic.id}`}
                 className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-sm text-slate-600 transition hover:text-slate-900"
               >
-                View
+                {t('discover.view')}
               </Link>
               <button
                 onClick={() => handleSubscribe(topic.id)}
                 className="flex-1 rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600"
               >
-                Subscribe
+                {t('discover.subscribe')}
               </button>
             </div>
           </article>
