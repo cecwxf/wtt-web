@@ -1,43 +1,143 @@
-<svg width="1280" height="540" viewBox="0 0 1280 540" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1280" height="540" fill="#F1F5F9"/>
+<svg width="1400" height="780" viewBox="0 0 1400 780" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title { font: 700 34px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0f172a; }
+      .subtitle { font: 500 17px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #475569; }
+      .layerTitle { font: 700 18px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0f172a; }
+      .nodeTitle { font: 700 16px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #1e293b; }
+      .nodeText { font: 500 13px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #334155; }
+      .hint { font: 600 12px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #475569; }
+      .legend { font: 600 12px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #334155; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#059669"/>
+    </marker>
+  </defs>
 
-  <text x="56" y="54" font-size="28" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="700">WTT 架构总览（Architecture Overview）</text>
-  <text x="56" y="84" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#475569">从用户输入到任务执行，再到状态回传的完整链路</text>
+  <rect width="1400" height="780" fill="#f8fafc"/>
+  <rect x="24" y="24" width="1352" height="732" rx="22" fill="#ffffff" stroke="#dbe4ee"/>
 
-  <rect x="56" y="120" width="250" height="190" rx="14" fill="#EEF2FF" stroke="#C7D2FE"/>
-  <text x="76" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">1) Intent 输入层</text>
-  <text x="76" y="193" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 用户消息 / Slash 命令</text>
-  <text x="76" y="218" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Agent 选择 / 权限上下文</text>
-  <text x="76" y="243" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Topic / Task 语义识别</text>
+  <text x="56" y="78" class="title">WTT System Architecture（精准版）</text>
+  <text x="56" y="108" class="subtitle">覆盖前端、后端、插件、Runtime、数据层与实时事件回路（task_status / typing / summary）</text>
 
-  <rect x="364" y="120" width="250" height="190" rx="14" fill="#ECFEFF" stroke="#A5F3FC"/>
-  <text x="384" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">2) Topic 路由层</text>
-  <text x="384" y="193" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 会话与成员关系校验</text>
-  <text x="384" y="218" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• non-task discuss 定向规则</text>
-  <text x="384" y="243" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 消息分发与事件广播</text>
+  <!-- Layer backgrounds -->
+  <rect x="56" y="140" width="320" height="504" rx="16" fill="#eff6ff" stroke="#cfe0ff"/>
+  <rect x="392" y="140" width="340" height="504" rx="16" fill="#ecfeff" stroke="#bfeef8"/>
+  <rect x="748" y="140" width="304" height="504" rx="16" fill="#f0fdf4" stroke="#c9f0d5"/>
+  <rect x="1068" y="140" width="276" height="504" rx="16" fill="#fff7ed" stroke="#f8dcc0"/>
 
-  <rect x="672" y="120" width="250" height="190" rx="14" fill="#F0FDF4" stroke="#BBF7D0"/>
-  <text x="692" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">3) Task 编排层</text>
-  <text x="692" y="193" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Task 生命周期状态机</text>
-  <text x="692" y="218" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• owner/runner 一致性校验</text>
-  <text x="692" y="243" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• review/reject/rerun 控制</text>
+  <text x="72" y="170" class="layerTitle">① Interaction Layer</text>
+  <text x="408" y="170" class="layerTitle">② WTT Backend Layer</text>
+  <text x="764" y="170" class="layerTitle">③ Agent Runtime Layer</text>
+  <text x="1084" y="170" class="layerTitle">④ Data / Infra Layer</text>
 
-  <rect x="980" y="120" width="250" height="190" rx="14" fill="#FFFBEB" stroke="#FDE68A"/>
-  <text x="1000" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">4) Runner 执行层</text>
-  <text x="1000" y="193" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 插件触发 OpenClaw Runtime</text>
-  <text x="1000" y="218" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 真实推理 + typing 事件</text>
-  <text x="1000" y="243" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 结果与产物回传</text>
+  <!-- Interaction nodes -->
+  <rect x="76" y="196" width="280" height="132" rx="12" fill="#ffffff" stroke="#d4deea"/>
+  <text x="92" y="222" class="nodeTitle">WTT Web (UI)</text>
+  <text x="92" y="244" class="nodeText">• Feed / Tasks / Pipelines / Inbox</text>
+  <text x="92" y="263" class="nodeText">• Topic + Task 双视图</text>
+  <text x="92" y="282" class="nodeText">• Slash 命令与语言切换</text>
+  <text x="92" y="301" class="nodeText">• 实时渲染 typing / task_status</text>
 
-  <path d="M306 214H364" stroke="#6B7280" stroke-width="3"/>
-  <path d="M614 214H672" stroke="#6B7280" stroke-width="3"/>
-  <path d="M922 214H980" stroke="#6B7280" stroke-width="3"/>
-  <path d="M356 214L344 206V222L356 214Z" fill="#6B7280"/>
-  <path d="M664 214L652 206V222L664 214Z" fill="#6B7280"/>
-  <path d="M972 214L960 206V222L972 214Z" fill="#6B7280"/>
+  <rect x="76" y="346" width="280" height="132" rx="12" fill="#ffffff" stroke="#d4deea"/>
+  <text x="92" y="372" class="nodeTitle">User Surfaces</text>
+  <text x="92" y="394" class="nodeText">• Telegram / Group Topic</text>
+  <text x="92" y="413" class="nodeText">• Web 登录与会话上下文</text>
+  <text x="92" y="432" class="nodeText">• @mention / command 输入</text>
 
-  <rect x="56" y="344" width="1174" height="150" rx="14" fill="#F8FAFC" stroke="#D9E2EC"/>
-  <text x="78" y="377" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="700">反馈与可观测（Feedback & Observability）</text>
-  <text x="78" y="408" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• WS 事件：typing / task_status / new_message 实时回流到 WTT-Web</text>
-  <text x="78" y="434" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 任务追踪：Doing → Review → Done，支持 Reject 回退与再次执行</text>
-  <text x="78" y="460" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 交付证据：消息时间线 + 结果摘要 + commit id / 产物链接</text>
+  <rect x="76" y="496" width="280" height="132" rx="12" fill="#ffffff" stroke="#d4deea"/>
+  <text x="92" y="522" class="nodeTitle">Operator Control</text>
+  <text x="92" y="544" class="nodeText">• Agent 绑定与切换</text>
+  <text x="92" y="563" class="nodeText">• topic 订阅 / 邀请 / P2P</text>
+  <text x="92" y="582" class="nodeText">• review/reject/rerun 交互</text>
+
+  <!-- Backend nodes -->
+  <rect x="412" y="196" width="300" height="132" rx="12" fill="#ffffff" stroke="#cfe7ef"/>
+  <text x="428" y="222" class="nodeTitle">wtt_service API/WS</text>
+  <text x="428" y="244" class="nodeText">• REST: tasks / topics / agents</text>
+  <text x="428" y="263" class="nodeText">• WS: publish / typing / task_status</text>
+  <text x="428" y="282" class="nodeText">• 鉴权与 owner/runner 约束</text>
+
+  <rect x="412" y="346" width="300" height="132" rx="12" fill="#ffffff" stroke="#cfe7ef"/>
+  <text x="428" y="372" class="nodeTitle">Orchestration Rules</text>
+  <text x="428" y="394" class="nodeText">• topic 类型触发规则</text>
+  <text x="428" y="413" class="nodeText">• non-task discuss 定向</text>
+  <text x="428" y="432" class="nodeText">• task lifecycle 状态机</text>
+
+  <rect x="412" y="496" width="300" height="132" rx="12" fill="#ffffff" stroke="#cfe7ef"/>
+  <text x="428" y="522" class="nodeTitle">Event Bus</text>
+  <text x="428" y="544" class="nodeText">• new_message / summary / asset</text>
+  <text x="428" y="563" class="nodeText">• typing start/stop</text>
+  <text x="428" y="582" class="nodeText">• task_status 实时广播</text>
+
+  <!-- Runtime nodes -->
+  <rect x="768" y="196" width="264" height="132" rx="12" fill="#ffffff" stroke="#d3ead9"/>
+  <text x="784" y="222" class="nodeTitle">wtt_plugin</text>
+  <text x="784" y="244" class="nodeText">• WS client 与命令桥接</text>
+  <text x="784" y="263" class="nodeText">• mention / slash 路由</text>
+  <text x="784" y="282" class="nodeText">• 推理前后 typing 信号</text>
+
+  <rect x="768" y="346" width="264" height="132" rx="12" fill="#ffffff" stroke="#d3ead9"/>
+  <text x="784" y="372" class="nodeTitle">OpenClaw Gateway</text>
+  <text x="784" y="394" class="nodeText">• channel 分发与会话管理</text>
+  <text x="784" y="413" class="nodeText">• tool 调用与 runtime 调度</text>
+  <text x="784" y="432" class="nodeText">• 状态回执聚合</text>
+
+  <rect x="768" y="496" width="264" height="132" rx="12" fill="#ffffff" stroke="#d3ead9"/>
+  <text x="784" y="522" class="nodeTitle">Model / Agent Runtime</text>
+  <text x="784" y="544" class="nodeText">• task execution / reasoning</text>
+  <text x="784" y="563" class="nodeText">• commit / result 产出</text>
+  <text x="784" y="582" class="nodeText">• summary / review 输出</text>
+
+  <!-- Data layer nodes -->
+  <rect x="1088" y="196" width="236" height="132" rx="12" fill="#ffffff" stroke="#ead8c3"/>
+  <text x="1104" y="222" class="nodeTitle">PostgreSQL</text>
+  <text x="1104" y="244" class="nodeText">• tasks / topics / members</text>
+  <text x="1104" y="263" class="nodeText">• messages / feed / bindings</text>
+  <text x="1104" y="282" class="nodeText">• 状态与审计数据</text>
+
+  <rect x="1088" y="346" width="236" height="132" rx="12" fill="#ffffff" stroke="#ead8c3"/>
+  <text x="1104" y="372" class="nodeTitle">Redis</text>
+  <text x="1104" y="394" class="nodeText">• session / cache / pubsub</text>
+  <text x="1104" y="413" class="nodeText">• 在线连接态</text>
+
+  <rect x="1088" y="496" width="236" height="132" rx="12" fill="#ffffff" stroke="#ead8c3"/>
+  <text x="1104" y="522" class="nodeTitle">Artifacts / Links</text>
+  <text x="1104" y="544" class="nodeText">• markdown / html / files</text>
+  <text x="1104" y="563" class="nodeText">• commit id / URL 归档</text>
+
+  <!-- Horizontal flow arrows -->
+  <path d="M356 262H412" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M712 262H768" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1032 262H1088" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <path d="M356 412H412" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M712 412H768" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1032 412H1088" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <path d="M356 562H412" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M712 562H768" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1032 562H1088" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Feedback loop -->
+  <path d="M1180 644C1180 700 540 700 540 644" stroke="#2563eb" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrowBlue)"/>
+  <text x="642" y="716" class="hint">实时回流：task_status / typing / summary → Web UI</text>
+
+  <!-- runtime to backend signal -->
+  <path d="M900 328C900 305 650 305 650 328" stroke="#059669" stroke-width="3" stroke-dasharray="6 6" marker-end="url(#arrowGreen)"/>
+  <text x="676" y="300" class="hint">Execution telemetry / event publish</text>
+
+  <!-- Legend -->
+  <rect x="56" y="664" width="430" height="74" rx="12" fill="#ffffff" stroke="#dbe4ee"/>
+  <line x1="80" y1="692" x2="132" y2="692" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="146" y="696" class="legend">主业务调用链</text>
+  <line x1="80" y1="716" x2="132" y2="716" stroke="#2563eb" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrowBlue)"/>
+  <text x="146" y="720" class="legend">状态回流链路</text>
+
 </svg>
