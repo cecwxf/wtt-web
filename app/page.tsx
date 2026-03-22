@@ -141,134 +141,132 @@ export default function Home() {
       }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(99,102,241,0.35),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.2),transparent_30%)]" />
+    <main className="min-h-screen bg-slate-50 text-slate-800">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.12),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(14,165,233,0.08),transparent_30%)]" />
       <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-8">
-        <header className="mb-16 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-3 backdrop-blur">
-          <div className="flex items-center gap-2 text-sm text-slate-200">
-            <Bot className="h-4 w-4 text-indigo-300" />
+        <header className="mb-14 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
+          <div className="flex items-center gap-2 text-sm text-slate-700">
+            <Bot className="h-4 w-4 text-blue-600" />
             <span>WTT-Web</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href={status === 'authenticated' ? '/feed' : '/login'}
-              className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-400"
-            >
-              {copy.login}
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
+          <Link
+            href={status === 'authenticated' ? '/feed' : '/login'}
+            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500"
+          >
+            {copy.login}
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
         </header>
 
-        <section className="mb-14 grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-center">
+        <section className="mb-12 grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-center">
           <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-300/40 bg-indigo-500/10 px-3 py-1 text-xs text-indigo-200">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">
               <Sparkles className="h-3.5 w-3.5" />
               {copy.badge}
             </div>
-            <h1 className="max-w-4xl text-4xl font-bold leading-tight sm:text-5xl">{copy.title}</h1>
-            <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">{copy.subtitle}</p>
+            <h1 className="max-w-4xl text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">{copy.title}</h1>
+            <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">{copy.subtitle}</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
                 href={status === 'authenticated' ? '/feed' : '/login'}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-400"
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
               >
                 {copy.ctaPrimary}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <a
                 href="#wtt-arch"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm text-slate-100 transition hover:bg-white/10"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm text-slate-700 transition hover:bg-slate-100"
               >
                 {copy.ctaSecondary}
               </a>
             </div>
-            <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-300">
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-600">
               {copy.trust.map((item) => (
-                <span key={item} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                <span key={item} className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
                   {item}
                 </span>
               ))}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between px-1">
-              <p className="text-sm font-semibold text-white">{copy.heroVisualTitle}</p>
-              <span className="rounded-full border border-emerald-300/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-200">Live</span>
+              <p className="text-sm font-semibold text-slate-800">{copy.heroVisualTitle}</p>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700">Live</span>
             </div>
-            <div className="overflow-hidden rounded-xl border border-white/10">
+            <div className="overflow-hidden rounded-xl border border-slate-200">
               <Image src="/landing/wtt-dashboard.svg" alt="WTT dashboard preview" width={1280} height={820} className="h-auto w-full" priority />
             </div>
-            <p className="mt-3 px-1 text-xs text-slate-300">{copy.heroVisualDesc}</p>
+            <p className="mt-3 px-1 text-xs text-slate-600">{copy.heroVisualDesc}</p>
           </div>
         </section>
 
-        <section className="mb-14">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-indigo-200/90">{copy.sectionFeature}</p>
-          <h2 className="mb-5 text-2xl font-semibold text-white">{copy.sectionFeatureTitle}</h2>
+        <section className="mb-12">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionFeature}</p>
+          <h2 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionFeatureTitle}</h2>
           <div className="grid gap-3 md:grid-cols-3">
             {[Lock, Workflow, Radar].map((Icon, i) => (
-              <article key={copy.featureCards[i].title} className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                <Icon className="mb-3 h-5 w-5 text-indigo-300" />
-                <h3 className="mb-2 text-base font-semibold text-white">{copy.featureCards[i].title}</h3>
-                <p className="text-sm leading-6 text-slate-300">{copy.featureCards[i].desc}</p>
+              <article key={copy.featureCards[i].title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <Icon className="mb-3 h-5 w-5 text-blue-600" />
+                <h3 className="mb-2 text-base font-semibold text-slate-900">{copy.featureCards[i].title}</h3>
+                <p className="text-sm leading-6 text-slate-600">{copy.featureCards[i].desc}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section id="wtt-arch" className="mb-14 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-indigo-200/90">{copy.sectionArch}</p>
-          <h2 className="mb-6 text-2xl font-semibold text-white">{copy.sectionArchTitle}</h2>
+        <section id="wtt-arch" className="mb-12 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionArch}</p>
+          <h2 className="mb-6 text-2xl font-semibold text-slate-900">{copy.sectionArchTitle}</h2>
           <div className="grid gap-4 lg:grid-cols-[1fr_1fr] lg:items-start">
             <div className="grid gap-3 md:grid-cols-2">
               {copy.archNodes.map((n, idx) => (
-                <div key={n.title} className="relative rounded-xl border border-white/10 bg-slate-900/40 p-4">
-                  <div className="mb-2 inline-flex rounded-lg bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-200">{n.title}</div>
-                  <p className="text-sm text-slate-300">{n.desc}</p>
+                <div key={n.title} className="relative rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-2 inline-flex rounded-lg bg-blue-100 px-2 py-1 text-[11px] text-blue-700">{n.title}</div>
+                  <p className="text-sm text-slate-600">{n.desc}</p>
                   {idx < copy.archNodes.length - 1 && idx % 2 === 0 && (
-                    <Cable className="absolute -right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-indigo-300/80 md:block" />
+                    <Cable className="absolute -right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-blue-500 md:block" />
                   )}
                 </div>
               ))}
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
-              <p className="mb-2 text-xs text-slate-300">{copy.archVisualTitle}</p>
-              <div className="overflow-hidden rounded-lg border border-white/10">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-xs text-slate-600">{copy.archVisualTitle}</p>
+              <div className="overflow-hidden rounded-lg border border-slate-200">
                 <Image src="/landing/wtt-architecture.svg" alt="WTT architecture diagram" width={1280} height={540} className="h-auto w-full" />
               </div>
             </div>
           </div>
         </section>
 
-        <section className="mb-14 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-indigo-200/90">{copy.sectionFlow}</p>
-            <h3 className="mb-4 text-xl font-semibold text-white">{copy.sectionFlowTitle}</h3>
-            <p className="mb-2 text-xs text-slate-300">{copy.flowVisualTitle}</p>
-            <div className="mb-4 overflow-hidden rounded-xl border border-white/10">
+        <section className="mb-12 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionFlow}</p>
+            <h3 className="mb-4 text-xl font-semibold text-slate-900">{copy.sectionFlowTitle}</h3>
+            <p className="mb-2 text-xs text-slate-600">{copy.flowVisualTitle}</p>
+            <div className="mb-4 overflow-hidden rounded-xl border border-slate-200">
               <Image src="/landing/wtt-flow.svg" alt="WTT task flow" width={1280} height={560} className="h-auto w-full" />
             </div>
             <div className="space-y-3">
               {copy.flow.map((f) => (
-                <div key={f.step} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-                  <p className="mb-1 text-xs text-indigo-200">STEP {f.step}</p>
-                  <p className="font-medium text-white">{f.title}</p>
-                  <p className="mt-1 text-sm text-slate-300">{f.desc}</p>
+                <div key={f.step} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="mb-1 text-xs text-blue-700">STEP {f.step}</p>
+                  <p className="font-medium text-slate-900">{f.title}</p>
+                  <p className="mt-1 text-sm text-slate-600">{f.desc}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-indigo-200/90">{copy.sectionCapability}</p>
-            <h3 className="mb-4 text-xl font-semibold text-white">WTT Capability</h3>
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionCapability}</p>
+            <h3 className="mb-4 text-xl font-semibold text-slate-900">WTT Capability</h3>
             <div className="grid gap-2">
               {copy.capabilities.map((c) => (
-                <div key={c} className="flex items-start gap-2 rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-sm text-slate-200">
-                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                <div key={c} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <span>{c}</span>
                 </div>
               ))}
@@ -276,41 +274,41 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="mb-14">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-indigo-200/90">{copy.sectionGallery}</p>
-          <h3 className="mb-5 text-2xl font-semibold text-white">{copy.sectionGalleryTitle}</h3>
+        <section className="mb-12">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionGallery}</p>
+          <h3 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionGalleryTitle}</h3>
           <div className="grid gap-4 md:grid-cols-3">
             {copy.gallery.map((item) => (
-              <article key={item.title} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                <div className="border-b border-white/10">
+              <article key={item.title} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-200">
                   <Image src={item.image} alt={item.title} width={1280} height={820} className="h-auto w-full" />
                 </div>
                 <div className="p-4">
-                  <p className="text-sm font-semibold text-white">{item.title}</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-300">{item.desc}</p>
+                  <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{item.desc}</p>
                 </div>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="rounded-2xl border border-indigo-300/30 bg-indigo-500/10 p-6 text-center">
-          <div className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-indigo-400/20">
-            <Blocks className="h-5 w-5 text-indigo-200" />
+        <section className="rounded-2xl border border-blue-200 bg-blue-50 p-6 text-center">
+          <div className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+            <Blocks className="h-5 w-5 text-blue-700" />
           </div>
-          <h3 className="text-xl font-semibold text-white">{copy.finalTitle}</h3>
-          <p className="mx-auto mt-2 max-w-3xl text-sm leading-6 text-slate-200">{copy.finalDesc}</p>
+          <h3 className="text-xl font-semibold text-slate-900">{copy.finalTitle}</h3>
+          <p className="mx-auto mt-2 max-w-3xl text-sm leading-6 text-slate-600">{copy.finalDesc}</p>
           <div className="mt-5 flex justify-center gap-3">
             <Link
               href={status === 'authenticated' ? '/feed' : '/login'}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
             >
               {copy.ctaPrimary}
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-5 py-2.5 text-sm text-white/90 transition hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm text-slate-700 transition hover:bg-slate-100"
             >
               <Cpu className="h-4 w-4" />
               {copy.login}
