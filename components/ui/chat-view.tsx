@@ -1417,32 +1417,26 @@ export function ChatView({
         const currentIdx = steps.indexOf(status)
 
         return (
-          <div className={`mx-3 mb-1 rounded-lg ${cfg.bg} border border-slate-200/60 dark:border-zinc-700/60 px-4 py-2.5`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`text-sm ${cfg.color} ${cfg.animate ? 'animate-pulse' : ''}`}>{cfg.icon}</span>
-                <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
-                {lastTaskMsg.task_title && (
-                  <span className="text-xs text-slate-400 dark:text-zinc-500 truncate max-w-[200px]">· {lastTaskMsg.task_title}</span>
-                )}
-              </div>
-              {lastTaskMsg.runner_agent_id && (
-                <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">{lastTaskMsg.runner_agent_id.slice(0, 12)}</span>
+          <div className={`mx-2 mb-1 rounded-md ${cfg.bg} border border-slate-200/60 dark:border-zinc-700/60 px-2 py-1`}>
+            <div className="flex items-center gap-1.5 leading-none">
+              <span className={`text-[11px] ${cfg.color} ${cfg.animate ? 'animate-pulse' : ''}`}>{cfg.icon}</span>
+              <span className={`text-[11px] font-medium ${cfg.color}`}>{cfg.label}</span>
+              {lastTaskMsg.task_title && (
+                <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate max-w-[180px]">· {lastTaskMsg.task_title}</span>
               )}
             </div>
-            {/* Step progress dots */}
+            {/* Step progress (compact) */}
             {status !== 'blocked' && (
-              <div className="flex items-center gap-1 mt-2">
+              <div className="flex items-center gap-0.5 mt-1">
                 {steps.map((s, i) => {
                   const isActive = i === currentIdx
                   const isPast = i < currentIdx
                   const stepCfg = statusConfig[s] || statusConfig.todo
                   return (
-                    <div key={s} className="flex items-center gap-1 flex-1">
-                      <div className={`h-1.5 flex-1 rounded-full transition-all ${
+                    <div key={s} className="flex items-center gap-0.5 flex-1">
+                      <div className={`h-1 flex-1 rounded-full transition-all ${
                         isPast || isActive ? 'bg-current ' + stepCfg.color : 'bg-slate-200 dark:bg-zinc-600'
                       } ${isActive && cfg.animate ? 'animate-pulse' : ''}`} />
-                      {i < steps.length - 1 && <div className="w-0.5" />}
                     </div>
                   )
                 })}
