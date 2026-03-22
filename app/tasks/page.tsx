@@ -190,20 +190,9 @@ function TasksPageInner() {
     onMessage: handleWsTaskStatus,
   })
 
-  const subscribedTopicSet = useMemo(() => {
-    const set = new Set<string>()
-    if (Array.isArray(subscribedTopicsRaw)) {
-      for (const t of subscribedTopicsRaw as { id?: string }[]) {
-        if (t?.id) set.add(String(t.id))
-      }
-    }
-    return set
-  }, [subscribedTopicsRaw])
-
-  // Only show tasks whose topic is still subscribed (or tasks without topic binding), filtered by type
+  // Task panel should reflect owner-scoped task truth, independent of topic subscription state.
   const visibleTasks: TaskItem[] = useMemo(
     () => tasks.filter((t) => {
-      if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
       // Pipeline filter (mode-based)
       if (taskTypeFilter === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
       // Type filter
@@ -211,7 +200,7 @@ function TasksPageInner() {
       if (taskTypeFilter === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
       return t.task_type === taskTypeFilter
     }),
-    [tasks, subscribedTopicSet, taskTypeFilter]
+    [tasks, taskTypeFilter]
   )
 
   // Worker (sub-agent) grouping — same as feed page
@@ -933,7 +922,6 @@ function TasksPageInner() {
             ['pipeline', '🔗 Pipeline'],
           ] as const).map(([key, label]) => {
             const count = tasks.filter(t => {
-              if (t.topic_id && !subscribedTopicSet.has(t.topic_id)) return false
               if (key === 'all') return true
               if (key === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
               if (key === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
