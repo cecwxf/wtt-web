@@ -48,9 +48,7 @@ type SlashCommandDef = {
   mode?: SlashCommandMode
 }
 
-// Slash commands definition
-const SLASH_COMMANDS: SlashCommandDef[] = [
-  // Local wtt-web helpers
+const LOCAL_SLASH_COMMANDS: SlashCommandDef[] = [
   { cmd: '/new task', desc: 'Create a general task', icon: '📋', mode: 'local' },
   { cmd: '/new code task', desc: 'Create a code task', icon: '💻', mode: 'local' },
   { cmd: '/new research task', desc: 'Create a research task', icon: '🔬', mode: 'local' },
@@ -59,19 +57,66 @@ const SLASH_COMMANDS: SlashCommandDef[] = [
   { cmd: '/run', desc: 'Run the current task', icon: '▶️', mode: 'local' },
   { cmd: '/rerun', desc: 'Rerun pipeline', icon: '🔄', mode: 'local' },
   { cmd: '/workers', desc: 'List workers for agent', icon: '👷', mode: 'local' },
+]
 
-  // OpenClaw runtime slash (pass-through to backend)
+// Full OpenClaw built-ins (aligned with /commands docs). Shown in autocomplete,
+// executed by pass-through unless handled locally above.
+const OPENCLAW_PASSTHROUGH_COMMANDS: SlashCommandDef[] = [
   { cmd: '/help', desc: 'OpenClaw help', icon: '❓', mode: 'passthrough' },
-  { cmd: '/commands', desc: 'List OpenClaw commands', icon: '📚', mode: 'passthrough' },
-  { cmd: '/status', desc: 'Session/runtime status card', icon: '📊', mode: 'passthrough' },
-  { cmd: '/model', desc: 'Show or switch model', icon: '🤖', mode: 'passthrough' },
-  { cmd: '/skill', desc: 'Run skill by name', icon: '🧩', mode: 'passthrough' },
-  { cmd: '/subagents', desc: 'List/control subagents', icon: '🛰️', mode: 'passthrough' },
+  { cmd: '/commands', desc: 'List all commands', icon: '📚', mode: 'passthrough' },
+  { cmd: '/status', desc: 'Session/runtime status', icon: '📊', mode: 'passthrough' },
+  { cmd: '/skill', desc: 'Run a skill by name', icon: '🧩', mode: 'passthrough' },
+  { cmd: '/allowlist', desc: 'Manage command allowlist', icon: '🛡️', mode: 'passthrough' },
+  { cmd: '/approve', desc: 'Resolve exec approval', icon: '✅', mode: 'passthrough' },
+  { cmd: '/context', desc: 'Show context summary/detail', icon: '🧾', mode: 'passthrough' },
+  { cmd: '/export-session', desc: 'Export session HTML', icon: '📤', mode: 'passthrough' },
+  { cmd: '/export', desc: 'Alias of /export-session', icon: '📤', mode: 'passthrough' },
+  { cmd: '/whoami', desc: 'Show sender id', icon: '🪪', mode: 'passthrough' },
+  { cmd: '/id', desc: 'Alias of /whoami', icon: '🪪', mode: 'passthrough' },
+  { cmd: '/session idle', desc: 'Set session idle max', icon: '⏲️', mode: 'passthrough' },
+  { cmd: '/session max-age', desc: 'Set session max age', icon: '🕒', mode: 'passthrough' },
+  { cmd: '/subagents', desc: 'Control subagents', icon: '🛰️', mode: 'passthrough' },
   { cmd: '/acp', desc: 'ACP runtime control', icon: '🛠️', mode: 'passthrough' },
-  { cmd: '/queue', desc: 'Queue mode config', icon: '🧵', mode: 'passthrough' },
-  { cmd: '/reasoning', desc: 'Reasoning visibility toggle', icon: '🧠', mode: 'passthrough' },
-  { cmd: '/verbose', desc: 'Verbose output toggle', icon: '🔍', mode: 'passthrough' },
+  { cmd: '/agents', desc: 'List thread-bound agents', icon: '👥', mode: 'passthrough' },
+  { cmd: '/focus', desc: 'Focus thread binding', icon: '🎯', mode: 'passthrough' },
+  { cmd: '/unfocus', desc: 'Clear thread binding', icon: '🧭', mode: 'passthrough' },
+  { cmd: '/kill', desc: 'Abort subagent(s)', icon: '🛑', mode: 'passthrough' },
+  { cmd: '/steer', desc: 'Steer a subagent', icon: '🕹️', mode: 'passthrough' },
+  { cmd: '/tell', desc: 'Alias of /steer', icon: '🕹️', mode: 'passthrough' },
+  { cmd: '/config', desc: 'Config show/get/set/unset', icon: '⚙️', mode: 'passthrough' },
+  { cmd: '/debug', desc: 'Runtime debug overrides', icon: '🐞', mode: 'passthrough' },
+  { cmd: '/usage', desc: 'Usage footer/cost', icon: '💳', mode: 'passthrough' },
+  { cmd: '/tts', desc: 'Text-to-speech controls', icon: '🔊', mode: 'passthrough' },
+  { cmd: '/stop', desc: 'Stop active run', icon: '⛔', mode: 'passthrough' },
+  { cmd: '/restart', desc: 'Restart runtime', icon: '♻️', mode: 'passthrough' },
+  { cmd: '/dock-telegram', desc: 'Dock replies to Telegram', icon: '📨', mode: 'passthrough' },
+  { cmd: '/dock-discord', desc: 'Dock replies to Discord', icon: '💬', mode: 'passthrough' },
+  { cmd: '/dock-slack', desc: 'Dock replies to Slack', icon: '🧵', mode: 'passthrough' },
+  { cmd: '/activation', desc: 'Group activation mode', icon: '📣', mode: 'passthrough' },
+  { cmd: '/send', desc: 'Send mode on/off/inherit', icon: '✉️', mode: 'passthrough' },
+  { cmd: '/reset', desc: 'Reset/new session', icon: '🆕', mode: 'passthrough' },
+  { cmd: '/new', desc: 'New session (optional model)', icon: '🆕', mode: 'passthrough' },
+  { cmd: '/think', desc: 'Thinking effort', icon: '🧠', mode: 'passthrough' },
+  { cmd: '/thinking', desc: 'Alias of /think', icon: '🧠', mode: 'passthrough' },
+  { cmd: '/t', desc: 'Alias of /think', icon: '🧠', mode: 'passthrough' },
+  { cmd: '/verbose', desc: 'Verbose visibility', icon: '🔍', mode: 'passthrough' },
+  { cmd: '/v', desc: 'Alias of /verbose', icon: '🔍', mode: 'passthrough' },
+  { cmd: '/reasoning', desc: 'Reasoning visibility', icon: '🧠', mode: 'passthrough' },
+  { cmd: '/reason', desc: 'Alias of /reasoning', icon: '🧠', mode: 'passthrough' },
+  { cmd: '/elevated', desc: 'Elevated mode', icon: '🔐', mode: 'passthrough' },
+  { cmd: '/elev', desc: 'Alias of /elevated', icon: '🔐', mode: 'passthrough' },
+  { cmd: '/exec', desc: 'Exec security/host mode', icon: '🧪', mode: 'passthrough' },
+  { cmd: '/model', desc: 'Show/switch model', icon: '🤖', mode: 'passthrough' },
+  { cmd: '/models', desc: 'Alias of /model', icon: '🤖', mode: 'passthrough' },
+  { cmd: '/queue', desc: 'Queue mode/options', icon: '🧵', mode: 'passthrough' },
+  { cmd: '/bash', desc: 'Host shell command', icon: '💻', mode: 'passthrough' },
+  { cmd: '/compact', desc: 'Compact session context', icon: '🗜️', mode: 'passthrough' },
   { cmd: '/wtt', desc: 'WTT command namespace', icon: '💬', mode: 'passthrough' },
+]
+
+const SLASH_COMMANDS: SlashCommandDef[] = [
+  ...LOCAL_SLASH_COMMANDS,
+  ...OPENCLAW_PASSTHROUGH_COMMANDS,
 ]
 
 const LOCAL_NOARG_SLASH_COMMANDS = new Set([
@@ -623,10 +668,23 @@ export function ChatView({
     return () => document.removeEventListener('mousedown', handler)
   }, [attachMenuOpen])
 
+  const isDiscussTopic = topicType === 'discussion'
+  const isModelCommand = useCallback((cmd: string) => {
+    const c = cmd.trim().toLowerCase()
+    return c === '/model' || c.startsWith('/model ') || c === '/models' || c.startsWith('/models ')
+  }, [])
+
+  const availableSlashCommands = useMemo(() => {
+    if (!isDiscussTopic) return SLASH_COMMANDS
+    // In discuss topics, model switching must be blocked to avoid all agents
+    // reacting to the same slash command.
+    return SLASH_COMMANDS.filter((c) => !isModelCommand(c.cmd))
+  }, [isDiscussTopic, isModelCommand])
+
   // Slash command filtering
   const filteredCommands = slashFilter
-    ? SLASH_COMMANDS.filter(c => c.cmd.startsWith(slashFilter.toLowerCase()))
-    : SLASH_COMMANDS
+    ? availableSlashCommands.filter(c => c.cmd.startsWith(slashFilter.toLowerCase()))
+    : availableSlashCommands
 
   const handleDraftChange = useCallback((value: string) => {
     setDraft(value)
@@ -879,9 +937,14 @@ export function ChatView({
       setSlashOpen(false)
       setSlashResult(null)
 
-      const sorted = [...SLASH_COMMANDS].sort((a, b) => b.cmd.length - a.cmd.length)
+      const sorted = [...availableSlashCommands].sort((a, b) => b.cmd.length - a.cmd.length)
       const match = sorted.find(c => content.toLowerCase() === c.cmd || content.toLowerCase().startsWith(c.cmd + ' '))
       const mode = match?.mode ?? 'passthrough'
+
+      if (isDiscussTopic && isModelCommand(content)) {
+        setSlashResult('⚠️ Discuss topic 中不允许切模型（会触发多 agent 响应）。')
+        return
+      }
 
       if (mode === 'local' && match) {
         const remainder = content.slice(match.cmd.length).trim()
@@ -1583,41 +1646,43 @@ export function ChatView({
 
         {/* Compact control bar: model / think / quick slash */}
         <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
-          <div className="relative shrink-0" ref={modelMenuRef}>
-            <button
-              onClick={() => setModelMenuOpen(!modelMenuOpen)}
-              className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2 py-1 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition"
-              title="Select model"
-            >
-              <span>🤖</span>
-              <span className="font-medium max-w-[140px] truncate">{availableModels.find(m => m.id === selectedModel)?.label || selectedModel}</span>
-              <span className="text-slate-400">▾</span>
-            </button>
-            {modelMenuOpen && (
-              <div className="absolute bottom-full left-0 mb-1 z-50 min-w-[220px] max-h-[240px] overflow-y-auto rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
-                {availableModels.map(m => (
-                  <button
-                    key={m.id}
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={() => {
-                      setSelectedModel(m.id)
-                      setModelMenuOpen(false)
-                      void sendPassthroughSlash(`/model ${m.id}`, { silent: true })
-                    }}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
-                      selectedModel === m.id
-                        ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 font-medium'
-                        : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
-                    }`}
-                  >
-                    {selectedModel === m.id && <span className="text-indigo-500">✓</span>}
-                    <span>{m.label}</span>
-                    {m.supports_reasoning === false && <span className="ml-auto text-[9px] text-slate-400">no reasoning</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {!isDiscussTopic && (
+            <div className="relative shrink-0" ref={modelMenuRef}>
+              <button
+                onClick={() => setModelMenuOpen(!modelMenuOpen)}
+                className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2 py-1 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition"
+                title="Select model"
+              >
+                <span>🤖</span>
+                <span className="font-medium max-w-[140px] truncate">{availableModels.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+                <span className="text-slate-400">▾</span>
+              </button>
+              {modelMenuOpen && (
+                <div className="absolute bottom-full left-0 mb-1 z-50 min-w-[220px] max-h-[240px] overflow-y-auto rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                  {availableModels.map(m => (
+                    <button
+                      key={m.id}
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        setSelectedModel(m.id)
+                        setModelMenuOpen(false)
+                        void sendPassthroughSlash(`/model ${m.id}`, { silent: true })
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
+                        selectedModel === m.id
+                          ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 font-medium'
+                          : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
+                      }`}
+                    >
+                      {selectedModel === m.id && <span className="text-indigo-500">✓</span>}
+                      <span>{m.label}</span>
+                      {m.supports_reasoning === false && <span className="ml-auto text-[9px] text-slate-400">no reasoning</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="relative shrink-0" ref={thinkMenuRef}>
             <button
@@ -1654,7 +1719,7 @@ export function ChatView({
             )}
           </div>
 
-          {QUICK_SLASH_ACTIONS.map((action) => (
+          {QUICK_SLASH_ACTIONS.filter((action) => !(isDiscussTopic && isModelCommand(action.cmd))).map((action) => (
             <button
               key={action.cmd}
               type="button"
