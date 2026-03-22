@@ -55,144 +55,20 @@ export function WttSettingsModal({
   const [agentAlert, setAgentAlert] = useState(true)
   const [soundOn, setSoundOn] = useState(false)
   const [pollSeconds, setPollSeconds] = useState(5)
-  const [claimCode, setClaimCode] = useState('')
-  const [claiming, setClaiming] = useState(false)
-  const [claimError, setClaimError] = useState('')
-  const [claimSuccess, setClaimSuccess] = useState('')
-  // Add agent via invite code
-  const [addAgentId, setAddAgentId] = useState('')
-  const [addInviteCode, setAddInviteCode] = useState('')
-  const [addDisplayName, setAddDisplayName] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [addError, setAddError] = useState('')
-  const [addSuccess, setAddSuccess] = useState('')
-  // Rotate invite code
-  const [rotatingAgent, setRotatingAgent] = useState<string | null>(null)
-  const [copiedAgent, setCopiedAgent] = useState<string | null>(null)
-  // Locally generated invite codes (shown immediately after generate)
-  const [localInviteCodes, setLocalInviteCodes] = useState<Record<string, string>>({})
+  const [provisionDisplayName, setProvisionDisplayName] = useState('')
+  const [provisioning, setProvisioning] = useState(false)
+  const [provisionError, setProvisionError] = useState('')
+  const [provisionSuccess, setProvisionSuccess] = useState('')
+  const [provisioned, setProvisioned] = useState<{ agent_id: string; agent_token: string; api_key?: string } | null>(null)
+
   // Reset agent token
   const [resettingToken, setResettingToken] = useState<string | null>(null)
   const [agentTokens, setAgentTokens] = useState<Record<string, string>>({})
 
-  const handleClaim = async () => {
-    const code = claimCode.trim()
-    if (!code) {
-      setClaimError('Please enter claim code')
-      return
-    }
-
-    const token = session?.accessToken as string | undefined
-    if (!token) {
-      setClaimError('Session expired, please login again')
-      return
-    }
-
-    setClaiming(true)
-    setClaimError('')
-    setClaimSuccess('')
-    try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/claim`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ code }),
-      })
-
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        setClaimError(data.detail ?? 'Failed to claim agent')
-        return
-      }
-
-      setClaimCode('')
-      setClaimSuccess('Agent claimed successfully')
-      onBindingChanged?.()
-    } catch {
-      setClaimError('Network error')
-    } finally {
-      setClaiming(false)
-    }
-  }
-
-  const handleAddAgent = async () => {
-    const agentId = addAgentId.trim()
-    const inviteCode = addInviteCode.trim()
-    const displayName = addDisplayName.trim() || agentId
-    if (!agentId || !inviteCode) {
-      setAddError('请输入 Agent ID 和邀请码')
-      return
-    }
-    const token = session?.accessToken as string | undefined
-    if (!token) {
-      setAddError('Session expired, please login again')
-      return
-    }
-    setAdding(true)
-    setAddError('')
-    setAddSuccess('')
-    try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ agent_id: agentId, invite_code: inviteCode, display_name: displayName }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        setAddError(data.detail ?? 'Failed to add agent')
-        return
-      }
-      setAddAgentId('')
-      setAddInviteCode('')
-      setAddDisplayName('')
-      setAddSuccess('Agent added successfully')
-      onBindingChanged?.()
-    } catch {
-      setAddError('Network error')
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  const handleRotateInvite = async (agentId: string) => {
-    const token = session?.accessToken as string | undefined
-    if (!token) return
-    setRotatingAgent(agentId)
-    try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/rotate-invite`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (response.ok) {
-        const data = await response.json().catch(() => ({}))
-        if (data.invite_code) {
-          setLocalInviteCodes((prev) => ({ ...prev, [agentId]: data.invite_code }))
-        }
-        onBindingChanged?.()
-      } else {
-        const err = await response.json().catch(() => ({ detail: 'Failed' }))
-        alert(err.detail || 'Failed to generate invite code')
-      }
-    } catch {
-      alert('Network error')
-    } finally {
-      setRotatingAgent(null)
-    }
-  }
-
-  const handleCopyInvite = (agentId: string, code: string) => {
-    navigator.clipboard.writeText(code).then(() => {
-      setCopiedAgent(agentId)
-      setTimeout(() => setCopiedAgent(null), 2000)
-    })
-  }
-
   const handleResetToken = async (agentId: string) => {
     const token = session?.accessToken as string | undefined
     if (!token) return
-    const ok = confirm('重置 Agent Token 后，旧 token 立即失效。\n你需要将新 token 更新到 skill 的 .env 中。\n确定继续？')
+    const ok = confirm('重置 Agent Token 后，旧 token 立即失效。\n你需要将新 token 更新到 openclaw.json 中。\n确定继续？')
     if (!ok) return
     setResettingToken(agentId)
     try {
@@ -213,6 +89,59 @@ export function WttSettingsModal({
       alert('Network error')
     } finally {
       setResettingToken(null)
+    }
+  }
+
+  const handleProvisionAgent = async () => {
+    const token = session?.accessToken as string | undefined
+    if (!token) {
+      setProvisionError('Session expired, please login again')
+      return
+    }
+
+    setProvisioning(true)
+    setProvisionError('')
+    setProvisionSuccess('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/provision`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          display_name: provisionDisplayName.trim() || undefined,
+          platform: 'openclaw',
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setProvisionError(data.detail ?? 'Failed to create agent')
+        return
+      }
+
+      setProvisioned({
+        agent_id: data.agent_id,
+        agent_token: data.agent_token,
+        api_key: data.api_key,
+      })
+      setProvisionSuccess('Agent created and bound successfully')
+      setProvisionDisplayName('')
+      onBindingChanged?.()
+    } catch {
+      setProvisionError('Network error')
+    } finally {
+      setProvisioning(false)
+    }
+  }
+
+  const handleCopy = async (text: string, okText = 'Copied!') => {
+    try {
+      await navigator.clipboard.writeText(text)
+      alert(okText)
+    } catch {
+      alert('Copy failed')
     }
   }
 
@@ -336,123 +265,99 @@ export function WttSettingsModal({
 
           {activePage === 'binding' && (
             <div className="space-y-3">
-              {/* Claim Code 绑定 */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">🔑 Claim Code 绑定</p>
-                <p className="mt-1 text-xs text-slate-400">输入 Agent 端生成的一次性 Claim Code 直接绑定。</p>
+                <p className="text-sm font-semibold text-slate-800">🚀 一键创建 Agent（推荐）</p>
+                <p className="mt-1 text-xs text-slate-500">不再使用旧的 claim 流程。这里直接生成 agent_id + agent_token，并自动绑定到当前登录用户。</p>
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <input
-                    value={claimCode}
-                    onChange={(e) => setClaimCode(e.target.value)}
-                    placeholder="WTT-CLAIM-XXXXXX"
+                    value={provisionDisplayName}
+                    onChange={(e) => setProvisionDisplayName(e.target.value)}
+                    placeholder="Agent 显示名（可选）"
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                   <button
-                    onClick={handleClaim}
-                    disabled={claiming || !claimCode.trim()}
+                    onClick={handleProvisionAgent}
+                    disabled={provisioning}
                     className="shrink-0 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {claiming ? 'Claiming...' : 'Claim'}
+                    {provisioning ? '创建中...' : 'Create Agent'}
                   </button>
                 </div>
 
-                {claimError && <p className="mt-2 text-sm text-red-500">{claimError}</p>}
-                {claimSuccess && <p className="mt-2 text-sm text-emerald-600">{claimSuccess}</p>}
+                {provisionError && <p className="mt-2 text-sm text-red-500">{provisionError}</p>}
+                {provisionSuccess && <p className="mt-2 text-sm text-emerald-600">{provisionSuccess}</p>}
+
+                {provisioned && (
+                  <div className="mt-3 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <p className="text-xs font-semibold text-emerald-700">请立即保存以下凭据（token 仅展示一次）</p>
+                    <div className="grid gap-2">
+                      <div className="rounded border border-emerald-200 bg-white p-2">
+                        <p className="text-[11px] text-slate-500">agent_id</p>
+                        <code className="text-xs text-slate-800">{provisioned.agent_id}</code>
+                      </div>
+                      <div className="rounded border border-emerald-200 bg-white p-2">
+                        <p className="text-[11px] text-slate-500">agent_token</p>
+                        <code className="text-xs text-slate-800 break-all">{provisioned.agent_token}</code>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleCopy(provisioned.agent_id, 'agent_id copied')}
+                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                      >
+                        Copy agent_id
+                      </button>
+                      <button
+                        onClick={() => handleCopy(provisioned.agent_token, 'agent_token copied')}
+                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                      >
+                        Copy agent_token
+                      </button>
+                      <button
+                        onClick={() => handleCopy(JSON.stringify({
+                          channels: {
+                            wtt: {
+                              accounts: {
+                                default: {
+                                  enabled: true,
+                                  cloudUrl: CLIENT_WTT_API_BASE,
+                                  agentId: provisioned.agent_id,
+                                  token: provisioned.agent_token,
+                                  slashCompat: true,
+                                  slashCompatWttPrefixOnly: true,
+                                  slashBypassMentionGate: true,
+                                  taskExecutorScope: 'pipeline_only',
+                                },
+                              },
+                            },
+                          },
+                        }, null, 2), 'openclaw.json snippet copied')}
+                        className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
+                      >
+                        Copy openclaw.json snippet
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Invite Code 添加 */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">📨 邀请码添加</p>
-                <p className="mt-1 text-xs text-slate-400">输入 Agent ID 和邀请码来添加 Agent。邀请码由 Agent 拥有者分享。</p>
-
-                <div className="mt-3 space-y-2">
-                  <input
-                    value={addAgentId}
-                    onChange={(e) => setAddAgentId(e.target.value)}
-                    placeholder="Agent ID"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
-                  />
-                  <input
-                    value={addInviteCode}
-                    onChange={(e) => setAddInviteCode(e.target.value)}
-                    placeholder="邀请码 WTT-INV-XXXXXXXX"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
-                  />
-                  <input
-                    value={addDisplayName}
-                    onChange={(e) => setAddDisplayName(e.target.value)}
-                    placeholder="显示名称（可选）"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
-                  />
-                  <button
-                    onClick={handleAddAgent}
-                    disabled={adding || !addAgentId.trim() || !addInviteCode.trim()}
-                    className="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {adding ? 'Adding...' : '添加 Agent'}
-                  </button>
-                </div>
-
-                {addError && <p className="mt-2 text-sm text-red-500">{addError}</p>}
-                {addSuccess && <p className="mt-2 text-sm text-emerald-600">{addSuccess}</p>}
-              </div>
-
-              {/* 已绑定 Agent 列表（含 invite code） */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">已绑定 Agent（{agents.length}）</p>
-                <p className="mt-1 text-xs text-slate-400">生成一次性邀请码，分享给他人即可让对方添加你的 Agent。每个邀请码仅可使用一次。</p>
+                <p className="mt-1 text-xs text-slate-400">可在此重置 token（旧 token 会立刻失效）。</p>
 
                 <div className="mt-3 space-y-2">
-                  {agents.map((agent) => {
-                    const activeCode = localInviteCodes[agent.agent_id] || (agent.invite_status === 'active' ? agent.invite_code : null)
-                    return (
+                  {agents.map((agent) => (
                     <div key={agent.agent_id} className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-slate-800">
-                            {agent.display_name}
-                            {agent.is_primary && <span className="ml-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">Primary</span>}
-                          </p>
-                          <p className="mt-0.5 truncate text-xs text-slate-400">{agent.agent_id}</p>
-                        </div>
-                      </div>
-                      {activeCode ? (
-                        <div className="mt-2 flex items-center gap-2">
-                          <code className="flex-1 truncate rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-600 font-mono border border-emerald-200">{activeCode}</code>
-                          <button
-                            onClick={() => handleCopyInvite(agent.agent_id, activeCode)}
-                            className="shrink-0 rounded border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-indigo-600"
-                            title="复制邀请码"
-                          >
-                            <ClipboardCopy className="h-3.5 w-3.5" />
-                          </button>
-                          {copiedAgent === agent.agent_id && (
-                            <span className="text-xs text-emerald-500">Copied!</span>
-                          )}
-                          <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">🟢 有效</span>
-                        </div>
-                      ) : (
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="text-xs text-slate-400">暂无有效邀请码，点击下方按钮生成</span>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => handleRotateInvite(agent.agent_id)}
-                        disabled={rotatingAgent === agent.agent_id}
-                        className="mt-2 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-100 disabled:opacity-50"
-                      >
-                        {rotatingAgent === agent.agent_id ? '生成中...' : '🔄 生成新邀请码（旧码作废）'}
-                      </button>
-                      {/* Reset agent token */}
+                      <p className="truncate text-sm font-medium text-slate-800">{agent.display_name}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-400">{agent.agent_id}</p>
+
                       {agentTokens[agent.agent_id] ? (
                         <div className="mt-2 flex items-center gap-2">
                           <code className="flex-1 truncate rounded bg-amber-50 px-2 py-1 text-xs text-amber-700 font-mono border border-amber-200">{agentTokens[agent.agent_id]}</code>
                           <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(agentTokens[agent.agent_id])
-                              alert('Token 已复制！请立即粘贴到 skill 的 .env 中的 WTT_AGENT_TOKEN')
-                            }}
+                            onClick={() => handleCopy(agentTokens[agent.agent_id], 'Token copied')}
                             className="shrink-0 rounded border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-amber-600"
                             title="复制 Token"
                           >
@@ -469,8 +374,7 @@ export function WttSettingsModal({
                         </button>
                       )}
                     </div>
-                    )
-                  })}
+                  ))}
                   {agents.length === 0 && (
                     <p className="py-4 text-center text-sm text-slate-400">暂无绑定的 Agent</p>
                   )}
