@@ -1028,11 +1028,20 @@ export function ChatView({
   }, [messages, previewCache])
 
   // Filter out status-stream messages (TASK_REQUEST, SYSTEM, NOTIFICATION)
-  // These are operational/status messages; only show user input + agent replies
+  // and intermediate task stream cards (TASK_RUN / TASK_STATUS)
+  // so the feed focuses on final agent outputs.
   const STATUS_SEMANTIC_TYPES = new Set(['task_request', 'TASK_REQUEST', 'system', 'SYSTEM', 'notification', 'NOTIFICATION'])
-  const visibleMessages = messages.filter(m =>
-    !isProgressMessage(m.content) && !STATUS_SEMANTIC_TYPES.has(m.semantic_type || '')
-  )
+  const visibleMessages = messages.filter((m) => {
+    if (isProgressMessage(m.content)) return false
+    if (STATUS_SEMANTIC_TYPES.has(m.semantic_type || '')) return false
+
+    const taskParsed = parseTaskContent(m.content || '')
+    if (taskParsed.isTask && (taskParsed.kind === 'run' || taskParsed.kind === 'status')) {
+      return false
+    }
+
+    return true
+  })
 
   const groupedMessages: Array<{ label: string; messages: ChatMessage[] }> = []
   visibleMessages.forEach((message) => {
