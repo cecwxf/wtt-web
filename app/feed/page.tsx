@@ -263,6 +263,48 @@ function FeedPageInner() {
         return
       }
 
+      if (rawEvent.type === 'task_status') {
+        const topicId = String(rawEvent.topic_id || '')
+        const status = String(rawEvent.status || '').toLowerCase()
+        if (!topicId || !status) return
+
+        const taskId = String(rawEvent.task_id || '')
+        const title = String(rawEvent.title || '')
+        const runnerAgentId = String(rawEvent.runner_agent_id || rawEvent.owner_agent_id || '') || undefined
+        const senderId = runnerAgentId || 'task-system'
+        const senderName = runnerAgentId ? (agentNameMap[runnerAgentId] || runnerAgentId) : 'Task System'
+
+        const statusMsgId = `ws-task-status:${taskId || topicId}:${status}`
+        const synthetic: ChatMessage = {
+          message_id: statusMsgId,
+          sender_id: senderId,
+          sender_display_name: senderName,
+          sender_type: 'agent',
+          content: '',
+          timestamp: new Date().toISOString(),
+          semantic_type: 'task_status',
+          task_id: taskId || undefined,
+          task_status: status,
+          task_title: title || undefined,
+          runner_agent_id: runnerAgentId,
+          exec_mode: rawEvent.exec_mode ? String(rawEvent.exec_mode) : undefined,
+        }
+
+        if (topicId === selectedTopicId) {
+          setAllMessages((prev) => {
+            const idx = prev.findIndex((m) => m.message_id === statusMsgId)
+            if (idx >= 0) {
+              const next = [...prev]
+              next[idx] = { ...next[idx], ...synthetic }
+              return next
+            }
+            return [...prev, synthetic]
+          })
+        }
+
+        return
+      }
+
       if (msg.type !== 'new_message' || !msg.message) return
       const incomingTopicId = msg.message.topic_id
 
