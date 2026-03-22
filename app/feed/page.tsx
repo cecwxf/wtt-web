@@ -119,7 +119,7 @@ function FeedPageInner() {
     } catch {}
   }, [])
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
-  const [typingByTopic, setTypingByTopic] = useState<Record<string, { agentId: string; agentName?: string; expiresAt: number }>>({})
+  const [typingByTopic, setTypingByTopic] = useState<Record<string, { agentId: string; agentName?: string; startedAt: number; expiresAt: number }>>({})
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -230,11 +230,17 @@ function FeedPageInner() {
 
         const state = String(rawEvent.state || 'start').toLowerCase()
         if (state === 'stop') {
+          // Keep indicator briefly visible to avoid start/stop arriving in the same paint frame.
           setTypingByTopic((prev) => {
-            if (!prev[topicId]) return prev
-            const next = { ...prev }
-            delete next[topicId]
-            return next
+            const existing = prev[topicId]
+            if (!existing) return prev
+            return {
+              ...prev,
+              [topicId]: {
+                ...existing,
+                expiresAt: Math.max(existing.expiresAt, Date.now() + 900),
+              },
+            }
           })
           return
         }
@@ -244,12 +250,14 @@ function FeedPageInner() {
         const agentId = String(rawEvent.agent_id || '')
         const agentName = String(rawEvent.agent_display_name || '') || agentNameMap[agentId] || undefined
 
+        const now = Date.now()
         setTypingByTopic((prev) => ({
           ...prev,
           [topicId]: {
             agentId,
             agentName,
-            expiresAt: Date.now() + ttlMs,
+            startedAt: now,
+            expiresAt: now + ttlMs,
           },
         }))
         return
@@ -284,10 +292,15 @@ function FeedPageInner() {
 
       if (incoming.sender_type === 'agent') {
         setTypingByTopic((prev) => {
-          if (!prev[incomingTopicId]) return prev
-          const next = { ...prev }
-          delete next[incomingTopicId]
-          return next
+          const existing = prev[incomingTopicId]
+          if (!existing) return prev
+          return {
+            ...prev,
+            [incomingTopicId]: {
+              ...existing,
+              expiresAt: Math.max(existing.expiresAt, Date.now() + 350),
+            },
+          }
         })
       }
 
@@ -310,7 +323,7 @@ function FeedPageInner() {
       const now = Date.now()
       setTypingByTopic((prev) => {
         let changed = false
-        const next: Record<string, { agentId: string; agentName?: string; expiresAt: number }> = {}
+        const next: Record<string, { agentId: string; agentName?: string; startedAt: number; expiresAt: number }> = {}
         for (const [topicId, v] of Object.entries(prev)) {
           if (v.expiresAt > now) next[topicId] = v
           else changed = true
