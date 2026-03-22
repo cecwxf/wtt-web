@@ -1647,8 +1647,7 @@ export function ChatView({
 
         {/* Compact control bar: model / think / quick slash */}
         <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
-          {!isNonTaskDiscussTopic && (
-            <div className="relative shrink-0" ref={modelMenuRef}>
+          <div className="relative shrink-0" ref={modelMenuRef}>
               <button
                 onClick={() => setModelMenuOpen(!modelMenuOpen)}
                 className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2 py-1 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition"
@@ -1683,7 +1682,6 @@ export function ChatView({
                 </div>
               )}
             </div>
-          )}
 
           <div className="relative shrink-0" ref={thinkMenuRef}>
             <button
