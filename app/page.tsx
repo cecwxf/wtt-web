@@ -25,6 +25,28 @@ export default function Home() {
         heroVisualDesc: '统一视图下管理 Agent、Topic、Task 与执行状态。',
         archVisualTitle: 'WTT 架构图示',
         flowVisualTitle: '任务交付流程图',
+        sectionPaired: '图文搭配',
+        sectionPairedTitle: '左右图文 + 架构说明（更接近 botschat 的阅读节奏）',
+        pairedItems: [
+          {
+            title: '协作工作台视角',
+            desc: '先看整体工作面，再理解任务如何流转。',
+            points: ['左侧：Agent / Topic 导航', '中间：消息与任务上下文', '右侧：状态与执行摘要'],
+            image: '/landing/wtt-dashboard.svg',
+          },
+          {
+            title: '架构链路说明',
+            desc: '用一张图解释 WTT 如何从消息变成可执行任务。',
+            points: ['Intent 识别输入意图', 'Topic 负责上下文路由', 'Task 形成状态机', 'Runner 执行并回传'],
+            image: '/landing/wtt-architecture.svg',
+          },
+          {
+            title: '交付流程说明',
+            desc: '把“创建-执行-沉淀”作为闭环，便于对外演示。',
+            points: ['任务创建与分配', '推理执行与状态回传', '结果沉淀与复盘'],
+            image: '/landing/wtt-flow.svg',
+          },
+        ],
         sectionFeature: '核心能力',
         sectionFeatureTitle: 'WTT 的功能不是聊天壳，而是任务编排引擎',
         featureCards: [
@@ -88,6 +110,28 @@ export default function Home() {
         heroVisualDesc: 'Manage agents, topics, tasks, and execution status in one visual surface.',
         archVisualTitle: 'WTT Architecture Diagram',
         flowVisualTitle: 'Task Delivery Flow',
+        sectionPaired: 'Paired Story Sections',
+        sectionPairedTitle: 'Left-right visuals with architecture explanation',
+        pairedItems: [
+          {
+            title: 'Workspace Overview',
+            desc: 'Start with the full surface, then explain how work moves through it.',
+            points: ['Left: Agent / Topic navigation', 'Center: messages and task context', 'Right: status and execution summary'],
+            image: '/landing/wtt-dashboard.svg',
+          },
+          {
+            title: 'Architecture Walkthrough',
+            desc: 'Use one diagram to explain how a message becomes executable work.',
+            points: ['Intent captures user goal', 'Topic routes collaboration context', 'Task creates stateful execution unit', 'Runner executes and reports back'],
+            image: '/landing/wtt-architecture.svg',
+          },
+          {
+            title: 'Delivery Lifecycle',
+            desc: 'Present creation → execution → consolidation as a closed loop.',
+            points: ['Create and assign task', 'Reasoning + status feedback', 'Result consolidation and replay'],
+            image: '/landing/wtt-flow.svg',
+          },
+        ],
         sectionFeature: 'Core Features',
         sectionFeatureTitle: 'WTT is not just chat UI — it is an execution orchestration layer',
         featureCards: [
@@ -199,6 +243,34 @@ export default function Home() {
               <Image src="/landing/wtt-dashboard.svg" alt="WTT dashboard preview" width={1280} height={820} className="h-auto w-full" priority />
             </div>
             <p className="mt-3 px-1 text-xs text-slate-600">{copy.heroVisualDesc}</p>
+          </div>
+        </section>
+
+        <section className="mb-12">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-blue-700">{copy.sectionPaired}</p>
+          <h2 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionPairedTitle}</h2>
+          <div className="space-y-4">
+            {copy.pairedItems.map((item, idx) => (
+              <article key={item.title} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-2 lg:items-center">
+                <div className={idx % 2 === 1 ? 'lg:order-2' : ''}>
+                  <div className="overflow-hidden rounded-xl border border-slate-200">
+                    <Image src={item.image} alt={item.title} width={1280} height={820} className="h-auto w-full" />
+                  </div>
+                </div>
+                <div className={idx % 2 === 1 ? 'lg:order-1' : ''}>
+                  <p className="text-lg font-semibold text-slate-900">{item.title}</p>
+                  <p className="mt-2 text-sm text-slate-600">{item.desc}</p>
+                  <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                    {item.points.map((point) => (
+                      <li key={point} className="flex items-start gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </article>
+            ))}
           </div>
         </section>
 
