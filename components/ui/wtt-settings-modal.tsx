@@ -61,6 +61,13 @@ export function WttSettingsModal({
   const [provisionSuccess, setProvisionSuccess] = useState('')
   const [provisioned, setProvisioned] = useState<{ agent_id: string; agent_token: string; api_key?: string } | null>(null)
 
+  const [existingAgentId, setExistingAgentId] = useState('')
+  const [existingAgentToken, setExistingAgentToken] = useState('')
+  const [existingDisplayName, setExistingDisplayName] = useState('')
+  const [claimingExisting, setClaimingExisting] = useState(false)
+  const [claimExistingError, setClaimExistingError] = useState('')
+  const [claimExistingSuccess, setClaimExistingSuccess] = useState('')
+
   // Reset agent token
   const [resettingToken, setResettingToken] = useState<string | null>(null)
   const [agentTokens, setAgentTokens] = useState<Record<string, string>>({})
@@ -133,6 +140,54 @@ export function WttSettingsModal({
       setProvisionError('Network error')
     } finally {
       setProvisioning(false)
+    }
+  }
+
+  const handleClaimExisting = async () => {
+    const token = session?.accessToken as string | undefined
+    if (!token) {
+      setClaimExistingError('Session expired, please login again')
+      return
+    }
+
+    if (!existingAgentId.trim() || !existingAgentToken.trim()) {
+      setClaimExistingError('agent_id 和 agent_token 都不能为空')
+      return
+    }
+
+    setClaimingExisting(true)
+    setClaimExistingError('')
+    setClaimExistingSuccess('')
+
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/claim-existing`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          agent_id: existingAgentId.trim(),
+          agent_token: existingAgentToken.trim(),
+          display_name: existingDisplayName.trim() || undefined,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setClaimExistingError(data.detail ?? 'Failed to claim existing agent')
+        return
+      }
+
+      setClaimExistingSuccess('Existing agent claimed successfully')
+      setExistingAgentId('')
+      setExistingAgentToken('')
+      setExistingDisplayName('')
+      onBindingChanged?.()
+    } catch {
+      setClaimExistingError('Network error')
+    } finally {
+      setClaimingExisting(false)
     }
   }
 
@@ -266,8 +321,8 @@ export function WttSettingsModal({
           {activePage === 'binding' && (
             <div className="space-y-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">🚀 一键创建 Agent（推荐）</p>
-                <p className="mt-1 text-xs text-slate-500">不再使用旧的 claim 流程。这里直接生成 agent_id + agent_token，并自动绑定到当前登录用户。</p>
+                <p className="text-sm font-semibold text-slate-800">🚀 Claim Agent（New）</p>
+                <p className="mt-1 text-xs text-slate-500">新 agent 不在 WTT 体系时，直接一键生成 agent_id + agent_token 并绑定到当前登录用户。</p>
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <input
@@ -281,7 +336,7 @@ export function WttSettingsModal({
                     disabled={provisioning}
                     className="shrink-0 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {provisioning ? '创建中...' : 'Create Agent'}
+                    {provisioning ? '处理中...' : 'Claim New Agent'}
                   </button>
                 </div>
 
@@ -341,6 +396,42 @@ export function WttSettingsModal({
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">🔐 Claim Agent（Existing）</p>
+                <p className="mt-1 text-xs text-slate-500">已注册过的 agent，输入 agent_id + agent_token 重新绑定。仅 owner 可继续使用。</p>
+
+                <div className="mt-3 space-y-2">
+                  <input
+                    value={existingAgentId}
+                    onChange={(e) => setExistingAgentId(e.target.value)}
+                    placeholder="agent_id"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                  />
+                  <input
+                    value={existingAgentToken}
+                    onChange={(e) => setExistingAgentToken(e.target.value)}
+                    placeholder="agent_token"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                  />
+                  <input
+                    value={existingDisplayName}
+                    onChange={(e) => setExistingDisplayName(e.target.value)}
+                    placeholder="显示名称（可选）"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    onClick={handleClaimExisting}
+                    disabled={claimingExisting || !existingAgentId.trim() || !existingAgentToken.trim()}
+                    className="w-full rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {claimingExisting ? '处理中...' : 'Claim Existing Agent'}
+                  </button>
+                </div>
+
+                {claimExistingError && <p className="mt-2 text-sm text-red-500">{claimExistingError}</p>}
+                {claimExistingSuccess && <p className="mt-2 text-sm text-emerald-600">{claimExistingSuccess}</p>}
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
