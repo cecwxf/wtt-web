@@ -12,6 +12,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-column'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
+import { useI18n } from '@/lib/i18n-provider'
 
 interface Agent {
   id: string
@@ -100,6 +101,7 @@ export default function TasksPageWrapper() {
 function TasksPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useI18n()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
@@ -123,6 +125,23 @@ function TasksPageInner() {
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
   const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code' | 'pipeline'>('all')
   const chatScrollRef = useRef<HTMLDivElement>(null)
+
+  const statusLabel = useCallback((status: TaskItem['status']) => {
+    switch (status) {
+      case 'todo':
+        return t('chat.statusTodo')
+      case 'doing':
+        return t('chat.statusDoing')
+      case 'review':
+        return t('chat.statusReview')
+      case 'done':
+        return t('chat.statusDone')
+      case 'blocked':
+        return t('chat.statusBlocked')
+      default:
+        return status
+    }
+  }, [t])
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -441,7 +460,7 @@ function TasksPageInner() {
     const title = newTaskTitle.trim()
     if (!title) return
     if (!newTaskAgentId) {
-      alert('请选择分配的 Agent')
+      alert(t('tasks.pickAgentFirst'))
       return
     }
     setShowNewTaskModal(false)
@@ -511,7 +530,7 @@ function TasksPageInner() {
   }
 
   const cancelTask = async (task: TaskItem) => {
-    const ok = window.confirm(`确认取消任务「${task.title}」吗？取消后任务和关联 Topic 都会消失。`)
+    const ok = window.confirm(t('tasks.cancelTaskConfirm', { title: task.title }))
     if (!ok) return
 
     const actingAgent = task.owner_agent_id || selectedAgentId
@@ -527,8 +546,8 @@ function TasksPageInner() {
       const txt = await response.text()
       try {
         const detail = JSON.parse(txt)?.detail || txt
-        alert(`取消任务失败: ${detail}`)
-      } catch { alert(`取消任务失败: ${txt || response.status}`) }
+        alert(t('tasks.cancelTaskFailed', { detail }))
+      } catch { alert(t('tasks.cancelTaskFailed', { detail: txt || response.status })) }
       return
     }
 
@@ -544,7 +563,7 @@ function TasksPageInner() {
   }
 
   const bulkRunTasks = async () => {
-    if (!selectedTaskIds.length) return alert('请先勾选任务')
+    if (!selectedTaskIds.length) return alert(t('tasks.selectTasksFirst'))
     const targets = tasks.filter((t) => selectedTaskIds.includes(t.id))
     const headers = {
       'Content-Type': 'application/json',
@@ -563,13 +582,13 @@ function TasksPageInner() {
       )
     )
     const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
-    alert(`批量运行完成：成功 ${ok} / ${targets.length}`)
+    alert(t('tasks.bulkRunDone', { ok, total: targets.length }))
     await mutateTasks()
   }
 
   const bulkCancelTasks = async () => {
-    if (!selectedTaskIds.length) return alert('请先勾选任务')
-    if (!confirm(`确认取消已勾选 ${selectedTaskIds.length} 个任务？将同时删除关联Topic。`)) return
+    if (!selectedTaskIds.length) return alert(t('tasks.selectTasksFirst'))
+    if (!confirm(t('tasks.bulkCancelConfirm', { count: selectedTaskIds.length }))) return
     const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
     const results = await Promise.allSettled(
       selectedTaskIds.map((id) => {
@@ -586,11 +605,11 @@ function TasksPageInner() {
     setSelectedTaskIds([])
     mutateTasks((prev: TaskItem[] | undefined) => (prev || []).filter(t => !deletedIds.has(t.id)), { revalidate: true })
     await mutateSubscribedTopics()
-    alert(`批量取消完成：成功 ${ok} / ${results.length}`)
+    alert(t('tasks.bulkCancelDone', { ok, total: results.length }))
   }
 
   const leaveTopicFromSidebar = async (topicId: string) => {
-    if (!confirm('Leave this topic?')) return
+    if (!confirm(t('tasks.leaveTopicConfirm'))) return
 
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave?agent_id=${encodeURIComponent(selectedAgentId)}`, {
       method: 'POST',
@@ -599,7 +618,7 @@ function TasksPageInner() {
 
     if (!response.ok) {
       const txt = await response.text()
-      alert(`Leave topic failed: ${txt || response.status}`)
+      alert(t('tasks.leaveTopicFailed', { detail: txt || response.status }))
       return
     }
 
@@ -607,7 +626,7 @@ function TasksPageInner() {
   }
 
   const deleteTopicFromSidebar = async (topicId: string) => {
-    if (!confirm('确认删除此 Topic？(软删除)')) return
+    if (!confirm(t('tasks.deleteTopicConfirm'))) return
 
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}?agent_id=${encodeURIComponent(selectedAgentId)}`, {
       method: 'DELETE',
@@ -618,8 +637,8 @@ function TasksPageInner() {
       const txt = await response.text()
       try {
         const detail = JSON.parse(txt)?.detail || txt
-        alert(`删除Topic失败: ${detail}`)
-      } catch { alert(`删除Topic失败: ${txt || response.status}`) }
+        alert(t('tasks.deleteTopicFailed', { detail }))
+      } catch { alert(t('tasks.deleteTopicFailed', { detail: txt || response.status })) }
       return
     }
 
@@ -663,12 +682,12 @@ function TasksPageInner() {
       })
       if (!resp.ok) {
         const txt = await resp.text()
-        alert(`Run Task failed: ${txt || resp.status}`)
+        alert(t('tasks.runFailed', { detail: txt || resp.status }))
         mutateTasks()
         return
       }
     } catch (e) {
-      alert(`Run Task failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+      alert(t('tasks.runFailed', { detail: e instanceof Error ? e.message : 'unknown error' }))
       mutateTasks()
     } finally {
       setRunningTaskId(null)
@@ -681,7 +700,7 @@ function TasksPageInner() {
 
     if (action === 'reject') {
       // Reject: post a plain message to the task topic feed
-      const input = window.prompt('请输入 Reject 意见：', '')
+      const input = window.prompt(t('tasks.rejectPrompt'), '')
       if (input === null || !input.trim()) return
       if (selectedTask.topic_id) {
         await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages`, {
@@ -902,24 +921,24 @@ function TasksPageInner() {
       <div className="h-full p-4 text-slate-800">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Tasks</h1>
-            <p className="text-xs text-slate-500">Trigger · Assign · Review</p>
+            <h1 className="text-2xl font-bold">{t('tasks.title')}</h1>
+            <p className="text-xs text-slate-500">{t('tasks.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-500">批量Run任务</button>
-            <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">批量取消任务</button>
-            <button onClick={() => { setNewTaskAgentId(''); setShowNewTaskModal(true) }} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ New Task</button>
+            <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-500">{t('tasks.bulkRun')}</button>
+            <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">{t('tasks.bulkCancel')}</button>
+            <button onClick={() => { setNewTaskAgentId(''); setShowNewTaskModal(true) }} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ {t('tasks.newTask')}</button>
           </div>
         </div>
 
         {/* Task type filter tabs (unified: type + pipeline) */}
         <div className="mb-3 flex items-center gap-1">
           {([
-            ['all', '📋 All'],
-            ['general', '💬 General'],
-            ['code', '💻 Code'],
-            ['research', '📄 Research'],
-            ['pipeline', '🔗 Pipeline'],
+            ['all', `📋 ${t('tasks.filterAll')}`],
+            ['general', `💬 ${t('tasks.filterGeneral')}`],
+            ['code', `💻 ${t('tasks.filterCode')}`],
+            ['research', `📄 ${t('tasks.filterResearch')}`],
+            ['pipeline', `🔗 ${t('tasks.filterPipeline')}`],
           ] as const).map(([key, label]) => {
             const count = tasks.filter(t => {
               if (key === 'all') return true
@@ -949,7 +968,7 @@ function TasksPageInner() {
             {columns.map((col) => (
               <div key={col} className="flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-2 overflow-hidden">
                 <div className="mb-2 flex shrink-0 items-center justify-between text-sm font-semibold capitalize">
-                  <span>{col}</span>
+                  <span>{statusLabel(col)}</span>
                   <span className="text-xs text-slate-500">{grouped[col].length}</span>
                 </div>
                 <div className="flex-1 space-y-2 overflow-y-auto">
@@ -978,7 +997,7 @@ function TasksPageInner() {
                       <div className="mb-1 flex items-center gap-2">
                         {task.task_type === 'code' && <span className="shrink-0 rounded bg-cyan-100 px-1 text-[10px] font-medium text-cyan-700">💻</span>}
                         {task.task_type === 'research' && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700">📄</span>}
-                        {task.task_mode === 'pipeline' && <span className="shrink-0 rounded bg-violet-100 px-1 text-[10px] font-medium text-violet-700">🔗 Pipeline</span>}
+                        {task.task_mode === 'pipeline' && <span className="shrink-0 rounded bg-violet-100 px-1 text-[10px] font-medium text-violet-700">🔗 {t('tasks.filterPipeline')}</span>}
                         <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
                       </div>
                       {task.topic_id && (
@@ -989,9 +1008,9 @@ function TasksPageInner() {
                             onClick={(e) => { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) }}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) } }}
                             className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100 hover:border-indigo-300 cursor-pointer transition"
-                            title="View in Feed"
+                            title={t('tasks.viewInFeed')}
                           >
-                            📡 Feed
+                            📡 {t('tasks.feed')}
                           </span>
                         </div>
                       )}
@@ -999,12 +1018,12 @@ function TasksPageInner() {
                       {(tokenStats[task.id] || task.started_at) && (
                         <div className="mb-1 flex items-center gap-1.5 flex-wrap">
                           {tokenStats[task.id] && tokenStats[task.id].estimated_tokens > 0 && (
-                            <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 px-1 py-px text-[9px] font-medium text-emerald-600 dark:text-emerald-400" title={`${tokenStats[task.id].estimated_tokens.toLocaleString()} tokens (${tokenStats[task.id].message_count} msgs)`}>
-                              🪙 Token Cost: {formatTokens(tokenStats[task.id].estimated_tokens)}
+                            <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 px-1 py-px text-[9px] font-medium text-emerald-600 dark:text-emerald-400" title={`${tokenStats[task.id].estimated_tokens.toLocaleString()} ${t('tasks.tokens')} (${tokenStats[task.id].message_count} ${t('tasks.messages')})`}>
+                              🪙 {t('tasks.tokenCost')}: {formatTokens(tokenStats[task.id].estimated_tokens)}
                             </span>
                           )}
                           {task.started_at && (task.completed_at || task.status === 'doing') && (
-                            <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 dark:bg-blue-950/30 px-1 py-px text-[9px] font-medium text-blue-600 dark:text-blue-400" title={`Execution time (doing→review)`}>
+                            <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 dark:bg-blue-950/30 px-1 py-px text-[9px] font-medium text-blue-600 dark:text-blue-400" title={t('tasks.executionTimeHint')}>
                               ⏱ {formatDuration(Math.max(0, (toMs(task.completed_at) ?? Date.now()) - (toMs(task.started_at) ?? 0)))}
                             </span>
                           )}
@@ -1015,7 +1034,7 @@ function TasksPageInner() {
                           <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
                         </div>
                         {(task.task_type === 'code' || task.task_type === 'research') && (
-                          <span className="ml-2 shrink-0 text-[9px] text-slate-400">double-click to open</span>
+                          <span className="ml-2 shrink-0 text-[9px] text-slate-400">{t('tasks.doubleClickOpen')}</span>
                         )}
                       </div>
                     </button>
@@ -1027,7 +1046,7 @@ function TasksPageInner() {
 
           <aside className={`flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
             <div className="mb-3 shrink-0 rounded-lg border border-slate-200 bg-slate-100 p-2">
-              <p className="text-xs font-semibold text-slate-600">Task执行时间饼图（Top 8）</p>
+              <p className="text-xs font-semibold text-slate-600">{t('tasks.durationPieTop8')}</p>
               {taskDurationSummary.slices.length > 0 ? (
                 <>
                   <div className="mt-2 flex items-center gap-3">
@@ -1037,7 +1056,7 @@ function TasksPageInner() {
                         <path key={slice.id} d={slice.path} fill={slice.color} />
                       ))}
                       <circle cx="60" cy="60" r="25" fill="#f8fafc" />
-                      <text x="60" y="57" textAnchor="middle" className="fill-slate-500 text-[8px]">总耗时</text>
+                      <text x="60" y="57" textAnchor="middle" className="fill-slate-500 text-[8px]">{t('tasks.totalDuration')}</text>
                       <text x="60" y="67" textAnchor="middle" className="fill-slate-600 text-[9px] font-semibold">{formatDuration(taskDurationSummary.totalMs)}</text>
                     </svg>
                     <div className="max-h-28 flex-1 space-y-1 overflow-auto pr-1">
@@ -1050,10 +1069,10 @@ function TasksPageInner() {
                       ))}
                     </div>
                   </div>
-                  <p className="mt-1 text-[10px] text-slate-500">按任务执行时长占比统计（doing→review，进行中任务按当前时间持续累计）</p>
+                  <p className="mt-1 text-[10px] text-slate-500">{t('tasks.durationHint')}</p>
                 </>
               ) : (
-                <p className="mt-1 text-[11px] text-slate-400">暂无可统计的执行时长（需有doing→review记录）</p>
+                <p className="mt-1 text-[11px] text-slate-400">{t('tasks.noDurationData')}</p>
               )}
               {/* Token consumption summary below pie chart */}
               {(() => {
@@ -1066,7 +1085,7 @@ function TasksPageInner() {
                 if (tokenEntries.length === 0) return null
                 return (
                   <div className="mt-2 border-t border-slate-200 dark:border-zinc-700 pt-2">
-                    <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1">🪙 Token消耗（Top 8）  总计: {formatTokens(totalTokens)}</p>
+                    <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1">🪙 {t('tasks.tokenTop8')}  {t('tasks.total')}: {formatTokens(totalTokens)}</p>
                     <div className="space-y-0.5 max-h-24 overflow-auto">
                       {tokenEntries.map((entry) => (
                         <div key={entry.id} className="flex items-center gap-1 text-[10px] text-slate-600 dark:text-zinc-400">
@@ -1083,7 +1102,7 @@ function TasksPageInner() {
               })()}
             </div>
 
-            <h2 className="mb-2 shrink-0 text-sm font-semibold">Messages</h2>
+            <h2 className="mb-2 shrink-0 text-sm font-semibold">{t('tasks.messagesPanel')}</h2>
             {selectedTask ? (
               <>
                 {/* Task header */}
@@ -1095,23 +1114,23 @@ function TasksPageInner() {
                     selectedTask.status === 'done' ? 'bg-green-100 text-green-600' :
                     selectedTask.status === 'blocked' ? 'bg-red-100 text-red-600' :
                     'bg-slate-200 text-slate-600'
-                  }`}>{selectedTask.status}</span>
+                  }`}>{statusLabel(selectedTask.status)}</span>
                   <button
                     onClick={async () => {
-                      const t = prompt('ReRun times (1-10)', '1')
-                      if (!t) return
-                      const n = Math.max(1, Math.min(10, parseInt(t) || 1))
+                      const rerunInput = prompt(t('tasks.rerunPrompt'), '1')
+                      if (!rerunInput) return
+                      const n = Math.max(1, Math.min(10, parseInt(rerunInput) || 1))
                       const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/rerun?times=${n}`, {
                         method: 'POST',
                         headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
                       })
                       if (r.ok) mutateTasks()
-                      else alert('ReRun failed')
+                      else alert(t('tasks.rerunFailed'))
                     }}
                     className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-amber-600 hover:bg-amber-50 border border-amber-300"
-                    title="Re-run this task"
+                    title={t('tasks.rerunTitle')}
                   >
-                    ↻ ReRun
+                    ↻ {t('tasks.rerun')}
                   </button>
                   <div className="flex gap-1">
                     <button
@@ -1124,7 +1143,7 @@ function TasksPageInner() {
                         })
                         mutateTasks()
                       }}
-                    >Agent</button>
+                    >{t('tasks.agentMode')}</button>
                     <button
                       className={`rounded-md px-2 py-0.5 text-[10px] ${selectedTask.exec_mode === 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
                       onClick={async () => {
@@ -1135,7 +1154,7 @@ function TasksPageInner() {
                         })
                         mutateTasks()
                       }}
-                    >Plan</button>
+                    >{t('tasks.planMode')}</button>
                   </div>
                 </div>
 
@@ -1148,7 +1167,7 @@ function TasksPageInner() {
                       return (
                         <div key={item.id || `${item.sender}-${item.created_at}`} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 ${isHuman ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-800'}`}>
-                            <p className={`text-[10px] mb-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-500'}`}>{isHuman ? 'You' : `🤖 ${item.sender}`}</p>
+                            <p className={`text-[10px] mb-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-500'}`}>{isHuman ? t('tasks.you') : `🤖 ${item.sender}`}</p>
                             <p className="text-[11px] leading-4 whitespace-pre-wrap break-words">{stripFileTokens(displayContent) || displayContent}</p>
                             <FileAttachmentPreview content={displayContent} />
                             <p className={`text-[9px] mt-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-400'}`}>{item.created_at?.replace('T', ' ').slice(0, 19)}</p>
@@ -1157,13 +1176,13 @@ function TasksPageInner() {
                       )
                     })
                   ) : (
-                    <p className="text-[11px] text-slate-400 text-center py-4">No messages yet</p>
+                    <p className="text-[11px] text-slate-400 text-center py-4">{t('tasks.noMessages')}</p>
                   )}
                 </div>
 
                 {/* Send box */}
                 <div className="shrink-0 border-t border-slate-200 pt-2 px-1">
-                  <div className="mb-1 text-[10px] text-slate-500">发送身份：👤 {actorSource(session)}</div>
+                  <div className="mb-1 text-[10px] text-slate-500">{t('tasks.senderIdentity')}: 👤 {actorSource(session)}</div>
                   <PendingAttachments attachments={pendingAttachments} onRemove={(i) => setPendingAttachments(prev => prev.filter((_, j) => j !== i))} />
                   <div className="flex gap-1 items-center">
                     <ChatFileUpload
@@ -1173,7 +1192,7 @@ function TasksPageInner() {
                     />
                     <input
                       className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-indigo-400"
-                      placeholder="Type a message..."
+                      placeholder={t('tasks.typeMessage')}
                       value={panelInput}
                       onChange={(e) => setPanelInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (panelInput.trim() || pendingAttachments.length)) { e.preventDefault(); sendPanelMessage() } }}
@@ -1182,27 +1201,27 @@ function TasksPageInner() {
                       onClick={sendPanelMessage}
                       disabled={panelSending || (!panelInput.trim() && !pendingAttachments.length)}
                       className="shrink-0 rounded-md bg-indigo-500 px-3 py-1 text-xs text-white disabled:opacity-50"
-                    >{panelSending ? '...' : 'Send'}</button>
+                    >{panelSending ? '...' : t('tasks.send')}</button>
                   </div>
-                  {queueIndicator && <p className="text-[10px] text-amber-500 mt-1">📨 Message queued, will be processed after current reasoning</p>}
+                  {queueIndicator && <p className="text-[10px] text-amber-500 mt-1">📨 {t('tasks.queuedHint')}</p>}
                   {(selectedTask.status === 'review' || selectedTask.status === 'doing') && (
                     <div className="mt-2 flex gap-1">
                       {selectedTask.status === 'review' && (
                         <button
                           onClick={() => reviewCurrent('approve')}
                           className="flex-1 rounded-md bg-green-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-600"
-                        >✅ Approve</button>
+                        >✅ {t('tasks.approve')}</button>
                       )}
                       <button
                         onClick={() => reviewCurrent('reject')}
                         className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50"
-                      >↩ Reject / 补充</button>
+                      >↩ {t('tasks.rejectSupplement')}</button>
                     </div>
                   )}
                 </div>
               </>
             ) : (
-              <p className="text-xs text-slate-500">Select a task to start chatting.</p>
+              <p className="text-xs text-slate-500">{t('tasks.selectTaskHint')}</p>
             )}
           </aside>
         </div>
@@ -1224,7 +1243,7 @@ function TasksPageInner() {
                 else router.push(buildAgentUrl(`/tasks/research/${t.id}`, selectedAgentId))
               }}
             >
-              {taskContextMenu.task.task_type === 'code' ? '💻' : '📄'} Open in IDE
+              {taskContextMenu.task.task_type === 'code' ? '💻' : '📄'} {t('tasks.openInIde')}
             </button>
           )}
           {taskContextMenu.task.topic_id && (
@@ -1236,14 +1255,14 @@ function TasksPageInner() {
                 setShareTarget({ topicId: t.topic_id!, name: t.title })
               }}
             >
-              🔗 Share to...
+              🔗 {t('tasks.shareTo')}
             </button>
           )}
           <button
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
             onClick={() => cancelTask(taskContextMenu.task)}
           >
-            🗑️ Cancel Task
+            🗑️ {t('tasks.cancelTask')}
           </button>
         </div>
       )}
@@ -1311,33 +1330,33 @@ function TasksPageInner() {
       {showNewTaskModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNewTaskModal(false)}>
           <div className="w-[420px] rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-lg font-semibold text-slate-800">New Task</h3>
+            <h3 className="mb-4 text-lg font-semibold text-slate-800">{t('tasks.newTask')}</h3>
             <input
               autoFocus
               className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
-              placeholder="Task title..."
+              placeholder={t('tasks.taskTitlePlaceholder')}
               value={newTaskTitle}
               onChange={(e) => setNewTaskTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && newTaskTitle.trim()) createTask() }}
             />
-            <p className="mb-2 text-xs font-medium text-slate-500">Assign Agent</p>
+            <p className="mb-2 text-xs font-medium text-slate-500">{t('tasks.assignAgent')}</p>
             <select
               className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
               value={newTaskAgentId}
               onChange={(e) => setNewTaskAgentId(e.target.value)}
             >
-              <option value="">请选择 Agent</option>
+              <option value="">{t('tasks.selectAgent')}</option>
               {agents.map((a) => (
                 <option key={a.agent_id} value={a.agent_id}>{a.display_name || a.agent_id}</option>
               ))}
             </select>
 
-            <p className="mb-2 text-xs font-medium text-slate-500">Task Type</p>
+            <p className="mb-2 text-xs font-medium text-slate-500">{t('tasks.taskType')}</p>
             <div className="mb-5 grid grid-cols-3 gap-3">
               {([
-                { key: 'code' as const, icon: '💻', label: 'Code Task', desc: 'IDE + Agent coding' },
-                { key: 'research' as const, icon: '📄', label: 'Research', desc: 'Papers & reports' },
-                { key: 'common' as const, icon: '📋', label: 'Common', desc: 'General task' },
+                { key: 'code' as const, icon: '💻', label: t('tasks.filterCode'), desc: t('tasks.codeDesc') },
+                { key: 'research' as const, icon: '📄', label: t('tasks.filterResearch'), desc: t('tasks.researchDesc') },
+                { key: 'common' as const, icon: '📋', label: t('tasks.filterGeneral'), desc: t('tasks.generalDesc') },
               ]).map((t) => (
                 <button
                   key={t.key}
@@ -1353,12 +1372,12 @@ function TasksPageInner() {
               ))}
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowNewTaskModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">Cancel</button>
+              <button onClick={() => setShowNewTaskModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">{t('common.cancel')}</button>
               <button
                 onClick={createTask}
                 disabled={!newTaskTitle.trim() || !newTaskAgentId}
                 className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white disabled:opacity-50"
-              >Create</button>
+              >{t('tasks.create')}</button>
             </div>
           </div>
         </div>
