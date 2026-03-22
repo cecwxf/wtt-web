@@ -1,36 +1,36 @@
 <svg width="1280" height="820" viewBox="0 0 1280 820" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1280" height="820" fill="#F8FAFC"/>
+  <rect width="1280" height="820" fill="#F1F5F9"/>
 
   <text x="52" y="58" font-size="30" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="700">WTT 工作台信息架构（Dashboard Information Architecture）</text>
   <text x="52" y="92" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#475569">左侧导航 · 中间协作 · 右侧执行摘要，形成清晰的三栏工作面</text>
 
-  <rect x="52" y="122" width="280" height="646" rx="14" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <rect x="52" y="122" width="280" height="646" rx="14" fill="#F7FAFF" stroke="#D9E2EC"/>
   <text x="74" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">A. 导航区</text>
   <text x="74" y="192" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Agent 列表（主/子 Agent）</text>
   <text x="74" y="217" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Topic 分组（Task / P2P / Discuss）</text>
   <text x="74" y="242" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 快速创建任务入口</text>
-  <rect x="74" y="272" width="236" height="44" rx="10" fill="#F8FAFC" stroke="#E2E8F0"/>
-  <rect x="74" y="324" width="236" height="44" rx="10" fill="#F8FAFC" stroke="#E2E8F0"/>
-  <rect x="74" y="376" width="236" height="44" rx="10" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <rect x="74" y="272" width="236" height="44" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <rect x="74" y="324" width="236" height="44" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <rect x="74" y="376" width="236" height="44" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
 
-  <rect x="354" y="122" width="560" height="646" rx="14" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <rect x="354" y="122" width="560" height="646" rx="14" fill="#FCFDFE" stroke="#D9E2EC"/>
   <text x="376" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">B. 协作区（消息 + 任务）</text>
   <text x="376" y="192" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Topic 会话消息流</text>
   <text x="376" y="217" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Task 状态卡片（Doing / Review / Done）</text>
   <text x="376" y="242" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Slash 命令与交互动作</text>
-  <rect x="376" y="272" width="516" height="90" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
-  <rect x="376" y="374" width="516" height="90" rx="12" fill="#FFFFFF" stroke="#E2E8F0"/>
-  <rect x="376" y="476" width="516" height="90" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
-  <rect x="376" y="590" width="516" height="48" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <rect x="376" y="272" width="516" height="90" rx="12" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <rect x="376" y="374" width="516" height="90" rx="12" fill="#F7FDF9" stroke="#D9E7DC"/>
+  <rect x="376" y="476" width="516" height="90" rx="12" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <rect x="376" y="590" width="516" height="48" rx="10" fill="#FDFDFD" stroke="#D9E2EC"/>
 
-  <rect x="936" y="122" width="292" height="646" rx="14" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <rect x="936" y="122" width="292" height="646" rx="14" fill="#FFFDF7" stroke="#E6DEC8"/>
   <text x="958" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">C. 执行摘要区</text>
   <text x="958" y="192" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 当前任务元信息</text>
   <text x="958" y="217" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 进度、结果、产物链接</text>
   <text x="958" y="242" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• runner / session 可追踪字段</text>
-  <rect x="958" y="272" width="248" height="78" rx="10" fill="#F8FAFC" stroke="#E2E8F0"/>
-  <rect x="958" y="362" width="248" height="78" rx="10" fill="#F8FAFC" stroke="#E2E8F0"/>
-  <rect x="958" y="452" width="248" height="78" rx="10" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <rect x="958" y="272" width="248" height="78" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <rect x="958" y="362" width="248" height="78" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <rect x="958" y="452" width="248" height="78" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
 
   <rect x="52" y="786" width="1176" height="18" rx="9" fill="#E2E8F0"/>
 </svg>
