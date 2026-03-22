@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import { ArrowRight, Blocks, Bot, Cable, ChevronRight, Cpu, Lock, Radar, ShieldCheck, Sparkles, Workflow } from 'lucide-react'
 import { useI18n } from '@/lib/i18n-provider'
@@ -20,6 +21,10 @@ export default function Home() {
         ctaPrimary: status === 'authenticated' ? '进入工作台' : '登录并开始',
         ctaSecondary: '查看架构总览',
         trust: ['多 Agent 协同', 'Topic / Task 双轨', '可观测执行流'],
+        heroVisualTitle: 'WTT 工作面预览',
+        heroVisualDesc: '统一视图下管理 Agent、Topic、Task 与执行状态。',
+        archVisualTitle: 'WTT 架构图示',
+        flowVisualTitle: '任务交付流程图',
         sectionFeature: '核心能力',
         sectionFeatureTitle: 'WTT 的功能不是聊天壳，而是任务编排引擎',
         featureCards: [
@@ -72,6 +77,10 @@ export default function Home() {
         ctaPrimary: status === 'authenticated' ? 'Open Workspace' : 'Login to Start',
         ctaSecondary: 'View Architecture',
         trust: ['Multi-agent collaboration', 'Topic + Task dual rails', 'Observable execution flow'],
+        heroVisualTitle: 'WTT Workspace Preview',
+        heroVisualDesc: 'Manage agents, topics, tasks, and execution status in one visual surface.',
+        archVisualTitle: 'WTT Architecture Diagram',
+        flowVisualTitle: 'Task Delivery Flow',
         sectionFeature: 'Core Features',
         sectionFeatureTitle: 'WTT is not just chat UI — it is an execution orchestration layer',
         featureCards: [
@@ -137,34 +146,47 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="mb-14">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-300/40 bg-indigo-500/10 px-3 py-1 text-xs text-indigo-200">
-            <Sparkles className="h-3.5 w-3.5" />
-            {copy.badge}
+        <section className="mb-14 grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-center">
+          <div>
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-300/40 bg-indigo-500/10 px-3 py-1 text-xs text-indigo-200">
+              <Sparkles className="h-3.5 w-3.5" />
+              {copy.badge}
+            </div>
+            <h1 className="max-w-4xl text-4xl font-bold leading-tight sm:text-5xl">{copy.title}</h1>
+            <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">{copy.subtitle}</p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link
+                href={status === 'authenticated' ? '/feed' : '/login'}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-400"
+              >
+                {copy.ctaPrimary}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <a
+                href="#wtt-arch"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm text-slate-100 transition hover:bg-white/10"
+              >
+                {copy.ctaSecondary}
+              </a>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-300">
+              {copy.trust.map((item) => (
+                <span key={item} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
-          <h1 className="max-w-4xl text-4xl font-bold leading-tight sm:text-5xl">{copy.title}</h1>
-          <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">{copy.subtitle}</p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <Link
-              href={status === 'authenticated' ? '/feed' : '/login'}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-400"
-            >
-              {copy.ctaPrimary}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <a
-              href="#wtt-arch"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm text-slate-100 transition hover:bg-white/10"
-            >
-              {copy.ctaSecondary}
-            </a>
-          </div>
-          <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-300">
-            {copy.trust.map((item) => (
-              <span key={item} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-                {item}
-              </span>
-            ))}
+
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur">
+            <div className="mb-3 flex items-center justify-between px-1">
+              <p className="text-sm font-semibold text-white">{copy.heroVisualTitle}</p>
+              <span className="rounded-full border border-emerald-300/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-200">Live</span>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-white/10">
+              <Image src="/landing/wtt-dashboard.svg" alt="WTT dashboard preview" width={1280} height={820} className="h-auto w-full" priority />
+            </div>
+            <p className="mt-3 px-1 text-xs text-slate-300">{copy.heroVisualDesc}</p>
           </div>
         </section>
 
@@ -185,16 +207,25 @@ export default function Home() {
         <section id="wtt-arch" className="mb-14 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-indigo-200/90">{copy.sectionArch}</p>
           <h2 className="mb-6 text-2xl font-semibold text-white">{copy.sectionArchTitle}</h2>
-          <div className="grid gap-3 md:grid-cols-4">
-            {copy.archNodes.map((n, idx) => (
-              <div key={n.title} className="relative rounded-xl border border-white/10 bg-slate-900/40 p-4">
-                <div className="mb-2 inline-flex rounded-lg bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-200">{n.title}</div>
-                <p className="text-sm text-slate-300">{n.desc}</p>
-                {idx < copy.archNodes.length - 1 && (
-                  <Cable className="absolute -right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-indigo-300/80 md:block" />
-                )}
+          <div className="grid gap-4 lg:grid-cols-[1fr_1fr] lg:items-start">
+            <div className="grid gap-3 md:grid-cols-2">
+              {copy.archNodes.map((n, idx) => (
+                <div key={n.title} className="relative rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                  <div className="mb-2 inline-flex rounded-lg bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-200">{n.title}</div>
+                  <p className="text-sm text-slate-300">{n.desc}</p>
+                  {idx < copy.archNodes.length - 1 && idx % 2 === 0 && (
+                    <Cable className="absolute -right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-indigo-300/80 md:block" />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+              <p className="mb-2 text-xs text-slate-300">{copy.archVisualTitle}</p>
+              <div className="overflow-hidden rounded-lg border border-white/10">
+                <Image src="/landing/wtt-architecture.svg" alt="WTT architecture diagram" width={1280} height={540} className="h-auto w-full" />
               </div>
-            ))}
+            </div>
           </div>
         </section>
 
@@ -202,6 +233,10 @@ export default function Home() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
             <p className="mb-2 text-xs uppercase tracking-[0.18em] text-indigo-200/90">{copy.sectionFlow}</p>
             <h3 className="mb-4 text-xl font-semibold text-white">{copy.sectionFlowTitle}</h3>
+            <p className="mb-2 text-xs text-slate-300">{copy.flowVisualTitle}</p>
+            <div className="mb-4 overflow-hidden rounded-xl border border-white/10">
+              <Image src="/landing/wtt-flow.svg" alt="WTT task flow" width={1280} height={560} className="h-auto w-full" />
+            </div>
             <div className="space-y-3">
               {copy.flow.map((f) => (
                 <div key={f.step} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
