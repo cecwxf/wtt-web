@@ -2,6 +2,7 @@
 
 import { Bot, Hash, Lock, Plus, MoreVertical, Pin, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useI18n } from '@/lib/i18n-provider'
 
 export interface TopicItem {
   topic_id: string
@@ -51,16 +52,16 @@ function getTopicGroup(topic: TopicItem): TopicGroupKey {
   return 'discuss'
 }
 
-function getGroupLabel(group: TopicGroupKey): string {
+function getGroupLabelKey(group: TopicGroupKey): string {
   switch (group) {
     case 'p2p':
-      return 'P2P'
+      return 'topic.group.p2p'
     case 'task':
-      return 'Task'
+      return 'topic.group.task'
     case 'discuss':
-      return 'Discuss'
+      return 'topic.group.discuss'
     case 'subscriber':
-      return 'Subscriber'
+      return 'topic.group.subscriber'
   }
 }
 
@@ -89,6 +90,7 @@ export function TopicColumn({
   const [discussAgentId, setDiscussAgentId] = useState('')
   const [discussTopicName, setDiscussTopicName] = useState('')
   const [creatingDiscuss, setCreatingDiscuss] = useState(false)
+  const { t } = useI18n()
 
   // Load pinned topics
   useEffect(() => {
@@ -208,7 +210,7 @@ export function TopicColumn({
     <div className="flex h-full w-[250px] flex-col border-r border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
       <div className="border-b border-slate-200 dark:border-zinc-700 px-3 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-          {agentName ? `${agentName}'s Topics` : 'Topics'}
+          {agentName ? t('topic.agentsTopics', { name: agentName }) : t('topic.topics')}
         </p>
       </div>
 
@@ -219,7 +221,7 @@ export function TopicColumn({
             className="mb-2 flex w-full items-center gap-2 rounded-lg border border-dashed border-indigo-300 dark:border-indigo-700 px-2 py-2.5 text-left text-sm font-medium text-indigo-500 dark:text-indigo-400 transition hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
           >
             <Plus className="h-4 w-4 shrink-0" />
-            <span className="truncate">New Task</span>
+            <span className="truncate">{t('topic.newTask')}</span>
           </button>
         )}
 
@@ -232,20 +234,20 @@ export function TopicColumn({
           }`}
         >
           <Hash className="h-4 w-4 shrink-0" />
-          <span className="truncate text-sm font-medium">All Topics</span>
+          <span className="truncate text-sm font-medium">{t('topic.allTopics')}</span>
         </button>
 
-        {topics.length === 0 && <p className="px-2 py-4 text-xs text-slate-400">No subscribed topics</p>}
+        {topics.length === 0 && <p className="px-2 py-4 text-xs text-slate-400">{t('topic.noTopics')}</p>}
 
         {groupedTopics.map(({ group, items }) => (
           <div key={group} className="mb-1">
             <div className="mx-1 mb-1 flex items-center justify-between rounded-md bg-slate-50/70 dark:bg-zinc-800/50 px-2 py-1">
-              <span className="text-[11px] font-medium text-slate-400">{getGroupLabel(group)}</span>
+              <span className="text-[11px] font-medium text-slate-400">{t(getGroupLabelKey(group))}</span>
               {group === 'discuss' && onRequestDiscuss && (
                 <button
                   onClick={() => setShowDiscussForm(!showDiscussForm)}
                   className="rounded p-0.5 text-slate-400 transition hover:bg-slate-200 dark:hover:bg-zinc-700 hover:text-indigo-500"
-                  title="Request mutual discuss topic"
+                  title={t('topic.requestDiscuss')}
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
@@ -257,7 +259,7 @@ export function TopicColumn({
                   type="text"
                   value={discussAgentId}
                   onChange={(e) => setDiscussAgentId(e.target.value)}
-                  placeholder="Target Agent ID..."
+                  placeholder={t('topic.targetAgentPlaceholder')}
                   autoFocus
                   className="w-full bg-transparent text-xs text-slate-700 dark:text-zinc-300 placeholder:text-slate-400 outline-none"
                 />
@@ -266,7 +268,7 @@ export function TopicColumn({
                   value={discussTopicName}
                   onChange={(e) => setDiscussTopicName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleRequestDiscuss(); if (e.key === 'Escape') { setShowDiscussForm(false); setDiscussAgentId(''); setDiscussTopicName('') } }}
-                  placeholder="Topic name..."
+                  placeholder={t('topic.topicNamePlaceholder')}
                   className="w-full bg-transparent text-xs text-slate-700 dark:text-zinc-300 placeholder:text-slate-400 outline-none"
                 />
                 <div className="flex justify-end gap-1">
@@ -274,14 +276,14 @@ export function TopicColumn({
                     onClick={() => { setShowDiscussForm(false); setDiscussAgentId(''); setDiscussTopicName('') }}
                     className="rounded px-2 py-0.5 text-[10px] text-slate-400 hover:text-slate-600"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                   <button
                     onClick={handleRequestDiscuss}
                     disabled={!discussAgentId.trim() || !discussTopicName.trim() || creatingDiscuss}
                     className="rounded bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-50"
                   >
-                    {creatingDiscuss ? '...' : 'Send Request'}
+                    {creatingDiscuss ? '...' : t('topic.sendRequest')}
                   </button>
                 </div>
               </div>
@@ -362,7 +364,7 @@ export function TopicColumn({
                             setMenuFor(null)
                           }}
                         >
-                          {topic.is_default_p2p ? '📌 默认置顶' : isPinned ? '📌 取消置顶' : '📌 置顶'}
+                          {topic.is_default_p2p ? t('topic.pinDefault') : isPinned ? t('topic.unpin') : t('topic.pin')}
                         </button>
                         <button
                           className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
@@ -372,7 +374,7 @@ export function TopicColumn({
                             setRenamingTopicId(topic.topic_id)
                           }}
                         >
-                          ✏️ Rename (local)
+                          ✏️ {t('topic.renameLocal')}
                         </button>
                         {topicAliases[topic.topic_id] && (
                           <button
@@ -382,7 +384,7 @@ export function TopicColumn({
                               saveTopicAlias(topic.topic_id, '')
                             }}
                           >
-                            🔄 Reset Name
+                            🔄 {t('topic.resetName')}
                           </button>
                         )}
                         <button
@@ -396,7 +398,7 @@ export function TopicColumn({
                             navigator.clipboard.writeText(url).catch(() => {})
                           }}
                         >
-                          📋 Copy Link
+                          📋 {t('topic.copyLink')}
                         </button>
                         <button
                           className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
@@ -405,7 +407,7 @@ export function TopicColumn({
                             onLeaveTopic?.(topic.topic_id)
                           }}
                         >
-                          Leave Topic
+                          {t('topic.leaveTopic')}
                         </button>
                         <button
                           className="w-full rounded px-2 py-1.5 text-left text-xs text-red-500 hover:bg-slate-100 dark:hover:bg-zinc-700"
@@ -414,7 +416,7 @@ export function TopicColumn({
                             onDeleteTopic?.(topic.topic_id)
                           }}
                         >
-                          Delete Topic
+                          {t('topic.deleteTopic')}
                         </button>
                       </div>
                     </>
@@ -427,7 +429,7 @@ export function TopicColumn({
       </div>
 
       <div className="border-t border-slate-200 dark:border-zinc-700 px-3 py-2 text-[11px] text-slate-400">
-        Total {summary.total} · P2P {summary.p2p} · Task {summary.task} · Discuss {summary.discuss} · Subscriber {summary.subscriber}
+        {t('topic.totalSummary', { total: summary.total, p2p: summary.p2p, task: summary.task, discuss: summary.discuss, subscriber: summary.subscriber })}
       </div>
     </div>
   )

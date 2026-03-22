@@ -17,6 +17,7 @@ import type { ContentFormat } from '@/components/ui/content-editor'
 import type { EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
+import { useI18n } from '@/lib/i18n-provider'
 
 const ContentEditor = dynamic(
   () => import('@/components/ui/content-editor').then((m) => m.ContentEditor),
@@ -102,6 +103,7 @@ function MemberRow({ member, isSelf, onRequestPrivateDiscuss }: {
 
 function FeedPageInner() {
   const { data: session, status } = useSession()
+  const { t } = useI18n()
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
@@ -541,8 +543,8 @@ function FeedPageInner() {
     const typing = typingByTopic[selectedTopicId]
     if (!typing) return null
     const name = typing.agentName || agentNameMap[typing.agentId] || typing.agentId || 'Agent'
-    return `${name} 正在输入...`
-  }, [selectedTopicId, typingByTopic, agentNameMap])
+    return `${name} ${t('feed.typing')}`
+  }, [selectedTopicId, typingByTopic, agentNameMap, t])
 
   // Clear stale persisted topic if it no longer exists in the topics list
   useEffect(() => {
@@ -673,7 +675,7 @@ function FeedPageInner() {
     const taskType = type ?? 'general'
 
     if (taskType === 'pipeline') {
-      const title = prompt('New Pipeline\n\nEnter pipeline name:')
+      const title = prompt(t('feed.newPipelinePrompt'))
       if (!title?.trim()) return
       try {
         const r = await fetch(`${CLIENT_WTT_API_BASE}/pipelines`, {
@@ -684,16 +686,16 @@ function FeedPageInner() {
             owner_agent_id: selectedAgentId,
           }),
         })
-        if (!r.ok) { alert('Failed to create pipeline'); return }
+        if (!r.ok) { alert(t('feed.failedCreatePipeline')); return }
         const pipeline = await r.json()
         router.push(buildAgentUrl(`/pipelines/${pipeline.id}`, selectedAgentId))
-      } catch { alert('Failed to create pipeline') }
+      } catch { alert(t('feed.failedCreatePipeline')) }
       return
     }
 
     if (taskType === 'code' || taskType === 'research') {
-      const label = taskType === 'code' ? 'New Code Task' : 'New Research Task'
-      const title = prompt(`${label}\n\nEnter task title:`)
+      const label = taskType === 'code' ? t('feed.newCodeTaskPrompt') : t('feed.newResearchTaskPrompt')
+      const title = prompt(label)
       if (!title?.trim()) return
       try {
         const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
@@ -709,11 +711,11 @@ function FeedPageInner() {
             created_by: selectedAgentId || undefined,
           }),
         })
-        if (!r.ok) { alert('Failed to create task'); return }
+        if (!r.ok) { alert(t('feed.failedCreateTask')); return }
         const task = await r.json()
         if (taskType === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
         else router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
-      } catch { alert('Failed to create task') }
+      } catch { alert(t('feed.failedCreateTask')) }
       return
     }
 
@@ -732,7 +734,7 @@ function FeedPageInner() {
           created_by: selectedAgentId,
         }),
       })
-      if (!r.ok) { alert('Failed to create task'); return }
+      if (!r.ok) { alert(t('feed.failedCreateTask')); return }
       const task = await r.json()
       if (task.id && task.topic_id) {
         pendingRenameTaskRef.current = { taskId: task.id, topicId: task.topic_id }
@@ -742,7 +744,7 @@ function FeedPageInner() {
         setSelectedTopicId(task.topic_id)
       }
     } catch {
-      alert('Failed to create task')
+      alert(t('feed.failedCreateTask'))
     }
   }
 
@@ -872,7 +874,7 @@ function FeedPageInner() {
     try {
       const token = session?.accessToken as string | undefined
       if (!token) {
-        alert('Session expired, please login again')
+        alert(t('settings.sessionExpired'))
         return
       }
       const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}`, {
@@ -885,7 +887,7 @@ function FeedPageInner() {
       }
       await loadAgents()
       await mutateTopics()
-      alert('Agent unclaimed')
+      alert(t('feed.agentUnclaimed'))
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Unclaim failed')
     }
@@ -944,7 +946,7 @@ function FeedPageInner() {
       const err = await res.json().catch(() => ({ detail: 'Failed' }))
       throw new Error(err.detail || 'Failed to send P2P request')
     }
-    alert('P2P request sent! The target user will see it in their notifications.')
+    alert(t('feed.p2pRequestSent'))
   }
 
   const handleRequestDiscuss = async (targetAgentId: string, topicName: string) => {
@@ -967,7 +969,7 @@ function FeedPageInner() {
       const err = await res.json().catch(() => ({ detail: 'Failed' }))
       throw new Error(err.detail || 'Failed to send discuss request')
     }
-    alert('Discussion invite sent! The target agent owner will see it in their notifications.')
+    alert(t('feed.discussRequestSent'))
   }
 
   const handleInviteMember = async (agentId: string) => {
@@ -984,10 +986,10 @@ function FeedPageInner() {
         setInviteMemberOpen(false)
       } else {
         const err = await res.json().catch(() => ({ detail: 'Failed' }))
-        alert(err.detail || 'Failed to add member')
+        alert(err.detail || t('feed.privateDiscussFailed'))
       }
     } catch {
-      alert('Network error')
+      alert(t('feed.networkError'))
     } finally {
       setInvitingMember(false)
     }
@@ -1021,13 +1023,13 @@ function FeedPageInner() {
         }),
       })
       if (res.ok) {
-        alert('Private discuss request sent!')
+        alert(t('feed.privateDiscussSent'))
       } else {
         const err = await res.json().catch(() => ({ detail: 'Failed' }))
-        alert(err.detail || 'Failed to send request')
+        alert(err.detail || t('feed.privateDiscussFailed'))
       }
     } catch {
-      alert('Network error')
+      alert(t('feed.networkError'))
     }
   }
 
@@ -1182,9 +1184,9 @@ function FeedPageInner() {
                       <button
                         onClick={() => setMembersOpen((v) => !v)}
                         className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-2 py-1 text-[11px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
-                        title="Topic members"
+                        title={t('feed.members')}
                       >
-                        👥 Members ({discussMemberCount}) ▾
+                        👥 {t('feed.members')} ({discussMemberCount}) ▾
                       </button>
                       {membersOpen && (
                         <>
@@ -1200,7 +1202,7 @@ function FeedPageInner() {
                                 />
                               ))
                             ) : (
-                              <div className="px-3 py-2 text-xs text-slate-400">No members</div>
+                              <div className="px-3 py-2 text-xs text-slate-400">{t('feed.noMembers')}</div>
                             )}
                             {/* Invite member */}
                             <div className="border-t border-slate-100 dark:border-zinc-700 px-3 py-1.5">
@@ -1215,7 +1217,7 @@ function FeedPageInner() {
                                       if (e.key === 'Enter' && inviteAgentId.trim()) handleInviteMember(inviteAgentId.trim())
                                       if (e.key === 'Escape') { setInviteMemberOpen(false); setInviteAgentId('') }
                                     }}
-                                    placeholder="Agent ID..."
+                                    placeholder={t('feed.agentIdPlaceholder')}
                                     className="flex-1 bg-transparent text-xs text-slate-700 dark:text-zinc-200 placeholder:text-slate-400 outline-none border-b border-indigo-400"
                                   />
                                   <button
@@ -1223,7 +1225,7 @@ function FeedPageInner() {
                                     disabled={!inviteAgentId.trim() || invitingMember}
                                     className="rounded bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-indigo-600 disabled:opacity-50"
                                   >
-                                    {invitingMember ? '...' : 'Add'}
+                                    {invitingMember ? '...' : t('feed.add')}
                                   </button>
                                 </div>
                               ) : (
@@ -1231,7 +1233,7 @@ function FeedPageInner() {
                                   onClick={() => setInviteMemberOpen(true)}
                                   className="flex items-center gap-1 text-[11px] font-medium text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition"
                                 >
-                                  <span className="text-sm">+</span> Invite Member
+                                  <span className="text-sm">+</span> {t('feed.inviteMember')}
                                 </button>
                               )}
                             </div>
@@ -1244,8 +1246,8 @@ function FeedPageInner() {
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center text-slate-400">
-                <p className="text-lg">Select a topic to start chatting</p>
-                <p className="mt-1 text-sm">Choose from the topic list or create a new task</p>
+                <p className="text-lg">{t('feed.selectTopic')}</p>
+                <p className="mt-1 text-sm">{t('feed.selectTopicHint')}</p>
               </div>
             )}
           </div>

@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, FileEdit, Home, KanbanSquare, Plus, Workflow, Sun, Moon } from 'lucide-react'
+import { Bell, FileEdit, Home, KanbanSquare, Plus, Workflow, Sun, Moon, Languages } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
 import { buildAgentUrl } from '@/lib/hooks/use-agent-id'
+import { useI18n } from '@/lib/i18n-provider'
 
 interface P2PRequestItem {
   id: string
@@ -37,13 +38,14 @@ interface TopBarProps {
 export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, agentId = '' }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const { theme, setTheme } = useTheme()
+  const { locale, toggleLocale, t } = useI18n()
 
   return (
     <header className="flex h-[60px] items-center gap-4 border-b border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4">
       <Link
         href={buildAgentUrl('/feed', agentId)}
         className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-indigo-600 dark:text-indigo-400 transition hover:bg-indigo-50 dark:hover:bg-indigo-950/40/40"
-        title="Home"
+        title={t('top.home')}
       >
         <Home className="h-5 w-5" />
       </Link>
@@ -54,29 +56,29 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         <Link
           href={buildAgentUrl('/tasks', agentId)}
           className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
-          title="Tasks Board"
+          title={t('top.tasksBoard')}
         >
           <KanbanSquare className="h-4 w-4" />
-          <span className="hidden sm:inline">Tasks</span>
+          <span className="hidden sm:inline">{t('top.tasks')}</span>
         </Link>
 
         <Link
           href={buildAgentUrl('/pipelines', agentId)}
           className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
-          title="Pipelines"
+          title={t('top.pipelines')}
         >
           <Workflow className="h-4 w-4" />
-          <span className="hidden sm:inline">Pipelines</span>
+          <span className="hidden sm:inline">{t('top.pipelines')}</span>
         </Link>
 
         {!hideCreateTopic && (
           <button
             onClick={onOpenEditor}
             className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2 text-sm text-indigo-600 dark:text-indigo-400 transition hover:bg-indigo-100 dark:hover:bg-indigo-950/40 hover:text-indigo-700 dark:hover:text-indigo-200"
-            title="Markdown Editor"
+            title={t('top.editor')}
           >
             <FileEdit className="h-4 w-4" />
-            <span className="hidden sm:inline">Editor</span>
+            <span className="hidden sm:inline">{t('top.editor')}</span>
           </button>
         )}
 
@@ -84,10 +86,10 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           <button
             onClick={onCreateTopic}
             className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-200"
-            title="Create Topic"
+            title={t('top.createTopic')}
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Topic</span>
+            <span className="hidden sm:inline">{t('top.topic')}</span>
           </button>
         )}
 
@@ -95,7 +97,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="relative inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
-            title="Notifications"
+            title={t('top.notifications')}
           >
             <Bell className="h-4 w-4" />
             {notificationCount > 0 && (
@@ -109,7 +111,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowNotifications(false)} />
               <div className="absolute right-0 top-12 z-20 w-96 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow-lg">
-                <p className="mb-3 text-sm font-semibold dark:text-zinc-200">Notifications</p>
+                <p className="mb-3 text-sm font-semibold dark:text-zinc-200">{t('top.notifications')}</p>
                 {p2pRequests.length > 0 ? (
                   <div className="space-y-2 max-h-[320px] overflow-y-auto">
                     {p2pRequests.map((req) => {
@@ -117,13 +119,13 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
                       return (
                       <div key={req.id} className="rounded-lg border border-slate-100 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 p-3">
                         <p className="text-xs font-medium text-slate-700 dark:text-zinc-300">
-                          {isDiscuss ? '💬 Topic Invite' : '🤝 P2P Chat Request'}
+                          {isDiscuss ? `💬 ${t('top.topicInvite')}` : `🤝 ${t('top.p2pRequest')}`}
                         </p>
                         <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
                           <span className="font-medium text-indigo-600 dark:text-indigo-400">{req.from_agent_id || req.from_user_id}</span>
                           {isDiscuss
-                            ? <> invites <span className="font-medium">{req.target_agent_id}</span> to discuss</>
-                            : <> wants to chat with <span className="font-medium">{req.target_agent_id}</span></>
+                            ? <> {t('top.invites')} <span className="font-medium">{req.target_agent_id}</span> {t('top.toDiscuss')}</>
+                            : <> {t('top.wantsToChat')} <span className="font-medium">{req.target_agent_id}</span></>
                           }
                         </p>
                         {req.topic_name && (
@@ -140,13 +142,13 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
                             }}
                             className="flex-1 rounded-md bg-green-500 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-green-600"
                           >
-                            ✓ Accept
+                            ✓ {t('top.accept')}
                           </button>
                           <button
                             onClick={() => onRejectP2PRequest?.(req.id)}
                             className="flex-1 rounded-md bg-slate-200 dark:bg-zinc-700 px-3 py-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-300 transition hover:bg-slate-300 dark:hover:bg-zinc-600"
                           >
-                            ✕ Decline
+                            ✕ {t('top.decline')}
                           </button>
                         </div>
                       </div>
@@ -154,7 +156,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
                     })}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400">No new notifications</p>
+                  <p className="text-xs text-slate-400">{t('top.noNotifications')}</p>
                 )}
               </div>
             </>
@@ -164,9 +166,18 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           className="inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 p-2 text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={theme === 'dark' ? t('top.lightMode') : t('top.darkMode')}
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+
+        <button
+          onClick={toggleLocale}
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-2 py-2 text-xs font-semibold text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+          title={t('lang.switchTo')}
+        >
+          <Languages className="h-3.5 w-3.5" />
+          {locale === 'zh' ? 'EN' : '中'}
         </button>
 
         {userMenu}

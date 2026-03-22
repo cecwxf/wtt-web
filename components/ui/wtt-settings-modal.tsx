@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { Bot, Bell, Brush, ClipboardCopy, Lock, User, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { useI18n } from '@/lib/i18n-provider'
 
 type SettingsPage = 'profile' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
@@ -26,13 +27,13 @@ interface WttSettingsModalProps {
   onBindingChanged?: () => void
 }
 
-const PAGE_ITEMS: Array<{ key: SettingsPage; label: string; icon: typeof User }> = [
-  { key: 'profile', label: '我的资料', icon: User },
-  { key: 'binding', label: 'Agent 绑定', icon: Bot },
-  { key: 'notifications', label: '通知设置', icon: Bell },
-  { key: 'privacy', label: '隐私与安全', icon: Lock },
-  { key: 'appearance', label: '外观', icon: Brush },
-  { key: 'about', label: '关于 WTT', icon: Bot },
+const PAGE_ITEMS: Array<{ key: SettingsPage; labelKey: string; icon: typeof User }> = [
+  { key: 'profile', labelKey: 'settings.profile', icon: User },
+  { key: 'binding', labelKey: 'settings.binding', icon: Bot },
+  { key: 'notifications', labelKey: 'settings.notifications', icon: Bell },
+  { key: 'privacy', labelKey: 'settings.privacy', icon: Lock },
+  { key: 'appearance', labelKey: 'settings.appearance', icon: Brush },
+  { key: 'about', labelKey: 'settings.about', icon: Bot },
 ]
 
 export function WttSettingsModal({
@@ -45,6 +46,7 @@ export function WttSettingsModal({
   onBindingChanged,
 }: WttSettingsModalProps) {
   const { data: session } = useSession()
+  const { t } = useI18n()
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.agent_id === selectedAgentId),
     [agents, selectedAgentId]
@@ -72,7 +74,7 @@ export function WttSettingsModal({
   const handleResetToken = async (agentId: string) => {
     const token = session?.accessToken as string | undefined
     if (!token) return
-    const ok = confirm('重置 Agent Token 后，旧 token 立即失效。\n你需要将新 token 更新到 openclaw.json 中。\n确定继续？')
+    const ok = confirm(t('settings.resetTokenConfirm'))
     if (!ok) return
     setResettingToken(agentId)
     try {
@@ -87,10 +89,10 @@ export function WttSettingsModal({
         }
       } else {
         const err = await response.json().catch(() => ({ detail: 'Failed' }))
-        alert(err.detail || 'Failed to reset token')
+        alert(err.detail || t('settings.resetTokenFailed'))
       }
     } catch {
-      alert('Network error')
+      alert(t('settings.networkError'))
     } finally {
       setResettingToken(null)
     }
@@ -99,7 +101,7 @@ export function WttSettingsModal({
   const handleProvisionAgent = async () => {
     const token = session?.accessToken as string | undefined
     if (!token) {
-      setProvisionError('Session expired, please login again')
+      setProvisionError(t('settings.sessionExpired'))
       return
     }
 
@@ -121,7 +123,7 @@ export function WttSettingsModal({
 
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setProvisionError(data.detail ?? 'Failed to create agent')
+        setProvisionError(data.detail ?? t('settings.failedCreateAgent'))
         return
       }
 
@@ -130,11 +132,11 @@ export function WttSettingsModal({
         agent_token: data.agent_token,
         api_key: data.api_key,
       })
-      setProvisionSuccess('Agent created and bound successfully')
+      setProvisionSuccess(t('settings.claimNewSuccess'))
       setProvisionDisplayName('')
       onBindingChanged?.()
     } catch {
-      setProvisionError('Network error')
+      setProvisionError(t('settings.networkError'))
     } finally {
       setProvisioning(false)
     }
@@ -143,12 +145,12 @@ export function WttSettingsModal({
   const handleClaimExisting = async () => {
     const token = session?.accessToken as string | undefined
     if (!token) {
-      setClaimExistingError('Session expired, please login again')
+      setClaimExistingError(t('settings.sessionExpired'))
       return
     }
 
     if (!existingAgentId.trim() || !existingAgentToken.trim()) {
-      setClaimExistingError('agent_id 和 agent_token 都不能为空')
+      setClaimExistingError(t('settings.claimEmpty'))
       return
     }
 
@@ -172,28 +174,28 @@ export function WttSettingsModal({
 
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setClaimExistingError(data.detail ?? 'Failed to claim existing agent')
+        setClaimExistingError(data.detail ?? t('settings.failedClaimExisting'))
         return
       }
 
-      setClaimExistingSuccess('Existing agent claimed successfully')
+      setClaimExistingSuccess(t('settings.claimExistingSuccess'))
       setExistingAgentId('')
       setExistingAgentToken('')
       setExistingDisplayName('')
       onBindingChanged?.()
     } catch {
-      setClaimExistingError('Network error')
+      setClaimExistingError(t('settings.networkError'))
     } finally {
       setClaimingExisting(false)
     }
   }
 
-  const handleCopy = async (text: string, okText = 'Copied!') => {
+  const handleCopy = async (text: string, okText = t('settings.copyOk')) => {
     try {
       await navigator.clipboard.writeText(text)
       alert(okText)
     } catch {
-      alert('Copy failed')
+      alert(t('settings.copyFail'))
     }
   }
 
@@ -207,8 +209,8 @@ export function WttSettingsModal({
       >
         <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-slate-50 md:block">
           <div className="border-b border-slate-200 px-4 py-5">
-            <p className="text-sm font-semibold text-slate-800">WTT 设置中心</p>
-            <p className="mt-1 text-xs text-slate-400">对齐 `wtt-client-v2` 的设置结构</p>
+            <p className="text-sm font-semibold text-slate-800">{t('settings.center')}</p>
+            <p className="mt-1 text-xs text-slate-400">{t('settings.structHint')}</p>
           </div>
           <nav className="p-2">
             {PAGE_ITEMS.map((item) => {
@@ -223,7 +225,7 @@ export function WttSettingsModal({
                   }`}
                 >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  {t(item.labelKey)}
                 </button>
               )
             })}
@@ -234,16 +236,18 @@ export function WttSettingsModal({
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold text-slate-800">
-                {PAGE_ITEMS.find((item) => item.key === activePage)?.label ?? '设置'}
+                {t(PAGE_ITEMS.find((item) => item.key === activePage)?.labelKey || 'settings.titleFallback')}
               </h2>
               <p className="mt-1 text-sm text-slate-400">
-                当前 Agent：{selectedAgent?.display_name ?? '未选择'} ({selectedAgentId || 'n/a'})
+                {selectedAgent
+                  ? t('settings.currentAgent', { name: selectedAgent.display_name, id: selectedAgentId || 'n/a' })
+                  : t('settings.currentAgentNone')}
               </p>
             </div>
             <button
               onClick={onClose}
               className="rounded-full border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:text-slate-900"
-              aria-label="Close settings"
+              aria-label={t('common.close')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -257,7 +261,7 @@ export function WttSettingsModal({
             >
               {PAGE_ITEMS.map((item) => (
                 <option key={item.key} value={item.key}>
-                  {item.label}
+                  {t(item.labelKey)}
                 </option>
               ))}
             </select>
@@ -266,7 +270,7 @@ export function WttSettingsModal({
           {activePage === 'profile' && (
             <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">Account</p>
+                <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">{t('settings.account')}</p>
                 {session?.user?.image && (
                   <div className="mb-3 flex items-center gap-3">
                     <img src={session.user.image} alt="avatar" className="h-14 w-14 rounded-full border-2 border-indigo-200" />
@@ -283,14 +287,14 @@ export function WttSettingsModal({
                   </div>
                 )}
                 <label className="block">
-                  <span className="mb-2 block text-sm text-slate-500">Display Name</span>
+                  <span className="mb-2 block text-sm text-slate-500">{t('settings.displayName')}</span>
                   <input
                     defaultValue={session?.user?.name || 'WTT User'}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                 </label>
                 <label className="mt-3 block">
-                  <span className="mb-2 block text-sm text-slate-500">Email</span>
+                  <span className="mb-2 block text-sm text-slate-500">{t('settings.email')}</span>
                   <input
                     defaultValue={session?.user?.email || ''}
                     disabled
@@ -298,18 +302,18 @@ export function WttSettingsModal({
                   />
                 </label>
                 <label className="mt-3 block">
-                  <span className="mb-2 block text-sm text-slate-500">Bio</span>
+                  <span className="mb-2 block text-sm text-slate-500">{t('settings.bio')}</span>
                   <textarea
                     rows={3}
-                    placeholder="介绍你关注的话题方向..."
+                    placeholder={t('settings.bioPlaceholder')}
                     className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                 </label>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">Linked Agent</p>
+                <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t('settings.linkedAgent')}</p>
                 <p className="text-sm text-slate-600">
-                  {selectedAgent ? `${selectedAgent.display_name} (${selectedAgentId})` : '未绑定 Agent'}
+                  {selectedAgent ? `${selectedAgent.display_name} (${selectedAgentId})` : t('settings.noBoundAgent')}
                 </p>
               </div>
             </div>
@@ -318,14 +322,14 @@ export function WttSettingsModal({
           {activePage === 'binding' && (
             <div className="space-y-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">🚀 Claim Agent（New）</p>
-                <p className="mt-1 text-xs text-slate-500">新 agent 不在 WTT 体系时，直接一键生成 agent_id + agent_token 并绑定到当前登录用户。</p>
+                <p className="text-sm font-semibold text-slate-800">{t('settings.claimNew')}</p>
+                <p className="mt-1 text-xs text-slate-500">{t('settings.claimNewDesc')}</p>
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <input
                     value={provisionDisplayName}
                     onChange={(e) => setProvisionDisplayName(e.target.value)}
-                    placeholder="Agent 显示名（可选）"
+                    placeholder={t('settings.agentDisplayOptional')}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                   <button
@@ -333,7 +337,7 @@ export function WttSettingsModal({
                     disabled={provisioning}
                     className="shrink-0 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {provisioning ? '处理中...' : 'Claim New Agent'}
+                    {provisioning ? t('settings.processing') : t('settings.claimNewBtn')}
                   </button>
                 </div>
 
@@ -342,7 +346,7 @@ export function WttSettingsModal({
 
                 {provisioned && (
                   <div className="mt-3 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                    <p className="text-xs font-semibold text-emerald-700">请立即保存以下凭据（token 仅展示一次）</p>
+                    <p className="text-xs font-semibold text-emerald-700">{t('settings.saveCred')}</p>
                     <div className="grid gap-2">
                       <div className="rounded border border-emerald-200 bg-white p-2">
                         <p className="text-[11px] text-slate-500">agent_id</p>
@@ -359,13 +363,13 @@ export function WttSettingsModal({
                         onClick={() => handleCopy(provisioned.agent_id, 'agent_id copied')}
                         className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
                       >
-                        Copy agent_id
+                        {t('settings.copyAgentId')}
                       </button>
                       <button
                         onClick={() => handleCopy(provisioned.agent_token, 'agent_token copied')}
                         className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
                       >
-                        Copy agent_token
+                        {t('settings.copyAgentToken')}
                       </button>
                       <button
                         onClick={() => handleCopy(JSON.stringify({
@@ -388,7 +392,7 @@ export function WttSettingsModal({
                         }, null, 2), 'openclaw.json snippet copied')}
                         className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
                       >
-                        Copy openclaw.json snippet
+                        {t('settings.copySnippet')}
                       </button>
                     </div>
                   </div>
@@ -396,8 +400,8 @@ export function WttSettingsModal({
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">🔐 Claim Agent（Existing）</p>
-                <p className="mt-1 text-xs text-slate-500">已注册过的 agent，输入 agent_id + agent_token 重新绑定。仅 owner 可继续使用。</p>
+                <p className="text-sm font-semibold text-slate-800">{t('settings.claimExisting')}</p>
+                <p className="mt-1 text-xs text-slate-500">{t('settings.claimExistingDesc')}</p>
 
                 <div className="mt-3 space-y-2">
                   <input
@@ -415,7 +419,7 @@ export function WttSettingsModal({
                   <input
                     value={existingDisplayName}
                     onChange={(e) => setExistingDisplayName(e.target.value)}
-                    placeholder="显示名称（可选）"
+                    placeholder={t('settings.displayNameOptional')}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                   <button
@@ -423,7 +427,7 @@ export function WttSettingsModal({
                     disabled={claimingExisting || !existingAgentId.trim() || !existingAgentToken.trim()}
                     className="w-full rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {claimingExisting ? '处理中...' : 'Claim Existing Agent'}
+                    {claimingExisting ? t('settings.processing') : t('settings.claimExistingBtn')}
                   </button>
                 </div>
 
@@ -432,8 +436,8 @@ export function WttSettingsModal({
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">已绑定 Agent（{agents.length}）</p>
-                <p className="mt-1 text-xs text-slate-400">可在此重置 token（旧 token 会立刻失效）。</p>
+                <p className="text-sm font-semibold text-slate-800">{t('settings.boundAgents', { count: agents.length })}</p>
+                <p className="mt-1 text-xs text-slate-400">{t('settings.boundAgentsDesc')}</p>
 
                 <div className="mt-3 space-y-2">
                   {agents.map((agent) => (
@@ -447,7 +451,7 @@ export function WttSettingsModal({
                           <button
                             onClick={() => handleCopy(agentTokens[agent.agent_id], 'Token copied')}
                             className="shrink-0 rounded border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-amber-600"
-                            title="复制 Token"
+                            title={t('settings.copyAgentToken')}
                           >
                             <ClipboardCopy className="h-3.5 w-3.5" />
                           </button>
@@ -458,13 +462,13 @@ export function WttSettingsModal({
                           disabled={resettingToken === agent.agent_id}
                           className="mt-2 w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
                         >
-                          {resettingToken === agent.agent_id ? '重置中...' : '🔑 重置 Agent Token'}
+                          {resettingToken === agent.agent_id ? t('settings.resetting') : t('settings.resetToken')}
                         </button>
                       )}
                     </div>
                   ))}
                   {agents.length === 0 && (
-                    <p className="py-4 text-center text-sm text-slate-400">暂无绑定的 Agent</p>
+                    <p className="py-4 text-center text-sm text-slate-400">{t('settings.noAgents')}</p>
                   )}
                 </div>
               </div>
@@ -473,27 +477,27 @@ export function WttSettingsModal({
 
           {activePage === 'notifications' && (
             <div className="space-y-3">
-              <ToggleRow label="消息提醒" hint="新消息到达时显示通知" enabled={messageNotify} onToggle={setMessageNotify} />
-              <ToggleRow label="Agent 状态提醒" hint="Agent 离线/恢复时通知" enabled={agentAlert} onToggle={setAgentAlert} />
-              <ToggleRow label="提示音" hint="播放提示音" enabled={soundOn} onToggle={setSoundOn} />
+              <ToggleRow label={t('settings.notifyMessage')} hint={t('settings.notifyMessageHint')} enabled={messageNotify} onToggle={setMessageNotify} />
+              <ToggleRow label={t('settings.notifyAgent')} hint={t('settings.notifyAgentHint')} enabled={agentAlert} onToggle={setAgentAlert} />
+              <ToggleRow label={t('settings.sound')} hint={t('settings.soundHint')} enabled={soundOn} onToggle={setSoundOn} />
             </div>
           )}
 
           {activePage === 'privacy' && (
             <div className="space-y-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">会话与令牌</p>
-                <p className="mt-1 text-sm text-slate-400">建议定期更新 API Key，并在共享设备上退出登录。</p>
+                <p className="text-sm font-semibold text-slate-800">{t('settings.sessionToken')}</p>
+                <p className="mt-1 text-sm text-slate-400">{t('settings.sessionTokenHint')}</p>
               </div>
               <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-4">
-                <p className="text-sm text-red-600">高风险操作建议在 Agent 页面执行，避免误解绑主 Agent。</p>
+                <p className="text-sm text-red-600">{t('settings.riskHint')}</p>
               </div>
             </div>
           )}
 
           {activePage === 'appearance' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {['Light (Active)', 'Warm Neutral', 'Cool Blue'].map((theme, i) => (
+              {[t('settings.themeLight'), t('settings.themeWarm'), t('settings.themeCool')].map((theme, i) => (
                 <button
                   key={theme}
                   className={`rounded-xl border px-3 py-8 text-sm transition ${i === 0 ? 'border-indigo-300 bg-indigo-50 text-indigo-600 font-medium' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-300'}`}
@@ -507,11 +511,11 @@ export function WttSettingsModal({
           {activePage === 'about' && (
             <div className="space-y-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">WTT Client v2 Style</p>
-                <p className="mt-1 text-sm text-slate-400">当前界面已按你提供的 `wtt-client-v2.html` 风格重构。</p>
+                <p className="text-sm font-semibold text-slate-800">{t('settings.aboutTitle')}</p>
+                <p className="mt-1 text-sm text-slate-400">{t('settings.aboutDesc')}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
-                Need help? 提交 issue 或继续让我细化到逐像素对齐。
+                {t('settings.aboutHelp')}
               </div>
             </div>
           )}

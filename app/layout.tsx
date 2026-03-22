@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { NextAuthProvider } from "@/lib/session-provider";
 import { ThemeProvider } from "@/lib/theme-provider";
+import { I18nProvider } from "@/lib/i18n-provider";
 
 // Register local variable fonts and expose them via CSS variables.
 const geistSans = localFont({
@@ -33,12 +34,14 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+        <I18nProvider>
         {/* Keep auth providers at the root so all pages/components can access session and user state. */}
         <NextAuthProvider>
           <AuthProvider>
             {children}
           </AuthProvider>
         </NextAuthProvider>
+        </I18nProvider>
         </ThemeProvider>
       </body>
     </html>

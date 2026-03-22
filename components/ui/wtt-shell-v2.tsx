@@ -8,6 +8,7 @@ import { TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
+import { useI18n } from '@/lib/i18n-provider'
 
 interface P2PRequest {
   id: string
@@ -98,6 +99,7 @@ export function WttShellV2({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('profile')
   const [createTopicOpen, setCreateTopicOpen] = useState(false)
+  const { t } = useI18n()
 
   const selectedAgent = agents.find((a) => a.agent_id === selectedAgentId)
 
@@ -144,25 +146,25 @@ export function WttShellV2({
                     onClick={() => openSettings('profile')}
                     className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 dark:text-zinc-300 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
                   >
-                    Profile
+                    {t('shell.profile')}
                   </button>
                   <button
                     onClick={() => openSettings('binding')}
                     className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 dark:text-zinc-300 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
                   >
-                    Agent Binding
+                    {t('shell.agentBinding')}
                   </button>
                   <button
                     onClick={() => openSettings('notifications')}
                     className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 dark:text-zinc-300 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
                   >
-                    Notifications
+                    {t('shell.notifications')}
                   </button>
                   <button
                     onClick={() => openSettings('api')}
                     className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 dark:text-zinc-300 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
                   >
-                    API & MCP
+                    {t('shell.apiMcp')}
                   </button>
                   <button
                     onClick={() => {
@@ -170,14 +172,14 @@ export function WttShellV2({
                     }}
                     className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 dark:text-zinc-300 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
                   >
-                    Manage Cleanup
+                    {t('shell.manageCleanup')}
                   </button>
                   <div className="my-1 h-px bg-slate-200 dark:bg-zinc-600" />
                   <button
                     onClick={onLogout}
                     className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-red-400 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
                   >
-                    Logout
+                    {t('shell.logout')}
                   </button>
                 </div>
               )}

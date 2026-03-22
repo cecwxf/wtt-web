@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight, MoreVertical, Plus, Trash2, Edit3, User } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { useI18n } from '@/lib/i18n-provider'
 
 export interface AgentItem {
   agent_id: string
@@ -141,6 +142,7 @@ export function AgentColumn({
   const [editingConfig, setEditingConfig] = useState<{ worker: WorkerItem; agentId: string } | null>(null)
   const [personaMd, setPersonaMd] = useState('')
   const [personaLoading, setPersonaLoading] = useState(false)
+  const { t } = useI18n()
 
   const fetchWorkers = useCallback(async (agentId: string) => {
     try {
@@ -221,7 +223,7 @@ export function AgentColumn({
   }
 
   const handleDeleteWorker = async (workerId: string, agentId: string) => {
-    if (!confirm('Delete this worker?')) return
+    if (!confirm(t('agent.deleteWorkerConfirm'))) return
     try {
       await fetch(`${API_BASE}/workers/${workerId}`, { method: 'DELETE', credentials: 'include' })
       fetchWorkers(agentId)
@@ -268,7 +270,7 @@ export function AgentColumn({
   return (
     <div className="flex h-full w-[200px] flex-col border-r border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
       <div className="border-b border-slate-200 dark:border-zinc-700 px-3 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Agents</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('agent.agents')}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -280,13 +282,13 @@ export function AgentColumn({
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{currentUserName}</p>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-zinc-400">Logged-in User</p>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-zinc-400">{t('agent.loggedUser')}</p>
               </div>
             </div>
           </div>
         )}
 
-        {agents.length === 0 && <p className="px-2 py-4 text-xs text-slate-400">No agents bound</p>}
+        {agents.length === 0 && <p className="px-2 py-4 text-xs text-slate-400">{t('agent.noAgents')}</p>}
 
         {agents.map((agent) => {
           const isSelected = agent.agent_id === selectedAgentId
@@ -348,7 +350,7 @@ export function AgentColumn({
                           ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.5)]'
                           : 'bg-slate-300 dark:bg-zinc-600'
                       }`}
-                      title={isOnline ? 'Online' : 'Offline'}
+                      title={isOnline ? t('agent.online') : t('agent.offline')}
                     />
                     {activeCount > 0 && (
                       <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-indigo-500 text-[7px] font-bold text-white ring-2 ring-white dark:ring-zinc-900">
@@ -410,7 +412,7 @@ export function AgentColumn({
                   {workers.length > 0 && (
                     <>
                       <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                        Workers
+                        {t('agent.workers')}
                       </p>
                       {workers.map((w, idx) => (
                         <div
@@ -501,19 +503,19 @@ export function AgentColumn({
                                 className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[11px] text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
                                 onClick={() => { setWorkerMenuFor(null); setRenamingWorker({ id: w.id, name: w.name }) }}
                               >
-                                <Edit3 className="h-3 w-3" /> Rename
+                                <Edit3 className="h-3 w-3" /> {t('agent.rename')}
                               </button>
                               <button
                                 className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[11px] text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700"
                                 onClick={() => openPersonaEditor(w, agent.agent_id)}
                               >
-                                <Edit3 className="h-3 w-3" /> Edit Persona
+                                <Edit3 className="h-3 w-3" /> {t('agent.editPersona')}
                               </button>
                               <button
                                 className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[11px] text-red-500 hover:bg-slate-100 dark:hover:bg-zinc-700"
                                 onClick={() => handleDeleteWorker(w.id, agent.agent_id)}
                               >
-                                <Trash2 className="h-3 w-3" /> Delete
+                                <Trash2 className="h-3 w-3" /> {t('common.delete')}
                               </button>
                             </div>
                           )}
@@ -530,7 +532,7 @@ export function AgentColumn({
                       <input
                         autoFocus
                         className="flex-1 rounded border border-indigo-300 bg-white dark:bg-zinc-800 px-2 py-1 text-[11px] text-slate-700 dark:text-zinc-200 outline-none placeholder:text-slate-400"
-                        placeholder="Worker name…"
+                        placeholder={t('agent.workerNamePlaceholder')}
                         value={newWorkerName}
                         onChange={(e) => setNewWorkerName(e.target.value)}
                         onKeyDown={(e) => {
@@ -543,7 +545,7 @@ export function AgentColumn({
                         onClick={() => handleCreateWorker(agent.agent_id)}
                         disabled={creatingWorker}
                       >
-                        {creatingWorker ? '...' : 'Add'}
+                        {creatingWorker ? '...' : t('agent.add')}
                       </button>
                     </div>
                   ) : (
@@ -551,7 +553,7 @@ export function AgentColumn({
                       className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition"
                       onClick={() => setAddingWorkerFor(agent.agent_id)}
                     >
-                      <Plus className="h-3 w-3" /> Add Worker
+                      <Plus className="h-3 w-3" /> {t('agent.addWorker')}
                     </button>
                   )}
 
@@ -571,7 +573,7 @@ export function AgentColumn({
                       onRenameAgent?.(agent.agent_id, agent.display_name)
                     }}
                   >
-                    Rename
+                    {t('agent.rename')}
                   </button>
                   <button
                     className="w-full rounded px-2 py-1.5 text-left text-xs text-red-500 hover:bg-slate-100 dark:hover:bg-zinc-700"
@@ -580,13 +582,13 @@ export function AgentColumn({
                       onUnclaimAgent?.(agent.agent_id)
                     }}
                   >
-                    Unclaim
+                    {t('agent.unclaim')}
                   </button>
                   <button
                     className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700"
                     onClick={() => setMenuFor(null)}
                   >
-                    Cancel
+                    {t('agent.cancel')}
                   </button>
                 </div>
               )}
@@ -598,13 +600,13 @@ export function AgentColumn({
       {/* Quick Create */}
       {onQuickCreate && (
         <div className="border-t border-slate-200 dark:border-zinc-700 px-2 py-2 space-y-1">
-          <p className="px-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Quick Create</p>
+          <p className="px-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">{t('agent.quickCreate')}</p>
           <div className="grid grid-cols-2 gap-1">
             {([
-              { type: 'general' as const, icon: '💬', label: 'Chat' },
-              { type: 'code' as const, icon: '💻', label: 'Code' },
-              { type: 'research' as const, icon: '🔬', label: 'Research' },
-              { type: 'pipeline' as const, icon: '🔗', label: 'Pipeline' },
+              { type: 'general' as const, icon: '💬', label: t('agent.chat') },
+              { type: 'code' as const, icon: '💻', label: t('agent.code') },
+              { type: 'research' as const, icon: '🔬', label: t('agent.research') },
+              { type: 'pipeline' as const, icon: '🔗', label: t('agent.pipeline') },
             ]).map((item) => (
               <button
                 key={item.type}

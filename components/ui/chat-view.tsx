@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import { CircularProgress } from '@/components/ui/circular-progress'
+import { useI18n } from '@/lib/i18n-provider'
 
 export interface ChatMessage {
   message_id: string
@@ -494,6 +495,7 @@ export function ChatView({
   topicType,
   typingIndicatorText = null,
 }: ChatViewProps) {
+  const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -983,7 +985,7 @@ export function ChatView({
   const insertLocation = () => {
     setAttachMenuOpen(false)
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported in this browser')
+      alert(t('chat.locationUnsupported'))
       return
     }
 
@@ -994,7 +996,7 @@ export function ChatView({
         setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
       },
       (err) => {
-        alert(`Location failed: ${err.message || 'permission denied'}`)
+        alert(t('chat.locationFailed', { msg: err.message || 'permission denied' }))
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
     )
@@ -1152,11 +1154,11 @@ export function ChatView({
           <div>
             <h2 className="truncate text-lg font-semibold dark:text-zinc-100">{topicName}</h2>
             <p className="mt-1 text-xs text-slate-400">
-              {messages.length} messages loaded
+              {t('chat.messagesLoaded', { count: messages.length })}
               {wsConnected && (
                 <span className="ml-2 inline-flex items-center gap-1 text-emerald-500">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  live
+                  {t('chat.live')}
                 </span>
               )}
             </p>
@@ -1169,7 +1171,7 @@ export function ChatView({
                 onBlur={() => setTimeout(() => setExportOpen(false), 150)}
                 className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-2 py-1 text-[11px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
               >
-                <Download size={12} /> Export ▾
+                <Download size={12} /> {t('chat.export')} ▾
               </button>
               {exportOpen && (
                 <div className="absolute right-0 top-full mt-1 z-30 min-w-[132px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
@@ -1178,7 +1180,7 @@ export function ChatView({
                     onClick={() => { onExport?.('md'); setExportOpen(false) }}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-800 dark:hover:text-zinc-100"
                   >
-                    📝 MarkDown
+                    📝 {t('chat.exportMarkdown')}
                   </button>
                 </div>
               )}
@@ -1197,7 +1199,7 @@ export function ChatView({
             disabled={!hasOlder || loadingOlder}
             className="rounded-full border border-slate-200 dark:border-zinc-700 bg-slate-50/85 dark:bg-zinc-800/85 px-3 py-1 text-xs text-slate-500 disabled:opacity-40"
           >
-            {loadingOlder ? 'Loading history...' : hasOlder ? 'Load older messages' : 'No older messages'}
+            {loadingOlder ? t('chat.loadingHistory') : hasOlder ? t('chat.loadOlder') : t('chat.noOlder')}
           </button>
         </div>
 
@@ -1208,7 +1210,7 @@ export function ChatView({
         )}
 
         {!loading && messages.length === 0 && (
-          <div className="pt-20 text-center text-sm text-slate-400">No messages yet. Start the conversation!</div>
+          <div className="pt-20 text-center text-sm text-slate-400">{t('chat.noMessages')}</div>
         )}
 
         {groupedMessages.map((group) => (
@@ -1242,12 +1244,12 @@ export function ChatView({
                         const task = parseTaskContent(message.content || '')
                         if (task.isTask) {
                           const colorMap: Record<string, { border: string; badge: string; badgeText: string; bg: string }> = {
-                            run: { border: 'border-l-indigo-500', badge: 'bg-indigo-100 text-indigo-700', badgeText: 'Task Meta', bg: 'bg-indigo-50/50' },
-                            status: { border: 'border-l-amber-500', badge: 'bg-amber-100 text-amber-700', badgeText: 'Progress', bg: 'bg-amber-50/50' },
-                            summary: { border: 'border-l-emerald-500', badge: 'bg-emerald-100 text-emerald-700', badgeText: 'Result', bg: 'bg-emerald-50/50' },
-                            blocked: { border: 'border-l-red-500', badge: 'bg-red-100 text-red-700', badgeText: 'Blocked', bg: 'bg-red-50/50' },
-                            asset: { border: 'border-l-violet-500', badge: 'bg-violet-100 text-violet-700', badgeText: 'Asset', bg: 'bg-violet-50/50' },
-                            review: { border: 'border-l-sky-500', badge: 'bg-sky-100 text-sky-700', badgeText: 'Review', bg: 'bg-sky-50/50' },
+                            run: { border: 'border-l-indigo-500', badge: 'bg-indigo-100 text-indigo-700', badgeText: t('chat.taskMeta'), bg: 'bg-indigo-50/50' },
+                            status: { border: 'border-l-amber-500', badge: 'bg-amber-100 text-amber-700', badgeText: t('chat.progress'), bg: 'bg-amber-50/50' },
+                            summary: { border: 'border-l-emerald-500', badge: 'bg-emerald-100 text-emerald-700', badgeText: t('chat.result'), bg: 'bg-emerald-50/50' },
+                            blocked: { border: 'border-l-red-500', badge: 'bg-red-100 text-red-700', badgeText: t('chat.blocked'), bg: 'bg-red-50/50' },
+                            asset: { border: 'border-l-violet-500', badge: 'bg-violet-100 text-violet-700', badgeText: t('chat.asset'), bg: 'bg-violet-50/50' },
+                            review: { border: 'border-l-sky-500', badge: 'bg-sky-100 text-sky-700', badgeText: t('chat.review'), bg: 'bg-sky-50/50' },
                             other: { border: 'border-l-slate-400', badge: 'bg-slate-100 text-slate-600', badgeText: 'Update', bg: 'bg-slate-50/50' },
                           }
                           const colors = colorMap[task.kind || 'other']
@@ -1264,11 +1266,11 @@ export function ChatView({
                               {/* Metadata card */}
                               {(task.runner || task.executor || task.sessionId) && (
                                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Metadata</p>
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('chat.metadata')}</p>
                                   <div className="space-y-1 text-xs text-slate-600">
-                                    {task.runner && <div className="flex justify-between"><span className="text-slate-400">Runner</span><span className="font-medium text-slate-700">{task.runner}</span></div>}
-                                    {task.executor && <div className="flex justify-between"><span className="text-slate-400">Executor</span><span className="font-medium text-slate-700">{task.executor}</span></div>}
-                                    {task.sessionId && <div className="flex justify-between"><span className="text-slate-400">Session</span><span className="font-mono text-slate-600">{task.sessionId.slice(0, 8)}</span></div>}
+                                    {task.runner && <div className="flex justify-between"><span className="text-slate-400">{t('chat.runner')}</span><span className="font-medium text-slate-700">{task.runner}</span></div>}
+                                    {task.executor && <div className="flex justify-between"><span className="text-slate-400">{t('chat.executor')}</span><span className="font-medium text-slate-700">{task.executor}</span></div>}
+                                    {task.sessionId && <div className="flex justify-between"><span className="text-slate-400">{t('chat.session')}</span><span className="font-mono text-slate-600">{task.sessionId.slice(0, 8)}</span></div>}
                                   </div>
                                 </div>
                               )}
@@ -1276,7 +1278,7 @@ export function ChatView({
                               {/* Progress card */}
                               {task.kind === 'status' && (
                                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Progress</p>
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('chat.progress')}</p>
                                   {pct !== undefined && (
                                     <div className="mb-2 flex items-center gap-2">
                                       <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
@@ -1293,7 +1295,7 @@ export function ChatView({
                               {(task.kind === 'summary' || task.kind === 'blocked' || task.kind === 'review') && task.body && (
                                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                    {task.kind === 'summary' ? 'Result' : task.kind === 'blocked' ? 'Blocked' : 'Review'}
+                                    {task.kind === 'summary' ? t('chat.result') : task.kind === 'blocked' ? t('chat.blocked') : t('chat.review')}
                                   </p>
                                   <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
                                 </div>
@@ -1302,7 +1304,7 @@ export function ChatView({
                               {/* Asset card */}
                               {task.kind === 'asset' && (
                                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Asset</p>
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('chat.asset')}</p>
                                   {task.assetUrl ? (
                                     <a href={task.assetUrl} target="_blank" rel="noreferrer" className="text-sm text-indigo-600 underline break-all hover:text-indigo-800">{task.assetUrl}</a>
                                   ) : (
@@ -1314,7 +1316,7 @@ export function ChatView({
                               {/* Run body card */}
                               {task.kind === 'run' && task.body && (
                                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Details</p>
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('chat.details')}</p>
                                   <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
                                 </div>
                               )}
@@ -1385,7 +1387,7 @@ export function ChatView({
                                   return (
                                     <div key={bi} className="space-y-1">
                                       <iframe src={url} title={fname} className="h-80 w-full rounded-lg border border-slate-200" />
-                                      <a href={url} target="_blank" rel="noreferrer" className="inline-block text-xs text-indigo-500 underline">Open PDF</a>
+                                      <a href={url} target="_blank" rel="noreferrer" className="inline-block text-xs text-indigo-500 underline">{t('chat.openPdf')}</a>
                                     </div>
                                   )
                                 }
@@ -1395,7 +1397,7 @@ export function ChatView({
                                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-500 text-xs font-bold">.md</span>
                                       <span className="min-w-0 flex-1">
                                         <span className="block truncate font-medium">{fname}</span>
-                                        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>Markdown · Click to download</span>
+                                        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>{t('chat.markdownDownload')}</span>
                                       </span>
                                     </a>
                                   )
@@ -1407,7 +1409,7 @@ export function ChatView({
                                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-orange-500 text-xs font-bold">.html</span>
                                       <span className="min-w-0 flex-1">
                                         <span className="block truncate font-medium">{fname}</span>
-                                        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>Rich Text · Click to download</span>
+                                        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>{t('chat.htmlDownload')}</span>
                                       </span>
                                     </a>
                                   )
@@ -1524,11 +1526,11 @@ export function ChatView({
         if (!lastTaskMsg?.task_status) return null
         const status = lastTaskMsg.task_status
         const statusConfig: Record<string, { label: string; color: string; bg: string; icon: string; animate?: boolean }> = {
-          todo:    { label: 'Todo',    color: 'text-slate-500',  bg: 'bg-slate-100 dark:bg-zinc-700',   icon: '○' },
-          doing:   { label: 'Doing',   color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-950/30',  icon: '◉', animate: true },
-          review:  { label: 'Review',  color: 'text-sky-600',    bg: 'bg-sky-50 dark:bg-sky-950/30',    icon: '◎' },
-          done:    { label: 'Done',    color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: '●' },
-          blocked: { label: 'Blocked', color: 'text-red-500',    bg: 'bg-red-50 dark:bg-red-950/30',    icon: '✕' },
+          todo:    { label: t('chat.statusTodo'),    color: 'text-slate-500',  bg: 'bg-slate-100 dark:bg-zinc-700',   icon: '○' },
+          doing:   { label: t('chat.statusDoing'),   color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-950/30',  icon: '◉', animate: true },
+          review:  { label: t('chat.statusReview'),  color: 'text-sky-600',    bg: 'bg-sky-50 dark:bg-sky-950/30',    icon: '◎' },
+          done:    { label: t('chat.statusDone'),    color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: '●' },
+          blocked: { label: t('chat.statusBlocked'), color: 'text-red-500',    bg: 'bg-red-50 dark:bg-red-950/30',    icon: '✕' },
         }
         const cfg = statusConfig[status] || statusConfig.todo
         const steps = ['todo', 'doing', 'review', 'done']
@@ -1728,23 +1730,23 @@ export function ChatView({
               type="button"
               onClick={() => setAttachMenuOpen((v) => !v)}
               className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100"
-              title="Attach"
+              title={t('chat.attach')}
             >
               <Paperclip className="h-4 w-4" />
             </button>
             {attachMenuOpen && (
               <div className="absolute bottom-full left-0 mb-1 z-40 w-44 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
                 <button type="button" onClick={() => openFilePicker('image/*')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
-                  <ImageIcon className="h-3.5 w-3.5" /> Image
+                  <ImageIcon className="h-3.5 w-3.5" /> {t('chat.image')}
                 </button>
                 <button type="button" onClick={() => openFilePicker('video/*')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
-                  <Video className="h-3.5 w-3.5" /> Video
+                  <Video className="h-3.5 w-3.5" /> {t('chat.video')}
                 </button>
                 <button type="button" onClick={() => openFilePicker('*/*')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
-                  <Paperclip className="h-3.5 w-3.5" /> File
+                  <Paperclip className="h-3.5 w-3.5" /> {t('chat.file')}
                 </button>
                 <button type="button" onClick={insertLocation} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
-                  <MapPin className="h-3.5 w-3.5" /> Location
+                  <MapPin className="h-3.5 w-3.5" /> {t('chat.location')}
                 </button>
               </div>
             )}
@@ -1755,7 +1757,7 @@ export function ChatView({
             value={draft}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={topicType === 'discussion' ? `Message ${topicName}… (type @ to mention)` : `Message ${topicName}… (type / for commands)`}
+            placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
             rows={1}
             className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none"
           />
@@ -1763,7 +1765,7 @@ export function ChatView({
             onClick={handleSend}
             disabled={sending || uploading || !draft.trim() || !currentAgentId}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label="Send"
+            aria-label={t('chat.send')}
           >
             {sending ? '...' : <Send className="h-4 w-4" />}
           </button>
@@ -1798,7 +1800,7 @@ export function ChatView({
         {(uploading || loadingOlder) && (
           <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
             {uploading && <CircularProgress value={uploadProgress} size={20} strokeWidth={2.5} />}
-            <span>{uploading ? `Uploading${uploadProgress !== undefined ? ` ${uploadProgress}%` : '…'}` : 'Loading history…'}</span>
+            <span>{uploading ? `${t('chat.uploading')}${uploadProgress !== undefined ? ` ${uploadProgress}%` : '…'}` : t('chat.loadingHistory')}</span>
           </div>
         )}
       </div>
