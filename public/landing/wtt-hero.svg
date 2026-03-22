@@ -1,0 +1,44 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#060C1B"/>
+      <stop offset="1" stop-color="#0B1A36"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1200" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#131F3C"/>
+      <stop offset="1" stop-color="#101A2F"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect x="100" y="90" width="1400" height="720" rx="28" fill="#0A1226" stroke="#243A68"/>
+  <text x="150" y="168" font-family="Inter, sans-serif" font-size="38" fill="#F8FAFC" font-weight="700">WTT Global View</text>
+  <text x="150" y="206" font-family="Inter, sans-serif" font-size="18" fill="#AEC2E8">From user intent to task execution and realtime feedback</text>
+
+  <rect x="150" y="242" width="340" height="500" rx="18" fill="url(#panel)" stroke="#375C9C"/>
+  <text x="176" y="280" font-family="Inter, sans-serif" font-size="20" fill="#E6EEFF" font-weight="700">Navigation</text>
+  <rect x="176" y="304" width="288" height="48" rx="12" fill="#1D2F5A"/>
+  <rect x="176" y="364" width="288" height="48" rx="12" fill="#162649"/>
+  <rect x="176" y="424" width="288" height="48" rx="12" fill="#162649"/>
+  <rect x="176" y="484" width="288" height="48" rx="12" fill="#162649"/>
+
+  <rect x="520" y="242" width="640" height="500" rx="18" fill="url(#panel)" stroke="#3C6EAA"/>
+  <text x="546" y="280" font-family="Inter, sans-serif" font-size="20" fill="#E6EEFF" font-weight="700">Collaboration Stream</text>
+  <rect x="546" y="304" width="588" height="92" rx="14" fill="#132745" stroke="#345A90"/>
+  <rect x="546" y="414" width="588" height="92" rx="14" fill="#112C3D" stroke="#2E7D76"/>
+  <rect x="546" y="524" width="588" height="92" rx="14" fill="#2E2A42" stroke="#7F6BB7"/>
+
+  <rect x="1188" y="242" width="262" height="500" rx="18" fill="url(#panel)" stroke="#5E5DA5"/>
+  <text x="1212" y="280" font-family="Inter, sans-serif" font-size="20" fill="#E6EEFF" font-weight="700">Execution</text>
+  <rect x="1212" y="306" width="214" height="84" rx="12" fill="#1A2B4C" stroke="#446AA6"/>
+  <rect x="1212" y="406" width="214" height="84" rx="12" fill="#1C3044" stroke="#3E8B7E"/>
+  <rect x="1212" y="506" width="214" height="84" rx="12" fill="#332F45" stroke="#8D79B8"/>
+
+  <line x1="490" y1="490" x2="520" y2="490" stroke="#88A5DD" stroke-width="4"/>
+  <polygon points="520,490 508,483 508,497" fill="#88A5DD"/>
+  <line x1="1160" y1="490" x2="1188" y2="490" stroke="#88A5DD" stroke-width="4"/>
+  <polygon points="1188,490 1176,483 1176,497" fill="#88A5DD"/>
+
+  <path d="M1340 742C1340 790 620 790 620 742" stroke="#60A5FA" stroke-width="4" stroke-dasharray="10 8"/>
+  <polygon points="620,742 628,728 612,728" fill="#60A5FA"/>
+</svg>

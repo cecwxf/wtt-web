@@ -1,36 +1,40 @@
-<svg width="1280" height="820" viewBox="0 0 1280 820" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1280" height="820" fill="#F1F5F9"/>
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#081022"/>
+      <stop offset="1" stop-color="#122448"/>
+    </linearGradient>
+  </defs>
 
-  <text x="52" y="58" font-size="30" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="700">WTT 工作台信息架构（Dashboard Information Architecture）</text>
-  <text x="52" y="92" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#475569">左侧导航 · 中间协作 · 右侧执行摘要，形成清晰的三栏工作面</text>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect x="80" y="70" width="1440" height="760" rx="24" fill="#0C152D" stroke="#2A4272"/>
 
-  <rect x="52" y="122" width="280" height="646" rx="14" fill="#F7FAFF" stroke="#D9E2EC"/>
-  <text x="74" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">A. 导航区</text>
-  <text x="74" y="192" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Agent 列表（主/子 Agent）</text>
-  <text x="74" y="217" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Topic 分组（Task / P2P / Discuss）</text>
-  <text x="74" y="242" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 快速创建任务入口</text>
-  <rect x="74" y="272" width="236" height="44" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
-  <rect x="74" y="324" width="236" height="44" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
-  <rect x="74" y="376" width="236" height="44" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <text x="130" y="134" font-family="Inter, sans-serif" font-size="34" fill="#F8FAFC" font-weight="700">WTT Workspace Dashboard</text>
+  <text x="130" y="168" font-family="Inter, sans-serif" font-size="17" fill="#B1C2E8">Three-column layout: Navigation · Collaboration · Execution Summary</text>
 
-  <rect x="354" y="122" width="560" height="646" rx="14" fill="#FCFDFE" stroke="#D9E2EC"/>
-  <text x="376" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">B. 协作区（消息 + 任务）</text>
-  <text x="376" y="192" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Topic 会话消息流</text>
-  <text x="376" y="217" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Task 状态卡片（Doing / Review / Done）</text>
-  <text x="376" y="242" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Slash 命令与交互动作</text>
-  <rect x="376" y="272" width="516" height="90" rx="12" fill="#F1F5F9" stroke="#E2E8F0"/>
-  <rect x="376" y="374" width="516" height="90" rx="12" fill="#F7FDF9" stroke="#D9E7DC"/>
-  <rect x="376" y="476" width="516" height="90" rx="12" fill="#F1F5F9" stroke="#E2E8F0"/>
-  <rect x="376" y="590" width="516" height="48" rx="10" fill="#FDFDFD" stroke="#D9E2EC"/>
+  <rect x="130" y="210" width="320" height="560" rx="16" fill="#131F3D" stroke="#375B96"/>
+  <text x="156" y="248" font-family="Inter, sans-serif" font-size="20" fill="#E6EEFF" font-weight="700">A. Navigation</text>
+  <rect x="156" y="274" width="268" height="48" rx="12" fill="#1D2F5A"/>
+  <rect x="156" y="334" width="268" height="48" rx="12" fill="#182949"/>
+  <rect x="156" y="394" width="268" height="48" rx="12" fill="#182949"/>
+  <rect x="156" y="454" width="268" height="48" rx="12" fill="#182949"/>
+  <rect x="156" y="514" width="268" height="48" rx="12" fill="#182949"/>
 
-  <rect x="936" y="122" width="292" height="646" rx="14" fill="#FFFDF7" stroke="#E6DEC8"/>
-  <text x="958" y="160" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">C. 执行摘要区</text>
-  <text x="958" y="192" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 当前任务元信息</text>
-  <text x="958" y="217" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 进度、结果、产物链接</text>
-  <text x="958" y="242" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• runner / session 可追踪字段</text>
-  <rect x="958" y="272" width="248" height="78" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
-  <rect x="958" y="362" width="248" height="78" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
-  <rect x="958" y="452" width="248" height="78" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <rect x="474" y="210" width="680" height="560" rx="16" fill="#131F3D" stroke="#3E6AAA"/>
+  <text x="500" y="248" font-family="Inter, sans-serif" font-size="20" fill="#E6EEFF" font-weight="700">B. Collaboration Stream</text>
+  <rect x="500" y="274" width="628" height="100" rx="14" fill="#122A4A" stroke="#355F97"/>
+  <rect x="500" y="390" width="628" height="100" rx="14" fill="#0F2F43" stroke="#2B8A7D"/>
+  <rect x="500" y="506" width="628" height="100" rx="14" fill="#2F2A46" stroke="#7D6CB2"/>
+  <rect x="500" y="628" width="628" height="54" rx="10" fill="#111D36" stroke="#2F4C81"/>
 
-  <rect x="52" y="786" width="1176" height="18" rx="9" fill="#E2E8F0"/>
+  <rect x="1178" y="210" width="292" height="560" rx="16" fill="#131F3D" stroke="#5A5AA0"/>
+  <text x="1204" y="248" font-family="Inter, sans-serif" font-size="20" fill="#E6EEFF" font-weight="700">C. Execution Summary</text>
+  <rect x="1204" y="274" width="240" height="90" rx="12" fill="#1A2B4C" stroke="#446AA6"/>
+  <rect x="1204" y="382" width="240" height="90" rx="12" fill="#1B3045" stroke="#3B8B7F"/>
+  <rect x="1204" y="490" width="240" height="90" rx="12" fill="#332F45" stroke="#8A75B8"/>
+
+  <line x1="450" y1="490" x2="474" y2="490" stroke="#89A6DE" stroke-width="4"/>
+  <polygon points="474,490 462,483 462,497" fill="#89A6DE"/>
+  <line x1="1154" y1="490" x2="1178" y2="490" stroke="#89A6DE" stroke-width="4"/>
+  <polygon points="1178,490 1166,483 1166,497" fill="#89A6DE"/>
 </svg>

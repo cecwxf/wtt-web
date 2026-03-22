@@ -1,45 +1,59 @@
-<svg width="1280" height="560" viewBox="0 0 1280 560" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1280" height="560" fill="#F1F5F9"/>
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#070E1E"/>
+      <stop offset="1" stop-color="#11213F"/>
+    </linearGradient>
+  </defs>
 
-  <text x="56" y="54" font-size="28" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="700">WTT 任务交付流程（Task Delivery Flow）</text>
-  <text x="56" y="84" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#475569">清晰展示：创建 → 执行 → 评审 → 完成，并支持 reject 回路</text>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect x="72" y="72" width="1456" height="756" rx="24" fill="#0C1530" stroke="#2E4778"/>
 
-  <rect x="72" y="140" width="250" height="180" rx="14" fill="#EEF2FF" stroke="#C7D2FE"/>
-  <text x="96" y="182" font-size="24" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">STEP 1 创建</text>
-  <text x="96" y="214" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 新建任务（code/research/common）</text>
-  <text x="96" y="239" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 绑定 owner / runner</text>
-  <text x="96" y="264" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 进入 Doing</text>
+  <text x="124" y="138" font-family="Inter, sans-serif" font-size="34" fill="#F8FAFC" font-weight="700">WTT Delivery Flow</text>
+  <text x="124" y="172" font-family="Inter, sans-serif" font-size="17" fill="#B4C5EB">Create → Execute → Review → Complete, with reject rollback loop</text>
 
-  <rect x="366" y="140" width="250" height="180" rx="14" fill="#ECFEFF" stroke="#A5F3FC"/>
-  <text x="390" y="182" font-size="24" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">STEP 2 执行</text>
-  <text x="390" y="214" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Runner 推理执行</text>
-  <text x="390" y="239" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• typing / 状态事件回传</text>
-  <text x="390" y="264" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 产物与摘要生成</text>
+  <!-- cards -->
+  <rect x="124" y="230" width="300" height="240" rx="18" fill="#1A2446" stroke="#4A67A5"/>
+  <rect x="468" y="230" width="300" height="240" rx="18" fill="#172D44" stroke="#3E8D82"/>
+  <rect x="812" y="230" width="300" height="240" rx="18" fill="#2E2B46" stroke="#8974B7"/>
+  <rect x="1156" y="230" width="300" height="240" rx="18" fill="#312B40" stroke="#B08E58"/>
 
-  <rect x="660" y="140" width="250" height="180" rx="14" fill="#FFF7ED" stroke="#FED7AA"/>
-  <text x="684" y="182" font-size="24" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">STEP 3 评审</text>
-  <text x="684" y="214" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 进入 Review</text>
-  <text x="684" y="239" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 人工确认 / 机器检查</text>
-  <text x="684" y="264" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 可 Approve 或 Reject</text>
+  <text x="152" y="276" font-family="Inter, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">STEP 1 · Create</text>
+  <text x="152" y="306" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 创建任务并分配 owner/runner</text>
+  <text x="152" y="332" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 建立 topic 与上下文</text>
+  <text x="152" y="358" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 任务进入 Doing</text>
 
-  <rect x="954" y="140" width="250" height="180" rx="14" fill="#F0FDF9" stroke="#BBF7D0"/>
-  <text x="978" y="182" font-size="24" font-family="Arial, Helvetica, sans-serif" fill="#1E293B" font-weight="700">STEP 4 完成</text>
-  <text x="978" y="214" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• Done + 结果沉淀</text>
-  <text x="978" y="239" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 提交记录 / 链接归档</text>
-  <text x="978" y="264" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#334155">• 可回放与复盘</text>
+  <text x="496" y="276" font-family="Inter, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">STEP 2 · Execute</text>
+  <text x="496" y="306" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• Plugin 触发 runtime 推理</text>
+  <text x="496" y="332" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• typing / task_status 回传</text>
+  <text x="496" y="358" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 产出 summary / asset</text>
 
-  <path d="M322 225H366" stroke="#6B7280" stroke-width="3"/>
-  <path d="M616 225H660" stroke="#6B7280" stroke-width="3"/>
-  <path d="M910 225H954" stroke="#6B7280" stroke-width="3"/>
-  <path d="M358 225L346 217V233L358 225Z" fill="#6B7280"/>
-  <path d="M652 225L640 217V233L652 225Z" fill="#6B7280"/>
-  <path d="M946 225L934 217V233L946 225Z" fill="#6B7280"/>
+  <text x="840" y="276" font-family="Inter, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">STEP 3 · Review</text>
+  <text x="840" y="306" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 自动进入 Review</text>
+  <text x="840" y="332" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 人工确认与补充意见</text>
+  <text x="840" y="358" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• Approve / Reject 决策</text>
 
-  <path d="M785 320C785 390 520 390 520 320" stroke="#F59E0B" stroke-width="3" stroke-dasharray="8 8"/>
-  <path d="M530 320L544 312V328L530 320Z" fill="#F59E0B"/>
-  <text x="545" y="386" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#B45309">Reject / 补充意见 → 回到 Doing 继续执行</text>
+  <text x="1184" y="276" font-family="Inter, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">STEP 4 · Complete</text>
+  <text x="1184" y="306" font-family="Inter, sans-serif" font-size="16" fill="#D9D3BE">• Done 与结果沉淀</text>
+  <text x="1184" y="332" font-family="Inter, sans-serif" font-size="16" fill="#D9D3BE">• commit / link 归档</text>
+  <text x="1184" y="358" font-family="Inter, sans-serif" font-size="16" fill="#D9D3BE">• 可回放与复盘</text>
 
-  <rect x="72" y="420" width="1132" height="96" rx="14" fill="#F8FAFC" stroke="#D9E2EC"/>
-  <text x="94" y="456" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#334155">关键信号：task_status（实时状态） / typing（推理中） / summary（结果） / asset（产物）</text>
-  <text x="94" y="484" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#334155">关键约束：owner/runner 不为空，task-topic 与 p2p 可无 @ 触发，discuss 按规则定向</text>
+  <!-- arrows -->
+  <line x1="424" y1="350" x2="468" y2="350" stroke="#8FA4D8" stroke-width="4"/>
+  <polygon points="468,350 456,343 456,357" fill="#8FA4D8"/>
+  <line x1="768" y1="350" x2="812" y2="350" stroke="#8FA4D8" stroke-width="4"/>
+  <polygon points="812,350 800,343 800,357" fill="#8FA4D8"/>
+  <line x1="1112" y1="350" x2="1156" y2="350" stroke="#8FA4D8" stroke-width="4"/>
+  <polygon points="1156,350 1144,343 1144,357" fill="#8FA4D8"/>
+
+  <!-- rollback loop -->
+  <path d="M962 470C962 610 620 610 620 470" stroke="#60A5FA" stroke-width="4" stroke-dasharray="10 8"/>
+  <polygon points="620,470 628,456 612,456" fill="#60A5FA"/>
+  <text x="650" y="628" font-family="Inter, sans-serif" font-size="16" fill="#98B9F4">Reject / 补充意见 → 回到 Execute 继续迭代</text>
+
+  <!-- realtime rail -->
+  <rect x="124" y="660" width="1332" height="130" rx="18" fill="#111F42" stroke="#395A9A"/>
+  <text x="154" y="700" font-family="Inter, sans-serif" font-size="24" fill="#EAF1FF" font-weight="700">Realtime Event Rail</text>
+  <text x="154" y="732" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">task_status / typing / new_message 持续回流，保证 UI 与执行状态一致</text>
+  <text x="154" y="758" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">summary / asset / commit 形成可验证交付证据</text>
 </svg>
