@@ -1,143 +1,113 @@
 <svg width="1400" height="780" viewBox="0 0 1400 780" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1400" y2="780" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050B1A"/>
+      <stop offset="1" stop-color="#0D1833"/>
+    </linearGradient>
+    <linearGradient id="cardA" x1="0" y1="0" x2="250" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A2345"/>
+      <stop offset="1" stop-color="#121A34"/>
+    </linearGradient>
+    <linearGradient id="cardB" x1="0" y1="0" x2="250" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A2A4A"/>
+      <stop offset="1" stop-color="#11223A"/>
+    </linearGradient>
+    <linearGradient id="cardC" x1="0" y1="0" x2="250" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B2E45"/>
+      <stop offset="1" stop-color="#132538"/>
+    </linearGradient>
+    <linearGradient id="cardD" x1="0" y1="0" x2="250" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2A2648"/>
+      <stop offset="1" stop-color="#1B1838"/>
+    </linearGradient>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
     <style>
-      .title { font: 700 34px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0f172a; }
-      .subtitle { font: 500 17px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #475569; }
-      .layerTitle { font: 700 18px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0f172a; }
-      .nodeTitle { font: 700 16px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #1e293b; }
-      .nodeText { font: 500 13px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #334155; }
-      .hint { font: 600 12px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #475569; }
-      .legend { font: 600 12px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #334155; }
+      .title { font: 700 34px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #F8FAFC; }
+      .subtitle { font: 500 17px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #A8B3CF; }
+      .cardTitle { font: 700 18px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #EEF2FF; }
+      .cardText { font: 500 13px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #C6D0EA; }
+      .legend { font: 600 13px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #BFD0FF; }
+      .muted { font: 500 12px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #95A4CB; }
     </style>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-      <path d="M0 0L10 5L0 10Z" fill="#64748b"/>
-    </marker>
-    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-      <path d="M0 0L10 5L0 10Z" fill="#2563eb"/>
-    </marker>
-    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-      <path d="M0 0L10 5L0 10Z" fill="#059669"/>
-    </marker>
   </defs>
 
-  <rect width="1400" height="780" fill="#f8fafc"/>
-  <rect x="24" y="24" width="1352" height="732" rx="22" fill="#ffffff" stroke="#dbe4ee"/>
+  <rect width="1400" height="780" fill="url(#bg)"/>
+  <rect x="24" y="24" width="1352" height="732" rx="22" fill="#070F22" stroke="#1F2C4A"/>
 
-  <text x="56" y="78" class="title">WTT System Architecture（精准版）</text>
-  <text x="56" y="108" class="subtitle">覆盖前端、后端、插件、Runtime、数据层与实时事件回路（task_status / typing / summary）</text>
+  <text x="56" y="82" class="title">WTT Architecture</text>
+  <text x="56" y="112" class="subtitle">Interaction → Backend Orchestration → Agent Runtime → Persistence, with real-time feedback loop</text>
 
-  <!-- Layer backgrounds -->
-  <rect x="56" y="140" width="320" height="504" rx="16" fill="#eff6ff" stroke="#cfe0ff"/>
-  <rect x="392" y="140" width="340" height="504" rx="16" fill="#ecfeff" stroke="#bfeef8"/>
-  <rect x="748" y="140" width="304" height="504" rx="16" fill="#f0fdf4" stroke="#c9f0d5"/>
-  <rect x="1068" y="140" width="276" height="504" rx="16" fill="#fff7ed" stroke="#f8dcc0"/>
+  <!-- Step labels -->
+  <rect x="64" y="146" width="130" height="28" rx="14" fill="#1E2A4A" stroke="#334675"/>
+  <text x="84" y="165" class="legend">STEP 01</text>
+  <rect x="396" y="146" width="130" height="28" rx="14" fill="#1E2A4A" stroke="#334675"/>
+  <text x="416" y="165" class="legend">STEP 02</text>
+  <rect x="728" y="146" width="130" height="28" rx="14" fill="#1E2A4A" stroke="#334675"/>
+  <text x="748" y="165" class="legend">STEP 03</text>
+  <rect x="1060" y="146" width="130" height="28" rx="14" fill="#1E2A4A" stroke="#334675"/>
+  <text x="1080" y="165" class="legend">STEP 04</text>
 
-  <text x="72" y="170" class="layerTitle">① Interaction Layer</text>
-  <text x="408" y="170" class="layerTitle">② WTT Backend Layer</text>
-  <text x="764" y="170" class="layerTitle">③ Agent Runtime Layer</text>
-  <text x="1084" y="170" class="layerTitle">④ Data / Infra Layer</text>
+  <!-- Main cards -->
+  <rect x="64" y="188" width="280" height="236" rx="16" fill="url(#cardA)" stroke="#3A4F86"/>
+  <text x="88" y="223" class="cardTitle">Interaction Layer</text>
+  <text x="88" y="249" class="cardText">• WTT UI: Feed / Tasks / Pipelines</text>
+  <text x="88" y="271" class="cardText">• User input: message / slash / mention</text>
+  <text x="88" y="293" class="cardText">• Topic context and agent selection</text>
+  <text x="88" y="315" class="cardText">• Render typing + task_status realtime</text>
 
-  <!-- Interaction nodes -->
-  <rect x="76" y="196" width="280" height="132" rx="12" fill="#ffffff" stroke="#d4deea"/>
-  <text x="92" y="222" class="nodeTitle">WTT Web (UI)</text>
-  <text x="92" y="244" class="nodeText">• Feed / Tasks / Pipelines / Inbox</text>
-  <text x="92" y="263" class="nodeText">• Topic + Task 双视图</text>
-  <text x="92" y="282" class="nodeText">• Slash 命令与语言切换</text>
-  <text x="92" y="301" class="nodeText">• 实时渲染 typing / task_status</text>
+  <rect x="396" y="188" width="280" height="236" rx="16" fill="url(#cardB)" stroke="#3C5E90"/>
+  <text x="420" y="223" class="cardTitle">WTT Service Layer</text>
+  <text x="420" y="249" class="cardText">• REST/WS gateway for topics/tasks</text>
+  <text x="420" y="271" class="cardText">• owner/runner validation + auth</text>
+  <text x="420" y="293" class="cardText">• discuss command targeting rules</text>
+  <text x="420" y="315" class="cardText">• event publish: message/status/typing</text>
 
-  <rect x="76" y="346" width="280" height="132" rx="12" fill="#ffffff" stroke="#d4deea"/>
-  <text x="92" y="372" class="nodeTitle">User Surfaces</text>
-  <text x="92" y="394" class="nodeText">• Telegram / Group Topic</text>
-  <text x="92" y="413" class="nodeText">• Web 登录与会话上下文</text>
-  <text x="92" y="432" class="nodeText">• @mention / command 输入</text>
+  <rect x="728" y="188" width="280" height="236" rx="16" fill="url(#cardC)" stroke="#3C6E8A"/>
+  <text x="752" y="223" class="cardTitle">Agent Runtime Layer</text>
+  <text x="752" y="249" class="cardText">• wtt_plugin command bridge</text>
+  <text x="752" y="271" class="cardText">• OpenClaw gateway dispatch</text>
+  <text x="752" y="293" class="cardText">• model reasoning / tool execution</text>
+  <text x="752" y="315" class="cardText">• summary & asset generation</text>
 
-  <rect x="76" y="496" width="280" height="132" rx="12" fill="#ffffff" stroke="#d4deea"/>
-  <text x="92" y="522" class="nodeTitle">Operator Control</text>
-  <text x="92" y="544" class="nodeText">• Agent 绑定与切换</text>
-  <text x="92" y="563" class="nodeText">• topic 订阅 / 邀请 / P2P</text>
-  <text x="92" y="582" class="nodeText">• review/reject/rerun 交互</text>
+  <rect x="1060" y="188" width="280" height="236" rx="16" fill="url(#cardD)" stroke="#5E4F94"/>
+  <text x="1084" y="223" class="cardTitle">Data & Infra Layer</text>
+  <text x="1084" y="249" class="cardText">• PostgreSQL task/topic/message state</text>
+  <text x="1084" y="271" class="cardText">• Redis cache / online sessions</text>
+  <text x="1084" y="293" class="cardText">• artifact links and commit evidence</text>
+  <text x="1084" y="315" class="cardText">• timeline replay & observability</text>
 
-  <!-- Backend nodes -->
-  <rect x="412" y="196" width="300" height="132" rx="12" fill="#ffffff" stroke="#cfe7ef"/>
-  <text x="428" y="222" class="nodeTitle">wtt_service API/WS</text>
-  <text x="428" y="244" class="nodeText">• REST: tasks / topics / agents</text>
-  <text x="428" y="263" class="nodeText">• WS: publish / typing / task_status</text>
-  <text x="428" y="282" class="nodeText">• 鉴权与 owner/runner 约束</text>
+  <!-- Arrows -->
+  <line x1="344" y1="306" x2="396" y2="306" stroke="#7E90BF" stroke-width="3"/>
+  <polygon points="396,306 384,299 384,313" fill="#7E90BF"/>
 
-  <rect x="412" y="346" width="300" height="132" rx="12" fill="#ffffff" stroke="#cfe7ef"/>
-  <text x="428" y="372" class="nodeTitle">Orchestration Rules</text>
-  <text x="428" y="394" class="nodeText">• topic 类型触发规则</text>
-  <text x="428" y="413" class="nodeText">• non-task discuss 定向</text>
-  <text x="428" y="432" class="nodeText">• task lifecycle 状态机</text>
+  <line x1="676" y1="306" x2="728" y2="306" stroke="#7E90BF" stroke-width="3"/>
+  <polygon points="728,306 716,299 716,313" fill="#7E90BF"/>
 
-  <rect x="412" y="496" width="300" height="132" rx="12" fill="#ffffff" stroke="#cfe7ef"/>
-  <text x="428" y="522" class="nodeTitle">Event Bus</text>
-  <text x="428" y="544" class="nodeText">• new_message / summary / asset</text>
-  <text x="428" y="563" class="nodeText">• typing start/stop</text>
-  <text x="428" y="582" class="nodeText">• task_status 实时广播</text>
+  <line x1="1008" y1="306" x2="1060" y2="306" stroke="#7E90BF" stroke-width="3"/>
+  <polygon points="1060,306 1048,299 1048,313" fill="#7E90BF"/>
 
-  <!-- Runtime nodes -->
-  <rect x="768" y="196" width="264" height="132" rx="12" fill="#ffffff" stroke="#d3ead9"/>
-  <text x="784" y="222" class="nodeTitle">wtt_plugin</text>
-  <text x="784" y="244" class="nodeText">• WS client 与命令桥接</text>
-  <text x="784" y="263" class="nodeText">• mention / slash 路由</text>
-  <text x="784" y="282" class="nodeText">• 推理前后 typing 信号</text>
+  <!-- Real-time feedback rail -->
+  <rect x="64" y="460" width="1276" height="126" rx="16" fill="#0D1630" stroke="#304575"/>
+  <text x="88" y="494" class="cardTitle">Realtime Feedback Rail</text>
+  <text x="88" y="520" class="cardText">• task_status / typing / new_message are pushed via WS and rendered in Feed/Chat immediately</text>
+  <text x="88" y="542" class="cardText">• review / reject / rerun operations form a closed-loop control path for delivery quality</text>
+  <text x="88" y="564" class="cardText">• key output is traceable: summary + asset + commit id</text>
 
-  <rect x="768" y="346" width="264" height="132" rx="12" fill="#ffffff" stroke="#d3ead9"/>
-  <text x="784" y="372" class="nodeTitle">OpenClaw Gateway</text>
-  <text x="784" y="394" class="nodeText">• channel 分发与会话管理</text>
-  <text x="784" y="413" class="nodeText">• tool 调用与 runtime 调度</text>
-  <text x="784" y="432" class="nodeText">• 状态回执聚合</text>
-
-  <rect x="768" y="496" width="264" height="132" rx="12" fill="#ffffff" stroke="#d3ead9"/>
-  <text x="784" y="522" class="nodeTitle">Model / Agent Runtime</text>
-  <text x="784" y="544" class="nodeText">• task execution / reasoning</text>
-  <text x="784" y="563" class="nodeText">• commit / result 产出</text>
-  <text x="784" y="582" class="nodeText">• summary / review 输出</text>
-
-  <!-- Data layer nodes -->
-  <rect x="1088" y="196" width="236" height="132" rx="12" fill="#ffffff" stroke="#ead8c3"/>
-  <text x="1104" y="222" class="nodeTitle">PostgreSQL</text>
-  <text x="1104" y="244" class="nodeText">• tasks / topics / members</text>
-  <text x="1104" y="263" class="nodeText">• messages / feed / bindings</text>
-  <text x="1104" y="282" class="nodeText">• 状态与审计数据</text>
-
-  <rect x="1088" y="346" width="236" height="132" rx="12" fill="#ffffff" stroke="#ead8c3"/>
-  <text x="1104" y="372" class="nodeTitle">Redis</text>
-  <text x="1104" y="394" class="nodeText">• session / cache / pubsub</text>
-  <text x="1104" y="413" class="nodeText">• 在线连接态</text>
-
-  <rect x="1088" y="496" width="236" height="132" rx="12" fill="#ffffff" stroke="#ead8c3"/>
-  <text x="1104" y="522" class="nodeTitle">Artifacts / Links</text>
-  <text x="1104" y="544" class="nodeText">• markdown / html / files</text>
-  <text x="1104" y="563" class="nodeText">• commit id / URL 归档</text>
-
-  <!-- Horizontal flow arrows -->
-  <path d="M356 262H412" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M712 262H768" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M1032 262H1088" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-
-  <path d="M356 412H412" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M712 412H768" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M1032 412H1088" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-
-  <path d="M356 562H412" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M712 562H768" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M1032 562H1088" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-
-  <!-- Feedback loop -->
-  <path d="M1180 644C1180 700 540 700 540 644" stroke="#2563eb" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrowBlue)"/>
-  <text x="642" y="716" class="hint">实时回流：task_status / typing / summary → Web UI</text>
-
-  <!-- runtime to backend signal -->
-  <path d="M900 328C900 305 650 305 650 328" stroke="#059669" stroke-width="3" stroke-dasharray="6 6" marker-end="url(#arrowGreen)"/>
-  <text x="676" y="300" class="hint">Execution telemetry / event publish</text>
+  <path d="M1200 586C1200 676 200 676 200 424" stroke="#6FA3FF" stroke-width="3" stroke-dasharray="9 8" filter="url(#softGlow)"/>
+  <polygon points="200,424 193,437 207,437" fill="#6FA3FF"/>
+  <text x="930" y="700" class="legend">Feedback loop to Interaction Layer</text>
 
   <!-- Legend -->
-  <rect x="56" y="664" width="430" height="74" rx="12" fill="#ffffff" stroke="#dbe4ee"/>
-  <line x1="80" y1="692" x2="132" y2="692" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-  <text x="146" y="696" class="legend">主业务调用链</text>
-  <line x1="80" y1="716" x2="132" y2="716" stroke="#2563eb" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrowBlue)"/>
-  <text x="146" y="720" class="legend">状态回流链路</text>
-
+  <rect x="64" y="616" width="560" height="108" rx="14" fill="#0A132A" stroke="#24365F"/>
+  <text x="88" y="646" class="legend">Legend</text>
+  <line x1="88" y1="670" x2="150" y2="670" stroke="#7E90BF" stroke-width="3"/>
+  <text x="162" y="674" class="muted">Primary data/control path</text>
+  <line x1="88" y1="694" x2="150" y2="694" stroke="#6FA3FF" stroke-width="3" stroke-dasharray="9 8"/>
+  <text x="162" y="698" class="muted">Realtime feedback path (WS events)</text>
 </svg>
