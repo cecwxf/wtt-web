@@ -1,113 +1,85 @@
-<svg width="1400" height="780" viewBox="0 0 1400 780" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1400" y2="780" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#050B1A"/>
-      <stop offset="1" stop-color="#0D1833"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#070B17"/>
+      <stop offset="1" stop-color="#0E1730"/>
     </linearGradient>
-    <linearGradient id="cardA" x1="0" y1="0" x2="250" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1A2345"/>
-      <stop offset="1" stop-color="#121A34"/>
+    <linearGradient id="panel" x1="0" y1="0" x2="300" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#151E3D"/>
+      <stop offset="1" stop-color="#101933"/>
     </linearGradient>
-    <linearGradient id="cardB" x1="0" y1="0" x2="250" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1A2A4A"/>
-      <stop offset="1" stop-color="#11223A"/>
-    </linearGradient>
-    <linearGradient id="cardC" x1="0" y1="0" x2="250" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1B2E45"/>
-      <stop offset="1" stop-color="#132538"/>
-    </linearGradient>
-    <linearGradient id="cardD" x1="0" y1="0" x2="250" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2A2648"/>
-      <stop offset="1" stop-color="#1B1838"/>
-    </linearGradient>
-    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-    <style>
-      .title { font: 700 34px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #F8FAFC; }
-      .subtitle { font: 500 17px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #A8B3CF; }
-      .cardTitle { font: 700 18px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #EEF2FF; }
-      .cardText { font: 500 13px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #C6D0EA; }
-      .legend { font: 600 13px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #BFD0FF; }
-      .muted { font: 500 12px 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #95A4CB; }
-    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#8FA4D8"/>
+    </marker>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#60A5FA"/>
+    </marker>
   </defs>
 
-  <rect width="1400" height="780" fill="url(#bg)"/>
-  <rect x="24" y="24" width="1352" height="732" rx="22" fill="#070F22" stroke="#1F2C4A"/>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect x="28" y="28" width="1544" height="844" rx="22" fill="#0A1125" stroke="#22345E"/>
 
-  <text x="56" y="82" class="title">WTT Architecture</text>
-  <text x="56" y="112" class="subtitle">Interaction → Backend Orchestration → Agent Runtime → Persistence, with real-time feedback loop</text>
+  <text x="70" y="86" font-family="Inter, PingFang SC, sans-serif" font-size="40" fill="#F8FAFC" font-weight="700">WTT System Architecture</text>
+  <text x="70" y="122" font-family="Inter, PingFang SC, sans-serif" font-size="19" fill="#AFC0E8">前端交互 → 服务编排 → Agent 执行 → 数据沉淀 + 实时回流</text>
 
-  <!-- Step labels -->
-  <rect x="64" y="146" width="130" height="28" rx="14" fill="#1E2A4A" stroke="#334675"/>
-  <text x="84" y="165" class="legend">STEP 01</text>
-  <rect x="396" y="146" width="130" height="28" rx="14" fill="#1E2A4A" stroke="#334675"/>
-  <text x="416" y="165" class="legend">STEP 02</text>
-  <rect x="728" y="146" width="130" height="28" rx="14" fill="#1E2A4A" stroke="#334675"/>
-  <text x="748" y="165" class="legend">STEP 03</text>
-  <rect x="1060" y="146" width="130" height="28" rx="14" fill="#1E2A4A" stroke="#334675"/>
-  <text x="1080" y="165" class="legend">STEP 04</text>
+  <!-- Layer Tags -->
+  <rect x="70" y="160" width="170" height="34" rx="17" fill="#172546" stroke="#35589B"/>
+  <text x="96" y="183" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">STEP 01</text>
+  <rect x="450" y="160" width="170" height="34" rx="17" fill="#172546" stroke="#35589B"/>
+  <text x="476" y="183" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">STEP 02</text>
+  <rect x="830" y="160" width="170" height="34" rx="17" fill="#172546" stroke="#35589B"/>
+  <text x="856" y="183" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">STEP 03</text>
+  <rect x="1210" y="160" width="170" height="34" rx="17" fill="#172546" stroke="#35589B"/>
+  <text x="1236" y="183" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">STEP 04</text>
 
-  <!-- Main cards -->
-  <rect x="64" y="188" width="280" height="236" rx="16" fill="url(#cardA)" stroke="#3A4F86"/>
-  <text x="88" y="223" class="cardTitle">Interaction Layer</text>
-  <text x="88" y="249" class="cardText">• WTT UI: Feed / Tasks / Pipelines</text>
-  <text x="88" y="271" class="cardText">• User input: message / slash / mention</text>
-  <text x="88" y="293" class="cardText">• Topic context and agent selection</text>
-  <text x="88" y="315" class="cardText">• Render typing + task_status realtime</text>
+  <!-- 4 main columns -->
+  <rect x="70" y="214" width="340" height="420" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
+  <rect x="450" y="214" width="340" height="420" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
+  <rect x="830" y="214" width="340" height="420" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
+  <rect x="1210" y="214" width="320" height="420" rx="18" fill="url(#panel)" stroke="#4E5FA0"/>
 
-  <rect x="396" y="188" width="280" height="236" rx="16" fill="url(#cardB)" stroke="#3C5E90"/>
-  <text x="420" y="223" class="cardTitle">WTT Service Layer</text>
-  <text x="420" y="249" class="cardText">• REST/WS gateway for topics/tasks</text>
-  <text x="420" y="271" class="cardText">• owner/runner validation + auth</text>
-  <text x="420" y="293" class="cardText">• discuss command targeting rules</text>
-  <text x="420" y="315" class="cardText">• event publish: message/status/typing</text>
+  <text x="96" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">Interaction Layer</text>
+  <text x="96" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• WTT Web（Feed / Tasks / Inbox）</text>
+  <text x="96" y="320" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• 用户输入（message / slash / mention）</text>
+  <text x="96" y="350" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• Topic 上下文和 Agent 选择</text>
+  <text x="96" y="380" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• 实时渲染 typing / task_status</text>
 
-  <rect x="728" y="188" width="280" height="236" rx="16" fill="url(#cardC)" stroke="#3C6E8A"/>
-  <text x="752" y="223" class="cardTitle">Agent Runtime Layer</text>
-  <text x="752" y="249" class="cardText">• wtt_plugin command bridge</text>
-  <text x="752" y="271" class="cardText">• OpenClaw gateway dispatch</text>
-  <text x="752" y="293" class="cardText">• model reasoning / tool execution</text>
-  <text x="752" y="315" class="cardText">• summary & asset generation</text>
+  <text x="476" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">WTT Service Layer</text>
+  <text x="476" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• REST / WS（topics / tasks / agents）</text>
+  <text x="476" y="320" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• owner/runner 校验与鉴权</text>
+  <text x="476" y="350" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• discuss 命令定向规则</text>
+  <text x="476" y="380" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• 广播 new_message / status / typing</text>
 
-  <rect x="1060" y="188" width="280" height="236" rx="16" fill="url(#cardD)" stroke="#5E4F94"/>
-  <text x="1084" y="223" class="cardTitle">Data & Infra Layer</text>
-  <text x="1084" y="249" class="cardText">• PostgreSQL task/topic/message state</text>
-  <text x="1084" y="271" class="cardText">• Redis cache / online sessions</text>
-  <text x="1084" y="293" class="cardText">• artifact links and commit evidence</text>
-  <text x="1084" y="315" class="cardText">• timeline replay & observability</text>
+  <text x="856" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">Agent Runtime Layer</text>
+  <text x="856" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• wtt_plugin 命令桥接</text>
+  <text x="856" y="320" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• OpenClaw Gateway 分发</text>
+  <text x="856" y="350" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• 模型推理与工具执行</text>
+  <text x="856" y="380" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• summary / asset 产出</text>
 
-  <!-- Arrows -->
-  <line x1="344" y1="306" x2="396" y2="306" stroke="#7E90BF" stroke-width="3"/>
-  <polygon points="396,306 384,299 384,313" fill="#7E90BF"/>
+  <text x="1236" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">Data Layer</text>
+  <text x="1236" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#D4D9F8">• PostgreSQL（任务/消息/成员）</text>
+  <text x="1236" y="320" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#D4D9F8">• Redis（在线连接/缓存）</text>
+  <text x="1236" y="350" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#D4D9F8">• 产物链接 / commit 归档</text>
 
-  <line x1="676" y1="306" x2="728" y2="306" stroke="#7E90BF" stroke-width="3"/>
-  <polygon points="728,306 716,299 716,313" fill="#7E90BF"/>
+  <!-- arrows main -->
+  <line x1="410" y1="435" x2="450" y2="435" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="790" y1="435" x2="830" y2="435" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1170" y1="435" x2="1210" y2="435" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
 
-  <line x1="1008" y1="306" x2="1060" y2="306" stroke="#7E90BF" stroke-width="3"/>
-  <polygon points="1060,306 1048,299 1048,313" fill="#7E90BF"/>
+  <!-- Realtime rail -->
+  <rect x="70" y="666" width="1460" height="156" rx="18" fill="#101B3A" stroke="#2F4D8A"/>
+  <text x="96" y="706" font-family="Inter, PingFang SC, sans-serif" font-size="25" fill="#E9F0FF" font-weight="700">Realtime Feedback Rail</text>
+  <text x="96" y="738" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C5D3F2">• WS 事件：task_status / typing / new_message 实时回流到前端视图</text>
+  <text x="96" y="764" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C5D3F2">• 质量闭环：review / reject / rerun 可回退到执行层继续迭代</text>
+  <text x="96" y="790" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C5D3F2">• 交付证据：summary + asset + commit id 形成可追踪结果</text>
 
-  <!-- Real-time feedback rail -->
-  <rect x="64" y="460" width="1276" height="126" rx="16" fill="#0D1630" stroke="#304575"/>
-  <text x="88" y="494" class="cardTitle">Realtime Feedback Rail</text>
-  <text x="88" y="520" class="cardText">• task_status / typing / new_message are pushed via WS and rendered in Feed/Chat immediately</text>
-  <text x="88" y="542" class="cardText">• review / reject / rerun operations form a closed-loop control path for delivery quality</text>
-  <text x="88" y="564" class="cardText">• key output is traceable: summary + asset + commit id</text>
-
-  <path d="M1200 586C1200 676 200 676 200 424" stroke="#6FA3FF" stroke-width="3" stroke-dasharray="9 8" filter="url(#softGlow)"/>
-  <polygon points="200,424 193,437 207,437" fill="#6FA3FF"/>
-  <text x="930" y="700" class="legend">Feedback loop to Interaction Layer</text>
-
-  <!-- Legend -->
-  <rect x="64" y="616" width="560" height="108" rx="14" fill="#0A132A" stroke="#24365F"/>
-  <text x="88" y="646" class="legend">Legend</text>
-  <line x1="88" y1="670" x2="150" y2="670" stroke="#7E90BF" stroke-width="3"/>
-  <text x="162" y="674" class="muted">Primary data/control path</text>
-  <line x1="88" y1="694" x2="150" y2="694" stroke="#6FA3FF" stroke-width="3" stroke-dasharray="9 8"/>
-  <text x="162" y="698" class="muted">Realtime feedback path (WS events)</text>
+  <path d="M1320 666C1320 618 980 618 980 634" stroke="#60A5FA" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrow2)" filter="url(#glow)"/>
+  <path d="M980 634C980 598 220 598 220 666" stroke="#60A5FA" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrow2)" filter="url(#glow)"/>
 </svg>
