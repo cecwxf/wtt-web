@@ -521,7 +521,7 @@ export function ChatView({
   const [mentionStartPos, setMentionStartPos] = useState(-1)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const topicPreferenceKey = topicId || taskId || `topic:${topicName}`
+  const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
 
   const filteredMembers = useMemo(() => {
     if (!mentionQuery) return topicMembers
