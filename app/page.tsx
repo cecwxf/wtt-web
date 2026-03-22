@@ -17,8 +17,9 @@ export default function Home() {
         badge: 'WTT Web · 多 Agent 协作控制台',
         title: '把 Agent 对话升级成可编排的工作系统',
         subtitle:
-          '参考 BotsChat 首页的叙事方式，我们把 WTT 的核心能力完整呈现：Agent 编排、Topic 协同、Task 生命周期、Runner 执行与可追踪观测。',
-        ctaPrimary: status === 'authenticated' ? '进入工作台' : '登录并开始',
+          '我们把 WTT 的核心能力完整呈现：Agent 编排、Topic 协同、Task 生命周期、Runner 执行与可追踪观测。',
+        ctaPrimary: '进入工作台',
+        ctaGuestPrimary: '查看功能概览',
         ctaSecondary: '查看架构总览',
         trust: ['多 Agent 协同', 'Topic / Task 双轨', '可观测执行流'],
         heroVisualTitle: 'WTT 工作面预览',
@@ -26,7 +27,7 @@ export default function Home() {
         archVisualTitle: 'WTT 架构图示',
         flowVisualTitle: '任务交付流程图',
         sectionPaired: '图文搭配',
-        sectionPairedTitle: '左右图文 + 架构说明（更接近 botschat 的阅读节奏）',
+        sectionPairedTitle: '左右图文 + 架构说明（突出结构化表达）',
         pairedItems: [
           {
             title: '协作工作台视角',
@@ -102,8 +103,9 @@ export default function Home() {
         badge: 'WTT Web · Multi-Agent Orchestration Console',
         title: 'Turn AI chat into an orchestrated delivery system',
         subtitle:
-          'Inspired by BotsChat’s homepage storytelling, this WTT landing highlights the full system: agent orchestration, topic collaboration, task lifecycle, runner execution, and observability.',
-        ctaPrimary: status === 'authenticated' ? 'Open Workspace' : 'Login to Start',
+          'This WTT landing highlights the full system: agent orchestration, topic collaboration, task lifecycle, runner execution, and observability.',
+        ctaPrimary: 'Open Workspace',
+        ctaGuestPrimary: 'Explore Features',
         ctaSecondary: 'View Architecture',
         trust: ['Multi-agent collaboration', 'Topic + Task dual rails', 'Observable execution flow'],
         heroVisualTitle: 'WTT Workspace Preview',
@@ -193,13 +195,15 @@ export default function Home() {
             <Bot className="h-4 w-4 text-slate-600" />
             <span>WTT-Web</span>
           </div>
-          <Link
-            href={status === 'authenticated' ? '/feed' : '/login'}
-            className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
-          >
-            {copy.login}
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Link>
+          {status === 'authenticated' && (
+            <Link
+              href="/feed"
+              className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
+            >
+              {copy.ctaPrimary}
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
         </header>
 
         <section className="mb-12 grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-center">
@@ -212,10 +216,10 @@ export default function Home() {
             <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">{copy.subtitle}</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
-                href={status === 'authenticated' ? '/feed' : '/login'}
+                href={status === 'authenticated' ? '/feed' : '#wtt-arch'}
                 className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
               >
-                {copy.ctaPrimary}
+                {status === 'authenticated' ? copy.ctaPrimary : copy.ctaGuestPrimary}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <a
@@ -372,10 +376,10 @@ export default function Home() {
           <p className="mx-auto mt-2 max-w-3xl text-sm leading-6 text-slate-600">{copy.finalDesc}</p>
           <div className="mt-5 flex justify-center gap-3">
             <Link
-              href={status === 'authenticated' ? '/feed' : '/login'}
+              href={status === 'authenticated' ? '/feed' : '#wtt-arch'}
               className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
             >
-              {copy.ctaPrimary}
+              {status === 'authenticated' ? copy.ctaPrimary : copy.ctaGuestPrimary}
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
