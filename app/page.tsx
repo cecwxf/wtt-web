@@ -141,12 +141,12 @@ export default function Home() {
       }
 
   return (
-    <main className="min-h-screen bg-[#020817] text-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(99,102,241,0.30),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.18),transparent_30%)]" />
+    <main className="min-h-screen bg-white text-slate-800">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(99,102,241,0.08),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.06),transparent_30%)]" />
       <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-8">
-        <header className="mb-14 flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/70 px-5 py-3 shadow-sm">
-          <div className="flex items-center gap-2 text-sm text-slate-300">
-            <Bot className="h-4 w-4 text-slate-400" />
+        <header className="mb-14 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
+          <div className="flex items-center gap-2 text-sm text-slate-700">
+            <Bot className="h-4 w-4 text-slate-600" />
             <span>WTT</span>
           </div>
           <Link
@@ -164,8 +164,8 @@ export default function Home() {
               <Sparkles className="h-3.5 w-3.5" />
               {copy.badge}
             </div>
-            <h1 className="max-w-4xl text-4xl font-bold leading-tight text-slate-100 sm:text-5xl">{copy.title}</h1>
-            <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-400 sm:text-base">{copy.subtitle}</p>
+            <h1 className="max-w-4xl text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">{copy.title}</h1>
+            <p className="mt-5 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">{copy.subtitle}</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
                 href={status === 'authenticated' ? '/feed' : '#diagram-sections'}
@@ -176,32 +176,32 @@ export default function Home() {
               </Link>
               <a
                 href="#diagram-sections"
-                className="inline-flex items-center gap-2 rounded-xl border border-indigo-400/30 bg-indigo-500/10 px-5 py-2.5 text-sm text-indigo-200 transition hover:bg-indigo-500/20"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm text-slate-700 transition hover:bg-slate-100"
               >
                 {copy.ctaSecondary}
               </a>
             </div>
-            <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-400">
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-600">
               {copy.trust.map((item) => (
-                <span key={item} className="rounded-full border border-slate-800 bg-slate-900/70 px-2.5 py-1">
+                <span key={item} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
                   {item}
                 </span>
               ))}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between px-1">
-              <p className="text-sm font-semibold text-slate-100">{copy.heroVisualTitle}</p>
+              <p className="text-sm font-semibold text-slate-900">{copy.heroVisualTitle}</p>
               <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">Live</span>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-1">
+            <div className="rounded-xl border border-slate-200 bg-white p-1">
               <a href="/landing/wtt-hero.svg" target="_blank" rel="noreferrer" className="block">
                 <Image src="/landing/wtt-hero.svg" alt="WTT global preview" width={1600} height={900} className="h-auto w-full" priority />
               </a>
             </div>
-            <p className="mt-3 px-1 text-xs text-slate-400">{copy.heroVisualDesc}</p>
-            <a href="/landing/wtt-hero.svg" target="_blank" rel="noreferrer" className="mt-1 inline-flex px-1 text-xs text-slate-500 underline underline-offset-2 hover:text-slate-300">
+            <p className="mt-3 px-1 text-xs text-slate-600">{copy.heroVisualDesc}</p>
+            <a href="/landing/wtt-hero.svg" target="_blank" rel="noreferrer" className="mt-1 inline-flex px-1 text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">
               {copy.viewFull}
             </a>
           </div>
@@ -209,21 +209,21 @@ export default function Home() {
 
         <section id="diagram-sections" className="mb-12">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionPaired}</p>
-          <h2 className="mb-5 text-2xl font-semibold text-slate-100">{copy.sectionPairedTitle}</h2>
+          <h2 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionPairedTitle}</h2>
           <div className="space-y-4">
             {copy.pairedItems.map((item, idx) => (
-              <article key={item.title} className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm lg:grid-cols-[1.35fr_0.65fr] lg:items-center">
+              <article key={item.title} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1.35fr_0.65fr] lg:items-center">
                 <div className={idx % 2 === 1 ? 'lg:order-2' : ''}>
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-1">
+                  <div className="rounded-xl border border-slate-200 bg-white p-1">
                     <a href={item.image} target="_blank" rel="noreferrer" className="block">
                       <Image src={item.image} alt={item.title} width={1600} height={900} className="h-auto w-full" />
                     </a>
                   </div>
                 </div>
                 <div className={idx % 2 === 1 ? 'lg:order-1' : ''}>
-                  <p className="text-lg font-semibold text-slate-100">{item.title}</p>
-                  <p className="mt-2 text-sm text-slate-400">{item.desc}</p>
-                  <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                  <p className="text-lg font-semibold text-slate-900">{item.title}</p>
+                  <p className="mt-2 text-sm text-slate-600">{item.desc}</p>
+                  <ul className="mt-3 space-y-2 text-sm text-slate-700">
                     {item.points.map((point) => (
                       <li key={point} className="flex items-start gap-2">
                         <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-400" />
@@ -231,7 +231,7 @@ export default function Home() {
                       </li>
                     ))}
                   </ul>
-                  <a href={item.image} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs text-slate-500 underline underline-offset-2 hover:text-slate-300">
+                  <a href={item.image} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">
                     {copy.viewFull}
                   </a>
                 </div>
@@ -242,13 +242,13 @@ export default function Home() {
 
         <section className="mb-12">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionFeature}</p>
-          <h2 className="mb-5 text-2xl font-semibold text-slate-100">{copy.sectionFeatureTitle}</h2>
+          <h2 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionFeatureTitle}</h2>
           <div className="grid gap-3 md:grid-cols-3">
             {[Lock, Workflow, Radar].map((Icon, i) => (
-              <article key={copy.featureCards[i].title} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-sm">
-                <Icon className="mb-3 h-5 w-5 text-slate-400" />
-                <h3 className="mb-2 text-base font-semibold text-slate-100">{copy.featureCards[i].title}</h3>
-                <p className="text-sm leading-6 text-slate-400">{copy.featureCards[i].desc}</p>
+              <article key={copy.featureCards[i].title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <Icon className="mb-3 h-5 w-5 text-slate-600" />
+                <h3 className="mb-2 text-base font-semibold text-slate-900">{copy.featureCards[i].title}</h3>
+                <p className="text-sm leading-6 text-slate-600">{copy.featureCards[i].desc}</p>
               </article>
             ))}
           </div>
@@ -256,10 +256,10 @@ export default function Home() {
 
         <section className="mb-12">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionCapability}</p>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="grid gap-2">
               {copy.capabilities.map((c) => (
-                <div key={c} className="flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-800/60 px-3 py-2 text-sm text-slate-300">
+                <div key={c} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
                   <span>{c}</span>
                 </div>
@@ -268,12 +268,12 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center">
-          <div className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-800">
-            <Blocks className="h-5 w-5 text-slate-400" />
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+          <div className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+            <Blocks className="h-5 w-5 text-slate-600" />
           </div>
-          <h3 className="text-xl font-semibold text-slate-100">{copy.finalTitle}</h3>
-          <p className="mx-auto mt-2 max-w-3xl text-sm leading-6 text-slate-400">{copy.finalDesc}</p>
+          <h3 className="text-xl font-semibold text-slate-900">{copy.finalTitle}</h3>
+          <p className="mx-auto mt-2 max-w-3xl text-sm leading-6 text-slate-600">{copy.finalDesc}</p>
           <div className="mt-5 flex justify-center gap-3">
             <Link
               href={status === 'authenticated' ? '/feed' : '#diagram-sections'}
@@ -284,7 +284,7 @@ export default function Home() {
             </Link>
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 rounded-xl border border-indigo-400/30 bg-indigo-500/10 px-5 py-2.5 text-sm text-indigo-200 transition hover:bg-indigo-500/20"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm text-slate-700 transition hover:bg-slate-100"
             >
               <Cpu className="h-4 w-4" />
               {copy.login}
