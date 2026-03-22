@@ -669,17 +669,18 @@ export function ChatView({
   }, [attachMenuOpen])
 
   const isDiscussTopic = topicType === 'discussion'
+  const isNonTaskDiscussTopic = isDiscussTopic && !isTaskTopic
   const isModelCommand = useCallback((cmd: string) => {
     const c = cmd.trim().toLowerCase()
     return c === '/model' || c.startsWith('/model ') || c === '/models' || c.startsWith('/models ')
   }, [])
 
   const availableSlashCommands = useMemo(() => {
-    if (!isDiscussTopic) return SLASH_COMMANDS
-    // In discuss topics, model switching must be blocked to avoid all agents
-    // reacting to the same slash command.
+    if (!isNonTaskDiscussTopic) return SLASH_COMMANDS
+    // In non-task discuss topics, model switching must be blocked to avoid all
+    // agents reacting to the same slash command.
     return SLASH_COMMANDS.filter((c) => !isModelCommand(c.cmd))
-  }, [isDiscussTopic, isModelCommand])
+  }, [isNonTaskDiscussTopic, isModelCommand])
 
   // Slash command filtering
   const filteredCommands = slashFilter
@@ -941,8 +942,8 @@ export function ChatView({
       const match = sorted.find(c => content.toLowerCase() === c.cmd || content.toLowerCase().startsWith(c.cmd + ' '))
       const mode = match?.mode ?? 'passthrough'
 
-      if (isDiscussTopic && isModelCommand(content)) {
-        setSlashResult('⚠️ Discuss topic 中不允许切模型（会触发多 agent 响应）。')
+      if (isNonTaskDiscussTopic && isModelCommand(content)) {
+        setSlashResult('⚠️ 非任务 discuss topic 中不允许切模型（会触发多 agent 响应）。')
         return
       }
 
@@ -1646,7 +1647,7 @@ export function ChatView({
 
         {/* Compact control bar: model / think / quick slash */}
         <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
-          {!isDiscussTopic && (
+          {!isNonTaskDiscussTopic && (
             <div className="relative shrink-0" ref={modelMenuRef}>
               <button
                 onClick={() => setModelMenuOpen(!modelMenuOpen)}
@@ -1719,7 +1720,7 @@ export function ChatView({
             )}
           </div>
 
-          {QUICK_SLASH_ACTIONS.filter((action) => !(isDiscussTopic && isModelCommand(action.cmd))).map((action) => (
+          {QUICK_SLASH_ACTIONS.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd))).map((action) => (
             <button
               key={action.cmd}
               type="button"
