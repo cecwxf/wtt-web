@@ -752,6 +752,9 @@ function FeedPageInner() {
     if (!selectedTopicId || !selectedAgentId) return
 
     const isTask = !!selectedTopic?.task_id
+    const isSlashCommand = content.trim().startsWith('/')
+    const isNonTaskDiscuss = selectedTopic?.topic_type === 'discussion' && !isTask
+
     // Build metadata with model config so the agent knows which model/mode to use
     const metadata: Record<string, unknown> = {}
     if (modelConfig) {
@@ -759,6 +762,11 @@ function FeedPageInner() {
         model: modelConfig.model,
         reasoning_effort: modelConfig.reasoningEffort,
       }
+    }
+
+    if (isSlashCommand && isNonTaskDiscuss) {
+      metadata.command_scope = 'single_agent'
+      metadata.command_target_agent_id = selectedAgentId
     }
 
     // Check if this is a first-time worker session — inject persona.md as system context
