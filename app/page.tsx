@@ -149,15 +149,13 @@ export default function Home() {
             <Bot className="h-4 w-4 text-slate-400" />
             <span>WTT</span>
           </div>
-          {status === 'authenticated' && (
-            <Link
-              href="/feed"
-              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500"
-            >
-              {copy.ctaPrimary}
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          )}
+          <Link
+            href={status === 'authenticated' ? '/feed' : '/login'}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500"
+          >
+            {status === 'authenticated' ? copy.ctaPrimary : copy.login}
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
         </header>
 
         <section className="mb-12 grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-center">
