@@ -271,7 +271,6 @@ function DiscoverPageInner() {
   }
 
   const handleUnclaimAgent = async (agentId: string) => {
-    await new Promise((r) => setTimeout(r, 0))
     if (!confirm(`Unclaim agent ${agentId}?`)) return
     try {
       const token = session?.accessToken as string | undefined
@@ -289,6 +288,7 @@ function DiscoverPageInner() {
       }
       await loadAgents()
       await mutateTopics()
+      alert('Agent unclaimed')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Unclaim failed')
     }
