@@ -98,6 +98,7 @@ export default function Home() {
         finalTitle: '准备好把 WTT 升级成“可演示 + 可生产”的首页了吗？',
         finalDesc: '登录入口保留，同时首页承担产品叙事：先看懂架构，再进入执行。',
         login: '登录',
+        viewFull: '查看原图（全尺寸）',
       }
     : {
         badge: 'WTT · Multi-Agent Orchestration Console',
@@ -184,6 +185,7 @@ export default function Home() {
         finalTitle: 'Ready to turn WTT into a product-grade landing experience?',
         finalDesc: 'Keep login intact, and let the homepage explain architecture before users enter execution.',
         login: 'Login',
+        viewFull: 'View full-size image',
       }
 
   return (
@@ -243,10 +245,15 @@ export default function Home() {
               <p className="text-sm font-semibold text-slate-800">{copy.heroVisualTitle}</p>
               <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">Live</span>
             </div>
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <Image src="/landing/wtt-dashboard.svg" alt="WTT dashboard preview" width={1280} height={820} className="h-auto w-full" priority />
+            <div className="rounded-xl border border-slate-200 bg-white p-1">
+              <a href="/landing/wtt-dashboard.svg" target="_blank" rel="noreferrer" className="block">
+                <Image src="/landing/wtt-dashboard.svg" alt="WTT dashboard preview" width={1280} height={820} className="h-auto w-full" priority />
+              </a>
             </div>
             <p className="mt-3 px-1 text-xs text-slate-600">{copy.heroVisualDesc}</p>
+            <a href="/landing/wtt-dashboard.svg" target="_blank" rel="noreferrer" className="mt-1 inline-flex px-1 text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">
+              {copy.viewFull}
+            </a>
           </div>
         </section>
 
@@ -255,10 +262,12 @@ export default function Home() {
           <h2 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionPairedTitle}</h2>
           <div className="space-y-4">
             {copy.pairedItems.map((item, idx) => (
-              <article key={item.title} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-2 lg:items-center">
+              <article key={item.title} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1.35fr_0.65fr] lg:items-center">
                 <div className={idx % 2 === 1 ? 'lg:order-2' : ''}>
-                  <div className="overflow-hidden rounded-xl border border-slate-200">
-                    <Image src={item.image} alt={item.title} width={1280} height={820} className="h-auto w-full" />
+                  <div className="rounded-xl border border-slate-200 bg-white p-1">
+                    <a href={item.image} target="_blank" rel="noreferrer" className="block">
+                      <Image src={item.image} alt={item.title} width={1280} height={820} className="h-auto w-full" />
+                    </a>
                   </div>
                 </div>
                 <div className={idx % 2 === 1 ? 'lg:order-1' : ''}>
@@ -272,6 +281,9 @@ export default function Home() {
                       </li>
                     ))}
                   </ul>
+                  <a href={item.image} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">
+                    {copy.viewFull}
+                  </a>
                 </div>
               </article>
             ))}
@@ -295,7 +307,7 @@ export default function Home() {
         <section id="wtt-arch" className="mb-12 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionArch}</p>
           <h2 className="mb-6 text-2xl font-semibold text-slate-900">{copy.sectionArchTitle}</h2>
-          <div className="grid gap-4 lg:grid-cols-[1fr_1fr] lg:items-start">
+          <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
             <div className="grid gap-3 md:grid-cols-2">
               {copy.archNodes.map((n, idx) => (
                 <div key={n.title} className="relative rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -309,21 +321,31 @@ export default function Home() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="mb-2 text-xs text-slate-600">{copy.archVisualTitle}</p>
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <Image src="/landing/wtt-architecture.svg" alt="WTT architecture diagram" width={1280} height={540} className="h-auto w-full" />
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs text-slate-600">{copy.archVisualTitle}</p>
+                <a href="/landing/wtt-architecture.svg" target="_blank" rel="noreferrer" className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">{copy.viewFull}</a>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white p-1">
+                <a href="/landing/wtt-architecture.svg" target="_blank" rel="noreferrer" className="block">
+                  <Image src="/landing/wtt-architecture.svg" alt="WTT architecture diagram" width={1400} height={780} className="h-auto w-full" />
+                </a>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="mb-12 grid gap-4 lg:grid-cols-2">
+        <section className="mb-12 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionFlow}</p>
             <h3 className="mb-4 text-xl font-semibold text-slate-900">{copy.sectionFlowTitle}</h3>
-            <p className="mb-2 text-xs text-slate-600">{copy.flowVisualTitle}</p>
-            <div className="mb-4 overflow-hidden rounded-xl border border-slate-200">
-              <Image src="/landing/wtt-flow.svg" alt="WTT task flow" width={1280} height={560} className="h-auto w-full" />
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs text-slate-600">{copy.flowVisualTitle}</p>
+              <a href="/landing/wtt-flow.svg" target="_blank" rel="noreferrer" className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">{copy.viewFull}</a>
+            </div>
+            <div className="mb-4 rounded-xl border border-slate-200 bg-white p-1">
+              <a href="/landing/wtt-flow.svg" target="_blank" rel="noreferrer" className="block">
+                <Image src="/landing/wtt-flow.svg" alt="WTT task flow" width={1280} height={560} className="h-auto w-full" />
+              </a>
             </div>
             <div className="space-y-3">
               {copy.flow.map((f) => (
@@ -353,15 +375,20 @@ export default function Home() {
         <section className="mb-12">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionGallery}</p>
           <h3 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionGalleryTitle}</h3>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4">
             {copy.gallery.map((item) => (
               <article key={item.title} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200">
-                  <Image src={item.image} alt={item.title} width={1280} height={820} className="h-auto w-full" />
+                <div className="border-b border-slate-200 bg-white p-1">
+                  <a href={item.image} target="_blank" rel="noreferrer" className="block">
+                    <Image src={item.image} alt={item.title} width={1280} height={820} className="h-auto w-full" />
+                  </a>
                 </div>
                 <div className="p-4">
                   <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-600">{item.desc}</p>
+                  <a href={item.image} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">
+                    {copy.viewFull}
+                  </a>
                 </div>
               </article>
             ))}
