@@ -97,6 +97,50 @@ export interface MentionableAgent {
   display_name: string
 }
 
+type ActionQuickButton = {
+  text: string
+  command: string
+}
+
+function extractActionQuickButtons(content: string): { body: string; buttons: ActionQuickButton[] } {
+  if (!content || !content.includes('```action')) {
+    return { body: content, buttons: [] }
+  }
+
+  const buttons: ActionQuickButton[] = []
+  const body = content.replace(/```action\s*([\s\S]*?)```/gi, (_match, inner) => {
+    const raw = String(inner || '').trim()
+    if (!raw) return ''
+
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      const kind = String(parsed.kind || parsed.type || '').toLowerCase()
+      if (kind !== 'buttons' && kind !== 'confirm') return ''
+
+      const rows = Array.isArray(parsed.buttons)
+        ? parsed.buttons
+        : Array.isArray(parsed.options)
+          ? parsed.options
+          : []
+
+      for (const row of rows) {
+        if (!row || typeof row !== 'object') continue
+        const item = row as Record<string, unknown>
+        const text = String(item.text || item.label || item.title || '').trim()
+        const command = String(item.command || item.value || item.callback_data || item.payload || '').trim()
+        if (!text || !command) continue
+        buttons.push({ text, command })
+      }
+    } catch {
+      // ignore malformed action blocks
+    }
+
+    return ''
+  })
+
+  return { body: body.trim(), buttons }
+}
+
 interface ChatViewProps {
   topicName: string
   topicId?: string
@@ -1138,7 +1182,8 @@ export function ChatView({
 
                         // Strip ASCII box-drawing metadata blocks
                         const { body: cleanContent } = stripMetaBlocks(message.content || '')
-                        const blocks = parseRichBlocks(cleanContent)
+                        const { body: actionCleanBody, buttons: actionButtons } = extractActionQuickButtons(cleanContent)
+                        const blocks = parseRichBlocks(actionCleanBody)
 
                         // Detect document message pattern: plain text preview + .md/.html file
                         const docFileIdx = blocks.findIndex(
@@ -1279,6 +1324,22 @@ export function ChatView({
                               if (!block.text?.trim()) return null
                               return <p key={bi} className="whitespace-pre-wrap break-words leading-relaxed">{block.text}</p>
                             })}
+
+                            {actionButtons.length > 0 && (
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                {actionButtons.map((btn, idx) => (
+                                  <button
+                                    key={`${btn.command}-${idx}`}
+                                    type="button"
+                                    onClick={() => setDraft(btn.command)}
+                                    className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs text-indigo-600 transition hover:bg-indigo-100"
+                                    title={btn.command}
+                                  >
+                                    {btn.text}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )
                       })()}
