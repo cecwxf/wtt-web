@@ -728,7 +728,7 @@ function FeedPageInner() {
     mutate()
   }
 
-  const handleExportTopic = (format: 'md' | 'pdf' | 'docx') => {
+  const handleExportTopic = (format: 'md') => {
     if (!selectedTopicId) return
     const u = `${CLIENT_WTT_API_BASE}/export/topic/${selectedTopicId}?format=${format}`
     window.open(u, '_blank', 'noopener,noreferrer')

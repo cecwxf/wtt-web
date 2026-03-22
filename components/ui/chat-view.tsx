@@ -189,7 +189,7 @@ interface ChatViewProps {
   currentAgentId: string
   onSendMessage: (content: string, modelConfig?: ChatModelConfig) => Promise<void>
   onLoadOlder?: () => Promise<void>
-  onExport?: (format: 'md' | 'pdf' | 'docx') => void
+  onExport?: (format: 'md') => void
   hasOlder?: boolean
   loading?: boolean
   extraHeaderActions?: React.ReactNode
@@ -430,7 +430,12 @@ function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
             </div>
           ) : (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={url} alt="" className="max-h-[90vh] max-w-[90vw] rounded-lg" />
+            <img
+              src={url}
+              alt=""
+              onError={() => setFailed(true)}
+              className="max-h-[90vh] max-w-[90vw] rounded-lg"
+            />
           )}
         </div>
       )}
@@ -499,7 +504,9 @@ export function ChatView({
   const [selectedModel, setSelectedModel] = useState(FALLBACK_MODELS[0].id)
   const [reasoningEffort, setReasoningEffort] = useState<'off' | 'low' | 'medium' | 'high'>(defaultEffort)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const [thinkMenuOpen, setThinkMenuOpen] = useState(false)
   const modelMenuRef = useRef<HTMLDivElement>(null)
+  const thinkMenuRef = useRef<HTMLDivElement>(null)
   const attachMenuRef = useRef<HTMLDivElement>(null)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
@@ -589,6 +596,17 @@ export function ChatView({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [modelMenuOpen])
+
+  useEffect(() => {
+    if (!thinkMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (thinkMenuRef.current && !thinkMenuRef.current.contains(e.target as Node)) {
+        setThinkMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [thinkMenuOpen])
 
   useEffect(() => {
     if (!attachMenuOpen) return
@@ -1152,17 +1170,14 @@ export function ChatView({
                 <Download size={12} /> Export ▾
               </button>
               {exportOpen && (
-                <div className="absolute right-0 top-full mt-1 z-30 min-w-[120px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
-                  {(['md', 'pdf', 'docx'] as const).map(fmt => (
-                    <button
-                      key={fmt}
-                      onMouseDown={e => e.preventDefault()}
-                      onClick={() => { onExport?.(fmt); setExportOpen(false) }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-800 dark:hover:text-zinc-100"
-                    >
-                      {fmt === 'md' ? '📝' : fmt === 'pdf' ? '📄' : '📑'} {fmt.toUpperCase()}
-                    </button>
-                  ))}
+                <div className="absolute right-0 top-full mt-1 z-30 min-w-[132px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                  <button
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => { onExport?.('md'); setExportOpen(false) }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-800 dark:hover:text-zinc-100"
+                  >
+                    📝 MarkDown
+                  </button>
                 </div>
               )}
             </div>
@@ -1417,7 +1432,12 @@ export function ChatView({
                                       {pv.image && (
                                         <a href={block.url} target="_blank" rel="noreferrer" className="mb-2 block">
                                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                                          <img src={pv.image} alt={pv.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
+                                          <img
+                                            src={pv.image}
+                                            alt={pv.title || 'preview'}
+                                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                            className="max-h-52 w-full rounded-md border border-slate-200 object-cover"
+                                          />
                                         </a>
                                       )}
                                       <p className="text-xs font-semibold text-slate-700">{pv.title || block.url}</p>
@@ -1436,7 +1456,12 @@ export function ChatView({
                                     {block.image && (
                                       <a href={block.url} target="_blank" rel="noreferrer" className="mb-2 block">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={block.image} alt={block.title || 'preview'} className="max-h-52 w-full rounded-md border border-slate-200 object-cover" />
+                                        <img
+                                          src={block.image}
+                                          alt={block.title || 'preview'}
+                                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                          className="max-h-52 w-full rounded-md border border-slate-200 object-cover"
+                                        />
                                       </a>
                                     )}
                                     <p className="text-xs font-semibold text-slate-700">{block.title || 'Link Preview'}</p>
@@ -1579,30 +1604,39 @@ export function ChatView({
             )}
           </div>
 
-          <div className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-1.5 py-1 shrink-0">
-            <span className="text-slate-400">think</span>
-            {REASONING_EFFORTS.map((e) => (
-              <label
-                key={e.id}
-                className={`flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer transition ${
-                  reasoningEffort === e.id
-                    ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400'
-                    : 'text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-700'
-                }`}
-                title={`/think ${e.id}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={reasoningEffort === e.id}
-                  onChange={() => {
-                    setReasoningEffort(e.id)
-                    void sendPassthroughSlash(`/think ${e.id}`, { silent: true })
-                  }}
-                  className="h-3 w-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>{e.label}</span>
-              </label>
-            ))}
+          <div className="relative shrink-0" ref={thinkMenuRef}>
+            <button
+              onClick={() => setThinkMenuOpen((v) => !v)}
+              className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2 py-1 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition"
+              title="Select think mode"
+            >
+              <span>🧠</span>
+              <span className="font-medium">{REASONING_EFFORTS.find((e) => e.id === reasoningEffort)?.label || reasoningEffort}</span>
+              <span className="text-slate-400">▾</span>
+            </button>
+            {thinkMenuOpen && (
+              <div className="absolute bottom-full left-0 mb-1 z-50 min-w-[140px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                {REASONING_EFFORTS.map((e) => (
+                  <button
+                    key={e.id}
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={() => {
+                      setReasoningEffort(e.id)
+                      setThinkMenuOpen(false)
+                      void sendPassthroughSlash(`/think ${e.id}`, { silent: true })
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
+                      reasoningEffort === e.id
+                        ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 font-medium'
+                        : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    {reasoningEffort === e.id && <span className="text-indigo-500">✓</span>}
+                    <span>{e.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {QUICK_SLASH_ACTIONS.map((action) => (
