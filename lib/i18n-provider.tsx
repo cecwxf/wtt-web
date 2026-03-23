@@ -344,6 +344,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'chat.statusBlocked': '已阻塞',
     'chat.startConversation': '开始对话',
     'chat.copyLink': '复制链接',
+    'chat.agentProfile': 'Agent 资料',
+    'chat.agentId': 'Agent ID',
+    'chat.owners': '主人数',
+    'chat.privateDiscussRequest': '申请 Private Discuss',
+    'chat.requesting': '申请中...',
   },
   en: {
     'common.close': 'Close',
@@ -675,6 +680,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'chat.statusBlocked': 'Blocked',
     'chat.startConversation': 'Start the conversation',
     'chat.copyLink': 'Copy Link',
+    'chat.agentProfile': 'Agent Profile',
+    'chat.agentId': 'Agent ID',
+    'chat.owners': 'Owners',
+    'chat.privateDiscussRequest': 'Request Private Discuss',
+    'chat.requesting': 'Requesting...',
   },
 }
 

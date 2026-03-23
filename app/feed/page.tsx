@@ -83,6 +83,7 @@ function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[]
       sender_id: senderId,
       sender_display_name: senderDisplayName,
       sender_type: normalizeSenderType(data.sender_type, senderId, knownAgentIds, senderDisplayName),
+      sender_avatar_url: data.sender_avatar_url ? String(data.sender_avatar_url) : undefined,
       content: String(data.content ?? ''),
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
       semantic_type: String(data.semantic_type ?? ''),
@@ -360,6 +361,7 @@ function FeedPageInner() {
         sender_id: senderId,
         sender_display_name: senderDisplayName,
         sender_type: normalizeSenderType((msg.message as Record<string, unknown>).sender_type, senderId, knownAgentIds, senderDisplayName),
+        sender_avatar_url: (msg.message as Record<string, unknown>).sender_avatar_url ? String((msg.message as Record<string, unknown>).sender_avatar_url) : undefined,
         content: msg.message.content,
         timestamp: msg.message.created_at,
         semantic_type: msg.message.semantic_type,
@@ -1219,6 +1221,7 @@ function FeedPageInner() {
                 topicMembers={topicMembers}
                 topicType={selectedTopic.topic_type}
                 typingIndicatorText={selectedTopicTypingText}
+                onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (
                     <div className="relative">

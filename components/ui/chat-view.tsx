@@ -13,6 +13,7 @@ export interface ChatMessage {
   message_id: string
   sender_id: string
   sender_display_name?: string
+  sender_avatar_url?: string
   sender_type: 'human' | 'agent'
   content: string
   timestamp: string
@@ -248,6 +249,15 @@ interface ChatViewProps {
   topicMembers?: MentionableAgent[]
   topicType?: string
   typingIndicatorText?: string | null
+  onRequestPrivateDiscuss?: (targetAgentId: string, targetDisplayName?: string) => Promise<void> | void
+}
+
+interface AgentProfileSummary {
+  agent_id: string
+  display_name: string
+  avatar_url?: string | null
+  owner_count?: number
+  owner_names?: string[]
 }
 
 type ParsedRich =
@@ -516,6 +526,13 @@ function ThumbnailVideo({ url, isMine }: { url: string; isMine: boolean }) {
   )
 }
 
+function avatarInitial(name?: string, fallback = '?'): string {
+  const n = String(name || '').trim()
+  if (!n) return fallback
+  const first = n[0]
+  return first.toUpperCase()
+}
+
 export function ChatView({
   topicName,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -539,6 +556,7 @@ export function ChatView({
   topicMembers = [],
   topicType,
   typingIndicatorText = null,
+  onRequestPrivateDiscuss,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -582,6 +600,13 @@ export function ChatView({
   const [mentionStartPos, setMentionStartPos] = useState(-1)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Avatar/profile card states
+  const [agentCardOpen, setAgentCardOpen] = useState(false)
+  const [agentCardLoading, setAgentCardLoading] = useState(false)
+  const [agentCardError, setAgentCardError] = useState<string | null>(null)
+  const [agentCardRequesting, setAgentCardRequesting] = useState(false)
+  const [agentCard, setAgentCard] = useState<AgentProfileSummary | null>(null)
+
   const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
 
   const filteredMembers = useMemo(() => {
@@ -591,6 +616,60 @@ export function ChatView({
       m.display_name.toLowerCase().includes(q) || m.agent_id.toLowerCase().includes(q)
     )
   }, [topicMembers, mentionQuery])
+
+  const openAgentCard = useCallback(async (agentId: string, fallbackName?: string, fallbackAvatar?: string) => {
+    if (!agentId) return
+    setAgentCardOpen(true)
+    setAgentCardLoading(true)
+    setAgentCardError(null)
+    setAgentCard({
+      agent_id: agentId,
+      display_name: fallbackName || agentId,
+      avatar_url: fallbackAvatar || null,
+      owner_count: undefined,
+      owner_names: [],
+    })
+
+    try {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/profile`, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      })
+
+      if (!res.ok) {
+        throw new Error(`status_${res.status}`)
+      }
+
+      const data = await res.json()
+      const ownerNames = Array.isArray(data?.owner_names)
+        ? data.owner_names.map((v: unknown) => String(v)).filter(Boolean)
+        : []
+
+      setAgentCard({
+        agent_id: String(data?.agent_id || agentId),
+        display_name: String(data?.display_name || fallbackName || agentId),
+        avatar_url: data?.avatar_url ? String(data.avatar_url) : (fallbackAvatar || null),
+        owner_count: Number.isFinite(Number(data?.owner_count)) ? Number(data.owner_count) : undefined,
+        owner_names: ownerNames,
+      })
+    } catch {
+      setAgentCardError('Failed to load agent profile')
+    } finally {
+      setAgentCardLoading(false)
+    }
+  }, [accessToken])
+
+  const handleRequestPrivateFromCard = useCallback(async () => {
+    if (!agentCard?.agent_id || !onRequestPrivateDiscuss) return
+    setAgentCardRequesting(true)
+    try {
+      await onRequestPrivateDiscuss(agentCard.agent_id, agentCard.display_name)
+      setAgentCardOpen(false)
+    } catch {
+      // caller usually handles feedback; keep UI stable
+    } finally {
+      setAgentCardRequesting(false)
+    }
+  }, [agentCard, onRequestPrivateDiscuss])
 
   // Fetch available models from API
   useEffect(() => {
@@ -1291,27 +1370,51 @@ export function ChatView({
 
                 return (
                   <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[82%] rounded-2xl px-5 py-3.5 text-[14px] leading-relaxed tracking-[-0.01em] ${
-                        isMine
-                          ? 'border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/80 dark:bg-indigo-950/20 text-slate-800 dark:text-zinc-200'
-                          : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'
-                      } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
-                    >
-                      {(() => {
-                        let label = message.sender_display_name || message.sender_id || ''
-                        // Strip verbose prefixes — keep concise sender identity
-                        label = label.replace(/^Agent\s+/i, '').replace(/^WTT[\s-]*User\s*/i, '').trim()
-                        if (!label) return null
+                    <div className={`flex max-w-[92%] items-end gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
+                      {message.sender_type === 'agent' ? (
+                        <button
+                          type="button"
+                          onClick={() => openAgentCard(message.sender_id, message.sender_display_name, message.sender_avatar_url)}
+                          title={`View ${message.sender_display_name || message.sender_id} profile`}
+                          className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-600 shadow-sm hover:border-indigo-300 hover:text-indigo-600"
+                        >
+                          {message.sender_avatar_url ? (
+                            <img src={message.sender_avatar_url} alt={message.sender_display_name || message.sender_id} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center">{avatarInitial(message.sender_display_name || message.sender_id, 'A')}</span>
+                          )}
+                        </button>
+                      ) : (
+                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-indigo-200 bg-indigo-100 text-[11px] font-semibold text-indigo-700 shadow-sm">
+                          {message.sender_avatar_url ? (
+                            <img src={message.sender_avatar_url} alt={message.sender_display_name || message.sender_id} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center">{avatarInitial(message.sender_display_name || message.sender_id, 'U')}</span>
+                          )}
+                        </div>
+                      )}
 
-                        return (
-                          <p className={`mb-1 text-xs font-semibold ${isMine ? 'text-emerald-600 text-right' : 'text-indigo-600'}`}>
-                            {label}
-                          </p>
-                        )
-                      })()}
-                      {(() => {
-                        const task = parseTaskContent(message.content || '')
+                      <div
+                        className={`max-w-[82%] rounded-2xl px-5 py-3.5 text-[14px] leading-relaxed tracking-[-0.01em] ${
+                          isMine
+                            ? 'border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/80 dark:bg-indigo-950/20 text-slate-800 dark:text-zinc-200'
+                            : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'
+                        } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
+                      >
+                        {(() => {
+                          let label = message.sender_display_name || message.sender_id || ''
+                          // Strip verbose prefixes — keep concise sender identity
+                          label = label.replace(/^Agent\s+/i, '').replace(/^WTT[\s-]*User\s*/i, '').trim()
+                          if (!label) return null
+
+                          return (
+                            <p className={`mb-1 text-xs font-semibold ${isMine ? 'text-emerald-600 text-right' : 'text-indigo-600'}`}>
+                              {label}
+                            </p>
+                          )
+                        })()}
+                        {(() => {
+                          const task = parseTaskContent(message.content || '')
                         if (task.isTask) {
                           const colorMap: Record<string, { border: string; badge: string; badgeText: string; bg: string }> = {
                             run: { border: 'border-l-indigo-500', badge: 'bg-indigo-100 text-indigo-700', badgeText: t('chat.taskMeta'), bg: 'bg-indigo-50/50' },
@@ -1572,6 +1675,7 @@ export function ChatView({
                       </div>
                     </div>
                   </div>
+                  </div>
                 )
               })}
             </div>
@@ -1636,6 +1740,71 @@ export function ChatView({
         )
       })()}
 
+      {agentCardOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4" onClick={() => setAgentCardOpen(false)}>
+          <div
+            className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-100">{t('chat.agentProfile')}</h3>
+              <button
+                type="button"
+                onClick={() => setAgentCardOpen(false)}
+                className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-zinc-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-3 flex items-center gap-3">
+              <div className="h-11 w-11 overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-600">
+                {agentCard?.avatar_url ? (
+                  <img src={agentCard.avatar_url} alt={agentCard.display_name || agentCard.agent_id} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center">{avatarInitial(agentCard?.display_name || agentCard?.agent_id, 'A')}</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-800 dark:text-zinc-100">{agentCard?.display_name || '-'}</p>
+                <p className="truncate text-xs text-slate-500 dark:text-zinc-400">{t('chat.agentId')}: {agentCard?.agent_id || '-'}</p>
+              </div>
+            </div>
+
+            {agentCardLoading && <p className="mb-3 text-xs text-slate-500 dark:text-zinc-400">Loading...</p>}
+            {agentCardError && <p className="mb-3 text-xs text-red-500">{agentCardError}</p>}
+
+            {!!agentCard?.owner_count && (
+              <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                <p className="mb-1 font-medium text-slate-700 dark:text-zinc-200">{t('chat.owners')} · {agentCard.owner_count}</p>
+                {Array.isArray(agentCard.owner_names) && agentCard.owner_names.length > 0 ? (
+                  <p className="line-clamp-2">{agentCard.owner_names.join('、')}</p>
+                ) : (
+                  <p className="text-slate-400">—</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAgentCardOpen(false)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                {t('common.cancel') || 'Cancel'}
+              </button>
+              <button
+                type="button"
+                disabled={!onRequestPrivateDiscuss || !agentCard?.agent_id || agentCardRequesting}
+                onClick={() => void handleRequestPrivateFromCard()}
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {agentCardRequesting ? t('chat.requesting') : t('chat.privateDiscussRequest')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="border-t border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-2">
         {/* Slash command result display */}
