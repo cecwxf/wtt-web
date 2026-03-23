@@ -260,6 +260,14 @@ interface AgentProfileSummary {
   owner_names?: string[]
 }
 
+interface HumanProfileSummary {
+  sender_id: string
+  display_name: string
+  avatar_url?: string | null
+  user_id?: string | null
+  claimed_agents?: Array<{ agent_id: string; display_name: string }>
+}
+
 type ParsedRich =
   | { kind: 'plain'; text: string }
   | { kind: 'image'; url: string }
@@ -607,6 +615,12 @@ export function ChatView({
   const [agentCardRequesting, setAgentCardRequesting] = useState(false)
   const [agentCard, setAgentCard] = useState<AgentProfileSummary | null>(null)
 
+  const [humanCardOpen, setHumanCardOpen] = useState(false)
+  const [humanCardLoading, setHumanCardLoading] = useState(false)
+  const [humanCardError, setHumanCardError] = useState<string | null>(null)
+  const [humanCardRequestingAgentId, setHumanCardRequestingAgentId] = useState<string | null>(null)
+  const [humanCard, setHumanCard] = useState<HumanProfileSummary | null>(null)
+
   const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
 
   const filteredMembers = useMemo(() => {
@@ -670,6 +684,69 @@ export function ChatView({
       setAgentCardRequesting(false)
     }
   }, [agentCard, onRequestPrivateDiscuss])
+
+  const openHumanCard = useCallback(async (senderId: string, fallbackName?: string, fallbackAvatar?: string) => {
+    if (!topicId || !senderId) return
+
+    setHumanCardOpen(true)
+    setHumanCardLoading(true)
+    setHumanCardError(null)
+    setHumanCard({
+      sender_id: senderId,
+      display_name: fallbackName || senderId,
+      avatar_url: fallbackAvatar || null,
+      user_id: null,
+      claimed_agents: [],
+    })
+
+    try {
+      const res = await fetch(
+        `${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/human-profile?sender_id=${encodeURIComponent(senderId)}`,
+        { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined },
+      )
+
+      if (!res.ok) {
+        throw new Error(`status_${res.status}`)
+      }
+
+      const data = await res.json()
+      const claimed = Array.isArray(data?.claimed_agents)
+        ? data.claimed_agents
+            .map((x: unknown) => {
+              const r = x as Record<string, unknown>
+              const aid = String(r?.agent_id || '').trim()
+              if (!aid) return null
+              return { agent_id: aid, display_name: String(r?.display_name || aid) }
+            })
+            .filter(Boolean) as Array<{ agent_id: string; display_name: string }>
+        : []
+
+      setHumanCard({
+        sender_id: String(data?.sender_id || senderId),
+        display_name: String(data?.display_name || fallbackName || senderId),
+        avatar_url: data?.avatar_url ? String(data.avatar_url) : (fallbackAvatar || null),
+        user_id: data?.user_id ? String(data.user_id) : null,
+        claimed_agents: claimed,
+      })
+    } catch {
+      setHumanCardError(t('chat.userProfileLoadFailed'))
+    } finally {
+      setHumanCardLoading(false)
+    }
+  }, [topicId, accessToken, t])
+
+  const handleRequestPrivateWithHumanAgent = useCallback(async (agentId: string, displayName?: string) => {
+    if (!onRequestPrivateDiscuss || !agentId) return
+    setHumanCardRequestingAgentId(agentId)
+    try {
+      await onRequestPrivateDiscuss(agentId, displayName)
+      setHumanCardOpen(false)
+    } catch {
+      // noop
+    } finally {
+      setHumanCardRequestingAgentId(null)
+    }
+  }, [onRequestPrivateDiscuss])
 
   // Fetch available models from API
   useEffect(() => {
@@ -1385,13 +1462,18 @@ export function ChatView({
                           )}
                         </button>
                       ) : (
-                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-indigo-200 bg-indigo-100 text-[11px] font-semibold text-indigo-700 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => openHumanCard(message.sender_id, message.sender_display_name, message.sender_avatar_url)}
+                          title={`View ${message.sender_display_name || message.sender_id} profile`}
+                          className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-indigo-200 bg-indigo-100 text-[11px] font-semibold text-indigo-700 shadow-sm hover:border-indigo-300"
+                        >
                           {message.sender_avatar_url ? (
                             <img src={message.sender_avatar_url} alt={message.sender_display_name || message.sender_id} className="h-full w-full object-cover" />
                           ) : (
                             <span className="flex h-full w-full items-center justify-center">{avatarInitial(message.sender_display_name || message.sender_id, 'U')}</span>
                           )}
-                        </div>
+                        </button>
                       )}
 
                       <div
@@ -1800,6 +1882,79 @@ export function ChatView({
                 className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {agentCardRequesting ? t('chat.requesting') : t('chat.privateDiscussRequest')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {humanCardOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4" onClick={() => setHumanCardOpen(false)}>
+          <div
+            className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-100">{t('chat.userProfile')}</h3>
+              <button
+                type="button"
+                onClick={() => setHumanCardOpen(false)}
+                className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-zinc-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-3 flex items-center gap-3">
+              <div className="h-11 w-11 overflow-hidden rounded-full border border-indigo-200 bg-indigo-100 text-sm font-semibold text-indigo-700">
+                {humanCard?.avatar_url ? (
+                  <img src={humanCard.avatar_url} alt={humanCard.display_name || humanCard.sender_id} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center">{avatarInitial(humanCard?.display_name || humanCard?.sender_id, 'U')}</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-800 dark:text-zinc-100">{humanCard?.display_name || '-'}</p>
+                <p className="truncate text-xs text-slate-500 dark:text-zinc-400">{t('chat.userSenderId')}: {humanCard?.sender_id || '-'}</p>
+              </div>
+            </div>
+
+            {humanCardLoading && <p className="mb-3 text-xs text-slate-500 dark:text-zinc-400">Loading...</p>}
+            {humanCardError && <p className="mb-3 text-xs text-red-500">{humanCardError}</p>}
+
+            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              <p className="mb-2 font-medium text-slate-700 dark:text-zinc-200">{t('chat.claimedAgentsInTopic')}</p>
+              {Array.isArray(humanCard?.claimed_agents) && humanCard.claimed_agents.length > 0 ? (
+                <div className="space-y-1.5">
+                  {humanCard.claimed_agents.map((a) => (
+                    <div key={a.agent_id} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-slate-700 dark:text-zinc-200">{a.display_name}</p>
+                        <p className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{a.agent_id}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!onRequestPrivateDiscuss || humanCardRequestingAgentId === a.agent_id}
+                        onClick={() => void handleRequestPrivateWithHumanAgent(a.agent_id, a.display_name)}
+                        className="shrink-0 rounded bg-indigo-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {humanCardRequestingAgentId === a.agent_id ? t('chat.requesting') : t('chat.privateDiscussRequest')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-400">{t('chat.noClaimedAgentsInTopic')}</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setHumanCardOpen(false)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                {t('common.cancel') || 'Cancel'}
               </button>
             </div>
           </div>

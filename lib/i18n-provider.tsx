@@ -349,6 +349,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'chat.owners': '主人数',
     'chat.privateDiscussRequest': '申请 Private Discuss',
     'chat.requesting': '申请中...',
+    'chat.userProfile': '用户资料',
+    'chat.userSenderId': '发送者标识',
+    'chat.claimedAgentsInTopic': '该用户在当前群中的 Agent',
+    'chat.noClaimedAgentsInTopic': '当前群里暂无可用 Agent',
+    'chat.userProfileLoadFailed': '加载用户资料失败',
   },
   en: {
     'common.close': 'Close',
@@ -685,6 +690,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'chat.owners': 'Owners',
     'chat.privateDiscussRequest': 'Request Private Discuss',
     'chat.requesting': 'Requesting...',
+    'chat.userProfile': 'User Profile',
+    'chat.userSenderId': 'Sender ID',
+    'chat.claimedAgentsInTopic': "This user's agents in current topic",
+    'chat.noClaimedAgentsInTopic': 'No available agents in this topic',
+    'chat.userProfileLoadFailed': 'Failed to load user profile',
   },
 }
 
