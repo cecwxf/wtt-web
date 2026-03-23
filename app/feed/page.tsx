@@ -40,17 +40,32 @@ function getHumanSender(session: unknown): string {
   return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
-function normalizeSenderType(rawType: unknown, senderId?: string): 'human' | 'agent' {
+function normalizeSenderType(
+  rawType: unknown,
+  senderId?: string,
+  knownAgentIds?: Set<string>,
+  senderDisplayName?: string,
+): 'human' | 'agent' {
   const t = String(rawType ?? '').trim().toLowerCase()
   if (t === 'human' || t === 'user' || t === 'person') return 'human'
+  if (t === 'agent' || t === 'bot' || t === 'assistant' || t === 'system') return 'agent'
 
-  const sid = String(senderId ?? '').trim().toLowerCase()
-  if (sid.startsWith('user_')) return 'human'
+  const sid = String(senderId ?? '').trim()
+  const sidLower = sid.toLowerCase()
+
+  if (knownAgentIds?.has(sid)) return 'agent'
+  if (sidLower.startsWith('agent_') || sidLower.startsWith('agent-')) return 'agent'
+
+  if (sidLower.startsWith('user_') || sidLower.startsWith('human_')) return 'human'
+  if (/^\d{5,}$/.test(sid)) return 'human'
+
+  const name = String(senderDisplayName ?? '').trim().toLowerCase()
+  if (name.startsWith('user ') || name.startsWith('wtt user') || name.includes('群众')) return 'human'
 
   return 'agent'
 }
 
-function normalizeFeed(raw: unknown): ChatMessage[] {
+function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[] {
   if (!raw || typeof raw !== 'object') return []
 
   const rows = Array.isArray(raw)
@@ -62,11 +77,12 @@ function normalizeFeed(raw: unknown): ChatMessage[] {
   return rows.map((row, index) => {
     const data = row as Record<string, unknown>
     const senderId = String(data.sender_id ?? 'unknown')
+    const senderDisplayName = data.sender_display_name ? String(data.sender_display_name) : undefined
     return {
       message_id: String(data.message_id ?? data.id ?? `msg-${index}`),
       sender_id: senderId,
-      sender_display_name: data.sender_display_name ? String(data.sender_display_name) : undefined,
-      sender_type: normalizeSenderType(data.sender_type, senderId),
+      sender_display_name: senderDisplayName,
+      sender_type: normalizeSenderType(data.sender_type, senderId, knownAgentIds, senderDisplayName),
       content: String(data.content ?? ''),
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
       semantic_type: String(data.semantic_type ?? ''),
@@ -188,6 +204,8 @@ function FeedPageInner() {
     for (const a of agents) map[a.agent_id] = a.display_name
     return map
   }, [agents])
+
+  const knownAgentIds = useMemo(() => new Set(agents.map((a) => a.agent_id)), [agents])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -336,11 +354,12 @@ function FeedPageInner() {
 
       if (incomingTopicId !== selectedTopicId) return
       const senderId = String(msg.message.sender_id || 'unknown')
+      const senderDisplayName = (msg.message as Record<string, string>).sender_display_name || agentNameMap[senderId] || undefined
       const incoming: ChatMessage = {
         message_id: msg.message.id,
         sender_id: senderId,
-        sender_display_name: (msg.message as Record<string, string>).sender_display_name || agentNameMap[senderId] || undefined,
-        sender_type: normalizeSenderType((msg.message as Record<string, unknown>).sender_type, senderId),
+        sender_display_name: senderDisplayName,
+        sender_type: normalizeSenderType((msg.message as Record<string, unknown>).sender_type, senderId, knownAgentIds, senderDisplayName),
         content: msg.message.content,
         timestamp: msg.message.created_at,
         semantic_type: msg.message.semantic_type,
@@ -365,7 +384,7 @@ function FeedPageInner() {
         return [...prev, incoming]
       })
     },
-    [selectedTopicId, agentNameMap],
+    [selectedTopicId, agentNameMap, knownAgentIds],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
@@ -392,7 +411,7 @@ function FeedPageInner() {
 
   const prevTopicRef = useRef(selectedTopicId)
   useEffect(() => {
-    const normalized = normalizeFeed(feedRaw)
+    const normalized = normalizeFeed(feedRaw, knownAgentIds)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     const topicChanged = prevTopicRef.current !== selectedTopicId
     prevTopicRef.current = selectedTopicId
@@ -416,7 +435,7 @@ function FeedPageInner() {
       })
     }
     setHasOlder(normalized.length >= 100)
-  }, [feedRaw, selectedTopicId])
+  }, [feedRaw, selectedTopicId, knownAgentIds])
 
   // Enrich messages: replace raw agent_id fallback with display_name from agentNameMap
   const enrichedMessages = useMemo(() => {
@@ -438,7 +457,7 @@ function FeedPageInner() {
         agentId: selectedAgentId,
       })
 
-      const normalizedOlder = normalizeFeed(older)
+      const normalizedOlder = normalizeFeed(older, knownAgentIds)
       if (normalizedOlder.length === 0) {
         setHasOlder(false)
       } else {
@@ -453,7 +472,7 @@ function FeedPageInner() {
     } finally {
       setLoadingOlder(false)
     }
-  }, [selectedTopicId, loadingOlder, allMessages])
+  }, [selectedTopicId, loadingOlder, allMessages, knownAgentIds])
 
   const { data: subscribedTopicsRaw, mutate: mutateTopics } = useSWR(
     selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
