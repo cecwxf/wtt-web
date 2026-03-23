@@ -40,6 +40,16 @@ function getHumanSender(session: unknown): string {
   return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
+function normalizeSenderType(rawType: unknown, senderId?: string): 'human' | 'agent' {
+  const t = String(rawType ?? '').trim().toLowerCase()
+  if (t === 'human' || t === 'user' || t === 'person') return 'human'
+
+  const sid = String(senderId ?? '').trim().toLowerCase()
+  if (sid.startsWith('user_')) return 'human'
+
+  return 'agent'
+}
+
 function normalizeFeed(raw: unknown): ChatMessage[] {
   if (!raw || typeof raw !== 'object') return []
 
@@ -51,11 +61,12 @@ function normalizeFeed(raw: unknown): ChatMessage[] {
 
   return rows.map((row, index) => {
     const data = row as Record<string, unknown>
+    const senderId = String(data.sender_id ?? 'unknown')
     return {
       message_id: String(data.message_id ?? data.id ?? `msg-${index}`),
-      sender_id: String(data.sender_id ?? 'unknown'),
+      sender_id: senderId,
       sender_display_name: data.sender_display_name ? String(data.sender_display_name) : undefined,
-      sender_type: (data.sender_type === 'human' ? 'human' : 'agent') as 'human' | 'agent',
+      sender_type: normalizeSenderType(data.sender_type, senderId),
       content: String(data.content ?? ''),
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
       semantic_type: String(data.semantic_type ?? ''),
@@ -324,11 +335,12 @@ function FeedPageInner() {
       }
 
       if (incomingTopicId !== selectedTopicId) return
+      const senderId = String(msg.message.sender_id || 'unknown')
       const incoming: ChatMessage = {
         message_id: msg.message.id,
-        sender_id: msg.message.sender_id,
-        sender_display_name: (msg.message as Record<string, string>).sender_display_name || agentNameMap[msg.message.sender_id] || undefined,
-        sender_type: (msg.message.sender_type as 'human' | 'agent') || 'agent',
+        sender_id: senderId,
+        sender_display_name: (msg.message as Record<string, string>).sender_display_name || agentNameMap[senderId] || undefined,
+        sender_type: normalizeSenderType((msg.message as Record<string, unknown>).sender_type, senderId),
         content: msg.message.content,
         timestamp: msg.message.created_at,
         semantic_type: msg.message.semantic_type,
