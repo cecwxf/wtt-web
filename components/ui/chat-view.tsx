@@ -154,6 +154,7 @@ const PROGRESS_PATTERNS = [
   /^Progress:\s*\d+%\s*$/m,                                        // Standalone "Progress: N%"
   /^\[TASK_STATUS\]/m,                                              // Structured [TASK_STATUS] progress
   /^\[TASK_RUN\]/m,                                                 // Task dispatch metadata
+  /^\[[^\]]+\]\s*状态=.*\|\s*动作=.*\|\s*(?:elapsed=\d+s\s*\|\s*)?(?:queue_depth=\d+\s*\|\s*)?心跳=\d+s/m, // WTT heartbeat line
   /^🤔\s*Agent thinking/m,                                         // Agent thinking placeholder
 ]
 
@@ -161,6 +162,41 @@ export function isProgressMessage(content: string): boolean {
   if (!content) return false
   const c = content.trim()
   return PROGRESS_PATTERNS.some(p => p.test(c))
+}
+
+interface ParsedTaskHeartbeat {
+  at?: string
+  status?: string
+  action?: string
+  elapsedSeconds?: number
+  queueDepth?: number
+  heartbeatSeconds?: number
+}
+
+function parseTaskHeartbeat(content: string): ParsedTaskHeartbeat | null {
+  const c = String(content || '').trim()
+  if (!c) return null
+
+  const m = c.match(/^\[([^\]]+)\]\s*状态=([^|]+)\|\s*动作=([^|]+)\|\s*(.*)$/)
+  if (!m) return null
+
+  const tail = String(m[4] || '').trim()
+  const elapsedMatch = tail.match(/elapsed\s*=\s*(\d+)s/i)
+  const queueMatch = tail.match(/queue_depth\s*=\s*(\d+)/i)
+  const hbMatch = tail.match(/心跳\s*=\s*(\d+)s/i)
+
+  const elapsedSeconds = elapsedMatch ? Number(elapsedMatch[1]) : undefined
+  const queueDepth = queueMatch ? Number(queueMatch[1]) : undefined
+  const heartbeatSeconds = hbMatch ? Number(hbMatch[1]) : undefined
+
+  return {
+    at: String(m[1] || '').trim() || undefined,
+    status: String(m[2] || '').trim() || undefined,
+    action: String(m[3] || '').trim() || undefined,
+    elapsedSeconds: Number.isFinite(elapsedSeconds as number) ? elapsedSeconds : undefined,
+    queueDepth: Number.isFinite(queueDepth as number) ? queueDepth : undefined,
+    heartbeatSeconds: Number.isFinite(heartbeatSeconds as number) ? heartbeatSeconds : undefined,
+  }
 }
 
 const REASONING_EFFORTS = [
@@ -1367,6 +1403,20 @@ export function ChatView({
     }
   })
 
+  const latestHeartbeat = (() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const parsed = parseTaskHeartbeat(messages[i].content || '')
+      if (parsed) {
+        const atMs = parsed.at ? Date.parse(parsed.at) : NaN
+        const isFresh = Number.isFinite(atMs)
+          ? Date.now() - atMs <= Math.max(180000, ((parsed.heartbeatSeconds || 60) * 3000))
+          : false
+        return { parsed, isFresh }
+      }
+    }
+    return null
+  })()
+
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-200 dark:border-zinc-700 px-5 py-4">
@@ -1821,6 +1871,26 @@ export function ChatView({
           </div>
         )
       })()}
+
+      {latestHeartbeat && (
+        <div className={`mx-2 mb-1 rounded-md border px-2 py-1 text-[11px] ${latestHeartbeat.isFresh
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300'
+          : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+        }`}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="font-medium">
+              {latestHeartbeat.isFresh ? 'Session: running' : 'Session: idle'}
+            </span>
+            {latestHeartbeat.parsed.status && <span>status={latestHeartbeat.parsed.status}</span>}
+            {typeof latestHeartbeat.parsed.queueDepth === 'number' && <span>queue_depth={latestHeartbeat.parsed.queueDepth}</span>}
+            {typeof latestHeartbeat.parsed.elapsedSeconds === 'number' && <span>elapsed={latestHeartbeat.parsed.elapsedSeconds}s</span>}
+            {typeof latestHeartbeat.parsed.heartbeatSeconds === 'number' && <span>heartbeat={latestHeartbeat.parsed.heartbeatSeconds}s</span>}
+          </div>
+          {latestHeartbeat.parsed.action && (
+            <p className="mt-1 truncate">action: {latestHeartbeat.parsed.action}</p>
+          )}
+        </div>
+      )}
 
       {agentCardOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4" onClick={() => setAgentCardOpen(false)}>
