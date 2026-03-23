@@ -154,7 +154,7 @@ const PROGRESS_PATTERNS = [
   /^Progress:\s*\d+%\s*$/m,                                        // Standalone "Progress: N%"
   /^\[TASK_STATUS\]/m,                                              // Structured [TASK_STATUS] progress
   /^\[TASK_RUN\]/m,                                                 // Task dispatch metadata
-  /^\[[^\]]+\]\s*状态=.*\|\s*动作=.*\|\s*(?:elapsed=\d+s\s*\|\s*)?(?:queue_depth=\d+\s*\|\s*)?心跳=\d+s/m, // WTT heartbeat line
+  /^\[[^\]]+\]\s*状态=.*\|\s*动作=.*心跳=\d+s/m, // WTT heartbeat line
   /^🤔\s*Agent thinking/m,                                         // Agent thinking placeholder
 ]
 
@@ -170,6 +170,10 @@ interface ParsedTaskHeartbeat {
   action?: string
   elapsedSeconds?: number
   queueDepth?: number
+  queueMode?: string
+  source?: string
+  sessionKey?: string
+  inflight?: boolean
   heartbeatSeconds?: number
 }
 
@@ -183,11 +187,16 @@ function parseTaskHeartbeat(content: string): ParsedTaskHeartbeat | null {
   const tail = String(m[4] || '').trim()
   const elapsedMatch = tail.match(/elapsed\s*=\s*(\d+)s/i)
   const queueMatch = tail.match(/queue_depth\s*=\s*(\d+)/i)
+  const modeMatch = tail.match(/queue_mode\s*=\s*([a-zA-Z0-9+_-]+)/i)
+  const sourceMatch = tail.match(/source\s*=\s*([a-zA-Z0-9+_-]+)/i)
+  const sessionMatch = tail.match(/session\s*=\s*([^|]+)/i)
+  const inflightMatch = tail.match(/inflight\s*=\s*(\d+)/i)
   const hbMatch = tail.match(/心跳\s*=\s*(\d+)s/i)
 
   const elapsedSeconds = elapsedMatch ? Number(elapsedMatch[1]) : undefined
   const queueDepth = queueMatch ? Number(queueMatch[1]) : undefined
   const heartbeatSeconds = hbMatch ? Number(hbMatch[1]) : undefined
+  const inflight = inflightMatch ? Number(inflightMatch[1]) > 0 : undefined
 
   return {
     at: String(m[1] || '').trim() || undefined,
@@ -195,6 +204,10 @@ function parseTaskHeartbeat(content: string): ParsedTaskHeartbeat | null {
     action: String(m[3] || '').trim() || undefined,
     elapsedSeconds: Number.isFinite(elapsedSeconds as number) ? elapsedSeconds : undefined,
     queueDepth: Number.isFinite(queueDepth as number) ? queueDepth : undefined,
+    queueMode: modeMatch ? String(modeMatch[1]).trim() : undefined,
+    source: sourceMatch ? String(sourceMatch[1]).trim() : undefined,
+    sessionKey: sessionMatch ? String(sessionMatch[1]).trim() : undefined,
+    inflight,
     heartbeatSeconds: Number.isFinite(heartbeatSeconds as number) ? heartbeatSeconds : undefined,
   }
 }
@@ -1872,25 +1885,33 @@ export function ChatView({
         )
       })()}
 
-      {latestHeartbeat && (
-        <div className={`mx-2 mb-1 rounded-md border px-2 py-1 text-[11px] ${latestHeartbeat.isFresh
-          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300'
-          : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
-        }`}>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-medium">
-              {latestHeartbeat.isFresh ? 'Session: running' : 'Session: idle'}
-            </span>
-            {latestHeartbeat.parsed.status && <span>status={latestHeartbeat.parsed.status}</span>}
-            {typeof latestHeartbeat.parsed.queueDepth === 'number' && <span>queue_depth={latestHeartbeat.parsed.queueDepth}</span>}
-            {typeof latestHeartbeat.parsed.elapsedSeconds === 'number' && <span>elapsed={latestHeartbeat.parsed.elapsedSeconds}s</span>}
-            {typeof latestHeartbeat.parsed.heartbeatSeconds === 'number' && <span>heartbeat={latestHeartbeat.parsed.heartbeatSeconds}s</span>}
+      {latestHeartbeat && (() => {
+        const isRunning = typeof latestHeartbeat.parsed.inflight === 'boolean'
+          ? latestHeartbeat.parsed.inflight
+          : latestHeartbeat.isFresh
+
+        return (
+          <div className={`mx-2 mb-1 rounded-md border px-2 py-1 text-[11px] ${isRunning
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300'
+            : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+          }`}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-medium">
+                {isRunning ? 'Session: running' : 'Session: idle'}
+              </span>
+              {latestHeartbeat.parsed.source && <span>source={latestHeartbeat.parsed.source}</span>}
+              {latestHeartbeat.parsed.status && <span>status={latestHeartbeat.parsed.status}</span>}
+              {latestHeartbeat.parsed.queueMode && <span>queue_mode={latestHeartbeat.parsed.queueMode}</span>}
+              {typeof latestHeartbeat.parsed.queueDepth === 'number' && <span>queue_depth={latestHeartbeat.parsed.queueDepth}</span>}
+              {typeof latestHeartbeat.parsed.elapsedSeconds === 'number' && <span>elapsed={latestHeartbeat.parsed.elapsedSeconds}s</span>}
+              {typeof latestHeartbeat.parsed.heartbeatSeconds === 'number' && <span>heartbeat={latestHeartbeat.parsed.heartbeatSeconds}s</span>}
+            </div>
+            {latestHeartbeat.parsed.action && (
+              <p className="mt-1 truncate">action: {latestHeartbeat.parsed.action}</p>
+            )}
           </div>
-          {latestHeartbeat.parsed.action && (
-            <p className="mt-1 truncate">action: {latestHeartbeat.parsed.action}</p>
-          )}
-        </div>
-      )}
+        )
+      })()}
 
       {agentCardOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4" onClick={() => setAgentCardOpen(false)}>
