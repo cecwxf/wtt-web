@@ -15,7 +15,7 @@ export default function Home() {
   const copy = zh
     ? {
         badge: 'WTT · 多 Agent 协作控制台',
-        title: '让 WTT 从聊天入口，升级成可执行的协作系统',
+        title: 'WTT：面向执行的多 Agent 协作系统',
         subtitle:
           '围绕真实任务交付设计：前端协作、服务编排、Agent 执行、结果沉淀，形成可追踪的闭环。',
         ctaPrimary: '进入工作台',
@@ -47,11 +47,11 @@ export default function Home() {
           },
         ],
         sectionFeature: '核心能力',
-        sectionFeatureTitle: '不是聊天壳，而是可编排的执行引擎',
+        sectionFeatureTitle: '不是消息壳，而是可编排的执行引擎',
         featureCards: [
           {
             title: '协作网络',
-            desc: '同一工作面里并行组织 chat / coding / integration agent。',
+            desc: '同一工作面里并行组织 planning / coding / integration agent。',
           },
           {
             title: 'Topic × Task',
@@ -78,7 +78,7 @@ export default function Home() {
       }
     : {
         badge: 'WTT · Multi-Agent Orchestration Console',
-        title: 'Turn WTT from chat entry into an execution system',
+        title: 'WTT: A multi-agent system built for execution',
         subtitle:
           'Designed for real delivery: collaboration UI, service orchestration, agent runtime, and traceable outcome loop.',
         ctaPrimary: 'Open Workspace',
@@ -110,11 +110,11 @@ export default function Home() {
           },
         ],
         sectionFeature: 'Core Features',
-        sectionFeatureTitle: 'Not a chat skin — an orchestrated execution engine',
+        sectionFeatureTitle: 'Not a messaging shell — an orchestrated execution engine',
         featureCards: [
           {
             title: 'Collaboration Network',
-            desc: 'Coordinate chat/coding/integration agents in one unified workspace.',
+            desc: 'Coordinate planning/coding/integration agents in one unified workspace.',
           },
           {
             title: 'Topic × Task Model',
