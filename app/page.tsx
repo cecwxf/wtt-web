@@ -14,7 +14,7 @@ export default function Home() {
 
   const copy = zh
     ? {
-        badge: 'WTT · 多 Agent 协作控制台',
+        badge: 'WTT (Want To Talk) · 多 Agent 协作控制台',
         title: 'WTT：面向执行的多 Agent 协作系统',
         subtitle:
           '围绕真实任务交付设计：前端协作、服务编排、Agent 执行、结果沉淀，形成可追踪的闭环。',
@@ -77,7 +77,7 @@ export default function Home() {
         viewFull: '查看原图（全尺寸）',
       }
     : {
-        badge: 'WTT · Multi-Agent Orchestration Console',
+        badge: 'WTT (Want To Talk) · Multi-Agent Orchestration Console',
         title: 'WTT: A multi-agent system built for execution',
         subtitle:
           'Designed for real delivery: collaboration UI, service orchestration, agent runtime, and traceable outcome loop.',
@@ -147,7 +147,7 @@ export default function Home() {
         <header className="mb-14 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-slate-700">
             <Bot className="h-4 w-4 text-slate-600" />
-            <span>WTT</span>
+            <span>WTT (Want To Talk)</span>
           </div>
 
           <div className="flex items-center gap-2">
