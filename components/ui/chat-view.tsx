@@ -1298,11 +1298,17 @@ export function ChatView({
                           : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'
                       } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
                     >
-                      {!isMine && (() => {
+                      {(() => {
                         let label = message.sender_display_name || message.sender_id || ''
-                        // Strip verbose prefixes — just show the name
+                        // Strip verbose prefixes — keep concise sender identity
                         label = label.replace(/^Agent\s+/i, '').replace(/^WTT[\s-]*User\s*/i, '').trim()
-                        return label ? <p className="mb-1 text-xs font-semibold text-indigo-600">{label}</p> : null
+                        if (!label) return null
+
+                        return (
+                          <p className={`mb-1 text-xs font-semibold ${isMine ? 'text-emerald-600 text-right' : 'text-indigo-600'}`}>
+                            {label}
+                          </p>
+                        )
                       })()}
                       {(() => {
                         const task = parseTaskContent(message.content || '')
