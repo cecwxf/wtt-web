@@ -8,7 +8,7 @@ import { useI18n } from '@/lib/i18n-provider'
 
 export default function Home() {
   const { status } = useSession()
-  const { locale } = useI18n()
+  const { locale, setLocale } = useI18n()
 
   const zh = locale === 'zh'
 
@@ -149,13 +149,35 @@ export default function Home() {
             <Bot className="h-4 w-4 text-slate-600" />
             <span>WTT</span>
           </div>
-          <Link
-            href={status === 'authenticated' ? '/feed' : '/login'}
-            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500"
-          >
-            {status === 'authenticated' ? copy.ctaPrimary : copy.login}
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Link>
+
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setLocale('zh')}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${locale === 'zh' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                aria-label="Switch language to Chinese"
+              >
+                中文
+              </button>
+              <button
+                type="button"
+                onClick={() => setLocale('en')}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${locale === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                aria-label="Switch language to English"
+              >
+                EN
+              </button>
+            </div>
+
+            <Link
+              href={status === 'authenticated' ? '/feed' : '/login'}
+              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500"
+            >
+              {status === 'authenticated' ? copy.ctaPrimary : copy.login}
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </header>
 
         <section className="mb-12 grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-center">
