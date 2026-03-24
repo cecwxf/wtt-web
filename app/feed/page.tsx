@@ -1047,8 +1047,103 @@ function FeedPageInner() {
     mutate()
   }
 
-  const handleExportTopic = (format: 'md') => {
+  const exportPlaintextTopicMarkdown = async () => {
     if (!selectedTopicId) return
+    const token = session?.accessToken
+    if (!token) {
+      alert('Session expired. Please re-login and try again.')
+      return
+    }
+
+    const pageSize = 500
+    const maxPages = 60
+    let offset = 0
+    const rows: ChatMessage[] = []
+
+    for (let page = 0; page < maxPages; page++) {
+      const params = new URLSearchParams({
+        limit: String(pageSize),
+        offset: String(offset),
+      })
+      if (selectedAgentId) params.set('agent_id', selectedAgentId)
+
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        throw new Error(`Export fetch failed: HTTP ${res.status}`)
+      }
+
+      const batchRaw = await res.json() as unknown
+      if (!Array.isArray(batchRaw) || batchRaw.length === 0) break
+
+      const normalized = normalizeFeed(batchRaw, knownAgentIds)
+      const decrypted = await decryptMessagesForDisplay(normalized)
+      rows.push(...decrypted)
+
+      if (batchRaw.length < pageSize) break
+      offset += batchRaw.length
+    }
+
+    if (rows.length === 0) {
+      alert('No messages to export in this topic.')
+      return
+    }
+
+    const sorted = [...rows].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    const unresolved = sorted.filter((m) => m.content.includes('[🔒'))
+
+    const header = [
+      `# ${selectedTopic?.name || `Topic ${selectedTopicId}`}`,
+      '',
+      `- Topic ID: \`${selectedTopicId}\``,
+      `- Type: \`${selectedTopic?.topic_type || 'unknown'}\``,
+      `- Exported At: \`${new Date().toISOString()}\``,
+      `- Export Mode: \`client-side plaintext\``,
+      '',
+      '---',
+      '',
+    ]
+
+    const body: string[] = []
+    for (const m of sorted) {
+      const sender = m.sender_display_name || m.sender_id || 'unknown'
+      body.push(`## ${m.timestamp} · ${sender}`)
+      body.push('')
+      body.push(m.content || '')
+      body.push('')
+    }
+
+    const markdown = [...header, ...body].join('\n')
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const baseName = (selectedTopic?.name || `topic_${selectedTopicId}`).replace(/[\\/:*?"<>|]+/g, '_')
+    a.href = url
+    a.download = `${baseName}_plaintext.md`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+
+    if (unresolved.length > 0) {
+      alert(`Export completed with ${unresolved.length} locked/decrypt-failed messages.`)
+    }
+  }
+
+  const handleExportTopic = async (format: 'md') => {
+    if (!selectedTopicId) return
+
+    // For P2P E2E topics, export plaintext on client side.
+    if (format === 'md' && selectedTopic?.topic_type === 'p2p') {
+      try {
+        await exportPlaintextTopicMarkdown()
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Plaintext export failed')
+      }
+      return
+    }
+
     const u = `${CLIENT_WTT_API_BASE}/export/topic/${selectedTopicId}?format=${format}`
     window.open(u, '_blank', 'noopener,noreferrer')
   }
