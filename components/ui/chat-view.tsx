@@ -25,6 +25,8 @@ export interface ChatMessage {
   task_title?: string
   runner_agent_id?: string
   exec_mode?: string
+  model_hint?: string
+  reasoning_hint?: 'off' | 'low' | 'medium' | 'high'
 }
 
 export interface ChatModelConfig {
@@ -693,6 +695,7 @@ export function ChatView({
   const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
   const modelPrefsByTopicRef = useRef<Record<string, ModelPref>>({})
   const workerConfigHydratedRef = useRef<Record<string, boolean>>({})
+  const messageHintAppliedRef = useRef<Record<string, string>>({})
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
@@ -902,6 +905,35 @@ export function ChatView({
     modelPrefsByTopicRef.current[topicPreferenceKey] = pref
     writeStoredModelPref(topicPreferenceKey, pref)
   }, [topicPreferenceKey, selectedModel, reasoningEffort])
+
+  // Hydrate from latest message metadata.model_config when available.
+  // This keeps picker aligned with the actual running session config per topic.
+  useEffect(() => {
+    const latestWithHint = [...messages]
+      .reverse()
+      .find((m) => m.model_hint || m.reasoning_hint)
+
+    if (!latestWithHint) return
+
+    const appliedMessageId = messageHintAppliedRef.current[topicPreferenceKey]
+    if (appliedMessageId === latestWithHint.message_id) return
+
+    const model = String(latestWithHint.model_hint || '').trim()
+    const effort = latestWithHint.reasoning_hint
+
+    const nextModel = model && availableModels.some((m) => m.id === model)
+      ? model
+      : (model || selectedModel)
+    const nextEffort: ModelPref['effort'] = effort || reasoningEffort
+
+    if (nextModel) setSelectedModel(nextModel)
+    setReasoningEffort(nextEffort)
+
+    const pref: ModelPref = { model: nextModel || selectedModel, effort: nextEffort }
+    modelPrefsByTopicRef.current[topicPreferenceKey] = pref
+    writeStoredModelPref(topicPreferenceKey, pref)
+    messageHintAppliedRef.current[topicPreferenceKey] = latestWithHint.message_id
+  }, [messages, topicPreferenceKey, availableModels, selectedModel, reasoningEffort])
 
   // Hydrate from current worker model config so picker reflects active worker settings.
   useEffect(() => {

@@ -95,6 +95,38 @@ function toChatTaskType(taskTypeRaw?: string, taskModeRaw?: string, execModeRaw?
   return null
 }
 
+function parseModelHintFromMetadata(metaRaw: unknown): { model_hint?: string; reasoning_hint?: 'off' | 'low' | 'medium' | 'high' } {
+  let meta: Record<string, unknown> | null = null
+
+  if (metaRaw && typeof metaRaw === 'object') {
+    meta = metaRaw as Record<string, unknown>
+  } else if (typeof metaRaw === 'string' && metaRaw.trim()) {
+    try {
+      const parsed = JSON.parse(metaRaw)
+      if (parsed && typeof parsed === 'object') meta = parsed as Record<string, unknown>
+    } catch {
+      // ignore malformed metadata
+    }
+  }
+
+  if (!meta) return {}
+
+  const cfgRaw = meta.model_config
+  const cfg = (cfgRaw && typeof cfgRaw === 'object') ? (cfgRaw as Record<string, unknown>) : null
+  if (!cfg) return {}
+
+  const model = String(cfg.model || '').trim()
+  const effortRaw = String(cfg.reasoning_effort || cfg.reasoningEffort || '').trim().toLowerCase()
+  const reasoning = (['off', 'low', 'medium', 'high'].includes(effortRaw)
+    ? effortRaw
+    : '') as '' | 'off' | 'low' | 'medium' | 'high'
+
+  return {
+    ...(model ? { model_hint: model } : {}),
+    ...(reasoning ? { reasoning_hint: reasoning } : {}),
+  }
+}
+
 function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[] {
   if (!raw || typeof raw !== 'object') return []
 
@@ -115,6 +147,7 @@ function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[]
 
     const senderId = String(data.sender_id ?? 'unknown')
     const senderDisplayName = data.sender_display_name ? String(data.sender_display_name) : undefined
+    const modelHint = parseModelHintFromMetadata(data.metadata)
     normalized.push({
       message_id: String(data.message_id ?? data.id ?? `msg-${index}`),
       topic_id: String(data.topic_id ?? ''),
@@ -131,6 +164,7 @@ function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[]
       task_title: data.task_title ? String(data.task_title) : undefined,
       runner_agent_id: data.runner_agent_id ? String(data.runner_agent_id) : undefined,
       exec_mode: data.exec_mode ? String(data.exec_mode) : undefined,
+      ...modelHint,
     })
   }
 
@@ -448,6 +482,7 @@ function FeedPageInner() {
       const senderDisplayName = (msg.message as Record<string, unknown>).sender_display_name
         ? String((msg.message as Record<string, unknown>).sender_display_name)
         : agentNameMap[senderId] || undefined
+      const modelHint = parseModelHintFromMetadata((msg.message as Record<string, unknown>).metadata)
       const incomingBase: ChatMessage = {
         message_id: msg.message.id,
         topic_id: incomingTopicId,
@@ -459,6 +494,7 @@ function FeedPageInner() {
         encrypted: Boolean((msg.message as Record<string, unknown>).encrypted),
         timestamp: msg.message.created_at,
         semantic_type: semanticType,
+        ...modelHint,
       }
 
       if (incomingBase.sender_type === 'agent') {
