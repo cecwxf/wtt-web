@@ -431,23 +431,30 @@ function FeedPageInner() {
 
   useEffect(() => {
     if (!selectedAgentId) return
-    if (wsState !== 'connected') return
     if (getCachedKey()) return
     if (e2eBootstrapRequestedRef.current === selectedAgentId) return
 
     e2eBootstrapRequestedRef.current = selectedAgentId
     void (async () => {
-      try {
-        const result = await sendAction<{ key_b64?: string }>('e2e_get_key', {
-          token: session?.accessToken || undefined,
-        })
-        const keyB64 = result && typeof result === 'object' ? String((result as { key_b64?: string }).key_b64 || '') : ''
-        if (keyB64 && cacheKeyFromBase64(keyB64)) {
-          return
+      let bootstrapped = false
+
+      // Prefer WS path when available.
+      if (wsState === 'connected') {
+        try {
+          const result = await sendAction<{ key_b64?: string }>('e2e_get_key', {
+            token: session?.accessToken || undefined,
+          })
+          const keyB64 = result && typeof result === 'object' ? String((result as { key_b64?: string }).key_b64 || '') : ''
+          if (keyB64 && cacheKeyFromBase64(keyB64)) {
+            bootstrapped = true
+          }
+        } catch {
+          // ignore and continue HTTP fallback
         }
-        throw new Error('e2e key missing')
-      } catch {
-        // WebSocket bootstrap failed; fallback to HTTP bridge endpoint.
+      }
+
+      // HTTP fallback (also handles cases where web WS is unavailable).
+      if (!bootstrapped) {
         try {
           const resp = await fetch(
             `${CLIENT_WTT_API_BASE}/agents/e2e-key?agent_id=${encodeURIComponent(selectedAgentId)}`,
@@ -457,13 +464,15 @@ function FeedPageInner() {
             const payload = (await resp.json()) as { key_b64?: string }
             const keyB64 = String(payload?.key_b64 || '')
             if (keyB64 && cacheKeyFromBase64(keyB64)) {
-              return
+              bootstrapped = true
             }
           }
         } catch {
           // ignore and retry below
         }
+      }
 
+      if (!bootstrapped) {
         // best-effort bootstrap (plugin offline / auth race / no peer plugin)
         e2eBootstrapRequestedRef.current = null
         if (e2eBootstrapTimerRef.current) clearTimeout(e2eBootstrapTimerRef.current)
