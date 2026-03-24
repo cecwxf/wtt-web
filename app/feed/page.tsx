@@ -86,6 +86,15 @@ function shouldDisplayMessage(semanticTypeRaw: unknown, contentRaw: unknown): bo
   return true
 }
 
+function toChatTaskType(taskTypeRaw?: string, taskModeRaw?: string, execModeRaw?: string): 'code' | 'research' | 'general' | 'pipeline' | null {
+  const raw = `${String(taskTypeRaw || '').toLowerCase()} ${String(taskModeRaw || '').toLowerCase()} ${String(execModeRaw || '').toLowerCase()}`
+  if (raw.includes('pipeline')) return 'pipeline'
+  if (raw.includes('research')) return 'research'
+  if (raw.includes('code')) return 'code'
+  if (raw.includes('general')) return 'general'
+  return null
+}
+
 function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[] {
   if (!raw || typeof raw !== 'object') return []
 
@@ -727,7 +736,7 @@ function FeedPageInner() {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
     const humanSender = getHumanSender(session)
 
-    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; last_activity_at?: string }) => {
+    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; task_mode?: string; exec_mode?: string; last_activity_at?: string }) => {
       const topicType = ((topic.type || 'discussion').toLowerCase()) as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
       const isDefaultP2P =
         topicType === 'p2p' &&
@@ -742,7 +751,9 @@ function FeedPageInner() {
         unread_count: Number((topic as Record<string, unknown>).unread_count || 0),
         can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
         task_id: topic.task_id,
-        task_type: topic.task_type as 'code' | 'research' | 'general' | 'pipeline' | undefined,
+        task_type: topic.task_type ? String(topic.task_type) : undefined,
+        task_mode: topic.task_mode ? String(topic.task_mode) : undefined,
+        exec_mode: topic.exec_mode ? String(topic.exec_mode) : undefined,
         runner_agent_id: topic.runner_agent_id,
         is_default_p2p: isDefaultP2P,
         last_activity_at: topic.last_activity_at || '',
@@ -1537,7 +1548,7 @@ function FeedPageInner() {
                 hasOlder={hasOlder && !loadingOlder}
                 loading={!feedRaw && !error}
                 isTaskTopic={!!selectedTopic.task_id}
-                taskType={selectedTopic.task_type || null}
+                taskType={toChatTaskType(selectedTopic.task_type, selectedTopic.task_mode, selectedTopic.exec_mode)}
                 wsConnected={wsState === 'connected'}
                 accessToken={session?.accessToken as string | undefined}
                 onTaskCreated={() => mutateRecentTasks()}

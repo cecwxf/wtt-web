@@ -11,7 +11,9 @@ export interface TopicItem {
   unread_count?: number
   can_delete?: boolean
   task_id?: string
-  task_type?: 'code' | 'research' | 'general' | 'pipeline'
+  task_type?: string
+  task_mode?: string
+  exec_mode?: string
   runner_agent_id?: string
   is_default_p2p?: boolean
   last_activity_at?: string
@@ -70,17 +72,12 @@ function stripTaskPrefix(name: string): string {
   return name.replace(/^TASK-[a-f0-9]{8}\s*/i, '')
 }
 
-function normalizeTaskType(type?: TopicItem['task_type']): TaskTypeKey {
-  switch (String(type || '').toLowerCase()) {
-    case 'code':
-      return 'code'
-    case 'pipeline':
-      return 'pipeline'
-    case 'research':
-      return 'research'
-    default:
-      return 'general'
-  }
+function normalizeTaskType(type?: string, taskMode?: string, execMode?: string): TaskTypeKey {
+  const raw = `${String(type || '').toLowerCase()} ${String(taskMode || '').toLowerCase()} ${String(execMode || '').toLowerCase()}`
+  if (raw.includes('pipeline')) return 'pipeline'
+  if (raw.includes('research')) return 'research'
+  if (raw.includes('code')) return 'code'
+  return 'general'
 }
 
 function taskTypeInitial(type: TaskTypeKey): string {
@@ -285,7 +282,7 @@ export function TopicColumn({
     const isMenuOpen = menuFor === topic.topic_id
     const isPinned = !!topic.is_default_p2p || pinnedTopicIds.includes(topic.topic_id)
     const displayName = topicAliases[topic.topic_id] || (topic.task_id ? stripTaskPrefix(topic.name) : topic.name)
-    const taskGroup = topic.task_id ? normalizeTaskType(topic.task_type) : null
+    const taskGroup = topic.task_id ? normalizeTaskType(topic.task_type, topic.task_mode, topic.exec_mode) : null
 
     return (
       <div
@@ -526,7 +523,7 @@ export function TopicColumn({
             {!collapsed && group === 'task' && (
               <div className="space-y-1">
                 {(['general', 'code', 'pipeline', 'research'] as TaskTypeKey[]).map((taskType) => {
-                  const taskItems = items.filter((it) => normalizeTaskType(it.task_type) === taskType)
+                  const taskItems = items.filter((it) => normalizeTaskType(it.task_type, it.task_mode, it.exec_mode) === taskType)
                   if (taskItems.length === 0) return null
                   const taskCollapsed = collapsedTaskTypeGroups[taskType]
                   const unreadTaskTopics = taskItems.filter((it) => Number(it.unread_count || 0) > 0).length
