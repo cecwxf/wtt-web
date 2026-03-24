@@ -1460,7 +1460,10 @@ export function ChatView({
   })()
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className="flex h-full flex-col"
+      style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif' }}
+    >
       <div className="border-b border-slate-200 dark:border-zinc-700 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -1503,7 +1506,7 @@ export function ChatView({
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/50 to-white dark:from-zinc-900/50 dark:to-zinc-950 px-4 py-4 sm:px-5"
+        className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] dark:bg-zinc-900 px-3 py-3 sm:px-4"
       >
         <div className="mb-3 flex justify-center">
           <button
@@ -1529,7 +1532,7 @@ export function ChatView({
           <div key={group.label} className="mb-4">
             <div className="mb-3 flex items-center gap-3">
               <div className="h-px flex-1 bg-white/10" />
-              <span className="rounded-full bg-slate-50 dark:bg-zinc-800 px-3 py-1 text-[11px] text-slate-400 dark:text-zinc-500">{group.label}</span>
+              <span className="rounded-full border border-slate-200/80 bg-white/80 dark:border-zinc-700 dark:bg-zinc-800/90 px-3 py-1 text-[11px] text-slate-500 dark:text-zinc-400 shadow-sm">{group.label}</span>
               <div className="h-px flex-1 bg-white/10" />
             </div>
 
@@ -1540,7 +1543,7 @@ export function ChatView({
 
                 return (
                   <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                    <div className="flex max-w-[92%] items-start gap-2">
+                    <div className="flex max-w-[96%] items-start gap-1.5">
                       {message.sender_type === 'agent' ? (
                         <button
                           type="button"
@@ -1571,19 +1574,19 @@ export function ChatView({
                         </button>
                       )}
 
-                      <div className="min-w-0 max-w-[82%]">
+                      <div className="min-w-0 max-w-[76%]">
                         {!!label && (
-                          <p className={`mb-1 truncate text-xs font-semibold ${isMine ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                          <p className={`mb-1 px-1 truncate text-[11px] font-medium ${isMine ? 'text-emerald-700 dark:text-emerald-400' : 'text-sky-700 dark:text-sky-400'}`}>
                             {label}
                           </p>
                         )}
 
                         <div
-                          className={`rounded-2xl px-5 py-3.5 text-[14px] leading-relaxed tracking-[-0.01em] ${
+                          className={`rounded-2xl px-3.5 py-2.5 text-[14px] leading-[1.42] ${
                             isMine
-                              ? 'border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/80 dark:bg-indigo-950/20 text-slate-800 dark:text-zinc-200'
-                              : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'
-                          } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
+                              ? 'bg-[#DCF8C6] dark:bg-emerald-900/45 text-slate-800 dark:text-zinc-100'
+                              : 'bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-200'
+                          } ${isMine ? 'rounded-br-md' : 'rounded-bl-md'} shadow-[0_1px_0_rgba(0,0,0,0.08)]`}
                         >
                           {(() => {
                             const task = parseTaskContent(message.content || '')
@@ -1842,7 +1845,7 @@ export function ChatView({
                           </div>
                         )
                       })()}
-                      <div className={`mt-2 text-[10px] ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>
+                      <div className={`mt-1 text-right text-[10px] leading-none ${isMine ? 'text-emerald-600/70 dark:text-emerald-300/70' : 'text-slate-500 dark:text-zinc-400'}`}>
                         {formatTime(message.timestamp)}
                       </div>
                     </div>
