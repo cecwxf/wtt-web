@@ -155,6 +155,8 @@ function FeedPageInner() {
   const [typingByTopic, setTypingByTopic] = useState<Record<string, { agentId: string; agentName?: string; startedAt: number; expiresAt: number }>>({})
   // Cache successful decrypt results by message_id + ciphertext to avoid repeated CPU work.
   const decryptCacheRef = useRef<Map<string, string>>(new Map())
+  // Keep feed polling fallback enabled only when realtime WS is not healthy.
+  const [wsConnectedForPoll, setWsConnectedForPoll] = useState(false)
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -250,9 +252,9 @@ function FeedPageInner() {
       return response.json()
     },
     {
-      // Keep frequent enough fallback polling for topic chat stream.
-      // Web WS may temporarily miss updates in some deployments.
-      refreshInterval: 5000,
+      // WS-first: disable regular polling when websocket is healthy.
+      // Keep 5s fallback only while WS is disconnected/unhealthy.
+      refreshInterval: wsConnectedForPoll ? 0 : 5000,
     }
   )
 
@@ -433,6 +435,19 @@ function FeedPageInner() {
     token: session?.accessToken || undefined,
     onMessage: handleWsMessage,
   })
+
+  const prevWsStateRef = useRef<string>('disconnected')
+  useEffect(() => {
+    const connected = wsState === 'connected'
+    setWsConnectedForPoll(connected)
+
+    // After reconnect, run one immediate HTTP backfill to avoid missed messages
+    // during transient WS outages.
+    if (connected && prevWsStateRef.current !== 'connected') {
+      void mutate()
+    }
+    prevWsStateRef.current = wsState
+  }, [wsState, mutate])
 
   const e2eBootstrapRequestedRef = useRef<string | null>(null)
   const e2eBootstrapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
