@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, Hash, Lock, Plus, MoreVertical, Pin, Users } from 'lucide-react'
+import { Bot, Hash, Lock, Plus, MoreVertical, Pin, Users, ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '@/lib/i18n-provider'
 
@@ -90,6 +90,12 @@ export function TopicColumn({
   const [discussAgentId, setDiscussAgentId] = useState('')
   const [discussTopicName, setDiscussTopicName] = useState('')
   const [creatingDiscuss, setCreatingDiscuss] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
+    p2p: false,
+    task: false,
+    discuss: false,
+    subscriber: false,
+  })
   const { t } = useI18n()
 
   // Load pinned topics
@@ -159,6 +165,10 @@ export function TopicColumn({
     } finally {
       setCreatingDiscuss(false)
     }
+  }
+
+  const toggleGroup = (group: TopicGroupKey) => {
+    setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }))
   }
 
   const groupedTopics = useMemo(() => {
@@ -239,21 +249,31 @@ export function TopicColumn({
 
         {topics.length === 0 && <p className="px-2 py-4 text-xs text-slate-400">{t('topic.noTopics')}</p>}
 
-        {groupedTopics.map(({ group, items }) => (
+        {groupedTopics.map(({ group, items }) => {
+          const collapsed = collapsedGroups[group]
+          return (
           <div key={group} className="mb-1">
             <div className="mx-1 mb-1 flex items-center justify-between rounded-md bg-slate-50/70 dark:bg-zinc-800/50 px-2 py-1">
-              <span className="text-[11px] font-medium text-slate-400">{t(getGroupLabelKey(group))}</span>
+              <button
+                onClick={() => toggleGroup(group)}
+                className="inline-flex min-w-0 items-center gap-1.5 rounded px-0.5 py-0.5 text-[11px] font-medium text-slate-500 transition hover:text-slate-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                title={collapsed ? t('topic.expandGroup') : t('topic.collapseGroup')}
+              >
+                {collapsed ? <ChevronRight className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />}
+                <span className="truncate">{t(getGroupLabelKey(group))}</span>
+                <span className="rounded-full bg-slate-200/70 dark:bg-zinc-700 px-1.5 py-0 text-[10px] text-slate-500 dark:text-zinc-300">{items.length}</span>
+              </button>
               {group === 'discuss' && onRequestDiscuss && (
                 <button
-                  onClick={() => setShowDiscussForm(!showDiscussForm)}
-                  className="rounded p-0.5 text-slate-400 transition hover:bg-slate-200 dark:hover:bg-zinc-700 hover:text-indigo-500"
+                  onClick={(e) => { e.stopPropagation(); setShowDiscussForm(!showDiscussForm) }}
+                  className="rounded-md border border-slate-300/80 dark:border-zinc-600 p-0.5 text-slate-600 dark:text-zinc-300 transition hover:bg-slate-200 dark:hover:bg-zinc-700 hover:text-indigo-600"
                   title={t('topic.requestDiscuss')}
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4 stroke-[3]" />
                 </button>
               )}
             </div>
-            {group === 'discuss' && showDiscussForm && (
+            {group === 'discuss' && showDiscussForm && !collapsed && (
               <div className="mx-1 mb-2 space-y-1.5 rounded-md border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-zinc-800 px-2 py-2">
                 <input
                   type="text"
@@ -288,7 +308,7 @@ export function TopicColumn({
                 </div>
               </div>
             )}
-            {items.map((topic) => {
+            {!collapsed && items.map((topic) => {
               const isSelected = topic.topic_id === selectedTopicId
               const Icon = getTopicIcon(topic.topic_type, !!topic.task_id)
               const isMenuOpen = menuFor === topic.topic_id
@@ -425,7 +445,8 @@ export function TopicColumn({
               )
             })}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="border-t border-slate-200 dark:border-zinc-700 px-3 py-2 text-[11px] text-slate-400">
