@@ -896,6 +896,8 @@ function CodeTaskPageInner() {
     } catch { /* ignore */ }
   }, [taskId])
 
+  const SEND_TIMEOUT_MS = 15000
+
   // ── Publish to topic helper (WS first, HTTP fallback) ──
   const publishToTopic = async (content: string, semanticType = 'post', senderType: 'HUMAN' | 'AGENT' = 'AGENT') => {
     if (!task?.topic_id || !selectedAgentId) {
@@ -924,6 +926,7 @@ function CodeTaskPageInner() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.accessToken ?? ''}`,
       },
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       body: JSON.stringify({
         content,
         content_type: 'text',
@@ -2103,10 +2106,11 @@ function CodeTaskPageInner() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session?.accessToken ?? ''}`,
           },
+          signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
           body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'reply', auto_run: task?.status === 'todo', include_task_context: task?.status === 'todo' }),
         })
         if (!r.ok) throw new Error(await r.text())
-        await mutateTask()
+        void mutateTask()
       } else {
         await publishToTopic(displayContent, 'post', 'HUMAN')
         if (built.fullCodebase) {
@@ -2867,7 +2871,7 @@ function CodeTaskPageInner() {
                   <ChatFileUpload
                     compact
                     onUploaded={(asset) => setPendingAttachments(prev => [...prev, asset.markdownToken])}
-                    disabled={sending}
+                    disabled={false}
                   />
                   <textarea
                     className={`flex-1 rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-2 text-sm ${tc.text} focus:border-indigo-400 focus:outline-none resize-none`}
@@ -2876,7 +2880,7 @@ function CodeTaskPageInner() {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-                    disabled={sending}
+                    disabled={false}
                   />
                   <button
                     onClick={sendMessage}
