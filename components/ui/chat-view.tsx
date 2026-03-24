@@ -11,11 +11,13 @@ import { useI18n } from '@/lib/i18n-provider'
 
 export interface ChatMessage {
   message_id: string
+  topic_id?: string
   sender_id: string
   sender_display_name?: string
   sender_avatar_url?: string
   sender_type: 'human' | 'agent'
   content: string
+  encrypted?: boolean
   timestamp: string
   semantic_type?: string
   task_id?: string

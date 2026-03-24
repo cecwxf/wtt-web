@@ -598,13 +598,15 @@ function CodeTaskPageInner() {
     (msg: WsMessage) => {
       if (msg.type !== 'new_message' || !msg.message) return
       if (msg.message.topic_id !== task?.topic_id) return
-      const m = msg.message as Record<string, string>
+      const m = msg.message as Record<string, unknown>
+      const senderType = String(m.sender_type || '').toLowerCase()
+      const senderId = String(m.sender_id || '')
       const incoming: ChatMsg = {
-        id: m.id,
-        role: m.sender_type === 'HUMAN' ? 'user' : 'assistant',
-        content: m.content,
-        timestamp: m.created_at,
-        sender_display_name: m.sender_display_name || agents.find(a => a.agent_id === m.sender_id)?.display_name || m.sender_id,
+        id: String(m.id || ''),
+        role: senderType === 'human' ? 'user' : 'assistant',
+        content: String(m.content || ''),
+        timestamp: String(m.created_at || new Date().toISOString()),
+        sender_display_name: m.sender_display_name ? String(m.sender_display_name) : agents.find(a => a.agent_id === senderId)?.display_name || senderId,
       }
       setChatMessages(prev => {
         if (prev.some(x => x.id === incoming.id)) return prev

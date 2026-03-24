@@ -25,6 +25,7 @@ export interface Message {
   content_type: string
   semantic_type: string
   content: string
+  encrypted?: boolean
   timestamp: string
   reply_to?: string
 }
@@ -174,6 +175,7 @@ class WTTApiClient {
       sender_type?: 'HUMAN' | 'AGENT' | 'human' | 'agent'
       sender_id?: string
       metadata?: Record<string, unknown>
+      encrypted?: boolean
     },
     options?: { agentId?: string }
   ): Promise<Message> {

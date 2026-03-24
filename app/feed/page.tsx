@@ -18,6 +18,7 @@ import type { EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { useI18n } from '@/lib/i18n-provider'
+import { cacheKeyFromBase64, decryptReceived, encryptForSend, getCachedKey } from '@/lib/e2e-crypto'
 
 const ContentEditor = dynamic(
   () => import('@/components/ui/content-editor').then((m) => m.ContentEditor),
@@ -80,11 +81,13 @@ function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[]
     const senderDisplayName = data.sender_display_name ? String(data.sender_display_name) : undefined
     return {
       message_id: String(data.message_id ?? data.id ?? `msg-${index}`),
+      topic_id: String(data.topic_id ?? ''),
       sender_id: senderId,
       sender_display_name: senderDisplayName,
       sender_type: normalizeSenderType(data.sender_type, senderId, knownAgentIds, senderDisplayName),
       sender_avatar_url: data.sender_avatar_url ? String(data.sender_avatar_url) : undefined,
       content: String(data.content ?? ''),
+      encrypted: Boolean(data.encrypted),
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
       semantic_type: String(data.semantic_type ?? ''),
       task_id: data.task_id ? String(data.task_id) : undefined,
@@ -252,6 +255,16 @@ function FeedPageInner() {
   // WebSocket for real-time messages
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
   const subscribedTopicsRef = useRef<{ raw: unknown[] | null; mutate: (data?: unknown, revalidate?: boolean) => void }>({ raw: null, mutate: () => {} })
+  const decryptMessageForDisplay = useCallback(async (message: ChatMessage): Promise<ChatMessage> => {
+    if (!message.encrypted) return message
+    const dec = await decryptReceived(message.content, true)
+    return { ...message, content: dec.text }
+  }, [])
+
+  const decryptMessagesForDisplay = useCallback(async (messages: ChatMessage[]): Promise<ChatMessage[]> => {
+    return Promise.all(messages.map((m) => decryptMessageForDisplay(m)))
+  }, [decryptMessageForDisplay])
+
   const handleWsMessage = useCallback(
     (msg: WsMessage) => {
       const rawEvent = msg as unknown as Record<string, unknown>
@@ -355,19 +368,23 @@ function FeedPageInner() {
 
       if (incomingTopicId !== selectedTopicId) return
       const senderId = String(msg.message.sender_id || 'unknown')
-      const senderDisplayName = (msg.message as Record<string, string>).sender_display_name || agentNameMap[senderId] || undefined
-      const incoming: ChatMessage = {
+      const senderDisplayName = (msg.message as Record<string, unknown>).sender_display_name
+        ? String((msg.message as Record<string, unknown>).sender_display_name)
+        : agentNameMap[senderId] || undefined
+      const incomingBase: ChatMessage = {
         message_id: msg.message.id,
+        topic_id: incomingTopicId,
         sender_id: senderId,
         sender_display_name: senderDisplayName,
         sender_type: normalizeSenderType((msg.message as Record<string, unknown>).sender_type, senderId, knownAgentIds, senderDisplayName),
         sender_avatar_url: (msg.message as Record<string, unknown>).sender_avatar_url ? String((msg.message as Record<string, unknown>).sender_avatar_url) : undefined,
         content: msg.message.content,
+        encrypted: Boolean((msg.message as Record<string, unknown>).encrypted),
         timestamp: msg.message.created_at,
         semantic_type: msg.message.semantic_type,
       }
 
-      if (incoming.sender_type === 'agent') {
+      if (incomingBase.sender_type === 'agent') {
         setTypingByTopic((prev) => {
           const existing = prev[incomingTopicId]
           if (!existing) return prev
@@ -381,12 +398,15 @@ function FeedPageInner() {
         })
       }
 
-      setAllMessages((prev) => {
-        if (prev.some((m) => m.message_id === incoming.message_id)) return prev
-        return [...prev, incoming]
-      })
+      void (async () => {
+        const incoming = await decryptMessageForDisplay(incomingBase)
+        setAllMessages((prev) => {
+          if (prev.some((m) => m.message_id === incoming.message_id)) return prev
+          return [...prev, incoming]
+        })
+      })()
     },
-    [selectedTopicId, agentNameMap, knownAgentIds],
+    [selectedTopicId, agentNameMap, knownAgentIds, decryptMessageForDisplay],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
@@ -394,6 +414,27 @@ function FeedPageInner() {
     token: session?.accessToken || undefined,
     onMessage: handleWsMessage,
   })
+
+  const e2eBootstrapRequestedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!selectedAgentId) return
+    if (wsState !== 'connected') return
+    if (getCachedKey()) return
+    if (e2eBootstrapRequestedRef.current === selectedAgentId) return
+
+    e2eBootstrapRequestedRef.current = selectedAgentId
+    void (async () => {
+      try {
+        const result = await sendAction<{ key_b64?: string }>('e2e_get_key', {})
+        const keyB64 = result && typeof result === 'object' ? String((result as { key_b64?: string }).key_b64 || '') : ''
+        if (keyB64) {
+          cacheKeyFromBase64(keyB64)
+        }
+      } catch {
+        // best-effort bootstrap (plugin offline / no key / unauthorized)
+      }
+    })()
+  }, [selectedAgentId, wsState, sendAction])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -413,31 +454,41 @@ function FeedPageInner() {
 
   const prevTopicRef = useRef(selectedTopicId)
   useEffect(() => {
-    const normalized = normalizeFeed(feedRaw, knownAgentIds)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-    const topicChanged = prevTopicRef.current !== selectedTopicId
-    prevTopicRef.current = selectedTopicId
-    if (topicChanged || normalized.length === 0) {
-      // Full replace on topic switch or empty data
-      setAllMessages(normalized)
-    } else {
-      setAllMessages((prev) => {
-        if (prev.length === 0) return normalized
-        // Merge: preserve DOM/scroll position during polling refreshes
-        const existingIds = new Set(prev.map(m => m.message_id))
-        const newMsgs = normalized.filter(m => !existingIds.has(m.message_id))
-        if (newMsgs.length === 0 && prev.length === normalized.length) return prev
-        const normalizedMap = new Map(normalized.map(m => [m.message_id, m]))
-        const merged = prev
-          .filter(m => normalizedMap.has(m.message_id))
-          .map(m => normalizedMap.get(m.message_id)!)
-        for (const m of newMsgs) merged.push(m)
-        merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-        return merged
-      })
+    let cancelled = false
+    void (async () => {
+      const normalizedRaw = normalizeFeed(feedRaw, knownAgentIds)
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      const normalized = await decryptMessagesForDisplay(normalizedRaw)
+      if (cancelled) return
+
+      const topicChanged = prevTopicRef.current !== selectedTopicId
+      prevTopicRef.current = selectedTopicId
+      if (topicChanged || normalized.length === 0) {
+        // Full replace on topic switch or empty data
+        setAllMessages(normalized)
+      } else {
+        setAllMessages((prev) => {
+          if (prev.length === 0) return normalized
+          // Merge: preserve DOM/scroll position during polling refreshes
+          const existingIds = new Set(prev.map(m => m.message_id))
+          const newMsgs = normalized.filter(m => !existingIds.has(m.message_id))
+          if (newMsgs.length === 0 && prev.length === normalized.length) return prev
+          const normalizedMap = new Map(normalized.map(m => [m.message_id, m]))
+          const merged = prev
+            .filter(m => normalizedMap.has(m.message_id))
+            .map(m => normalizedMap.get(m.message_id)!)
+          for (const m of newMsgs) merged.push(m)
+          merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+          return merged
+        })
+      }
+      setHasOlder(normalized.length >= 100)
+    })()
+
+    return () => {
+      cancelled = true
     }
-    setHasOlder(normalized.length >= 100)
-  }, [feedRaw, selectedTopicId, knownAgentIds])
+  }, [feedRaw, selectedTopicId, knownAgentIds, decryptMessagesForDisplay])
 
   // Enrich messages: replace raw agent_id fallback with display_name from agentNameMap
   const enrichedMessages = useMemo(() => {
@@ -459,7 +510,8 @@ function FeedPageInner() {
         agentId: selectedAgentId,
       })
 
-      const normalizedOlder = normalizeFeed(older, knownAgentIds)
+      const normalizedOlderRaw = normalizeFeed(older, knownAgentIds)
+      const normalizedOlder = await decryptMessagesForDisplay(normalizedOlderRaw)
       if (normalizedOlder.length === 0) {
         setHasOlder(false)
       } else {
@@ -474,7 +526,7 @@ function FeedPageInner() {
     } finally {
       setLoadingOlder(false)
     }
-  }, [selectedTopicId, loadingOlder, allMessages, knownAgentIds])
+  }, [selectedTopicId, loadingOlder, allMessages, knownAgentIds, decryptMessagesForDisplay, selectedAgentId])
 
   const { data: subscribedTopicsRaw, mutate: mutateTopics } = useSWR(
     selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
@@ -571,6 +623,7 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
+
   const selectedTopicTypingText = useMemo(() => {
     if (!selectedTopicId) return null
     const typing = typingByTopic[selectedTopicId]
@@ -868,12 +921,22 @@ function FeedPageInner() {
       }
     } else {
       // Regular topic — use publishMessage (may include worker persona context)
+      let outboundContent = augmentedContent
+      let encrypted = false
+      if (selectedTopic?.topic_type === 'p2p') {
+        const messageId = `web-p2p-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        const enc = await encryptForSend(augmentedContent, messageId)
+        outboundContent = enc.content
+        encrypted = enc.encrypted
+      }
+
       await wttApi.publishMessage(selectedTopicId, {
-        content: augmentedContent,
+        content: outboundContent,
         content_type: 'text',
         semantic_type: 'post',
         sender_type: 'HUMAN',
         sender_id: getHumanSender(session),
+        ...(encrypted ? { encrypted: true } : {}),
         ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
       }, {
         agentId: selectedAgentId || undefined,

@@ -16,6 +16,7 @@ export interface WsMessage {
     content_type?: string
     semantic_type?: string
     content: string
+    encrypted?: boolean
     created_at: string
   }
 }
@@ -23,6 +24,7 @@ export interface WsMessage {
 export type WsAction =
   | 'list' | 'find' | 'join' | 'leave' | 'subscribed'
   | 'publish' | 'poll' | 'p2p' | 'history' | 'detail'
+  | 'e2e_get_key'
 
 interface PendingRequest {
   resolve: (data: unknown) => void

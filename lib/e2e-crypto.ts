@@ -118,6 +118,26 @@ export function getCachedKey(): Uint8Array | null {
   return bytes;
 }
 
+function setCachedKeyBytes(key: Uint8Array): void {
+  if (!key || key.length !== 32) return;
+  const hex = Array.from(key)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  localStorage.setItem(STORAGE_KEY, hex);
+}
+
+/** Cache a derived key (base64-encoded 32-byte raw key) from agent bootstrap. */
+export function cacheKeyFromBase64(keyB64: string): boolean {
+  try {
+    const key = fromBase64(keyB64);
+    if (key.length !== 32) return false;
+    setCachedKeyBytes(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Clear cached key from localStorage. */
 export function clearCachedKey(): void {
   localStorage.removeItem(STORAGE_KEY);
