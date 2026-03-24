@@ -1,12 +1,27 @@
 import { NextRequest } from 'next/server'
-import { request as httpRequest } from 'node:http'
-import { request as httpsRequest } from 'node:https'
+import { Agent as HttpAgent, request as httpRequest } from 'node:http'
+import { Agent as HttpsAgent, request as httpsRequest } from 'node:https'
 import { DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 
 const UPSTREAM_BASE =
   process.env.WTT_API_URL ||
   process.env.NEXT_PUBLIC_WTT_API_URL ||
   DEFAULT_WTT_API_ORIGIN
+
+const REQUEST_TIMEOUT_MS = 15000
+const RETRYABLE_ERROR_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH'])
+
+const HTTP_AGENT = new HttpAgent({
+  keepAlive: true,
+  keepAliveMsecs: 10_000,
+  maxSockets: 128,
+})
+
+const HTTPS_AGENT = new HttpsAgent({
+  keepAlive: true,
+  keepAliveMsecs: 10_000,
+  maxSockets: 128,
+})
 
 function buildUpstreamUrl(path: string[], request: NextRequest): string {
   const base = UPSTREAM_BASE.replace(/\/+$/, '')
@@ -27,7 +42,15 @@ function filterResponseHeaders(headers: Headers): Headers {
   return outgoing
 }
 
-async function requestUpstream(urlString: string, method: string, headers: Headers, body?: Buffer): Promise<Response> {
+function shouldRetry(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const code = (error as { code?: string }).code
+  if (code && RETRYABLE_ERROR_CODES.has(code)) return true
+  const msg = String((error as { message?: string }).message || '').toLowerCase()
+  return msg.includes('socket hang up') || msg.includes('timeout')
+}
+
+async function requestUpstreamOnce(urlString: string, method: string, headers: Headers, body?: Buffer): Promise<Response> {
   const url = new URL(urlString)
   const isHttps = url.protocol === 'https:'
   const reqFn = isHttps ? httpsRequest : httpRequest
@@ -40,7 +63,7 @@ async function requestUpstream(urlString: string, method: string, headers: Heade
     reqHeaders['content-length'] = String(body.length)
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const req = reqFn(
       {
         protocol: url.protocol,
@@ -49,6 +72,7 @@ async function requestUpstream(urlString: string, method: string, headers: Heade
         path: `${url.pathname}${url.search}`,
         method,
         headers: reqHeaders,
+        agent: isHttps ? HTTPS_AGENT : HTTP_AGENT,
       },
       (upstreamRes) => {
         const chunks: Buffer[] = []
@@ -69,23 +93,44 @@ async function requestUpstream(urlString: string, method: string, headers: Heade
       },
     )
 
-    req.on('error', (error) => {
-      resolve(
-        Response.json(
-          {
-            detail: `Upstream request failed: ${error instanceof Error ? error.message : 'unknown error'}`,
-            upstream: urlString,
-          },
-          { status: 502 },
-        ),
-      )
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      req.destroy(Object.assign(new Error(`upstream timeout after ${REQUEST_TIMEOUT_MS}ms`), { code: 'ETIMEDOUT' }))
     })
+
+    req.on('error', (error) => reject(error))
 
     if (body && body.length > 0) {
       req.write(body)
     }
     req.end()
   })
+}
+
+async function requestUpstream(urlString: string, method: string, headers: Headers, body?: Buffer): Promise<Response> {
+  let lastError: unknown
+  const maxAttempts = 2
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await requestUpstreamOnce(urlString, method, headers, body)
+    } catch (error) {
+      lastError = error
+      if (attempt < maxAttempts && shouldRetry(error)) {
+        await new Promise((r) => setTimeout(r, 150 * attempt))
+        continue
+      }
+      break
+    }
+  }
+
+  const detail = lastError instanceof Error ? lastError.message : 'unknown error'
+  return Response.json(
+    {
+      detail: `Upstream request failed: ${detail}`,
+      upstream: urlString,
+    },
+    { status: 502 },
+  )
 }
 
 async function proxy(request: NextRequest, path: string[]): Promise<Response> {
