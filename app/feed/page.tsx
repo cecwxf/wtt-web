@@ -431,6 +431,7 @@ function FeedPageInner() {
 
   useEffect(() => {
     if (!selectedAgentId) return
+    if (!session?.accessToken) return
     if (getCachedKey()) return
     if (e2eBootstrapRequestedRef.current === selectedAgentId) return
 
@@ -438,38 +439,21 @@ function FeedPageInner() {
     void (async () => {
       let bootstrapped = false
 
-      // Prefer WS path when available.
-      if (wsState === 'connected') {
-        try {
-          const result = await sendAction<{ key_b64?: string }>('e2e_get_key', {
-            token: session?.accessToken || undefined,
-          })
-          const keyB64 = result && typeof result === 'object' ? String((result as { key_b64?: string }).key_b64 || '') : ''
+      // Single HTTP bootstrap path (server bridges to plugin over WS).
+      try {
+        const resp = await fetch(
+          `${CLIENT_WTT_API_BASE}/agents/e2e-key?agent_id=${encodeURIComponent(selectedAgentId)}`,
+          { headers: { Authorization: `Bearer ${session.accessToken}` } },
+        )
+        if (resp.ok) {
+          const payload = (await resp.json()) as { key_b64?: string }
+          const keyB64 = String(payload?.key_b64 || '')
           if (keyB64 && cacheKeyFromBase64(keyB64)) {
             bootstrapped = true
           }
-        } catch {
-          // ignore and continue HTTP fallback
         }
-      }
-
-      // HTTP fallback (also handles cases where web WS is unavailable).
-      if (!bootstrapped) {
-        try {
-          const resp = await fetch(
-            `${CLIENT_WTT_API_BASE}/agents/e2e-key?agent_id=${encodeURIComponent(selectedAgentId)}`,
-            { headers: { Authorization: `Bearer ${session?.accessToken || ''}` } },
-          )
-          if (resp.ok) {
-            const payload = (await resp.json()) as { key_b64?: string }
-            const keyB64 = String(payload?.key_b64 || '')
-            if (keyB64 && cacheKeyFromBase64(keyB64)) {
-              bootstrapped = true
-            }
-          }
-        } catch {
-          // ignore and retry below
-        }
+      } catch {
+        // ignore and retry below
       }
 
       if (!bootstrapped) {
@@ -488,7 +472,7 @@ function FeedPageInner() {
         e2eBootstrapTimerRef.current = null
       }
     }
-  }, [selectedAgentId, wsState, sendAction, session?.accessToken, e2eBootstrapSeq])
+  }, [selectedAgentId, session?.accessToken, e2eBootstrapSeq])
 
   useEffect(() => {
     const timer = setInterval(() => {
