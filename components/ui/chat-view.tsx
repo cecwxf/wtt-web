@@ -599,10 +599,12 @@ function senderLabelText(label?: string, senderId?: string): string {
   // Strip verbose system prefixes.
   text = text.replace(/^Agent\s+/i, '').replace(/^WTT[\s-]*User\s*/i, '').trim()
 
-  // Human owner labels like: "Alice（agent-x 的主人）" -> "@agent-x"
+  // Human owner labels like: "Alice（agent-x 的主人）" -> "Alice(@agent-x)"
   const ownerAgentMatch = text.match(/[（(]\s*([^（）()]+?)\s*的主人\s*[）)]/)
   if (ownerAgentMatch?.[1]) {
-    text = `@${ownerAgentMatch[1].trim()}`
+    const agentName = ownerAgentMatch[1].trim()
+    const humanName = text.split(/[（(]/)[0]?.trim() || ''
+    text = humanName ? `${humanName}(@${agentName})` : `@${agentName}`
   }
   return text
 }
