@@ -42,6 +42,34 @@ interface ModelOption {
   supports_reasoning?: boolean
 }
 
+type ModelPref = { model: string; effort: 'off' | 'low' | 'medium' | 'high' }
+
+const MODEL_PREF_STORAGE_PREFIX = 'wtt:model-pref:v1:'
+
+function readStoredModelPref(key: string): ModelPref | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(`${MODEL_PREF_STORAGE_PREFIX}${key}`)
+    if (!raw) return null
+    const data = JSON.parse(raw) as { model?: string; effort?: string }
+    const effort = String(data?.effort || '').toLowerCase()
+    if (!data?.model) return null
+    if (!['off', 'low', 'medium', 'high'].includes(effort)) return null
+    return { model: String(data.model), effort: effort as ModelPref['effort'] }
+  } catch {
+    return null
+  }
+}
+
+function writeStoredModelPref(key: string, pref: ModelPref): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(`${MODEL_PREF_STORAGE_PREFIX}${key}`, JSON.stringify(pref))
+  } catch {
+    // ignore quota/storage errors
+  }
+}
+
 type SlashCommandMode = 'local' | 'passthrough'
 
 type SlashCommandDef = {
@@ -663,7 +691,8 @@ export function ChatView({
   const attachMenuRef = useRef<HTMLDivElement>(null)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
-  const modelPrefsByTopicRef = useRef<Record<string, { model: string; effort: 'off' | 'low' | 'medium' | 'high' }>>({})
+  const modelPrefsByTopicRef = useRef<Record<string, ModelPref>>({})
+  const workerConfigHydratedRef = useRef<Record<string, boolean>>({})
   const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
@@ -847,9 +876,13 @@ export function ChatView({
     fetchModels()
   }, [])
 
-  // Keep model/think preference per topic/task/p2p session
+  // Keep model/think preference per topic/task/p2p session.
+  // Priority: worker current config (if available) > local persisted per-topic pref > task defaults.
   useEffect(() => {
-    const saved = modelPrefsByTopicRef.current[topicPreferenceKey]
+    const inMemory = modelPrefsByTopicRef.current[topicPreferenceKey]
+    const persisted = readStoredModelPref(topicPreferenceKey)
+    const saved = inMemory ?? persisted
+
     const preferredEffort = saved?.effort ?? ((taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off')
 
     let preferredModel = saved?.model
@@ -862,11 +895,64 @@ export function ChatView({
   }, [topicPreferenceKey, taskType, availableModels])
 
   useEffect(() => {
-    modelPrefsByTopicRef.current[topicPreferenceKey] = {
+    const pref: ModelPref = {
       model: selectedModel,
       effort: reasoningEffort,
     }
+    modelPrefsByTopicRef.current[topicPreferenceKey] = pref
+    writeStoredModelPref(topicPreferenceKey, pref)
   }, [topicPreferenceKey, selectedModel, reasoningEffort])
+
+  // Hydrate from current worker model config so picker reflects active worker settings.
+  useEffect(() => {
+    if (!topicId || !currentAgentId) return
+    if (workerConfigHydratedRef.current[topicPreferenceKey]) return
+
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch(`${CLIENT_WTT_API_BASE}/workers?agent_id=${encodeURIComponent(currentAgentId)}`, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        })
+        if (!res.ok) return
+        const rows = await res.json() as unknown
+        if (!Array.isArray(rows)) return
+
+        const row = rows.find((r) => String((r as Record<string, unknown>).topic_id || '') === String(topicId)) as Record<string, unknown> | undefined
+        if (!row) return
+
+        const cfg = ((row.model_config && typeof row.model_config === 'object') ? row.model_config : {}) as Record<string, unknown>
+        const model = String(cfg.model || '').trim()
+        const effortRaw = String(cfg.reasoning_effort || cfg.reasoningEffort || '').trim().toLowerCase()
+        const effort = (['off', 'low', 'medium', 'high'].includes(effortRaw)
+          ? effortRaw
+          : '') as '' | ModelPref['effort']
+
+        if (cancelled) return
+
+        const nextModel = model && availableModels.some((m) => m.id === model)
+          ? model
+          : (model || selectedModel)
+        const nextEffort: ModelPref['effort'] = effort || reasoningEffort
+
+        if (nextModel) setSelectedModel(nextModel)
+        setReasoningEffort(nextEffort)
+
+        const pref: ModelPref = { model: nextModel || selectedModel, effort: nextEffort }
+        modelPrefsByTopicRef.current[topicPreferenceKey] = pref
+        writeStoredModelPref(topicPreferenceKey, pref)
+      } catch {
+        // keep local pref fallback
+      } finally {
+        workerConfigHydratedRef.current[topicPreferenceKey] = true
+      }
+    }
+
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [topicId, currentAgentId, accessToken, topicPreferenceKey, availableModels, selectedModel, reasoningEffort])
 
   // Close model menu on click outside
   useEffect(() => {
