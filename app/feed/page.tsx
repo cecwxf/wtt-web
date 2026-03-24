@@ -153,6 +153,8 @@ function FeedPageInner() {
   }, [])
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [typingByTopic, setTypingByTopic] = useState<Record<string, { agentId: string; agentName?: string; startedAt: number; expiresAt: number }>>({})
+  // Cache successful decrypt results by message_id + ciphertext to avoid repeated CPU work.
+  const decryptCacheRef = useRef<Map<string, string>>(new Map())
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -248,7 +250,8 @@ function FeedPageInner() {
       return response.json()
     },
     {
-      refreshInterval: 30000,
+      // WS carries realtime message updates; keep HTTP polling as low-frequency backfill.
+      refreshInterval: 60000,
     }
   )
 
@@ -257,7 +260,22 @@ function FeedPageInner() {
   const subscribedTopicsRef = useRef<{ raw: unknown[] | null; mutate: (data?: unknown, revalidate?: boolean) => void }>({ raw: null, mutate: () => {} })
   const decryptMessageForDisplay = useCallback(async (message: ChatMessage): Promise<ChatMessage> => {
     if (!message.encrypted) return message
+
+    const cacheKey = `${message.message_id}:${message.content}`
+    const cached = decryptCacheRef.current.get(cacheKey)
+    if (cached !== undefined) {
+      return { ...message, content: cached }
+    }
+
     const dec = await decryptReceived(message.content, true)
+    // Cache only successful decrypts so key bootstrap can recover locked messages immediately.
+    if (!dec.decryptFailed) {
+      decryptCacheRef.current.set(cacheKey, dec.text)
+      if (decryptCacheRef.current.size > 5000) {
+        const firstKey = decryptCacheRef.current.keys().next().value
+        if (firstKey) decryptCacheRef.current.delete(firstKey)
+      }
+    }
     return { ...message, content: dec.text }
   }, [])
 
@@ -417,6 +435,7 @@ function FeedPageInner() {
 
   const e2eBootstrapRequestedRef = useRef<string | null>(null)
   const e2eBootstrapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const e2eRetryDelayRef = useRef(3000)
   const lastE2EAgentRef = useRef<string | null>(null)
   const [e2eBootstrapSeq, setE2eBootstrapSeq] = useState(0)
 
@@ -426,7 +445,9 @@ function FeedPageInner() {
     lastE2EAgentRef.current = selectedAgentId
     // Current cache is single-key storage; switching agent should force re-bootstrap.
     clearCachedKey()
+    decryptCacheRef.current.clear()
     e2eBootstrapRequestedRef.current = null
+    e2eRetryDelayRef.current = 3000
   }, [selectedAgentId])
 
   useEffect(() => {
@@ -450,6 +471,9 @@ function FeedPageInner() {
           const keyB64 = String(payload?.key_b64 || '')
           if (keyB64 && cacheKeyFromBase64(keyB64)) {
             bootstrapped = true
+            e2eRetryDelayRef.current = 3000
+            // Force one refresh so previously locked encrypted rows can re-render decrypted.
+            void mutate()
           }
         }
       } catch {
@@ -460,9 +484,11 @@ function FeedPageInner() {
         // best-effort bootstrap (plugin offline / auth race / no peer plugin)
         e2eBootstrapRequestedRef.current = null
         if (e2eBootstrapTimerRef.current) clearTimeout(e2eBootstrapTimerRef.current)
+        const retryDelay = e2eRetryDelayRef.current
+        e2eRetryDelayRef.current = Math.min(retryDelay * 2, 30000)
         e2eBootstrapTimerRef.current = setTimeout(() => {
           setE2eBootstrapSeq((n) => n + 1)
-        }, 3000)
+        }, retryDelay)
       }
     })()
 
@@ -472,7 +498,7 @@ function FeedPageInner() {
         e2eBootstrapTimerRef.current = null
       }
     }
-  }, [selectedAgentId, session?.accessToken, e2eBootstrapSeq])
+  }, [selectedAgentId, session?.accessToken, e2eBootstrapSeq, mutate])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -583,7 +609,8 @@ function FeedPageInner() {
       return response.json()
     },
     {
-      refreshInterval: 10000,
+      // WS updates topic activity; keep low-frequency polling as safety net.
+      refreshInterval: wsState === 'connected' ? 60000 : 10000,
     }
   )
 
@@ -607,7 +634,7 @@ function FeedPageInner() {
       if (!res.ok) return []
       return res.json()
     },
-    { refreshInterval: 30000 }
+    { refreshInterval: wsState === 'connected' ? 120000 : 30000 }
   )
   const pendingP2pCount = Array.isArray(p2pRequests) ? p2pRequests.length : 0
 
@@ -716,7 +743,7 @@ function FeedPageInner() {
       if (!r.ok) return []
       return r.json()
     },
-    { refreshInterval: 30000 }
+    { refreshInterval: wsState === 'connected' ? 120000 : 30000 }
   )
 
   // Build sub-agent map: each task = 1 sub-agent, grouped by owner agent
@@ -750,7 +777,7 @@ function FeedPageInner() {
       if (!r.ok) return null
       return r.json()
     },
-    { refreshInterval: 30000 }
+    { refreshInterval: wsState === 'connected' ? 120000 : 30000 }
   )
   const maxSubAgents = (agentStatsRaw as Record<string, unknown>)?.max_sub_agents as number | undefined ?? 20
   const agentStats = (agentStatsRaw as Record<string, unknown>)?.agents as Record<string, { total: number; active: number; done: number; todo: number }> | undefined
