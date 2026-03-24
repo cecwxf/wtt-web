@@ -689,8 +689,8 @@ function CodeTaskPageInner() {
     onMessage: handleWsMessage,
   })
 
-  // Load initial message history via HTTP (once)
-  const { data: topicMessages } = useSWR(
+  // Load initial message history via HTTP (once), then switch to WS-first.
+  const { data: topicMessages, mutate: mutateTopicMessages } = useSWR(
     task?.topic_id && session?.accessToken ? [`code-chat-${task.topic_id}`, session.accessToken, streamAgentId] : null,
     async () => {
       const tryFetch = async (agentId?: string) => {
@@ -711,8 +711,17 @@ function CodeTaskPageInner() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return r.json()
     },
-    { revalidateOnFocus: false, refreshInterval: 5000, keepPreviousData: true },
+    { revalidateOnFocus: false, refreshInterval: wsState === 'connected' ? 0 : 5000, keepPreviousData: true },
   )
+
+  const prevWsStateRef = useRef<string>('disconnected')
+  useEffect(() => {
+    if (wsState === 'connected' && prevWsStateRef.current !== 'connected') {
+      // one-shot backfill after reconnect to cover short WS gaps
+      void mutateTopicMessages()
+    }
+    prevWsStateRef.current = wsState
+  }, [wsState, mutateTopicMessages])
 
   // Seed chat from history (only once on load or agent switch)
   useEffect(() => {
