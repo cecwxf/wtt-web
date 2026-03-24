@@ -592,6 +592,32 @@ function avatarInitial(name?: string, fallback = '?'): string {
   return first.toUpperCase()
 }
 
+function senderLabelText(label?: string, senderId?: string): string {
+  let text = String(label || senderId || '').trim()
+  if (!text) return ''
+
+  // Strip verbose system prefixes.
+  text = text.replace(/^Agent\s+/i, '').replace(/^WTT[\s-]*User\s*/i, '').trim()
+
+  // Human owner labels like: "Alice（agent-x 的主人）" -> "@Alice"
+  const ownerMatch = text.match(/^(.+?)[（(].*?主人.*?[）)]$/)
+  if (ownerMatch?.[1]) {
+    text = `@${ownerMatch[1].trim()}`
+  }
+
+  return text
+}
+
+function avatarTone(seed: string, kind: 'agent' | 'human') {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0
+  const hue = Math.abs(hash) % 360
+  const bg = kind === 'agent' ? `hsl(${hue} 88% 94%)` : `hsl(${(hue + 18) % 360} 92% 94%)`
+  const fg = kind === 'agent' ? `hsl(${hue} 60% 34%)` : `hsl(${(hue + 18) % 360} 62% 34%)`
+  const bd = kind === 'agent' ? `hsl(${hue} 52% 78%)` : `hsl(${(hue + 18) % 360} 56% 80%)`
+  return { backgroundColor: bg, color: fg, borderColor: bd }
+}
+
 export function ChatView({
   topicName,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1509,16 +1535,18 @@ export function ChatView({
             <div className="space-y-2">
               {group.messages.map((message) => {
                 const isMine = message.sender_type === 'human'
+                const label = senderLabelText(message.sender_display_name, message.sender_id)
 
                 return (
                   <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`flex max-w-[92%] items-end gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
+                    <div className="flex max-w-[92%] items-start gap-2">
                       {message.sender_type === 'agent' ? (
                         <button
                           type="button"
                           onClick={() => openAgentCard(message.sender_id, message.sender_display_name, message.sender_avatar_url)}
                           title={`View ${message.sender_display_name || message.sender_id} profile`}
-                          className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-600 shadow-sm hover:border-indigo-300 hover:text-indigo-600"
+                          className="mt-0.5 h-8 w-8 shrink-0 overflow-hidden rounded-full border text-[11px] font-semibold shadow-sm transition hover:scale-[1.02]"
+                          style={message.sender_avatar_url ? undefined : avatarTone(message.sender_id || message.sender_display_name || 'agent', 'agent')}
                         >
                           {message.sender_avatar_url ? (
                             <img src={message.sender_avatar_url} alt={message.sender_display_name || message.sender_id} className="h-full w-full object-cover" />
@@ -1531,7 +1559,8 @@ export function ChatView({
                           type="button"
                           onClick={() => openHumanCard(message.sender_id, message.sender_display_name, message.sender_avatar_url)}
                           title={`View ${message.sender_display_name || message.sender_id} profile`}
-                          className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-indigo-200 bg-indigo-100 text-[11px] font-semibold text-indigo-700 shadow-sm hover:border-indigo-300"
+                          className="mt-0.5 h-8 w-8 shrink-0 overflow-hidden rounded-full border text-[11px] font-semibold shadow-sm transition hover:scale-[1.02]"
+                          style={message.sender_avatar_url ? undefined : avatarTone(message.sender_id || message.sender_display_name || 'human', 'human')}
                         >
                           {message.sender_avatar_url ? (
                             <img src={message.sender_avatar_url} alt={message.sender_display_name || message.sender_id} className="h-full w-full object-cover" />
@@ -1541,27 +1570,22 @@ export function ChatView({
                         </button>
                       )}
 
-                      <div
-                        className={`max-w-[82%] rounded-2xl px-5 py-3.5 text-[14px] leading-relaxed tracking-[-0.01em] ${
-                          isMine
-                            ? 'border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/80 dark:bg-indigo-950/20 text-slate-800 dark:text-zinc-200'
-                            : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'
-                        } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
-                      >
-                        {(() => {
-                          let label = message.sender_display_name || message.sender_id || ''
-                          // Strip verbose prefixes — keep concise sender identity
-                          label = label.replace(/^Agent\s+/i, '').replace(/^WTT[\s-]*User\s*/i, '').trim()
-                          if (!label) return null
+                      <div className="min-w-0 max-w-[82%]">
+                        {!!label && (
+                          <p className={`mb-1 truncate text-xs font-semibold ${isMine ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                            {label}
+                          </p>
+                        )}
 
-                          return (
-                            <p className={`mb-1 text-xs font-semibold ${isMine ? 'text-emerald-600 text-right' : 'text-indigo-600'}`}>
-                              {label}
-                            </p>
-                          )
-                        })()}
-                        {(() => {
-                          const task = parseTaskContent(message.content || '')
+                        <div
+                          className={`rounded-2xl px-5 py-3.5 text-[14px] leading-relaxed tracking-[-0.01em] ${
+                            isMine
+                              ? 'border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/80 dark:bg-indigo-950/20 text-slate-800 dark:text-zinc-200'
+                              : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'
+                          } ${isMine ? 'rounded-tr-md' : 'rounded-tl-md'} shadow-sm`}
+                        >
+                          {(() => {
+                            const task = parseTaskContent(message.content || '')
                         if (task.isTask) {
                           const colorMap: Record<string, { border: string; badge: string; badgeText: string; bg: string }> = {
                             run: { border: 'border-l-indigo-500', badge: 'bg-indigo-100 text-indigo-700', badgeText: t('chat.taskMeta'), bg: 'bg-indigo-50/50' },
@@ -1822,6 +1846,7 @@ export function ChatView({
                       </div>
                     </div>
                   </div>
+                </div>
                   </div>
                 )
               })}
