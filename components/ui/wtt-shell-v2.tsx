@@ -117,7 +117,7 @@ export function WttShellV2({
   }))
 
   return (
-    <div className="h-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-200">
+    <div className="h-screen bg-[#ece5dd] dark:bg-zinc-950 text-slate-800 dark:text-zinc-200">
       <div className="flex h-full flex-col">
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}
@@ -221,7 +221,7 @@ export function WttShellV2({
             )}
           </div>
 
-          <main className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/30 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900">
+          <main className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] dark:bg-zinc-900">
             {children}
           </main>
         </div>

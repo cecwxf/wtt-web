@@ -81,7 +81,7 @@ export function TaskAgentSidebar({
 
   if (collapsed) {
     return (
-      <div className="flex w-10 shrink-0 flex-col items-center border-r border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 py-3">
+      <div className="flex w-10 shrink-0 flex-col items-center border-r border-slate-200/80 dark:border-zinc-700 bg-[#f7f5f2] dark:bg-zinc-900 py-3">
         <button
           onClick={() => setCollapsed(false)}
           className="mb-3 rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-600 dark:hover:text-zinc-200"

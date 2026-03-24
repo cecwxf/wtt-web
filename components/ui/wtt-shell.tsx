@@ -67,9 +67,9 @@ export function WttShell({
   }
 
   return (
-    <div className="h-screen bg-slate-50 text-slate-800">
+    <div className="h-screen bg-[#ece5dd] text-slate-800">
       <div className="mx-auto flex h-full max-w-[1800px]">
-        <aside className="hidden w-[320px] shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
+        <aside className="hidden w-[320px] shrink-0 flex-col border-r border-slate-200/80 bg-[#f7f5f2] lg:flex">
           <div className="border-b border-slate-200 p-4">
             <div className="relative flex items-center gap-3">
               <button
@@ -171,7 +171,7 @@ export function WttShell({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+          <header className="border-b border-slate-200/80 bg-[#f7f5f2] px-4 py-3 sm:px-6">
             <div className="flex flex-wrap items-center gap-3">
               <div className="min-w-0 flex-1">
                 <h1 className="truncate text-lg font-semibold sm:text-xl">{pageTitle}</h1>
@@ -235,13 +235,13 @@ export function WttShell({
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/30 p-4 sm:p-6">
+          <main className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] p-4 sm:p-5">
             {children}
           </main>
         </div>
 
         {rightPanel && (
-          <aside className="hidden w-[300px] shrink-0 border-l border-slate-200 bg-white xl:block">
+          <aside className="hidden w-[300px] shrink-0 border-l border-slate-200/80 bg-[#f7f5f2] xl:block">
             {rightPanel}
           </aside>
         )}

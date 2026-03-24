@@ -5,8 +5,8 @@
 
 /* Global color tokens used by the app shell */
 :root {
-  --background: #f8fafc;
-  --foreground: #1e293b;
+  --background: #ece5dd;
+  --foreground: #1f2937;
 }
 
 .dark {
@@ -18,7 +18,8 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  line-height: 1.45;
 }
 
 /* Extra utility used by markdown rendering for nicer line breaks */

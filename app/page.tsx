@@ -171,7 +171,7 @@ export default function Home() {
       }
 
   return (
-    <main className="min-h-screen bg-white text-slate-800">
+    <main className="min-h-screen bg-[#efeae2] text-slate-800">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(99,102,241,0.08),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.06),transparent_30%)]" />
       <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-8">
         <header className="mb-14 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
