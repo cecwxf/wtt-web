@@ -442,9 +442,17 @@ function FeedPageInner() {
 
   useEffect(() => {
     if (!selectedAgentId) return
+
+    // On first mount, keep existing cached key (it may already match this agent).
+    if (!lastE2EAgentRef.current) {
+      lastE2EAgentRef.current = selectedAgentId
+      return
+    }
+
     if (lastE2EAgentRef.current === selectedAgentId) return
     lastE2EAgentRef.current = selectedAgentId
-    // Current cache is single-key storage; switching agent should force re-bootstrap.
+
+    // Agent really changed: clear cached key and force re-bootstrap.
     clearCachedKey()
     decryptCacheRef.current.clear()
     e2eBootstrapRequestedRef.current = null
