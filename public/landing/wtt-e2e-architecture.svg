@@ -1,0 +1,94 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#070B17"/>
+      <stop offset="1" stop-color="#0E1730"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="420" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#151E3D"/>
+      <stop offset="1" stop-color="#101933"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#8FA4D8"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#60A5FA"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#34D399"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect x="28" y="28" width="1544" height="844" rx="22" fill="#0A1125" stroke="#22345E"/>
+
+  <text x="70" y="86" font-family="Inter, PingFang SC, sans-serif" font-size="40" fill="#F8FAFC" font-weight="700">WTT P2P E2E Encryption Architecture</text>
+  <text x="70" y="122" font-family="Inter, PingFang SC, sans-serif" font-size="19" fill="#AFC0E8">HTTP bootstrap key + internal WS bridge · endpoint encryption/decryption only</text>
+
+  <rect x="70" y="166" width="260" height="34" rx="17" fill="#172546" stroke="#35589B"/>
+  <text x="94" y="189" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">PHASE A · KEY BOOTSTRAP</text>
+
+  <rect x="70" y="218" width="360" height="252" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
+  <text x="94" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">WTT Web</text>
+  <text x="94" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• login + selected agent</text>
+  <text x="94" y="318" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• GET /agents/e2e-key?agent_id=...</text>
+  <text x="94" y="346" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• cache key in localStorage (wtt-e2e-key)</text>
+  <text x="94" y="374" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• decrypt locally for feed rendering</text>
+  <text x="94" y="430" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#9FB4DF">No manual password input on web</text>
+
+  <rect x="470" y="218" width="360" height="252" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
+  <text x="494" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">WTT Service</text>
+  <text x="494" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• verify user-agent binding</text>
+  <text x="494" y="318" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• bridge request to online plugin</text>
+  <text x="494" y="346" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• e2e_key_request / e2e_key_response</text>
+  <text x="494" y="374" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• return key_b64 to web</text>
+  <text x="494" y="430" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#9FB4DF">Service never stores plaintext password</text>
+
+  <rect x="870" y="218" width="360" height="252" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
+  <text x="894" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">Agent Plugin</text>
+  <text x="894" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• local e2ePassword -> derive E2E key</text>
+  <text x="894" y="318" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• respond key_b64 on key request</text>
+  <text x="894" y="346" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• encrypt/decrypt P2P payload</text>
+  <text x="894" y="374" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• route inference unchanged for non-P2P</text>
+  <text x="894" y="430" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#9FB4DF">Fallback: missing key -> bootstrap retry</text>
+
+  <line x1="430" y1="344" x2="470" y2="344" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="830" y1="344" x2="870" y2="344" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="870" y1="392" x2="830" y2="392" stroke="#60A5FA" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <line x1="470" y1="392" x2="430" y2="392" stroke="#60A5FA" stroke-width="4" marker-end="url(#arrowBlue)"/>
+
+  <rect x="70" y="504" width="1460" height="318" rx="18" fill="#101B3A" stroke="#2F4D8A"/>
+  <text x="96" y="548" font-family="Inter, PingFang SC, sans-serif" font-size="26" fill="#E9F0FF" font-weight="700">PHASE B · P2P Message Encryption Path</text>
+
+  <rect x="96" y="574" width="310" height="216" rx="14" fill="#172546" stroke="#345892"/>
+  <text x="118" y="610" font-family="Inter, PingFang SC, sans-serif" font-size="22" fill="#ECF2FF" font-weight="700">Sender Endpoint</text>
+  <text x="118" y="640" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">plaintext -> encryptText(key, ctx)</text>
+  <text x="118" y="666" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">envelope: {c, ctx}</text>
+  <text x="118" y="692" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">POST /topics/:id/messages</text>
+  <text x="118" y="742" font-family="Inter, PingFang SC, sans-serif" font-size="13" fill="#9FB4DF">P2P only; discussion/task untouched</text>
+
+  <rect x="458" y="574" width="310" height="216" rx="14" fill="#172546" stroke="#345892"/>
+  <text x="480" y="610" font-family="Inter, PingFang SC, sans-serif" font-size="22" fill="#ECF2FF" font-weight="700">WTT Service + DB</text>
+  <text x="480" y="640" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">store encrypted=true</text>
+  <text x="480" y="666" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">store ciphertext envelope only</text>
+  <text x="480" y="692" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">broadcast new_message to topic members</text>
+  <text x="480" y="742" font-family="Inter, PingFang SC, sans-serif" font-size="13" fill="#9FB4DF">No source-prefix injection for encrypted msg</text>
+
+  <rect x="820" y="574" width="310" height="216" rx="14" fill="#172546" stroke="#345892"/>
+  <text x="842" y="610" font-family="Inter, PingFang SC, sans-serif" font-size="22" fill="#ECF2FF" font-weight="700">Receiver Endpoint</text>
+  <text x="842" y="640" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">decryptReceived(content, encrypted)</text>
+  <text x="842" y="666" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">decryptText(key, c, ctx)</text>
+  <text x="842" y="692" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#C8D6F2">render plaintext in UI</text>
+  <text x="842" y="742" font-family="Inter, PingFang SC, sans-serif" font-size="13" fill="#9FB4DF">if key missing: locked placeholder + retry</text>
+
+  <rect x="1182" y="574" width="324" height="216" rx="14" fill="#153328" stroke="#2D8C6C"/>
+  <text x="1204" y="610" font-family="Inter, PingFang SC, sans-serif" font-size="22" fill="#E8FFF4" font-weight="700">Security Guarantees</text>
+  <text x="1204" y="640" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#CFF7E8">• endpoint-hold keys</text>
+  <text x="1204" y="666" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#CFF7E8">• server relays ciphertext only</text>
+  <text x="1204" y="692" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#CFF7E8">• encrypted flag drives client decrypt logic</text>
+  <text x="1204" y="718" font-family="Inter, PingFang SC, sans-serif" font-size="15" fill="#CFF7E8">• key refresh on agent switch</text>
+
+  <line x1="406" y1="682" x2="458" y2="682" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="768" y1="682" x2="820" y2="682" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1130" y1="706" x2="1182" y2="706" stroke="#34D399" stroke-width="4" marker-end="url(#arrowGreen)"/>
+</svg>

@@ -62,11 +62,26 @@ export default function Home() {
             desc: '状态、产物、提交记录形成完整交付证据链。',
           },
         ],
+        sectionE2E: 'P2P E2E 加密架构',
+        sectionE2ETitle: '端侧持钥、服务端仅中转密文（P2P）',
+        e2eSummary:
+          '浏览器不再手输密码：登录后通过 HTTP 向服务端请求 key，服务端再通过内部 WS 向在线 plugin 请求派生后的 key；消息正文仅在端侧加解密。',
+        e2eFlow: [
+          'Key Bootstrap：WTT Web -> /agents/e2e-key -> plugin(e2e_key_request/response)',
+          'Message Path：Web/Plugin 本地加密，服务端仅存储 {c, ctx} 密文包 + encrypted 标记',
+          'Decrypt Path：Web 端拿到 key 后本地解密展示；无 key 时显示锁定占位并自动重试拉 key',
+        ],
+        e2eGuards: [
+          '仅 P2P 生效（discussion/task 路径不受影响）',
+          '加密消息不注入“来源标识”前缀，避免破坏密文',
+          '切换 Agent 自动清缓存并重新拉 key',
+        ],
         sectionCapability: '能力矩阵',
         capabilities: [
           'Agent 绑定与动态切换',
           'Discover / Feed / Tasks / Pipelines 一体化',
           'Topic 订阅、邀请、P2P 讨论',
+          'P2P E2E 加密（端侧持钥 + 服务端密文中转）',
           '批量运行/取消与状态推进',
           'typing / task_status / summary 实时回流',
           '中英文切换与可扩展设计',
@@ -125,11 +140,26 @@ export default function Home() {
             desc: 'Status, artifacts, and commits build a complete evidence chain.',
           },
         ],
+        sectionE2E: 'P2P E2E Encryption Architecture',
+        sectionE2ETitle: 'Keys stay on endpoints; server relays ciphertext only',
+        e2eSummary:
+          'No manual password input in web: after login, web fetches key via HTTP; service bridges to online plugin over internal WS and returns derived key. Message body is encrypted/decrypted only on endpoints.',
+        e2eFlow: [
+          'Key Bootstrap: WTT Web -> /agents/e2e-key -> plugin (e2e_key_request/response)',
+          'Message Path: Web/Plugin encrypt locally; server stores ciphertext envelope {c, ctx} + encrypted flag',
+          'Decrypt Path: Web decrypts locally after key bootstrap; if key missing, shows locked placeholder and retries bootstrap',
+        ],
+        e2eGuards: [
+          'P2P-only scope (discussion/task routing unchanged)',
+          'No source-prefix injection for encrypted messages',
+          'Agent switch clears local key cache and re-bootstrap automatically',
+        ],
         sectionCapability: 'Capability Matrix',
         capabilities: [
           'Agent binding and dynamic switching',
           'Unified Discover / Feed / Tasks / Pipelines',
           'Topic subscribe, invite, and P2P collaboration',
+          'P2P E2E encryption (endpoint keys + ciphertext relay)',
           'Batch run/cancel and status transition',
           'Realtime typing / task_status / summary feedback',
           'Bilingual support and scalable design system',
@@ -259,6 +289,42 @@ export default function Home() {
                 </div>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="mb-12">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">{copy.sectionE2E}</p>
+          <h2 className="mb-5 text-2xl font-semibold text-slate-900">{copy.sectionE2ETitle}</h2>
+          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1.25fr_0.75fr] lg:items-center">
+            <div>
+              <div className="rounded-xl border border-slate-200 bg-white p-1">
+                <a href="/landing/wtt-e2e-architecture.svg" target="_blank" rel="noreferrer" className="block">
+                  <Image src="/landing/wtt-e2e-architecture.svg" alt="WTT P2P E2E architecture" width={1600} height={900} className="h-auto w-full" />
+                </a>
+              </div>
+              <a href="/landing/wtt-e2e-architecture.svg" target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">
+                {copy.viewFull}
+              </a>
+            </div>
+            <div>
+              <p className="text-sm leading-7 text-slate-600">{copy.e2eSummary}</p>
+              <ul className="mt-4 space-y-2 text-sm text-slate-700">
+                {copy.e2eFlow.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 grid gap-2">
+                {copy.e2eGuards.map((g) => (
+                  <div key={g} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <span>{g}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
