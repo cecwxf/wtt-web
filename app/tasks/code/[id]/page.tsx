@@ -899,7 +899,11 @@ function CodeTaskPageInner() {
   const SEND_TIMEOUT_MS = 15000
 
   // ── Publish to topic helper (WS first, HTTP fallback) ──
-  const publishToTopic = async (content: string, semanticType = 'post', senderType: 'HUMAN' | 'AGENT' = 'AGENT') => {
+  const publishToTopic = async (
+    content: string,
+    semanticType = 'post',
+    senderType: 'HUMAN' | 'AGENT' = 'AGENT',
+  ): Promise<'ws' | 'http'> => {
     if (!task?.topic_id || !selectedAgentId) {
       throw new Error('No topic or agent selected')
     }
@@ -913,7 +917,7 @@ function CodeTaskPageInner() {
         semantic_type: semanticType,
         sender_type: senderType,
       })
-      if (wsResult !== null) return // WS succeeded
+      if (wsResult !== null) return 'ws' // WS succeeded
     } catch {
       console.warn('[CodeTask] WS publish failed, falling back to HTTP')
     }
@@ -939,6 +943,7 @@ function CodeTaskPageInner() {
       console.error('[CodeTask] HTTP publish failed:', resp.status, err)
       throw new Error(`Publish failed: ${resp.status} ${err}`)
     }
+    return 'http'
   }
 
   const codebaseSignature = (nodes: FileNode[], label?: string): string => {
@@ -2112,7 +2117,11 @@ function CodeTaskPageInner() {
         if (!r.ok) throw new Error(await r.text())
         void mutateTask()
       } else {
-        await publishToTopic(displayContent, 'post', 'HUMAN')
+        const transport = await publishToTopic(displayContent, 'post', 'HUMAN')
+        // Only do immediate HTTP backfill when WS is not connected and publish used HTTP fallback.
+        if (transport === 'http' && wsState !== 'connected') {
+          void mutateTopicMessages()
+        }
         if (built.fullCodebase) {
           const at = agentMode === 'remote' ? sshTree : fileTree
           const adn = agentMode === 'remote' ? sshRemoteDirName : dirName
