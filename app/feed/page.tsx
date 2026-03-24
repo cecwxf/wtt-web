@@ -164,6 +164,7 @@ function FeedPageInner() {
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false)
   const [inviteAgentId, setInviteAgentId] = useState('')
   const [invitingMember, setInvitingMember] = useState(false)
+  const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
   // Track active worker session context for persona injection
@@ -642,6 +643,20 @@ function FeedPageInner() {
   useEffect(() => {
     subscribedTopicsRef.current = { raw: subscribedTopicsRaw ?? null, mutate: mutateTopics }
   }, [subscribedTopicsRaw, mutateTopics])
+
+  // After topic messages are loaded (which marks latest as read server-side),
+  // sync subscribed topic list to clear unread badges after refresh.
+  useEffect(() => {
+    if (!selectedTopicId) return
+    if (!Array.isArray(feedRaw) || feedRaw.length === 0) return
+
+    const now = Date.now()
+    const prev = lastReadSyncRef.current
+    if (prev && prev.topicId === selectedTopicId && now - prev.ts < 5000) return
+
+    lastReadSyncRef.current = { topicId: selectedTopicId, ts: now }
+    void mutateTopics()
+  }, [selectedTopicId, feedRaw, mutateTopics])
 
   // Poll pending P2P requests for notifications
   // session.userId is the WTT backend UUID; session.user.id may not be set by NextAuth
