@@ -250,8 +250,9 @@ function FeedPageInner() {
       return response.json()
     },
     {
-      // WS carries realtime message updates; keep HTTP polling as low-frequency backfill.
-      refreshInterval: 60000,
+      // Keep frequent enough fallback polling for topic chat stream.
+      // Web WS may temporarily miss updates in some deployments.
+      refreshInterval: 5000,
     }
   )
 
