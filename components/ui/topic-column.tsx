@@ -251,6 +251,7 @@ export function TopicColumn({
 
         {groupedTopics.map(({ group, items }) => {
           const collapsed = collapsedGroups[group]
+          const unreadTopics = items.filter((it) => Number(it.unread_count || 0) > 0).length
           return (
           <div key={group} className="mb-1">
             <div className="mx-1 mb-1 flex items-center justify-between rounded-md bg-slate-50/70 dark:bg-zinc-800/50 px-2 py-1">
@@ -262,6 +263,11 @@ export function TopicColumn({
                 {collapsed ? <ChevronRight className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />}
                 <span className="truncate">{t(getGroupLabelKey(group))}</span>
                 <span className="rounded-full bg-slate-200/70 dark:bg-zinc-700 px-1.5 py-0 text-[10px] text-slate-500 dark:text-zinc-300">{items.length}</span>
+                {unreadTopics > 0 && (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-semibold leading-none text-white shadow">
+                    {unreadTopics > 99 ? '99+' : unreadTopics}
+                  </span>
+                )}
               </button>
               {group === 'discuss' && onRequestDiscuss && (
                 <button

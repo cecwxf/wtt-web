@@ -1398,6 +1398,22 @@ function FeedPageInner() {
     [topics],
   )
 
+  const handleTopicChange = useCallback((topicId: string | null) => {
+    setSelectedTopicId(topicId)
+    if (!topicId) return
+
+    // Optimistic unread-clear for immediate red badge feedback.
+    void mutateTopics((prev: unknown) => {
+      if (!Array.isArray(prev)) return prev
+      return prev.map((t) => {
+        const row = t as Record<string, unknown>
+        const id = String(row.id ?? row.topic_id ?? '')
+        if (id !== topicId) return t
+        return { ...row, unread_count: 0 }
+      })
+    }, false)
+  }, [mutateTopics])
+
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -1418,7 +1434,7 @@ function FeedPageInner() {
         onAgentChange={(id) => { setSelectedAgentId(id); setSelectedTopicId(null) }}
         topics={topics}
         selectedTopicId={selectedTopicId}
-        onTopicChange={setSelectedTopicId}
+        onTopicChange={handleTopicChange}
         onRenameAgent={handleRenameAgent}
         onUnclaimAgent={handleUnclaimAgent}
         onLeaveTopic={handleLeaveTopic}
