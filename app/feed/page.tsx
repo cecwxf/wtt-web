@@ -447,6 +447,23 @@ function FeedPageInner() {
         }
         throw new Error('e2e key missing')
       } catch {
+        // WebSocket bootstrap failed; fallback to HTTP bridge endpoint.
+        try {
+          const resp = await fetch(
+            `${CLIENT_WTT_API_BASE}/agents/e2e-key?agent_id=${encodeURIComponent(selectedAgentId)}`,
+            { headers: { Authorization: `Bearer ${session?.accessToken || ''}` } },
+          )
+          if (resp.ok) {
+            const payload = (await resp.json()) as { key_b64?: string }
+            const keyB64 = String(payload?.key_b64 || '')
+            if (keyB64 && cacheKeyFromBase64(keyB64)) {
+              return
+            }
+          }
+        } catch {
+          // ignore and retry below
+        }
+
         // best-effort bootstrap (plugin offline / auth race / no peer plugin)
         e2eBootstrapRequestedRef.current = null
         if (e2eBootstrapTimerRef.current) clearTimeout(e2eBootstrapTimerRef.current)
