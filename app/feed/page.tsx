@@ -18,7 +18,7 @@ import type { EditorTopic } from '@/components/ui/markdown-editor'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { useI18n } from '@/lib/i18n-provider'
-import { cacheKeyFromBase64, decryptReceived, encryptForSend, getCachedKey } from '@/lib/e2e-crypto'
+import { cacheKeyFromBase64, clearCachedKey, decryptReceived, encryptForSend, getCachedKey } from '@/lib/e2e-crypto'
 
 const ContentEditor = dynamic(
   () => import('@/components/ui/content-editor').then((m) => m.ContentEditor),
@@ -416,6 +416,19 @@ function FeedPageInner() {
   })
 
   const e2eBootstrapRequestedRef = useRef<string | null>(null)
+  const e2eBootstrapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastE2EAgentRef = useRef<string | null>(null)
+  const [e2eBootstrapSeq, setE2eBootstrapSeq] = useState(0)
+
+  useEffect(() => {
+    if (!selectedAgentId) return
+    if (lastE2EAgentRef.current === selectedAgentId) return
+    lastE2EAgentRef.current = selectedAgentId
+    // Current cache is single-key storage; switching agent should force re-bootstrap.
+    clearCachedKey()
+    e2eBootstrapRequestedRef.current = null
+  }, [selectedAgentId])
+
   useEffect(() => {
     if (!selectedAgentId) return
     if (wsState !== 'connected') return
@@ -425,16 +438,31 @@ function FeedPageInner() {
     e2eBootstrapRequestedRef.current = selectedAgentId
     void (async () => {
       try {
-        const result = await sendAction<{ key_b64?: string }>('e2e_get_key', {})
+        const result = await sendAction<{ key_b64?: string }>('e2e_get_key', {
+          token: session?.accessToken || undefined,
+        })
         const keyB64 = result && typeof result === 'object' ? String((result as { key_b64?: string }).key_b64 || '') : ''
-        if (keyB64) {
-          cacheKeyFromBase64(keyB64)
+        if (keyB64 && cacheKeyFromBase64(keyB64)) {
+          return
         }
+        throw new Error('e2e key missing')
       } catch {
-        // best-effort bootstrap (plugin offline / no key / unauthorized)
+        // best-effort bootstrap (plugin offline / auth race / no peer plugin)
+        e2eBootstrapRequestedRef.current = null
+        if (e2eBootstrapTimerRef.current) clearTimeout(e2eBootstrapTimerRef.current)
+        e2eBootstrapTimerRef.current = setTimeout(() => {
+          setE2eBootstrapSeq((n) => n + 1)
+        }, 3000)
       }
     })()
-  }, [selectedAgentId, wsState, sendAction])
+
+    return () => {
+      if (e2eBootstrapTimerRef.current) {
+        clearTimeout(e2eBootstrapTimerRef.current)
+        e2eBootstrapTimerRef.current = null
+      }
+    }
+  }, [selectedAgentId, wsState, sendAction, session?.accessToken, e2eBootstrapSeq])
 
   useEffect(() => {
     const timer = setInterval(() => {
