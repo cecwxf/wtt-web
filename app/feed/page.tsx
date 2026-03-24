@@ -66,6 +66,26 @@ function normalizeSenderType(
   return 'agent'
 }
 
+function stripSourceMarker(content: string): string {
+  const text = String(content || '')
+  if (!text.startsWith('┌─ 来源标识')) return text
+  const markerEnd = text.indexOf('\n└────────────────────\n')
+  if (markerEnd === -1) return text
+  return text.slice(markerEnd + '\n└────────────────────\n'.length)
+}
+
+function shouldDisplayMessage(semanticTypeRaw: unknown, contentRaw: unknown): boolean {
+  const semantic = String(semanticTypeRaw ?? '').trim().toLowerCase()
+  if (semantic === 'system' || semantic === 'notification' || semantic === 'command') return false
+
+  const content = String(contentRaw ?? '')
+  if (!content.trim()) return false
+  if (content.includes('[system:p2p_init]')) return false
+  if (content.includes('[System] P2P channel established')) return false
+
+  return true
+}
+
 function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[] {
   if (!raw || typeof raw !== 'object') return []
 
@@ -75,28 +95,37 @@ function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[]
       ? (raw as { messages: unknown[] }).messages
       : []
 
-  return rows.map((row, index) => {
+  const normalized: ChatMessage[] = []
+
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index]
     const data = row as Record<string, unknown>
+    const semanticType = String(data.semantic_type ?? '')
+    const cleanedContent = stripSourceMarker(String(data.content ?? ''))
+    if (!shouldDisplayMessage(semanticType, cleanedContent)) continue
+
     const senderId = String(data.sender_id ?? 'unknown')
     const senderDisplayName = data.sender_display_name ? String(data.sender_display_name) : undefined
-    return {
+    normalized.push({
       message_id: String(data.message_id ?? data.id ?? `msg-${index}`),
       topic_id: String(data.topic_id ?? ''),
       sender_id: senderId,
       sender_display_name: senderDisplayName,
       sender_type: normalizeSenderType(data.sender_type, senderId, knownAgentIds, senderDisplayName),
       sender_avatar_url: data.sender_avatar_url ? String(data.sender_avatar_url) : undefined,
-      content: String(data.content ?? ''),
+      content: cleanedContent,
       encrypted: Boolean(data.encrypted),
       timestamp: String(data.timestamp ?? data.created_at ?? new Date().toISOString()),
-      semantic_type: String(data.semantic_type ?? ''),
+      semantic_type: semanticType,
       task_id: data.task_id ? String(data.task_id) : undefined,
       task_status: data.task_status ? String(data.task_status) : undefined,
       task_title: data.task_title ? String(data.task_title) : undefined,
       runner_agent_id: data.runner_agent_id ? String(data.runner_agent_id) : undefined,
       exec_mode: data.exec_mode ? String(data.exec_mode) : undefined,
-    }
-  })
+    })
+  }
+
+  return normalized
 }
 
 export default function FeedPageWrapper() {
@@ -375,20 +404,37 @@ function FeedPageInner() {
       if (msg.type !== 'new_message' || !msg.message) return
       const incomingTopicId = msg.message.topic_id
 
-      // Bump activity for the topic that received the message (optimistic sort)
+      const semanticType = String((msg.message as Record<string, unknown>).semantic_type ?? '')
+      const rawContent = String((msg.message as Record<string, unknown>).content ?? '')
+      const cleanedContent = stripSourceMarker(rawContent)
+      const displayable = shouldDisplayMessage(semanticType, cleanedContent)
+
+      // Bump activity and unread counters for the topic that received the message.
       const { raw, mutate: mutateSubs } = subscribedTopicsRef.current
       if (raw && Array.isArray(raw)) {
         const now = new Date().toISOString()
         mutateSubs(
           raw.map((t) => {
             const rec = t as Record<string, unknown>
-            return rec.id === incomingTopicId ? { ...rec, last_activity_at: now } : t
+            if (rec.id !== incomingTopicId) return t
+
+            const currentUnread = Number(rec.unread_count || 0)
+            if (incomingTopicId === selectedTopicId) {
+              return { ...rec, last_activity_at: now, unread_count: 0 }
+            }
+            return {
+              ...rec,
+              last_activity_at: now,
+              unread_count: displayable ? currentUnread + 1 : currentUnread,
+            }
           }),
           false,
         )
       }
 
       if (incomingTopicId !== selectedTopicId) return
+      if (!displayable) return
+
       const senderId = String(msg.message.sender_id || 'unknown')
       const senderDisplayName = (msg.message as Record<string, unknown>).sender_display_name
         ? String((msg.message as Record<string, unknown>).sender_display_name)
@@ -400,10 +446,10 @@ function FeedPageInner() {
         sender_display_name: senderDisplayName,
         sender_type: normalizeSenderType((msg.message as Record<string, unknown>).sender_type, senderId, knownAgentIds, senderDisplayName),
         sender_avatar_url: (msg.message as Record<string, unknown>).sender_avatar_url ? String((msg.message as Record<string, unknown>).sender_avatar_url) : undefined,
-        content: msg.message.content,
+        content: cleanedContent,
         encrypted: Boolean((msg.message as Record<string, unknown>).encrypted),
         timestamp: msg.message.created_at,
-        semantic_type: msg.message.semantic_type,
+        semantic_type: semanticType,
       }
 
       if (incomingBase.sender_type === 'agent') {
