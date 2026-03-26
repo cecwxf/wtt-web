@@ -209,28 +209,17 @@ export function WttSettingsModal({
   }
 
   const buildPluginCommand = (agentId: string, agentToken: string) => {
-    const payload = JSON.stringify({ WTT_AGENT_ID: agentId, WTT_AGENT_TOKEN: agentToken })
+    const aid = JSON.stringify(agentId)
+    const tok = JSON.stringify(agentToken)
     return [
-      "python3 - <<'PY'",
-      'from pathlib import Path',
-      'import json',
-      'import re',
-      `updates = json.loads(${JSON.stringify(payload)})`,
-      "env_path = Path.home() / '.openclaw' / 'workspace' / 'skills' / 'wtt-skill' / '.env'",
-      'env_path.parent.mkdir(parents=True, exist_ok=True)',
-      "text = env_path.read_text(encoding='utf-8') if env_path.exists() else ''",
-      'for key, value in updates.items():',
-      "    pattern = rf'^{key}=.*$'",
-      '    if re.search(pattern, text, flags=re.MULTILINE):',
-      "        text = re.sub(pattern, f'{key}={value}', text, flags=re.MULTILINE)",
-      '    else:',
-      "        if text and not text.endswith('\\n'):",
-      "            text += '\\n'",
-      "        text += f'{key}={value}\\n'",
-      "env_path.write_text(text, encoding='utf-8')",
-      "print(f'updated {env_path}')",
-      'PY',
-      'bash ~/.openclaw/workspace/skills/wtt-skill/scripts/status_autopoll.sh',
+      '# WTT plugin bootstrap (preferred)',
+      `openclaw-wtt-bootstrap --agent-id ${aid} --token ${tok}`,
+      '',
+      '# fallback if openclaw-wtt-bootstrap is not in PATH',
+      `node ~/.openclaw/workspace/wtt/wtt_plugin/bin/openclaw-wtt-bootstrap.mjs --agent-id ${aid} --token ${tok}`,
+      '',
+      '# verify',
+      'openclaw status',
     ].join('\n')
   }
 
