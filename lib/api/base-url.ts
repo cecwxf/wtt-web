@@ -3,7 +3,7 @@ export const CLIENT_WTT_API_BASE = '/api/wtt'
 export const DEFAULT_WTT_API_ORIGIN =
   process.env.NEXT_PUBLIC_WTT_API_URL || 'http://170.106.109.4:8000'
 
-const DEFAULT_PUBLIC_WTT_WS_ORIGIN = 'wss://www.waxbyte.com'
+const DEFAULT_PUBLIC_WTT_WS_ORIGIN = 'wss://www.wtt.sh'
 
 function toWsOrigin(input: string): string {
   const s = (input || '').trim()
