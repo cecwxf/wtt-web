@@ -20,6 +20,7 @@ export default function LoginPage() {
   // Sign in
   const [signInEmail, setSignInEmail] = useState('')
   const [signInPassword, setSignInPassword] = useState('')
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
 
   // Register
   const [registerName, setRegisterName] = useState('')
@@ -151,6 +152,37 @@ export default function LoginPage() {
     }
   }
 
+  const handleForgotPassword = async () => {
+    setError('')
+    setInfo('')
+
+    const email = signInEmail.trim().toLowerCase()
+    if (!email) {
+      setError('Enter your email first')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setError(data.detail ?? 'Failed to send reset email')
+        return
+      }
+      setInfo(data.message ?? 'If the email is registered, a reset link has been sent.')
+      setShowForgotPassword(false)
+    } catch {
+      setError('Network error while requesting password reset')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-50 px-4 py-10">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_25%,rgba(99,102,241,0.12)_0%,transparent_35%),radial-gradient(circle_at_80%_70%,rgba(16,185,129,0.1)_0%,transparent_35%)]" />
@@ -174,14 +206,14 @@ export default function LoginPage() {
         <div className="mb-5 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
-            onClick={() => { setTab('signin'); setError(''); setInfo('') }}
+            onClick={() => { setTab('signin'); setError(''); setInfo(''); setShowForgotPassword(false) }}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${tab === 'signin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             Sign In
           </button>
           <button
             type="button"
-            onClick={() => { setTab('register'); setError(''); setInfo('') }}
+            onClick={() => { setTab('register'); setError(''); setInfo(''); setShowForgotPassword(false) }}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${tab === 'register' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             Register
@@ -220,6 +252,28 @@ export default function LoginPage() {
                   required
                 />
               </label>
+
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword((v) => !v)}
+                className="-mt-1 text-left text-xs font-medium text-indigo-600 hover:text-indigo-700"
+              >
+                {showForgotPassword ? 'Hide reset password' : 'Forgot password?'}
+              </button>
+
+              {showForgotPassword && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-xs text-indigo-700">
+                  We will send a reset link to <span className="font-semibold">{signInEmail || 'your email'}</span>.
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={loading}
+                    className="mt-2 w-full rounded-lg bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Send reset link
+                  </button>
+                </div>
+              )}
 
               <button
                 type="submit"
