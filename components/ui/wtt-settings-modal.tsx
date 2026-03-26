@@ -59,6 +59,7 @@ export function WttSettingsModal({
   const [provisionError, setProvisionError] = useState('')
   const [provisionSuccess, setProvisionSuccess] = useState('')
   const [provisioned, setProvisioned] = useState<{ agent_id: string; agent_token: string; api_key?: string } | null>(null)
+  const [pluginCommandCreds, setPluginCommandCreds] = useState<{ agent_id: string; agent_token: string } | null>(null)
 
   const [existingAgentId, setExistingAgentId] = useState('')
   const [existingAgentToken, setExistingAgentToken] = useState('')
@@ -132,6 +133,10 @@ export function WttSettingsModal({
         agent_token: data.agent_token,
         api_key: data.api_key,
       })
+      setPluginCommandCreds({
+        agent_id: data.agent_id,
+        agent_token: data.agent_token,
+      })
       setProvisionSuccess(t('settings.claimNewSuccess'))
       setProvisionDisplayName('')
       onBindingChanged?.()
@@ -178,6 +183,10 @@ export function WttSettingsModal({
         return
       }
 
+      setPluginCommandCreds({
+        agent_id: data.agent_id || existingAgentId.trim(),
+        agent_token: data.agent_token || existingAgentToken.trim(),
+      })
       setClaimExistingSuccess(t('settings.claimExistingSuccess'))
       setExistingAgentId('')
       setExistingAgentToken('')
@@ -197,6 +206,32 @@ export function WttSettingsModal({
     } catch {
       alert(t('settings.copyFail'))
     }
+  }
+
+  const buildPluginCommand = (agentId: string, agentToken: string) => {
+    const payload = JSON.stringify({ WTT_AGENT_ID: agentId, WTT_AGENT_TOKEN: agentToken })
+    return [
+      "python3 - <<'PY'",
+      'from pathlib import Path',
+      'import json',
+      'import re',
+      `updates = json.loads(${JSON.stringify(payload)})`,
+      "env_path = Path.home() / '.openclaw' / 'workspace' / 'skills' / 'wtt-skill' / '.env'",
+      'env_path.parent.mkdir(parents=True, exist_ok=True)',
+      "text = env_path.read_text(encoding='utf-8') if env_path.exists() else ''",
+      'for key, value in updates.items():',
+      "    pattern = rf'^{key}=.*$'",
+      '    if re.search(pattern, text, flags=re.MULTILINE):',
+      "        text = re.sub(pattern, f'{key}={value}', text, flags=re.MULTILINE)",
+      '    else:',
+      "        if text and not text.endswith('\\n'):",
+      "            text += '\\n'",
+      "        text += f'{key}={value}\\n'",
+      "env_path.write_text(text, encoding='utf-8')",
+      "print(f'updated {env_path}')",
+      'PY',
+      'bash ~/.openclaw/workspace/skills/wtt-skill/scripts/status_autopoll.sh',
+    ].join('\n')
   }
 
   if (!open) return null
@@ -434,6 +469,24 @@ export function WttSettingsModal({
                 {claimExistingError && <p className="mt-2 text-sm text-red-500">{claimExistingError}</p>}
                 {claimExistingSuccess && <p className="mt-2 text-sm text-emerald-600">{claimExistingSuccess}</p>}
               </div>
+
+              {pluginCommandCreds && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                  <p className="text-sm font-semibold text-indigo-800">{t('settings.pluginCmdTitle')}</p>
+                  <p className="mt-1 text-xs text-indigo-600">{t('settings.pluginCmdDesc')}</p>
+                  <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-indigo-200 bg-white p-3 text-[11px] leading-5 text-slate-700">
+                    {buildPluginCommand(pluginCommandCreds.agent_id, pluginCommandCreds.agent_token)}
+                  </pre>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleCopy(buildPluginCommand(pluginCommandCreds.agent_id, pluginCommandCreds.agent_token), t('settings.pluginCmdCopied'))}
+                      className="rounded border border-indigo-200 bg-white px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
+                    >
+                      {t('settings.copyPluginCmd')}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">{t('settings.boundAgents', { count: agents.length })}</p>
