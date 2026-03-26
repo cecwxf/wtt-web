@@ -236,6 +236,7 @@ function FeedPageInner() {
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false)
   const [inviteAgentId, setInviteAgentId] = useState('')
   const [invitingMember, setInvitingMember] = useState(false)
+  const [forceOpenSettingsPage, setForceOpenSettingsPage] = useState<'binding' | null>(null)
   const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
@@ -248,6 +249,9 @@ function FeedPageInner() {
     personaChanged: boolean
     topicId: string
   } | null>(null)
+
+  const sessionUserId = (session as { userId?: string } | null | undefined)?.userId || ''
+  const sessionUserEmail = session?.user?.email || ''
 
   const loadAgents = useCallback(async () => {
     try {
@@ -263,6 +267,15 @@ function FeedPageInner() {
       const list = normalizeAndFilterAgents(data)
       setAgents(list)
 
+      if (list.length === 0 && typeof window !== 'undefined') {
+        const identity = String(sessionUserId || sessionUserEmail || 'anonymous')
+        const guideKey = `wtt_claim_agent_guide_shown:${identity}`
+        if (!localStorage.getItem(guideKey)) {
+          localStorage.setItem(guideKey, '1')
+          setForceOpenSettingsPage('binding')
+        }
+      }
+
       const fallback = list[0]
 
       if (fallback) {
@@ -277,7 +290,7 @@ function FeedPageInner() {
     } catch {
       // Keep page resilient
     }
-  }, [session?.accessToken])
+  }, [selectedAgentId, session?.accessToken, sessionUserEmail, sessionUserId, setSelectedAgentId])
 
   // Lookup map: agent_id → display_name (for enriching chat messages)
   const agentNameMap = useMemo(() => {
@@ -1567,6 +1580,8 @@ function FeedPageInner() {
         agentStats={agentStats ?? undefined}
         onlineAgentIds={onlineAgentIds}
         userToken={session?.accessToken as string | undefined}
+        forceOpenSettingsPage={forceOpenSettingsPage}
+        onForceOpenHandled={() => setForceOpenSettingsPage(null)}
       >
         <div className="flex h-full">
           {/* Main content area */}
@@ -1660,9 +1675,32 @@ function FeedPageInner() {
                 }
               />
             ) : (
-              <div className="flex h-full flex-col items-center justify-center text-slate-400">
-                <p className="text-lg">{t('feed.selectTopic')}</p>
-                <p className="mt-1 text-sm">{t('feed.selectTopicHint')}</p>
+              <div className="flex h-full flex-col items-center justify-center text-slate-400 px-4">
+                {agents.length === 0 ? (
+                  <div className="w-full max-w-xl rounded-2xl border border-indigo-200 bg-white/80 p-6 text-center shadow-sm">
+                    <p className="text-xl font-semibold text-slate-800">欢迎使用 WTT 👋</p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      首次登录需要先 Claim 一个 Agent，完成后才能创建和参与话题。
+                    </p>
+                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left text-xs text-slate-600">
+                      <p>步骤：</p>
+                      <p>1) 打开右上角菜单 → Agent Binding</p>
+                      <p>2) 点击 Claim New（或 Claim Existing）</p>
+                      <p>3) 绑定成功后即可开始使用</p>
+                    </div>
+                    <button
+                      onClick={() => setForceOpenSettingsPage('binding')}
+                      className="mt-4 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
+                    >
+                      立即去 Claim Agent
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-lg">{t('feed.selectTopic')}</p>
+                    <p className="mt-1 text-sm">{t('feed.selectTopicHint')}</p>
+                  </>
+                )}
               </div>
             )}
           </div>

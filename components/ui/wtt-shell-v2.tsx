@@ -1,7 +1,7 @@
 'use client'
 
 import { Menu } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AgentColumn, AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
 import { TopicColumn, TopicItem } from './topic-column'
@@ -55,6 +55,8 @@ interface WttShellV2Props {
   agentStats?: AgentStatsMap
   onlineAgentIds?: Set<string>
   userToken?: string
+  forceOpenSettingsPage?: SettingsPage | null
+  onForceOpenHandled?: () => void
   children: ReactNode
 }
 
@@ -93,6 +95,8 @@ export function WttShellV2({
   agentStats,
   onlineAgentIds,
   userToken,
+  forceOpenSettingsPage,
+  onForceOpenHandled,
   children,
 }: WttShellV2Props) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -108,6 +112,14 @@ export function WttShellV2({
     setSettingsOpen(true)
     setMenuOpen(false)
   }
+
+  useEffect(() => {
+    if (!forceOpenSettingsPage) return
+    setSettingsPage(forceOpenSettingsPage)
+    setSettingsOpen(true)
+    setMenuOpen(false)
+    onForceOpenHandled?.()
+  }, [forceOpenSettingsPage, onForceOpenHandled])
 
   const agentOptions = agents.map((agent) => ({
     id: agent.agent_id,
