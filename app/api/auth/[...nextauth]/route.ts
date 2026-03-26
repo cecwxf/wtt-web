@@ -3,7 +3,6 @@ import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
 import TwitterProvider from "next-auth/providers/twitter"
 import CredentialsProvider from "next-auth/providers/credentials"
-import WeChatProvider from "@/lib/auth/wechat-provider"
 
 const WTT_API_URL =
   process.env.WTT_API_URL ||
@@ -30,27 +29,24 @@ const authOptions: NextAuthOptions = {
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
       version: "2.0",
     }),
-    WeChatProvider({
-      clientId: process.env.WECHAT_APP_ID!,
-      clientSecret: process.env.WECHAT_APP_SECRET!,
-    }),
     CredentialsProvider({
-      name: "Phone OTP",
+      name: "Email Password",
       credentials: {
-        identifier: { label: "Phone", type: "text" },
-        code: { label: "Code", type: "text" },
-        displayName: { label: "Display Name", type: "text" },
+        email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.identifier) {
+        const email = (credentials?.email ?? (credentials as Record<string, string | undefined>)?.identifier ?? '').trim().toLowerCase()
+        const password = credentials?.password ?? ''
+
+        if (!email || !password) {
           return null
         }
 
         if (
           ENABLE_TEST_LOGIN &&
-          credentials.identifier === TEST_ADMIN_IDENTIFIER &&
-          credentials.password === TEST_ADMIN_PASSWORD
+          email === TEST_ADMIN_IDENTIFIER &&
+          password === TEST_ADMIN_PASSWORD
         ) {
           return {
             id: 'test-admin',
@@ -61,28 +57,17 @@ const authOptions: NextAuthOptions = {
         }
 
         try {
-          const useCodeFlow = Boolean(credentials.code)
-          const response = await fetch(
-            useCodeFlow ? `${WTT_API_URL}/auth/phone/login` : `${WTT_API_URL}/auth/login`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(
-                useCodeFlow
-                  ? {
-                      phone: credentials.identifier,
-                      code: credentials.code,
-                      display_name: credentials.displayName,
-                    }
-                  : {
-                      email: credentials.identifier,
-                      password: credentials.password,
-                    }
-              ),
-            }
-          )
+          const response = await fetch(`${WTT_API_URL}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          })
 
           if (!response.ok) {
+            const err = await response.json().catch(() => ({}))
+            if (response.status === 403 && err?.detail === 'EMAIL_NOT_VERIFIED') {
+              throw new Error('EMAIL_NOT_VERIFIED')
+            }
             return null
           }
 
@@ -96,7 +81,7 @@ const authOptions: NextAuthOptions = {
           }
         } catch (error) {
           console.error("Login error:", error)
-          return null
+          throw error
         }
       },
     }),
