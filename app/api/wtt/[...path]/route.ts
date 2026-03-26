@@ -133,12 +133,26 @@ async function requestUpstream(urlString: string, method: string, headers: Heade
   )
 }
 
+function isPublicAuthPath(path: string[]): boolean {
+  const p = `/${path.join('/')}`
+  return (
+    p === '/auth/register' ||
+    p === '/auth/login' ||
+    p === '/auth/activate' ||
+    p === '/auth/resend-activation' ||
+    p === '/auth/phone/send-code' ||
+    p === '/auth/phone/login'
+  )
+}
+
 async function proxy(request: NextRequest, path: string[]): Promise<Response> {
-  // Auth check: require Authorization header or NextAuth session cookie
+  // Auth check: require Authorization header or NextAuth session cookie,
+  // except for public auth endpoints used before login.
   const hasAuthHeader = !!request.headers.get('authorization')
   const hasSessionCookie = request.cookies.has('next-auth.session-token') ||
     request.cookies.has('__Secure-next-auth.session-token')
-  if (!hasAuthHeader && !hasSessionCookie) {
+  const isPublic = isPublicAuthPath(path)
+  if (!isPublic && !hasAuthHeader && !hasSessionCookie) {
     return Response.json({ detail: 'Unauthorized' }, { status: 401 })
   }
 
