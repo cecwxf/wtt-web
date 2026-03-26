@@ -182,6 +182,10 @@ function ResearchTaskPageInner() {
   const [annotationAnchor, setAnnotationAnchor] = useState<{ x: number; y: number } | null>(null)
 
   // Resize
+  const [projectW, setProjectW] = useState(() => {
+    if (typeof window !== 'undefined') return parseInt(localStorage.getItem('research-project-w') || '192') || 192
+    return 192
+  })
   const [leftW, setLeftW] = useState(() => {
     if (typeof window !== 'undefined') return parseInt(localStorage.getItem('research-left-w') || '280') || 280
     return 280
@@ -190,7 +194,7 @@ function ResearchTaskPageInner() {
     if (typeof window !== 'undefined') return parseInt(localStorage.getItem('research-right-w') || '420') || 420
     return 420
   })
-  const resizingRef = useRef<'left' | 'right' | null>(null)
+  const resizingRef = useRef<'projects' | 'left' | 'right' | null>(null)
   const resizeStartXRef = useRef(0)
   const resizeStartWRef = useRef(0)
 
@@ -374,10 +378,11 @@ function ResearchTaskPageInner() {
   // Resize persistence
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      localStorage.setItem('research-project-w', String(projectW))
       localStorage.setItem('research-left-w', String(leftW))
       localStorage.setItem('research-right-w', String(rightW))
     }
-  }, [leftW, rightW])
+  }, [projectW, leftW, rightW])
 
   // Write content auto-save
   useEffect(() => {
@@ -391,7 +396,9 @@ function ResearchTaskPageInner() {
     const onMove = (e: MouseEvent) => {
       if (!resizingRef.current) return
       const dx = e.clientX - resizeStartXRef.current
-      if (resizingRef.current === 'left') {
+      if (resizingRef.current === 'projects') {
+        setProjectW(Math.max(120, Math.min(360, resizeStartWRef.current + dx)))
+      } else if (resizingRef.current === 'left') {
         setLeftW(Math.max(200, Math.min(500, resizeStartWRef.current + dx)))
       } else {
         setRightW(Math.max(280, Math.min(700, resizeStartWRef.current - dx)))
@@ -493,10 +500,10 @@ function ResearchTaskPageInner() {
     setNoteDialog(null)
   }
 
-  const startResize = (which: 'left' | 'right', e: React.MouseEvent) => {
+  const startResize = (which: 'projects' | 'left' | 'right', e: React.MouseEvent) => {
     resizingRef.current = which
     resizeStartXRef.current = e.clientX
-    resizeStartWRef.current = which === 'left' ? leftW : rightW
+    resizeStartWRef.current = which === 'projects' ? projectW : which === 'left' ? leftW : rightW
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
   }
@@ -824,7 +831,10 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
 
         {/* ═══ PROJECT DIRECTORY ═══ */}
         {!l4Fullscreen && (
-          <div className={`flex flex-col border-r border-slate-200 dark:border-zinc-700 bg-slate-50/80 dark:bg-zinc-800/80 transition-all ${projectsCollapsed ? 'w-10' : 'w-48'}`}>
+          <div
+            className={`flex flex-col border-r border-slate-200 dark:border-zinc-700 bg-slate-50/80 dark:bg-zinc-800/80 transition-all ${projectsCollapsed ? 'w-10' : ''}`}
+            style={!projectsCollapsed ? { width: projectW } : undefined}
+          >
             {projectsCollapsed ? (
               <button
                 onClick={() => { setProjectsCollapsed(false); localStorage.setItem('research-projects-collapsed', 'false') }}
@@ -886,6 +896,14 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
               </>
             )}
           </div>
+        )}
+
+        {/* Projects resize handle */}
+        {!l4Fullscreen && !projectsCollapsed && (
+          <div
+            className="w-[3px] shrink-0 cursor-col-resize hover:bg-indigo-400 transition-colors bg-transparent"
+            onMouseDown={(e) => startResize('projects', e)}
+          />
         )}
 
         {/* ═══ LEFT: Library Panel ═══ */}
