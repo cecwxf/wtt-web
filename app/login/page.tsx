@@ -41,7 +41,7 @@ export default function LoginPage() {
     const password = signInPassword
 
     if (!email || !password) {
-      setError('Please enter email and password')
+      setError('请输入邮箱和密码')
       return
     }
 
@@ -59,13 +59,13 @@ export default function LoginPage() {
       }
 
       if (result?.error === 'EMAIL_NOT_VERIFIED') {
-        setError('Email not activated. Please check your inbox, or resend activation email below.')
+        setError('邮箱未激活，请先查收激活邮件（或点击下方重发激活邮件）。')
         return
       }
 
-      setError('Invalid email or password')
+      setError('邮箱或密码错误，请重试。')
     } catch {
-      setError('Authentication failed')
+      setError('登录失败，请稍后重试。')
     } finally {
       setLoading(false)
     }
