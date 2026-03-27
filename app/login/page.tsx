@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowRight, Github, Twitter, User, Mail, Lock } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { useI18n } from '@/lib/i18n-provider'
 
 type AuthTab = 'signin' | 'register'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { t } = useI18n()
 
   const [tab, setTab] = useState<AuthTab>('signin')
   const [loading, setLoading] = useState(false)
@@ -41,7 +43,7 @@ export default function LoginPage() {
     const password = signInPassword
 
     if (!email || !password) {
-      setError('请输入邮箱和密码')
+      setError(t('login.errorEnterEmailPassword'))
       return
     }
 
@@ -59,13 +61,13 @@ export default function LoginPage() {
       }
 
       if (result?.error === 'EMAIL_NOT_VERIFIED') {
-        setError('邮箱未激活，请先查收激活邮件（或点击下方重发激活邮件）。')
+        setError(t('login.errorEmailNotActivated'))
         return
       }
 
-      setError('邮箱或密码错误，请重试。')
+      setError(t('login.errorInvalidEmailOrPassword'))
     } catch {
-      setError('登录失败，请稍后重试。')
+      setError(t('login.errorAuthFailed'))
     } finally {
       setLoading(false)
     }
@@ -80,15 +82,15 @@ export default function LoginPage() {
     const displayName = registerName.trim()
 
     if (!displayName || !email || !registerPassword || !registerPassword2) {
-      setError('Please complete all registration fields')
+      setError(t('login.errorCompleteFields'))
       return
     }
     if (registerPassword.length < 8) {
-      setError('Password must be at least 8 characters')
+      setError(t('login.errorPasswordMin'))
       return
     }
     if (registerPassword !== registerPassword2) {
-      setError('Passwords do not match')
+      setError(t('login.errorPasswordMismatch'))
       return
     }
 
@@ -106,18 +108,18 @@ export default function LoginPage() {
 
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setError(data.detail ?? 'Registration failed')
+        setError(data.detail ?? t('login.errorRegisterFailed'))
         return
       }
 
-      setInfo('Registration successful. We sent an activation link to your email.')
+      setInfo(t('login.infoRegisterSuccess'))
       setTab('signin')
       setSignInEmail(email)
       setSignInPassword('')
       setRegisterPassword('')
       setRegisterPassword2('')
     } catch {
-      setError('Network error while registering')
+      setError(t('login.errorNetworkRegister'))
     } finally {
       setLoading(false)
     }
@@ -128,7 +130,7 @@ export default function LoginPage() {
     setInfo('')
     const email = signInEmail.trim().toLowerCase()
     if (!email) {
-      setError('Enter your email first')
+      setError(t('login.errorEnterEmailFirst'))
       return
     }
 
@@ -141,12 +143,12 @@ export default function LoginPage() {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setError(data.detail ?? 'Failed to resend activation email')
+        setError(data.detail ?? t('login.errorResendActivationFailed'))
         return
       }
-      setInfo(data.message ?? 'Activation email sent')
+      setInfo(t('login.infoActivationSent'))
     } catch {
-      setError('Network error while resending activation email')
+      setError(t('login.errorNetworkResend'))
     } finally {
       setLoading(false)
     }
@@ -158,7 +160,7 @@ export default function LoginPage() {
 
     const email = signInEmail.trim().toLowerCase()
     if (!email) {
-      setError('Enter your email first')
+      setError(t('login.errorEnterEmailFirst'))
       return
     }
 
@@ -171,13 +173,13 @@ export default function LoginPage() {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setError(data.detail ?? 'Failed to send reset email')
+        setError(data.detail ?? t('login.errorSendResetFailed'))
         return
       }
-      setInfo(data.message ?? 'If the email is registered, a reset link has been sent.')
+      setInfo(t('login.infoResetSentGeneric'))
       setShowForgotPassword(false)
     } catch {
-      setError('Network error while requesting password reset')
+      setError(t('login.errorNetworkRequestReset'))
     } finally {
       setLoading(false)
     }
@@ -209,14 +211,14 @@ export default function LoginPage() {
             onClick={() => { setTab('signin'); setError(''); setInfo(''); setShowForgotPassword(false) }}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${tab === 'signin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            Sign In
+            {t('login.signIn')}
           </button>
           <button
             type="button"
             onClick={() => { setTab('register'); setError(''); setInfo(''); setShowForgotPassword(false) }}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${tab === 'register' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            Register
+            {t('login.register')}
           </button>
         </div>
 
@@ -226,14 +228,14 @@ export default function LoginPage() {
               <label className="block">
                 <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                   <Mail className="h-3.5 w-3.5" />
-                  Email
+                  {t('login.email')}
                 </span>
                 <input
                   type="email"
                   value={signInEmail}
                   onChange={(e) => setSignInEmail(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                  placeholder="you@example.com"
+                  placeholder={t('login.emailPlaceholder')}
                   required
                 />
               </label>
@@ -241,14 +243,14 @@ export default function LoginPage() {
               <label className="block">
                 <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                   <Lock className="h-3.5 w-3.5" />
-                  Password
+                  {t('login.password')}
                 </span>
                 <input
                   type="password"
                   value={signInPassword}
                   onChange={(e) => setSignInPassword(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                  placeholder="Your password"
+                  placeholder={t('login.passwordPlaceholder')}
                   required
                 />
               </label>
@@ -258,19 +260,19 @@ export default function LoginPage() {
                 onClick={() => setShowForgotPassword((v) => !v)}
                 className="-mt-1 text-left text-xs font-medium text-indigo-600 hover:text-indigo-700"
               >
-                {showForgotPassword ? 'Hide reset password' : 'Forgot password?'}
+                {showForgotPassword ? t('login.hideResetPassword') : t('login.forgotPassword')}
               </button>
 
               {showForgotPassword && (
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-xs text-indigo-700">
-                  We will send a reset link to <span className="font-semibold">{signInEmail || 'your email'}</span>.
+                  {t('login.resetLinkWillSend', { email: signInEmail || t('login.yourEmail') })}
                   <button
                     type="button"
                     onClick={handleForgotPassword}
                     disabled={loading}
                     className="mt-2 w-full rounded-lg bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Send reset link
+                    {t('login.sendResetLink')}
                   </button>
                 </div>
               )}
@@ -280,7 +282,7 @@ export default function LoginPage() {
                 disabled={loading}
                 className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? t('login.signingIn') : t('login.signIn')}
                 {!loading && <ArrowRight className="h-4 w-4" />}
               </button>
             </form>
@@ -291,14 +293,14 @@ export default function LoginPage() {
               disabled={loading}
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Resend activation email
+              {t('login.resendActivation')}
             </button>
 
             <div className="relative my-5">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-slate-200" />
               </div>
-              <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-slate-400">or</p>
+              <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-slate-400">{t('login.or')}</p>
             </div>
 
             <div className="space-y-2.5">
@@ -312,7 +314,7 @@ export default function LoginPage() {
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
-                Continue with Google
+                {t('login.continueGoogle')}
               </button>
 
               <button
@@ -320,7 +322,7 @@ export default function LoginPage() {
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
               >
                 <Github className="h-5 w-5" />
-                Continue with GitHub
+                {t('login.continueGithub')}
               </button>
 
               <button
@@ -328,7 +330,7 @@ export default function LoginPage() {
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
               >
                 <Twitter className="h-5 w-5" />
-                Continue with Twitter
+                {t('login.continueTwitter')}
               </button>
             </div>
           </>
@@ -337,14 +339,14 @@ export default function LoginPage() {
             <label className="block">
               <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                 <User className="h-3.5 w-3.5" />
-                Display Name
+                {t('login.displayName')}
               </span>
               <input
                 type="text"
                 value={registerName}
                 onChange={(e) => setRegisterName(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="Your name"
+                placeholder={t('login.displayNamePlaceholder')}
                 required
               />
             </label>
@@ -352,14 +354,14 @@ export default function LoginPage() {
             <label className="block">
               <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                 <Mail className="h-3.5 w-3.5" />
-                Email
+                {t('login.email')}
               </span>
               <input
                 type="email"
                 value={registerEmail}
                 onChange={(e) => setRegisterEmail(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="you@example.com"
+                placeholder={t('login.emailPlaceholder')}
                 required
               />
             </label>
@@ -367,14 +369,14 @@ export default function LoginPage() {
             <label className="block">
               <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                 <Lock className="h-3.5 w-3.5" />
-                Password
+                {t('login.password')}
               </span>
               <input
                 type="password"
                 value={registerPassword}
                 onChange={(e) => setRegisterPassword(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="At least 8 characters"
+                placeholder={t('login.passwordMinPlaceholder')}
                 required
               />
             </label>
@@ -382,14 +384,14 @@ export default function LoginPage() {
             <label className="block">
               <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                 <Lock className="h-3.5 w-3.5" />
-                Confirm Password
+                {t('login.confirmPassword')}
               </span>
               <input
                 type="password"
                 value={registerPassword2}
                 onChange={(e) => setRegisterPassword2(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="Repeat password"
+                placeholder={t('login.confirmPasswordPlaceholder')}
                 required
               />
             </label>
@@ -399,12 +401,12 @@ export default function LoginPage() {
               disabled={loading}
               className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? 'Creating account...' : 'Register'}
+              {loading ? t('login.creatingAccount') : t('login.register')}
               {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
 
             <p className="text-center text-xs text-slate-500">
-              After registration, you will receive an activation link by email.
+              {t('login.registerActivationHint')}
             </p>
           </form>
         )}
