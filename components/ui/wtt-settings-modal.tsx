@@ -212,11 +212,11 @@ export function WttSettingsModal({
     const aid = JSON.stringify(agentId)
     const tok = JSON.stringify(agentToken)
     return [
-      '# WTT plugin bootstrap (preferred)',
-      `openclaw-wtt-bootstrap --agent-id ${aid} --token ${tok}`,
+      '# WTT plugin bootstrap (works after npm/plugin install)',
+      `openclaw wtt-bootstrap --agent-id ${aid} --token ${tok}`,
       '',
-      '# fallback if openclaw-wtt-bootstrap is not in PATH',
-      `node ~/.openclaw/workspace/wtt/wtt_plugin/bin/openclaw-wtt-bootstrap.mjs --agent-id ${aid} --token ${tok}`,
+      '# optional shortcut if standalone binary is installed',
+      `openclaw-wtt-bootstrap --agent-id ${aid} --token ${tok}`,
       '',
       '# verify',
       'openclaw status',
