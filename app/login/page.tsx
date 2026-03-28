@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { signIn } from 'next-auth/react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -196,8 +197,10 @@ export default function LoginPage() {
         transition={{ duration: 0.35 }}
         className="relative mx-auto w-full max-w-[440px] rounded-[28px] border border-slate-200 bg-white px-6 pb-7 pt-8 shadow-[0_24px_70px_rgba(99,102,241,0.12)] sm:px-8"
       >
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 text-indigo-600 shadow-[0_14px_28px_rgba(99,102,241,0.18)]">
-          <span className="text-xl font-semibold tracking-[0.12em]">WTT</span>
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_14px_28px_rgba(99,102,241,0.18)]">
+          <span className="inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80">
+            <Image src="/icon.png" alt="WTT" width={56} height={56} className="h-14 w-14" priority />
+          </span>
         </div>
 
         <div className="mb-7 text-center">

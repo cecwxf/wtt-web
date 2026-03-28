@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
-import { ArrowRight, Blocks, Bot, ChevronRight, Cpu, Lock, Radar, ShieldCheck, Sparkles, Workflow } from 'lucide-react'
+import { ArrowRight, Blocks, ChevronRight, Cpu, Lock, Radar, ShieldCheck, Sparkles, Workflow } from 'lucide-react'
 import { useI18n } from '@/lib/i18n-provider'
+import { WttLogo } from '@/components/ui/wtt-logo'
 
 export default function Home() {
   const { status } = useSession()
@@ -176,7 +177,7 @@ export default function Home() {
       <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-8">
         <header className="mb-14 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-slate-700">
-            <Bot className="h-4 w-4 text-slate-600" />
+            <WttLogo size={18} className="ring-1 ring-slate-300/80" />
             <span>WTT (Want To Talk)</span>
           </div>
 

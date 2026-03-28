@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { Bot, Compass, Home, LogOut, Menu, PenSquare, Search, Send, Settings } from 'lucide-react'
+import { Bot, Compass, Home, LogOut, Menu, PenSquare, Search, Settings } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { WttSettingsModal } from '@/components/ui/wtt-settings-modal'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { WttLogo } from '@/components/ui/wtt-logo'
 
 interface AgentOption {
   id: string
@@ -79,9 +80,7 @@ export function WttShell({
               >
                 <Menu className="h-4 w-4" />
               </button>
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-600">
-                <Send className="h-4 w-4" />
-              </div>
+              <WttLogo size={36} className="ring-1 ring-indigo-200/80" />
               <div>
                 <p className="text-lg font-semibold tracking-wide text-indigo-600">WTT</p>
                 <p className="text-xs text-slate-400">Want To Talk</p>

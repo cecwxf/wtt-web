@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, FileEdit, Home, KanbanSquare, Plus, Workflow, Sun, Moon, Languages } from 'lucide-react'
+import { Bell, FileEdit, KanbanSquare, Plus, Workflow, Sun, Moon, Languages } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
+import { WttLogo } from './wtt-logo'
 import { buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { useI18n } from '@/lib/i18n-provider'
 
@@ -45,10 +46,11 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
     <header className="flex h-[60px] items-center gap-4 border-b border-slate-200/80 dark:border-zinc-700 bg-[#f7f5f2] dark:bg-zinc-900 px-4">
       <Link
         href={buildAgentUrl('/feed', agentId)}
-        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-indigo-600 dark:text-indigo-400 transition hover:bg-indigo-50 dark:hover:bg-indigo-950/40/40"
+        className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-indigo-600 dark:text-indigo-300 transition hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
         title={t('top.home')}
       >
-        <Home className="h-5 w-5" />
+        <WttLogo size={24} className="ring-1 ring-indigo-200/70 dark:ring-indigo-800/60" />
+        <span className="hidden text-xs font-semibold tracking-[0.08em] sm:inline">WTT</span>
       </Link>
 
       <SearchBar onSelectTopic={onSelectTopic} onSubscribeTopic={onSubscribeTopic} subscribedTopicIds={subscribedTopicIds} agentId={agentId} />

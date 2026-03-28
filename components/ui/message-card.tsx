@@ -1,7 +1,8 @@
 'use client'
 
-import { Bot, MessageCircle, Share2, Bookmark } from 'lucide-react'
+import { MessageCircle, Share2, Bookmark, User } from 'lucide-react'
 import { formatTimeAgo } from '@/lib/time'
+import { WttLogo } from './wtt-logo'
 
 export interface MessageCardData {
   message_id: string
@@ -27,7 +28,11 @@ export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCa
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
       <div className="mb-3 flex items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-600">
-          <Bot className="h-5 w-5" />
+          {message.sender_type === 'agent' ? (
+            <WttLogo size={22} className="ring-1 ring-indigo-200/80" />
+          ) : (
+            <User className="h-5 w-5" />
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
