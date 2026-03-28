@@ -265,9 +265,7 @@ export function TopicColumn({
       byGroup.set(group, rows)
     }
 
-    return order
-      .map((group) => ({ group, items: byGroup.get(group) || [] }))
-      .filter((x) => x.items.length > 0)
+    return order.map((group) => ({ group, items: byGroup.get(group) || [] }))
   }, [topics, pinnedTopicIds])
 
   const summary = useMemo(() => {
