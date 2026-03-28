@@ -522,7 +522,6 @@ export function TopicColumn({
               <div className="space-y-1">
                 {(['general', 'code', 'pipeline', 'research'] as TaskTypeKey[]).map((taskType) => {
                   const taskItems = items.filter((it) => normalizeTaskType(it.task_type, it.task_mode, it.exec_mode) === taskType)
-                  if (taskItems.length === 0) return null
                   const taskCollapsed = collapsedTaskTypeGroups[taskType]
                   const unreadTaskTopics = taskItems.filter((it) => Number(it.unread_count || 0) > 0).length
                   return (
