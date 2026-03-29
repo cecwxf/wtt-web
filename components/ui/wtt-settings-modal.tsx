@@ -291,8 +291,12 @@ export function WttSettingsModal({
         {
           method: "POST",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({
+            selected_agent_id: selectedAgentId || undefined,
+          }),
         },
       );
       const data = await response.json().catch(() => ({}));
