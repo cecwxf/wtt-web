@@ -20,6 +20,11 @@ import {
   Shield,
   Layers,
   GitBranch,
+  FileCode,
+  BookOpen,
+  GitPullRequest,
+  Search,
+  PenLine,
 } from 'lucide-react'
 import { useI18n } from '@/lib/i18n-provider'
 import { WttLogo } from '@/components/ui/wtt-logo'
@@ -321,7 +326,137 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Architecture */}
+        {/* Code Task */}
+        <section className="mb-20">
+          <p className="mb-2 text-center text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+            {zh ? 'Code Task' : 'Code Task'}
+          </p>
+          <h2 className="mb-3 text-center text-2xl font-semibold text-slate-900">
+            {zh ? '在浏览器里写代码，Agent 帮你提交 PR' : 'Code in the browser, agents submit PRs for you'}
+          </h2>
+          <p className="mx-auto mb-10 max-w-2xl text-center text-sm leading-6 text-slate-600">
+            {zh
+              ? 'Code Task 是一个集成了 GitHub 的代码工作空间。你可以浏览 Issue、分配给 Agent 执行、审查代码补丁，然后一键创建 Pull Request。'
+              : 'Code Task is a GitHub-integrated workspace. Browse issues, assign to agents, review code patches, and create pull requests — all from one screen.'}
+          </p>
+
+          <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr] lg:items-start">
+            {/* Feature list */}
+            <div className="space-y-3">
+              {[
+                {
+                  icon: GitBranch,
+                  title: zh ? 'GitHub 仓库集成' : 'GitHub Repo Integration',
+                  desc: zh
+                    ? '链接已有仓库或新建仓库。浏览文件树、切换分支、查看 Issue 和 PR，直接在任务中操作。'
+                    : 'Link existing repos or create new ones. Browse file trees, switch branches, view issues and PRs — all within the task.',
+                },
+                {
+                  icon: FileCode,
+                  title: zh ? 'Monaco 代码编辑器' : 'Monaco Code Editor',
+                  desc: zh
+                    ? '内置 Monaco 编辑器，支持 25+ 语言的语法高亮。Agent 生成的代码补丁自动标记 diff，你可以逐个审查并 Accept/Reject。'
+                    : 'Built-in Monaco editor with syntax highlighting for 25+ languages. Agent-generated patches show inline diffs — accept or reject each one.',
+                },
+                {
+                  icon: GitPullRequest,
+                  title: zh ? '一键创建 PR' : 'One-click Pull Request',
+                  desc: zh
+                    ? '审查通过后，直接在 WTT 中创建分支和 Pull Request。Agent 的代码改动自动推送到 GitHub。'
+                    : 'After review, create branches and pull requests directly from WTT. Agent code changes are pushed to GitHub automatically.',
+                },
+                {
+                  icon: MessageSquare,
+                  title: zh ? '对话驱动开发' : 'Conversation-driven Development',
+                  desc: zh
+                    ? '在右侧面板与 Agent 对话。描述需求，Agent 分析代码库、生成补丁、处理 review 反馈。支持多 Agent 协作。'
+                    : 'Chat with agents in the side panel. Describe what you need — agents analyze code, generate patches, and handle review feedback. Multi-agent supported.',
+                },
+              ].map((f) => (
+                <div key={f.title} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <f.icon className="h-4 w-4 text-indigo-500" />
+                    <h3 className="text-sm font-semibold text-slate-900">{f.title}</h3>
+                  </div>
+                  <p className="text-[13px] leading-6 text-slate-600">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Screenshot */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <a href="/landing/wtt-code-task.svg" target="_blank" rel="noreferrer" className="block">
+                <Image src="/landing/wtt-code-task.svg" alt="Code Task workspace" width={800} height={520} className="h-auto w-full rounded-xl" />
+              </a>
+            </div>
+          </div>
+        </section>
+
+        {/* Research Task */}
+        <section className="mb-20">
+          <p className="mb-2 text-center text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+            {zh ? 'Research Task' : 'Research Task'}
+          </p>
+          <h2 className="mb-3 text-center text-2xl font-semibold text-slate-900">
+            {zh ? '论文阅读、笔记标注、AI 辅助写作' : 'Read papers, annotate, and write with AI assistance'}
+          </h2>
+          <p className="mx-auto mb-10 max-w-2xl text-center text-sm leading-6 text-slate-600">
+            {zh
+              ? 'Research Task 为科研工作者设计。上传 PDF/BibTeX，自动提取元数据，用 5 级阅读深度消化论文，选中文本直接引用到 Agent 对话中。'
+              : 'Research Task is built for scientists. Upload PDFs or BibTeX, auto-extract metadata, digest papers at 5 reading levels, and quote text directly into agent conversations.'}
+          </p>
+
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-start">
+            {/* Screenshot (left for visual variety) */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <a href="/landing/wtt-research-task.svg" target="_blank" rel="noreferrer" className="block">
+                <Image src="/landing/wtt-research-task.svg" alt="Research Task workspace" width={800} height={520} className="h-auto w-full rounded-xl" />
+              </a>
+            </div>
+
+            {/* Feature list */}
+            <div className="space-y-3">
+              {[
+                {
+                  icon: BookOpen,
+                  title: zh ? '5 级阅读模式' : '5-Level Reading Mode',
+                  desc: zh
+                    ? '从 Level 1 摘要速览到 Level 5 引用网络全景。PDF 原文渲染、自动文本清洗、元数据提取（标题、作者、年份、DOI）。'
+                    : 'From Level 1 summary to Level 5 citation network view. Native PDF rendering, automatic text cleaning, and metadata extraction (title, authors, year, DOI).',
+                },
+                {
+                  icon: Search,
+                  title: zh ? '全文检索 & 引用追踪' : 'Full-text Search & Citation Tracking',
+                  desc: zh
+                    ? '跨论文全文搜索（基于 PostgreSQL FTS）。引用关系追踪：References 和 Cited-by 双向浏览，发现上下游文献。'
+                    : 'Full-text search across papers (PostgreSQL FTS). Citation tracking: browse both References and Cited-by relationships to discover upstream and downstream work.',
+                },
+                {
+                  icon: PenLine,
+                  title: zh ? 'Writer 写作模式' : 'Writer Mode',
+                  desc: zh
+                    ? '内置 Markdown 编辑器，支持编辑、分屏、预览三种视图。键盘快捷键、自动保存。可选学术/会议/期刊模板，导出 BibTeX、PDF、LaTeX。'
+                    : 'Built-in Markdown editor with Edit, Split, and Preview views. Keyboard shortcuts and auto-save. Academic/conference/journal templates, export to BibTeX, PDF, LaTeX.',
+                },
+                {
+                  icon: MessageSquare,
+                  title: zh ? 'Quote-to-Chat' : 'Quote-to-Chat',
+                  desc: zh
+                    ? '选中论文中的任意文本，一键引用到 Agent 聊天窗口。让 Agent 解释概念、对比论文、生成综述段落。'
+                    : 'Select any text in a paper and quote it directly to agent chat. Have agents explain concepts, compare papers, or generate literature review paragraphs.',
+                },
+              ].map((f) => (
+                <div key={f.title} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <f.icon className="h-4 w-4 text-purple-500" />
+                    <h3 className="text-sm font-semibold text-slate-900">{f.title}</h3>
+                  </div>
+                  <p className="text-[13px] leading-6 text-slate-600">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
         <section id="architecture" className="mb-20">
           <p className="mb-2 text-center text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
             {zh ? '系统架构' : 'Architecture'}

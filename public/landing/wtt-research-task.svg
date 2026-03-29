@@ -1,0 +1,220 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" fill="none">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="800" y2="520">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#faf5ff"/>
+    </linearGradient>
+    <filter id="shadow2" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.06"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="520" rx="16" fill="url(#bg2)"/>
+
+  <!-- Main window -->
+  <g filter="url(#shadow2)">
+    <rect x="24" y="24" width="752" height="472" rx="12" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+    <rect x="24" y="24" width="752" height="36" rx="12" fill="#f8fafc"/>
+    <rect x="24" y="48" width="752" height="12" fill="#f8fafc"/>
+    <circle cx="44" cy="42" r="5" fill="#f87171"/>
+    <circle cx="62" cy="42" r="5" fill="#fbbf24"/>
+    <circle cx="80" cy="42" r="5" fill="#4ade80"/>
+    <text x="400" y="46" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="11" fill="#64748b" font-weight="600">Research Task — WTT Workspace</text>
+  </g>
+
+  <!-- Left panel: Projects + Papers -->
+  <rect x="24" y="60" width="200" height="436" fill="#fafbfc" stroke="#e2e8f0" stroke-width="0.5"/>
+
+  <!-- Project header -->
+  <text x="36" y="80" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#94a3b8" font-weight="600" letter-spacing="0.5">PROJECTS</text>
+
+  <!-- Project list -->
+  <g transform="translate(32, 88)">
+    <rect width="184" height="28" rx="6" fill="#eef2ff"/>
+    <text x="10" y="18" font-family="Inter,system-ui,sans-serif" font-size="11" fill="#4f46e5" font-weight="600">📂 LLM Agents Survey</text>
+    <rect y="32" width="184" height="28" rx="6" fill="transparent"/>
+    <text x="10" y="50" font-family="Inter,system-ui,sans-serif" font-size="11" fill="#64748b">📂 Multi-modal RAG</text>
+    <rect y="64" width="184" height="28" rx="6" fill="transparent"/>
+    <text x="10" y="82" font-family="Inter,system-ui,sans-serif" font-size="11" fill="#64748b">📂 Code Generation</text>
+  </g>
+
+  <!-- Papers list -->
+  <text x="36" y="200" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#94a3b8" font-weight="600" letter-spacing="0.5">PAPERS (12)</text>
+
+  <!-- Search bar -->
+  <g transform="translate(32, 208)">
+    <rect width="184" height="26" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="0.5"/>
+    <text x="10" y="17" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#94a3b8">🔍 Search papers...</text>
+  </g>
+
+  <!-- Paper items -->
+  <g transform="translate(32, 244)">
+    <rect width="184" height="56" rx="6" fill="#f0f9ff" stroke="#bae6fd" stroke-width="0.5"/>
+    <text x="8" y="16" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#0f172a" font-weight="600">ReAct: Synergizing</text>
+    <text x="8" y="28" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#0f172a" font-weight="600">Reasoning and Acting</text>
+    <text x="8" y="42" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#64748b">Yao et al. · 2023 · ICLR</text>
+    <text x="8" y="52" font-family="Inter,system-ui,sans-serif" font-size="8" fill="#94a3b8">📎 PDF · 🏷️ agents, reasoning</text>
+  </g>
+  <g transform="translate(32, 306)">
+    <rect width="184" height="56" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="0.5"/>
+    <text x="8" y="16" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#0f172a" font-weight="600">Toolformer: Language</text>
+    <text x="8" y="28" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#0f172a" font-weight="600">Models as Tool Users</text>
+    <text x="8" y="42" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#64748b">Schick et al. · 2023 · NeurIPS</text>
+    <text x="8" y="52" font-family="Inter,system-ui,sans-serif" font-size="8" fill="#94a3b8">📎 PDF · 🏷️ tools, LLM</text>
+  </g>
+  <g transform="translate(32, 368)">
+    <rect width="184" height="56" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="0.5"/>
+    <text x="8" y="16" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#0f172a" font-weight="600">Chain-of-Thought</text>
+    <text x="8" y="28" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#0f172a" font-weight="600">Prompting Elicits...</text>
+    <text x="8" y="42" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#64748b">Wei et al. · 2022 · NeurIPS</text>
+    <text x="8" y="52" font-family="Inter,system-ui,sans-serif" font-size="8" fill="#94a3b8">📎 PDF · 🏷️ CoT, prompting</text>
+  </g>
+
+  <!-- Upload hint -->
+  <g transform="translate(32, 434)">
+    <rect width="184" height="30" rx="6" fill="#faf5ff" stroke="#d8b4fe" stroke-width="0.5" stroke-dasharray="4 2"/>
+    <text x="28" y="19" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#7c3aed">+ Upload PDF / BibTeX</text>
+  </g>
+
+  <!-- Center panel: Paper reader -->
+  <rect x="224" y="60" width="336" height="436" fill="#fff"/>
+
+  <!-- Tab bar: Read / Write / Export -->
+  <rect x="224" y="60" width="336" height="32" fill="#fafbfc" stroke="#e2e8f0" stroke-width="0.5"/>
+  <g font-family="Inter,system-ui,sans-serif" font-size="11">
+    <rect x="228" y="64" width="60" height="24" rx="5" fill="#4f46e5"/>
+    <text x="245" y="80" fill="#fff" font-weight="600">Read</text>
+    <text x="308" y="80" fill="#64748b">Write</text>
+    <text x="368" y="80" fill="#64748b">Export</text>
+  </g>
+
+  <!-- Reading level selector -->
+  <g transform="translate(430, 66)">
+    <text font-family="Inter,system-ui,sans-serif" font-size="9" fill="#94a3b8">Level:</text>
+    <rect x="32" width="18" height="18" rx="4" fill="#f1f5f9"/>
+    <text x="37" y="13" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#94a3b8">1</text>
+    <rect x="52" width="18" height="18" rx="4" fill="#f1f5f9"/>
+    <text x="57" y="13" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#94a3b8">2</text>
+    <rect x="72" width="18" height="18" rx="4" fill="#f1f5f9"/>
+    <text x="77" y="13" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#94a3b8">3</text>
+    <rect x="92" width="18" height="18" rx="4" fill="#4f46e5"/>
+    <text x="97" y="13" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#fff" font-weight="600">4</text>
+    <rect x="112" width="18" height="18" rx="4" fill="#f1f5f9"/>
+    <text x="117" y="13" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#94a3b8">5</text>
+  </g>
+
+  <!-- Paper metadata header -->
+  <g transform="translate(236, 102)">
+    <text font-family="Inter,system-ui,sans-serif" font-size="14" fill="#0f172a" font-weight="700">ReAct: Synergizing Reasoning</text>
+    <text y="18" font-family="Inter,system-ui,sans-serif" font-size="14" fill="#0f172a" font-weight="700">and Acting in Language Models</text>
+    <text y="36" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#64748b">Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, et al.</text>
+    <text y="50" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#94a3b8">ICLR 2023 · arXiv:2210.03629 · Cited by 1,847</text>
+
+    <!-- Tags -->
+    <rect y="58" width="50" height="16" rx="4" fill="#eef2ff"/>
+    <text x="8" y="70" font-family="Inter,system-ui,sans-serif" font-size="8" fill="#4f46e5">agents</text>
+    <rect x="54" y="58" width="62" height="16" rx="4" fill="#eef2ff"/>
+    <text x="62" y="70" font-family="Inter,system-ui,sans-serif" font-size="8" fill="#4f46e5">reasoning</text>
+    <rect x="120" y="58" width="42" height="16" rx="4" fill="#eef2ff"/>
+    <text x="128" y="70" font-family="Inter,system-ui,sans-serif" font-size="8" fill="#4f46e5">LLM</text>
+  </g>
+
+  <!-- Abstract section -->
+  <g transform="translate(236, 186)">
+    <text font-family="Inter,system-ui,sans-serif" font-size="11" fill="#334155" font-weight="700">Abstract</text>
+    <rect y="8" width="310" height="1" fill="#e2e8f0"/>
+
+    <text y="24" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569" xml:space="preserve">While large language models have shown impressive</text>
+    <text y="38" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">abilities in reasoning and decision making separately,</text>
+    <text y="52" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">this paper explores the synergy of reasoning and</text>
+    <text y="66" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">acting in language models. We introduce ReAct, a</text>
+    <text y="80" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">paradigm that interleaves reasoning traces and</text>
+    <text y="94" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">task-specific actions in an interleaved manner...</text>
+  </g>
+
+  <!-- Highlighted text selection with quote button -->
+  <g transform="translate(236, 324)">
+    <rect x="-4" y="-4" width="318" height="20" rx="2" fill="#fef08a" opacity="0.4"/>
+    <text font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">interleaves reasoning traces and task-specific actions</text>
+    <!-- Quote to chat bubble -->
+    <rect x="200" y="-22" width="96" height="20" rx="6" fill="#4f46e5" filter="url(#shadow2)"/>
+    <text x="212" y="-8" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#fff" font-weight="500">💬 Quote to chat</text>
+  </g>
+
+  <!-- Conclusion section -->
+  <g transform="translate(236, 358)">
+    <text font-family="Inter,system-ui,sans-serif" font-size="11" fill="#334155" font-weight="700">Key Findings</text>
+    <rect y="8" width="310" height="1" fill="#e2e8f0"/>
+    <text y="24" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">• ReAct outperforms Act-only on HotpotQA (67%→71%)</text>
+    <text y="38" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">• Reasoning traces improve task decomposition</text>
+    <text y="52" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">• Grounded actions reduce hallucination in QA tasks</text>
+    <text y="66" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#475569">• Easy to extend with external knowledge tools</text>
+  </g>
+
+  <!-- Personal notes -->
+  <g transform="translate(236, 440)">
+    <rect width="310" height="44" rx="6" fill="#fffbeb" stroke="#fde68a" stroke-width="0.5"/>
+    <text x="10" y="16" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#92400e" font-weight="600">📝 My Notes</text>
+    <text x="10" y="32" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#78350f">Core reference for agent architecture. Compare</text>
+    <text x="10" y="44" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#78350f">with Toolformer for tool-use differences.</text>
+  </g>
+
+  <!-- Right panel: Chat + Citations -->
+  <rect x="560" y="60" width="216" height="436" fill="#fff" stroke="#e2e8f0" stroke-width="0.5"/>
+
+  <!-- Panel tabs -->
+  <rect x="560" y="60" width="216" height="28" fill="#fafbfc" stroke="#e2e8f0" stroke-width="0.5"/>
+  <rect x="564" y="64" width="50" height="20" rx="4" fill="#4f46e5"/>
+  <text x="577" y="78" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#fff" font-weight="600">Chat</text>
+  <text x="634" y="78" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#64748b">Citations</text>
+  <text x="702" y="78" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#64748b">Export</text>
+
+  <!-- Chat messages -->
+  <g transform="translate(568, 98)">
+    <!-- User quoted message -->
+    <rect width="200" height="62" rx="8" fill="#eef2ff"/>
+    <text x="10" y="16" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#4f46e5" font-weight="500">You</text>
+    <rect x="8" y="22" width="184" height="14" rx="3" fill="#c7d2fe" opacity="0.4"/>
+    <text x="12" y="32" font-family="Inter,system-ui,sans-serif" font-size="8" fill="#6366f1" font-style="italic">"interleaves reasoning traces and..."</text>
+    <text x="10" y="52" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#334155">How does this compare to CoT?</text>
+
+    <!-- Agent response -->
+    <rect y="72" width="200" height="88" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="0.5"/>
+    <text x="10" y="88" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#7c3aed" font-weight="500">🤖 research-agent</text>
+    <text x="10" y="104" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#334155">Unlike CoT which only generates</text>
+    <text x="10" y="118" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#334155">reasoning traces, ReAct alternates</text>
+    <text x="10" y="132" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#334155">between thought and action steps.</text>
+    <text x="10" y="148" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#7c3aed">See also: Wei et al. 2022, §3.2</text>
+
+    <!-- Follow-up -->
+    <rect y="170" width="200" height="46" rx="8" fill="#eef2ff"/>
+    <text x="10" y="186" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#4f46e5" font-weight="500">You</text>
+    <text x="10" y="202" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#334155">Summarize for my literature review</text>
+  </g>
+
+  <!-- Agent typing indicator -->
+  <g transform="translate(568, 330)">
+    <rect width="200" height="28" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="0.5"/>
+    <text x="10" y="18" font-family="Inter,system-ui,sans-serif" font-size="10" fill="#7c3aed" font-weight="500">🤖 research-agent</text>
+    <circle cx="140" cy="14" r="2.5" fill="#a78bfa"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" repeatCount="indefinite"/></circle>
+    <circle cx="150" cy="14" r="2.5" fill="#a78bfa"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" begin="0.2s" repeatCount="indefinite"/></circle>
+    <circle cx="160" cy="14" r="2.5" fill="#a78bfa"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" begin="0.4s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <!-- Writer mode preview -->
+  <g transform="translate(568, 370)">
+    <rect width="200" height="86" rx="8" fill="#faf5ff" stroke="#d8b4fe" stroke-width="0.5"/>
+    <text x="10" y="16" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#7c3aed" font-weight="600" letter-spacing="0.3">WRITER MODE</text>
+    <rect x="8" y="22" width="184" height="1" fill="#e9d5ff"/>
+    <text x="10" y="38" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#581c87" font-weight="600">## 2. Related Work</text>
+    <text x="10" y="52" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#6b21a8">ReAct (Yao et al., 2023) proposes</text>
+    <text x="10" y="64" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#6b21a8">interleaving reasoning and action...</text>
+    <text x="10" y="80" font-family="Inter,system-ui,sans-serif" font-size="8" fill="#a78bfa">✍️ Edit · Split · Preview</text>
+  </g>
+
+  <!-- Export hint -->
+  <g transform="translate(568, 466)">
+    <rect width="200" height="24" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="0.5"/>
+    <text x="10" y="16" font-family="Inter,system-ui,sans-serif" font-size="9" fill="#15803d">📤 Export: BibTeX · PDF · LaTeX</text>
+  </g>
+</svg>
