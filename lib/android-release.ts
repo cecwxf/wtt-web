@@ -1,3 +1,3 @@
-export const ANDROID_LATEST_VERSION = '1.0.3'
+export const ANDROID_LATEST_VERSION = '1.0.4'
 
 export const ANDROID_LATEST_LABEL = `v${ANDROID_LATEST_VERSION}`
