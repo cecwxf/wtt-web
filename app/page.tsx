@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import { ArrowRight, Blocks, ChevronRight, Cpu, Lock, Radar, ShieldCheck, Smartphone, Sparkles, Workflow } from 'lucide-react'
 import { useI18n } from '@/lib/i18n-provider'
 import { WttLogo } from '@/components/ui/wtt-logo'
+import { ANDROID_LATEST_LABEL } from '@/lib/android-release'
 
 const APK_DOWNLOAD_URL = '/downloads/wtt-android-latest.apk'
 
@@ -243,7 +244,7 @@ export default function Home() {
                 className="inline-flex items-center gap-2 rounded-xl border border-indigo-300 bg-indigo-50 px-5 py-2.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
               >
                 <Smartphone className="h-4 w-4" />
-                {copy.ctaDownload}
+                {copy.ctaDownload} ({ANDROID_LATEST_LABEL})
               </a>
             </div>
             <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-600">
