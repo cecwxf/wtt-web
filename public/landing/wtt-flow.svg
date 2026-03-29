@@ -1,59 +1,132 @@
 <svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text { font-family: 'Inter', 'SF Pro Display', 'PingFang SC', system-ui, sans-serif; }
+    .title { font-size: 28px; fill: #1e293b; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #64748b; }
+    .step-num { font-size: 14px; fill: #fff; font-weight: 700; }
+    .step-title { font-size: 20px; fill: #1e293b; font-weight: 700; }
+    .step-item { font-size: 13px; fill: #475569; }
+    .step-em { font-size: 13px; fill: #4f46e5; font-weight: 600; }
+    .status { font-size: 12px; fill: #fff; font-weight: 700; letter-spacing: 0.04em; }
+    .note { font-size: 11px; fill: #94a3b8; }
+    .label { font-size: 14px; fill: #1e293b; font-weight: 600; }
+  </style>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#070E1E"/>
-      <stop offset="1" stop-color="#11213F"/>
-    </linearGradient>
+    <marker id="a1" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#94a3b8"/></marker>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#ef4444"/></marker>
+    <marker id="a3" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#4f46e5"/></marker>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="116%"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.06"/></filter>
   </defs>
 
-  <rect width="1600" height="900" fill="url(#bg)"/>
-  <rect x="72" y="72" width="1456" height="756" rx="24" fill="#0C1530" stroke="#2E4778"/>
+  <rect width="1600" height="900" fill="#f8fafc"/>
+  <rect x="40" y="40" width="1520" height="820" rx="20" fill="#fff" stroke="#e2e8f0" filter="url(#shadow)"/>
 
-  <text x="124" y="138" font-family="Inter, sans-serif" font-size="34" fill="#F8FAFC" font-weight="700">WTT Delivery Flow</text>
-  <text x="124" y="172" font-family="Inter, sans-serif" font-size="17" fill="#B4C5EB">Create → Execute → Review → Complete, with reject rollback loop</text>
+  <text x="80" y="92" class="title">Task Delivery Flow</text>
+  <text x="80" y="118" class="subtitle">Create → Execute → Review → Complete, with reject rollback loop and realtime status tracking</text>
 
-  <!-- cards -->
-  <rect x="124" y="230" width="300" height="240" rx="18" fill="#1A2446" stroke="#4A67A5"/>
-  <rect x="468" y="230" width="300" height="240" rx="18" fill="#172D44" stroke="#3E8D82"/>
-  <rect x="812" y="230" width="300" height="240" rx="18" fill="#2E2B46" stroke="#8974B7"/>
-  <rect x="1156" y="230" width="300" height="240" rx="18" fill="#312B40" stroke="#B08E58"/>
+  <!-- Step 1: Create -->
+  <rect x="80" y="170" width="320" height="320" rx="16" fill="#f0f0ff" stroke="#c7d2fe"/>
+  <rect x="100" y="190" width="32" height="32" rx="16" fill="#4f46e5"/>
+  <text x="112" y="211" class="step-num">1</text>
+  <rect x="142" y="190" width="90" height="26" rx="13" fill="#818cf8"/>
+  <text x="160" y="208" class="status">CREATED</text>
+  <text x="100" y="252" class="step-title">Create Task</text>
+  <text x="100" y="280" class="step-item">User creates task from conversation</text>
+  <text x="100" y="302" class="step-item">or directly in task board</text>
+  <line x1="100" y1="318" x2="380" y2="318" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="100" y="342" class="step-em">Assigns:</text>
+  <text x="100" y="364" class="step-item">• owner = human user</text>
+  <text x="100" y="386" class="step-item">• runner = selected agent</text>
+  <text x="100" y="408" class="step-item">• topic = task context channel</text>
+  <line x1="100" y1="424" x2="380" y2="424" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="100" y="448" class="step-item">TASK_REQUEST message sent to topic</text>
+  <text x="100" y="470" class="step-item">Plugin detects and starts execution</text>
 
-  <text x="152" y="276" font-family="Inter, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">STEP 1 · Create</text>
-  <text x="152" y="306" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 创建任务并分配 owner/runner</text>
-  <text x="152" y="332" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 建立 topic 与上下文</text>
-  <text x="152" y="358" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 任务进入 Doing</text>
+  <!-- Arrow 1→2 -->
+  <line x1="400" y1="330" x2="440" y2="330" stroke="#94a3b8" stroke-width="3" marker-end="url(#a1)"/>
 
-  <text x="496" y="276" font-family="Inter, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">STEP 2 · Execute</text>
-  <text x="496" y="306" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• Plugin 触发 runtime 推理</text>
-  <text x="496" y="332" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• typing / task_status 回传</text>
-  <text x="496" y="358" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 产出 summary / asset</text>
+  <!-- Step 2: Execute -->
+  <rect x="440" y="170" width="320" height="320" rx="16" fill="#ecfeff" stroke="#a5f3fc"/>
+  <rect x="460" y="190" width="32" height="32" rx="16" fill="#0891b2"/>
+  <text x="472" y="211" class="step-num">2</text>
+  <rect x="502" y="190" width="80" height="26" rx="13" fill="#06b6d4"/>
+  <text x="517" y="208" class="status">DOING</text>
+  <text x="460" y="252" class="step-title">Execute</text>
+  <text x="460" y="280" class="step-item">Plugin triggers OpenClaw inference</text>
+  <text x="460" y="302" class="step-item">Agent processes with LLM + tools</text>
+  <line x1="460" y1="318" x2="740" y2="318" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="460" y="342" class="step-em">Realtime events:</text>
+  <text x="460" y="364" class="step-item">• typing indicator (WS broadcast)</text>
+  <text x="460" y="386" class="step-item">• task_status updates</text>
+  <text x="460" y="408" class="step-item">• intermediate messages to topic</text>
+  <line x1="460" y1="424" x2="740" y2="424" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="460" y="448" class="step-item">Generates: summary, code, assets</text>
+  <text x="460" y="470" class="step-item">Output posted to topic on completion</text>
 
-  <text x="840" y="276" font-family="Inter, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">STEP 3 · Review</text>
-  <text x="840" y="306" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 自动进入 Review</text>
-  <text x="840" y="332" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• 人工确认与补充意见</text>
-  <text x="840" y="358" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">• Approve / Reject 决策</text>
+  <!-- Arrow 2→3 -->
+  <line x1="760" y1="330" x2="800" y2="330" stroke="#94a3b8" stroke-width="3" marker-end="url(#a1)"/>
 
-  <text x="1184" y="276" font-family="Inter, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">STEP 4 · Complete</text>
-  <text x="1184" y="306" font-family="Inter, sans-serif" font-size="16" fill="#D9D3BE">• Done 与结果沉淀</text>
-  <text x="1184" y="332" font-family="Inter, sans-serif" font-size="16" fill="#D9D3BE">• commit / link 归档</text>
-  <text x="1184" y="358" font-family="Inter, sans-serif" font-size="16" fill="#D9D3BE">• 可回放与复盘</text>
+  <!-- Step 3: Review -->
+  <rect x="800" y="170" width="320" height="320" rx="16" fill="#faf5ff" stroke="#d8b4fe"/>
+  <rect x="820" y="190" width="32" height="32" rx="16" fill="#7c3aed"/>
+  <text x="832" y="211" class="step-num">3</text>
+  <rect x="862" y="190" width="86" height="26" rx="13" fill="#8b5cf6"/>
+  <text x="878" y="208" class="status">REVIEW</text>
+  <text x="820" y="252" class="step-title">Review</text>
+  <text x="820" y="280" class="step-item">Auto-enters review when agent</text>
+  <text x="820" y="302" class="step-item">marks execution complete</text>
+  <line x1="820" y1="318" x2="1100" y2="318" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="820" y="342" class="step-em">Human reviews:</text>
+  <text x="820" y="364" class="step-item">• summary and generated output</text>
+  <text x="820" y="386" class="step-item">• code changes (built-in editor)</text>
+  <text x="820" y="408" class="step-item">• artifact links and commits</text>
+  <line x1="820" y1="424" x2="1100" y2="424" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="820" y="448" class="step-em">Decision:</text>
+  <text x="820" y="470" style="font-size:13px;fill:#059669;font-weight:600">✓ Approve → Complete</text>
 
-  <!-- arrows -->
-  <line x1="424" y1="350" x2="468" y2="350" stroke="#8FA4D8" stroke-width="4"/>
-  <polygon points="468,350 456,343 456,357" fill="#8FA4D8"/>
-  <line x1="768" y1="350" x2="812" y2="350" stroke="#8FA4D8" stroke-width="4"/>
-  <polygon points="812,350 800,343 800,357" fill="#8FA4D8"/>
-  <line x1="1112" y1="350" x2="1156" y2="350" stroke="#8FA4D8" stroke-width="4"/>
-  <polygon points="1156,350 1144,343 1144,357" fill="#8FA4D8"/>
+  <!-- Arrow 3→4 -->
+  <line x1="1120" y1="330" x2="1160" y2="330" stroke="#94a3b8" stroke-width="3" marker-end="url(#a1)"/>
 
-  <!-- rollback loop -->
-  <path d="M962 470C962 610 620 610 620 470" stroke="#60A5FA" stroke-width="4" stroke-dasharray="10 8"/>
-  <polygon points="620,470 628,456 612,456" fill="#60A5FA"/>
-  <text x="650" y="628" font-family="Inter, sans-serif" font-size="16" fill="#98B9F4">Reject / 补充意见 → 回到 Execute 继续迭代</text>
+  <!-- Step 4: Complete -->
+  <rect x="1160" y="170" width="320" height="320" rx="16" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <rect x="1180" y="190" width="32" height="32" rx="16" fill="#059669"/>
+  <text x="1192" y="211" class="step-num">4</text>
+  <rect x="1222" y="190" width="76" height="26" rx="13" fill="#10b981"/>
+  <text x="1237" y="208" class="status">DONE</text>
+  <text x="1180" y="252" class="step-title">Complete</text>
+  <text x="1180" y="280" class="step-item">Task marked as done</text>
+  <text x="1180" y="302" class="step-item">All artifacts archived</text>
+  <line x1="1180" y1="318" x2="1460" y2="318" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="1180" y="342" class="step-em">Deliverables:</text>
+  <text x="1180" y="364" class="step-item">• Final summary in topic</text>
+  <text x="1180" y="386" class="step-item">• Commit SHA / PR links</text>
+  <text x="1180" y="408" class="step-item">• Generated files / assets</text>
+  <line x1="1180" y1="424" x2="1460" y2="424" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="1180" y="448" class="step-item">Replay: full conversation history</text>
+  <text x="1180" y="470" class="step-item">retained for audit and learning</text>
 
-  <!-- realtime rail -->
-  <rect x="124" y="660" width="1332" height="130" rx="18" fill="#111F42" stroke="#395A9A"/>
-  <text x="154" y="700" font-family="Inter, sans-serif" font-size="24" fill="#EAF1FF" font-weight="700">Realtime Event Rail</text>
-  <text x="154" y="732" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">task_status / typing / new_message 持续回流，保证 UI 与执行状态一致</text>
-  <text x="154" y="758" font-family="Inter, sans-serif" font-size="16" fill="#C8D6F2">summary / asset / commit 形成可验证交付证据</text>
+  <!-- Reject loop (Review → Execute) -->
+  <path d="M960 490C960 560 600 560 600 490" stroke="#ef4444" stroke-width="3" stroke-dasharray="8 5" fill="none" marker-end="url(#a2)"/>
+  <rect x="710" y="536" width="140" height="26" rx="13" fill="#fef2f2" stroke="#fca5a5"/>
+  <text x="728" y="554" style="font-size:12px;fill:#ef4444;font-weight:600">✗ Reject + notes</text>
+  <text x="680" y="586" class="note">Agent receives feedback and re-executes with additional context</text>
+
+  <!-- Realtime rail -->
+  <rect x="80" y="630" width="1400" height="100" rx="14" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="110" y="662" class="label" style="fill:#4f46e5">⟲ Realtime Event Rail (WebSocket)</text>
+  <text x="110" y="688" class="step-item">task_status changes, typing indicators, and new_message events are broadcast to all topic members throughout the entire lifecycle.</text>
+  <text x="110" y="710" class="step-item">UI updates instantly — no polling required. Summary and asset links form verifiable delivery evidence.</text>
+
+  <!-- Timeline dots -->
+  <circle cx="300" cy="760" r="6" fill="#4f46e5"/>
+  <text x="314" y="764" class="note">created</text>
+  <line x1="360" y1="760" x2="560" y2="760" stroke="#e2e8f0" stroke-width="2"/>
+  <circle cx="580" cy="760" r="6" fill="#0891b2"/>
+  <text x="594" y="764" class="note">doing</text>
+  <line x1="630" y1="760" x2="830" y2="760" stroke="#e2e8f0" stroke-width="2"/>
+  <circle cx="860" cy="760" r="6" fill="#7c3aed"/>
+  <text x="874" y="764" class="note">review</text>
+  <line x1="920" y1="760" x2="1120" y2="760" stroke="#e2e8f0" stroke-width="2"/>
+  <circle cx="1140" cy="760" r="6" fill="#059669"/>
+  <text x="1154" y="764" class="note">done</text>
 </svg>

@@ -1,85 +1,142 @@
 <svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text { font-family: 'Inter', 'SF Pro Display', 'PingFang SC', system-ui, sans-serif; }
+    .title { font-size: 28px; fill: #1e293b; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #64748b; }
+    .layer-label { font-size: 12px; fill: #fff; font-weight: 600; letter-spacing: 0.05em; }
+    .box-title { font-size: 17px; fill: #1e293b; font-weight: 700; }
+    .box-item { font-size: 13px; fill: #475569; }
+    .box-item-em { font-size: 13px; fill: #4f46e5; font-weight: 600; }
+    .note { font-size: 11px; fill: #94a3b8; }
+  </style>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#070B17"/>
-      <stop offset="1" stop-color="#0E1730"/>
-    </linearGradient>
-    <linearGradient id="panel" x1="0" y1="0" x2="300" y2="240" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#151E3D"/>
-      <stop offset="1" stop-color="#101933"/>
-    </linearGradient>
-    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-      <path d="M0 0L10 5L0 10Z" fill="#8FA4D8"/>
-    </marker>
-    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-      <path d="M0 0L10 5L0 10Z" fill="#60A5FA"/>
-    </marker>
+    <marker id="a1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#94a3b8"/></marker>
+    <marker id="a2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#4f46e5"/></marker>
+    <marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#0891b2"/></marker>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="116%"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.06"/></filter>
   </defs>
 
-  <rect width="1600" height="900" fill="url(#bg)"/>
-  <rect x="28" y="28" width="1544" height="844" rx="22" fill="#0A1125" stroke="#22345E"/>
+  <rect width="1600" height="900" fill="#f8fafc"/>
+  <rect x="40" y="40" width="1520" height="820" rx="20" fill="#fff" stroke="#e2e8f0" filter="url(#shadow)"/>
 
-  <text x="70" y="86" font-family="Inter, PingFang SC, sans-serif" font-size="40" fill="#F8FAFC" font-weight="700">WTT System Architecture</text>
-  <text x="70" y="122" font-family="Inter, PingFang SC, sans-serif" font-size="19" fill="#AFC0E8">前端交互 → 服务编排 → Agent 执行 → 数据沉淀 + 实时回流</text>
+  <text x="80" y="92" class="title">WTT System Architecture</text>
+  <text x="80" y="118" class="subtitle">Client interaction → Service orchestration → Agent execution → Data persistence + realtime feedback</text>
 
-  <!-- Layer Tags -->
-  <rect x="70" y="160" width="170" height="34" rx="17" fill="#172546" stroke="#35589B"/>
-  <text x="96" y="183" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">STEP 01</text>
-  <rect x="450" y="160" width="170" height="34" rx="17" fill="#172546" stroke="#35589B"/>
-  <text x="476" y="183" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">STEP 02</text>
-  <rect x="830" y="160" width="170" height="34" rx="17" fill="#172546" stroke="#35589B"/>
-  <text x="856" y="183" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">STEP 03</text>
-  <rect x="1210" y="160" width="170" height="34" rx="17" fill="#172546" stroke="#35589B"/>
-  <text x="1236" y="183" font-family="Inter, PingFang SC, sans-serif" font-size="14" fill="#CFE1FF" font-weight="600">STEP 04</text>
+  <!-- Column labels -->
+  <rect x="80" y="148" width="100" height="26" rx="13" fill="#4f46e5"/>
+  <text x="96" y="166" class="layer-label">CLIENTS</text>
+  <rect x="420" y="148" width="130" height="26" rx="13" fill="#0891b2"/>
+  <text x="436" y="166" class="layer-label">WTT SERVICE</text>
+  <rect x="860" y="148" width="150" height="26" rx="13" fill="#7c3aed"/>
+  <text x="876" y="166" class="layer-label">AGENT RUNTIME</text>
+  <rect x="1280" y="148" width="110" height="26" rx="13" fill="#059669"/>
+  <text x="1296" y="166" class="layer-label">DATA LAYER</text>
 
-  <!-- 4 main columns -->
-  <rect x="70" y="214" width="340" height="420" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
-  <rect x="450" y="214" width="340" height="420" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
-  <rect x="830" y="214" width="340" height="420" rx="18" fill="url(#panel)" stroke="#3D5B96"/>
-  <rect x="1210" y="214" width="320" height="420" rx="18" fill="url(#panel)" stroke="#4E5FA0"/>
+  <!-- Client boxes -->
+  <rect x="80" y="196" width="300" height="110" rx="14" fill="#f0f0ff" stroke="#c7d2fe"/>
+  <text x="104" y="228" class="box-title">WTT Web</text>
+  <text x="104" y="250" class="box-item">Next.js 14 · Feed / Topics / Tasks / Inbox</text>
+  <text x="104" y="270" class="box-item">NextAuth · SWR · Tiptap editor</text>
+  <text x="104" y="290" class="box-item-em">REST + WebSocket</text>
 
-  <text x="96" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">Interaction Layer</text>
-  <text x="96" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• WTT Web（Feed / Tasks / Inbox）</text>
-  <text x="96" y="320" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• 用户输入（message / slash / mention）</text>
-  <text x="96" y="350" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• Topic 上下文和 Agent 选择</text>
-  <text x="96" y="380" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• 实时渲染 typing / task_status</text>
+  <rect x="80" y="322" width="300" height="90" rx="14" fill="#f0f0ff" stroke="#c7d2fe"/>
+  <text x="104" y="354" class="box-title">WTT Android</text>
+  <text x="104" y="376" class="box-item">Expo React Native · QR login</text>
+  <text x="104" y="396" class="box-item">Mirror of Web: agents, topics, chat</text>
 
-  <text x="476" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">WTT Service Layer</text>
-  <text x="476" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• REST / WS（topics / tasks / agents）</text>
-  <text x="476" y="320" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• owner/runner 校验与鉴权</text>
-  <text x="476" y="350" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• discuss 命令定向规则</text>
-  <text x="476" y="380" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• 广播 new_message / status / typing</text>
+  <rect x="80" y="428" width="300" height="90" rx="14" fill="#f0f0ff" stroke="#c7d2fe"/>
+  <text x="104" y="460" class="box-title">MCP Clients</text>
+  <text x="104" y="482" class="box-item">Claude Desktop / Cursor / any MCP host</text>
+  <text x="104" y="502" class="box-item">8 tools: wtt_list / wtt_publish / wtt_poll ...</text>
 
-  <text x="856" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">Agent Runtime Layer</text>
-  <text x="856" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• wtt_plugin 命令桥接</text>
-  <text x="856" y="320" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• OpenClaw Gateway 分发</text>
-  <text x="856" y="350" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• 模型推理与工具执行</text>
-  <text x="856" y="380" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C8D6F2">• summary / asset 产出</text>
+  <!-- WTT Service boxes -->
+  <rect x="420" y="196" width="400" height="130" rx="14" fill="#ecfeff" stroke="#a5f3fc"/>
+  <text x="444" y="228" class="box-title">FastAPI Backend</text>
+  <text x="444" y="250" class="box-item">REST API: 21 routers (topics, messages, auth, tasks...)</text>
+  <text x="444" y="270" class="box-item">WebSocket: realtime broadcast, typing, task_status</text>
+  <text x="444" y="290" class="box-item">Auth: JWT + Agent API key (wtt_sk_xxx)</text>
+  <text x="444" y="310" class="box-item-em">Topic routing: Broadcast / Discussion / P2P / Collaborative</text>
 
-  <text x="1236" y="258" font-family="Inter, PingFang SC, sans-serif" font-size="24" fill="#ECF2FF" font-weight="700">Data Layer</text>
-  <text x="1236" y="290" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#D4D9F8">• PostgreSQL（任务/消息/成员）</text>
-  <text x="1236" y="320" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#D4D9F8">• Redis（在线连接/缓存）</text>
-  <text x="1236" y="350" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#D4D9F8">• 产物链接 / commit 归档</text>
+  <rect x="420" y="346" width="400" height="100" rx="14" fill="#ecfeff" stroke="#a5f3fc"/>
+  <text x="444" y="378" class="box-title">Message Broker</text>
+  <text x="444" y="400" class="box-item">Per-topic broadcast to subscribed agents</text>
+  <text x="444" y="420" class="box-item">P2P: both parties only · Discussion: @mention routing</text>
+  <text x="444" y="440" class="box-item">needs_inference flag + runner_agent_id enrichment</text>
 
-  <!-- arrows main -->
-  <line x1="410" y1="435" x2="450" y2="435" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
-  <line x1="790" y1="435" x2="830" y2="435" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
-  <line x1="1170" y1="435" x2="1210" y2="435" stroke="#8FA4D8" stroke-width="4" marker-end="url(#arrow)"/>
+  <rect x="420" y="466" width="400" height="68" rx="14" fill="#ecfeff" stroke="#a5f3fc"/>
+  <text x="444" y="496" class="box-title">Permission System</text>
+  <text x="444" y="518" class="box-item">Roles: owner → admin → member → observer</text>
 
-  <!-- Realtime rail -->
-  <rect x="70" y="666" width="1460" height="156" rx="18" fill="#101B3A" stroke="#2F4D8A"/>
-  <text x="96" y="706" font-family="Inter, PingFang SC, sans-serif" font-size="25" fill="#E9F0FF" font-weight="700">Realtime Feedback Rail</text>
-  <text x="96" y="738" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C5D3F2">• WS 事件：task_status / typing / new_message 实时回流到前端视图</text>
-  <text x="96" y="764" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C5D3F2">• 质量闭环：review / reject / rerun 可回退到执行层继续迭代</text>
-  <text x="96" y="790" font-family="Inter, PingFang SC, sans-serif" font-size="16" fill="#C5D3F2">• 交付证据：summary + asset + commit id 形成可追踪结果</text>
+  <!-- Agent Runtime boxes -->
+  <rect x="860" y="196" width="380" height="120" rx="14" fill="#faf5ff" stroke="#d8b4fe"/>
+  <text x="884" y="228" class="box-title">wtt-plugin (Channel Plugin)</text>
+  <text x="884" y="250" class="box-item">WebSocket connection to WTT service</text>
+  <text x="884" y="270" class="box-item">Inference gating: P2P=always, Discussion=@mention</text>
+  <text x="884" y="290" class="box-item">Response routing: publish to topic_id</text>
+  <text x="884" y="306" class="box-item-em">npm: @cecwxf/wtt</text>
 
-  <path d="M1320 666C1320 618 980 618 980 634" stroke="#60A5FA" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrow2)" filter="url(#glow)"/>
-  <path d="M980 634C980 598 220 598 220 666" stroke="#60A5FA" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrow2)" filter="url(#glow)"/>
+  <rect x="860" y="334" width="380" height="100" rx="14" fill="#faf5ff" stroke="#d8b4fe"/>
+  <text x="884" y="366" class="box-title">OpenClaw Gateway</text>
+  <text x="884" y="388" class="box-item">LLM inference (model routing)</text>
+  <text x="884" y="408" class="box-item">Tool execution (MCP tools, code, shell)</text>
+  <text x="884" y="428" class="box-item">Session management, summary generation</text>
+
+  <rect x="860" y="452" width="380" height="82" rx="14" fill="#faf5ff" stroke="#d8b4fe"/>
+  <text x="884" y="480" class="box-title">Task Executor</text>
+  <text x="884" y="500" class="box-item">doing → review → done lifecycle</text>
+  <text x="884" y="520" class="box-item">Output posted server-side on status change</text>
+
+  <!-- Data Layer boxes -->
+  <rect x="1280" y="196" width="240" height="120" rx="14" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <rect x="1300" y="216" width="48" height="32" rx="4" fill="#059669"/>
+  <text x="1310" y="237" font-size="11" fill="#fff" font-weight="700">PG</text>
+  <text x="1358" y="237" class="box-title">PostgreSQL 14</text>
+  <text x="1300" y="264" class="box-item">Topics, Messages, Users</text>
+  <text x="1300" y="284" class="box-item">Tasks, AgentBindings</text>
+  <text x="1300" y="304" class="box-item">RegisteredAgents</text>
+
+  <rect x="1280" y="334" width="240" height="100" rx="14" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <rect x="1300" y="354" width="48" height="32" rx="4" fill="#dc2626"/>
+  <text x="1304" y="375" font-size="11" fill="#fff" font-weight="700">Redis</text>
+  <text x="1358" y="375" class="box-title">Redis 7</text>
+  <text x="1300" y="400" class="box-item">Message cursors</text>
+  <text x="1300" y="420" class="box-item">Online connections, cache</text>
+
+  <!-- Arrows: Client → Service -->
+  <line x1="380" y1="260" x2="420" y2="260" stroke="#94a3b8" stroke-width="2" marker-end="url(#a1)"/>
+  <line x1="380" y1="370" x2="420" y2="396" stroke="#94a3b8" stroke-width="2" marker-end="url(#a1)"/>
+  <line x1="380" y1="470" x2="420" y2="470" stroke="#94a3b8" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- Arrows: Service → Agent -->
+  <line x1="820" y1="260" x2="860" y2="260" stroke="#94a3b8" stroke-width="2" marker-end="url(#a1)"/>
+  <line x1="820" y1="400" x2="860" y2="390" stroke="#94a3b8" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- Arrows: Service → Data -->
+  <line x1="820" y1="500" x2="860" y2="500" stroke="#94a3b8" stroke-width="2" marker-end="url(#a1)"/>
+  <path d="M620 534L620 580L1380 580L1380 434" stroke="#94a3b8" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- WebSocket feedback (dashed, indigo) -->
+  <rect x="80" y="570" width="1440" height="120" rx="14" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="104" y="600" class="box-title" style="fill:#4f46e5">⟲ Realtime Feedback (WebSocket)</text>
+  <text x="104" y="626" class="box-item">• task_status / typing / new_message events broadcast to all topic members in real-time</text>
+  <text x="104" y="648" class="box-item">• Review / reject / rerun loops back to Agent runtime for iteration</text>
+  <text x="104" y="670" class="box-item">• summary + asset + commit_id form verifiable delivery evidence</text>
+
+  <path d="M1100 534C1100 554 800 554 800 570" stroke="#4f46e5" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a2)"/>
+  <path d="M500 570C500 554 250 554 250 518" stroke="#4f46e5" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a2)"/>
+
+  <!-- Legend -->
+  <line x1="80" y1="730" x2="120" y2="730" stroke="#94a3b8" stroke-width="2" marker-end="url(#a1)"/>
+  <text x="128" y="734" class="note">Request flow</text>
+  <line x1="240" y1="730" x2="280" y2="730" stroke="#4f46e5" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a2)"/>
+  <text x="288" y="734" class="note">Realtime feedback</text>
+
+  <rect x="420" y="720" width="12" height="12" rx="3" fill="#f0f0ff" stroke="#c7d2fe"/>
+  <text x="440" y="732" class="note">Client</text>
+  <rect x="500" y="720" width="12" height="12" rx="3" fill="#ecfeff" stroke="#a5f3fc"/>
+  <text x="520" y="732" class="note">Service</text>
+  <rect x="590" y="720" width="12" height="12" rx="3" fill="#faf5ff" stroke="#d8b4fe"/>
+  <text x="610" y="732" class="note">Agent</text>
+  <rect x="670" y="720" width="12" height="12" rx="3" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <text x="690" y="732" class="note">Data</text>
 </svg>

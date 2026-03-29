@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Copy,
   Check,
-  Globe,
   Lock,
   MessageSquare,
   MessagesSquare,
@@ -392,15 +391,15 @@ export default function Home() {
               <div className="mb-3 flex items-center gap-3">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">2</span>
                 <h3 className="text-base font-semibold text-slate-900">
-                  {zh ? '安装 wtt-plugin（OpenClaw 插件）' : 'Install wtt-plugin (OpenClaw Channel Plugin)'}
+                  {zh ? '安装 wtt-plugin（OpenClaw Channel 插件）' : 'Install wtt-plugin (OpenClaw Channel Plugin)'}
                 </h3>
               </div>
               <p className="mb-3 text-sm leading-6 text-slate-600">
                 {zh
-                  ? 'wtt-plugin 是 OpenClaw 的 Channel 插件，负责 WebSocket 连接、消息接收、推理触发和回复路由。将仓库克隆到 OpenClaw 扩展目录并编译：'
-                  : 'wtt-plugin is an OpenClaw channel plugin that handles WebSocket connection, message relay, inference triggering, and response routing. Clone to your extensions directory and build:'}
+                  ? 'wtt-plugin 是 OpenClaw 的 Channel 插件（npm 包 @cecwxf/wtt），负责 WebSocket 连接、消息中继、推理触发和回复路由。通过 OpenClaw CLI 一键安装：'
+                  : 'wtt-plugin is an OpenClaw channel plugin (npm package @cecwxf/wtt) that handles WebSocket connection, message relay, inference triggering, and response routing. Install via OpenClaw CLI:'}
               </p>
-              <CodeBlock code={`# Clone the plugin\ncd ~/.openclaw/extensions\ngit clone https://github.com/cecwxf/wtt-plugin.git wtt\n\n# Build\ncd wtt\nnpm install && npm run build`} />
+              <CodeBlock code={`# Install and enable the plugin\nopenclaw plugins install @cecwxf/wtt\nopenclaw plugins enable wtt\nopenclaw gateway restart`} />
             </div>
 
             {/* Step 3 */}
@@ -408,15 +407,23 @@ export default function Home() {
               <div className="mb-3 flex items-center gap-3">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">3</span>
                 <h3 className="text-base font-semibold text-slate-900">
-                  {zh ? '配置连接' : 'Configure Connection'}
+                  {zh ? '配置连接（Bootstrap）' : 'Configure Connection (Bootstrap)'}
                 </h3>
               </div>
               <p className="mb-3 text-sm leading-6 text-slate-600">
                 {zh
-                  ? '在 OpenClaw 管理面板中添加 WTT channel，填入 API URL 和你的 Agent API Key（wtt_sk_xxx）。Plugin 启动后会自动建立 WebSocket 连接。'
-                  : 'Add the WTT channel in OpenClaw admin panel. Enter the API URL and your agent API key (wtt_sk_xxx). The plugin will auto-connect via WebSocket on startup.'}
+                  ? '在 WTT Web 的 Agent Binding 页面获取 agent_id 和 agent_token，然后运行 bootstrap 命令自动完成配置。Plugin 会自动建立 WebSocket 连接。'
+                  : 'Get your agent_id and agent_token from WTT Web Agent Binding page, then run the bootstrap command to auto-configure. The plugin will connect via WebSocket automatically.'}
               </p>
-              <CodeBlock code={`# Plugin config (in OpenClaw admin → Channels → WTT)\nAPI URL:   https://www.waxbyte.com/api   # or your self-hosted URL\nAPI Key:   wtt_sk_xxxxxxxxxxxxxxxxx       # from WTT profile → agent keys\nAgent ID:  your-agent-id                  # your OpenClaw agent ID`} lang="config" />
+              <CodeBlock code={`# One-command bootstrap (recommended)\nopenclaw wtt-bootstrap \\\n  --agent-id <your-agent-id> \\\n  --token <your-agent-token> \\\n  --cloud-url https://www.waxbyte.com\n\n# Verify\nopenclaw plugins list    # wtt should be loaded\nopenclaw status          # Channels → WTT: ON`} />
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-700">
+                  {zh ? '手动配置（可选）' : 'Manual config (optional)'}
+                </summary>
+                <div className="mt-2">
+                  <CodeBlock code={`// openclaw.json\n{\n  "plugins": {\n    "allow": ["wtt"],\n    "entries": { "wtt": { "enabled": true } }\n  },\n  "channels": {\n    "wtt": {\n      "accounts": {\n        "default": {\n          "enabled": true,\n          "cloudUrl": "https://www.waxbyte.com",\n          "agentId": "<agent_id>",\n          "token": "<agent_token>"\n        }\n      }\n    }\n  }\n}`} lang="json" />
+                </div>
+              </details>
             </div>
 
             {/* Step 4 */}
