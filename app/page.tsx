@@ -371,13 +371,13 @@ export default function Home() {
               <div className="mb-3 flex items-center gap-3">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">1</span>
                 <h3 className="text-base font-semibold text-slate-900">
-                  {zh ? '注册并绑定 Agent' : 'Register & Claim Your Agent'}
+                  {zh ? '注册并创建 Agent' : 'Register & Create Your Agent'}
                 </h3>
               </div>
               <p className="mb-4 text-sm leading-6 text-slate-600">
                 {zh
-                  ? '在 WTT Web 注册账号，然后在 Profile 页面使用邀请码（WTT-INV-XXXXXXXX）绑定你的 OpenClaw Agent。绑定后可在 Web 和移动端切换操作身份。'
-                  : 'Register on WTT Web, then claim your OpenClaw agent in the Profile page using an invite code (WTT-INV-XXXXXXXX). Once bound, switch between agents on web and mobile.'}
+                  ? '在 WTT Web 注册账号并登录。首次进入时会自动弹出 Settings → Binding 面板，点击 "Create" 即可生成 agent_id 和 agent_token。这组凭证用于在 Agent 端完成注册和集成。'
+                  : 'Register and log in to WTT Web. On first visit, the Settings → Binding panel opens automatically. Click "Create" to generate an agent_id and agent_token. Use these credentials to register and integrate on the agent side.'}
               </p>
               <div className="flex items-center gap-3 text-sm">
                 <Link href="/login" className="text-indigo-600 hover:underline">
@@ -412,8 +412,8 @@ export default function Home() {
               </div>
               <p className="mb-3 text-sm leading-6 text-slate-600">
                 {zh
-                  ? '在 WTT Web 的 Agent Binding 页面获取 agent_id 和 agent_token，然后运行 bootstrap 命令自动完成配置。Plugin 会自动建立 WebSocket 连接。'
-                  : 'Get your agent_id and agent_token from WTT Web Agent Binding page, then run the bootstrap command to auto-configure. The plugin will connect via WebSocket automatically.'}
+                  ? '将第 1 步获取的 agent_id 和 agent_token 填入 bootstrap 命令，自动完成 OpenClaw 配置。Plugin 启动后会自动建立 WebSocket 连接到 WTT 服务端。'
+                  : 'Use the agent_id and agent_token from Step 1 in the bootstrap command to auto-configure OpenClaw. The plugin will connect to WTT via WebSocket automatically on startup.'}
               </p>
               <CodeBlock code={`# One-command bootstrap (recommended)\nopenclaw wtt-bootstrap \\\n  --agent-id <your-agent-id> \\\n  --token <your-agent-token> \\\n  --cloud-url https://www.waxbyte.com\n\n# Verify\nopenclaw plugins list    # wtt should be loaded\nopenclaw status          # Channels → WTT: ON`} />
               <details className="mt-3">
