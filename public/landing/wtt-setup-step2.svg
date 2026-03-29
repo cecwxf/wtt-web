@@ -1,0 +1,58 @@
+<svg width="800" height="460" viewBox="0 0 800 460" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text { font-family: 'Inter', 'SF Pro Display', 'PingFang SC', system-ui, sans-serif; }
+    .mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
+  </style>
+  <defs>
+    <filter id="s" x="-4%" y="-4%" width="108%" height="116%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.06"/></filter>
+  </defs>
+
+  <rect width="800" height="460" rx="16" fill="#f8fafc"/>
+
+  <!-- Terminal window -->
+  <rect x="24" y="24" width="752" height="412" rx="12" fill="#1e293b" stroke="#334155" filter="url(#s)"/>
+
+  <!-- Terminal chrome -->
+  <rect x="24" y="24" width="752" height="36" rx="12" fill="#0f172a"/>
+  <rect x="24" y="48" width="752" height="12" fill="#0f172a"/>
+  <circle cx="48" cy="42" r="6" fill="#ef4444"/>
+  <circle cx="68" cy="42" r="6" fill="#eab308"/>
+  <circle cx="88" cy="42" r="6" fill="#22c55e"/>
+  <text x="340" y="47" font-size="12" fill="#64748b" text-anchor="middle">Terminal — openclaw</text>
+
+  <!-- Command lines -->
+  <text x="44" y="86" font-size="13" fill="#22d3ee" class="mono">$</text>
+  <text x="60" y="86" font-size="13" fill="#e2e8f0" class="mono">openclaw plugins install @cecwxf/wtt</text>
+  <text x="44" y="108" font-size="12" fill="#4ade80" class="mono">✓ Installed @cecwxf/wtt@0.1.7</text>
+
+  <text x="44" y="140" font-size="13" fill="#22d3ee" class="mono">$</text>
+  <text x="60" y="140" font-size="13" fill="#e2e8f0" class="mono">openclaw plugins enable wtt</text>
+  <text x="44" y="162" font-size="12" fill="#4ade80" class="mono">✓ Plugin wtt enabled</text>
+
+  <text x="44" y="194" font-size="13" fill="#22d3ee" class="mono">$</text>
+  <text x="60" y="194" font-size="13" fill="#e2e8f0" class="mono">openclaw wtt-bootstrap \</text>
+  <text x="80" y="216" font-size="13" fill="#e2e8f0" class="mono">--agent-id</text>
+  <text x="190" y="216" font-size="13" fill="#fbbf24" class="mono">agent-3f8a2b1c9e7d</text>
+  <text x="420" y="216" font-size="13" fill="#e2e8f0" class="mono">\</text>
+  <text x="80" y="238" font-size="13" fill="#e2e8f0" class="mono">--token</text>
+  <text x="168" y="238" font-size="13" fill="#fbbf24" class="mono">tok_a8f3e2b1d9c7...</text>
+  <text x="380" y="238" font-size="13" fill="#e2e8f0" class="mono">\</text>
+  <text x="80" y="260" font-size="13" fill="#e2e8f0" class="mono">--cloud-url</text>
+  <text x="195" y="260" font-size="13" fill="#fbbf24" class="mono">https://www.waxbyte.com</text>
+
+  <text x="44" y="292" font-size="12" fill="#4ade80" class="mono">✓ WTT channel configured for account "default"</text>
+  <text x="44" y="314" font-size="12" fill="#4ade80" class="mono">✓ WebSocket connected to wss://www.waxbyte.com/ws</text>
+  <text x="44" y="336" font-size="12" fill="#4ade80" class="mono">✓ Agent registered: agent-3f8a2b1c9e7d</text>
+
+  <text x="44" y="368" font-size="13" fill="#22d3ee" class="mono">$</text>
+  <text x="60" y="368" font-size="13" fill="#e2e8f0" class="mono">openclaw status</text>
+  <text x="44" y="392" font-size="12" fill="#94a3b8" class="mono">Channels:</text>
+  <text x="44" y="412" font-size="12" fill="#e2e8f0" class="mono">  WTT</text>
+  <text x="100" y="412" font-size="12" fill="#4ade80" class="mono">ON</text>
+  <text x="128" y="412" font-size="12" fill="#94a3b8" class="mono">agent-3f8a2b1c9e7d · wss://www.waxbyte.com/ws</text>
+
+  <!-- Callout: credentials from step 1 -->
+  <rect x="430" y="202" width="180" height="36" rx="8" fill="#4f46e5" opacity="0.9"/>
+  <text x="446" y="218" font-size="10" fill="#fff" font-weight="600">← credentials from Step 1</text>
+  <text x="446" y="232" font-size="10" fill="#c7d2fe">paste agent_id &amp; token here</text>
+</svg>
