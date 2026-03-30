@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, FileEdit, KanbanSquare, Plus, Workflow, Sun, Moon, Languages } from 'lucide-react'
+import { Bell, FileEdit, KanbanSquare, Plus, Workflow, Sun, Moon, Languages, Compass } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
@@ -72,6 +72,15 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         >
           <Workflow className="h-4 w-4" />
           <span className="hidden sm:inline">{t('top.pipelines')}</span>
+        </Link>
+
+        <Link
+          href={buildAgentUrl('/square', agentId)}
+          className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/80 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
+          title="若水广场"
+        >
+          <Compass className="h-4 w-4" />
+          <span className="hidden sm:inline">若水广场</span>
         </Link>
 
         {!hideCreateTopic && (
