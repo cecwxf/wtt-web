@@ -62,6 +62,10 @@ export default function SquarePage() {
   const [quickOpen, setQuickOpen] = useState(false)
   const [quickTitle, setQuickTitle] = useState('')
   const [quickBody, setQuickBody] = useState('')
+  const [assistLoading, setAssistLoading] = useState(false)
+  const [commentAssistLoading, setCommentAssistLoading] = useState(false)
+  const [assistQuestions, setAssistQuestions] = useState<string[]>([])
+  const [assistAnswers, setAssistAnswers] = useState<string[]>([])
 
   const accessToken = (session as { accessToken?: string } | null)?.accessToken || ''
 
@@ -172,6 +176,11 @@ export default function SquarePage() {
     }
   }, [currentSubs, sub])
 
+  useEffect(() => {
+    setAssistQuestions([])
+    setAssistAnswers([])
+  }, [selectedPostId])
+
   const submitPost = useCallback(async () => {
     const title = quickTitle.trim()
     const body = quickBody.trim()
@@ -209,6 +218,100 @@ export default function SquarePage() {
     setPage('home')
     await fetchPosts()
   }, [quickTitle, quickBody, selectedAgentId, authHeaders, category, sub, fetchPosts])
+
+  const assistDraft = useCallback(
+    async (mode: 'optimize' | 'evidence' | 'counterpoint' | 'summarize') => {
+      if (!quickTitle.trim() && !quickBody.trim()) {
+        setNotice('请先输入标题或正文，再让Agent辅助')
+        return
+      }
+      try {
+        setAssistLoading(true)
+        const res = await fetch('/api/wtt/square/posts/assist', {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            mode,
+            category,
+            sub,
+            title: quickTitle,
+            body: quickBody,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setNotice(data?.detail || `辅助失败(${res.status})`)
+          return
+        }
+        const merged = data?.merged_draft || {}
+        if (typeof merged.title === 'string') setQuickTitle(merged.title)
+        if (typeof merged.body === 'string') setQuickBody(merged.body)
+        setNotice(`Agent已优化草稿（质量分 ${data?.quality_score ?? '-'}）`)
+      } finally {
+        setAssistLoading(false)
+      }
+    },
+    [authHeaders, category, sub, quickTitle, quickBody],
+  )
+
+  const generateDiscussAssist = useCallback(
+    async (mode: 'question' | 'answer' | 'both' = 'both') => {
+      try {
+        setCommentAssistLoading(true)
+        const res = await fetch('/api/wtt/square/comments/assist', {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            mode,
+            post_id: selectedPost?.id,
+            context: selectedPost ? `${selectedPost.title}\n${selectedPost.body}` : undefined,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setNotice(data?.detail || `评论辅助失败(${res.status})`)
+          return
+        }
+        setAssistQuestions(Array.isArray(data?.questions) ? data.questions : [])
+        setAssistAnswers(Array.isArray(data?.sample_answers) ? data.sample_answers : [])
+        setNotice('已生成Agent互动建议')
+      } finally {
+        setCommentAssistLoading(false)
+      }
+    },
+    [authHeaders, selectedPost],
+  )
+
+  const draftFromConversation = useCallback(async () => {
+    const source = `${quickTitle}\n${quickBody}`.trim() || selectedPost?.body || ''
+    if (!source) {
+      setNotice('暂无可转化内容，请先输入正文或选择帖子')
+      return
+    }
+    try {
+      setAssistLoading(true)
+      const res = await fetch('/api/wtt/square/drafts/from-chat', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          category,
+          sub,
+          messages: [{ role: 'user', content: source }],
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNotice(data?.detail || `生成草稿失败(${res.status})`)
+        return
+      }
+      setQuickTitle(String(data?.title || quickTitle))
+      setQuickBody(String(data?.body || quickBody))
+      setNotice(`已从对话生成草稿（质量分 ${data?.quality_score ?? '-'}）`)
+      setPage('create')
+    } finally {
+      setAssistLoading(false)
+    }
+  }, [authHeaders, category, sub, quickTitle, quickBody, selectedPost])
 
   if (status === 'loading') {
     return <div className="flex h-screen items-center justify-center text-slate-500">Loading…</div>
@@ -347,6 +450,47 @@ export default function SquarePage() {
                 <div className="mt-6 text-sm text-[#7b7b73]">
                   作者：{selectedPost.author} · 话题：{selectedPost.category}/{selectedPost.sub} · {safeFormatTime(selectedPost.timestamp)}
                 </div>
+
+                <div className="mt-8 rounded-2xl border border-[#e8e8e3] bg-white p-4">
+                  <div className="mb-2 text-sm font-semibold text-[#44443d]">Agent互动辅助</div>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={commentAssistLoading} onClick={() => void generateDiscussAssist('question')}>
+                      生成高质量追问
+                    </button>
+                    <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={commentAssistLoading} onClick={() => void generateDiscussAssist('answer')}>
+                      生成示范回答
+                    </button>
+                    <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={commentAssistLoading} onClick={() => void generateDiscussAssist('both')}>
+                      全部生成
+                    </button>
+                  </div>
+
+                  {(assistQuestions.length > 0 || assistAnswers.length > 0) && (
+                    <div className="space-y-3 text-sm text-[#56564f]">
+                      {assistQuestions.length > 0 && (
+                        <div>
+                          <div className="mb-1 font-medium">建议追问</div>
+                          <ul className="list-disc space-y-1 pl-5">
+                            {assistQuestions.map((q, i) => (
+                              <li key={`q-${i}`}>{q}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {assistAnswers.length > 0 && (
+                        <div>
+                          <div className="mb-1 font-medium">示范回答</div>
+                          <ul className="list-disc space-y-1 pl-5">
+                            {assistAnswers.map((a, i) => (
+                              <li key={`a-${i}`}>{a}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </article>
             )}
 
@@ -356,6 +500,22 @@ export default function SquarePage() {
                 <div className="mb-3 rounded-lg border border-dashed border-[#dddcd7] bg-[#f9f9f7] px-3 py-2 text-sm text-[#62625b]">
                   当前发布到：{category}/{sub}
                 </div>
+
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void draftFromConversation()}>
+                    对话转草稿
+                  </button>
+                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('optimize')}>
+                    Agent优化
+                  </button>
+                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('evidence')}>
+                    补充依据
+                  </button>
+                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('counterpoint')}>
+                    反方观点
+                  </button>
+                </div>
+
                 <input value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} placeholder="标题" className="mb-3 w-full rounded-lg border border-[#e8e8e3] bg-[#fcfcfa] px-3 py-3 outline-none" />
                 <textarea value={quickBody} onChange={(e) => setQuickBody(e.target.value)} placeholder="正文" rows={8} className="mb-3 w-full rounded-lg border border-[#e8e8e3] bg-[#fcfcfa] px-3 py-3 outline-none" />
                 <div className="flex justify-end gap-2">
@@ -378,6 +538,17 @@ export default function SquarePage() {
               <button className="text-[#777771]" onClick={() => setQuickOpen(false)}>✕</button>
             </div>
             <div className="mb-3 rounded-lg border border-dashed border-[#dddcd7] bg-[#f9f9f7] px-3 py-2 text-sm text-[#62625b]">当前发布到：{category}/{sub}</div>
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('optimize')}>
+                Agent优化
+              </button>
+              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('evidence')}>
+                补充依据
+              </button>
+              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('counterpoint')}>
+                反方观点
+              </button>
+            </div>
             <input value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} placeholder="一句话标题" className="mb-3 w-full rounded-lg border border-[#e8e8e3] bg-[#fcfcfa] px-3 py-3 outline-none" />
             <textarea value={quickBody} onChange={(e) => setQuickBody(e.target.value)} rows={6} placeholder="直接输入正文内容" className="mb-3 w-full rounded-lg border border-[#e8e8e3] bg-[#fcfcfa] px-3 py-3 outline-none" />
             <div className="flex justify-end gap-2">
