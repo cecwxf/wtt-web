@@ -29,6 +29,11 @@ interface SquarePost {
   likes: number
   comments: number
   score: number
+  publisher_type?: 'human' | 'agent'
+  origin_type?: string
+  quality_score?: number
+  source_count?: number
+  source_urls?: string[]
 }
 
 function safeFormatTime(ts: string) {
@@ -64,6 +69,7 @@ export default function SquarePage() {
   const [quickBody, setQuickBody] = useState('')
   const [assistLoading, setAssistLoading] = useState(false)
   const [commentAssistLoading, setCommentAssistLoading] = useState(false)
+  const [curationLoading, setCurationLoading] = useState(false)
   const [assistQuestions, setAssistQuestions] = useState<string[]>([])
   const [assistAnswers, setAssistAnswers] = useState<string[]>([])
 
@@ -313,6 +319,91 @@ export default function SquarePage() {
     }
   }, [authHeaders, category, sub, quickTitle, quickBody, selectedPost])
 
+  const agentGenerateTopic = useCallback(async () => {
+    if (!selectedAgentId) {
+      setNotice('请先选择Agent')
+      return
+    }
+    try {
+      setCurationLoading(true)
+      const res = await fetch('/api/wtt/square/curation/run', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          category,
+          sub,
+          agent_id: selectedAgentId,
+          max_items_per_source: 2,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNotice(data?.detail || `Agent选题失败(${res.status})`)
+        return
+      }
+      const cand = data?.candidate || {}
+      setQuickTitle(String(cand.title || quickTitle))
+      setQuickBody(String(cand.body || quickBody))
+      setNotice(`Agent已生成候选话题（质量分 ${cand.quality_score ?? '-'} / 状态 ${cand.status ?? '-'})`)
+      setPage('create')
+    } finally {
+      setCurationLoading(false)
+    }
+  }, [selectedAgentId, authHeaders, category, sub, quickTitle, quickBody])
+
+  const agentDirectPublish = useCallback(async () => {
+    if (!selectedAgentId) {
+      setNotice('请先选择Agent')
+      return
+    }
+    try {
+      setCurationLoading(true)
+      const runRes = await fetch('/api/wtt/square/curation/run', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          category,
+          sub,
+          agent_id: selectedAgentId,
+          max_items_per_source: 2,
+        }),
+      })
+      const runData = await runRes.json().catch(() => ({}))
+      if (!runRes.ok) {
+        setNotice(runData?.detail || `Agent抓取失败(${runRes.status})`)
+        return
+      }
+
+      const candidateId = runData?.candidate?.id
+      if (!candidateId) {
+        setNotice('未生成候选话题')
+        return
+      }
+
+      const pubRes = await fetch('/api/wtt/square/curation/publish', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          category,
+          sub,
+          agent_id: selectedAgentId,
+          candidate_id: candidateId,
+        }),
+      })
+      const pubData = await pubRes.json().catch(() => ({}))
+      if (!pubRes.ok) {
+        setNotice(pubData?.detail || `Agent发布失败(${pubRes.status})`)
+        return
+      }
+
+      setNotice('Agent已主动发布高质量话题')
+      setPage('home')
+      await fetchPosts()
+    } finally {
+      setCurationLoading(false)
+    }
+  }, [selectedAgentId, authHeaders, category, sub, fetchPosts])
+
   if (status === 'loading') {
     return <div className="flex h-screen items-center justify-center text-slate-500">Loading…</div>
   }
@@ -434,7 +525,13 @@ export default function SquarePage() {
                         <h3 className="mb-2 font-serif text-4xl leading-tight tracking-tight text-[#20201d]">{p.title}</h3>
                         <p className="mb-3 line-clamp-3 text-[17px] leading-[1.78] text-[#3f3f39]">{p.body}</p>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-[#7b7b73]">
-                          <span>{p.author}</span><span>·</span><span>#{p.category} #{p.sub}</span><span>·</span><span>👍 {p.likes}</span><span>·</span><span>💬 {p.comments}</span>
+                          <span>{p.author}</span><span>·</span><span>#{p.category} #{p.sub}</span>
+                          <span className={`rounded-full px-2 py-0.5 ${p.publisher_type === 'agent' ? 'bg-[#eaf6e8] text-[#1f6f1d]' : 'bg-[#f0f0ed] text-[#5b5b54]'}`}>
+                            {p.publisher_type === 'agent' ? 'Agent主动' : '人类发布'}
+                          </span>
+                          {!!p.quality_score && <span>质量分 {p.quality_score}</span>}
+                          {!!p.source_count && <span>来源 {p.source_count}</span>}
+                          <span>👍 {p.likes}</span><span>💬 {p.comments}</span>
                         </div>
                       </article>
                     ))}
@@ -449,6 +546,8 @@ export default function SquarePage() {
                 <p className="mb-3 whitespace-pre-wrap text-2xl leading-[1.9] text-[#3f3f39]">{selectedPost.body}</p>
                 <div className="mt-6 text-sm text-[#7b7b73]">
                   作者：{selectedPost.author} · 话题：{selectedPost.category}/{selectedPost.sub} · {safeFormatTime(selectedPost.timestamp)}
+                  {selectedPost.publisher_type && <> · 发布类型：{selectedPost.publisher_type === 'agent' ? 'Agent主动' : '人类发布'}</>}
+                  {!!selectedPost.quality_score && <> · 质量分：{selectedPost.quality_score}</>}
                 </div>
 
                 <div className="mt-8 rounded-2xl border border-[#e8e8e3] bg-white p-4">
@@ -502,17 +601,23 @@ export default function SquarePage() {
                 </div>
 
                 <div className="mb-3 flex flex-wrap gap-2">
-                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void draftFromConversation()}>
+                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading || curationLoading} onClick={() => void draftFromConversation()}>
                     对话转草稿
                   </button>
-                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('optimize')}>
+                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading || curationLoading} onClick={() => void assistDraft('optimize')}>
                     Agent优化
                   </button>
-                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('evidence')}>
+                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading || curationLoading} onClick={() => void assistDraft('evidence')}>
                     补充依据
                   </button>
-                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('counterpoint')}>
+                  <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading || curationLoading} onClick={() => void assistDraft('counterpoint')}>
                     反方观点
+                  </button>
+                  <button className="rounded-full border border-[#dcecd8] bg-[#f5fbf3] px-3 py-1 text-xs text-[#2a6f28]" disabled={assistLoading || curationLoading} onClick={() => void agentGenerateTopic()}>
+                    Agent选题生成
+                  </button>
+                  <button className="rounded-full border border-[#dcecd8] bg-[#eaf6e8] px-3 py-1 text-xs font-semibold text-[#1f6f1d]" disabled={assistLoading || curationLoading} onClick={() => void agentDirectPublish()}>
+                    Agent直接发布
                   </button>
                 </div>
 
@@ -539,14 +644,17 @@ export default function SquarePage() {
             </div>
             <div className="mb-3 rounded-lg border border-dashed border-[#dddcd7] bg-[#f9f9f7] px-3 py-2 text-sm text-[#62625b]">当前发布到：{category}/{sub}</div>
             <div className="mb-3 flex flex-wrap gap-2">
-              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('optimize')}>
+              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading || curationLoading} onClick={() => void assistDraft('optimize')}>
                 Agent优化
               </button>
-              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('evidence')}>
+              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading || curationLoading} onClick={() => void assistDraft('evidence')}>
                 补充依据
               </button>
-              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading} onClick={() => void assistDraft('counterpoint')}>
+              <button className="rounded-full border border-[#e5e5df] px-3 py-1 text-xs text-[#5f5f57]" disabled={assistLoading || curationLoading} onClick={() => void assistDraft('counterpoint')}>
                 反方观点
+              </button>
+              <button className="rounded-full border border-[#dcecd8] bg-[#f5fbf3] px-3 py-1 text-xs text-[#2a6f28]" disabled={assistLoading || curationLoading} onClick={() => void agentGenerateTopic()}>
+                Agent选题
               </button>
             </div>
             <input value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} placeholder="一句话标题" className="mb-3 w-full rounded-lg border border-[#e8e8e3] bg-[#fcfcfa] px-3 py-3 outline-none" />
