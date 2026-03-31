@@ -59,7 +59,7 @@ export default function ComposePage() {
   // Polishing state — agent responses go directly into body
   const [polishPending, setPolishPending] = useState(false)
   const [polishStatus, setPolishStatus] = useState('')
-  const prevAgentMsgCount = useRef(0)
+  const polishMsgIds = useRef<Set<string>>(new Set())
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
@@ -123,19 +123,24 @@ export default function ComposePage() {
   }, [chatMessagesRaw])
   useEffect(() => { decryptMessages() }, [decryptMessages])
 
-  // Auto-apply polished content: when agent replies during polish, update body directly
+  // Auto-apply polished content: detect NEW messages not from us
   useEffect(() => {
-    if (!polishPending) return
-    const agentMsgs = chatMessages.filter(m => m.sender_type.toUpperCase() === 'AGENT')
-    if (agentMsgs.length > prevAgentMsgCount.current) {
-      const latest = agentMsgs[agentMsgs.length - 1]
+    if (!polishPending || chatMessages.length === 0) return
+    // Find messages that appeared AFTER we sent the polish request
+    // and are NOT from the current user (i.e. from the agent)
+    const newAgentMsgs = chatMessages.filter(m =>
+      !polishMsgIds.current.has(m.id) &&
+      m.sender_id !== senderIdentity
+    )
+    if (newAgentMsgs.length > 0) {
+      const latest = newAgentMsgs[newAgentMsgs.length - 1]
       setBody(latest.content)
       setPolishPending(false)
       setPolishStatus('✅ 润色完成，正文已更新')
-      prevAgentMsgCount.current = agentMsgs.length
+      polishMsgIds.current = new Set(chatMessages.map(m => m.id))
       setTimeout(() => setPolishStatus(''), 4000)
     }
-  }, [chatMessages, polishPending])
+  }, [chatMessages, polishPending, senderIdentity])
 
   // Auto-scroll chat
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages.length])
@@ -229,24 +234,19 @@ export default function ComposePage() {
     }
   }
 
-  // Agent-powered style polishing via P2P — result goes directly into body
-  const handleStylePolish = async (mode: string) => {
-    if (!body.trim() || !chatTargetAgent || chatSending) return
+  // One-click polish: send body to agent for polishing, result auto-fills body
+  const handlePolish = async () => {
+    if (!body.trim() || !chatTargetAgent || chatSending || polishPending) return
     setChatSending(true)
     setPolishStatus('🤖 润色中… 请稍候')
 
-    // Record current agent msg count so auto-apply detects the NEW response
-    const agentCount = chatMessages.filter(m => m.sender_type.toUpperCase() === 'AGENT').length
-    prevAgentMsgCount.current = agentCount
+    // Snapshot current message IDs so we can detect the NEW agent response
+    polishMsgIds.current = new Set(chatMessages.map(m => m.id))
 
-    const styleHint = writingStyle !== '默认' ? `，使用${writingStyle}的写作风格` : ''
-    const instructions: Record<string, string> = {
-      optimize: `请对以下内容进行结构优化和润色${styleHint}，保持核心观点不变，只输出优化后的完整正文，不要加任何前缀说明:\n\n标题: ${title}\n\n${body}`,
-      evidence: `请为以下内容补充论据和数据支撑${styleHint}，增加可信度，只输出补充后的完整正文，不要加任何前缀说明:\n\n标题: ${title}\n\n${body}`,
-      counterpoint: `请为以下内容增加反方观点和辩证思考${styleHint}，使论述更全面，只输出增强后的完整正文，不要加任何前缀说明:\n\n标题: ${title}\n\n${body}`,
-      style: `请将以下内容用${writingStyle}的写作风格进行重写润色，保持核心观点和信息不变，只输出润色后的完整正文，不要加任何前缀说明:\n\n标题: ${title}\n\n${body}`,
-    }
-    const content = instructions[mode] || instructions.optimize
+    const styleHint = writingStyle !== '默认'
+      ? `请使用${writingStyle}的写作风格进行润色，`
+      : ''
+    const content = `${styleHint}请对以下内容进行全面润色（结构优化、语言打磨、补充论据），保持核心观点不变。只输出润色后的完整正文，不要加任何前缀、解释或标记:\n\n${body}`
 
     try {
       let topicId = chatTopicId
@@ -489,37 +489,14 @@ export default function ComposePage() {
                     <option key={s} value={s}>{s === '默认' ? '✏️ 默认风格' : `🖊️ ${s}风格`}</option>
                   ))}
                 </select>
-                {/* Agent-powered polishing buttons */}
+                {/* Single polish button */}
                 <button
-                  onClick={() => handleStylePolish('optimize')}
+                  onClick={handlePolish}
                   disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
-                  className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
+                  className="text-xs px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40 transition-colors"
                 >
-                  {polishPending ? '⏳' : '🤖'} 结构润色
+                  {polishPending ? '⏳ 润色中…' : '✨ 一键润色'}
                 </button>
-                <button
-                  onClick={() => handleStylePolish('evidence')}
-                  disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
-                  className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
-                >
-                  {polishPending ? '⏳' : '🤖'} 补充依据
-                </button>
-                <button
-                  onClick={() => handleStylePolish('counterpoint')}
-                  disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
-                  className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
-                >
-                  {polishPending ? '⏳' : '🤖'} 反方观点
-                </button>
-                {writingStyle !== '默认' && (
-                  <button
-                    onClick={() => handleStylePolish('style')}
-                    disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
-                    className="text-xs px-2 py-1 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-40 transition-colors"
-                  >
-                    {polishPending ? '⏳' : '🖊️'} {writingStyle}润色
-                  </button>
-                )}
               </div>
             </div>
             {polishStatus && (
