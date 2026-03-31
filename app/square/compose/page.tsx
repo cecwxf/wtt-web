@@ -44,10 +44,6 @@ export default function ComposePage() {
   const [qualityScore, setQualityScore] = useState(0)
   const [qualityHints, setQualityHints] = useState<string[]>([])
 
-  // Writing style
-  const [writingStyle, setWritingStyle] = useState('默认')
-  const STYLES = ['默认', '鲁迅', '张爱玲', '张佳玮', '王小波', '余华', '学术']
-
   // Agent chat panel — real P2P
   const [chatMode, setChatMode] = useState(false)
   const [chatInput, setChatInput] = useState('')
@@ -55,12 +51,6 @@ export default function ComposePage() {
   const [chatTargetAgent, setChatTargetAgent] = useState('')
   const [chatTopicId, setChatTopicId] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
-
-  // Polishing state — fresh P2P topic per request, deleted after use
-  const [polishPending, setPolishPending] = useState(false)
-  const [polishStatus, setPolishStatus] = useState('')
-  const [polishTopicId, setPolishTopicId] = useState<string | null>(null)
-  const polishVersion = useRef(0)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
@@ -90,19 +80,6 @@ export default function ComposePage() {
       return r.json()
     },
     { refreshInterval: 3000 }
-  )
-
-  // Poll polish topic (separate, ephemeral P2P topic for polishing only)
-  const { data: polishMessagesRaw } = useSWR(
-    polishTopicId && polishPending && token ? ['polish-topic', polishTopicId, token] : null,
-    async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${polishTopicId}/messages?limit=10`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!r.ok) return []
-      return r.json()
-    },
-    { refreshInterval: 2000 }
   )
 
   // Decrypt chat messages asynchronously
@@ -136,65 +113,6 @@ export default function ComposePage() {
     setChatMessages(decrypted)
   }, [chatMessagesRaw])
   useEffect(() => { decryptMessages() }, [decryptMessages])
-
-  // Auto-apply polished content from the ephemeral polish topic
-  useEffect(() => {
-    if (!polishPending || !polishTopicId || !polishMessagesRaw) return
-    const raw = Array.isArray(polishMessagesRaw)
-      ? polishMessagesRaw
-      : Array.isArray((polishMessagesRaw as { messages?: unknown[] })?.messages)
-        ? (polishMessagesRaw as { messages: unknown[] }).messages
-        : []
-    // Find agent reply (not from us)
-    const agentMsg = raw.find((x: unknown) => {
-      const m = x as Record<string, unknown>
-      return String(m.sender_id || '') !== senderIdentity
-    })
-    if (!agentMsg) return
-    const myVersion = polishVersion.current
-
-    ;(async () => {
-      const m = agentMsg as Record<string, unknown>
-      let content = String(m.content || '')
-      // Decrypt if needed
-      const isEnc = m.encrypted === true ||
-        (content.startsWith('{') && content.includes('"c"') && content.includes('"ctx"'))
-      if (isEnc) {
-        try {
-          const r = await decryptReceived(content, true)
-          content = r.decryptFailed ? content : r.text
-        } catch { /* use raw */ }
-      }
-
-      // Version guard: if user started a newer polish, discard this one
-      if (myVersion !== polishVersion.current) return
-
-      // Parse structured response: 标题：xxx\n正文：xxx
-      const titleMatch = content.match(/^标题[：:]\s*(.+)/m)
-      const bodyStart = content.match(/正文[：:]\s*\n?([\s\S]+)/m)
-      if (titleMatch && bodyStart) {
-        setTitle(titleMatch[1].trim())
-        setBody(bodyStart[1].trim())
-      } else {
-        // Fallback: entire response is polished body
-        setBody(content.trim())
-      }
-      setPolishPending(false)
-      setPolishStatus('✅ 润色完成')
-      setTimeout(() => setPolishStatus(''), 4000)
-
-      // Delete the ephemeral polish topic (fire-and-forget)
-      const topicToDelete = polishTopicId
-      setPolishTopicId(null)
-      if (token) {
-        fetch(`${CLIENT_WTT_API_BASE}/topics/${topicToDelete}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => {})
-      }
-    })()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polishMessagesRaw, polishPending, polishTopicId, senderIdentity])
 
   // Auto-scroll chat
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages.length])
@@ -285,51 +203,6 @@ export default function ComposePage() {
       alert(`发布失败: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setPublishing(false)
-    }
-  }
-
-  // One-click polish: fresh P2P topic per request, auto-deleted after use
-  const handlePolish = async () => {
-    if ((!title.trim() && !body.trim()) || !chatTargetAgent || chatSending || polishPending) return
-    setChatSending(true)
-    setPolishStatus('🤖 润色中… 请稍候')
-
-    // Cancel any previous pending polish
-    polishVersion.current += 1
-    if (polishTopicId && token) {
-      fetch(`${CLIENT_WTT_API_BASE}/topics/${polishTopicId}`, {
-        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {})
-      setPolishTopicId(null)
-    }
-
-    const styleHint = writingStyle !== '默认'
-      ? `使用${writingStyle}的写作风格，`
-      : ''
-    const content = `${styleHint}请润色以下标题和正文，保持核心观点和事实不变，优化语言表达和文章结构。请严格按以下格式返回，不要加额外说明：\n\n标题：<润色后的标题>\n正文：<润色后的正文>\n\n---\n标题：${title}\n正文：${body}`
-
-    try {
-      // Always create a FRESH P2P topic for this polish request
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(senderIdentity)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          target_agent_id: chatTargetAgent,
-          content,
-          content_type: 'text',
-          semantic_type: 'post',
-          sender_type: 'HUMAN',
-        }),
-      })
-      if (!r.ok) throw new Error(await r.text().catch(() => `${r.status}`))
-      const res = await r.json()
-      setPolishTopicId(res.topic_id)
-      setPolishPending(true)
-    } catch (e: unknown) {
-      alert(`润色请求失败: ${e instanceof Error ? e.message : String(e)}`)
-      setPolishStatus('')
-    } finally {
-      setChatSending(false)
     }
   }
 
@@ -511,13 +384,7 @@ export default function ComposePage() {
             <input
               type="text"
               value={title}
-              onChange={e => {
-                setTitle(e.target.value)
-                if (polishPending) {
-                  setPolishPending(false); setPolishStatus(''); polishVersion.current += 1
-                  if (polishTopicId && token) { fetch(`${CLIENT_WTT_API_BASE}/topics/${polishTopicId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {}); setPolishTopicId(null) }
-                }
-              }}
+              onChange={e => setTitle(e.target.value)}
               placeholder="输入话题标题…"
               className="w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -525,46 +392,10 @@ export default function ComposePage() {
 
           {/* Body */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">正文</label>
-              <div className="flex items-center gap-2">
-                {/* Writing style selector */}
-                <select
-                  value={writingStyle}
-                  onChange={e => setWritingStyle(e.target.value)}
-                  className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-                >
-                  {STYLES.map(s => (
-                    <option key={s} value={s}>{s === '默认' ? '✏️ 默认风格' : `🖊️ ${s}风格`}</option>
-                  ))}
-                </select>
-                {/* Single polish button */}
-                <button
-                  onClick={handlePolish}
-                  disabled={(!title.trim() && !body.trim()) || !chatTargetAgent || chatSending || polishPending}
-                  className="text-xs px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40 transition-colors"
-                >
-                  {polishPending ? '⏳ 润色中…' : '✨ 一键润色'}
-                </button>
-              </div>
-            </div>
-            {polishStatus && (
-              <div className={`text-xs mb-1 ${polishStatus.startsWith('✅') ? 'text-green-500' : 'text-purple-500 animate-pulse'}`}>
-                {polishStatus}
-              </div>
-            )}
-            {!chatTargetAgent && agents.length === 0 && body.trim() && (
-              <div className="text-xs text-amber-500 mb-1">💡 请先在 Agent 页面绑定 Agent，润色功能需要 Agent 推理</div>
-            )}
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">正文</label>
             <textarea
               value={body}
-              onChange={e => {
-                setBody(e.target.value)
-                if (polishPending) {
-                  setPolishPending(false); setPolishStatus(''); polishVersion.current += 1
-                  if (polishTopicId && token) { fetch(`${CLIENT_WTT_API_BASE}/topics/${polishTopicId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {}); setPolishTopicId(null) }
-                }
-              }}
+              onChange={e => setBody(e.target.value)}
               placeholder="分享你的观点、分析、见解…"
               rows={16}
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
