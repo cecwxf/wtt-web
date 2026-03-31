@@ -31,6 +31,7 @@ interface MessageCardProps {
 
 type RichBlock =
   | { kind: 'plain'; text: string }
+  | { kind: 'html'; html: string }
   | { kind: 'image'; url: string }
   | { kind: 'audio'; url: string }
   | { kind: 'video'; url: string }
@@ -71,10 +72,34 @@ function classifyLine(line: string): RichBlock {
   return { kind: 'plain', text: line }
 }
 
+function proxyHtml(html: string): string {
+  return html.replace(
+    /(<img\s[^>]*\bsrc\s*=\s*")(https?:\/\/[^"]+)(")/gi,
+    (_m, pre, url, post) => pre + proxyUrl(url) + post,
+  )
+}
+
+const HTML_TAG_RE = /<(?:img|p|div|br|h[1-6]|ul|ol|li|blockquote|table|a|span|strong|em)\b/i
+
 function parseContent(content: string): RichBlock[] {
   const c = (content || '').trim()
   if (!c) return [{ kind: 'plain', text: '' }]
 
+  // Detect HTML content — render as HTML with proxied URLs
+  if (HTML_TAG_RE.test(c)) {
+    // Split leading plain text lines from the HTML portion
+    const firstTagIdx = c.search(HTML_TAG_RE)
+    const blocks: RichBlock[] = []
+    if (firstTagIdx > 0) {
+      const leading = c.slice(0, firstTagIdx).trim()
+      if (leading) blocks.push({ kind: 'plain', text: leading })
+    }
+    const htmlPart = c.slice(Math.max(0, firstTagIdx)).trim()
+    if (htmlPart) blocks.push({ kind: 'html', html: proxyHtml(htmlPart) })
+    return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtml(c) }]
+  }
+
+  // Markdown / plain text path
   const segments = c.split(/\n/)
   const blocks: RichBlock[] = []
   let textBuf: string[] = []
@@ -204,6 +229,14 @@ export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCa
                 <a key={i} href={block.url} target="_blank" rel="noreferrer" className="block text-xs text-indigo-500 hover:underline truncate">
                   🔗 {block.url}
                 </a>
+              )
+            case 'html':
+              return (
+                <div
+                  key={i}
+                  className="prose prose-sm dark:prose-invert max-w-none [&_img]:max-h-48 [&_img]:w-auto [&_img]:rounded-lg [&_img]:border [&_img]:border-slate-200"
+                  dangerouslySetInnerHTML={{ __html: block.html }}
+                />
               )
             case 'plain':
             default:
