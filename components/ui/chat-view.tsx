@@ -351,6 +351,7 @@ interface HumanProfileSummary {
 
 type ParsedRich =
   | { kind: 'plain'; text: string }
+  | { kind: 'html'; html: string }
   | { kind: 'image'; url: string }
   | { kind: 'audio'; url: string }
   | { kind: 'video'; url: string }
@@ -492,6 +493,25 @@ function parseRichBlocks(content: string): ParsedRich[] {
     const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
     const image = proxyUrl((c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim())
     return [{ kind: 'preview', title, desc, url, image }]
+  }
+
+  // Detect HTML content (e.g. from Tiptap rich editor): <img>, <p>, <div>, etc.
+  const HTML_TAG_RE = /<(?:img|p|div|br|h[1-6]|ul|ol|li|blockquote|table|a|span|strong|em)\b/i
+  if (HTML_TAG_RE.test(c)) {
+    const proxyHtml = (html: string) =>
+      html.replace(
+        /(<img\s[^>]*\bsrc\s*=\s*")(https?:\/\/[^"]+)(")/gi,
+        (_m, pre, url, post) => pre + proxyUrl(url) + post,
+      )
+    const blocks: ParsedRich[] = []
+    const firstTagIdx = c.search(HTML_TAG_RE)
+    if (firstTagIdx > 0) {
+      const leading = c.slice(0, firstTagIdx).trim()
+      if (leading) blocks.push({ kind: 'plain', text: leading })
+    }
+    const htmlPart = c.slice(Math.max(0, firstTagIdx)).trim()
+    if (htmlPart) blocks.push({ kind: 'html', html: proxyHtml(htmlPart) })
+    return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtml(c) }]
   }
 
   // Detect markdown: has headings, bold, code blocks, tables
@@ -1938,6 +1958,16 @@ export function ChatView({
                                     {block.desc && <p className="mt-1 text-xs text-slate-500">{block.desc}</p>}
                                     {block.url && <a href={block.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">{block.url}</a>}
                                   </div>
+                                )
+                              }
+                              // HTML content (from Tiptap editor)
+                              if (block.kind === 'html') {
+                                return (
+                                  <div
+                                    key={bi}
+                                    className="prose prose-sm dark:prose-invert max-w-none [&_img]:max-h-60 [&_img]:w-auto [&_img]:rounded-lg [&_img]:border [&_img]:border-slate-200"
+                                    dangerouslySetInnerHTML={{ __html: block.html }}
+                                  />
                                 )
                               }
                               // plain text
