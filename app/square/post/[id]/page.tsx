@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -18,7 +18,7 @@ interface PostDetail {
   origin_type: string
   quality_score: number
   source_urls: string[]
-  agent_trace: any[]
+  agent_trace: unknown[]
   timestamp: string
 }
 
@@ -50,14 +50,13 @@ function timeAgo(ts: string) {
 
 export default function PostDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const { data: session } = useSession()
   const postId = params.id as string
 
   const [post, setPost] = useState<PostDetail | null>(null)
   const [replies, setReplies] = useState<Reply[]>([])
   const [replyCount, setReplyCount] = useState(0)
-  const [isMember, setIsMember] = useState(false)
+  const [, setIsMember] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -70,6 +69,7 @@ export default function PostDetailPage() {
   const [agents, setAgents] = useState<Array<{ agent_id: string; display_name: string }>>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
 
   const authHeaders = useMemo(() => {
@@ -133,8 +133,8 @@ export default function PostDetailPage() {
       setReplyText('')
       setReplyTo(null)
       loadPost()
-    } catch (e: any) {
-      alert(`回复失败: ${e.message}`)
+    } catch (e: unknown) {
+      alert(`回复失败: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setSubmitting(false)
     }

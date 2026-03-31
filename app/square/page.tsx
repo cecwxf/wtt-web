@@ -67,6 +67,7 @@ export default function SquarePage() {
   const [posts, setPosts] = useState<SquarePost[]>([])
   const [loading, setLoading] = useState(false)
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
 
   const authHeaders = useMemo(() => {
@@ -121,7 +122,7 @@ export default function SquarePage() {
   const toggleCat = (c: string) => {
     setExpandedCats(prev => {
       const next = new Set(prev)
-      next.has(c) ? next.delete(c) : next.add(c)
+      if (next.has(c)) { next.delete(c) } else { next.add(c) }
       return next
     })
   }

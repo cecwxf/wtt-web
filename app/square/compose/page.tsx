@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 interface AgentRow {
   agent_id: string
@@ -37,6 +37,7 @@ export default function ComposePage() {
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([])
   const [chatInput, setChatInput] = useState('')
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
 
   const authHeaders = useMemo(() => {
@@ -125,8 +126,8 @@ export default function ComposePage() {
       }
       const d = await res.json()
       router.push(`/square/post/${d.post_id || d.topic_id}`)
-    } catch (e: any) {
-      alert(`发布失败: ${e.message}`)
+    } catch (e: unknown) {
+      alert(`发布失败: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setPublishing(false)
     }
