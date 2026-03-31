@@ -3,8 +3,20 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
+import dynamic from 'next/dynamic'
+
+const SquareEditor = dynamic(
+  () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
+  { ssr: false, loading: () => <div className="h-[120px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
+)
+
+interface EditorHelpers {
+  getHTML: () => string
+  isEmpty: () => boolean
+  clear: () => void
+}
 
 interface PostDetail {
   id: string
@@ -60,6 +72,10 @@ export default function PostDetailPage() {
   const [replyAs, setReplyAs] = useState<'human' | 'agent'>('human')
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const replyInputRef = useRef<HTMLTextAreaElement>(null)
+  const replyEditorRef = useRef<EditorHelpers | null>(null)
+  const handleReplyEditorReady = useCallback((helpers: EditorHelpers) => {
+    replyEditorRef.current = helpers
+  }, [])
 
   // Agent list for @mention
   const [agents, setAgents] = useState<Array<{ agent_id: string; display_name: string }>>([])
@@ -105,14 +121,16 @@ export default function PostDetailPage() {
 
   // Submit reply
   const handleReply = async () => {
-    if (!replyText.trim() || submitting) return
+    const html = replyEditorRef.current?.getHTML() || replyText.trim()
+    const isEmpty = replyEditorRef.current?.isEmpty() ?? !replyText.trim()
+    if (isEmpty || submitting) return
     setSubmitting(true)
     try {
       const res = await fetch(`/api/wtt/square/posts/${postId}/replies`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
-          content: replyText.trim(),
+          content: html,
           agent_id: selectedAgentId || undefined,
           reply_to: replyTo,
           publisher_type: replyAs,
@@ -122,6 +140,7 @@ export default function PostDetailPage() {
         const d = await res.json().catch(() => ({}))
         throw new Error(d.detail || `${res.status}`)
       }
+      replyEditorRef.current?.clear()
       setReplyText('')
       setReplyTo(null)
       mutatePost()
@@ -219,8 +238,12 @@ export default function PostDetailPage() {
                 )}
                 <span className="text-xs text-gray-400 dark:text-gray-500">{timeAgo(r.timestamp)}</span>
               </div>
-              <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-                {r.content}
+              <div className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
+                {r.content.includes('<') && r.content.includes('>') ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: r.content }} />
+                ) : (
+                  <span className="whitespace-pre-wrap">{r.content}</span>
+                )}
               </div>
               {token && (
                 <button
@@ -287,9 +310,10 @@ export default function PostDetailPage() {
               </>
             )}
           </div>
-          <div className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed text-[15px]">
-            {post.body}
-          </div>
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed text-[15px]"
+            dangerouslySetInnerHTML={{ __html: post.body }}
+          />
           {post.source_urls.length > 0 && (
             <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
               <div className="text-xs text-gray-400 dark:text-gray-500 mb-2">来源链接</div>
@@ -343,16 +367,11 @@ export default function PostDetailPage() {
                   </button>
                 </div>
               )}
-              <textarea
-                ref={replyInputRef}
-                value={replyText}
-                onChange={e => setReplyText(e.target.value)}
-                placeholder="输入回复… @agent 名称触发AI讨论"
-                rows={3}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleReply()
-                }}
+              <SquareEditor
+                variant="mini"
+                placeholder="输入回复… 支持图片粘贴/拖拽，@agent 触发AI讨论"
+                onChange={setReplyText}
+                onReady={handleReplyEditorReady}
               />
               {/* Action bar: reply-as toggle + @Agent picker + send */}
               <div className="flex items-center justify-between mt-2">
@@ -412,14 +431,14 @@ export default function PostDetailPage() {
 
                 <button
                   onClick={handleReply}
-                  disabled={!replyText.trim() || submitting}
+                  disabled={submitting}
                   className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
                 >
                   {submitting ? '发送中…' : '发送'}
                 </button>
               </div>
               <div className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                Ctrl+Enter 快速发送 · @agent名称 触发AI回复 · 回复自动刷新
+                支持粗体/斜体/列表/代码/图片 · @agent名称 触发AI回复 · 回复自动刷新
               </div>
             </div>
           ) : (

@@ -3,7 +3,13 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
+
+const SquareEditor = dynamic(
+  () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
+  { ssr: false, loading: () => <div className="h-[360px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
+)
 
 interface AgentRow {
   agent_id: string
@@ -13,6 +19,12 @@ interface AgentRow {
 interface TaxonomyRes {
   prefix: string
   categories: Array<{ name: string; subs: string[] }>
+}
+
+interface EditorHelpers {
+  getHTML: () => string
+  isEmpty: () => boolean
+  clear: () => void
 }
 
 export default function ComposePage() {
@@ -26,12 +38,16 @@ export default function ComposePage() {
   const [category, setCategory] = useState('')
   const [sub, setSub] = useState('')
   const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
+  const [bodyHtml, setBodyHtml] = useState('')
   const [sourceUrls, setSourceUrls] = useState<string[]>([''])
   const [publishing, setPublishing] = useState(false)
   const [qualityScore, setQualityScore] = useState(0)
   const [qualityHints, setQualityHints] = useState<string[]>([])
 
+  const editorRef = useRef<EditorHelpers | null>(null)
+  const handleEditorReady = useCallback((helpers: EditorHelpers) => {
+    editorRef.current = helpers
+  }, [])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
@@ -77,33 +93,39 @@ export default function ComposePage() {
     return cat?.subs || []
   }, [taxonomy, category])
 
-  // Compute quality score locally
+  // Compute quality score locally (strip HTML tags for text length)
   useEffect(() => {
     const titleLen = title.trim().length
-    const bodyLen = body.trim().length
+    const bodyText = bodyHtml.replace(/<[^>]*>/g, '').trim()
+    const bodyLen = bodyText.length
+    const hasImages = bodyHtml.includes('<img')
     const urls = sourceUrls.filter(u => u.trim())
 
     let score = 0
     score += Math.min(titleLen, 40)
-    score += Math.min(Math.floor(bodyLen / 12), 40)
+    score += Math.min(Math.floor(bodyLen / 12), 35)
+    if (hasImages) score += 5
     score += Math.min(urls.length * 10, 20)
     setQualityScore(Math.min(score, 100))
 
     const hints: string[] = []
     if (titleLen < 10) hints.push('标题可再具体一些')
     if (bodyLen < 180) hints.push('正文偏短，建议补充背景/依据/结论')
+    if (!hasImages) hints.push('添加图片可增强表达力')
     if (urls.length < 2) hints.push('建议补充至少2个来源链接')
     setQualityHints(hints)
-  }, [title, body, sourceUrls])
+  }, [title, bodyHtml, sourceUrls])
 
   // Publish post
   const handlePublish = async () => {
-    if (!title.trim() || !body.trim() || !category || !sub) {
+    const isEmpty = editorRef.current?.isEmpty() ?? true
+    if (!title.trim() || isEmpty || !category || !sub) {
       alert('请填写完整: 分类、标题、正文')
       return
     }
     setPublishing(true)
     try {
+      const html = editorRef.current?.getHTML() || ''
       const res = await fetch('/api/wtt/square/posts', {
         method: 'POST',
         headers: authHeaders,
@@ -111,7 +133,7 @@ export default function ComposePage() {
           category,
           sub,
           title: title.trim(),
-          body: body.trim(),
+          body: html,
           agent_id: selectedAgentId || undefined,
           publisher_type: 'human',
           source_urls: sourceUrls.filter(u => u.trim()),
@@ -159,7 +181,7 @@ export default function ComposePage() {
           <div className="flex items-center gap-3">
             <button
               onClick={handlePublish}
-              disabled={publishing || !title.trim() || !body.trim()}
+              disabled={publishing || !title.trim()}
               className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
             >
               {publishing ? '发布中…' : '发布话题'}
@@ -224,15 +246,14 @@ export default function ComposePage() {
             />
           </div>
 
-          {/* Body */}
+          {/* Rich text body editor */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">正文</label>
-            <textarea
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              placeholder="分享你的观点、分析、见解…"
-              rows={16}
-              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <SquareEditor
+              variant="full"
+              placeholder="分享你的观点、分析、见解… 支持图片粘贴/拖拽"
+              onChange={setBodyHtml}
+              onReady={handleEditorReady}
             />
           </div>
 
