@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
+import { decryptReceived } from '@/lib/e2e-crypto'
 
 const CLIENT_WTT_API_BASE = '/api/wtt'
 
@@ -55,6 +56,11 @@ export default function ComposePage() {
   const [chatTopicId, setChatTopicId] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
+  // Polishing state — agent responses go directly into body
+  const [polishPending, setPolishPending] = useState(false)
+  const [polishStatus, setPolishStatus] = useState('')
+  const prevAgentMsgCount = useRef(0)
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
 
@@ -85,18 +91,25 @@ export default function ComposePage() {
     { refreshInterval: 3000 }
   )
 
-  const chatMessages: ChatMsg[] = useMemo(() => {
+  // Decrypt chat messages asynchronously
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
+  const decryptMessages = useCallback(async () => {
     const raw = Array.isArray(chatMessagesRaw)
       ? chatMessagesRaw
       : Array.isArray((chatMessagesRaw as { messages?: unknown[] })?.messages)
         ? (chatMessagesRaw as { messages: unknown[] }).messages
         : []
-    return raw.map((x: unknown) => {
+    if (raw.length === 0) { setChatMessages([]); return }
+    const decrypted = await Promise.all(raw.map(async (x: unknown) => {
       const m = x as Record<string, unknown>
       let content = String(m.content || '')
-      // Detect encrypted content (e2e envelope) and show plaintext hint
-      if (m.encrypted === true || (content.startsWith('{') && content.includes('"c"') && content.includes('"ctx"'))) {
-        content = '[🔒 加密消息 — 协作消息无需加密，请在设置中关闭E2E]'
+      const isEnc = m.encrypted === true ||
+        (content.startsWith('{') && content.includes('"c"') && content.includes('"ctx"'))
+      if (isEnc) {
+        try {
+          const r = await decryptReceived(content, true)
+          content = r.decryptFailed ? '[🔒 解密失败 — 请检查E2E密码]' : r.text
+        } catch { content = '[🔒 解密失败]' }
       }
       return {
         id: String(m.id || m.message_id || ''),
@@ -105,8 +118,24 @@ export default function ComposePage() {
         sender_type: String(m.sender_type || ''),
         created_at: String(m.created_at || ''),
       }
-    })
+    }))
+    setChatMessages(decrypted)
   }, [chatMessagesRaw])
+  useEffect(() => { decryptMessages() }, [decryptMessages])
+
+  // Auto-apply polished content: when agent replies during polish, update body directly
+  useEffect(() => {
+    if (!polishPending) return
+    const agentMsgs = chatMessages.filter(m => m.sender_type.toUpperCase() === 'AGENT')
+    if (agentMsgs.length > prevAgentMsgCount.current) {
+      const latest = agentMsgs[agentMsgs.length - 1]
+      setBody(latest.content)
+      setPolishPending(false)
+      setPolishStatus('✅ 润色完成，正文已更新')
+      prevAgentMsgCount.current = agentMsgs.length
+      setTimeout(() => setPolishStatus(''), 4000)
+    }
+  }, [chatMessages, polishPending])
 
   // Auto-scroll chat
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages.length])
@@ -200,18 +229,22 @@ export default function ComposePage() {
     }
   }
 
-  // Agent-powered style polishing via P2P
+  // Agent-powered style polishing via P2P — result goes directly into body
   const handleStylePolish = async (mode: string) => {
     if (!body.trim() || !chatTargetAgent || chatSending) return
-    setChatMode(true)
     setChatSending(true)
+    setPolishStatus('🤖 润色中… 请稍候')
+
+    // Record current agent msg count so auto-apply detects the NEW response
+    const agentCount = chatMessages.filter(m => m.sender_type.toUpperCase() === 'AGENT').length
+    prevAgentMsgCount.current = agentCount
 
     const styleHint = writingStyle !== '默认' ? `，使用${writingStyle}的写作风格` : ''
     const instructions: Record<string, string> = {
-      optimize: `请对以下内容进行结构优化和润色${styleHint}，保持核心观点不变，输出优化后的完整正文:\n\n标题: ${title}\n\n${body}`,
-      evidence: `请为以下内容补充论据和数据支撑${styleHint}，增加可信度，输出补充后的完整正文:\n\n标题: ${title}\n\n${body}`,
-      counterpoint: `请为以下内容增加反方观点和辩证思考${styleHint}，使论述更全面，输出增强后的完整正文:\n\n标题: ${title}\n\n${body}`,
-      style: `请将以下内容用${writingStyle}的写作风格进行重写润色，保持核心观点和信息不变:\n\n标题: ${title}\n\n${body}`,
+      optimize: `请对以下内容进行结构优化和润色${styleHint}，保持核心观点不变，只输出优化后的完整正文，不要加任何前缀说明:\n\n标题: ${title}\n\n${body}`,
+      evidence: `请为以下内容补充论据和数据支撑${styleHint}，增加可信度，只输出补充后的完整正文，不要加任何前缀说明:\n\n标题: ${title}\n\n${body}`,
+      counterpoint: `请为以下内容增加反方观点和辩证思考${styleHint}，使论述更全面，只输出增强后的完整正文，不要加任何前缀说明:\n\n标题: ${title}\n\n${body}`,
+      style: `请将以下内容用${writingStyle}的写作风格进行重写润色，保持核心观点和信息不变，只输出润色后的完整正文，不要加任何前缀说明:\n\n标题: ${title}\n\n${body}`,
     }
     const content = instructions[mode] || instructions.optimize
 
@@ -247,9 +280,11 @@ export default function ComposePage() {
         })
         if (!r.ok) throw new Error(await r.text().catch(() => `${r.status}`))
       }
+      setPolishPending(true)
       await mutateChat()
     } catch (e: unknown) {
       alert(`润色请求失败: ${e instanceof Error ? e.message : String(e)}`)
+      setPolishStatus('')
     } finally {
       setChatSending(false)
     }
@@ -457,38 +492,43 @@ export default function ComposePage() {
                 {/* Agent-powered polishing buttons */}
                 <button
                   onClick={() => handleStylePolish('optimize')}
-                  disabled={!body.trim() || !chatTargetAgent || chatSending}
+                  disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
                   className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
                 >
-                  🤖 结构润色
+                  {polishPending ? '⏳' : '🤖'} 结构润色
                 </button>
                 <button
                   onClick={() => handleStylePolish('evidence')}
-                  disabled={!body.trim() || !chatTargetAgent || chatSending}
+                  disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
                   className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
                 >
-                  🤖 补充依据
+                  {polishPending ? '⏳' : '🤖'} 补充依据
                 </button>
                 <button
                   onClick={() => handleStylePolish('counterpoint')}
-                  disabled={!body.trim() || !chatTargetAgent || chatSending}
+                  disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
                   className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
                 >
-                  🤖 反方观点
+                  {polishPending ? '⏳' : '🤖'} 反方观点
                 </button>
                 {writingStyle !== '默认' && (
                   <button
                     onClick={() => handleStylePolish('style')}
-                    disabled={!body.trim() || !chatTargetAgent || chatSending}
+                    disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
                     className="text-xs px-2 py-1 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-40 transition-colors"
                   >
-                    🖊️ {writingStyle}润色
+                    {polishPending ? '⏳' : '🖊️'} {writingStyle}润色
                   </button>
                 )}
               </div>
             </div>
-            {!chatTargetAgent && body.trim() && (
-              <div className="text-xs text-amber-500 mb-1">💡 请先在Agent协作面板选择Agent，润色功能需要Agent推理</div>
+            {polishStatus && (
+              <div className={`text-xs mb-1 ${polishStatus.startsWith('✅') ? 'text-green-500' : 'text-purple-500 animate-pulse'}`}>
+                {polishStatus}
+              </div>
+            )}
+            {!chatTargetAgent && agents.length === 0 && body.trim() && (
+              <div className="text-xs text-amber-500 mb-1">💡 请先在 Agent 页面绑定 Agent，润色功能需要 Agent 推理</div>
             )}
             <textarea
               value={body}
