@@ -9,7 +9,7 @@ import dynamic from 'next/dynamic'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
-  { ssr: false, loading: () => <div className="h-[120px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
+  { ssr: false, loading: () => <div className="h-[180px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
 )
 
 interface EditorHelpers {

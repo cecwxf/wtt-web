@@ -147,8 +147,8 @@ export function SquareEditor({
     editorProps: {
       attributes: {
         class: isMini
-          ? 'prose prose-sm dark:prose-invert max-w-none outline-none px-3 py-2 min-h-[100px]'
-          : 'prose prose-sm dark:prose-invert max-w-none outline-none px-4 py-3 min-h-[320px]',
+          ? 'prose prose-sm dark:prose-invert max-w-none outline-none px-3 py-2 min-h-[160px]'
+          : 'prose prose-sm dark:prose-invert max-w-none outline-none px-4 py-4 min-h-[480px]',
       },
       // Handle pasted/dropped images
       handleDrop: (view, event) => {
