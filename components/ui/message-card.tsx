@@ -79,16 +79,15 @@ function proxyHtml(html: string): string {
   )
 }
 
-const HTML_TAG_RE = /<(?:img|p|div|br|h[1-6]|ul|ol|li|blockquote|table|a|span|strong|em)\b/i
+const HAS_IMG_TAG = /<img\s/i
 
 function parseContent(content: string): RichBlock[] {
   const c = (content || '').trim()
   if (!c) return [{ kind: 'plain', text: '' }]
 
-  // Detect HTML content — render as HTML with proxied URLs
-  if (HTML_TAG_RE.test(c)) {
-    // Split leading plain text lines from the HTML portion
-    const firstTagIdx = c.search(HTML_TAG_RE)
+  // Detect Tiptap HTML with <img> tags — only trigger on <img, not generic HTML
+  if (HAS_IMG_TAG.test(c)) {
+    const firstTagIdx = c.search(HAS_IMG_TAG)
     const blocks: RichBlock[] = []
     if (firstTagIdx > 0) {
       const leading = c.slice(0, firstTagIdx).trim()

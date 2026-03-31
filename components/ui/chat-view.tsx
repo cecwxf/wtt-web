@@ -495,16 +495,17 @@ function parseRichBlocks(content: string): ParsedRich[] {
     return [{ kind: 'preview', title, desc, url, image }]
   }
 
-  // Detect HTML content (e.g. from Tiptap rich editor): <img>, <p>, <div>, etc.
-  const HTML_TAG_RE = /<(?:img|p|div|br|h[1-6]|ul|ol|li|blockquote|table|a|span|strong|em)\b/i
-  if (HTML_TAG_RE.test(c)) {
+  // Detect Tiptap rich-editor HTML: only when content has <img tags (the key
+  // differentiator from agent markdown that may contain stray <a>/<p>/<strong> etc.)
+  const HAS_IMG_TAG = /<img\s/i
+  if (HAS_IMG_TAG.test(c)) {
     const proxyHtml = (html: string) =>
       html.replace(
         /(<img\s[^>]*\bsrc\s*=\s*")(https?:\/\/[^"]+)(")/gi,
         (_m, pre, url, post) => pre + proxyUrl(url) + post,
       )
     const blocks: ParsedRich[] = []
-    const firstTagIdx = c.search(HTML_TAG_RE)
+    const firstTagIdx = c.search(HAS_IMG_TAG)
     if (firstTagIdx > 0) {
       const leading = c.slice(0, firstTagIdx).trim()
       if (leading) blocks.push({ kind: 'plain', text: leading })
