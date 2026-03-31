@@ -56,10 +56,11 @@ export default function ComposePage() {
   const [chatTopicId, setChatTopicId] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  // Polishing state — agent responses go directly into body
+  // Polishing state — agent responses go directly into title+body
   const [polishPending, setPolishPending] = useState(false)
   const [polishStatus, setPolishStatus] = useState('')
   const polishMsgIds = useRef<Set<string>>(new Set())
+  const polishVersion = useRef(0)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
@@ -126,6 +127,7 @@ export default function ComposePage() {
   // Auto-apply polished content: detect NEW messages not from us
   useEffect(() => {
     if (!polishPending || chatMessages.length === 0) return
+    const myVersion = polishVersion.current
     // Find messages that appeared AFTER we sent the polish request
     // and are NOT from the current user (i.e. from the agent)
     const newAgentMsgs = chatMessages.filter(m =>
@@ -133,10 +135,22 @@ export default function ComposePage() {
       m.sender_id !== senderIdentity
     )
     if (newAgentMsgs.length > 0) {
-      const latest = newAgentMsgs[newAgentMsgs.length - 1]
-      setBody(latest.content)
+      // Ensure this is still the active polish request (no newer request)
+      if (myVersion !== polishVersion.current) return
+      const text = newAgentMsgs[newAgentMsgs.length - 1].content
+
+      // Parse structured response: 标题：xxx\n正文：xxx
+      const titleMatch = text.match(/^标题[：:]\s*(.+)/m)
+      const bodyStart = text.match(/正文[：:]\s*\n?([\s\S]+)/m)
+      if (titleMatch && bodyStart) {
+        setTitle(titleMatch[1].trim())
+        setBody(bodyStart[1].trim())
+      } else {
+        // Fallback: treat entire response as polished body
+        setBody(text.trim())
+      }
       setPolishPending(false)
-      setPolishStatus('✅ 润色完成，正文已更新')
+      setPolishStatus('✅ 润色完成')
       polishMsgIds.current = new Set(chatMessages.map(m => m.id))
       setTimeout(() => setPolishStatus(''), 4000)
     }
@@ -234,19 +248,19 @@ export default function ComposePage() {
     }
   }
 
-  // One-click polish: send body to agent for polishing, result auto-fills body
+  // One-click polish: send title+body to agent, result fills both fields
   const handlePolish = async () => {
-    if (!body.trim() || !chatTargetAgent || chatSending || polishPending) return
+    if ((!title.trim() && !body.trim()) || !chatTargetAgent || chatSending || polishPending) return
     setChatSending(true)
     setPolishStatus('🤖 润色中… 请稍候')
 
-    // Snapshot current message IDs so we can detect the NEW agent response
-    polishMsgIds.current = new Set(chatMessages.map(m => m.id))
+    // Bump version — any previous pending polish becomes stale
+    polishVersion.current += 1
 
     const styleHint = writingStyle !== '默认'
-      ? `请使用${writingStyle}的写作风格进行润色，`
+      ? `使用${writingStyle}的写作风格，`
       : ''
-    const content = `${styleHint}请对以下内容进行全面润色（结构优化、语言打磨、补充论据），保持核心观点不变。只输出润色后的完整正文，不要加任何前缀、解释或标记:\n\n${body}`
+    const content = `${styleHint}请润色以下标题和正文，保持核心观点和事实不变，优化语言表达和文章结构。请严格按以下格式返回，不要加额外说明：\n\n标题：<润色后的标题>\n正文：<润色后的正文>\n\n---\n标题：${title}\n正文：${body}`
 
     try {
       let topicId = chatTopicId
@@ -280,8 +294,13 @@ export default function ComposePage() {
         })
         if (!r.ok) throw new Error(await r.text().catch(() => `${r.status}`))
       }
-      setPolishPending(true)
+      // Refresh messages FIRST, then snapshot all current IDs
       await mutateChat()
+      // Wait a tick for decryptMessages to process, then snapshot
+      setTimeout(() => {
+        polishMsgIds.current = new Set(chatMessages.map(m => m.id))
+        setPolishPending(true)
+      }, 500)
     } catch (e: unknown) {
       alert(`润色请求失败: ${e instanceof Error ? e.message : String(e)}`)
       setPolishStatus('')
@@ -468,7 +487,7 @@ export default function ComposePage() {
             <input
               type="text"
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={e => { setTitle(e.target.value); if (polishPending) { setPolishPending(false); setPolishStatus(''); polishVersion.current += 1 } }}
               placeholder="输入话题标题…"
               className="w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -492,7 +511,7 @@ export default function ComposePage() {
                 {/* Single polish button */}
                 <button
                   onClick={handlePolish}
-                  disabled={!body.trim() || !chatTargetAgent || chatSending || polishPending}
+                  disabled={(!title.trim() && !body.trim()) || !chatTargetAgent || chatSending || polishPending}
                   className="text-xs px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40 transition-colors"
                 >
                   {polishPending ? '⏳ 润色中…' : '✨ 一键润色'}
@@ -509,7 +528,7 @@ export default function ComposePage() {
             )}
             <textarea
               value={body}
-              onChange={e => setBody(e.target.value)}
+              onChange={e => { setBody(e.target.value); if (polishPending) { setPolishPending(false); setPolishStatus(''); polishVersion.current += 1 } }}
               placeholder="分享你的观点、分析、见解…"
               rows={16}
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
