@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
+import useSWR from 'swr'
 
 interface PostDetail {
   id: string
@@ -53,16 +54,11 @@ export default function PostDetailPage() {
   const { data: session } = useSession()
   const postId = params.id as string
 
-  const [post, setPost] = useState<PostDetail | null>(null)
-  const [replies, setReplies] = useState<Reply[]>([])
-  const [replyCount, setReplyCount] = useState(0)
-  const [, setIsMember] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
   const [replyText, setReplyText] = useState('')
   const [replyTo, setReplyTo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [replyAs, setReplyAs] = useState<'human' | 'agent'>('human')
+  const [showAgentPicker, setShowAgentPicker] = useState(false)
   const replyInputRef = useRef<HTMLTextAreaElement>(null)
 
   // Agent list for @mention
@@ -78,25 +74,20 @@ export default function PostDetailPage() {
     return h
   }, [token])
 
-  // Load post detail
-  const loadPost = useCallback(() => {
-    setLoading(true)
-    fetch(`/api/wtt/square/posts/${postId}`, { headers: authHeaders })
-      .then(r => {
-        if (!r.ok) throw new Error(`${r.status}`)
-        return r.json()
-      })
-      .then(d => {
-        setPost(d.post)
-        setReplies(d.replies || [])
-        setReplyCount(d.reply_count || 0)
-        setIsMember(d.is_member || false)
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [postId, authHeaders])
+  // Auto-poll post detail via SWR (3s interval for real-time replies)
+  const { data: postData, error: postError, isLoading, mutate: mutatePost } = useSWR(
+    postId ? ['square-post', postId, token] : null,
+    async () => {
+      const r = await fetch(`/api/wtt/square/posts/${postId}`, { headers: authHeaders })
+      if (!r.ok) throw new Error(`${r.status}`)
+      return r.json()
+    },
+    { refreshInterval: 3000 }
+  )
 
-  useEffect(() => { loadPost() }, [loadPost])
+  const post: PostDetail | null = postData?.post ?? null
+  const replies: Reply[] = postData?.replies ?? []
+  const replyCount: number = postData?.reply_count ?? 0
 
   // Load agents
   useEffect(() => {
@@ -109,7 +100,8 @@ export default function PostDetailPage() {
         if (list.length > 0 && !selectedAgentId) setSelectedAgentId(list[0].agent_id)
       })
       .catch(() => {})
-  }, [token, authHeaders, selectedAgentId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, authHeaders])
 
   // Submit reply
   const handleReply = async () => {
@@ -123,7 +115,7 @@ export default function PostDetailPage() {
           content: replyText.trim(),
           agent_id: selectedAgentId || undefined,
           reply_to: replyTo,
-          publisher_type: 'human',
+          publisher_type: replyAs,
         }),
       })
       if (!res.ok) {
@@ -132,12 +124,21 @@ export default function PostDetailPage() {
       }
       setReplyText('')
       setReplyTo(null)
-      loadPost()
+      mutatePost()
     } catch (e: unknown) {
       alert(`回复失败: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Insert @agent mention
+  const insertMention = (agentId: string) => {
+    const agent = agents.find(a => a.agent_id === agentId)
+    const name = agent?.display_name || agentId
+    setReplyText(prev => prev + `@${name} `)
+    setShowAgentPicker(false)
+    replyInputRef.current?.focus()
   }
 
   // Set reply target and scroll to input
@@ -164,7 +165,7 @@ export default function PostDetailPage() {
     return { topLevel, childMap }
   }, [replies, post])
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-gray-500 dark:text-gray-400">加载中…</div>
@@ -172,12 +173,12 @@ export default function PostDetailPage() {
     )
   }
 
-  if (error || !post) {
+  if (postError || !post) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="text-red-500 text-lg mb-2">加载失败</div>
-          <div className="text-gray-400 text-sm mb-4">{error || '帖子不存在'}</div>
+          <div className="text-gray-400 text-sm mb-4">{postError?.message || '帖子不存在'}</div>
           <Link href="/square" className="text-blue-500 hover:text-blue-600">← 返回广场</Link>
         </div>
       </div>
@@ -206,11 +207,13 @@ export default function PostDetailPage() {
                 }`}>
                   {r.author}
                 </span>
-                {isAgent && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-                    Agent
-                  </span>
-                )}
+                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  isAgent
+                    ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                    : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                }`}>
+                  {isAgent ? 'Agent' : '人类'}
+                </span>
                 {r.optimized_by_agent && (
                   <span className="text-xs text-green-500">✨ Agent优化</span>
                 )}
@@ -262,6 +265,13 @@ export default function PostDetailPage() {
             }`}>
               {post.publisher_type === 'agent' ? '🤖' : '👤'} {post.author}
             </span>
+            <span className={`text-xs px-1.5 py-0.5 rounded ${
+              post.publisher_type === 'agent'
+                ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+            }`}>
+              {post.publisher_type === 'agent' ? 'Agent' : '人类'}
+            </span>
             <span>·</span>
             <span>{timeAgo(post.timestamp)}</span>
             {post.quality_score > 0 && (
@@ -306,22 +316,6 @@ export default function PostDetailPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               讨论 ({replyCount})
             </h2>
-            {token && agents.length > 0 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setReplyText(prev => {
-                      const agentName = agents.find(a => a.agent_id === selectedAgentId)?.display_name || selectedAgentId
-                      return prev + `@${agentName} `
-                    })
-                    replyInputRef.current?.focus()
-                  }}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
-                >
-                  🤖 @Agent提问
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Reply list */}
@@ -349,28 +343,83 @@ export default function PostDetailPage() {
                   </button>
                 </div>
               )}
-              <div className="flex gap-3">
-                <textarea
-                  ref={replyInputRef}
-                  value={replyText}
-                  onChange={e => setReplyText(e.target.value)}
-                  placeholder="输入回复… @mention agent参与讨论"
-                  rows={3}
-                  className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleReply()
-                  }}
-                />
+              <textarea
+                ref={replyInputRef}
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                placeholder="输入回复… @agent 名称触发AI讨论"
+                rows={3}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleReply()
+                }}
+              />
+              {/* Action bar: reply-as toggle + @Agent picker + send */}
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-2">
+                  {/* Reply-as toggle */}
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="text-gray-400 dark:text-gray-500">发布为:</span>
+                    <button
+                      onClick={() => setReplyAs('human')}
+                      className={`px-2 py-1 rounded-l-md border transition-colors ${
+                        replyAs === 'human'
+                          ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400'
+                          : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50'
+                      }`}
+                    >
+                      👤 人类
+                    </button>
+                    <button
+                      onClick={() => setReplyAs('agent')}
+                      className={`px-2 py-1 rounded-r-md border-t border-r border-b transition-colors ${
+                        replyAs === 'agent'
+                          ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400'
+                          : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50'
+                      }`}
+                    >
+                      🤖 Agent
+                    </button>
+                  </div>
+
+                  {/* @Agent mention button with picker */}
+                  {agents.length > 0 && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowAgentPicker(!showAgentPicker)}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                      >
+                        @ Agent
+                      </button>
+                      {showAgentPicker && (
+                        <div className="absolute left-0 bottom-full mb-1 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10 py-1">
+                          {agents.map(a => (
+                            <button
+                              key={a.agent_id}
+                              onClick={() => insertMention(a.agent_id)}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-2"
+                            >
+                              <span className="text-purple-500">🤖</span>
+                              <span className="font-medium">{a.display_name || a.agent_id}</span>
+                              <span className="text-gray-400 truncate">{a.agent_id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <button
                   onClick={handleReply}
                   disabled={!replyText.trim() || submitting}
-                  className="self-end px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
+                  className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
                 >
                   {submitting ? '发送中…' : '发送'}
                 </button>
               </div>
               <div className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                Ctrl+Enter 快速发送 · @agent名称 触发AI回复
+                Ctrl+Enter 快速发送 · @agent名称 触发AI回复 · 回复自动刷新
               </div>
             </div>
           ) : (

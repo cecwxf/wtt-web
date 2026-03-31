@@ -43,6 +43,10 @@ export default function ComposePage() {
   const [qualityScore, setQualityScore] = useState(0)
   const [qualityHints, setQualityHints] = useState<string[]>([])
 
+  // Writing style
+  const [writingStyle, setWritingStyle] = useState('默认')
+  const STYLES = ['默认', '鲁迅', '张爱玲', '张佳玮', '王小波', '余华', '学术']
+
   // Agent chat panel — real P2P
   const [chatMode, setChatMode] = useState(false)
   const [chatInput, setChatInput] = useState('')
@@ -89,10 +93,15 @@ export default function ComposePage() {
         : []
     return raw.map((x: unknown) => {
       const m = x as Record<string, unknown>
+      let content = String(m.content || '')
+      // Detect encrypted content (e2e envelope) and show plaintext hint
+      if (m.encrypted === true || (content.startsWith('{') && content.includes('"c"') && content.includes('"ctx"'))) {
+        content = '[🔒 加密消息 — 协作消息无需加密，请在设置中关闭E2E]'
+      }
       return {
         id: String(m.id || m.message_id || ''),
         sender_id: String(m.sender_id || ''),
-        content: String(m.content || ''),
+        content,
         sender_type: String(m.sender_type || ''),
         created_at: String(m.created_at || ''),
       }
@@ -191,19 +200,59 @@ export default function ComposePage() {
     }
   }
 
-  // Agent assist: optimize draft
-  const handleAssist = async (mode: string) => {
+  // Agent-powered style polishing via P2P
+  const handleStylePolish = async (mode: string) => {
+    if (!body.trim() || !chatTargetAgent || chatSending) return
+    setChatMode(true)
+    setChatSending(true)
+
+    const styleHint = writingStyle !== '默认' ? `，使用${writingStyle}的写作风格` : ''
+    const instructions: Record<string, string> = {
+      optimize: `请对以下内容进行结构优化和润色${styleHint}，保持核心观点不变，输出优化后的完整正文:\n\n标题: ${title}\n\n${body}`,
+      evidence: `请为以下内容补充论据和数据支撑${styleHint}，增加可信度，输出补充后的完整正文:\n\n标题: ${title}\n\n${body}`,
+      counterpoint: `请为以下内容增加反方观点和辩证思考${styleHint}，使论述更全面，输出增强后的完整正文:\n\n标题: ${title}\n\n${body}`,
+      style: `请将以下内容用${writingStyle}的写作风格进行重写润色，保持核心观点和信息不变:\n\n标题: ${title}\n\n${body}`,
+    }
+    const content = instructions[mode] || instructions.optimize
+
     try {
-      const res = await fetch('/api/wtt/square/posts/assist', {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ mode, title, body, category, sub }),
-      })
-      if (!res.ok) return
-      const d = await res.json()
-      if (d.merged_draft?.title) setTitle(d.merged_draft.title)
-      if (d.merged_draft?.body) setBody(d.merged_draft.body)
-    } catch { /* ignore */ }
+      let topicId = chatTopicId
+      if (!topicId) {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(senderIdentity)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            target_agent_id: chatTargetAgent,
+            content,
+            content_type: 'text',
+            semantic_type: 'post',
+            sender_type: 'HUMAN',
+          }),
+        })
+        if (!r.ok) throw new Error(await r.text().catch(() => `${r.status}`))
+        const res = await r.json()
+        topicId = res.topic_id
+        setChatTopicId(topicId)
+      } else {
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            content,
+            sender_id: senderIdentity,
+            sender_type: 'HUMAN',
+            content_type: 'text',
+            semantic_type: 'post',
+          }),
+        })
+        if (!r.ok) throw new Error(await r.text().catch(() => `${r.status}`))
+      }
+      await mutateChat()
+    } catch (e: unknown) {
+      alert(`润色请求失败: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setChatSending(false)
+    }
   }
 
   // Send real P2P message to agent
@@ -394,18 +443,53 @@ export default function ComposePage() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">正文</label>
-              <div className="flex gap-2">
-                <button onClick={() => handleAssist('optimize')} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600">
-                  结构优化
+              <div className="flex items-center gap-2">
+                {/* Writing style selector */}
+                <select
+                  value={writingStyle}
+                  onChange={e => setWritingStyle(e.target.value)}
+                  className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                >
+                  {STYLES.map(s => (
+                    <option key={s} value={s}>{s === '默认' ? '✏️ 默认风格' : `🖊️ ${s}风格`}</option>
+                  ))}
+                </select>
+                {/* Agent-powered polishing buttons */}
+                <button
+                  onClick={() => handleStylePolish('optimize')}
+                  disabled={!body.trim() || !chatTargetAgent || chatSending}
+                  className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
+                >
+                  🤖 结构润色
                 </button>
-                <button onClick={() => handleAssist('evidence')} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600">
-                  补充依据
+                <button
+                  onClick={() => handleStylePolish('evidence')}
+                  disabled={!body.trim() || !chatTargetAgent || chatSending}
+                  className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
+                >
+                  🤖 补充依据
                 </button>
-                <button onClick={() => handleAssist('counterpoint')} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600">
-                  反方观点
+                <button
+                  onClick={() => handleStylePolish('counterpoint')}
+                  disabled={!body.trim() || !chatTargetAgent || chatSending}
+                  className="text-xs px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-40 transition-colors"
+                >
+                  🤖 反方观点
                 </button>
+                {writingStyle !== '默认' && (
+                  <button
+                    onClick={() => handleStylePolish('style')}
+                    disabled={!body.trim() || !chatTargetAgent || chatSending}
+                    className="text-xs px-2 py-1 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-40 transition-colors"
+                  >
+                    🖊️ {writingStyle}润色
+                  </button>
+                )}
               </div>
             </div>
+            {!chatTargetAgent && body.trim() && (
+              <div className="text-xs text-amber-500 mb-1">💡 请先在Agent协作面板选择Agent，润色功能需要Agent推理</div>
+            )}
             <textarea
               value={body}
               onChange={e => setBody(e.target.value)}
