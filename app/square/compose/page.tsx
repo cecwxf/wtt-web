@@ -3,11 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import useSWR from 'swr'
-import { decryptReceived } from '@/lib/e2e-crypto'
-
-const CLIENT_WTT_API_BASE = '/api/wtt'
+import { useEffect, useMemo, useState } from 'react'
 
 interface AgentRow {
   agent_id: string
@@ -17,14 +13,6 @@ interface AgentRow {
 interface TaxonomyRes {
   prefix: string
   categories: Array<{ name: string; subs: string[] }>
-}
-
-interface ChatMsg {
-  id: string
-  sender_id: string
-  content: string
-  sender_type: string
-  created_at: string
 }
 
 export default function ComposePage() {
@@ -44,13 +32,6 @@ export default function ComposePage() {
   const [qualityScore, setQualityScore] = useState(0)
   const [qualityHints, setQualityHints] = useState<string[]>([])
 
-  // Agent chat panel — real P2P
-  const [chatMode, setChatMode] = useState(false)
-  const [chatInput, setChatInput] = useState('')
-  const [chatSending, setChatSending] = useState(false)
-  const [chatTargetAgent, setChatTargetAgent] = useState('')
-  const [chatTopicId, setChatTopicId] = useState<string | null>(null)
-  const chatEndRef = useRef<HTMLDivElement>(null)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
@@ -60,62 +41,6 @@ export default function ComposePage() {
     if (token) h['Authorization'] = `Bearer ${token}`
     return h
   }, [token])
-
-  // Derive sender identity
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const senderIdentity = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const s = session as any
-    return s?.user?.name || s?.user?.email || (s?.userId ? `user_${String(s.userId).slice(0, 8)}` : selectedAgentId || 'user')
-  }, [session, selectedAgentId])
-
-  // Poll chat messages from P2P topic via SWR (Agent协作 panel)
-  const { data: chatMessagesRaw, mutate: mutateChat } = useSWR(
-    chatTopicId && token ? ['compose-chat', chatTopicId, token] : null,
-    async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${chatTopicId}/messages?limit=50`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!r.ok) return []
-      return r.json()
-    },
-    { refreshInterval: 3000 }
-  )
-
-  // Decrypt chat messages asynchronously
-  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
-  const decryptMessages = useCallback(async () => {
-    const raw = Array.isArray(chatMessagesRaw)
-      ? chatMessagesRaw
-      : Array.isArray((chatMessagesRaw as { messages?: unknown[] })?.messages)
-        ? (chatMessagesRaw as { messages: unknown[] }).messages
-        : []
-    if (raw.length === 0) { setChatMessages([]); return }
-    const decrypted = await Promise.all(raw.map(async (x: unknown) => {
-      const m = x as Record<string, unknown>
-      let content = String(m.content || '')
-      const isEnc = m.encrypted === true ||
-        (content.startsWith('{') && content.includes('"c"') && content.includes('"ctx"'))
-      if (isEnc) {
-        try {
-          const r = await decryptReceived(content, true)
-          content = r.decryptFailed ? '[🔒 解密失败 — 请检查E2E密码]' : r.text
-        } catch { content = '[🔒 解密失败]' }
-      }
-      return {
-        id: String(m.id || m.message_id || ''),
-        sender_id: String(m.sender_id || ''),
-        content,
-        sender_type: String(m.sender_type || ''),
-        created_at: String(m.created_at || ''),
-      }
-    }))
-    setChatMessages(decrypted)
-  }, [chatMessagesRaw])
-  useEffect(() => { decryptMessages() }, [decryptMessages])
-
-  // Auto-scroll chat
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages.length])
 
   // Load taxonomy
   useEffect(() => {
@@ -141,7 +66,6 @@ export default function ComposePage() {
         const list: AgentRow[] = d.agents || d || []
         setAgents(list)
         if (list.length > 0 && !selectedAgentId) setSelectedAgentId(list[0].agent_id)
-        if (list.length > 0 && !chatTargetAgent) setChatTargetAgent(list[0].agent_id)
       })
       .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -206,85 +130,6 @@ export default function ComposePage() {
     }
   }
 
-  // Send real P2P message to agent
-  const sendChat = async () => {
-    if (!chatInput.trim() || !chatTargetAgent || chatSending) return
-    const content = chatInput.trim()
-    setChatInput('')
-    setChatSending(true)
-
-    try {
-      let topicId = chatTopicId
-
-      if (!topicId) {
-        // First message — create P2P topic via /messages/p2p
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(senderIdentity)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            target_agent_id: chatTargetAgent,
-            content,
-            content_type: 'text',
-            semantic_type: 'post',
-            sender_type: 'HUMAN',
-          }),
-        })
-        if (!r.ok) {
-          const errTxt = await r.text().catch(() => '')
-          throw new Error(errTxt || `${r.status}`)
-        }
-        const res = await r.json()
-        topicId = res.topic_id
-        setChatTopicId(topicId)
-      } else {
-        // Subsequent messages — publish to existing topic
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            content,
-            sender_id: senderIdentity,
-            sender_type: 'HUMAN',
-            content_type: 'text',
-            semantic_type: 'post',
-          }),
-        })
-        if (!r.ok) {
-          const errTxt = await r.text().catch(() => '')
-          throw new Error(errTxt || `${r.status}`)
-        }
-      }
-      await mutateChat()
-    } catch (e: unknown) {
-      alert(`发送失败: ${e instanceof Error ? e.message : String(e)}`)
-    } finally {
-      setChatSending(false)
-    }
-  }
-
-  // Convert P2P chat history to draft body
-  const handleChatToDraft = () => {
-    if (chatMessages.length === 0) return
-    const lines: string[] = []
-    for (const msg of chatMessages) {
-      const role = msg.sender_type.toUpperCase() === 'AGENT' ? '🤖 Agent' : '👤 我'
-      lines.push(`**${role}**: ${msg.content}`)
-    }
-    const merged = lines.join('\n\n')
-    setBody(prev => prev ? `${prev}\n\n---\n\n${merged}` : merged)
-    if (!title && chatMessages.length > 0) {
-      const first = chatMessages.find(m => m.sender_type.toUpperCase() !== 'AGENT')
-      if (first) setTitle(first.content.slice(0, 60))
-    }
-    setChatMode(false)
-  }
-
-  // Reset P2P topic when changing target agent
-  const handleChangeTarget = (agentId: string) => {
-    setChatTargetAgent(agentId)
-    setChatTopicId(null)
-  }
-
   if (status === 'loading') {
     return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="text-gray-500">加载中…</div></div>
   }
@@ -313,16 +158,6 @@ export default function ComposePage() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setChatMode(!chatMode)}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                chatMode
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100'
-              }`}
-            >
-              🤖 Agent协作 {chatMode ? '(开)' : '(关)'}
-            </button>
-            <button
               onClick={handlePublish}
               disabled={publishing || !title.trim() || !body.trim()}
               className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
@@ -333,9 +168,8 @@ export default function ComposePage() {
         </div>
       </header>
 
-      <div className={`max-w-7xl mx-auto px-4 py-6 flex gap-6 ${chatMode ? '' : 'justify-center'}`}>
-        {/* Left: Editor */}
-        <div className={`${chatMode ? 'flex-1' : 'max-w-3xl w-full'} space-y-4`}>
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="space-y-4">
           {/* Category selector */}
           <div className="flex gap-3">
             <div className="flex-1">
@@ -463,90 +297,6 @@ export default function ComposePage() {
             )}
           </div>
         </div>
-
-        {/* Right: Agent chat panel — real P2P */}
-        {chatMode && (
-          <div className="w-96 flex-shrink-0">
-            <div className="sticky top-20 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">🤖 Agent 协作</h3>
-                  <button
-                    onClick={handleChatToDraft}
-                    disabled={chatMessages.length === 0}
-                    className="text-xs px-2.5 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-40 transition-colors"
-                  >
-                    转为正文
-                  </button>
-                </div>
-                {agents.length > 0 && (
-                  <select
-                    value={chatTargetAgent}
-                    onChange={e => handleChangeTarget(e.target.value)}
-                    className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                  >
-                    {agents.map(a => (
-                      <option key={a.agent_id} value={a.agent_id}>
-                        与 {a.display_name || a.agent_id} 协作
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {chatMessages.length === 0 && !chatTopicId && (
-                  <div className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">
-                    发送消息开始与 Agent 讨论，<br/>Agent 会通过 P2P 通道实时回复<br/>
-                    <span className="text-xs mt-2 block text-gray-300 dark:text-gray-600">讨论完成后可一键「转为正文」</span>
-                  </div>
-                )}
-                {chatMessages.length === 0 && chatTopicId && (
-                  <div className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">
-                    <div className="animate-pulse">等待 Agent 回复中…</div>
-                  </div>
-                )}
-                {chatMessages.map((msg) => {
-                  const isAgent = msg.sender_type.toUpperCase() === 'AGENT'
-                  return (
-                    <div key={msg.id} className={`flex ${isAgent ? 'justify-start' : 'justify-end'}`}>
-                      <div className={`max-w-[85%] px-3 py-2 rounded-lg text-sm ${
-                        isAgent
-                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                          : 'bg-blue-600 text-white'
-                      }`}>
-                        {isAgent && (
-                          <div className="text-xs text-purple-500 dark:text-purple-400 mb-0.5 font-medium">🤖 {msg.sender_id}</div>
-                        )}
-                        <div className="whitespace-pre-wrap">{msg.content}</div>
-                      </div>
-                    </div>
-                  )
-                })}
-                <div ref={chatEndRef} />
-              </div>
-              <div className="p-3 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    placeholder={chatTargetAgent ? `和 ${agents.find(a => a.agent_id === chatTargetAgent)?.display_name || chatTargetAgent} 讨论…` : '选择Agent后开始讨论…'}
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
-                    disabled={!chatTargetAgent || chatSending}
-                  />
-                  <button
-                    onClick={sendChat}
-                    disabled={!chatInput.trim() || !chatTargetAgent || chatSending}
-                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600"
-                  >
-                    {chatSending ? '…' : '发送'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
