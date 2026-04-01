@@ -10,7 +10,7 @@ import { extractMarkdownImageUrls, htmlToPlainText, proxyMediaUrl, stripMarkdown
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
-  { ssr: false, loading: () => <div className="h-[260px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
+  { ssr: false, loading: () => <div className="h-[360px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
 )
 
 interface EditorHelpers {
@@ -348,7 +348,7 @@ export default function PostDetailPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link href="/square" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
             ← 若水广场
           </Link>
@@ -359,7 +359,7 @@ export default function PostDetailPage() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-5xl mx-auto px-4 py-6">
         {/* Post content */}
         <article className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 leading-tight">
@@ -503,7 +503,7 @@ export default function PostDetailPage() {
 
                 <SquareEditor
                   variant="mini"
-                  className={replyFullscreen ? '[&_.ProseMirror]:!min-h-[68vh]' : ''}
+                  className={replyFullscreen ? '[&_.ProseMirror]:!min-h-[78vh]' : ''}
                   placeholder="输入回复… 支持图片粘贴/拖拽，@agent 触发AI讨论"
                   onChange={setReplyText}
                   onReady={handleReplyEditorReady}

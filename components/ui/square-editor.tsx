@@ -154,8 +154,8 @@ export function SquareEditor({
     editorProps: {
       attributes: {
         class: isMini
-          ? 'prose prose-sm dark:prose-invert max-w-none outline-none px-3 py-3 min-h-[260px]'
-          : 'prose prose-sm dark:prose-invert max-w-none outline-none px-4 py-4 min-h-[640px]',
+          ? 'prose prose-sm dark:prose-invert max-w-none outline-none px-3 py-3 min-h-[360px]'
+          : 'prose prose-sm dark:prose-invert max-w-none outline-none px-4 py-4 min-h-[820px]',
       },
       // Handle pasted/dropped images
       handleDrop: (view, event) => {

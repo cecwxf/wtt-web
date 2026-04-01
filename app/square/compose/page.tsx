@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
-  { ssr: false, loading: () => <div className="h-[640px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
+  { ssr: false, loading: () => <div className="h-[820px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
 )
 
 interface AgentRow {
@@ -190,7 +190,7 @@ export default function ComposePage() {
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="max-w-5xl mx-auto px-4 py-6">
         <div className="space-y-4">
           {/* Category selector */}
           <div className="flex gap-3">
