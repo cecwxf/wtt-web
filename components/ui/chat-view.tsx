@@ -444,15 +444,24 @@ export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: str
 /** Rewrite absolute backend media URLs to go through the Next.js proxy so
  *  HTTPS pages can load HTTP resources without mixed-content blocking. */
 function proxyUrl(url: string): string {
-  if (url.startsWith(DEFAULT_WTT_API_ORIGIN)) {
-    return url.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
+  const raw = String(url || '').trim()
+  if (!raw) return raw
+
+  if (raw.startsWith(DEFAULT_WTT_API_ORIGIN)) {
+    return raw.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
   }
   // Also handle localhost / 127.0.0.1 backend origins (dev or stored URLs)
-  const localBackend = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
+  const localBackend = raw.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
   if (localBackend) {
-    return url.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
+    return raw.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
   }
-  return url
+
+  // Relative backend media paths from WTT payload (e.g. /media/xxx or media/xxx)
+  if (/^\/?media\//i.test(raw)) {
+    return `${CLIENT_WTT_API_BASE}/${raw.replace(/^\/+/, '')}`
+  }
+
+  return raw
 }
 
 function trimUrlTail(raw: string): string {
@@ -490,27 +499,30 @@ function htmlToPlainText(html: string): string {
 function classifyLine(line: string): ParsedRich {
   const c = line.trim()
   if (!c) return { kind: 'plain', text: '' }
-  const imageMatch = c.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/i)
-  if (imageMatch) return { kind: 'image', url: proxyUrl(imageMatch[2]) }
-  const audioMatch = c.match(/^\[audio(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
-  if (audioMatch) return { kind: 'audio', url: proxyUrl(audioMatch[2]) }
-  const videoMatch = c.match(/^\[video(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
-  if (videoMatch) return { kind: 'video', url: proxyUrl(videoMatch[2]) }
-  const fileMatch = c.match(/^\[file(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
-  if (fileMatch) return { kind: 'file', url: proxyUrl(fileMatch[2]), filename: fileMatch[1] || undefined }
-  const linkMatch = c.match(/^\[link\]\((https?:\/\/[^)]+)\)$/i)
-  if (linkMatch) return { kind: 'link', url: proxyUrl(linkMatch[1]) }
-  const plainUrl = c.match(/^(https?:\/\/\S+)$/i)
+
+  const imageMatch = c.match(/^!\[[^\]]*\]\(([^)]+)\)$/i)
+  if (imageMatch) return { kind: 'image', url: proxyUrl(trimUrlTail(imageMatch[1])) }
+  const audioMatch = c.match(/^\[audio(?::([^\]]*))?\]\(([^)]+)\)$/i)
+  if (audioMatch) return { kind: 'audio', url: proxyUrl(trimUrlTail(audioMatch[2])) }
+  const videoMatch = c.match(/^\[video(?::([^\]]*))?\]\(([^)]+)\)$/i)
+  if (videoMatch) return { kind: 'video', url: proxyUrl(trimUrlTail(videoMatch[2])) }
+  const fileMatch = c.match(/^\[file(?::([^\]]*))?\]\(([^)]+)\)$/i)
+  if (fileMatch) return { kind: 'file', url: proxyUrl(trimUrlTail(fileMatch[2])), filename: fileMatch[1] || undefined }
+  const linkMatch = c.match(/^\[link\]\(([^)]+)\)$/i)
+  if (linkMatch) return { kind: 'link', url: proxyUrl(trimUrlTail(linkMatch[1])) }
+
+  const plainUrl = c.match(/^(https?:\/\/\S+|\/?media\/\S+)$/i)
   if (plainUrl) {
     const raw = trimUrlTail(plainUrl[1])
     const u = raw.toLowerCase()
     if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: proxyUrl(raw) }
-    if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) return { kind: 'image', url: proxyUrl(raw) }
+    if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u) || /^\/?media\//i.test(u)) return { kind: 'image', url: proxyUrl(raw) }
     if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) return { kind: 'audio', url: proxyUrl(raw) }
     if (/\.(pdf)(\?|$)/.test(u)) return { kind: 'file', url: proxyUrl(raw), filename: undefined }
     if (/\.(docx|xlsx|csv|zip)(\?|$)/.test(u)) return { kind: 'file', url: proxyUrl(raw), filename: undefined }
-    return { kind: 'link', url: raw }
+    return { kind: 'link', url: proxyUrl(raw) }
   }
+
   return { kind: 'plain', text: line }
 }
 
@@ -533,10 +545,15 @@ function parseRichBlocks(content: string): ParsedRich[] {
   const HAS_HTML_TAG = /<\/?[a-z][^>]*>/i
   if (HAS_IMG_TAG.test(c)) {
     const proxyHtml = (html: string) =>
-      html.replace(
-        /(<img\s[^>]*\bsrc\s*=\s*")(https?:\/\/[^"]+)(")/gi,
-        (_m, pre, url, post) => pre + proxyUrl(url) + post,
-      )
+      html
+        .replace(
+          /(<img\s[^>]*\bsrc\s*=\s*")([^"]+)(")/gi,
+          (_m, pre, url, post) => pre + proxyUrl(url) + post,
+        )
+        .replace(
+          /(<source\s[^>]*\bsrc\s*=\s*")([^"]+)(")/gi,
+          (_m, pre, url, post) => pre + proxyUrl(url) + post,
+        )
     const blocks: ParsedRich[] = []
     const firstTagIdx = c.search(HAS_IMG_TAG)
     if (firstTagIdx > 0) {
@@ -549,9 +566,12 @@ function parseRichBlocks(content: string): ParsedRich[] {
     return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtml(c) }]
   }
 
-  // Rich-text HTML without images: collapse to readable plain text.
+  // Rich-text HTML without images: collapse to plain text and re-run parser,
+  // so markdown image tokens inside <p>..</p> can still be extracted.
   if (HAS_HTML_TAG.test(c)) {
     const plain = htmlToPlainText(c)
+    if (!plain) return [{ kind: 'plain', text: '' }]
+    if (plain !== c) return parseRichBlocks(plain)
     return [{ kind: 'plain', text: plain }]
   }
 
@@ -591,8 +611,8 @@ function parseRichBlocks(content: string): ParsedRich[] {
 
     // Remove inline markdown image tokens from text body (media will render as thumbnail).
     const sanitizedText = sourceText
-      .replace(/!\[[^\]]*\]\(https?:\/\/[^)\s]+\)/gi, '')
-      .replace(/^\s*\]\(https?:\/\/[^)\s]+\)\s*$/gim, '')
+      .replace(/!\[[^\]]*\]\([^\)\s]+\)/gi, '')
+      .replace(/^\s*\]\([^\)\s]+\)\s*$/gim, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim()
 
@@ -600,23 +620,23 @@ function parseRichBlocks(content: string): ParsedRich[] {
       blocks[0].text = sanitizedText
     }
 
-    const urls = sourceText.match(/https?:\/\/\S+/gi)
-    if (urls) {
+    const urlMatches = sourceText.match(/https?:\/\/\S+|\/?media\/[\w\-./]+(?:\?[^\s)]*)?/gi)
+    if (urlMatches) {
       const seen = new Set<string>()
-      for (const raw of urls) {
+      for (const raw of urlMatches) {
         const normalized = trimUrlTail(raw)
         if (!normalized || seen.has(normalized)) continue
         seen.add(normalized)
 
         const u = normalized.toLowerCase()
-        if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) {
+        if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u) || /^\/?media\//i.test(u)) {
           blocks.push({ kind: 'image', url: proxyUrl(normalized) })
         } else if (/\.(mp4|webm|mov)(\?|$)/.test(u)) {
           blocks.push({ kind: 'video', url: proxyUrl(normalized) })
         } else if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) {
           blocks.push({ kind: 'audio', url: proxyUrl(normalized) })
         } else {
-          blocks.push({ kind: 'link', url: normalized })
+          blocks.push({ kind: 'link', url: proxyUrl(normalized) })
         }
       }
     }
@@ -2543,8 +2563,8 @@ export function ChatView({
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
-            rows={1}
-            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${composerExpanded ? 'min-h-[45vh] max-h-[70vh]' : 'max-h-28 min-h-10'}`}
+            rows={2}
+            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${composerExpanded ? 'min-h-[45vh] max-h-[70vh]' : 'max-h-44 min-h-14'}`}
           />
           <button
             onClick={handleSend}
