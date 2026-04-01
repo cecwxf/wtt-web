@@ -455,6 +455,27 @@ function proxyUrl(url: string): string {
   return url
 }
 
+function trimUrlTail(raw: string): string {
+  let url = String(raw || '').trim()
+  if (!url) return url
+
+  while (url.length > 0) {
+    const last = url[url.length - 1]
+    if (!')]}.,!?'.includes(last)) break
+
+    // Keep balanced trailing ")" in URLs like ...(v1)
+    if (last === ')') {
+      const opens = (url.match(/\(/g) || []).length
+      const closes = (url.match(/\)/g) || []).length
+      if (closes <= opens) break
+    }
+
+    url = url.slice(0, -1)
+  }
+
+  return url
+}
+
 function classifyLine(line: string): ParsedRich {
   const c = line.trim()
   if (!c) return { kind: 'plain', text: '' }
@@ -470,7 +491,7 @@ function classifyLine(line: string): ParsedRich {
   if (linkMatch) return { kind: 'link', url: proxyUrl(linkMatch[1]) }
   const plainUrl = c.match(/^(https?:\/\/\S+)$/i)
   if (plainUrl) {
-    const raw = plainUrl[1]
+    const raw = trimUrlTail(plainUrl[1])
     const u = raw.toLowerCase()
     if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: proxyUrl(raw) }
     if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) return { kind: 'image', url: proxyUrl(raw) }
@@ -515,9 +536,10 @@ function parseRichBlocks(content: string): ParsedRich[] {
     return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtml(c) }]
   }
 
-  // Detect markdown: has headings, bold, code blocks, tables
+  // Detect markdown: has headings, bold, code blocks, tables, or inline media markdown.
   const hasMarkdown = /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(c)
-  if (hasMarkdown && c.length > 30) return [{ kind: 'markdown', text: c }]
+  const hasInlineMediaMarkdown = /!\[[^\]]*\]\(https?:\/\/[^)\s]+\)/i.test(c)
+  if ((hasMarkdown && c.length > 30) || hasInlineMediaMarkdown) return [{ kind: 'markdown', text: c }]
 
   // Split by lines / double newlines and classify each segment
   const segments = c.split(/\n/)
@@ -547,15 +569,16 @@ function parseRichBlocks(content: string): ParsedRich[] {
     const urls = (blocks[0].text || '').match(/https?:\/\/\S+/gi)
     if (urls) {
       for (const raw of urls) {
-        const u = raw.toLowerCase()
+        const normalized = trimUrlTail(raw)
+        const u = normalized.toLowerCase()
         if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'image', url: proxyUrl(raw) })
+          blocks.push({ kind: 'image', url: proxyUrl(normalized) })
         } else if (/\.(mp4|webm|mov)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'video', url: proxyUrl(raw) })
+          blocks.push({ kind: 'video', url: proxyUrl(normalized) })
         } else if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'audio', url: proxyUrl(raw) })
+          blocks.push({ kind: 'audio', url: proxyUrl(normalized) })
         } else {
-          blocks.push({ kind: 'link', url: raw })
+          blocks.push({ kind: 'link', url: normalized })
         }
       }
     }
