@@ -6,11 +6,11 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { extractMarkdownImageUrls, proxyMediaUrl, stripMarkdownImageTokens } from '@/lib/rich-content'
+import { extractMarkdownImageUrls, htmlToPlainText, proxyMediaUrl, stripMarkdownImageTokens } from '@/lib/rich-content'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
-  { ssr: false, loading: () => <div className="h-[180px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
+  { ssr: false, loading: () => <div className="h-[260px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
 )
 
 interface EditorHelpers {
@@ -72,6 +72,25 @@ function proxyHtmlMedia(html: string): string {
   )
 }
 
+function escapeHtml(raw: string): string {
+  return String(raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function summarizeReplyContent(raw: string): string {
+  const source = String(raw || '')
+  const plain = source.includes('<') && source.includes('>')
+    ? htmlToPlainText(source)
+    : stripMarkdownImageTokens(source)
+  const compact = plain.replace(/\s+/g, ' ').trim()
+  if (!compact) return '（图片或空内容）'
+  return compact.length > 140 ? `${compact.slice(0, 140)}…` : compact
+}
+
 export default function PostDetailPage() {
   const params = useParams()
   const { data: session } = useSession()
@@ -84,6 +103,7 @@ export default function PostDetailPage() {
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [replyFullscreen, setReplyFullscreen] = useState(false)
   const [agentQuery, setAgentQuery] = useState('')
+  const [replyContext, setReplyContext] = useState<{ author: string; snippet: string } | null>(null)
   const replyEditorRef = useRef<EditorHelpers | null>(null)
   const handleReplyEditorReady = useCallback((helpers: EditorHelpers) => {
     replyEditorRef.current = helpers
@@ -154,13 +174,19 @@ export default function PostDetailPage() {
     const html = replyEditorRef.current?.getHTML() || replyText.trim()
     const isEmpty = replyEditorRef.current?.isEmpty() ?? !replyText.trim()
     if (isEmpty || submitting) return
+
+    const injectedContext = replyContext
+      ? `<p><strong>回复上下文：</strong>@${escapeHtml(replyContext.author)} · ${escapeHtml(replyContext.snippet)}</p>`
+      : ''
+    const finalHtml = injectedContext ? `${injectedContext}${html}` : html
+
     setSubmitting(true)
     try {
       const res = await fetch(`/api/wtt/square/posts/${postId}/replies`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
-          content: html,
+          content: finalHtml,
           agent_id: selectedAgentId || undefined,
           reply_to: replyTo,
           publisher_type: replyAs,
@@ -173,6 +199,7 @@ export default function PostDetailPage() {
       replyEditorRef.current?.clear()
       setReplyText('')
       setReplyTo(null)
+      setReplyContext(null)
       mutatePost()
     } catch (e: unknown) {
       alert(`回复失败: ${e instanceof Error ? e.message : String(e)}`)
@@ -195,14 +222,18 @@ export default function PostDetailPage() {
     setAgentQuery('')
   }
 
-  // Set reply target and scroll to input
-  const startReplyTo = (replyId: string, authorName: string) => {
+  // Set reply target and inject quoted context into editor draft
+  const startReplyTo = (replyId: string, authorName: string, rawContent: string) => {
+    const snippet = summarizeReplyContent(rawContent)
     setReplyTo(replyId)
+    setReplyContext({ author: authorName, snippet })
+
+    const injected = `@${authorName} \n> ${snippet}\n`
     if (replyEditorRef.current?.insertText) {
-      replyEditorRef.current.insertText(`@${authorName} `)
+      replyEditorRef.current.insertText(injected)
       replyEditorRef.current.focus?.()
     } else {
-      setReplyText(`@${authorName} `)
+      setReplyText(injected)
     }
   }
 
@@ -299,7 +330,7 @@ export default function PostDetailPage() {
               </div>
               {token && (
                 <button
-                  onClick={() => startReplyTo(r.id, r.author)}
+                  onClick={() => startReplyTo(r.id, r.author, r.content)}
                   className="mt-1.5 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
                 >
                   回复
@@ -385,7 +416,7 @@ export default function PostDetailPage() {
           {token && (
             <div className="mt-3">
               <button
-                onClick={() => startReplyTo(post.message_id, post.author)}
+                onClick={() => startReplyTo(post.message_id, post.author, post.body)}
                 className="text-xs text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
               >
                 回复楼主
@@ -446,10 +477,13 @@ export default function PostDetailPage() {
               <div className={replyFullscreen ? 'fixed inset-4 z-[120] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-2xl overflow-y-auto' : 'relative'}>
                 <div className="mb-2 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-gray-500">
                   {replyTo ? (
-                    <div className="flex items-center gap-2">
-                      <span>回复中…</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="shrink-0">回复中…</span>
+                      {replyContext?.snippet && (
+                        <span className="truncate text-gray-500 dark:text-gray-400">@{replyContext.author}: {replyContext.snippet}</span>
+                      )}
                       <button
-                        onClick={() => { setReplyTo(null); setReplyText('') }}
+                        onClick={() => { setReplyTo(null); setReplyText(''); setReplyContext(null) }}
                         className="text-red-400 hover:text-red-500"
                       >
                         取消
@@ -469,7 +503,7 @@ export default function PostDetailPage() {
 
                 <SquareEditor
                   variant="mini"
-                  className={replyFullscreen ? '[&_.ProseMirror]:!min-h-[55vh]' : ''}
+                  className={replyFullscreen ? '[&_.ProseMirror]:!min-h-[68vh]' : ''}
                   placeholder="输入回复… 支持图片粘贴/拖拽，@agent 触发AI讨论"
                   onChange={setReplyText}
                   onReady={handleReplyEditorReady}

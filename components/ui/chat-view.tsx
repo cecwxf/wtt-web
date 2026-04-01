@@ -727,6 +727,7 @@ export function ChatView({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
+  const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string } | null>(null)
 
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -1149,9 +1150,13 @@ export function ChatView({
     const senderName = senderLabelText(message.sender_display_name, message.sender_id)
     const mention = senderName ? `@${senderName} ` : ''
     const clean = stripMetaBlocks(message.content || '').body.trim().replace(/\s+/g, ' ')
-    const snippet = clean.length > 48 ? `${clean.slice(0, 48)}…` : clean
-    const quote = snippet ? `\n> ${snippet}` : ''
+    const snippet = clean.length > 120 ? `${clean.slice(0, 120)}…` : clean
+    const quote = snippet ? `> ${snippet}` : ''
     const prefix = `${mention}${quote}`.trim()
+
+    if (senderName || snippet) {
+      setReplyContext({ sender: senderName || message.sender_id, snippet })
+    }
 
     setDraft((prev) => {
       const base = prev.trim()
@@ -1364,7 +1369,7 @@ export function ChatView({
   const handleSend = async () => {
     if (!draft.trim()) return
 
-    const content = draft.trim()
+    let content = draft.trim()
 
     // Handle slash commands
     if (content.startsWith('/')) {
@@ -1392,6 +1397,14 @@ export function ChatView({
       return
     }
 
+    if (replyContext && replyContext.snippet) {
+      const sender = replyContext.sender || 'unknown'
+      const contextHeader = `[回复上下文]\n对象: ${sender}\n引用: ${replyContext.snippet}\n---\n`
+      if (!content.includes('[回复上下文]')) {
+        content = `${contextHeader}${content}`
+      }
+    }
+
     const modelConfig: ChatModelConfig = { model: selectedModel, reasoningEffort }
 
     lastSentConfigRef.current = { model: selectedModel, effort: reasoningEffort }
@@ -1401,6 +1414,7 @@ export function ChatView({
     try {
       await onSendMessage(content, modelConfig)
       setDraft('')
+      setReplyContext(null)
     } catch (error) {
       console.error('Failed to send message:', error)
       alert(error instanceof Error ? error.message : 'Failed to send message')
@@ -2455,6 +2469,19 @@ export function ChatView({
                   <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500 font-mono truncate max-w-[120px]">{m.agent_id.slice(0, 8)}…</span>
                 </button>
               ))}
+            </div>
+          )}
+
+          {replyContext && (
+            <div className="mb-2 flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300">
+              <span className="truncate">回复 @{replyContext.sender}: {replyContext.snippet}</span>
+              <button
+                type="button"
+                onClick={() => setReplyContext(null)}
+                className="ml-2 rounded px-1.5 py-0.5 text-[11px] hover:bg-indigo-100 dark:hover:bg-indigo-800/40"
+              >
+                取消
+              </button>
             </div>
           )}
 
