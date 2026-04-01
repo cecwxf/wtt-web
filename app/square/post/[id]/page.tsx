@@ -268,26 +268,40 @@ export default function PostDetailPage() {
         return at - bt
       })
 
-    let latestHumanAnchor: { id: string; ts: number } | null = null
+    let latestHumanMessage: { id: string; ts: number } | null = null
+    let latestHumanReplyAnchor: { id: string; ts: number } | null = null
 
     for (const r of normalized) {
       const ts = Number.isFinite(Date.parse(r.timestamp)) ? Date.parse(r.timestamp) : Date.now()
       const summary = summarizeReplyContent(r.content).snippet
+      const rawCompact = String(r.content || '').replace(/\s+/g, ' ').trim()
       const looksLikeReplyAnchor = r.sender_type === 'human' && (
         Boolean(r.reply_to)
         || /回复上下文/.test(r.content)
+        || /^@\S+/.test(rawCompact)
         || /^@\S+/.test(summary)
       )
 
-      if (looksLikeReplyAnchor) {
-        latestHumanAnchor = { id: r.id, ts }
+      if (r.sender_type === 'human') {
+        latestHumanMessage = { id: r.id, ts }
+        if (looksLikeReplyAnchor) {
+          latestHumanReplyAnchor = { id: r.id, ts }
+        }
       }
 
       // Heuristic: agent reply often misses reply_to in discuss stream.
-      // Attach it under latest human reply anchor in a short time window.
-      if (r.sender_type === 'agent' && !r.__reply_to && latestHumanAnchor) {
-        if (ts - latestHumanAnchor.ts <= 15 * 60 * 1000) {
-          r.__reply_to = latestHumanAnchor.id
+      // Priority: latest explicit reply anchor -> latest human message.
+      if (r.sender_type === 'agent' && !r.__reply_to) {
+        const anchor = (
+          latestHumanReplyAnchor && (ts - latestHumanReplyAnchor.ts <= 15 * 60 * 1000)
+            ? latestHumanReplyAnchor
+            : latestHumanMessage && (ts - latestHumanMessage.ts <= 8 * 60 * 1000)
+              ? latestHumanMessage
+              : null
+        )
+
+        if (anchor) {
+          r.__reply_to = anchor.id
         }
       }
 
