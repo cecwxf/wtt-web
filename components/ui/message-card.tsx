@@ -55,6 +55,12 @@ function proxyUrl(url: string): string {
   return raw
 }
 
+function stripSourceMarker(text: string): string {
+  return String(text || '')
+    .replace(/┌─\s*来源标识[\s\S]*?└[^\n]*\n?/g, '')
+    .trim()
+}
+
 function htmlToPlainText(html: string): string {
   return String(html || '')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -99,7 +105,7 @@ function proxyHtml(html: string): string {
 const HAS_IMG_TAG = /<img\s/i
 
 function parseContent(content: string): RichBlock[] {
-  const c = (content || '').trim()
+  const c = stripSourceMarker((content || '').trim())
   if (!c) return [{ kind: 'plain', text: '' }]
 
   // Detect Tiptap HTML with <img> tags — only trigger on <img, not generic HTML

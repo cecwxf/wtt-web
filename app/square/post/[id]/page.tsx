@@ -80,9 +80,39 @@ function proxyMediaUrl(url: string): string {
 
 function proxyHtmlMedia(html: string): string {
   return String(html || '').replace(
-    /(<(?:img|source)\s[^>]*\b(?:src|srcset)\s*=\s*["'])(https?:\/\/[^"']+)(["'])/gi,
+    /(<(?:img|source)\s[^>]*\b(?:src|srcset)\s*=\s*["'])([^"']+)(["'])/gi,
     (_m, pre, url, post) => pre + proxyMediaUrl(url) + post,
   )
+}
+
+function stripSourceMarker(text: string): string {
+  return String(text || '')
+    .replace(/┌─\s*来源标识[\s\S]*?└[^\n]*\n?/g, '')
+    .trim()
+}
+
+function extractMarkdownImageUrls(text: string): string[] {
+  const input = stripSourceMarker(String(text || ''))
+  const out: string[] = []
+  const mdRe = /!\[[^\]]*\]\(([^)]+)\)/gi
+  let m: RegExpExecArray | null
+  while ((m = mdRe.exec(input)) !== null) {
+    const u = proxyMediaUrl(String(m[1] || '').trim())
+    if (u && !out.includes(u)) out.push(u)
+  }
+  const relRe = /(?:^|\s)(\/?media\/[\w\-./]+(?:\?[^\s)]*)?)/gi
+  while ((m = relRe.exec(input)) !== null) {
+    const u = proxyMediaUrl(String(m[1] || '').trim())
+    if (u && !out.includes(u)) out.push(u)
+  }
+  return out
+}
+
+function stripMarkdownImageTokens(text: string): string {
+  return stripSourceMarker(String(text || ''))
+    .replace(/!\[[^\]]*\]\([^\)\s]+\)/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 export default function PostDetailPage() {
@@ -290,11 +320,24 @@ export default function PostDetailPage() {
                 )}
                 <span className="text-xs text-gray-400 dark:text-gray-500">{timeAgo(r.timestamp)}</span>
               </div>
-              <div className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
+              <div className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed space-y-2">
                 {r.content.includes('<') && r.content.includes('>') ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: proxyHtmlMedia(r.content) }} />
                 ) : (
-                  <span className="whitespace-pre-wrap">{r.content}</span>
+                  <>
+                    {stripMarkdownImageTokens(r.content) && (
+                      <span className="whitespace-pre-wrap">{stripMarkdownImageTokens(r.content)}</span>
+                    )}
+                    {extractMarkdownImageUrls(r.content).map((img, idx) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={`${r.id}-img-${idx}`}
+                        src={img}
+                        alt="reply-image"
+                        className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
+                      />
+                    ))}
+                  </>
                 )}
               </div>
               {token && (
@@ -362,10 +405,26 @@ export default function PostDetailPage() {
               </>
             )}
           </div>
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed text-[15px]"
-            dangerouslySetInnerHTML={{ __html: proxyHtmlMedia(post.body) }}
-          />
+          <div className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed text-[15px] space-y-3">
+            {post.body.includes('<') && post.body.includes('>') ? (
+              <div dangerouslySetInnerHTML={{ __html: proxyHtmlMedia(post.body) }} />
+            ) : (
+              <>
+                {stripMarkdownImageTokens(post.body) && (
+                  <div className="whitespace-pre-wrap">{stripMarkdownImageTokens(post.body)}</div>
+                )}
+                {extractMarkdownImageUrls(post.body).map((img, idx) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={`post-img-${idx}`}
+                    src={img}
+                    alt="post-image"
+                    className="max-h-80 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
+                  />
+                ))}
+              </>
+            )}
+          </div>
           {token && (
             <div className="mt-3">
               <button

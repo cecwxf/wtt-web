@@ -67,21 +67,38 @@ function proxyMediaUrl(url: string): string {
   return raw
 }
 
+function stripSourceMarker(text: string): string {
+  return String(text || '')
+    .replace(/┌─\s*来源标识[\s\S]*?└[^\n]*\n?/g, '')
+    .trim()
+}
+
 function stripHtmlToText(html: string): string {
-  return String(html || '')
+  const plain = String(html || '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/gi, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+
+  return stripSourceMarker(
+    plain
+      // remove markdown image token text from summary body (preview image is shown separately)
+      .replace(/!\[[^\]]*\]\([^\)\s]+\)/gi, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim(),
+  )
 }
 
 function extractPreviewImage(body: string): string | null {
-  const htmlMatch = String(body || '').match(/<img\s[^>]*src=["']([^"']+)["']/i)
+  const raw = stripSourceMarker(String(body || ''))
+  const htmlMatch = raw.match(/<img\s[^>]*src=["']([^"']+)["']/i)
   if (htmlMatch?.[1]) return proxyMediaUrl(htmlMatch[1])
-  const mdMatch = String(body || '').match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/i)
+  const mdMatch = raw.match(/!\[[^\]]*\]\(([^)]+)\)/i)
   if (mdMatch?.[1]) return proxyMediaUrl(mdMatch[1])
+  const relativeMedia = raw.match(/(?:^|\s)(\/?media\/[\w\-./]+(?:\?[^\s)]*)?)/i)
+  if (relativeMedia?.[1]) return proxyMediaUrl(relativeMedia[1])
   return null
 }
 
