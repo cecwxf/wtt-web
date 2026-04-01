@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { extractMarkdownImageUrls, htmlToPlainText, proxyMediaUrl, stripMarkdownImageTokens, stripSourceMarker } from '@/lib/rich-content'
+import { extractMarkdownImageUrls, htmlToPlainText, parseRichBlocks, stripMarkdownImageTokens, stripSourceMarker } from '@/lib/rich-content'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -63,13 +63,6 @@ function timeAgo(ts: string) {
   } catch {
     return ts
   }
-}
-
-function proxyHtmlMedia(html: string): string {
-  return String(html || '').replace(
-    /(<(?:img|source)\s[^>]*\b(?:src|srcset)\s*=\s*["'])([^"']+)(["'])/gi,
-    (_m, pre, url, post) => pre + proxyMediaUrl(url) + post,
-  )
 }
 
 function escapeHtml(raw: string): string {
@@ -371,24 +364,36 @@ export default function PostDetailPage() {
                 <span className="text-xs text-gray-400 dark:text-gray-500">{timeAgo(r.timestamp)}</span>
               </div>
               <div className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed space-y-2">
-                {r.content.includes('<') && r.content.includes('>') ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: proxyHtmlMedia(r.content) }} />
-                ) : (
-                  <>
-                    {stripMarkdownImageTokens(r.content) && (
-                      <span className="whitespace-pre-wrap">{stripMarkdownImageTokens(r.content)}</span>
-                    )}
-                    {extractMarkdownImageUrls(r.content).map((img, idx) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={`${r.id}-img-${idx}`}
-                        src={img}
-                        alt="reply-image"
-                        className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
-                      />
-                    ))}
-                  </>
-                )}
+                {parseRichBlocks(r.content).map((block, bi) => {
+                  switch (block.kind) {
+                    case 'image':
+                      return (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={`${r.id}-img-${bi}`} src={block.url} alt="reply-image"
+                          className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover" />
+                      )
+                    case 'html':
+                      return (
+                        <div key={bi}
+                          className="prose prose-sm dark:prose-invert max-w-none [&_img]:max-h-64 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-gray-200 dark:[&_img]:border-gray-700"
+                          dangerouslySetInnerHTML={{ __html: block.html }} />
+                      )
+                    case 'video':
+                      return (
+                        <video key={bi} controls className="max-h-64 w-full rounded-lg border border-gray-200 dark:border-gray-700">
+                          <source src={block.url} />
+                        </video>
+                      )
+                    case 'audio':
+                      return <audio key={bi} controls src={block.url} className="w-full" />
+                    case 'markdown':
+                      return <div key={bi} className="whitespace-pre-wrap">{block.text}</div>
+                    case 'plain':
+                      return block.text?.trim() ? <span key={bi} className="whitespace-pre-wrap">{block.text}</span> : null
+                    default:
+                      return null
+                  }
+                })}
               </div>
               {token && (
                 <button
@@ -456,24 +461,38 @@ export default function PostDetailPage() {
             )}
           </div>
           <div className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed text-[15px] space-y-3">
-            {post.body.includes('<') && post.body.includes('>') ? (
-              <div dangerouslySetInnerHTML={{ __html: proxyHtmlMedia(post.body) }} />
-            ) : (
-              <>
-                {stripMarkdownImageTokens(post.body) && (
-                  <div className="whitespace-pre-wrap">{stripMarkdownImageTokens(post.body)}</div>
-                )}
-                {extractMarkdownImageUrls(post.body).map((img, idx) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={`post-img-${idx}`}
-                    src={img}
-                    alt="post-image"
-                    className="max-h-80 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
-                  />
-                ))}
-              </>
-            )}
+            {parseRichBlocks(post.body).map((block, bi) => {
+              switch (block.kind) {
+                case 'image':
+                  return (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={`post-img-${bi}`} src={block.url} alt="post-image"
+                      className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover" />
+                  )
+                case 'html':
+                  return (
+                    <div key={bi}
+                      className="[&_img]:max-h-64 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-gray-200 dark:[&_img]:border-gray-700"
+                      dangerouslySetInnerHTML={{ __html: block.html }} />
+                  )
+                case 'video':
+                  return (
+                    <video key={bi} controls className="max-h-64 w-full rounded-lg border border-gray-200 dark:border-gray-700">
+                      <source src={block.url} />
+                    </video>
+                  )
+                case 'audio':
+                  return <audio key={bi} controls src={block.url} className="w-full" />
+                case 'link':
+                  return <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline break-all text-sm">{block.url}</a>
+                case 'markdown':
+                  return <div key={bi} className="whitespace-pre-wrap">{block.text}</div>
+                case 'plain':
+                  return block.text?.trim() ? <div key={bi} className="whitespace-pre-wrap">{block.text}</div> : null
+                default:
+                  return null
+              }
+            })}
           </div>
           {token && (
             <div className="mt-3">

@@ -9,10 +9,9 @@ import { formatTime, formatDateGroup } from '@/lib/time'
 import {
   extractMarkdownImageUrls,
   htmlToPlainText,
-  proxyMediaUrl as proxyUrl,
+  parseRichBlocks,
   stripMarkdownImageTokens,
   stripSourceMarker,
-  trimUrlTail,
 } from '@/lib/rich-content'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
@@ -357,16 +356,7 @@ interface HumanProfileSummary {
   claimed_agents?: Array<{ agent_id: string; display_name: string }>
 }
 
-type ParsedRich =
-  | { kind: 'plain'; text: string }
-  | { kind: 'html'; html: string }
-  | { kind: 'image'; url: string }
-  | { kind: 'audio'; url: string }
-  | { kind: 'video'; url: string }
-  | { kind: 'file'; url: string; filename?: string }
-  | { kind: 'link'; url: string }
-  | { kind: 'markdown'; text: string }
-  | { kind: 'preview'; title?: string; desc?: string; url?: string; image?: string }
+// ParsedRich type imported from @/lib/rich-content
 
 interface UrlPreview {
   url: string
@@ -449,154 +439,7 @@ export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: str
   return { meta, body: cleaned.trim() }
 }
 
-function classifyLine(line: string): ParsedRich {
-  const c = line.trim()
-  if (!c) return { kind: 'plain', text: '' }
-
-  const imageMatch = c.match(/^!\[[^\]]*\]\(([^)]+)\)$/i)
-  if (imageMatch) return { kind: 'image', url: proxyUrl(trimUrlTail(imageMatch[1])) }
-  const audioMatch = c.match(/^\[audio(?::([^\]]*))?\]\(([^)]+)\)$/i)
-  if (audioMatch) return { kind: 'audio', url: proxyUrl(trimUrlTail(audioMatch[2])) }
-  const videoMatch = c.match(/^\[video(?::([^\]]*))?\]\(([^)]+)\)$/i)
-  if (videoMatch) return { kind: 'video', url: proxyUrl(trimUrlTail(videoMatch[2])) }
-  const fileMatch = c.match(/^\[file(?::([^\]]*))?\]\(([^)]+)\)$/i)
-  if (fileMatch) return { kind: 'file', url: proxyUrl(trimUrlTail(fileMatch[2])), filename: fileMatch[1] || undefined }
-  const linkMatch = c.match(/^\[link\]\(([^)]+)\)$/i)
-  if (linkMatch) return { kind: 'link', url: proxyUrl(trimUrlTail(linkMatch[1])) }
-
-  const plainUrl = c.match(/^(https?:\/\/\S+|\/?media\/\S+)$/i)
-  if (plainUrl) {
-    const raw = trimUrlTail(plainUrl[1])
-    const u = raw.toLowerCase()
-    if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: proxyUrl(raw) }
-    if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u) || /^\/?media\//i.test(u)) return { kind: 'image', url: proxyUrl(raw) }
-    if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) return { kind: 'audio', url: proxyUrl(raw) }
-    if (/\.(pdf)(\?|$)/.test(u)) return { kind: 'file', url: proxyUrl(raw), filename: undefined }
-    if (/\.(docx|xlsx|csv|zip)(\?|$)/.test(u)) return { kind: 'file', url: proxyUrl(raw), filename: undefined }
-    return { kind: 'link', url: proxyUrl(raw) }
-  }
-
-  return { kind: 'plain', text: line }
-}
-
-function parseRichBlocks(content: string): ParsedRich[] {
-  const c = stripSourceMarker((content || '').trim())
-  if (!c) return [{ kind: 'plain', text: '' }]
-
-  // [preview] block — return as single block
-  if (c.startsWith('[preview]')) {
-    const title = (c.match(/Title:\s*(.*)/i)?.[1] || '').trim()
-    const desc = (c.match(/Desc:\s*(.*)/i)?.[1] || '').trim()
-    const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
-    const image = proxyUrl((c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim())
-    return [{ kind: 'preview', title, desc, url, image }]
-  }
-
-  // Detect Tiptap rich-editor HTML. Keep image HTML rendering, but strip
-  // leading wrapper tags from text to avoid showing raw `<p>` in bubble text.
-  const HAS_IMG_TAG = /<img\s/i
-  const HAS_HTML_TAG = /<\/?[a-z][^>]*>/i
-  if (HAS_IMG_TAG.test(c)) {
-    const proxyHtml = (html: string) =>
-      html
-        .replace(
-          /(<img\s[^>]*\bsrc\s*=\s*")([^"]+)(")/gi,
-          (_m, pre, url, post) => pre + proxyUrl(url) + post,
-        )
-        .replace(
-          /(<source\s[^>]*\bsrc\s*=\s*")([^"]+)(")/gi,
-          (_m, pre, url, post) => pre + proxyUrl(url) + post,
-        )
-    const blocks: ParsedRich[] = []
-    const firstTagIdx = c.search(HAS_IMG_TAG)
-    if (firstTagIdx > 0) {
-      const leading = c.slice(0, firstTagIdx).trim()
-      const leadingText = htmlToPlainText(leading)
-      if (leadingText) blocks.push({ kind: 'plain', text: leadingText })
-    }
-    const htmlPart = c.slice(Math.max(0, firstTagIdx)).trim()
-    if (htmlPart) blocks.push({ kind: 'html', html: proxyHtml(htmlPart) })
-    return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtml(c) }]
-  }
-
-  // Rich-text HTML without images: collapse to plain text and re-run parser,
-  // so markdown image tokens inside <p>..</p> can still be extracted.
-  if (HAS_HTML_TAG.test(c)) {
-    const plain = htmlToPlainText(c)
-    if (!plain) return [{ kind: 'plain', text: '' }]
-    if (plain !== c) return parseRichBlocks(plain)
-    return [{ kind: 'plain', text: plain }]
-  }
-
-  // Detect rich markdown docs (headings/lists/tables/code blocks).
-  // NOTE: plain chat with inline media tokens like "text ![](url)" should not
-  // short-circuit here; we prefer mixed text + extracted media rendering below.
-  const hasMarkdown = /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(c)
-  if (hasMarkdown && c.length > 30) return [{ kind: 'markdown', text: c }]
-
-  // Split by lines / double newlines and classify each segment
-  const segments = c.split(/\n/)
-  const blocks: ParsedRich[] = []
-  let textBuf: string[] = []
-
-  const flushText = () => {
-    if (textBuf.length > 0) {
-      blocks.push({ kind: 'plain', text: textBuf.join('\n') })
-      textBuf = []
-    }
-  }
-
-  for (const seg of segments) {
-    const classified = classifyLine(seg)
-    if (classified.kind === 'plain') {
-      textBuf.push(seg)
-    } else {
-      flushText()
-      blocks.push(classified)
-    }
-  }
-  flushText()
-
-  // If only plain text, also extract inline URLs for media/link preview.
-  // This makes mixed lines like "这个狗狗 ![](https://...png)" render image reliably.
-  if (blocks.length === 1 && blocks[0].kind === 'plain') {
-    const sourceText = blocks[0].text || ''
-
-    // Remove inline markdown image tokens from text body (media will render as thumbnail).
-    const sanitizedText = sourceText
-      .replace(/!\[[^\]]*\]\([^\)\s]+\)/gi, '')
-      .replace(/^\s*\]\([^\)\s]+\)\s*$/gim, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-
-    if (sanitizedText !== sourceText) {
-      blocks[0].text = sanitizedText
-    }
-
-    const urlMatches = sourceText.match(/https?:\/\/\S+|\/?media\/[\w\-./]+(?:\?[^\s)]*)?/gi)
-    if (urlMatches) {
-      const seen = new Set<string>()
-      for (const raw of urlMatches) {
-        const normalized = trimUrlTail(raw)
-        if (!normalized || seen.has(normalized)) continue
-        seen.add(normalized)
-
-        const u = normalized.toLowerCase()
-        if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u) || /^\/?media\//i.test(u)) {
-          blocks.push({ kind: 'image', url: proxyUrl(normalized) })
-        } else if (/\.(mp4|webm|mov)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'video', url: proxyUrl(normalized) })
-        } else if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'audio', url: proxyUrl(normalized) })
-        } else {
-          blocks.push({ kind: 'link', url: proxyUrl(normalized) })
-        }
-      }
-    }
-  }
-
-  return blocks.length > 0 ? blocks : [{ kind: 'plain', text: content }]
-}
+// classifyLine + parseRichBlocks imported from @/lib/rich-content
 
 function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
   const [expanded, setExpanded] = useState(false)
@@ -2055,7 +1898,7 @@ export function ChatView({
                                 return (
                                   <div
                                     key={bi}
-                                    className="prose prose-sm dark:prose-invert max-w-none [&_img]:max-h-60 [&_img]:w-auto [&_img]:rounded-lg [&_img]:border [&_img]:border-slate-200"
+                                    className="prose prose-sm dark:prose-invert max-w-none [&_img]:max-h-64 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-slate-200"
                                     dangerouslySetInnerHTML={{ __html: block.html }}
                                   />
                                 )
