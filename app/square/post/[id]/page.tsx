@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { extractMarkdownImageUrls, htmlToPlainText, proxyMediaUrl, stripMarkdownImageTokens } from '@/lib/rich-content'
+import { extractMarkdownImageUrls, htmlToPlainText, proxyMediaUrl, stripMarkdownImageTokens, stripSourceMarker } from '@/lib/rich-content'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -86,7 +86,15 @@ function summarizeReplyContent(raw: string): string {
   const plain = source.includes('<') && source.includes('>')
     ? htmlToPlainText(source)
     : stripMarkdownImageTokens(source)
-  const compact = plain.replace(/\s+/g, ' ').trim()
+
+  const cleaned = stripSourceMarker(plain)
+    // avoid recursive quoting of previous injected context
+    .replace(/\[回复上下文\][\s\S]*?(?:---|$)/g, ' ')
+    .replace(/(^|\n)\s*对象\s*:[^\n]*/g, ' ')
+    .replace(/(^|\n)\s*引用\s*:[^\n]*/g, ' ')
+    .replace(/(^|\n)\s*回复上下文\s*:[^\n]*/g, ' ')
+
+  const compact = cleaned.replace(/\s+/g, ' ').trim()
   if (!compact) return '（图片或空内容）'
   return compact.length > 140 ? `${compact.slice(0, 140)}…` : compact
 }
