@@ -81,8 +81,9 @@ function escapeHtml(raw: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function summarizeReplyContent(raw: string): string {
+function summarizeReplyContent(raw: string): { snippet: string; imageUrl?: string } {
   const source = String(raw || '')
+  const imageUrls = extractMarkdownImageUrls(source)
   const plain = source.includes('<') && source.includes('>')
     ? htmlToPlainText(source)
     : stripMarkdownImageTokens(source)
@@ -95,8 +96,14 @@ function summarizeReplyContent(raw: string): string {
     .replace(/(^|\n)\s*回复上下文\s*:[^\n]*/g, ' ')
 
   const compact = cleaned.replace(/\s+/g, ' ').trim()
-  if (!compact) return '（图片或空内容）'
-  return compact.length > 140 ? `${compact.slice(0, 140)}…` : compact
+  const snippet = compact
+    ? (compact.length > 140 ? `${compact.slice(0, 140)}…` : compact)
+    : (imageUrls[0] ? `图片: ${imageUrls[0]}` : '（图片或空内容）')
+
+  return {
+    snippet,
+    imageUrl: imageUrls[0] || undefined,
+  }
 }
 
 export default function PostDetailPage() {
@@ -111,7 +118,7 @@ export default function PostDetailPage() {
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [replyFullscreen, setReplyFullscreen] = useState(false)
   const [agentQuery, setAgentQuery] = useState('')
-  const [replyContext, setReplyContext] = useState<{ author: string; snippet: string } | null>(null)
+  const [replyContext, setReplyContext] = useState<{ author: string; snippet: string; imageUrl?: string } | null>(null)
   const replyEditorRef = useRef<EditorHelpers | null>(null)
   const handleReplyEditorReady = useCallback((helpers: EditorHelpers) => {
     replyEditorRef.current = helpers
@@ -184,7 +191,7 @@ export default function PostDetailPage() {
     if (isEmpty || submitting) return
 
     const injectedContext = replyContext
-      ? `<p><strong>回复上下文：</strong>@${escapeHtml(replyContext.author)} · ${escapeHtml(replyContext.snippet)}</p>`
+      ? `<p><strong>回复上下文：</strong>@${escapeHtml(replyContext.author)} · ${escapeHtml(replyContext.snippet)}</p>${replyContext.imageUrl ? `<p><img src="${escapeHtml(replyContext.imageUrl)}" alt="reply-context-image" /></p>` : ''}`
       : ''
     const finalHtml = injectedContext ? `${injectedContext}${html}` : html
 
@@ -232,11 +239,12 @@ export default function PostDetailPage() {
 
   // Set reply target and inject quoted context into editor draft
   const startReplyTo = (replyId: string, authorName: string, rawContent: string) => {
-    const snippet = summarizeReplyContent(rawContent)
+    const context = summarizeReplyContent(rawContent)
     setReplyTo(replyId)
-    setReplyContext({ author: authorName, snippet })
+    setReplyContext({ author: authorName, snippet: context.snippet, imageUrl: context.imageUrl })
 
-    const injected = `@${authorName} \n> ${snippet}\n`
+    const imageLine = context.imageUrl ? `\n![reply-image](${context.imageUrl})` : ''
+    const injected = `@${authorName} \n> ${context.snippet}${imageLine}\n`
     if (replyEditorRef.current?.insertText) {
       replyEditorRef.current.insertText(injected)
       replyEditorRef.current.focus?.()
@@ -247,13 +255,39 @@ export default function PostDetailPage() {
 
   // Build threaded reply structure
   const threadedReplies = useMemo(() => {
-    const topLevel: Reply[] = []
-    const childMap: Record<string, Reply[]> = {}
+    type ReplyWithLocal = Reply & { __reply_to?: string | null }
 
-    for (const r of replies) {
-      if (r.reply_to && r.reply_to !== post?.message_id) {
-        if (!childMap[r.reply_to]) childMap[r.reply_to] = []
-        childMap[r.reply_to].push(r)
+    const topLevel: ReplyWithLocal[] = []
+    const childMap: Record<string, ReplyWithLocal[]> = {}
+
+    const normalized: ReplyWithLocal[] = replies.map((r) => ({ ...r, __reply_to: r.reply_to }))
+
+    let latestHumanAnchor: { id: string; ts: number } | null = null
+
+    for (const r of normalized) {
+      const ts = Number.isFinite(Date.parse(r.timestamp)) ? Date.parse(r.timestamp) : Date.now()
+      const summary = summarizeReplyContent(r.content).snippet
+      const looksLikeReplyAnchor = r.sender_type === 'human' && (
+        Boolean(r.reply_to)
+        || /回复上下文/.test(r.content)
+        || /^@\S+/.test(summary)
+      )
+
+      if (looksLikeReplyAnchor) {
+        latestHumanAnchor = { id: r.id, ts }
+      }
+
+      // Heuristic: agent reply often misses reply_to in discuss stream.
+      // Attach it under latest human reply anchor in a short time window.
+      if (r.sender_type === 'agent' && !r.__reply_to && latestHumanAnchor) {
+        if (ts - latestHumanAnchor.ts <= 15 * 60 * 1000) {
+          r.__reply_to = latestHumanAnchor.id
+        }
+      }
+
+      if (r.__reply_to && r.__reply_to !== post?.message_id) {
+        if (!childMap[r.__reply_to]) childMap[r.__reply_to] = []
+        childMap[r.__reply_to].push(r)
       } else {
         topLevel.push(r)
       }

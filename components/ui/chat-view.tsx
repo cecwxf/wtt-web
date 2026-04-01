@@ -6,7 +6,14 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { formatTime, formatDateGroup } from '@/lib/time'
-import { htmlToPlainText, proxyMediaUrl as proxyUrl, stripSourceMarker, trimUrlTail } from '@/lib/rich-content'
+import {
+  extractMarkdownImageUrls,
+  htmlToPlainText,
+  proxyMediaUrl as proxyUrl,
+  stripMarkdownImageTokens,
+  stripSourceMarker,
+  trimUrlTail,
+} from '@/lib/rich-content'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
 
@@ -727,7 +734,7 @@ export function ChatView({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
-  const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string } | null>(null)
+  const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string; imageUrl?: string } | null>(null)
 
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -1149,13 +1156,19 @@ export function ChatView({
   const quickReplyToMessage = useCallback((message: ChatMessage) => {
     const senderName = senderLabelText(message.sender_display_name, message.sender_id)
     const mention = senderName ? `@${senderName} ` : ''
-    const clean = stripMetaBlocks(message.content || '').body.trim().replace(/\s+/g, ' ')
-    const snippet = clean.length > 120 ? `${clean.slice(0, 120)}…` : clean
+    const body = stripMetaBlocks(message.content || '').body
+    const imageUrls = extractMarkdownImageUrls(body)
+    const plain = body.includes('<') && body.includes('>') ? htmlToPlainText(body) : stripMarkdownImageTokens(body)
+    const clean = stripSourceMarker(plain).trim().replace(/\s+/g, ' ')
+    const snippet = clean
+      ? (clean.length > 120 ? `${clean.slice(0, 120)}…` : clean)
+      : (imageUrls[0] ? `图片: ${imageUrls[0]}` : '（图片或空内容）')
     const quote = snippet ? `> ${snippet}` : ''
-    const prefix = `${mention}${quote}`.trim()
+    const imageLine = imageUrls[0] ? `\n![reply-image](${imageUrls[0]})` : ''
+    const prefix = `${mention}${quote}${imageLine}`.trim()
 
-    if (senderName || snippet) {
-      setReplyContext({ sender: senderName || message.sender_id, snippet })
+    if (senderName || snippet || imageUrls[0]) {
+      setReplyContext({ sender: senderName || message.sender_id, snippet, imageUrl: imageUrls[0] })
     }
 
     setDraft((prev) => {
@@ -1399,7 +1412,8 @@ export function ChatView({
 
     if (replyContext && replyContext.snippet) {
       const sender = replyContext.sender || 'unknown'
-      const contextHeader = `[回复上下文]\n对象: ${sender}\n引用: ${replyContext.snippet}\n---\n`
+      const imageLine = replyContext.imageUrl ? `\n引用图片: ${replyContext.imageUrl}` : ''
+      const contextHeader = `[回复上下文]\n对象: ${sender}\n引用: ${replyContext.snippet}${imageLine}\n---\n`
       if (!content.includes('[回复上下文]')) {
         content = `${contextHeader}${content}`
       }
@@ -2474,7 +2488,7 @@ export function ChatView({
 
           {replyContext && (
             <div className="mb-2 flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300">
-              <span className="truncate">回复 @{replyContext.sender}: {replyContext.snippet}</span>
+              <span className="truncate">回复 @{replyContext.sender}: {replyContext.snippet}{replyContext.imageUrl ? '（含图片）' : ''}</span>
               <button
                 type="button"
                 onClick={() => setReplyContext(null)}
