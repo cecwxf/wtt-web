@@ -260,7 +260,13 @@ export default function PostDetailPage() {
     const topLevel: ReplyWithLocal[] = []
     const childMap: Record<string, ReplyWithLocal[]> = {}
 
-    const normalized: ReplyWithLocal[] = replies.map((r) => ({ ...r, __reply_to: r.reply_to }))
+    const normalized: ReplyWithLocal[] = replies
+      .map((r) => ({ ...r, __reply_to: r.reply_to }))
+      .sort((a, b) => {
+        const at = Number.isFinite(Date.parse(a.timestamp)) ? Date.parse(a.timestamp) : 0
+        const bt = Number.isFinite(Date.parse(b.timestamp)) ? Date.parse(b.timestamp) : 0
+        return at - bt
+      })
 
     let latestHumanAnchor: { id: string; ts: number } | null = null
 
@@ -523,6 +529,14 @@ export default function PostDetailPage() {
                       <span className="shrink-0">回复中…</span>
                       {replyContext?.snippet && (
                         <span className="truncate text-gray-500 dark:text-gray-400">@{replyContext.author}: {replyContext.snippet}</span>
+                      )}
+                      {replyContext?.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={replyContext.imageUrl}
+                          alt="reply-context"
+                          className="h-10 w-10 rounded border border-gray-200 dark:border-gray-700 object-cover"
+                        />
                       )}
                       <button
                         onClick={() => { setReplyTo(null); setReplyText(''); setReplyContext(null) }}

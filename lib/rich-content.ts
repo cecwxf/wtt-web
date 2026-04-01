@@ -67,18 +67,32 @@ export function stripMarkdownImageTokens(text: string): string {
 export function extractMarkdownImageUrls(text: string): string[] {
   const input = stripSourceMarker(String(text || ''))
   const out: string[] = []
+  const push = (raw: string) => {
+    const u = proxyMediaUrl(trimUrlTail(String(raw || '')))
+    if (u && !out.includes(u)) out.push(u)
+  }
 
   const mdRe = /!\[[^\]]*\]\(([^)]+)\)/gi
   let m: RegExpExecArray | null
   while ((m = mdRe.exec(input)) !== null) {
-    const u = proxyMediaUrl(trimUrlTail(String(m[1] || '')))
-    if (u && !out.includes(u)) out.push(u)
+    push(m[1])
+  }
+
+  // HTML rich text images
+  const htmlImgRe = /<(?:img|source)\s[^>]*\b(?:src|srcset)\s*=\s*["']([^"']+)["']/gi
+  while ((m = htmlImgRe.exec(input)) !== null) {
+    push(m[1])
   }
 
   const relRe = /(?:^|\s)(\/?media\/[\w\-./]+(?:\?[^\s)]*)?)/gi
   while ((m = relRe.exec(input)) !== null) {
-    const u = proxyMediaUrl(trimUrlTail(String(m[1] || '')))
-    if (u && !out.includes(u)) out.push(u)
+    push(m[1])
+  }
+
+  // Fallback: bare image URLs in plain text
+  const absImgRe = /(https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\s)]*)?)/gi
+  while ((m = absImgRe.exec(input)) !== null) {
+    push(m[1])
   }
 
   return out
