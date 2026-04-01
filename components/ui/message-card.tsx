@@ -49,6 +49,17 @@ function proxyUrl(url: string): string {
   return url
 }
 
+function htmlToPlainText(html: string): string {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function classifyLine(line: string): RichBlock {
   const c = line.trim()
   if (!c) return { kind: 'plain', text: '' }
@@ -86,16 +97,23 @@ function parseContent(content: string): RichBlock[] {
   if (!c) return [{ kind: 'plain', text: '' }]
 
   // Detect Tiptap HTML with <img> tags — only trigger on <img, not generic HTML
+  const HAS_HTML_TAG = /<\/?[a-z][^>]*>/i
   if (HAS_IMG_TAG.test(c)) {
     const firstTagIdx = c.search(HAS_IMG_TAG)
     const blocks: RichBlock[] = []
     if (firstTagIdx > 0) {
       const leading = c.slice(0, firstTagIdx).trim()
-      if (leading) blocks.push({ kind: 'plain', text: leading })
+      const leadingText = htmlToPlainText(leading)
+      if (leadingText) blocks.push({ kind: 'plain', text: leadingText })
     }
     const htmlPart = c.slice(Math.max(0, firstTagIdx)).trim()
     if (htmlPart) blocks.push({ kind: 'html', html: proxyHtml(htmlPart) })
     return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtml(c) }]
+  }
+
+  // Rich text without image: collapse tags to plain text so raw <p> won't leak.
+  if (HAS_HTML_TAG.test(c)) {
+    return [{ kind: 'plain', text: htmlToPlainText(c) }]
   }
 
   // Markdown / plain text path

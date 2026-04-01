@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 
 type SortMode = '推荐' | '最新' | '热榜' | 'Agent精选'
 
@@ -51,6 +52,37 @@ function timeAgo(ts: string) {
   } catch {
     return ts
   }
+}
+
+function proxyMediaUrl(url: string): string {
+  const raw = String(url || '').trim()
+  if (!raw) return raw
+  if (raw.startsWith(DEFAULT_WTT_API_ORIGIN)) {
+    return raw.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
+  }
+  const localBackend = raw.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
+  if (localBackend) {
+    return raw.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
+  }
+  return raw
+}
+
+function stripHtmlToText(html: string): string {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function extractPreviewImage(body: string): string | null {
+  const htmlMatch = String(body || '').match(/<img\s[^>]*src=["']([^"']+)["']/i)
+  if (htmlMatch?.[1]) return proxyMediaUrl(htmlMatch[1])
+  const mdMatch = String(body || '').match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/i)
+  if (mdMatch?.[1]) return proxyMediaUrl(mdMatch[1])
+  return null
 }
 
 export default function SquarePage() {
@@ -316,8 +348,16 @@ export default function SquarePage() {
                         {post.title}
                       </h3>
                       {/* Preview */}
-                      <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
-                        {post.body}
+                      {extractPreviewImage(post.body) && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={extractPreviewImage(post.body) || ''}
+                          alt="preview"
+                          className="mb-2 max-h-40 w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
+                        />
+                      )}
+                      <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 whitespace-pre-wrap">
+                        {stripHtmlToText(post.body)}
                       </p>
                       {/* Footer stats */}
                       <div className="flex items-center gap-4 text-xs text-gray-400 dark:text-gray-500">

@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, Image as ImageIcon, MapPin, Paperclip, Send, Video } from 'lucide-react'
+import { Download, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -476,6 +476,17 @@ function trimUrlTail(raw: string): string {
   return url
 }
 
+function htmlToPlainText(html: string): string {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function classifyLine(line: string): ParsedRich {
   const c = line.trim()
   if (!c) return { kind: 'plain', text: '' }
@@ -516,9 +527,10 @@ function parseRichBlocks(content: string): ParsedRich[] {
     return [{ kind: 'preview', title, desc, url, image }]
   }
 
-  // Detect Tiptap rich-editor HTML: only when content has <img tags (the key
-  // differentiator from agent markdown that may contain stray <a>/<p>/<strong> etc.)
+  // Detect Tiptap rich-editor HTML. Keep image HTML rendering, but strip
+  // leading wrapper tags from text to avoid showing raw `<p>` in bubble text.
   const HAS_IMG_TAG = /<img\s/i
+  const HAS_HTML_TAG = /<\/?[a-z][^>]*>/i
   if (HAS_IMG_TAG.test(c)) {
     const proxyHtml = (html: string) =>
       html.replace(
@@ -529,11 +541,18 @@ function parseRichBlocks(content: string): ParsedRich[] {
     const firstTagIdx = c.search(HAS_IMG_TAG)
     if (firstTagIdx > 0) {
       const leading = c.slice(0, firstTagIdx).trim()
-      if (leading) blocks.push({ kind: 'plain', text: leading })
+      const leadingText = htmlToPlainText(leading)
+      if (leadingText) blocks.push({ kind: 'plain', text: leadingText })
     }
     const htmlPart = c.slice(Math.max(0, firstTagIdx)).trim()
     if (htmlPart) blocks.push({ kind: 'html', html: proxyHtml(htmlPart) })
     return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtml(c) }]
+  }
+
+  // Rich-text HTML without images: collapse to readable plain text.
+  if (HAS_HTML_TAG.test(c)) {
+    const plain = htmlToPlainText(c)
+    return [{ kind: 'plain', text: plain }]
   }
 
   // Detect rich markdown docs (headings/lists/tables/code blocks).
@@ -741,6 +760,7 @@ export function ChatView({
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [composerExpanded, setComposerExpanded] = useState(false)
 
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -1083,6 +1103,15 @@ export function ChatView({
     return () => document.removeEventListener('mousedown', handler)
   }, [attachMenuOpen])
 
+  useEffect(() => {
+    if (!composerExpanded) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [composerExpanded])
+
   const isDiscussTopic = topicType === 'discussion'
   const isNonTaskDiscussTopic = isDiscussTopic && !isTaskTopic
   const isModelCommand = useCallback((cmd: string) => {
@@ -1149,6 +1178,30 @@ export function ChatView({
       textarea.setSelectionRange(newCursorPos, newCursorPos)
     })
   }, [draft, mentionStartPos])
+
+  const quickReplyToMessage = useCallback((message: ChatMessage) => {
+    const senderName = senderLabelText(message.sender_display_name, message.sender_id)
+    const mention = senderName ? `@${senderName} ` : ''
+    const clean = stripMetaBlocks(message.content || '').body.trim().replace(/\s+/g, ' ')
+    const snippet = clean.length > 48 ? `${clean.slice(0, 48)}…` : clean
+    const quote = snippet ? `\n> ${snippet}` : ''
+    const prefix = `${mention}${quote}`.trim()
+
+    setDraft((prev) => {
+      const base = prev.trim()
+      if (!base) return `${prefix}${prefix ? '\n' : ''}`
+      return `${base}\n\n${prefix}${prefix ? '\n' : ''}`
+    })
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+      const t = textareaRef.current
+      if (t) {
+        const end = t.value.length
+        t.setSelectionRange(end, end)
+      }
+    })
+  }, [])
 
   const executeSlashCommand = useCallback(async (cmd: string, args: string) => {
     const apiBase = CLIENT_WTT_API_BASE
@@ -2036,8 +2089,16 @@ export function ChatView({
                           </div>
                         )
                       })()}
-                      <div className={`mt-1 text-right text-[10px] leading-none ${isMine ? 'text-emerald-600/70 dark:text-emerald-300/70' : 'text-slate-500 dark:text-zinc-400'}`}>
-                        {formatTime(message.timestamp)}
+                      <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] leading-none ${isMine ? 'text-emerald-600/70 dark:text-emerald-300/70' : 'text-slate-500 dark:text-zinc-400'}`}>
+                        <span>{formatTime(message.timestamp)}</span>
+                        <button
+                          type="button"
+                          onClick={() => quickReplyToMessage(message)}
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 transition hover:bg-black/5 dark:hover:bg-white/10"
+                        >
+                          <Reply className="h-3 w-3" />
+                          回复
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2431,7 +2492,15 @@ export function ChatView({
             </div>
           )}
 
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-2">
+          {composerExpanded && (
+            <button
+              type="button"
+              className="fixed inset-0 z-[110] bg-black/35"
+              onClick={() => setComposerExpanded(false)}
+              aria-label="关闭放大编辑框"
+            />
+          )}
+          <div className={`flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-2 ${composerExpanded ? 'fixed inset-x-2 bottom-2 z-[120] rounded-2xl border-2 bg-white dark:bg-zinc-900 shadow-2xl' : ''}`}>
           <div className="relative" ref={attachMenuRef}>
             <button
               type="button"
@@ -2459,6 +2528,15 @@ export function ChatView({
             )}
           </div>
 
+          <button
+            type="button"
+            onClick={() => setComposerExpanded((v) => !v)}
+            className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100"
+            title={composerExpanded ? '退出放大' : '放大编辑框'}
+          >
+            {composerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+
           <textarea
             ref={textareaRef}
             value={draft}
@@ -2466,7 +2544,7 @@ export function ChatView({
             onKeyDown={handleKeyDown}
             placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
             rows={1}
-            className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none"
+            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${composerExpanded ? 'min-h-[45vh] max-h-[70vh]' : 'max-h-28 min-h-10'}`}
           />
           <button
             onClick={handleSend}

@@ -113,8 +113,15 @@ interface SquareEditorProps {
   initialContent?: string
   /** Called when content changes. Returns HTML string. */
   onChange?: (html: string) => void
-  /** Expose the getHTML helper for parent to read content on demand */
-  onReady?: (helpers: { getHTML: () => string; isEmpty: () => boolean; clear: () => void }) => void
+  /** Expose helpers for parent controls (@mention insert, image picker, etc.) */
+  onReady?: (helpers: {
+    getHTML: () => string
+    isEmpty: () => boolean
+    clear: () => void
+    insertText: (text: string) => void
+    focus: () => void
+    openImagePicker: () => void
+  }) => void
   className?: string
 }
 
@@ -191,6 +198,15 @@ export function SquareEditor({
           return text.length === 0 && !editor.getHTML().includes('<img')
         },
         clear: () => editor.commands.clearContent(),
+        insertText: (text: string) => {
+          editor.chain().focus().insertContent(text).run()
+        },
+        focus: () => {
+          editor.chain().focus().run()
+        },
+        openImagePicker: () => {
+          fileInputRef.current?.click()
+        },
       })
     }
   }, [editor, onReady])
