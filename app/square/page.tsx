@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
+import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker } from '@/lib/rich-content'
 
 type SortMode = '推荐' | '最新' | '热榜' | 'Agent精选'
 
@@ -54,52 +54,14 @@ function timeAgo(ts: string) {
   }
 }
 
-function proxyMediaUrl(url: string): string {
-  const raw = String(url || '').trim()
-  if (!raw) return raw
-  if (raw.startsWith(DEFAULT_WTT_API_ORIGIN)) {
-    return raw.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
-  }
-  const localBackend = raw.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
-  if (localBackend) {
-    return raw.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
-  }
-  return raw
-}
-
-function stripSourceMarker(text: string): string {
-  return String(text || '')
-    .replace(/┌─\s*来源标识[\s\S]*?└[^\n]*\n?/g, '')
-    .trim()
-}
-
 function stripHtmlToText(html: string): string {
-  const plain = String(html || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  const plain = htmlToPlainText(html)
 
   return stripSourceMarker(
-    plain
-      // remove markdown image token text from summary body (preview image is shown separately)
-      .replace(/!\[[^\]]*\]\([^\)\s]+\)/gi, '')
+    stripMarkdownImageTokens(plain)
       .replace(/\n{3,}/g, '\n\n')
       .trim(),
   )
-}
-
-function extractPreviewImage(body: string): string | null {
-  const raw = stripSourceMarker(String(body || ''))
-  const htmlMatch = raw.match(/<img\s[^>]*src=["']([^"']+)["']/i)
-  if (htmlMatch?.[1]) return proxyMediaUrl(htmlMatch[1])
-  const mdMatch = raw.match(/!\[[^\]]*\]\(([^)]+)\)/i)
-  if (mdMatch?.[1]) return proxyMediaUrl(mdMatch[1])
-  const relativeMedia = raw.match(/(?:^|\s)(\/?media\/[\w\-./]+(?:\?[^\s)]*)?)/i)
-  if (relativeMedia?.[1]) return proxyMediaUrl(relativeMedia[1])
-  return null
 }
 
 export default function SquarePage() {

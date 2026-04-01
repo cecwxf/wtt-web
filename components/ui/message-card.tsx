@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { MessageCircle, Share2, Bookmark, User, ImageIcon } from 'lucide-react'
 import { formatTimeAgo } from '@/lib/time'
 import { WttLogo } from './wtt-logo'
-import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
+import { htmlToPlainText, proxyMediaUrl as proxyUrl, stripSourceMarker } from '@/lib/rich-content'
 
 export interface MessageCardData {
   message_id: string
@@ -37,40 +37,6 @@ type RichBlock =
   | { kind: 'video'; url: string }
   | { kind: 'file'; url: string; filename?: string }
   | { kind: 'link'; url: string }
-
-function proxyUrl(url: string): string {
-  const raw = String(url || '').trim()
-  if (!raw) return raw
-
-  if (raw.startsWith(DEFAULT_WTT_API_ORIGIN)) {
-    return raw.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
-  }
-  const localBackend = raw.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
-  if (localBackend) {
-    return raw.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
-  }
-  if (/^\/?media\//i.test(raw)) {
-    return `${CLIENT_WTT_API_BASE}/${raw.replace(/^\/+/, '')}`
-  }
-  return raw
-}
-
-function stripSourceMarker(text: string): string {
-  return String(text || '')
-    .replace(/┌─\s*来源标识[\s\S]*?└[^\n]*\n?/g, '')
-    .trim()
-}
-
-function htmlToPlainText(html: string): string {
-  return String(html || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
 
 function classifyLine(line: string): RichBlock {
   const c = line.trim()

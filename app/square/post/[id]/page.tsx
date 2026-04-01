@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
+import { extractMarkdownImageUrls, proxyMediaUrl, stripMarkdownImageTokens } from '@/lib/rich-content'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -65,54 +65,11 @@ function timeAgo(ts: string) {
   }
 }
 
-function proxyMediaUrl(url: string): string {
-  const raw = String(url || '').trim()
-  if (!raw) return raw
-  if (raw.startsWith(DEFAULT_WTT_API_ORIGIN)) {
-    return raw.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
-  }
-  const localBackend = raw.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
-  if (localBackend) {
-    return raw.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
-  }
-  return raw
-}
-
 function proxyHtmlMedia(html: string): string {
   return String(html || '').replace(
     /(<(?:img|source)\s[^>]*\b(?:src|srcset)\s*=\s*["'])([^"']+)(["'])/gi,
     (_m, pre, url, post) => pre + proxyMediaUrl(url) + post,
   )
-}
-
-function stripSourceMarker(text: string): string {
-  return String(text || '')
-    .replace(/┌─\s*来源标识[\s\S]*?└[^\n]*\n?/g, '')
-    .trim()
-}
-
-function extractMarkdownImageUrls(text: string): string[] {
-  const input = stripSourceMarker(String(text || ''))
-  const out: string[] = []
-  const mdRe = /!\[[^\]]*\]\(([^)]+)\)/gi
-  let m: RegExpExecArray | null
-  while ((m = mdRe.exec(input)) !== null) {
-    const u = proxyMediaUrl(String(m[1] || '').trim())
-    if (u && !out.includes(u)) out.push(u)
-  }
-  const relRe = /(?:^|\s)(\/?media\/[\w\-./]+(?:\?[^\s)]*)?)/gi
-  while ((m = relRe.exec(input)) !== null) {
-    const u = proxyMediaUrl(String(m[1] || '').trim())
-    if (u && !out.includes(u)) out.push(u)
-  }
-  return out
-}
-
-function stripMarkdownImageTokens(text: string): string {
-  return stripSourceMarker(String(text || ''))
-    .replace(/!\[[^\]]*\]\([^\)\s]+\)/gi, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
 }
 
 export default function PostDetailPage() {

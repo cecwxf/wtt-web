@@ -4,8 +4,9 @@ import { Download, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { formatTime, formatDateGroup } from '@/lib/time'
+import { htmlToPlainText, proxyMediaUrl as proxyUrl, stripSourceMarker, trimUrlTail } from '@/lib/rich-content'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
 
@@ -441,61 +442,6 @@ export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: str
   return { meta, body: cleaned.trim() }
 }
 
-/** Rewrite absolute backend media URLs to go through the Next.js proxy so
- *  HTTPS pages can load HTTP resources without mixed-content blocking. */
-function proxyUrl(url: string): string {
-  const raw = String(url || '').trim()
-  if (!raw) return raw
-
-  if (raw.startsWith(DEFAULT_WTT_API_ORIGIN)) {
-    return raw.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
-  }
-  // Also handle localhost / 127.0.0.1 backend origins (dev or stored URLs)
-  const localBackend = raw.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
-  if (localBackend) {
-    return raw.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
-  }
-
-  // Relative backend media paths from WTT payload (e.g. /media/xxx or media/xxx)
-  if (/^\/?media\//i.test(raw)) {
-    return `${CLIENT_WTT_API_BASE}/${raw.replace(/^\/+/, '')}`
-  }
-
-  return raw
-}
-
-function trimUrlTail(raw: string): string {
-  let url = String(raw || '').trim()
-  if (!url) return url
-
-  while (url.length > 0) {
-    const last = url[url.length - 1]
-    if (!')]}.,!?'.includes(last)) break
-
-    // Keep balanced trailing ")" in URLs like ...(v1)
-    if (last === ')') {
-      const opens = (url.match(/\(/g) || []).length
-      const closes = (url.match(/\)/g) || []).length
-      if (closes <= opens) break
-    }
-
-    url = url.slice(0, -1)
-  }
-
-  return url
-}
-
-function htmlToPlainText(html: string): string {
-  return String(html || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
 function classifyLine(line: string): ParsedRich {
   const c = line.trim()
   if (!c) return { kind: 'plain', text: '' }
@@ -527,7 +473,7 @@ function classifyLine(line: string): ParsedRich {
 }
 
 function parseRichBlocks(content: string): ParsedRich[] {
-  const c = (content || '').trim()
+  const c = stripSourceMarker((content || '').trim())
   if (!c) return [{ kind: 'plain', text: '' }]
 
   // [preview] block — return as single block
