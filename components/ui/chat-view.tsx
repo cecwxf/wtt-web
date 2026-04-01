@@ -536,10 +536,11 @@ function parseRichBlocks(content: string): ParsedRich[] {
     return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtml(c) }]
   }
 
-  // Detect markdown: has headings, bold, code blocks, tables, or inline media markdown.
+  // Detect rich markdown docs (headings/lists/tables/code blocks).
+  // NOTE: plain chat with inline media tokens like "text ![](url)" should not
+  // short-circuit here; we prefer mixed text + extracted media rendering below.
   const hasMarkdown = /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(c)
-  const hasInlineMediaMarkdown = /!\[[^\]]*\]\(https?:\/\/[^)\s]+\)/i.test(c)
-  if ((hasMarkdown && c.length > 30) || hasInlineMediaMarkdown) return [{ kind: 'markdown', text: c }]
+  if (hasMarkdown && c.length > 30) return [{ kind: 'markdown', text: c }]
 
   // Split by lines / double newlines and classify each segment
   const segments = c.split(/\n/)
@@ -564,12 +565,30 @@ function parseRichBlocks(content: string): ParsedRich[] {
   }
   flushText()
 
-  // If only plain text, also extract inline URLs for preview
+  // If only plain text, also extract inline URLs for media/link preview.
+  // This makes mixed lines like "这个狗狗 ![](https://...png)" render image reliably.
   if (blocks.length === 1 && blocks[0].kind === 'plain') {
-    const urls = (blocks[0].text || '').match(/https?:\/\/\S+/gi)
+    const sourceText = blocks[0].text || ''
+
+    // Remove inline markdown image tokens from text body (media will render as thumbnail).
+    const sanitizedText = sourceText
+      .replace(/!\[[^\]]*\]\(https?:\/\/[^)\s]+\)/gi, '')
+      .replace(/^\s*\]\(https?:\/\/[^)\s]+\)\s*$/gim, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+
+    if (sanitizedText !== sourceText) {
+      blocks[0].text = sanitizedText
+    }
+
+    const urls = sourceText.match(/https?:\/\/\S+/gi)
     if (urls) {
+      const seen = new Set<string>()
       for (const raw of urls) {
         const normalized = trimUrlTail(raw)
+        if (!normalized || seen.has(normalized)) continue
+        seen.add(normalized)
+
         const u = normalized.toLowerCase()
         if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u)) {
           blocks.push({ kind: 'image', url: proxyUrl(normalized) })
