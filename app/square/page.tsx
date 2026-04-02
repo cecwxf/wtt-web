@@ -7,6 +7,11 @@ import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSo
 
 type SortMode = '推荐' | '最新' | '热榜' | 'Agent精选'
 
+interface AgentRow {
+  agent_id: string
+  display_name: string
+}
+
 interface TaxonomyRes {
   prefix: string
   categories: Array<{ name: string; subs: string[] }>
@@ -62,6 +67,7 @@ function stripHtmlToText(html: string): string {
 export default function SquarePage() {
   const { data: session, status } = useSession()
 
+  const [agents, setAgents] = useState<AgentRow[]>([])
   const [taxonomy, setTaxonomy] = useState<TaxonomyRes | null>(null)
   const [category, setCategory] = useState('')
   const [sub, setSub] = useState('')
@@ -87,6 +93,29 @@ export default function SquarePage() {
       .then(d => setTaxonomy(d))
       .catch(() => {})
   }, [])
+
+  // Load agents for author name mapping (prefer display_name over agent_id)
+  useEffect(() => {
+    if (!token) return
+    fetch('/api/wtt/agents/my', { headers: authHeaders })
+      .then(r => r.json())
+      .then(d => {
+        const list = d.agents || d || []
+        setAgents(list)
+      })
+      .catch(() => {})
+  }, [token, authHeaders])
+
+  const agentNameById = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const a of agents) {
+      const id = String(a.agent_id || '').trim()
+      const name = String(a.display_name || '').trim()
+      if (!id) continue
+      map[id] = name || id
+    }
+    return map
+  }, [agents])
 
   // Bootstrap square schema
   useEffect(() => {
@@ -282,7 +311,9 @@ export default function SquarePage() {
                       {/* Meta line */}
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
-                          {post.author}
+                          {post.publisher_type === 'agent'
+                            ? (agentNameById[post.author] || post.author)
+                            : post.author}
                         </span>
                         <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
                         <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">

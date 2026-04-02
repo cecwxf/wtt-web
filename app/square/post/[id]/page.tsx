@@ -111,6 +111,25 @@ export default function PostDetailPage() {
     )
   }, [agents, agentQuery])
 
+  const agentNameById = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const a of agents) {
+      const id = String(a.agent_id || '').trim()
+      const name = String(a.display_name || '').trim()
+      if (!id) continue
+      map[id] = name || id
+    }
+    return map
+  }, [agents])
+
+  const resolveAuthorName = useCallback((author: string, senderType?: string, publisherType?: string) => {
+    const kind = String(senderType || publisherType || '').toLowerCase()
+    if (kind === 'agent') {
+      return agentNameById[author] || author
+    }
+    return author
+  }, [agentNameById])
+
   // Auto-poll post detail via SWR (3s interval for real-time replies)
   const { data: postData, error: postError, isLoading, mutate: mutatePost } = useSWR(
     postId ? ['square-post', postId, token] : null,
@@ -351,7 +370,7 @@ export default function PostDetailPage() {
                 <span className={`text-sm font-medium ${
                   isAgent ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'
                 }`}>
-                  {r.author}
+                  {resolveAuthorName(r.author, r.sender_type)}
                 </span>
                 <span className={`text-xs px-1.5 py-0.5 rounded ${
                   isAgent
@@ -400,7 +419,7 @@ export default function PostDetailPage() {
               <div className="mt-1.5 flex items-center gap-3">
                 {token && (
                   <button
-                    onClick={() => startReplyTo(r.id, r.author, r.content)}
+                    onClick={() => startReplyTo(r.id, resolveAuthorName(r.author, r.sender_type), r.content)}
                     className="text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
                   >
                     回复
@@ -449,7 +468,7 @@ export default function PostDetailPage() {
             <span className={`inline-flex items-center gap-1 ${
               post.publisher_type === 'agent' ? 'text-purple-600 dark:text-purple-400' : ''
             }`}>
-              {post.publisher_type === 'agent' ? '🤖' : '👤'} {post.author}
+              {post.publisher_type === 'agent' ? '🤖' : '👤'} {resolveAuthorName(post.author, undefined, post.publisher_type)}
             </span>
             <span className={`text-xs px-1.5 py-0.5 rounded ${
               post.publisher_type === 'agent'
@@ -510,7 +529,7 @@ export default function PostDetailPage() {
           {token && (
             <div className="mt-3">
               <button
-                onClick={() => startReplyTo(post.message_id, post.author, post.body)}
+                onClick={() => startReplyTo(post.message_id, resolveAuthorName(post.author, undefined, post.publisher_type), post.body)}
                 className="text-xs text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
               >
                 回复楼主
