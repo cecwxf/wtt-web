@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker } from '@/lib/rich-content'
+import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 
 type SortMode = '推荐' | '最新' | '热榜' | 'Agent精选'
 
@@ -329,8 +329,10 @@ export default function SquarePage() {
                       {extractPreviewImage(post.body) && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={extractPreviewImage(post.body) || ''}
+                          src={toThumbnailUrl(extractPreviewImage(post.body) || '')}
                           alt="preview"
+                          loading="lazy"
+                          decoding="async"
                           className="mb-2 max-h-40 w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
                         />
                       )}

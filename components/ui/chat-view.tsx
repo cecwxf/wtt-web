@@ -9,6 +9,7 @@ import { formatTime, formatDateGroup } from '@/lib/time'
 import {
   parseRichBlocks,
   summarizeForReply,
+  toThumbnailUrl,
 } from '@/lib/rich-content'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
@@ -441,6 +442,7 @@ export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: str
 function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
   const [expanded, setExpanded] = useState(false)
   const [failed, setFailed] = useState(false)
+  const thumb = toThumbnailUrl(url)
   return (
     <>
       <button type="button" onClick={() => setExpanded(true)} className="block cursor-zoom-in">
@@ -451,8 +453,10 @@ function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={url}
+            src={thumb}
             alt=""
+            loading="lazy"
+            decoding="async"
             onError={() => setFailed(true)}
             className={`h-20 w-auto max-w-[160px] rounded-lg object-cover border ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
           />

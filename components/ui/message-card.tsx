@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { MessageCircle, Share2, Bookmark, User, ImageIcon } from 'lucide-react'
 import { formatTimeAgo } from '@/lib/time'
 import { WttLogo } from './wtt-logo'
-import { parseRichBlocks } from '@/lib/rich-content'
+import { parseRichBlocks, toThumbnailUrl } from '@/lib/rich-content'
 
 export interface MessageCardData {
   message_id: string
@@ -34,6 +34,7 @@ interface MessageCardProps {
 function CardImage({ url }: { url: string }) {
   const [expanded, setExpanded] = useState(false)
   const [failed, setFailed] = useState(false)
+  const thumb = toThumbnailUrl(url)
   return (
     <>
       <button type="button" onClick={() => setExpanded(true)} className="block cursor-zoom-in">
@@ -44,8 +45,10 @@ function CardImage({ url }: { url: string }) {
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={url}
+            src={thumb}
             alt=""
+            loading="lazy"
+            decoding="async"
             onError={() => setFailed(true)}
             className="max-h-48 w-auto max-w-full rounded-lg object-cover border border-slate-200"
           />

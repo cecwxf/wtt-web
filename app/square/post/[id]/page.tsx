@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { parseRichBlocks, summarizeForReply } from '@/lib/rich-content'
+import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -502,7 +502,8 @@ export default function PostDetailPage() {
                     case 'image':
                       return (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img key={`${r.id}-img-${bi}`} src={block.url} alt="reply-image"
+                        <img key={`${r.id}-img-${bi}`} src={toThumbnailUrl(block.url)} alt="reply-image"
+                          loading="lazy" decoding="async"
                           className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover" />
                       )
                     case 'html':
@@ -612,7 +613,8 @@ export default function PostDetailPage() {
                 case 'image':
                   return (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={`post-img-${bi}`} src={block.url} alt="post-image"
+                    <img key={`post-img-${bi}`} src={toThumbnailUrl(block.url)} alt="post-image"
+                      loading="lazy" decoding="async"
                       className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover" />
                   )
                 case 'html':

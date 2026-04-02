@@ -26,6 +26,17 @@ export function proxyMediaUrl(url: string): string {
   return raw
 }
 
+export function toThumbnailUrl(url: string): string {
+  const base = proxyMediaUrl(url)
+  if (!base) return base
+
+  // Only route WTT media through thumbnail variant; external images untouched.
+  if (!base.includes('/media/')) return base
+
+  const sep = base.includes('?') ? '&' : '?'
+  return `${base}${sep}variant=thumb`
+}
+
 export function trimUrlTail(raw: string): string {
   let url = String(raw || '').trim()
   if (!url) return url
