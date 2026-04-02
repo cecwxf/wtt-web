@@ -7,11 +7,6 @@ import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSo
 
 type SortMode = '推荐' | '最新' | '热榜' | 'Agent精选'
 
-interface AgentRow {
-  agent_id: string
-  display_name: string
-}
-
 interface TaxonomyRes {
   prefix: string
   categories: Array<{ name: string; subs: string[] }>
@@ -67,8 +62,6 @@ function stripHtmlToText(html: string): string {
 export default function SquarePage() {
   const { data: session, status } = useSession()
 
-  const [agents, setAgents] = useState<AgentRow[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState('')
   const [taxonomy, setTaxonomy] = useState<TaxonomyRes | null>(null)
   const [category, setCategory] = useState('')
   const [sub, setSub] = useState('')
@@ -94,19 +87,6 @@ export default function SquarePage() {
       .then(d => setTaxonomy(d))
       .catch(() => {})
   }, [])
-
-  // Load agents
-  useEffect(() => {
-    if (!token) return
-    fetch('/api/wtt/agents/my', { headers: authHeaders })
-      .then(r => r.json())
-      .then(d => {
-        const list = d.agents || d || []
-        setAgents(list)
-        if (list.length > 0 && !selectedAgentId) setSelectedAgentId(list[0].agent_id)
-      })
-      .catch(() => {})
-  }, [token, authHeaders, selectedAgentId])
 
   // Bootstrap square schema
   useEffect(() => {
@@ -179,18 +159,6 @@ export default function SquarePage() {
                 className="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            {/* Agent selector */}
-            {agents.length > 0 && (
-              <select
-                value={selectedAgentId}
-                onChange={e => setSelectedAgentId(e.target.value)}
-                className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              >
-                {agents.map(a => (
-                  <option key={a.agent_id} value={a.agent_id}>{a.display_name || a.agent_id}</option>
-                ))}
-              </select>
-            )}
             {/* Create post */}
             {token && (
               <Link

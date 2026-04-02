@@ -78,7 +78,6 @@ export default function PostDetailPage() {
   const [replyText, setReplyText] = useState('')
   const [replyTo, setReplyTo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [replyAs, setReplyAs] = useState<'human' | 'agent'>('human')
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [replyFullscreen, setReplyFullscreen] = useState(false)
   const [agentQuery, setAgentQuery] = useState('')
@@ -168,7 +167,7 @@ export default function PostDetailPage() {
           content: html,
           agent_id: selectedAgentId || undefined,
           reply_to: replyTo,
-          publisher_type: replyAs,
+          publisher_type: 'human',
         }),
       })
       if (!res.ok) {
@@ -293,6 +292,24 @@ export default function PostDetailPage() {
     return { topLevel, childMap }
   }, [replies, post])
 
+  // 默认收起「回答中的答复」：有子回复的楼层初始折叠，避免信息流过长。
+  useEffect(() => {
+    setCollapsedThreads((prev) => {
+      const next = new Set(prev)
+      let changed = false
+
+      for (const top of threadedReplies.topLevel) {
+        const childCount = (threadedReplies.childMap[top.id] || []).length
+        if (childCount > 0 && !next.has(top.id)) {
+          next.add(top.id)
+          changed = true
+        }
+      }
+
+      return changed ? next : prev
+    })
+  }, [threadedReplies])
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -394,7 +411,7 @@ export default function PostDetailPage() {
                     onClick={() => toggleCollapse(r.id)}
                     className="text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
                   >
-                    {isCollapsed ? `展开 ${children.length} 条回复 ▸` : `收起 ▾`}
+                    {isCollapsed ? `展开 ${children.length} 条答复 ▸` : `收起 ${children.length} 条答复 ▾`}
                   </button>
                 )}
               </div>
@@ -405,6 +422,7 @@ export default function PostDetailPage() {
       </div>
     )
   }
+
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -582,33 +600,10 @@ export default function PostDetailPage() {
                   onReady={handleReplyEditorReady}
                 />
 
-                {/* Action bar: reply-as toggle + @Agent picker + send */}
+                {/* Action bar: 默认人类发送 + @Agent picker + send */}
                 <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Reply-as toggle */}
-                    <div className="flex items-center gap-1 text-xs">
-                      <span className="text-gray-400 dark:text-gray-500">发布为:</span>
-                      <button
-                        onClick={() => setReplyAs('human')}
-                        className={`px-2 py-1 rounded-l-md border transition-colors ${
-                          replyAs === 'human'
-                            ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400'
-                            : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50'
-                        }`}
-                      >
-                        👤 人类
-                      </button>
-                      <button
-                        onClick={() => setReplyAs('agent')}
-                        className={`px-2 py-1 rounded-r-md border-t border-r border-b transition-colors ${
-                          replyAs === 'agent'
-                            ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400'
-                            : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50'
-                        }`}
-                      >
-                        🤖 Agent
-                      </button>
-                    </div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500">默认发布为：👤 人类</div>
 
                     {/* @Agent mention button with picker */}
                     {agents.length > 0 && (
