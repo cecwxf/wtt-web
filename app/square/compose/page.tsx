@@ -31,7 +31,6 @@ export default function ComposePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  const [agents, setAgents] = useState<AgentRow[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [taxonomy, setTaxonomy] = useState<TaxonomyRes | null>(null)
 
@@ -80,7 +79,6 @@ export default function ComposePage() {
       .then(r => r.json())
       .then(d => {
         const list: AgentRow[] = d.agents || d || []
-        setAgents(list)
         if (list.length > 0 && !selectedAgentId) setSelectedAgentId(list[0].agent_id)
       })
       .catch(() => {})
