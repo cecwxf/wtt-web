@@ -195,11 +195,9 @@ export default function PostDetailPage() {
       }
       replyEditorRef.current?.clear()
       setReplyText('')
-      setReplyTo(null)
-      setReplyContext(null)
       await mutatePost()
 
-      // Scroll to the parent reply so user sees their new reply in context
+      // Keep focus around the replied anchor instead of jumping to the bottom composer.
       requestAnimationFrame(() => {
         const target = scrollTarget
           ? document.getElementById(`reply-${scrollTarget}`)
@@ -209,6 +207,7 @@ export default function PostDetailPage() {
           target.classList.add('bg-blue-50', 'dark:bg-blue-900/20')
           setTimeout(() => target.classList.remove('bg-blue-50', 'dark:bg-blue-900/20'), 2000)
         }
+        replyEditorRef.current?.focus?.()
       })
     } catch (e: unknown) {
       alert(`回复失败: ${e instanceof Error ? e.message : String(e)}`)
@@ -231,12 +230,17 @@ export default function PostDetailPage() {
     setAgentQuery('')
   }
 
-  // Set reply target — no quote injection; threaded layout shows context
+  // Set reply target and keep editor near target message
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const startReplyTo = (replyId: string, authorName: string, _rawContent: string) => {
     setReplyTo(replyId)
     setReplyContext({ author: authorName, snippet: '', imageUrl: undefined })
-    replyEditorRef.current?.focus?.()
+
+    requestAnimationFrame(() => {
+      const target = document.getElementById(`reply-${replyId}`)
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setTimeout(() => replyEditorRef.current?.focus?.(), 50)
+    })
   }
 
   const toggleCollapse = useCallback((replyId: string) => {
@@ -247,6 +251,114 @@ export default function PostDetailPage() {
       return next
     })
   }, [])
+
+  const renderReplyComposer = (compact = false) => (
+    <div className={`${compact ? 'mt-3' : 'mt-4'} pt-4 border-t border-gray-100 dark:border-gray-700`}>
+      {replyFullscreen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[110] bg-black/40"
+          onClick={() => setReplyFullscreen(false)}
+          aria-label="关闭全屏编辑"
+        />
+      )}
+
+      <div className={replyFullscreen ? 'fixed inset-4 z-[120] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-2xl overflow-y-auto' : 'relative'}>
+        <div className="mb-2 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-gray-500">
+          {replyTo ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="shrink-0 text-blue-500">回复 @{replyContext?.author}</span>
+              <button
+                onClick={() => { setReplyTo(null); setReplyText(''); setReplyContext(null) }}
+                className="text-red-400 hover:text-red-500"
+              >
+                取消
+              </button>
+            </div>
+          ) : (
+            <span>写下你的观点，支持 @Agent 与图片</span>
+          )}
+          <button
+            type="button"
+            onClick={() => setReplyFullscreen((v) => !v)}
+            className="rounded border border-gray-200 dark:border-gray-600 px-2 py-1 text-gray-500 hover:text-blue-500"
+          >
+            {replyFullscreen ? '退出全屏' : '全屏编辑'}
+          </button>
+        </div>
+
+        <SquareEditor
+          variant="mini"
+          className={replyFullscreen ? '[&_.ProseMirror]:!min-h-[78vh]' : ''}
+          placeholder="输入回复… 支持图片粘贴/拖拽，@agent 触发AI讨论"
+          onChange={setReplyText}
+          onReady={handleReplyEditorReady}
+        />
+
+        <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-xs text-gray-400 dark:text-gray-500">默认发布为：👤 人类</div>
+
+            {agents.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowAgentPicker(!showAgentPicker)}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                >
+                  @ Agent
+                </button>
+                {showAgentPicker && (
+                  <div className="absolute left-0 bottom-full mb-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10 p-2">
+                    <input
+                      value={agentQuery}
+                      onChange={(e) => setAgentQuery(e.target.value)}
+                      placeholder="搜索 Agent"
+                      className="mb-1 w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs text-gray-700 dark:text-gray-200"
+                    />
+                    <div className="max-h-44 overflow-y-auto">
+                      {filteredAgents.map(a => (
+                        <button
+                          key={a.agent_id}
+                          onClick={() => insertMention(a.agent_id)}
+                          className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-2"
+                        >
+                          <span className="text-purple-500">🤖</span>
+                          <span className="font-medium truncate">{a.display_name || a.agent_id}</span>
+                        </button>
+                      ))}
+                      {filteredAgents.length === 0 && (
+                        <div className="px-2 py-1.5 text-xs text-gray-400">无匹配 Agent</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => replyEditorRef.current?.openImagePicker?.()}
+              className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+            >
+              添加图片
+            </button>
+          </div>
+
+          <button
+            onClick={handleReply}
+            disabled={submitting}
+            className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
+          >
+            {submitting ? '发送中…' : '发送'}
+          </button>
+        </div>
+
+        <div className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+          支持粗体/斜体/列表/代码/图片 · @agent名称 自动补全 · 回复自动刷新
+        </div>
+      </div>
+    </div>
+  )
 
   // Build threaded reply structure
   const threadedReplies = useMemo(() => {
@@ -434,6 +546,8 @@ export default function PostDetailPage() {
                   </button>
                 )}
               </div>
+
+              {token && replyTo === r.id && renderReplyComposer(true)}
             </div>
           </div>
         </div>
@@ -460,7 +574,7 @@ export default function PostDetailPage() {
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         {/* Post content */}
-        <article className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <article id={`reply-${post.message_id}`} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 leading-tight">
             {post.title}
           </h1>
@@ -536,6 +650,8 @@ export default function PostDetailPage() {
               </button>
             </div>
           )}
+
+          {token && replyTo === post.message_id && renderReplyComposer(true)}
           {post.source_urls.length > 0 && (
             <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
               <div className="text-xs text-gray-400 dark:text-gray-500 mb-2">来源链接</div>
@@ -575,115 +691,15 @@ export default function PostDetailPage() {
             </div>
           )}
 
-          {/* Reply input */}
+          {/* Reply input: if a reply target is chosen, editor is rendered inline near that message. */}
           {token ? (
-            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-              {replyFullscreen && (
-                <button
-                  type="button"
-                  className="fixed inset-0 z-[110] bg-black/40"
-                  onClick={() => setReplyFullscreen(false)}
-                  aria-label="关闭全屏编辑"
-                />
-              )}
-
-              <div className={replyFullscreen ? 'fixed inset-4 z-[120] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-2xl overflow-y-auto' : 'relative'}>
-                <div className="mb-2 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-gray-500">
-                  {replyTo ? (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="shrink-0 text-blue-500">回复 @{replyContext?.author}</span>
-                      <button
-                        onClick={() => { setReplyTo(null); setReplyText(''); setReplyContext(null) }}
-                        className="text-red-400 hover:text-red-500"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  ) : (
-                    <span>写下你的观点，支持 @Agent 与图片</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setReplyFullscreen((v) => !v)}
-                    className="rounded border border-gray-200 dark:border-gray-600 px-2 py-1 text-gray-500 hover:text-blue-500"
-                  >
-                    {replyFullscreen ? '退出全屏' : '全屏编辑'}
-                  </button>
-                </div>
-
-                <SquareEditor
-                  variant="mini"
-                  className={replyFullscreen ? '[&_.ProseMirror]:!min-h-[78vh]' : ''}
-                  placeholder="输入回复… 支持图片粘贴/拖拽，@agent 触发AI讨论"
-                  onChange={setReplyText}
-                  onReady={handleReplyEditorReady}
-                />
-
-                {/* Action bar: 默认人类发送 + @Agent picker + send */}
-                <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="text-xs text-gray-400 dark:text-gray-500">默认发布为：👤 人类</div>
-
-                    {/* @Agent mention button with picker */}
-                    {agents.length > 0 && (
-                      <div className="relative">
-                        <button
-                          onClick={() => setShowAgentPicker(!showAgentPicker)}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
-                        >
-                          @ Agent
-                        </button>
-                        {showAgentPicker && (
-                          <div className="absolute left-0 bottom-full mb-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10 p-2">
-                            <input
-                              value={agentQuery}
-                              onChange={(e) => setAgentQuery(e.target.value)}
-                              placeholder="搜索 Agent"
-                              className="mb-1 w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs text-gray-700 dark:text-gray-200"
-                            />
-                            <div className="max-h-44 overflow-y-auto">
-                              {filteredAgents.map(a => (
-                                <button
-                                  key={a.agent_id}
-                                  onClick={() => insertMention(a.agent_id)}
-                                  className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-2"
-                                >
-                                  <span className="text-purple-500">🤖</span>
-                                  <span className="font-medium truncate">{a.display_name || a.agent_id}</span>
-                                </button>
-                              ))}
-                              {filteredAgents.length === 0 && (
-                                <div className="px-2 py-1.5 text-xs text-gray-400">无匹配 Agent</div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => replyEditorRef.current?.openImagePicker?.()}
-                      className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                    >
-                      添加图片
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={handleReply}
-                    disabled={submitting}
-                    className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
-                  >
-                    {submitting ? '发送中…' : '发送'}
-                  </button>
-                </div>
-
-                <div className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                  支持粗体/斜体/列表/代码/图片 · @agent名称 自动补全 · 回复自动刷新
-                </div>
+            !replyTo ? (
+              renderReplyComposer(false)
+            ) : (
+              <div className="mt-3 text-xs text-gray-400 dark:text-gray-500">
+                正在目标回复下编辑，发送后将保持当前位置。
               </div>
-            </div>
+            )
           ) : (
             <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-center">
               <Link href="/login" className="text-blue-500 hover:text-blue-600 text-sm">登录后参与讨论</Link>
