@@ -83,7 +83,9 @@ export default function PostDetailPage() {
   const [replyFullscreen, setReplyFullscreen] = useState(false)
   const [agentQuery, setAgentQuery] = useState('')
   const [replyContext, setReplyContext] = useState<{ author: string; snippet: string; imageUrl?: string } | null>(null)
+  const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set())
   const replyEditorRef = useRef<EditorHelpers | null>(null)
+  const lastReplyToRef = useRef<string | null>(null)
   const handleReplyEditorReady = useCallback((helpers: EditorHelpers) => {
     replyEditorRef.current = helpers
   }, [])
@@ -154,6 +156,9 @@ export default function PostDetailPage() {
     const isEmpty = replyEditorRef.current?.isEmpty() ?? !replyText.trim()
     if (isEmpty || submitting) return
 
+    const scrollTarget = replyTo
+    lastReplyToRef.current = scrollTarget
+
     setSubmitting(true)
     try {
       const res = await fetch(`/api/wtt/square/posts/${postId}/replies`, {
@@ -174,7 +179,19 @@ export default function PostDetailPage() {
       setReplyText('')
       setReplyTo(null)
       setReplyContext(null)
-      mutatePost()
+      await mutatePost()
+
+      // Scroll to the parent reply so user sees their new reply in context
+      requestAnimationFrame(() => {
+        const target = scrollTarget
+          ? document.getElementById(`reply-${scrollTarget}`)
+          : null
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          target.classList.add('bg-blue-50', 'dark:bg-blue-900/20')
+          setTimeout(() => target.classList.remove('bg-blue-50', 'dark:bg-blue-900/20'), 2000)
+        }
+      })
     } catch (e: unknown) {
       alert(`回复失败: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
@@ -203,6 +220,15 @@ export default function PostDetailPage() {
     setReplyContext({ author: authorName, snippet: '', imageUrl: undefined })
     replyEditorRef.current?.focus?.()
   }
+
+  const toggleCollapse = useCallback((replyId: string) => {
+    setCollapsedThreads(prev => {
+      const next = new Set(prev)
+      if (next.has(replyId)) next.delete(replyId)
+      else next.add(replyId)
+      return next
+    })
+  }, [])
 
   // Build threaded reply structure
   const threadedReplies = useMemo(() => {
@@ -290,9 +316,10 @@ export default function PostDetailPage() {
   const renderReply = (r: Reply, depth: number = 0) => {
     const isAgent = r.sender_type === 'agent'
     const children = threadedReplies.childMap[r.id] || []
+    const isCollapsed = collapsedThreads.has(r.id)
 
     return (
-      <div key={r.id} className={`${depth > 0 ? 'ml-8 border-l-2 border-gray-100 dark:border-gray-700 pl-4' : ''}`}>
+      <div key={r.id} id={`reply-${r.id}`} className={`transition-colors duration-500 ${depth > 0 ? 'ml-8 border-l-2 border-gray-100 dark:border-gray-700 pl-4' : ''}`}>
         <div className="py-3">
           <div className="flex items-start gap-2.5">
             <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
@@ -353,18 +380,28 @@ export default function PostDetailPage() {
                   }
                 })}
               </div>
-              {token && (
-                <button
-                  onClick={() => startReplyTo(r.id, r.author, r.content)}
-                  className="mt-1.5 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
-                >
-                  回复
-                </button>
-              )}
+              <div className="mt-1.5 flex items-center gap-3">
+                {token && (
+                  <button
+                    onClick={() => startReplyTo(r.id, r.author, r.content)}
+                    className="text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
+                  >
+                    回复
+                  </button>
+                )}
+                {children.length > 0 && (
+                  <button
+                    onClick={() => toggleCollapse(r.id)}
+                    className="text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+                  >
+                    {isCollapsed ? `展开 ${children.length} 条回复 ▸` : `收起 ▾`}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-        {children.map(child => renderReply(child, depth + 1))}
+        {!isCollapsed && children.map(child => renderReply(child, depth + 1))}
       </div>
     )
   }
