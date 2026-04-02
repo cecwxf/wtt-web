@@ -475,7 +475,7 @@ export function WttSettingsModal({
                     />
                     <div>
                       <p className="text-base font-semibold text-slate-800">
-                        {session.user.name || "WTT User"}
+                        {session.user.name || session.user.email || ""}
                       </p>
                       {session.user.email && (
                         <p className="text-xs text-slate-400">
@@ -488,7 +488,7 @@ export function WttSettingsModal({
                 {!session?.user?.image && (
                   <div className="mb-3">
                     <p className="text-base font-semibold text-slate-800">
-                      {session?.user?.name || "WTT User"}
+                      {session?.user?.name || session?.user?.email || ""}
                     </p>
                     {session?.user?.email && (
                       <p className="text-xs text-slate-400">
@@ -502,7 +502,7 @@ export function WttSettingsModal({
                     {t("settings.displayName")}
                   </span>
                   <input
-                    defaultValue={session?.user?.name || "WTT User"}
+                    defaultValue={session?.user?.name || ""}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                 </label>

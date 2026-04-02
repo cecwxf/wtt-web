@@ -7,11 +7,8 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import {
-  extractMarkdownImageUrls,
-  htmlToPlainText,
   parseRichBlocks,
-  stripMarkdownImageTokens,
-  stripSourceMarker,
+  summarizeForReply,
 } from '@/lib/rich-content'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
@@ -998,26 +995,20 @@ export function ChatView({
 
   const quickReplyToMessage = useCallback((message: ChatMessage) => {
     const senderName = senderLabelText(message.sender_display_name, message.sender_id)
-    const mention = senderName ? `@${senderName} ` : ''
     const body = stripMetaBlocks(message.content || '').body
-    const imageUrls = extractMarkdownImageUrls(body)
-    const plain = body.includes('<') && body.includes('>') ? htmlToPlainText(body) : stripMarkdownImageTokens(body)
-    const clean = stripSourceMarker(plain).trim().replace(/\s+/g, ' ')
-    const snippet = clean
-      ? (clean.length > 120 ? `${clean.slice(0, 120)}…` : clean)
-      : (imageUrls[0] ? `图片: ${imageUrls[0]}` : '（图片或空内容）')
-    const quote = snippet ? `> ${snippet}` : ''
-    const imageLine = imageUrls[0] ? `\n![reply-image](${imageUrls[0]})` : ''
-    const prefix = `${mention}${quote}${imageLine}`.trim()
+    const summary = summarizeForReply(body)
 
-    if (senderName || snippet || imageUrls[0]) {
-      setReplyContext({ sender: senderName || message.sender_id, snippet, imageUrl: imageUrls[0] })
-    }
+    setReplyContext({
+      sender: senderName || message.sender_id,
+      snippet: summary.text,
+      imageUrl: summary.thumbUrl,
+    })
 
+    // Only inject @mention into draft, no quoted content
+    const mention = senderName ? `@${senderName} ` : ''
     setDraft((prev) => {
       const base = prev.trim()
-      if (!base) return `${prefix}${prefix ? '\n' : ''}`
-      return `${base}\n\n${prefix}${prefix ? '\n' : ''}`
+      return base ? `${base}\n\n${mention}` : mention
     })
 
     requestAnimationFrame(() => {
@@ -1255,8 +1246,7 @@ export function ChatView({
 
     if (replyContext && replyContext.snippet) {
       const sender = replyContext.sender || 'unknown'
-      const imageLine = replyContext.imageUrl ? `\n引用图片: ${replyContext.imageUrl}` : ''
-      const contextHeader = `[回复上下文]\n对象: ${sender}\n引用: ${replyContext.snippet}${imageLine}\n---\n`
+      const contextHeader = `[回复上下文]\n对象: ${sender}\n引用: ${replyContext.snippet}\n---\n`
       if (!content.includes('[回复上下文]')) {
         content = `${contextHeader}${content}`
       }
@@ -2330,14 +2320,25 @@ export function ChatView({
           )}
 
           {replyContext && (
-            <div className="mb-2 flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300">
-              <span className="truncate">回复 @{replyContext.sender}: {replyContext.snippet}{replyContext.imageUrl ? '（含图片）' : ''}</span>
+            <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-indigo-400 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700 dark:border-indigo-500 dark:bg-indigo-900/20 dark:text-indigo-300">
+              {replyContext.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={replyContext.imageUrl}
+                  alt=""
+                  className="h-8 w-8 flex-shrink-0 rounded object-cover"
+                />
+              )}
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-medium">@{replyContext.sender}</span>
+                {replyContext.snippet ? `: ${replyContext.snippet}` : ''}
+              </span>
               <button
                 type="button"
                 onClick={() => setReplyContext(null)}
-                className="ml-2 rounded px-1.5 py-0.5 text-[11px] hover:bg-indigo-100 dark:hover:bg-indigo-800/40"
+                className="ml-1 flex-shrink-0 rounded px-1.5 py-0.5 text-[11px] text-indigo-400 hover:bg-indigo-100 hover:text-indigo-600 dark:hover:bg-indigo-800/40"
               >
-                取消
+                ✕
               </button>
             </div>
           )}

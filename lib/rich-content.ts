@@ -120,6 +120,68 @@ export function proxyHtmlMedia(html: string): string {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Clean reply summary (Telegram / Zhihu style)                       */
+/* ------------------------------------------------------------------ */
+
+export interface ReplySummary {
+  /** Clean text-only snippet for display (no URLs, max ~80 chars) */
+  text: string
+  /** Whether original content contains images */
+  hasImage: boolean
+  /** Number of images in the original content */
+  imageCount: number
+  /** First image URL for optional tiny thumbnail */
+  thumbUrl?: string
+}
+
+/**
+ * Produce a clean, Telegram-style reply summary: short text excerpt,
+ * 📷 indicator for images — never raw URLs.
+ */
+export function summarizeForReply(raw: string, maxLen = 80): ReplySummary {
+  const source = String(raw || '')
+  const imageUrls = extractMarkdownImageUrls(source)
+
+  // Strip HTML to plain text OR strip markdown image tokens
+  let plain = source.includes('<') && source.includes('>')
+    ? htmlToPlainText(source)
+    : stripMarkdownImageTokens(source)
+
+  // Clean previous injected reply context headers
+  plain = stripSourceMarker(plain)
+    .replace(/\[回复上下文\][\s\S]*?(?:---|$)/g, ' ')
+    .replace(/(^|\n)\s*(?:对象|引用|回复上下文|引用图片)\s*:[^\n]*/g, ' ')
+
+  // Remove any remaining bare URLs
+  plain = plain.replace(/https?:\/\/\S+/g, '').replace(/\/?media\/[\w\-./]+/g, '')
+
+  const compact = plain.replace(/\s+/g, ' ').trim()
+  const truncated = compact.length > maxLen ? `${compact.slice(0, maxLen)}…` : compact
+
+  const hasImage = imageUrls.length > 0
+  const imageTag = hasImage ? (imageUrls.length > 1 ? `📷×${imageUrls.length}` : '📷') : ''
+
+  // Build final display text
+  let text: string
+  if (truncated && imageTag) {
+    text = `${truncated} ${imageTag}`
+  } else if (truncated) {
+    text = truncated
+  } else if (imageTag) {
+    text = imageTag
+  } else {
+    text = '…'
+  }
+
+  return {
+    text,
+    hasImage,
+    imageCount: imageUrls.length,
+    thumbUrl: imageUrls[0] || undefined,
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Unified rich-content block parser                                  */
 /* ------------------------------------------------------------------ */
 

@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { extractMarkdownImageUrls, htmlToPlainText, parseRichBlocks, stripMarkdownImageTokens, stripSourceMarker } from '@/lib/rich-content'
+import { parseRichBlocks, summarizeForReply } from '@/lib/rich-content'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -65,38 +65,9 @@ function timeAgo(ts: string) {
   }
 }
 
-function escapeHtml(raw: string): string {
-  return String(raw || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
 function summarizeReplyContent(raw: string): { snippet: string; imageUrl?: string } {
-  const source = String(raw || '')
-  const imageUrls = extractMarkdownImageUrls(source)
-  const plain = source.includes('<') && source.includes('>')
-    ? htmlToPlainText(source)
-    : stripMarkdownImageTokens(source)
-
-  const cleaned = stripSourceMarker(plain)
-    // avoid recursive quoting of previous injected context
-    .replace(/\[回复上下文\][\s\S]*?(?:---|$)/g, ' ')
-    .replace(/(^|\n)\s*对象\s*:[^\n]*/g, ' ')
-    .replace(/(^|\n)\s*引用\s*:[^\n]*/g, ' ')
-    .replace(/(^|\n)\s*回复上下文\s*:[^\n]*/g, ' ')
-
-  const compact = cleaned.replace(/\s+/g, ' ').trim()
-  const snippet = compact
-    ? (compact.length > 140 ? `${compact.slice(0, 140)}…` : compact)
-    : (imageUrls[0] ? `图片: ${imageUrls[0]}` : '（图片或空内容）')
-
-  return {
-    snippet,
-    imageUrl: imageUrls[0] || undefined,
-  }
+  const summary = summarizeForReply(raw)
+  return { snippet: summary.text, imageUrl: summary.thumbUrl }
 }
 
 export default function PostDetailPage() {
@@ -177,16 +148,11 @@ export default function PostDetailPage() {
     }
   }, [replyFullscreen])
 
-  // Submit reply
+  // Submit reply — no quote injection; threading handles context visually
   const handleReply = async () => {
     const html = replyEditorRef.current?.getHTML() || replyText.trim()
     const isEmpty = replyEditorRef.current?.isEmpty() ?? !replyText.trim()
     if (isEmpty || submitting) return
-
-    const injectedContext = replyContext
-      ? `<p><strong>回复上下文：</strong>@${escapeHtml(replyContext.author)} · ${escapeHtml(replyContext.snippet)}</p>${replyContext.imageUrl ? `<p><img src="${escapeHtml(replyContext.imageUrl)}" alt="reply-context-image" /></p>` : ''}`
-      : ''
-    const finalHtml = injectedContext ? `${injectedContext}${html}` : html
 
     setSubmitting(true)
     try {
@@ -194,7 +160,7 @@ export default function PostDetailPage() {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
-          content: finalHtml,
+          content: html,
           agent_id: selectedAgentId || undefined,
           reply_to: replyTo,
           publisher_type: replyAs,
@@ -230,20 +196,12 @@ export default function PostDetailPage() {
     setAgentQuery('')
   }
 
-  // Set reply target and inject quoted context into editor draft
-  const startReplyTo = (replyId: string, authorName: string, rawContent: string) => {
-    const context = summarizeReplyContent(rawContent)
+  // Set reply target — no quote injection; threaded layout shows context
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const startReplyTo = (replyId: string, authorName: string, _rawContent: string) => {
     setReplyTo(replyId)
-    setReplyContext({ author: authorName, snippet: context.snippet, imageUrl: context.imageUrl })
-
-    const imageLine = context.imageUrl ? `\n![reply-image](${context.imageUrl})` : ''
-    const injected = `@${authorName} \n> ${context.snippet}${imageLine}\n`
-    if (replyEditorRef.current?.insertText) {
-      replyEditorRef.current.insertText(injected)
-      replyEditorRef.current.focus?.()
-    } else {
-      setReplyText(injected)
-    }
+    setReplyContext({ author: authorName, snippet: '', imageUrl: undefined })
+    replyEditorRef.current?.focus?.()
   }
 
   // Build threaded reply structure
@@ -559,18 +517,7 @@ export default function PostDetailPage() {
                 <div className="mb-2 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-gray-500">
                   {replyTo ? (
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="shrink-0">回复中…</span>
-                      {replyContext?.snippet && (
-                        <span className="truncate text-gray-500 dark:text-gray-400">@{replyContext.author}: {replyContext.snippet}</span>
-                      )}
-                      {replyContext?.imageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={replyContext.imageUrl}
-                          alt="reply-context"
-                          className="h-10 w-10 rounded border border-gray-200 dark:border-gray-700 object-cover"
-                        />
-                      )}
+                      <span className="shrink-0 text-blue-500">回复 @{replyContext?.author}</span>
                       <button
                         onClick={() => { setReplyTo(null); setReplyText(''); setReplyContext(null) }}
                         className="text-red-400 hover:text-red-500"
