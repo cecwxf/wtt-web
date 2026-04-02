@@ -20,6 +20,8 @@ import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { useI18n } from '@/lib/i18n-provider'
 import { cacheKeyFromBase64, clearCachedKey, decryptReceived, encryptForSend, getCachedKey } from '@/lib/e2e-crypto'
 
+const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
+
 const ContentEditor = dynamic(
   () => import('@/components/ui/content-editor').then((m) => m.ContentEditor),
   { ssr: false },
@@ -561,7 +563,21 @@ function FeedPageInner() {
   const [e2eBootstrapSeq, setE2eBootstrapSeq] = useState(0)
 
   useEffect(() => {
+    if (P2P_E2E_WEB_ENABLED) return
+    clearCachedKey()
+    decryptCacheRef.current.clear()
+    e2eBootstrapRequestedRef.current = null
+  }, [])
+
+  useEffect(() => {
     if (!selectedAgentId) return
+
+    if (!P2P_E2E_WEB_ENABLED) {
+      clearCachedKey()
+      decryptCacheRef.current.clear()
+      e2eBootstrapRequestedRef.current = null
+      return
+    }
 
     // On first mount, keep existing cached key (it may already match this agent).
     if (!lastE2EAgentRef.current) {
@@ -580,6 +596,7 @@ function FeedPageInner() {
   }, [selectedAgentId])
 
   useEffect(() => {
+    if (!P2P_E2E_WEB_ENABLED) return
     if (!selectedAgentId) return
     if (!session?.accessToken) return
     if (getCachedKey()) return
@@ -1133,7 +1150,7 @@ function FeedPageInner() {
       // Regular topic — use publishMessage (may include worker persona context)
       let outboundContent = augmentedContent
       let encrypted = false
-      if (selectedTopic?.topic_type === 'p2p') {
+      if (P2P_E2E_WEB_ENABLED && selectedTopic?.topic_type === 'p2p') {
         const messageId = `web-p2p-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
         const enc = await encryptForSend(augmentedContent, messageId)
         outboundContent = enc.content
