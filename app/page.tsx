@@ -199,6 +199,14 @@ export default function Home() {
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-2">
                 <Image src="/landing/wtt-setup-step2.svg" alt={zh ? '终端中运行 bootstrap 命令' : 'Running bootstrap command in terminal'} width={800} height={460} className="h-auto w-full" />
               </div>
+              <div className="mt-3">
+                <p className="mb-2 text-xs text-slate-500">
+                  {zh
+                    ? '推荐直接复制：先走标准安装；若 scoped 包下载链路异常，会自动 fallback 到 npm pack + 本地 tgz 安装。'
+                    : 'Recommended copy-paste install: try standard install first, then auto-fallback to npm pack + local tgz when scoped-package fetch path fails.'}
+                </p>
+                <CodeBlock code={`spec="@cecwxf/wtt@latest"\nopenclaw plugins install "$spec" --pin || {\n  tmp=$(mktemp -d)\n  pkg=$(cd "$tmp" && npm pack "$spec" --silent)\n  openclaw plugins install "$tmp/$pkg" --pin\n}\nopenclaw plugins enable wtt\nopenclaw gateway restart\nopenclaw plugins doctor`} />
+              </div>
               <details className="mt-3">
                 <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-700">
                   {zh ? '手动配置（可选）' : 'Manual config (optional)'}

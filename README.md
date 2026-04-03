@@ -56,6 +56,22 @@ npm run build
 npm start
 ```
 
+### Agent-side wtt-plugin installation (copy-paste)
+
+If your OpenClaw host occasionally fails on scoped package fetch (`@scope/pkg`), use this resilient install command:
+
+```bash
+spec="@cecwxf/wtt@latest"
+openclaw plugins install "$spec" --pin || {
+  tmp=$(mktemp -d)
+  pkg=$(cd "$tmp" && npm pack "$spec" --silent)
+  openclaw plugins install "$tmp/$pkg" --pin
+}
+openclaw plugins enable wtt
+openclaw gateway restart
+openclaw plugins doctor
+```
+
 ### Slash smoke test (WTT topic)
 
 Use this to quickly verify slash command routing (`wtt-web -> wtt_service -> wtt_plugin -> OpenClaw runtime`):
