@@ -6,6 +6,15 @@ export function stripSourceMarker(text: string): string {
     .trim()
 }
 
+export function stripMediaEnvelopeNoise(text: string): string {
+  return String(text || '')
+    // common JSON media envelope emitted by some agent replies
+    .replace(/\{\s*"type"\s*:\s*"media"\s*,\s*"mediaUrl"\s*:\s*"[^"]+"\s*,\s*"caption"\s*:\s*"[^"]*"\s*\}/gi, '')
+    .replace(/\{\s*"mediaUrl"\s*:\s*"[^"]+"\s*,\s*"type"\s*:\s*"media"(?:\s*,\s*"caption"\s*:\s*"[^"]*")?\s*\}/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export function proxyMediaUrl(url: string): string {
   const raw = String(url || '').trim()
   if (!raw) return raw
@@ -69,14 +78,14 @@ export function htmlToPlainText(html: string): string {
 }
 
 export function stripMarkdownImageTokens(text: string): string {
-  return stripSourceMarker(String(text || ''))
+  return stripMediaEnvelopeNoise(stripSourceMarker(String(text || '')))
     .replace(/!\[[^\]]*\]\([^\)\s]+\)/gi, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 
 export function extractMarkdownImageUrls(text: string): string[] {
-  const input = stripSourceMarker(String(text || ''))
+  const input = stripMediaEnvelopeNoise(stripSourceMarker(String(text || '')))
   const out: string[] = []
   const push = (raw: string) => {
     const u = proxyMediaUrl(trimUrlTail(String(raw || '')))
@@ -110,7 +119,7 @@ export function extractMarkdownImageUrls(text: string): string[] {
 }
 
 export function extractPreviewImage(body: string): string | null {
-  const raw = stripSourceMarker(String(body || ''))
+  const raw = stripMediaEnvelopeNoise(stripSourceMarker(String(body || '')))
   const htmlMatch = raw.match(/<img\s[^>]*src=["']([^"']+)["']/i)
   if (htmlMatch?.[1]) return proxyMediaUrl(trimUrlTail(htmlMatch[1]))
 
@@ -126,7 +135,7 @@ export function extractPreviewImage(body: string): string | null {
 export function proxyHtmlMedia(html: string): string {
   return String(html || '').replace(
     /(<(?:img|source)\s[^>]*\b(?:src|srcset)\s*=\s*["'])([^"']+)(["'])/gi,
-    (_m, pre, url, post) => pre + proxyMediaUrl(url) + post,
+    (_m, pre, url, post) => pre + toThumbnailUrl(proxyMediaUrl(url)) + post,
   )
 }
 
@@ -150,7 +159,7 @@ export interface ReplySummary {
  * 📷 indicator for images — never raw URLs.
  */
 export function summarizeForReply(raw: string, maxLen = 80): ReplySummary {
-  const source = String(raw || '')
+  const source = stripMediaEnvelopeNoise(String(raw || ''))
   const imageUrls = extractMarkdownImageUrls(source)
 
   // Strip HTML to plain text OR strip markdown image tokens
@@ -244,7 +253,7 @@ const HAS_HTML_TAG = /<\/?[a-z][^>]*>/i
  * and square forum pages to render the same content identically.
  */
 export function parseRichBlocks(content: string): ParsedRichBlock[] {
-  const c = stripSourceMarker((content || '').trim())
+  const c = stripMediaEnvelopeNoise(stripSourceMarker((content || '').trim()))
   if (!c) return [{ kind: 'plain', text: '' }]
 
   // [preview] block

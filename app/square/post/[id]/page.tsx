@@ -195,9 +195,12 @@ export default function PostDetailPage() {
       }
       replyEditorRef.current?.clear()
       setReplyText('')
+      setReplyTo(null)
+      setReplyContext(null)
+      setShowAgentPicker(false)
       await mutatePost()
 
-      // Keep focus around the replied anchor instead of jumping to the bottom composer.
+      // Keep viewport anchored on the replied content; do not jump to bottom.
       requestAnimationFrame(() => {
         const target = scrollTarget
           ? document.getElementById(`reply-${scrollTarget}`)
@@ -207,7 +210,6 @@ export default function PostDetailPage() {
           target.classList.add('bg-blue-50', 'dark:bg-blue-900/20')
           setTimeout(() => target.classList.remove('bg-blue-50', 'dark:bg-blue-900/20'), 2000)
         }
-        replyEditorRef.current?.focus?.()
       })
     } catch (e: unknown) {
       alert(`回复失败: ${e instanceof Error ? e.message : String(e)}`)
@@ -461,13 +463,19 @@ export default function PostDetailPage() {
     )
   }
 
-  const renderReply = (r: Reply, depth: number = 0) => {
+  const countThreadReplies = (replyId: string): number => {
+    const children = threadedReplies.childMap[replyId] || []
+    return children.reduce((sum, child) => sum + 1 + countThreadReplies(child.id), 0)
+  }
+
+  const renderReply = (r: Reply) => {
     const isAgent = r.sender_type === 'agent'
     const children = threadedReplies.childMap[r.id] || []
+    const totalDescendants = countThreadReplies(r.id)
     const isCollapsed = collapsedThreads.has(r.id)
 
     return (
-      <div key={r.id} id={`reply-${r.id}`} className={`transition-colors duration-500 ${depth > 0 ? 'ml-8 border-l-2 border-gray-100 dark:border-gray-700 pl-4' : ''}`}>
+      <div key={r.id} id={`reply-${r.id}`} className="transition-colors duration-500">
         <div className="py-3">
           <div className="flex items-start gap-2.5">
             <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
@@ -538,12 +546,12 @@ export default function PostDetailPage() {
                     回复
                   </button>
                 )}
-                {children.length > 0 && (
+                {totalDescendants > 0 && (
                   <button
                     onClick={() => toggleCollapse(r.id)}
                     className="text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
                   >
-                    {isCollapsed ? `展开 ${children.length} 条答复 ▸` : `收起 ${children.length} 条答复 ▾`}
+                    {isCollapsed ? `展开 ${totalDescendants} 条答复 ▸` : `收起 ${totalDescendants} 条答复 ▾`}
                   </button>
                 )}
               </div>
@@ -552,7 +560,7 @@ export default function PostDetailPage() {
             </div>
           </div>
         </div>
-        {!isCollapsed && children.map(child => renderReply(child, depth + 1))}
+        {!isCollapsed && children.map(child => renderReply(child))}
       </div>
     )
   }
