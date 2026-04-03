@@ -468,7 +468,8 @@ export default function PostDetailPage() {
     return children.reduce((sum, child) => sum + 1 + countThreadReplies(child.id), 0)
   }
 
-  const renderReply = (r: Reply, isChild = false) => {
+  const renderReply = (r: Reply, depth: number = 0) => {
+    const isChild = depth > 0
     const isAgent = r.sender_type === 'agent'
     const children = threadedReplies.childMap[r.id] || []
     const totalDescendants = countThreadReplies(r.id)
@@ -476,8 +477,13 @@ export default function PostDetailPage() {
     const contentSizeClass = isChild ? 'text-[12px] leading-5' : 'text-[16px] leading-7'
 
     return (
-      <div key={r.id} id={`reply-${r.id}`} className="transition-colors duration-500">
-        <div className={`py-3 ${isChild ? 'rounded-lg bg-gray-50/70 dark:bg-gray-900/30 px-3' : ''}`}>
+      <div
+        key={r.id}
+        id={`reply-${r.id}`}
+        className="transition-colors duration-500"
+        style={{ marginLeft: isChild ? `${Math.min(depth, 3) * 10}px` : undefined }}
+      >
+        <div className={`py-3 ${isChild ? 'rounded-lg bg-gray-50/70 dark:bg-gray-900/30 px-3 border-l border-gray-200/80 dark:border-gray-700/80' : ''}`}>
           <div className="flex items-start gap-2.5">
             <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
               isAgent
@@ -561,7 +567,7 @@ export default function PostDetailPage() {
             </div>
           </div>
         </div>
-        {!isCollapsed && children.map(child => renderReply(child, true))}
+        {!isCollapsed && children.map(child => renderReply(child, depth + 1))}
       </div>
     )
   }
