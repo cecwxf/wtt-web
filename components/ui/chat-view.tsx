@@ -1529,19 +1529,21 @@ export function ChatView({
       className="flex h-full flex-col"
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif' }}
     >
-      <div className="border-b border-slate-200 dark:border-zinc-700 px-5 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="truncate text-lg font-semibold dark:text-zinc-100">{topicName}</h2>
-            <p className="mt-1 text-xs text-slate-400">
-              {t('chat.messagesLoaded', { count: messages.length })}
+      <div className="border-b border-slate-200 dark:border-zinc-700 px-3 py-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-[15px] font-semibold leading-5 dark:text-zinc-100">{topicName}</h2>
+              <span className="shrink-0 text-[10px] text-slate-400">
+                {t('chat.messagesLoaded', { count: messages.length })}
+              </span>
               {wsConnected && (
-                <span className="ml-2 inline-flex items-center gap-1 text-emerald-500">
+                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
                   {t('chat.live')}
                 </span>
               )}
-            </p>
+            </div>
           </div>
           <div className="flex items-center gap-1">
             {extraHeaderActions}
@@ -1549,9 +1551,9 @@ export function ChatView({
               <button
                 onClick={() => setExportOpen(!exportOpen)}
                 onBlur={() => setTimeout(() => setExportOpen(false), 150)}
-                className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-2 py-1 text-[11px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
+                className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
               >
-                <Download size={12} /> {t('chat.export')} ▾
+                <Download size={11} /> {t('chat.export')} ▾
               </button>
               {exportOpen && (
                 <div className="absolute right-0 top-full mt-1 z-30 min-w-[132px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
@@ -2399,7 +2401,7 @@ export function ChatView({
             onKeyDown={handleKeyDown}
             placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
             rows={1}
-            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : 'max-h-28 min-h-10'}`}
+            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : 'max-h-24 min-h-8'}`}
           />
           <button
             onClick={handleSend}
