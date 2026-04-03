@@ -76,6 +76,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onLeaveTopic,
     onDeleteTopic,
     onOpenEditor,
+    onQuickCreateTask,
     onSubscribeTopic,
     onCreateP2P,
     onRequestDiscuss,
@@ -217,7 +218,7 @@ export function WttShellV2(props: WttShellV2Props) {
               onSelectTopic={onTopicChange}
               onLeaveTopic={onLeaveTopic}
               onDeleteTopic={onDeleteTopic}
-              onQuickCreateTask={undefined}
+              onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
               onCreateP2P={onCreateP2P}
               onRequestDiscuss={onRequestDiscuss}
               agentName={selectedAgent?.display_name}
