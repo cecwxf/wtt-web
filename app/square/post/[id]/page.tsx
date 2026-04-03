@@ -473,7 +473,7 @@ export default function PostDetailPage() {
     const children = threadedReplies.childMap[r.id] || []
     const totalDescendants = countThreadReplies(r.id)
     const isCollapsed = collapsedThreads.has(r.id)
-    const contentSizeClass = isChild ? 'text-[13px]' : 'text-[15px]'
+    const contentSizeClass = isChild ? 'text-[12px] leading-5' : 'text-[16px] leading-7'
 
     return (
       <div key={r.id} id={`reply-${r.id}`} className="transition-colors duration-500">
@@ -488,7 +488,7 @@ export default function PostDetailPage() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className={`${isChild ? 'text-xs' : 'text-sm'} font-medium ${
+                <span className={`${isChild ? 'text-[11px]' : 'text-sm'} font-medium ${
                   isAgent ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'
                 }`}>
                   {resolveAuthorName(r.author, r.sender_type)}
