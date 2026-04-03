@@ -336,6 +336,7 @@ interface ChatViewProps {
   topicType?: string
   typingIndicatorText?: string | null
   onRequestPrivateDiscuss?: (targetAgentId: string, targetDisplayName?: string) => Promise<void> | void
+  compactUi?: boolean
 }
 
 interface AgentProfileSummary {
@@ -572,6 +573,7 @@ export function ChatView({
   topicType,
   typingIndicatorText = null,
   onRequestPrivateDiscuss,
+  compactUi = false,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -1529,14 +1531,16 @@ export function ChatView({
       className="flex h-full flex-col"
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif' }}
     >
-      <div className="border-b border-slate-200 dark:border-zinc-700 px-3 py-1.5">
-        <div className="flex items-center justify-between gap-2">
+      <div className={`border-b border-slate-200 dark:border-zinc-700 ${compactUi ? 'px-2 py-0.5' : 'px-3 py-1.5'}`}>
+        <div className={`flex items-center justify-between ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="truncate text-[15px] font-semibold leading-5 dark:text-zinc-100">{topicName}</h2>
-              <span className="shrink-0 text-[10px] text-slate-400">
-                {t('chat.messagesLoaded', { count: messages.length })}
-              </span>
+            <div className={`flex items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
+              <h2 className={`truncate font-semibold dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}>{topicName}</h2>
+              {!compactUi && (
+                <span className="shrink-0 text-[10px] text-slate-400">
+                  {t('chat.messagesLoaded', { count: messages.length })}
+                </span>
+              )}
               {wsConnected && (
                 <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -1551,9 +1555,9 @@ export function ChatView({
               <button
                 onClick={() => setExportOpen(!exportOpen)}
                 onBlur={() => setTimeout(() => setExportOpen(false), 150)}
-                className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
+                className={`flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100 ${compactUi ? 'px-1 py-0.5 text-[9px]' : 'px-1.5 py-0.5 text-[10px]'}`}
               >
-                <Download size={11} /> {t('chat.export')} ▾
+                <Download size={compactUi ? 10 : 11} /> {t('chat.export')} ▾
               </button>
               {exportOpen && (
                 <div className="absolute right-0 top-full mt-1 z-30 min-w-[132px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
@@ -2357,12 +2361,12 @@ export function ChatView({
               aria-label="关闭放大编辑框"
             />
           )}
-          <div className={`flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-2 py-2 ${composerExpanded ? 'fixed inset-x-2 bottom-2 z-[120] rounded-2xl border-2 bg-white dark:bg-zinc-900 shadow-2xl' : ''}`}>
+          <div className={`flex items-center rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 ${compactUi ? 'gap-1.5 px-1.5 py-1' : 'gap-2 px-2 py-2'} ${composerExpanded ? 'fixed inset-x-2 bottom-2 z-[120] rounded-2xl border-2 bg-white dark:bg-zinc-900 shadow-2xl' : ''}`}>
           <div className="relative" ref={attachMenuRef}>
             <button
               type="button"
               onClick={() => setAttachMenuOpen((v) => !v)}
-              className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100"
+              className={`rounded-lg ${compactUi ? 'p-1.5' : 'p-2'} text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100`}
               title={t('chat.attach')}
             >
               <Paperclip className="h-4 w-4" />
@@ -2388,7 +2392,7 @@ export function ChatView({
           <button
             type="button"
             onClick={() => setComposerExpanded((v) => !v)}
-            className="rounded-lg p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100"
+            className={`rounded-lg ${compactUi ? 'p-1.5' : 'p-2'} text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100`}
             title={composerExpanded ? '退出放大' : '放大编辑框'}
           >
             {composerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -2401,15 +2405,15 @@ export function ChatView({
             onKeyDown={handleKeyDown}
             placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
             rows={1}
-            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : 'max-h-24 min-h-8'}`}
+            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${compactUi ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1.5 text-sm'} ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : compactUi ? 'max-h-20 min-h-[30px]' : 'max-h-24 min-h-8'}`}
           />
           <button
             onClick={handleSend}
             disabled={sending || uploading || !draft.trim() || !currentAgentId}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`flex items-center justify-center rounded-full bg-indigo-500 text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60 ${compactUi ? 'h-9 w-9' : 'h-10 w-10'}`}
             aria-label={t('chat.send')}
           >
-            {sending ? '...' : <Send className="h-4 w-4" />}
+            {sending ? '...' : <Send className={compactUi ? 'h-3.5 w-3.5' : 'h-4 w-4'} />}
           </button>
 
           <input

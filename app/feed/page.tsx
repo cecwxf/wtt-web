@@ -1625,12 +1625,13 @@ function FeedPageInner() {
                 topicType={selectedTopic.topic_type}
                 typingIndicatorText={selectedTopicTypingText}
                 onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
+                compactUi
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (
                     <div className="relative">
                       <button
                         onClick={() => setMembersOpen((v) => !v)}
-                        className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-2 py-1 text-[11px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
+                        className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
                         title={t('feed.members')}
                       >
                         👥 {t('feed.members')} ({discussMemberCount}) ▾
