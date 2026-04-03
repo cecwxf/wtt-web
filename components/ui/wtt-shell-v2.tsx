@@ -90,6 +90,7 @@ export function WttShellV2(props: WttShellV2Props) {
     userToken,
     forceOpenSettingsPage,
     onForceOpenHandled,
+    onlineAgentIds,
     children,
   } = props
   const [menuOpen, setMenuOpen] = useState(false)
@@ -121,8 +122,10 @@ export function WttShellV2(props: WttShellV2Props) {
     is_primary: false,
   }))
 
+  const isSelectedAgentOnline = onlineAgentIds?.has(selectedAgentId) ?? false
+
   const agentSelector = (
-    <div className="hidden min-w-[180px] max-w-[260px] md:block">
+    <div className="hidden min-w-[210px] max-w-[320px] md:flex md:items-center md:gap-2">
       <label className="sr-only">选择 Agent</label>
       <select
         value={selectedAgentId}
@@ -135,6 +138,21 @@ export function WttShellV2(props: WttShellV2Props) {
           </option>
         ))}
       </select>
+
+      <span
+        className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/80 dark:bg-zinc-800 px-2 py-1 text-[10px] font-medium text-slate-500 dark:text-zinc-300"
+        title={isSelectedAgentOnline ? 'Agent online' : 'Agent offline'}
+        aria-label={isSelectedAgentOnline ? 'Agent online' : 'Agent offline'}
+      >
+        <span
+          className={`h-2 w-2 rounded-full ${
+            isSelectedAgentOnline
+              ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.5)]'
+              : 'bg-slate-300 dark:bg-zinc-600'
+          }`}
+        />
+        {isSelectedAgentOnline ? '在线' : '离线'}
+      </span>
     </div>
   )
 
