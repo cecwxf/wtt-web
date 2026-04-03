@@ -3,7 +3,7 @@
 import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AgentColumn, AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
+import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
 import { TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
@@ -128,6 +128,23 @@ export function WttShellV2({
     is_primary: false,
   }))
 
+  const agentSelector = (
+    <div className="hidden min-w-[180px] max-w-[260px] md:block">
+      <label className="sr-only">选择 Agent</label>
+      <select
+        value={selectedAgentId}
+        onChange={(e) => onAgentChange(e.target.value)}
+        className="w-full rounded-lg border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-2 text-xs font-medium text-slate-600 dark:text-zinc-200"
+      >
+        {agents.map((agent) => (
+          <option key={agent.agent_id} value={agent.agent_id}>
+            {agent.display_name || agent.agent_id}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+
   return (
     <div className="h-screen bg-[#ece5dd] dark:bg-zinc-950 text-slate-800 dark:text-zinc-200">
       <div className="flex h-full flex-col">
@@ -143,6 +160,7 @@ export function WttShellV2({
           onAcceptP2PRequest={onAcceptP2PRequest}
           onRejectP2PRequest={onRejectP2PRequest}
           agentId={selectedAgentId}
+          leftSlot={agentSelector}
           userMenu={
             <div className="relative">
               <button
@@ -200,38 +218,20 @@ export function WttShellV2({
         />
 
         <div className="flex min-h-0 flex-1">
-          <div className="flex">
-            <AgentColumn
-              agents={agents}
-              selectedAgentId={selectedAgentId}
-              onSelectAgent={onAgentChange}
-              onRenameAgent={onRenameAgent}
-              onUnclaimAgent={onUnclaimAgent}
-              onSelectWorkerTopic={onSelectWorkerTopic}
-              currentUserName={currentUserName}
-              agentSubAgents={agentSubAgents}
-              maxSubAgents={maxSubAgents}
-              agentStats={agentStats}
-              onlineAgentIds={onlineAgentIds}
-              onQuickCreate={onQuickCreateTask}
-              userToken={userToken}
+          {!hideTopics && (
+            <TopicColumn
+              topics={topics}
+              selectedTopicId={selectedTopicId}
+              onSelectTopic={onTopicChange}
+              onLeaveTopic={onLeaveTopic}
+              onDeleteTopic={onDeleteTopic}
+              onQuickCreateTask={undefined}
+              onCreateP2P={onCreateP2P}
+              onRequestDiscuss={onRequestDiscuss}
+              agentName={selectedAgent?.display_name}
+              pinScopeKey={selectedAgentId}
             />
-
-            {!hideTopics && (
-              <TopicColumn
-                topics={topics}
-                selectedTopicId={selectedTopicId}
-                onSelectTopic={onTopicChange}
-                onLeaveTopic={onLeaveTopic}
-                onDeleteTopic={onDeleteTopic}
-                onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
-                onCreateP2P={onCreateP2P}
-                onRequestDiscuss={onRequestDiscuss}
-                agentName={selectedAgent?.display_name}
-                pinScopeKey={selectedAgentId}
-              />
-            )}
-          </div>
+          )}
 
           <main className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] dark:bg-zinc-900">
             {children}

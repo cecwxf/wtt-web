@@ -33,10 +33,11 @@ interface TopBarProps {
   onAcceptP2PRequest?: (requestId: string) => Promise<void>
   onRejectP2PRequest?: (requestId: string) => Promise<void>
   userMenu?: React.ReactNode
+  leftSlot?: React.ReactNode
   agentId?: string
 }
 
-export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, agentId = '' }: TopBarProps) {
+export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, leftSlot, agentId = '' }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showLanguageMenu, setShowLanguageMenu] = useState(false)
   const { theme, setTheme } = useTheme()
@@ -52,6 +53,8 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         <WttLogo size={24} className="ring-1 ring-indigo-200/70 dark:ring-indigo-800/60" />
         <span className="hidden text-xs font-semibold tracking-[0.08em] sm:inline">WTT</span>
       </Link>
+
+      {leftSlot}
 
       <SearchBar onSelectTopic={onSelectTopic} onSubscribeTopic={onSubscribeTopic} subscribedTopicIds={subscribedTopicIds} agentId={agentId} />
 
