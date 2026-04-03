@@ -44,7 +44,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
   const { locale, setLocale, t } = useI18n()
 
   return (
-    <header className="flex h-[60px] items-center gap-4 border-b border-slate-200/80 dark:border-zinc-700 bg-[#f7f5f2] dark:bg-zinc-900 px-4">
+    <header className="flex h-[54px] items-center gap-3 border-b border-slate-200/80 dark:border-zinc-700 bg-[#f7f5f2] dark:bg-zinc-900 px-3">
       <Link
         href={buildAgentUrl('/feed', agentId)}
         className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-indigo-600 dark:text-indigo-300 transition hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
@@ -61,38 +61,38 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
       <div className="ml-auto flex items-center gap-2">
         <Link
           href={buildAgentUrl('/tasks', agentId)}
-          className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
           title={t('top.tasksBoard')}
         >
-          <KanbanSquare className="h-4 w-4" />
+          <KanbanSquare className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{t('top.tasks')}</span>
         </Link>
 
         <Link
           href={buildAgentUrl('/pipelines', agentId)}
-          className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
           title={t('top.pipelines')}
         >
-          <Workflow className="h-4 w-4" />
+          <Workflow className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{t('top.pipelines')}</span>
         </Link>
 
         <Link
           href={buildAgentUrl('/square', agentId)}
-          className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/80 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
+          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/80 dark:bg-emerald-950/30 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
           title="若水广场"
         >
-          <Compass className="h-4 w-4" />
+          <Compass className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">若水广场</span>
         </Link>
 
         {!hideCreateTopic && (
           <button
             onClick={onOpenEditor}
-            className="inline-flex items-center gap-2 rounded-full border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/90 dark:bg-indigo-950/30 px-3 py-2 text-sm text-indigo-700 dark:text-indigo-300 transition hover:bg-indigo-100 dark:hover:bg-indigo-950/40 hover:text-indigo-800 dark:hover:text-indigo-200"
+            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/90 dark:bg-indigo-950/30 px-2.5 py-1.5 text-xs text-indigo-700 dark:text-indigo-300 transition hover:bg-indigo-100 dark:hover:bg-indigo-950/40 hover:text-indigo-800 dark:hover:text-indigo-200"
             title={t('top.editor')}
           >
-            <FileEdit className="h-4 w-4" />
+            <FileEdit className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t('top.editor')}</span>
           </button>
         )}
@@ -100,10 +100,10 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         {!hideCreateTopic && onCreateTopic && (
           <button
             onClick={onCreateTopic}
-            className="inline-flex items-center gap-2 rounded-full border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/30 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
             title={t('top.createTopic')}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t('top.topic')}</span>
           </button>
         )}
@@ -111,10 +111,10 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+            className="relative inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
             title={t('top.notifications')}
           >
-            <Bell className="h-4 w-4" />
+            <Bell className="h-3.5 w-3.5" />
             {notificationCount > 0 && (
               <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-semibold text-white">
                 {notificationCount > 9 ? '9+' : notificationCount}
@@ -180,16 +180,16 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
 
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="inline-flex items-center justify-center rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 p-2 text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+          className="inline-flex items-center justify-center rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 p-1.5 text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
           title={theme === 'dark' ? t('top.lightMode') : t('top.darkMode')}
         >
-          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         </button>
 
         <div className="relative">
           <button
             onClick={() => setShowLanguageMenu((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-2 text-xs font-semibold text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
             title={t('top.languageTitle')}
           >
             <Languages className="h-3.5 w-3.5" />

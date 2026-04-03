@@ -2398,8 +2398,8 @@ export function ChatView({
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
-            rows={2}
-            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${composerExpanded ? 'min-h-[45vh] max-h-[70vh]' : 'max-h-44 min-h-14'}`}
+            rows={1}
+            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent px-2 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : 'max-h-28 min-h-10'}`}
           />
           <button
             onClick={handleSend}
