@@ -84,7 +84,7 @@ export default function KnowledgeBasePage() {
   /* ── Data fetching ── */
   const base = CLIENT_WTT_API_BASE
   const { data: task } = useSWR(`${base}/tasks/${taskId}`, fetcher)
-  const { data: tocData } = useSWR<TOCData>(
+  const { data: tocData, mutate: mutateToc } = useSWR<TOCData>(
     `${base}/tasks/${taskId}/kb/toc`, fetcher, { refreshInterval: 10000 }
   )
   const { data: sourcesData, mutate: mutateSources } = useSWR(
@@ -168,10 +168,33 @@ export default function KnowledgeBasePage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!resp.ok) alert(`Compile failed (${resp.status})`)
-      else setActiveTab('chat')  // switch to chat to see agent working
+      else setActiveTab('chat')
     } catch (e) { console.error(e) }
     setCompileLoading(false)
     mutateChat()
+  }
+
+  const resetAndRecompile = async () => {
+    if (!confirm('This will delete ALL wiki articles and recompile from sources. Continue?')) return
+    setCompileLoading(true)
+    try {
+      const delResp = await fetch(`${base}/tasks/${taskId}/kb/articles/all?reset_sources=true`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!delResp.ok) { alert(`Reset failed (${delResp.status})`); setCompileLoading(false); return }
+      const delData = await delResp.json()
+      const compResp = await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=false`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!compResp.ok) alert(`Compile failed (${compResp.status})`)
+      else {
+        alert(`Reset ${delData.deleted_articles} articles, ${delData.reset_sources} sources. Recompiling...`)
+        setActiveTab('chat')
+      }
+    } catch (e) { console.error(e) }
+    setCompileLoading(false)
+    mutateChat()
+    mutateToc()
   }
 
   const triggerSync = async () => {
@@ -588,7 +611,7 @@ export default function KnowledgeBasePage() {
               {/* Index entries */}
               <div className="col-span-2 md:col-span-4 p-4 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
                 <h3 className="text-sm font-semibold text-slate-600 dark:text-zinc-400 mb-2">Index Entries: {stats.index_entries}</h3>
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <button
                     onClick={() => triggerCompile(true)}
                     disabled={compileLoading}
@@ -602,6 +625,13 @@ export default function KnowledgeBasePage() {
                     className="px-3 py-1.5 text-xs rounded bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
                   >
                     🔄 Full Recompile
+                  </button>
+                  <button
+                    onClick={resetAndRecompile}
+                    disabled={compileLoading}
+                    className="px-3 py-1.5 text-xs rounded bg-red-500 text-white hover:bg-red-600 disabled:opacity-50"
+                  >
+                    🗑️ Reset & Recompile
                   </button>
                 </div>
               </div>
