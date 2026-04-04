@@ -178,8 +178,8 @@ export default function KnowledgeBasePage() {
     if (!confirm('This will delete ALL wiki articles and recompile from sources. Continue?')) return
     setCompileLoading(true)
     try {
-      const delResp = await fetch(`${base}/tasks/${taskId}/kb/articles/all?reset_sources=true`, {
-        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      const delResp = await fetch(`${base}/tasks/${taskId}/kb/reset?reset_sources=true`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
       })
       if (!delResp.ok) { alert(`Reset failed (${delResp.status})`); setCompileLoading(false); return }
       const delData = await delResp.json()
