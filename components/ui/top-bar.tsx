@@ -27,6 +27,7 @@ interface TopBarProps {
   subscribedTopicIds?: string[]
   onCreateTopic?: () => void
   onOpenEditor?: () => void
+  onOpenKnowledgeRoot?: () => void
   hideCreateTopic?: boolean
   notificationCount?: number
   p2pRequests?: P2PRequestItem[]
@@ -37,7 +38,7 @@ interface TopBarProps {
   agentId?: string
 }
 
-export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, leftSlot, agentId = '' }: TopBarProps) {
+export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, onOpenKnowledgeRoot, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, leftSlot, agentId = '' }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showLanguageMenu, setShowLanguageMenu] = useState(false)
   const { theme, setTheme } = useTheme()
@@ -85,6 +86,17 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           <Compass className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">若水广场</span>
         </Link>
+
+        {onOpenKnowledgeRoot && (
+          <button
+            onClick={onOpenKnowledgeRoot}
+            className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-800 dark:hover:text-amber-200"
+            title="Knowledge Root"
+          >
+            📚
+            <span className="hidden sm:inline">Knowledge Root</span>
+          </button>
+        )}
 
         {!hideCreateTopic && (
           <button

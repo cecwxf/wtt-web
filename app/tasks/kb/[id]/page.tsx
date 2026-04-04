@@ -186,7 +186,7 @@ export default function KnowledgeBasePage() {
           ← Tasks
         </button>
         <h1 className="text-lg font-semibold text-slate-800 dark:text-zinc-100 truncate">
-          📚 {task?.title || 'Knowledge Base'}
+          📚 {task?.title || 'Knowledge Root'}
         </h1>
         {syncResult && (
           <span className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">

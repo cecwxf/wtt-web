@@ -37,6 +37,7 @@ interface WttShellV2Props {
   onLeaveTopic?: (topicId: string) => void
   onDeleteTopic?: (topicId: string) => void
   onOpenEditor?: () => void
+  onOpenKnowledgeRoot?: () => void
   onQuickCreateTask?: (type?: 'code' | 'research' | 'general' | 'pipeline') => void
   onSubscribeTopic?: (topicId: string) => Promise<void>
   onCreateP2P?: (targetAgentId: string) => Promise<void>
@@ -78,6 +79,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onLeaveTopic,
     onDeleteTopic,
     onOpenEditor,
+    onOpenKnowledgeRoot,
     onQuickCreateTask,
     onSubscribeTopic,
     onCreateP2P,
@@ -135,6 +137,7 @@ export function WttShellV2(props: WttShellV2Props) {
           subscribedTopicIds={subscribedTopicIds}
           onCreateTopic={() => setCreateTopicOpen(true)}
           onOpenEditor={onOpenEditor}
+          onOpenKnowledgeRoot={onOpenKnowledgeRoot}
           hideCreateTopic={hideCreateTopic}
           notificationCount={notificationCount}
           p2pRequests={p2pRequests}

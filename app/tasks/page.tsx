@@ -124,6 +124,7 @@ function TasksPageInner() {
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
   const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code' | 'pipeline'>('all')
+  const [kbLoading, setKbLoading] = useState(false)
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const statusLabel = useCallback((status: TaskItem['status']) => {
@@ -963,21 +964,26 @@ function TasksPageInner() {
           })}
           <div className="mx-2 h-5 w-px bg-slate-300 dark:bg-zinc-600" />
           <button
+            disabled={kbLoading}
             onClick={async () => {
+              setKbLoading(true)
               try {
                 const resp = await fetch(`${CLIENT_WTT_API_BASE}/kb/personal`, {
                   headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
                 })
-                if (!resp.ok) throw new Error('Failed to get KB')
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
                 const kb = await resp.json()
                 router.push(buildAgentUrl(`/tasks/kb/${kb.id}`, selectedAgentId))
               } catch (e) {
                 console.error('KB redirect failed:', e)
+                alert('Failed to open Knowledge Root. Please ensure you are logged in.')
+              } finally {
+                setKbLoading(false)
               }
             }}
-            className="rounded-lg bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-600 hover:shadow-md"
+            className="rounded-lg bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-600 hover:shadow-md disabled:opacity-50"
           >
-            📚 Knowledge Base
+            {kbLoading ? '⏳...' : '📚 Knowledge Root'}
           </button>
         </div>
 

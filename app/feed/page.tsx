@@ -234,6 +234,19 @@ function FeedPageInner() {
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
+
+  const handleOpenKnowledgeRoot = useCallback(async () => {
+    try {
+      const resp = await fetch(`${CLIENT_WTT_API_BASE}/kb/personal`, {
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      })
+      if (!resp.ok) return
+      const kb = await resp.json()
+      router.push(`/tasks/kb/${kb.id}`)
+    } catch (e) {
+      console.error('KB redirect failed:', e)
+    }
+  }, [session?.accessToken, router])
   const [membersOpen, setMembersOpen] = useState(false)
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false)
   const [inviteAgentId, setInviteAgentId] = useState('')
@@ -1605,6 +1618,7 @@ function FeedPageInner() {
         onRequestDiscuss={handleRequestDiscuss}
         subscribedTopicIds={subscribedTopicIds}
         onOpenEditor={() => setEditorOpen(true)}
+        onOpenKnowledgeRoot={handleOpenKnowledgeRoot}
         onQuickCreateTask={handleQuickCreateTask}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
