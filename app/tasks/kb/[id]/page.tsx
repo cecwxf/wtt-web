@@ -138,7 +138,11 @@ export default function KnowledgeBasePage() {
   const triggerCompile = async (incremental = true) => {
     setCompileLoading(true)
     try {
-      await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=${incremental}`, { method: 'POST' })
+      const resp = await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=${incremental}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      })
+      if (!resp.ok) alert(`Compile failed (${resp.status})`)
     } catch (e) { console.error(e) }
     setCompileLoading(false)
   }
