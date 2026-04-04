@@ -31,6 +31,10 @@ interface TopicColumnProps {
   onRequestMember?: (targetAgentId: string, topicId: string) => Promise<void>
   agentName?: string
   pinScopeKey?: string
+  agentOptions?: Array<{ agent_id: string; display_name: string }>
+  selectedAgentId?: string
+  onSelectAgent?: (agentId: string) => void
+  isSelectedAgentOnline?: boolean
 }
 
 function getTopicIcon(type: string, isTask?: boolean) {
@@ -129,6 +133,10 @@ export function TopicColumn({
   onRequestDiscuss,
   agentName,
   pinScopeKey,
+  agentOptions,
+  selectedAgentId,
+  onSelectAgent,
+  isSelectedAgentOnline,
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [pinnedTopicIds, setPinnedTopicIds] = useState<string[]>([])
@@ -436,6 +444,35 @@ export function TopicColumn({
             <span className="truncate">{t('topic.newTask')}</span>
           </button>
         )}
+
+        {agentOptions && agentOptions.length > 0 && onSelectAgent && selectedAgentId ? (
+          <div className="mb-2 rounded-lg border border-slate-200/80 dark:border-zinc-700 bg-white/70 dark:bg-zinc-800/40 px-2 py-2">
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">{t('agent.agents')}</p>
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  isSelectedAgentOnline
+                    ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.5)]'
+                    : 'bg-slate-300 dark:bg-zinc-600'
+                }`}
+                title={isSelectedAgentOnline ? t('agent.online') : t('agent.offline')}
+                aria-label={isSelectedAgentOnline ? t('agent.online') : t('agent.offline')}
+              />
+            </div>
+            <label className="sr-only">Select Agent</label>
+            <select
+              value={selectedAgentId}
+              onChange={(e) => onSelectAgent(e.target.value)}
+              className="w-full rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-zinc-300"
+            >
+              {agentOptions.map((agent) => (
+                <option key={agent.agent_id} value={agent.agent_id}>
+                  {agent.display_name || agent.agent_id}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <button
           onClick={() => onSelectTopic(null)}

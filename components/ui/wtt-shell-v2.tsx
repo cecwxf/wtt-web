@@ -3,7 +3,7 @@
 import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
+import { AgentColumn, AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
 import { TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
@@ -73,6 +73,8 @@ export function WttShellV2(props: WttShellV2Props) {
     onLogout,
     onTopicsRefresh,
     onBindingChanged,
+    onRenameAgent,
+    onUnclaimAgent,
     onLeaveTopic,
     onDeleteTopic,
     onOpenEditor,
@@ -80,6 +82,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onSubscribeTopic,
     onCreateP2P,
     onRequestDiscuss,
+    onSelectWorkerTopic,
     subscribedTopicIds,
     notificationCount = 0,
     p2pRequests = [],
@@ -87,6 +90,10 @@ export function WttShellV2(props: WttShellV2Props) {
     onRejectP2PRequest,
     hideTopics = false,
     hideCreateTopic = false,
+    currentUserName,
+    agentSubAgents,
+    maxSubAgents,
+    agentStats,
     userToken,
     forceOpenSettingsPage,
     onForceOpenHandled,
@@ -124,38 +131,6 @@ export function WttShellV2(props: WttShellV2Props) {
 
   const isSelectedAgentOnline = onlineAgentIds?.has(selectedAgentId) ?? false
 
-  const agentSelector = (
-    <div className="hidden min-w-[210px] max-w-[320px] md:flex md:items-center md:gap-2">
-      <label className="sr-only">选择 Agent</label>
-      <select
-        value={selectedAgentId}
-        onChange={(e) => onAgentChange(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-2 text-xs font-medium text-slate-600 dark:text-zinc-200"
-      >
-        {agents.map((agent) => (
-          <option key={agent.agent_id} value={agent.agent_id}>
-            {agent.display_name || agent.agent_id}
-          </option>
-        ))}
-      </select>
-
-      <span
-        className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/80 dark:bg-zinc-800 px-2 py-1 text-[10px] font-medium text-slate-500 dark:text-zinc-300"
-        title={isSelectedAgentOnline ? 'Agent online' : 'Agent offline'}
-        aria-label={isSelectedAgentOnline ? 'Agent online' : 'Agent offline'}
-      >
-        <span
-          className={`h-2 w-2 rounded-full ${
-            isSelectedAgentOnline
-              ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.5)]'
-              : 'bg-slate-300 dark:bg-zinc-600'
-          }`}
-        />
-        {isSelectedAgentOnline ? '在线' : '离线'}
-      </span>
-    </div>
-  )
-
   return (
     <div className="h-screen bg-[#ece5dd] dark:bg-zinc-950 text-slate-800 dark:text-zinc-200">
       <div className="flex h-full flex-col">
@@ -171,7 +146,6 @@ export function WttShellV2(props: WttShellV2Props) {
           onAcceptP2PRequest={onAcceptP2PRequest}
           onRejectP2PRequest={onRejectP2PRequest}
           agentId={selectedAgentId}
-          leftSlot={agentSelector}
           userMenu={
             <div className="relative">
               <button
@@ -229,20 +203,42 @@ export function WttShellV2(props: WttShellV2Props) {
         />
 
         <div className="flex min-h-0 flex-1">
-          {!hideTopics && (
-            <TopicColumn
-              topics={topics}
-              selectedTopicId={selectedTopicId}
-              onSelectTopic={onTopicChange}
-              onLeaveTopic={onLeaveTopic}
-              onDeleteTopic={onDeleteTopic}
-              onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
-              onCreateP2P={onCreateP2P}
-              onRequestDiscuss={onRequestDiscuss}
-              agentName={selectedAgent?.display_name}
-              pinScopeKey={selectedAgentId}
+          <div className="flex min-h-0">
+            <AgentColumn
+              agents={agents}
+              selectedAgentId={selectedAgentId}
+              onSelectAgent={onAgentChange}
+              onRenameAgent={onRenameAgent}
+              onUnclaimAgent={onUnclaimAgent}
+              onSelectWorkerTopic={onSelectWorkerTopic}
+              currentUserName={currentUserName}
+              agentSubAgents={agentSubAgents}
+              maxSubAgents={maxSubAgents}
+              agentStats={agentStats}
+              onlineAgentIds={onlineAgentIds}
+              onQuickCreate={undefined}
+              userToken={userToken}
             />
-          )}
+
+            {!hideTopics && (
+              <TopicColumn
+                topics={topics}
+                selectedTopicId={selectedTopicId}
+                onSelectTopic={onTopicChange}
+                onLeaveTopic={onLeaveTopic}
+                onDeleteTopic={onDeleteTopic}
+                onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
+                onCreateP2P={onCreateP2P}
+                onRequestDiscuss={onRequestDiscuss}
+                agentName={selectedAgent?.display_name}
+                pinScopeKey={selectedAgentId}
+                agentOptions={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
+                selectedAgentId={selectedAgentId}
+                onSelectAgent={onAgentChange}
+                isSelectedAgentOnline={isSelectedAgentOnline}
+              />
+            )}
+          </div>
 
           <main className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] dark:bg-zinc-900">
             {children}
