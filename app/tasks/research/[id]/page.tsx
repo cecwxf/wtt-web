@@ -813,6 +813,12 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-slate-400 dark:text-zinc-500">{papers.length} papers</span>
+          <button
+            onClick={() => router.push(buildAgentUrl(`/tasks/kb/${taskId}`, selectedAgentId))}
+            className="text-[10px] px-2 py-1 rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300 hover:bg-indigo-200"
+          >
+            📚 Knowledge Base
+          </button>
           <ThemeToggle />
         </div>
       </div>
