@@ -154,6 +154,7 @@ export function TopicColumn({
   const [discussTopicName, setDiscussTopicName] = useState('')
   const [creatingDiscuss, setCreatingDiscuss] = useState(false)
   const [creatingAgentWorker, setCreatingAgentWorker] = useState(false)
+  const [agentActionMenuOpen, setAgentActionMenuOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
     p2p: false,
     task: false,
@@ -493,44 +494,72 @@ export function TopicColumn({
                 aria-label={isSelectedAgentOnline ? t('agent.online') : t('agent.offline')}
               />
             </div>
-            <label className="sr-only">Select Agent</label>
-            <select
-              value={selectedAgentId}
-              onChange={(e) => onSelectAgent(e.target.value)}
-              className="w-full rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-zinc-300"
-            >
-              {agentOptions.map((agent) => (
-                <option key={agent.agent_id} value={agent.agent_id}>
-                  {agent.display_name || agent.agent_id}
-                </option>
-              ))}
-            </select>
-
-            <div className="mt-1.5 grid grid-cols-3 gap-1">
-              <button
-                className="rounded border border-slate-200 dark:border-zinc-700 px-1.5 py-1 text-[10px] text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50"
-                onClick={() => {
-                  const currentName = agentOptions.find((a) => a.agent_id === selectedAgentId)?.display_name || selectedAgentId
-                  onRenameAgent?.(selectedAgentId, currentName)
+            <div className="mt-1 flex items-center gap-1.5">
+              <label className="sr-only">Select Agent</label>
+              <select
+                value={selectedAgentId}
+                onChange={(e) => {
+                  onSelectAgent(e.target.value)
+                  setAgentActionMenuOpen(false)
                 }}
-                disabled={!onRenameAgent}
+                className="flex-1 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-zinc-300"
               >
-                {t('agent.rename')}
-              </button>
-              <button
-                className="rounded border border-red-200 dark:border-red-800/60 px-1.5 py-1 text-[10px] text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
-                onClick={() => onUnclaimAgent?.(selectedAgentId)}
-                disabled={!onUnclaimAgent}
-              >
-                {t('agent.unclaim')}
-              </button>
-              <button
-                className="rounded border border-slate-200 dark:border-zinc-700 px-1.5 py-1 text-[10px] text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50"
-                onClick={handleAddWorker}
-                disabled={creatingAgentWorker}
-              >
-                {creatingAgentWorker ? '...' : t('agent.addWorker')}
-              </button>
+                {agentOptions.map((agent) => (
+                  <option key={agent.agent_id} value={agent.agent_id}>
+                    {agent.display_name || agent.agent_id}
+                  </option>
+                ))}
+              </select>
+
+              <div className="relative">
+                <button
+                  className="inline-flex items-center justify-center rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-1.5 text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700"
+                  onClick={() => setAgentActionMenuOpen((v) => !v)}
+                  aria-label="Agent actions"
+                  title="Agent actions"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+
+                {agentActionMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setAgentActionMenuOpen(false)} />
+                    <div className="absolute right-0 top-8 z-30 w-36 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1 shadow-lg">
+                      <button
+                        className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+                        onClick={() => {
+                          setAgentActionMenuOpen(false)
+                          const currentName = agentOptions.find((a) => a.agent_id === selectedAgentId)?.display_name || selectedAgentId
+                          onRenameAgent?.(selectedAgentId, currentName)
+                        }}
+                        disabled={!onRenameAgent}
+                      >
+                        {t('agent.rename')}
+                      </button>
+                      <button
+                        className="w-full rounded px-2 py-1.5 text-left text-xs text-red-500 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+                        onClick={() => {
+                          setAgentActionMenuOpen(false)
+                          onUnclaimAgent?.(selectedAgentId)
+                        }}
+                        disabled={!onUnclaimAgent}
+                      >
+                        {t('agent.unclaim')}
+                      </button>
+                      <button
+                        className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+                        onClick={async () => {
+                          setAgentActionMenuOpen(false)
+                          await handleAddWorker()
+                        }}
+                        disabled={creatingAgentWorker}
+                      >
+                        {creatingAgentWorker ? '...' : t('agent.addWorker')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ) : null}
