@@ -2,6 +2,7 @@
 
 import { Bot, Hash, Lock, Plus, MoreVertical, Pin, Users, ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
 
 export interface TopicItem {
@@ -35,6 +36,8 @@ interface TopicColumnProps {
   selectedAgentId?: string
   onSelectAgent?: (agentId: string) => void
   isSelectedAgentOnline?: boolean
+  onRenameAgent?: (agentId: string, currentName: string) => void
+  onUnclaimAgent?: (agentId: string) => void
 }
 
 function getTopicIcon(type: string, isTask?: boolean) {
@@ -137,6 +140,8 @@ export function TopicColumn({
   selectedAgentId,
   onSelectAgent,
   isSelectedAgentOnline,
+  onRenameAgent,
+  onUnclaimAgent,
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [pinnedTopicIds, setPinnedTopicIds] = useState<string[]>([])
@@ -148,6 +153,7 @@ export function TopicColumn({
   const [discussAgentId, setDiscussAgentId] = useState('')
   const [discussTopicName, setDiscussTopicName] = useState('')
   const [creatingDiscuss, setCreatingDiscuss] = useState(false)
+  const [creatingAgentWorker, setCreatingAgentWorker] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
     p2p: false,
     task: false,
@@ -228,6 +234,34 @@ export function TopicColumn({
       // error handled by caller
     } finally {
       setCreatingDiscuss(false)
+    }
+  }
+
+  const handleAddWorker = async () => {
+    if (!selectedAgentId || creatingAgentWorker) return
+    const suggested = agentOptions?.find((a) => a.agent_id === selectedAgentId)?.display_name || selectedAgentId
+    const workerName = window.prompt('Worker name:', `${suggested}-worker`)
+    if (!workerName || !workerName.trim()) return
+
+    setCreatingAgentWorker(true)
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/workers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          agent_id: selectedAgentId,
+          name: workerName.trim(),
+          skills_config: [],
+          personality: '',
+          model_config: {},
+        }),
+      })
+      if (!response.ok) throw new Error(await response.text())
+    } catch {
+      alert('Add Worker failed')
+    } finally {
+      setCreatingAgentWorker(false)
     }
   }
 
@@ -471,6 +505,33 @@ export function TopicColumn({
                 </option>
               ))}
             </select>
+
+            <div className="mt-1.5 grid grid-cols-3 gap-1">
+              <button
+                className="rounded border border-slate-200 dark:border-zinc-700 px-1.5 py-1 text-[10px] text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50"
+                onClick={() => {
+                  const currentName = agentOptions.find((a) => a.agent_id === selectedAgentId)?.display_name || selectedAgentId
+                  onRenameAgent?.(selectedAgentId, currentName)
+                }}
+                disabled={!onRenameAgent}
+              >
+                {t('agent.rename')}
+              </button>
+              <button
+                className="rounded border border-red-200 dark:border-red-800/60 px-1.5 py-1 text-[10px] text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                onClick={() => onUnclaimAgent?.(selectedAgentId)}
+                disabled={!onUnclaimAgent}
+              >
+                {t('agent.unclaim')}
+              </button>
+              <button
+                className="rounded border border-slate-200 dark:border-zinc-700 px-1.5 py-1 text-[10px] text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50"
+                onClick={handleAddWorker}
+                disabled={creatingAgentWorker}
+              >
+                {creatingAgentWorker ? '...' : t('agent.addWorker')}
+              </button>
+            </div>
           </div>
         ) : null}
 

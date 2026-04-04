@@ -3,7 +3,7 @@
 import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AgentColumn, AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
+import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
 import { TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
@@ -82,7 +82,6 @@ export function WttShellV2(props: WttShellV2Props) {
     onSubscribeTopic,
     onCreateP2P,
     onRequestDiscuss,
-    onSelectWorkerTopic,
     subscribedTopicIds,
     notificationCount = 0,
     p2pRequests = [],
@@ -90,10 +89,6 @@ export function WttShellV2(props: WttShellV2Props) {
     onRejectP2PRequest,
     hideTopics = false,
     hideCreateTopic = false,
-    currentUserName,
-    agentSubAgents,
-    maxSubAgents,
-    agentStats,
     userToken,
     forceOpenSettingsPage,
     onForceOpenHandled,
@@ -203,42 +198,26 @@ export function WttShellV2(props: WttShellV2Props) {
         />
 
         <div className="flex min-h-0 flex-1">
-          <div className="flex min-h-0">
-            <AgentColumn
-              agents={agents}
+          {!hideTopics && (
+            <TopicColumn
+              topics={topics}
+              selectedTopicId={selectedTopicId}
+              onSelectTopic={onTopicChange}
+              onLeaveTopic={onLeaveTopic}
+              onDeleteTopic={onDeleteTopic}
+              onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
+              onCreateP2P={onCreateP2P}
+              onRequestDiscuss={onRequestDiscuss}
+              agentName={selectedAgent?.display_name}
+              pinScopeKey={selectedAgentId}
+              agentOptions={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
               selectedAgentId={selectedAgentId}
               onSelectAgent={onAgentChange}
+              isSelectedAgentOnline={isSelectedAgentOnline}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
-              onSelectWorkerTopic={onSelectWorkerTopic}
-              currentUserName={currentUserName}
-              agentSubAgents={agentSubAgents}
-              maxSubAgents={maxSubAgents}
-              agentStats={agentStats}
-              onlineAgentIds={onlineAgentIds}
-              onQuickCreate={undefined}
-              userToken={userToken}
             />
-
-            {!hideTopics && (
-              <TopicColumn
-                topics={topics}
-                selectedTopicId={selectedTopicId}
-                onSelectTopic={onTopicChange}
-                onLeaveTopic={onLeaveTopic}
-                onDeleteTopic={onDeleteTopic}
-                onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
-                onCreateP2P={onCreateP2P}
-                onRequestDiscuss={onRequestDiscuss}
-                agentName={selectedAgent?.display_name}
-                pinScopeKey={selectedAgentId}
-                agentOptions={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
-                selectedAgentId={selectedAgentId}
-                onSelectAgent={onAgentChange}
-                isSelectedAgentOnline={isSelectedAgentOnline}
-              />
-            )}
-          </div>
+          )}
 
           <main className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] dark:bg-zinc-900">
             {children}
