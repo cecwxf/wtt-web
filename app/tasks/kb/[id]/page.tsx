@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, useParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -23,11 +23,6 @@ interface KBArticle {
 interface KBArticleFull extends KBArticle {
   content_markdown: string; source_ids: string; backlinks: string
 }
-interface KBQuery {
-  id: string; question: string; answer_preview: string | null
-  articles_cited: string; sources_cited: string
-  filed_as_article_id: string | null; created_at: string
-}
 interface TOCData {
   categories: Record<string, { slug: string; title: string; summary: string | null; tags: string; version: number }[]>
   article_count: number
@@ -44,12 +39,15 @@ interface SearchResult {
   result_type: 'article' | 'source'; rank: number
   source_type?: string; category?: string
 }
+interface ChatMsg {
+  message_id: string; sender_id: string; sender_type: string
+  content: string; timestamp: string; semantic_type?: string
+}
 
 /* ── Helpers ── */
 const fetcher = async (url: string) => {
   const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json()
 }
-
 const SOURCE_ICONS: Record<string, string> = {
   paper: '📄', url: '🔗', note: '📝', topic_export: '💬', image: '🖼️', file: '📁'
 }
@@ -66,19 +64,22 @@ export default function KnowledgeBasePage() {
   const taskId = params.id as string
 
   /* ── Tabs ── */
-  const [activeTab, setActiveTab] = useState<'wiki' | 'sources' | 'search' | 'qa' | 'stats'>('wiki')
+  const [activeTab, setActiveTab] = useState<'chat' | 'wiki' | 'sources' | 'search' | 'stats'>('chat')
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchScope, setSearchScope] = useState<'all' | 'articles' | 'sources'>('all')
   const [clipUrl, setClipUrl] = useState('')
   const [clipLoading, setClipLoading] = useState(false)
-  const [qaInput, setQaInput] = useState('')
   const [noteTitle, setNoteTitle] = useState('')
   const [noteContent, setNoteContent] = useState('')
   const [compileLoading, setCompileLoading] = useState(false)
   const [syncLoading, setSyncLoading] = useState(false)
   const [syncResult, setSyncResult] = useState<{ total_imported: number; skipped_duplicates: number } | null>(null)
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
   const { data: session } = useSession() as { data: { accessToken?: string } | null }
+  const token = session?.accessToken ?? ''
 
   /* ── Data fetching ── */
   const base = CLIENT_WTT_API_BASE
@@ -98,19 +99,43 @@ export default function KnowledgeBasePage() {
       : null,
     fetcher
   )
-  const { data: qaData, mutate: mutateQa } = useSWR(
-    activeTab === 'qa' ? `${base}/tasks/${taskId}/kb/queries?limit=50` : null, fetcher
-  )
   const { data: statsData } = useSWR<KBStats>(
     activeTab === 'stats' ? `${base}/tasks/${taskId}/kb/stats` : null, fetcher
+  )
+  // Chat messages — poll every 3s when on chat tab
+  const { data: chatData, mutate: mutateChat } = useSWR<{ messages: ChatMsg[]; topic_id: string }>(
+    activeTab === 'chat' ? `${base}/tasks/${taskId}/kb/messages?limit=100` : null,
+    fetcher,
+    { refreshInterval: 3000 }
   )
 
   const toc = tocData || { categories: {}, article_count: 0, index_entries: [] }
   const sources: KBSource[] = sourcesData?.sources || []
-  const queries: KBQuery[] = qaData?.queries || []
+  const chatMessages: ChatMsg[] = chatData?.messages || []
   const stats: KBStats | null = statsData || null
 
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (activeTab === 'chat') chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages.length, activeTab])
+
   /* ── Actions ── */
+  const sendChat = useCallback(async () => {
+    const msg = chatInput.trim()
+    if (!msg || chatSending) return
+    setChatSending(true)
+    setChatInput('')
+    try {
+      await fetch(`${base}/tasks/${taskId}/kb/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: msg }),
+      })
+      mutateChat()
+    } catch (e) { console.error(e) }
+    setChatSending(false)
+  }, [chatInput, chatSending, base, taskId, token, mutateChat])
+
   const webClip = async () => {
     if (!clipUrl.trim()) return
     setClipLoading(true)
@@ -140,11 +165,13 @@ export default function KnowledgeBasePage() {
     try {
       const resp = await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=${incremental}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (!resp.ok) alert(`Compile failed (${resp.status})`)
+      else setActiveTab('chat')  // switch to chat to see agent working
     } catch (e) { console.error(e) }
     setCompileLoading(false)
+    mutateChat()
   }
 
   const triggerSync = async () => {
@@ -153,7 +180,7 @@ export default function KnowledgeBasePage() {
     try {
       const resp = await fetch(`${base}/kb/sync`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (resp.ok) {
         const data = await resp.json()
@@ -162,16 +189,6 @@ export default function KnowledgeBasePage() {
       }
     } catch (e) { console.error(e) }
     setSyncLoading(false)
-  }
-
-  const askQuestion = async () => {
-    if (!qaInput.trim()) return
-    await fetch(`${base}/tasks/${taskId}/kb/queries`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: qaInput.trim() }),
-    })
-    setQaInput('')
-    mutateQa()
   }
 
   /* ── Render helpers ── */
@@ -218,9 +235,9 @@ export default function KnowledgeBasePage() {
 
       {/* Tab bar */}
       <div className="flex gap-1 px-4 py-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        {(['wiki', 'sources', 'search', 'qa', 'stats'] as const).map(tab => (
+        {(['chat', 'wiki', 'sources', 'search', 'stats'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={tabCls(tab)}>
-            {tab === 'wiki' ? '📖 Wiki' : tab === 'sources' ? '📥 Sources' : tab === 'search' ? '🔍 Search' : tab === 'qa' ? '❓ Q&A' : '📊 Stats'}
+            {tab === 'chat' ? '💬 Chat' : tab === 'wiki' ? '📖 Wiki' : tab === 'sources' ? '📥 Sources' : tab === 'search' ? '🔍 Search' : '📊 Stats'}
           </button>
         ))}
         <span className="ml-auto text-xs text-slate-400 dark:text-zinc-500 self-center">
@@ -470,45 +487,66 @@ export default function KnowledgeBasePage() {
           </div>
         )}
 
-        {/* ═══ Q&A Tab ═══ */}
-        {activeTab === 'qa' && (
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="max-w-3xl mx-auto">
-              <div className="flex gap-2 mb-6">
+        {/* ═══ Chat Tab (Knowledge Worker P2P) ═══ */}
+        {activeTab === 'chat' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              <div className="max-w-3xl mx-auto space-y-3">
+                {chatMessages.length === 0 && (
+                  <div className="text-center text-slate-400 dark:text-zinc-600 mt-16">
+                    <div className="text-4xl mb-3">🧠</div>
+                    <p className="font-medium">Knowledge Worker</p>
+                    <p className="text-sm mt-1">Chat with your KB agent. Use <strong>🧠 Compile</strong> to build the wiki, or ask any question.</p>
+                  </div>
+                )}
+                {chatMessages.map(msg => {
+                  const isHuman = msg.sender_type === 'human'
+                  return (
+                    <div key={msg.message_id} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                        isHuman
+                          ? 'bg-indigo-500 text-white'
+                          : 'bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200'
+                      }`}>
+                        {!isHuman && (
+                          <div className="text-[10px] font-medium text-indigo-500 dark:text-indigo-400 mb-1">
+                            🤖 {msg.sender_id.length > 20 ? msg.sender_id.slice(0, 16) + '…' : msg.sender_id}
+                          </div>
+                        )}
+                        <div className={`text-sm whitespace-pre-wrap break-words ${isHuman ? '' : 'prose prose-sm dark:prose-invert max-w-none'}`}>
+                          {isHuman ? msg.content : (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                          )}
+                        </div>
+                        <div className={`text-[10px] mt-1 ${isHuman ? 'text-indigo-200' : 'text-slate-400 dark:text-zinc-500'}`}>
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div ref={chatEndRef} />
+              </div>
+            </div>
+
+            {/* Input bar */}
+            <div className="border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
+              <div className="max-w-3xl mx-auto flex gap-2">
                 <input
-                  value={qaInput}
-                  onChange={e => setQaInput(e.target.value)}
-                  placeholder="Ask a question against the knowledge base..."
-                  className="flex-1 px-3 py-2 text-sm border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200"
-                  onKeyDown={e => e.key === 'Enter' && askQuestion()}
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
+                  placeholder="Ask a question or send a command..."
+                  className="flex-1 px-4 py-2.5 text-sm border rounded-full dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200 focus:ring-2 focus:ring-indigo-300 focus:outline-none"
                 />
                 <button
-                  onClick={askQuestion}
-                  disabled={!qaInput.trim()}
-                  className="px-4 py-2 text-sm rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50"
+                  onClick={sendChat}
+                  disabled={!chatInput.trim() || chatSending}
+                  className="px-5 py-2.5 text-sm font-medium rounded-full bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 transition-colors"
                 >
-                  Ask
+                  {chatSending ? '⏳' : '↑'}
                 </button>
-              </div>
-
-              <div className="space-y-3">
-                {queries.map(q => (
-                  <div key={q.id} className="p-3 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
-                    <p className="text-sm font-medium text-slate-700 dark:text-zinc-200">❓ {q.question}</p>
-                    {q.answer_preview ? (
-                      <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">{q.answer_preview}</p>
-                    ) : (
-                      <p className="text-xs text-yellow-500 mt-1 italic">⏳ Awaiting agent answer...</p>
-                    )}
-                    <div className="text-[10px] text-slate-400 dark:text-zinc-600 mt-1">
-                      {new Date(q.created_at).toLocaleString()}
-                      {q.filed_as_article_id && <span className="ml-2 text-green-500">✅ Filed as article</span>}
-                    </div>
-                  </div>
-                ))}
-                {queries.length === 0 && (
-                  <p className="text-center text-slate-400 dark:text-zinc-600 mt-8">No questions yet. Ask something!</p>
-                )}
               </div>
             </div>
           </div>
