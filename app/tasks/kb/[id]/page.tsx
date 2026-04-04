@@ -5,6 +5,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 
@@ -75,6 +76,9 @@ export default function KnowledgeBasePage() {
   const [noteTitle, setNoteTitle] = useState('')
   const [noteContent, setNoteContent] = useState('')
   const [compileLoading, setCompileLoading] = useState(false)
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ total_imported: number; skipped_duplicates: number } | null>(null)
+  const { data: session } = useSession() as { data: { accessToken?: string } | null }
 
   /* ── Data fetching ── */
   const base = CLIENT_WTT_API_BASE
@@ -139,6 +143,23 @@ export default function KnowledgeBasePage() {
     setCompileLoading(false)
   }
 
+  const triggerSync = async () => {
+    setSyncLoading(true)
+    setSyncResult(null)
+    try {
+      const resp = await fetch(`${base}/kb/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        setSyncResult(data)
+        mutateSources()
+      }
+    } catch (e) { console.error(e) }
+    setSyncLoading(false)
+  }
+
   const askQuestion = async () => {
     if (!qaInput.trim()) return
     await fetch(`${base}/tasks/${taskId}/kb/queries`, {
@@ -167,19 +188,25 @@ export default function KnowledgeBasePage() {
         <h1 className="text-lg font-semibold text-slate-800 dark:text-zinc-100 truncate">
           📚 {task?.title || 'Knowledge Base'}
         </h1>
+        {syncResult && (
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+            +{syncResult.total_imported} imported, {syncResult.skipped_duplicates} skipped
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <button
-            onClick={() => router.push(`/tasks/research/${taskId}`)}
-            className="text-xs px-3 py-1.5 rounded bg-slate-200 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-300"
+            onClick={triggerSync}
+            disabled={syncLoading}
+            className="text-xs px-3 py-1.5 rounded bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 font-medium"
           >
-            📄 Research View
+            {syncLoading ? '⏳ Syncing...' : '🔄 Sync All Tasks'}
           </button>
           <button
             onClick={() => triggerCompile(true)}
             disabled={compileLoading}
             className="text-xs px-3 py-1.5 rounded bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50"
           >
-            {compileLoading ? '⏳ Compiling...' : '🔄 Compile'}
+            {compileLoading ? '⏳ Compiling...' : '🧠 Compile'}
           </button>
           <ThemeToggle />
         </div>

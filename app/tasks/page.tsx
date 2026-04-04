@@ -961,6 +961,24 @@ function TasksPageInner() {
               </button>
             )
           })}
+          <div className="mx-2 h-5 w-px bg-slate-300 dark:bg-zinc-600" />
+          <button
+            onClick={async () => {
+              try {
+                const resp = await fetch(`${CLIENT_WTT_API_BASE}/kb/personal`, {
+                  headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+                })
+                if (!resp.ok) throw new Error('Failed to get KB')
+                const kb = await resp.json()
+                router.push(buildAgentUrl(`/tasks/kb/${kb.id}`, selectedAgentId))
+              } catch (e) {
+                console.error('KB redirect failed:', e)
+              }
+            }}
+            className="rounded-lg bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-600 hover:shadow-md"
+          >
+            📚 Knowledge Base
+          </button>
         </div>
 
         <div className="grid h-[calc(100%-88px)] grid-cols-[1fr_380px] gap-3">
