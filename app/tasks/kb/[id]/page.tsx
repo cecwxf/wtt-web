@@ -73,6 +73,8 @@ export default function KnowledgeBasePage() {
   const [noteTitle, setNoteTitle] = useState('')
   const [noteContent, setNoteContent] = useState('')
   const [compileLoading, setCompileLoading] = useState(false)
+  const [compileProgress, setCompileProgress] = useState<{ percent: number; compiled: number; total: number; article_count: number } | null>(null)
+  const compileTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [syncLoading, setSyncLoading] = useState(false)
   const [syncResult, setSyncResult] = useState<{ total_imported: number; skipped_duplicates: number } | null>(null)
   const [chatInput, setChatInput] = useState('')
@@ -160,6 +162,32 @@ export default function KnowledgeBasePage() {
     mutateSources()
   }
 
+  const startProgressPolling = useCallback(() => {
+    if (compileTimerRef.current) clearInterval(compileTimerRef.current)
+    setCompileProgress({ percent: 0, compiled: 0, total: 0, article_count: 0 })
+    compileTimerRef.current = setInterval(async () => {
+      try {
+        const r = await fetch(`${base}/tasks/${taskId}/kb/compile/progress`)
+        if (r.ok) {
+          const p = await r.json()
+          setCompileProgress(p)
+          if (p.percent >= 100) {
+            if (compileTimerRef.current) clearInterval(compileTimerRef.current)
+            compileTimerRef.current = null
+            setCompileLoading(false)
+            mutateToc()
+          }
+        }
+      } catch {}
+    }, 3000)
+  }, [base, taskId, mutateToc])
+
+  const stopProgressPolling = useCallback(() => {
+    if (compileTimerRef.current) { clearInterval(compileTimerRef.current); compileTimerRef.current = null }
+  }, [])
+
+  useEffect(() => { return () => stopProgressPolling() }, [stopProgressPolling])
+
   const triggerCompile = async (incremental = true) => {
     setCompileLoading(true)
     try {
@@ -167,10 +195,9 @@ export default function KnowledgeBasePage() {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!resp.ok) alert(`Compile failed (${resp.status})`)
-      else setActiveTab('chat')
-    } catch (e) { console.error(e) }
-    setCompileLoading(false)
+      if (!resp.ok) { alert(`Compile failed (${resp.status})`); setCompileLoading(false) }
+      else { startProgressPolling(); setActiveTab('chat') }
+    } catch (e) { console.error(e); setCompileLoading(false) }
     mutateChat()
   }
 
@@ -182,17 +209,12 @@ export default function KnowledgeBasePage() {
         method: 'POST', headers: { Authorization: `Bearer ${token}` },
       })
       if (!delResp.ok) { alert(`Reset failed (${delResp.status})`); setCompileLoading(false); return }
-      const delData = await delResp.json()
       const compResp = await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=false`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` },
       })
-      if (!compResp.ok) alert(`Compile failed (${compResp.status})`)
-      else {
-        alert(`Reset ${delData.deleted_articles} articles, ${delData.reset_sources} sources. Recompiling...`)
-        setActiveTab('chat')
-      }
-    } catch (e) { console.error(e) }
-    setCompileLoading(false)
+      if (!compResp.ok) { alert(`Compile failed (${compResp.status})`); setCompileLoading(false) }
+      else { startProgressPolling(); setActiveTab('chat') }
+    } catch (e) { console.error(e); setCompileLoading(false) }
     mutateChat()
     mutateToc()
   }
@@ -255,6 +277,23 @@ export default function KnowledgeBasePage() {
           <ThemeToggle />
         </div>
       </div>
+
+      {/* Compile progress bar */}
+      {compileLoading && compileProgress && (
+        <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-800">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-3 bg-indigo-100 dark:bg-indigo-900 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: `${compileProgress.percent}%` }}
+              />
+            </div>
+            <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+              {compileProgress.percent}% — {compileProgress.compiled}/{compileProgress.total} sources → {compileProgress.article_count} articles
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Tab bar */}
       <div className="flex gap-1 px-4 py-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
