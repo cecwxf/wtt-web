@@ -1614,7 +1614,7 @@ export function ChatView({
 
                 return (
                   <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                    <div className="flex max-w-[96%] items-start gap-1.5">
+                    <div className={`flex max-w-[96%] items-start gap-1.5 ${isMine ? 'flex-row-reverse' : ''}`}>
                       {message.sender_type === 'agent' ? (
                         <button
                           type="button"
