@@ -866,7 +866,16 @@ function FeedPageInner() {
     }
   }, [topics, selectedTopicId, setSelectedTopicId])
 
-  const shouldShowDiscussMembers = !!selectedTopic && ['discussion', 'collaborative'].includes(selectedTopic.topic_type) && !selectedTopic.task_id
+  const selectedTopicTaskHint = useMemo(() => {
+    const direct = selectedTopic?.task_id
+    if (direct) return direct
+
+    const name = String(selectedTopic?.name || '')
+    const match = /^TASK-([a-f0-9]{8})\b/i.exec(name)
+    return match ? match[1].toLowerCase() : undefined
+  }, [selectedTopic?.task_id, selectedTopic?.name])
+
+  const shouldShowDiscussMembers = !!selectedTopic && ['discussion', 'collaborative'].includes(selectedTopic.topic_type) && !selectedTopicTaskHint
   const { data: topicMembersRaw, mutate: mutateMembers } = useSWR(
     shouldShowDiscussMembers && selectedTopicId && session?.accessToken
       ? ['topic-members', selectedTopicId, session.accessToken]
@@ -908,17 +917,18 @@ function FeedPageInner() {
     { refreshInterval: wsState === 'connected' ? 120000 : 30000 }
   )
 
-  const taskStatusById = useMemo<Record<string, string>>(() => {
-    const map: Record<string, string> = {}
-    if (!Array.isArray(recentTasksRaw)) return map
-    for (const t of recentTasksRaw) {
-      const raw = t as Record<string, unknown>
+  const selectedTopicTaskId = useMemo(() => {
+    if (!selectedTopicTaskHint) return undefined
+    if (selectedTopicTaskHint.length > 8) return selectedTopicTaskHint
+    if (!Array.isArray(recentTasksRaw)) return undefined
+
+    for (const item of recentTasksRaw) {
+      const raw = item as Record<string, unknown>
       const id = String(raw.id || '')
-      if (!id) continue
-      map[id] = String(raw.status || 'todo').toLowerCase()
+      if (id.toLowerCase().startsWith(selectedTopicTaskHint)) return id
     }
-    return map
-  }, [recentTasksRaw])
+    return undefined
+  }, [selectedTopicTaskHint, recentTasksRaw])
 
   // Build sub-agent map: each task = 1 sub-agent, grouped by owner agent
   const agentSubAgents = useMemo(() => {
@@ -1076,7 +1086,7 @@ function FeedPageInner() {
   const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig) => {
     if (!selectedTopicId || !selectedAgentId) return
 
-    const isTask = !!selectedTopic?.task_id
+    const isTask = !!selectedTopicTaskId
     const isSlashCommand = content.trim().startsWith('/')
     const isNonTaskDiscuss = selectedTopic?.topic_type === 'discussion' && !isTask
 
@@ -1139,19 +1149,18 @@ function FeedPageInner() {
       }
     }
 
-    if (isTask && selectedTopic?.task_id) {
-      const currentTaskStatus = taskStatusById[selectedTopic.task_id]
-      const isFreshTask = pendingRenameTaskRef.current?.taskId === selectedTopic.task_id
-      const autoRun = currentTaskStatus === 'todo' || isFreshTask
-
-      const sendResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopic.task_id}/chat/send`, {
+    if (isTask && selectedTopicTaskId) {
+      // Keep auto_run enabled for task chat sends from Feed.
+      // Backend only transitions on first send when task.status == 'todo',
+      // so this is safe for doing/review/done tasks and avoids stale-status misses.
+      const sendResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopicTaskId}/chat/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
         body: JSON.stringify({
           content: augmentedContent,
           sender_type: 'HUMAN',
           semantic_type: 'post',
-          auto_run: autoRun,
+          auto_run: true,
           ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
         }),
       })
@@ -1621,7 +1630,7 @@ function FeedPageInner() {
               <ChatView
                 topicName={selectedTopic.name}
                 topicId={selectedTopic.topic_id}
-                taskId={selectedTopic.task_id}
+                taskId={selectedTopicTaskId}
                 messages={enrichedMessages.filter(m => !m.content.includes('[system:p2p_init]') && !m.content.includes('[System] P2P channel established'))}
                 currentAgentId={selectedAgentId}
                 onSendMessage={handleSendMessage}
@@ -1629,7 +1638,7 @@ function FeedPageInner() {
                 onExport={handleExportTopic}
                 hasOlder={hasOlder && !loadingOlder}
                 loading={!feedRaw && !error}
-                isTaskTopic={!!selectedTopic.task_id}
+                isTaskTopic={!!selectedTopicTaskId}
                 taskType={toChatTaskType(selectedTopic.task_type, selectedTopic.task_mode, selectedTopic.exec_mode)}
                 wsConnected={wsState === 'connected'}
                 accessToken={session?.accessToken as string | undefined}
