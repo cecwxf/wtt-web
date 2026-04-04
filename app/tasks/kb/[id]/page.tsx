@@ -5,9 +5,15 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import rehypeRaw from 'rehype-raw'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import 'katex/dist/katex.min.css'
 
 /* ── Types ── */
 interface KBSource {
@@ -373,8 +379,51 @@ export default function KnowledgeBasePage() {
                       ))}
                     </div>
                   )}
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <div className="prose prose-slate dark:prose-invert prose-headings:scroll-mt-4 prose-h2:text-xl prose-h2:border-b prose-h2:border-slate-200 prose-h2:dark:border-zinc-700 prose-h2:pb-2 prose-h2:mt-8 prose-h3:text-lg prose-img:rounded-lg prose-img:shadow-md prose-table:text-sm prose-a:text-indigo-600 dark:prose-a:text-indigo-400 max-w-none">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeKatex, rehypeRaw]}
+                      components={{
+                        code({ className, children, ...props }) {
+                          const match = /language-(\w+)/.exec(className || '')
+                          const codeStr = String(children).replace(/\n$/, '')
+                          if (match) {
+                            return (
+                              <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div"
+                                customStyle={{ borderRadius: '0.5rem', fontSize: '0.85rem' }}>
+                                {codeStr}
+                              </SyntaxHighlighter>
+                            )
+                          }
+                          return <code className="bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-sm font-mono text-indigo-700 dark:text-indigo-300" {...props}>{children}</code>
+                        },
+                        // Convert [[slug]] wiki links to clickable buttons
+                        p({ children, ...props }) {
+                          if (typeof children === 'string' && children.includes('[[')) {
+                            const parts = children.split(/(\[\[[\w-]+\]\])/)
+                            return (
+                              <p {...props}>
+                                {parts.map((part, i) => {
+                                  const m = part.match(/^\[\[([\w-]+)\]\]$/)
+                                  if (m) return <button key={i} onClick={() => setSelectedSlug(m[1])} className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">{m[1]}</button>
+                                  return <span key={i}>{part}</span>
+                                })}
+                              </p>
+                            )
+                          }
+                          return <p {...props}>{children}</p>
+                        },
+                        blockquote({ children, ...props }) {
+                          return <blockquote className="border-l-4 border-indigo-300 dark:border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20 pl-4 py-2 my-4 italic" {...props}>{children}</blockquote>
+                        },
+                        table({ children, ...props }) {
+                          return <div className="overflow-x-auto my-4"><table className="min-w-full" {...props}>{children}</table></div>
+                        },
+                        img({ src, alt, ...props }) {
+                          return <figure className="my-4"><img src={src} alt={alt || ''} className="rounded-lg shadow-md max-w-full" {...props} />{alt && <figcaption className="text-center text-xs text-slate-400 mt-2">{alt}</figcaption>}</figure>
+                        },
+                      }}
+                    >
                       {articleFull.content_markdown}
                     </ReactMarkdown>
                   </div>
@@ -576,9 +625,21 @@ export default function KnowledgeBasePage() {
                             🤖 {msg.sender_id.length > 20 ? msg.sender_id.slice(0, 16) + '…' : msg.sender_id}
                           </div>
                         )}
-                        <div className={`text-sm whitespace-pre-wrap break-words ${isHuman ? '' : 'prose prose-sm dark:prose-invert max-w-none'}`}>
+                        <div className={`text-sm whitespace-pre-wrap break-words ${isHuman ? '' : 'prose prose-sm dark:prose-invert max-w-none prose-headings:text-base prose-p:my-1'}`}>
                           {isHuman ? msg.content : (
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm, remarkMath]}
+                              rehypePlugins={[rehypeKatex]}
+                              components={{
+                                code({ className, children }) {
+                                  const match = /language-(\w+)/.exec(className || '')
+                                  if (match) return <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div" customStyle={{ borderRadius: '0.375rem', fontSize: '0.8rem' }}>{String(children).replace(/\n$/, '')}</SyntaxHighlighter>
+                                  return <code className="bg-slate-100 dark:bg-zinc-700 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+                                },
+                              }}
+                            >
+                              {msg.content}
+                            </ReactMarkdown>
                           )}
                         </div>
                         <div className={`text-[10px] mt-1 ${isHuman ? 'text-indigo-200' : 'text-slate-400 dark:text-zinc-500'}`}>
