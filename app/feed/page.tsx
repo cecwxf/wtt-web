@@ -908,6 +908,18 @@ function FeedPageInner() {
     { refreshInterval: wsState === 'connected' ? 120000 : 30000 }
   )
 
+  const taskStatusById = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {}
+    if (!Array.isArray(recentTasksRaw)) return map
+    for (const t of recentTasksRaw) {
+      const raw = t as Record<string, unknown>
+      const id = String(raw.id || '')
+      if (!id) continue
+      map[id] = String(raw.status || 'todo').toLowerCase()
+    }
+    return map
+  }, [recentTasksRaw])
+
   // Build sub-agent map: each task = 1 sub-agent, grouped by owner agent
   const agentSubAgents = useMemo(() => {
     const map: Record<string, { id: string; title: string; task_type: string; status: string }[]> = {}
@@ -1128,8 +1140,10 @@ function FeedPageInner() {
     }
 
     if (isTask && selectedTopic?.task_id) {
-      // Use task chat/send endpoint with auto_run disabled.
-      // auto_run can trigger an additional task-run lane and cause duplicate-style replies in task topics.
+      const currentTaskStatus = taskStatusById[selectedTopic.task_id]
+      const isFreshTask = pendingRenameTaskRef.current?.taskId === selectedTopic.task_id
+      const autoRun = currentTaskStatus === 'todo' || isFreshTask
+
       const sendResp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTopic.task_id}/chat/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
@@ -1137,7 +1151,7 @@ function FeedPageInner() {
           content: augmentedContent,
           sender_type: 'HUMAN',
           semantic_type: 'post',
-          auto_run: false,
+          auto_run: autoRun,
           ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
         }),
       })
