@@ -235,18 +235,37 @@ function FeedPageInner() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
 
+  const [kbLoading, setKbLoading] = useState(false)
   const handleOpenKnowledgeRoot = useCallback(async () => {
+    if (kbLoading) return
+    if (!session?.accessToken) {
+      alert('Please log in first')
+      return
+    }
+    setKbLoading(true)
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/kb/personal`, {
-        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        headers: { Authorization: `Bearer ${session.accessToken}` },
       })
-      if (!resp.ok) return
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '')
+        console.error('KB personal error:', resp.status, errText)
+        alert(`Failed to open Knowledge Root (${resp.status})`)
+        return
+      }
       const kb = await resp.json()
-      router.push(`/tasks/kb/${kb.id}`)
+      if (kb?.id) {
+        router.push(`/tasks/kb/${kb.id}`)
+      } else {
+        alert('Failed to create Knowledge Root')
+      }
     } catch (e) {
       console.error('KB redirect failed:', e)
+      alert('Network error opening Knowledge Root')
+    } finally {
+      setKbLoading(false)
     }
-  }, [session?.accessToken, router])
+  }, [session?.accessToken, router, kbLoading])
   const [membersOpen, setMembersOpen] = useState(false)
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false)
   const [inviteAgentId, setInviteAgentId] = useState('')
