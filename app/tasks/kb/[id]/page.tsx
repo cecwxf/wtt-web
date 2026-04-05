@@ -572,7 +572,7 @@ export default function KnowledgeBasePage() {
                 <div className="absolute top-3 left-3 z-10 bg-white/90 dark:bg-zinc-900/90 backdrop-blur rounded-lg p-3 shadow-lg border border-slate-200 dark:border-zinc-700">
                   <div className="text-xs font-semibold text-slate-600 dark:text-zinc-400 mb-2">Categories</div>
                   <div className="space-y-1">
-                    {[...new Set(graphData.nodes.map(n => n.category))].sort().map(cat => (
+                    {Array.from(new Set(graphData.nodes.map(n => n.category))).sort().map(cat => (
                       <div key={cat} className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat] || '#6b7280' }} />
                         {cat}
