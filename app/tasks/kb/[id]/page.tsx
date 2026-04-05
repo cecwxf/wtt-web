@@ -2,6 +2,7 @@
 
 import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -14,6 +15,8 @@ import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import 'katex/dist/katex.min.css'
+
+const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false })
 
 /* ── Types ── */
 interface KBSource {
@@ -49,6 +52,12 @@ interface ChatMsg {
   message_id: string; sender_id: string; sender_type: string
   content: string; timestamp: string; semantic_type?: string
 }
+interface GraphNode {
+  id: string; title: string; category: string; tags: string; connections: number
+}
+interface GraphEdge {
+  source: string; target: string
+}
 
 /* ── Helpers ── */
 const fetcher = async (url: string) => {
@@ -70,7 +79,7 @@ export default function KnowledgeBasePage() {
   const taskId = params.id as string
 
   /* ── Tabs ── */
-  const [activeTab, setActiveTab] = useState<'chat' | 'wiki' | 'sources' | 'search' | 'stats'>('chat')
+  const [activeTab, setActiveTab] = useState<'chat' | 'wiki' | 'graph' | 'sources' | 'search' | 'stats'>('chat')
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchScope, setSearchScope] = useState<'all' | 'articles' | 'sources'>('all')
@@ -86,6 +95,11 @@ export default function KnowledgeBasePage() {
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [sourcePage, setSourcePage] = useState(0)
+  const graphContainerRef = useRef<HTMLDivElement>(null)
   const { data: session } = useSession() as { data: { accessToken?: string } | null }
   const token = session?.accessToken ?? ''
 
@@ -96,9 +110,9 @@ export default function KnowledgeBasePage() {
     `${base}/tasks/${taskId}/kb/toc`, fetcher, { refreshInterval: 10000 }
   )
   const { data: sourcesData, mutate: mutateSources } = useSWR(
-    activeTab === 'sources' ? `${base}/tasks/${taskId}/kb/sources?limit=100` : null, fetcher
+    activeTab === 'sources' ? `${base}/tasks/${taskId}/kb/sources?limit=50&offset=${sourcePage * 50}` : null, fetcher
   )
-  const { data: articleFull } = useSWR<KBArticleFull>(
+  const { data: articleFull, mutate: mutateArticle } = useSWR<KBArticleFull>(
     selectedSlug ? `${base}/tasks/${taskId}/kb/articles/${selectedSlug}` : null, fetcher
   )
   const { data: searchResults } = useSWR<{ results: SearchResult[] }>(
@@ -109,6 +123,9 @@ export default function KnowledgeBasePage() {
   )
   const { data: statsData } = useSWR<KBStats>(
     activeTab === 'stats' ? `${base}/tasks/${taskId}/kb/stats` : null, fetcher
+  )
+  const { data: graphData } = useSWR<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
+    activeTab === 'graph' ? `${base}/tasks/${taskId}/kb/graph` : null, fetcher
   )
   // Chat messages — poll every 3s when on chat tab
   const { data: chatData, mutate: mutateChat } = useSWR<{ messages: ChatMsg[]; topic_id: string }>(
@@ -242,6 +259,33 @@ export default function KnowledgeBasePage() {
     setSyncLoading(false)
   }
 
+  const saveArticleEdit = async () => {
+    if (!selectedSlug || !editContent.trim()) return
+    setEditSaving(true)
+    try {
+      const resp = await fetch(`${base}/tasks/${taskId}/kb/articles/${selectedSlug}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content_markdown: editContent }),
+      })
+      if (resp.ok) {
+        setEditMode(false)
+        mutateArticle()
+        mutateToc()
+      } else {
+        alert(`Save failed (${resp.status})`)
+      }
+    } catch (e) { console.error(e) }
+    setEditSaving(false)
+  }
+
+  // Category colors for graph
+  const CATEGORY_COLORS: Record<string, string> = {
+    technology: '#6366f1', research: '#8b5cf6', engineering: '#3b82f6',
+    business: '#10b981', culture: '#f59e0b', health: '#ef4444',
+    geography: '#14b8a6', uncategorized: '#6b7280',
+  }
+
   /* ── Render helpers ── */
   const tabCls = (tab: string) =>
     `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -303,9 +347,9 @@ export default function KnowledgeBasePage() {
 
       {/* Tab bar */}
       <div className="flex gap-1 px-4 py-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        {(['chat', 'wiki', 'sources', 'search', 'stats'] as const).map(tab => (
+        {(['chat', 'wiki', 'graph', 'sources', 'search', 'stats'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={tabCls(tab)}>
-            {tab === 'chat' ? '💬 Chat' : tab === 'wiki' ? '📖 Wiki' : tab === 'sources' ? '📥 Sources' : tab === 'search' ? '🔍 Search' : '📊 Stats'}
+            {tab === 'chat' ? '💬 Chat' : tab === 'wiki' ? '📖 Wiki' : tab === 'graph' ? '🕸️ Graph' : tab === 'sources' ? '📥 Sources' : tab === 'search' ? '🔍 Search' : '📊 Stats'}
           </button>
         ))}
         <span className="ml-auto text-xs text-slate-400 dark:text-zinc-500 self-center">
@@ -364,6 +408,21 @@ export default function KnowledgeBasePage() {
                     <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400">
                       v{articleFull.version}
                     </span>
+                    <button
+                      onClick={() => { if (editMode) { setEditMode(false) } else { setEditContent(articleFull.content_markdown); setEditMode(true) } }}
+                      className="ml-auto text-xs px-3 py-1 rounded border border-slate-300 dark:border-zinc-600 text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                    >
+                      {editMode ? '✕ Cancel' : '✏️ Edit'}
+                    </button>
+                    {editMode && (
+                      <button
+                        onClick={saveArticleEdit}
+                        disabled={editSaving}
+                        className="text-xs px-3 py-1 rounded bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50"
+                      >
+                        {editSaving ? '⏳' : '💾 Save'}
+                      </button>
+                    )}
                   </div>
                   {articleFull.summary && (
                     <p className="text-sm text-slate-500 dark:text-zinc-400 italic mb-4 border-l-2 border-indigo-300 pl-3">
@@ -379,6 +438,14 @@ export default function KnowledgeBasePage() {
                       ))}
                     </div>
                   )}
+                  {editMode ? (
+                    <textarea
+                      value={editContent}
+                      onChange={e => setEditContent(e.target.value)}
+                      className="w-full h-[60vh] px-4 py-3 text-sm font-mono border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200 focus:ring-2 focus:ring-indigo-300 focus:outline-none resize-y"
+                      placeholder="Edit article markdown..."
+                    />
+                  ) : (
                   <div className="prose prose-slate dark:prose-invert prose-headings:scroll-mt-4 prose-h2:text-xl prose-h2:border-b prose-h2:border-slate-200 prose-h2:dark:border-zinc-700 prose-h2:pb-2 prose-h2:mt-8 prose-h3:text-lg prose-img:rounded-lg prose-img:shadow-md prose-table:text-sm prose-a:text-indigo-600 dark:prose-a:text-indigo-400 max-w-none">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm, remarkMath]}
@@ -427,6 +494,7 @@ export default function KnowledgeBasePage() {
                       {articleFull.content_markdown}
                     </ReactMarkdown>
                   </div>
+                  )}
                   {/* Backlinks */}
                   {articleFull.backlinks && (
                     <div className="mt-8 pt-4 border-t border-slate-200 dark:border-zinc-700">
@@ -456,6 +524,81 @@ export default function KnowledgeBasePage() {
               )}
             </div>
           </>
+        )}
+
+        {/* ═══ Knowledge Graph Tab ═══ */}
+        {activeTab === 'graph' && (
+          <div className="flex-1 overflow-hidden relative" ref={graphContainerRef}>
+            {(!graphData || graphData.nodes.length === 0) ? (
+              <div className="flex items-center justify-center h-full text-slate-400 dark:text-zinc-600">
+                <div className="text-center">
+                  <div className="text-4xl mb-3">🕸️</div>
+                  <p className="font-medium">Knowledge Graph</p>
+                  <p className="text-sm mt-1">Compile wiki articles to see the knowledge graph</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Legend */}
+                <div className="absolute top-3 left-3 z-10 bg-white/90 dark:bg-zinc-900/90 backdrop-blur rounded-lg p-3 shadow-lg border border-slate-200 dark:border-zinc-700">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-zinc-400 mb-2">Categories</div>
+                  <div className="space-y-1">
+                    {[...new Set(graphData.nodes.map(n => n.category))].sort().map(cat => (
+                      <div key={cat} className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat] || '#6b7280' }} />
+                        {cat}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-slate-400 dark:text-zinc-600 mt-2 border-t pt-1">
+                    {graphData.nodes.length} nodes · {graphData.edges.length} links
+                  </div>
+                </div>
+                <ForceGraph2D
+                  graphData={{ nodes: graphData.nodes.map(n => ({ ...n })), links: graphData.edges.map(e => ({ ...e })) }}
+                  width={graphContainerRef.current?.clientWidth || 800}
+                  height={graphContainerRef.current?.clientHeight || 600}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  nodeLabel={(node: any) => `${node.title} (${node.category})`}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  nodeColor={(node: any) => CATEGORY_COLORS[node.category] || '#6b7280'}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  nodeVal={(node: any) => Math.max(3, (node.connections || 0) + 2)}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+                    const size = Math.max(4, (node.connections || 0) + 3)
+                    const color = CATEGORY_COLORS[node.category] || '#6b7280'
+                    ctx.beginPath()
+                    ctx.arc(node.x, node.y, size, 0, 2 * Math.PI)
+                    ctx.fillStyle = color
+                    ctx.fill()
+                    ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+                    ctx.lineWidth = 0.5
+                    ctx.stroke()
+                    if (globalScale > 1.2) {
+                      const label = node.title.length > 30 ? node.title.slice(0, 28) + '…' : node.title
+                      ctx.font = `${Math.min(12, 11 / globalScale)}px Inter, system-ui, sans-serif`
+                      ctx.textAlign = 'center'
+                      ctx.textBaseline = 'top'
+                      ctx.fillStyle = 'rgba(100,116,139,0.9)'
+                      ctx.fillText(label, node.x, node.y + size + 2)
+                    }
+                  }}
+                  linkColor={() => 'rgba(99,102,241,0.25)'}
+                  linkWidth={1.5}
+                  linkDirectionalParticles={1}
+                  linkDirectionalParticleWidth={2}
+                  linkDirectionalParticleColor={() => 'rgba(99,102,241,0.6)'}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  onNodeClick={(node: any) => { setSelectedSlug(node.id); setActiveTab('wiki') }}
+                  backgroundColor="transparent"
+                  cooldownTicks={100}
+                  d3AlphaDecay={0.02}
+                  d3VelocityDecay={0.3}
+                />
+              </>
+            )}
+          </div>
         )}
 
         {/* ═══ Sources Tab ═══ */}
@@ -506,7 +649,7 @@ export default function KnowledgeBasePage() {
             {/* Source list */}
             <div className="max-w-3xl mx-auto space-y-2">
               <h3 className="text-sm font-semibold text-slate-500 dark:text-zinc-400">
-                {sources.length} sources
+                {sourcesData?.total || sources.length} sources
               </h3>
               {sources.map(s => (
                 <div
@@ -535,10 +678,32 @@ export default function KnowledgeBasePage() {
                   </div>
                 </div>
               ))}
-              {sources.length === 0 && (
+              {sources.length === 0 && sourcePage === 0 && (
                 <p className="text-center text-slate-400 dark:text-zinc-600 mt-8">
                   No sources yet. Clip a URL, add a note, or import from a topic.
                 </p>
+              )}
+              {/* Pagination */}
+              {(sourcesData?.total || 0) > 50 && (
+                <div className="flex items-center justify-center gap-3 pt-4">
+                  <button
+                    onClick={() => setSourcePage(p => Math.max(0, p - 1))}
+                    disabled={sourcePage === 0}
+                    className="px-3 py-1 text-xs rounded border border-slate-300 dark:border-zinc-600 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                  >
+                    ← Prev
+                  </button>
+                  <span className="text-xs text-slate-500 dark:text-zinc-400">
+                    Page {sourcePage + 1} of {Math.ceil((sourcesData?.total || 0) / 50)}
+                  </span>
+                  <button
+                    onClick={() => setSourcePage(p => p + 1)}
+                    disabled={(sourcePage + 1) * 50 >= (sourcesData?.total || 0)}
+                    className="px-3 py-1 text-xs rounded border border-slate-300 dark:border-zinc-600 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                  >
+                    Next →
+                  </button>
+                </div>
               )}
             </div>
           </div>
