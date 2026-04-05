@@ -102,7 +102,6 @@ export default function KnowledgeBasePage() {
   const [fileUploading, setFileUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphContainerRef = useRef<HTMLDivElement>(null)
-  const [compileLang, setCompileLang] = useState<'en' | 'zh'>('en')
   const [wikiLang, setWikiLang] = useState<'en' | 'zh'>('en')
   const { data: session } = useSession() as { data: { accessToken?: string } | null }
   const token = session?.accessToken ?? ''
@@ -239,7 +238,7 @@ export default function KnowledgeBasePage() {
   const triggerCompile = async (incremental = true) => {
     setCompileLoading(true)
     try {
-      const resp = await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=${incremental}&lang=${compileLang}`, {
+      const resp = await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=${incremental}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
