@@ -30,7 +30,7 @@ interface KBArticle {
   compiled_by: string | null; created_at: string; updated_at: string
 }
 interface KBArticleFull extends KBArticle {
-  content_markdown: string; source_ids: string; backlinks: string
+  content_markdown: string; content_markdown_zh?: string; source_ids: string; backlinks: string
 }
 interface TOCData {
   categories: Record<string, { slug: string; title: string; summary: string | null; tags: string; version: number }[]>
@@ -103,6 +103,7 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphContainerRef = useRef<HTMLDivElement>(null)
   const [compileLang, setCompileLang] = useState<'en' | 'zh'>('en')
+  const [wikiLang, setWikiLang] = useState<'en' | 'zh'>('en')
   const { data: session } = useSession() as { data: { accessToken?: string } | null }
   const token = session?.accessToken ?? ''
 
@@ -287,10 +288,11 @@ export default function KnowledgeBasePage() {
     if (!selectedSlug || !editContent.trim()) return
     setEditSaving(true)
     try {
+      const field = wikiLang === 'zh' ? 'content_markdown_zh' : 'content_markdown'
       const resp = await fetch(`${base}/tasks/${taskId}/kb/articles/${selectedSlug}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content_markdown: editContent }),
+        body: JSON.stringify({ [field]: editContent }),
       })
       if (resp.ok) {
         setEditMode(false)
@@ -367,13 +369,6 @@ export default function KnowledgeBasePage() {
             className="text-xs px-3 py-1.5 rounded bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 font-medium"
           >
             {syncLoading ? '⏳ Syncing...' : '🔄 Sync Tasks'}
-          </button>
-          <button
-            onClick={() => setCompileLang(compileLang === 'en' ? 'zh' : 'en')}
-            className="text-xs px-2 py-1.5 rounded border border-slate-300 dark:border-zinc-600 text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-medium"
-            title="Toggle wiki language"
-          >
-            {compileLang === 'en' ? '🌐 EN' : '🌐 中文'}
           </button>
           <button
             onClick={() => triggerCompile(true)}
@@ -467,7 +462,18 @@ export default function KnowledgeBasePage() {
                       v{articleFull.version}
                     </span>
                     <button
-                      onClick={() => { if (editMode) { setEditMode(false) } else { setEditContent(articleFull.content_markdown); setEditMode(true) } }}
+                      onClick={() => setWikiLang(wikiLang === 'en' ? 'zh' : 'en')}
+                      className={`text-xs px-2 py-1 rounded font-medium transition-colors ${
+                        wikiLang === 'zh'
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                      }`}
+                      title="Switch language / 切换语言"
+                    >
+                      {wikiLang === 'en' ? '🌐 EN' : '🌐 中文'}
+                    </button>
+                    <button
+                      onClick={() => { if (editMode) { setEditMode(false) } else { setEditContent(wikiLang === 'zh' && articleFull.content_markdown_zh ? articleFull.content_markdown_zh : articleFull.content_markdown); setEditMode(true) } }}
                       className="ml-auto text-xs px-3 py-1 rounded border border-slate-300 dark:border-zinc-600 text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800"
                     >
                       {editMode ? '✕ Cancel' : '✏️ Edit'}
@@ -504,6 +510,12 @@ export default function KnowledgeBasePage() {
                       placeholder="Edit article markdown..."
                     />
                   ) : (
+                  <>
+                  {wikiLang === 'zh' && !articleFull.content_markdown_zh && (
+                    <div className="mb-4 px-3 py-2 rounded bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 text-sm">
+                      ⚠️ 中文版本暂未生成。请重新编译 (Compile) 以生成双语内容。当前显示英文版。
+                    </div>
+                  )}
                   <div className="prose prose-slate dark:prose-invert prose-headings:scroll-mt-4 prose-h2:text-xl prose-h2:border-b prose-h2:border-slate-200 prose-h2:dark:border-zinc-700 prose-h2:pb-2 prose-h2:mt-8 prose-h3:text-lg prose-img:rounded-lg prose-img:shadow-md prose-table:text-sm prose-a:text-indigo-600 dark:prose-a:text-indigo-400 max-w-none">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm, remarkMath]}
@@ -549,9 +561,10 @@ export default function KnowledgeBasePage() {
                         },
                       }}
                     >
-                      {articleFull.content_markdown}
+                      {(wikiLang === 'zh' && articleFull.content_markdown_zh) ? articleFull.content_markdown_zh : articleFull.content_markdown}
                     </ReactMarkdown>
                   </div>
+                  </>
                   )}
                   {/* Backlinks */}
                   {articleFull.backlinks && (
