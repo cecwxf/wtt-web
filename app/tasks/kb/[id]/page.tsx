@@ -102,6 +102,7 @@ export default function KnowledgeBasePage() {
   const [fileUploading, setFileUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphContainerRef = useRef<HTMLDivElement>(null)
+  const [compileLang, setCompileLang] = useState<'en' | 'zh'>('en')
   const { data: session } = useSession() as { data: { accessToken?: string } | null }
   const token = session?.accessToken ?? ''
 
@@ -213,10 +214,31 @@ export default function KnowledgeBasePage() {
 
   useEffect(() => { return () => stopProgressPolling() }, [stopProgressPolling])
 
+  // Restore compile progress if a compile is already in progress (e.g. after tab switch)
+  useEffect(() => {
+    let cancelled = false
+    const checkOngoing = async () => {
+      try {
+        const r = await fetch(`${base}/tasks/${taskId}/kb/compile/progress`)
+        if (r.ok && !cancelled) {
+          const p = await r.json()
+          if (p.total > 0 && p.percent < 100 && p.raw > 0) {
+            setCompileLoading(true)
+            setCompileProgress(p)
+            startProgressPolling()
+          }
+        }
+      } catch {}
+    }
+    checkOngoing()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId])
+
   const triggerCompile = async (incremental = true) => {
     setCompileLoading(true)
     try {
-      const resp = await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=${incremental}`, {
+      const resp = await fetch(`${base}/tasks/${taskId}/kb/compile?incremental=${incremental}&lang=${compileLang}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -344,7 +366,14 @@ export default function KnowledgeBasePage() {
             disabled={syncLoading}
             className="text-xs px-3 py-1.5 rounded bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 font-medium"
           >
-            {syncLoading ? '⏳ Syncing...' : '🔄 Sync All Tasks'}
+            {syncLoading ? '⏳ Syncing...' : '🔄 Sync Tasks'}
+          </button>
+          <button
+            onClick={() => setCompileLang(compileLang === 'en' ? 'zh' : 'en')}
+            className="text-xs px-2 py-1.5 rounded border border-slate-300 dark:border-zinc-600 text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-medium"
+            title="Toggle wiki language"
+          >
+            {compileLang === 'en' ? '🌐 EN' : '🌐 中文'}
           </button>
           <button
             onClick={() => triggerCompile(true)}
