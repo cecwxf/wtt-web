@@ -15,6 +15,27 @@ import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import 'katex/dist/katex.min.css'
+import mermaid from 'mermaid'
+
+mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' })
+
+function MermaidDiagram({ chart }: { chart: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [svg, setSvg] = useState('')
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let cancelled = false
+    const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`
+    mermaid.render(id, chart.trim()).then(({ svg: s }) => {
+      if (!cancelled) setSvg(s)
+    }).catch((e) => {
+      if (!cancelled) setError(String(e))
+    })
+    return () => { cancelled = true }
+  }, [chart])
+  if (error) return <pre className="text-xs text-red-500 bg-red-50 dark:bg-red-950/20 p-3 rounded-lg overflow-auto">{chart}</pre>
+  return <div ref={ref} className="my-4 flex justify-center overflow-x-auto" dangerouslySetInnerHTML={{ __html: svg }} />
+}
 
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false })
 
@@ -523,6 +544,9 @@ export default function KnowledgeBasePage() {
                         code({ className, children, ...props }) {
                           const match = /language-(\w+)/.exec(className || '')
                           const codeStr = String(children).replace(/\n$/, '')
+                          if (match && match[1] === 'mermaid') {
+                            return <MermaidDiagram chart={codeStr} />
+                          }
                           if (match) {
                             return (
                               <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div"
