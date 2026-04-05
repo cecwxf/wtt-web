@@ -79,7 +79,7 @@ export default function KnowledgeBasePage() {
   const taskId = params.id as string
 
   /* ── Tabs ── */
-  const [activeTab, setActiveTab] = useState<'chat' | 'wiki' | 'graph' | 'sources' | 'search' | 'stats'>('chat')
+  const [activeTab, setActiveTab] = useState<'wiki' | 'graph' | 'sources' | 'search' | 'stats' | 'qa'>('wiki')
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchScope, setSearchScope] = useState<'all' | 'articles' | 'sources'>('all')
@@ -99,6 +99,8 @@ export default function KnowledgeBasePage() {
   const [editContent, setEditContent] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   const [sourcePage, setSourcePage] = useState(0)
+  const [fileUploading, setFileUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const graphContainerRef = useRef<HTMLDivElement>(null)
   const { data: session } = useSession() as { data: { accessToken?: string } | null }
   const token = session?.accessToken ?? ''
@@ -127,9 +129,9 @@ export default function KnowledgeBasePage() {
   const { data: graphData } = useSWR<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
     activeTab === 'graph' ? `${base}/tasks/${taskId}/kb/graph` : null, fetcher
   )
-  // Chat messages — poll every 3s when on chat tab
+  // Chat messages — poll every 3s when on Q&A tab
   const { data: chatData, mutate: mutateChat } = useSWR<{ messages: ChatMsg[]; topic_id: string }>(
-    activeTab === 'chat' ? `${base}/tasks/${taskId}/kb/messages?limit=100` : null,
+    activeTab === 'qa' ? `${base}/tasks/${taskId}/kb/messages?limit=100` : null,
     fetcher,
     { refreshInterval: 3000 }
   )
@@ -141,7 +143,7 @@ export default function KnowledgeBasePage() {
 
   // Auto-scroll chat to bottom
   useEffect(() => {
-    if (activeTab === 'chat') chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (activeTab === 'qa') chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages.length, activeTab])
 
   /* ── Actions ── */
@@ -219,7 +221,7 @@ export default function KnowledgeBasePage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!resp.ok) { alert(`Compile failed (${resp.status})`); setCompileLoading(false) }
-      else { startProgressPolling(); setActiveTab('chat') }
+      else { startProgressPolling(); setActiveTab('qa') }
     } catch (e) { console.error(e); setCompileLoading(false) }
     mutateChat()
   }
@@ -236,7 +238,7 @@ export default function KnowledgeBasePage() {
         method: 'POST', headers: { Authorization: `Bearer ${token}` },
       })
       if (!compResp.ok) { alert(`Compile failed (${compResp.status})`); setCompileLoading(false) }
-      else { startProgressPolling(); setActiveTab('chat') }
+      else { startProgressPolling(); setActiveTab('qa') }
     } catch (e) { console.error(e); setCompileLoading(false) }
     mutateChat()
     mutateToc()
@@ -277,6 +279,33 @@ export default function KnowledgeBasePage() {
       }
     } catch (e) { console.error(e) }
     setEditSaving(false)
+  }
+
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setFileUploading(true)
+    let imported = 0
+    let duped = 0
+    for (const file of Array.from(files)) {
+      try {
+        const form = new FormData()
+        form.append('file', file)
+        const resp = await fetch(`${base}/tasks/${taskId}/kb/sources/upload`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        })
+        if (resp.ok) {
+          const data = await resp.json()
+          if (data.deduplicated) duped++
+          else imported++
+        }
+      } catch (e) { console.error('Upload failed:', file.name, e) }
+    }
+    setFileUploading(false)
+    mutateSources()
+    if (imported || duped) alert(`Imported ${imported} file(s)${duped ? `, ${duped} duplicate(s) skipped` : ''}`)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   // Category colors for graph
@@ -347,9 +376,9 @@ export default function KnowledgeBasePage() {
 
       {/* Tab bar */}
       <div className="flex gap-1 px-4 py-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        {(['chat', 'wiki', 'graph', 'sources', 'search', 'stats'] as const).map(tab => (
+        {(['wiki', 'graph', 'sources', 'search', 'stats', 'qa'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={tabCls(tab)}>
-            {tab === 'chat' ? '💬 Chat' : tab === 'wiki' ? '📖 Wiki' : tab === 'graph' ? '🕸️ Graph' : tab === 'sources' ? '📥 Sources' : tab === 'search' ? '🔍 Search' : '📊 Stats'}
+            {tab === 'wiki' ? '📖 Wiki' : tab === 'graph' ? '🕸️ Graph' : tab === 'sources' ? '📥 Sources' : tab === 'search' ? '🔍 Search' : tab === 'stats' ? '📊 Stats' : '❓ Q&A'}
           </button>
         ))}
         <span className="ml-auto text-xs text-slate-400 dark:text-zinc-500 self-center">
@@ -621,6 +650,27 @@ export default function KnowledgeBasePage() {
                   {clipLoading ? '⏳' : '📎 Clip'}
                 </button>
               </div>
+              {/* File import */}
+              <div className="flex gap-2 items-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.md,.txt,.csv,.json,.py,.js,.ts,.tsx,.jsx,.html,.xml,.yaml,.yml,.toml,.rst,.docx,.c,.cpp,.go,.rs,.rb,.sh,.java"
+                  onChange={e => uploadFiles(e.target.files)}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={fileUploading}
+                  className="px-4 py-2 text-sm rounded-lg bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50"
+                >
+                  {fileUploading ? '⏳ Uploading...' : '📁 Import Files'}
+                </button>
+                <span className="text-xs text-slate-400 dark:text-zinc-500">
+                  PDF, Markdown, TXT, Code, DOCX, CSV, JSON — up to 10MB each
+                </span>
+              </div>
               {/* Quick note */}
               <details className="border rounded-lg dark:border-zinc-700 p-3">
                 <summary className="text-sm font-medium text-slate-600 dark:text-zinc-400 cursor-pointer">📝 Add Note</summary>
@@ -763,82 +813,6 @@ export default function KnowledgeBasePage() {
           </div>
         )}
 
-        {/* ═══ Chat Tab (Knowledge Worker P2P) ═══ */}
-        {activeTab === 'chat' && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-3">
-              <div className="max-w-3xl mx-auto space-y-3">
-                {chatMessages.length === 0 && (
-                  <div className="text-center text-slate-400 dark:text-zinc-600 mt-16">
-                    <div className="text-4xl mb-3">🧠</div>
-                    <p className="font-medium">Knowledge Worker</p>
-                    <p className="text-sm mt-1">Chat with your KB agent. Use <strong>🧠 Compile</strong> to build the wiki, or ask any question.</p>
-                  </div>
-                )}
-                {chatMessages.map(msg => {
-                  const isHuman = msg.sender_type === 'human'
-                  return (
-                    <div key={msg.message_id} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
-                        isHuman
-                          ? 'bg-indigo-500 text-white'
-                          : 'bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200'
-                      }`}>
-                        {!isHuman && (
-                          <div className="text-[10px] font-medium text-indigo-500 dark:text-indigo-400 mb-1">
-                            🤖 {msg.sender_id.length > 20 ? msg.sender_id.slice(0, 16) + '…' : msg.sender_id}
-                          </div>
-                        )}
-                        <div className={`text-sm whitespace-pre-wrap break-words ${isHuman ? '' : 'prose prose-sm dark:prose-invert max-w-none prose-headings:text-base prose-p:my-1'}`}>
-                          {isHuman ? msg.content : (
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm, remarkMath]}
-                              rehypePlugins={[rehypeKatex]}
-                              components={{
-                                code({ className, children }) {
-                                  const match = /language-(\w+)/.exec(className || '')
-                                  if (match) return <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div" customStyle={{ borderRadius: '0.375rem', fontSize: '0.8rem' }}>{String(children).replace(/\n$/, '')}</SyntaxHighlighter>
-                                  return <code className="bg-slate-100 dark:bg-zinc-700 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
-                                },
-                              }}
-                            >
-                              {msg.content}
-                            </ReactMarkdown>
-                          )}
-                        </div>
-                        <div className={`text-[10px] mt-1 ${isHuman ? 'text-indigo-200' : 'text-slate-400 dark:text-zinc-500'}`}>
-                          {new Date(msg.timestamp).toLocaleTimeString()}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-                <div ref={chatEndRef} />
-              </div>
-            </div>
-
-            {/* Input bar */}
-            <div className="border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
-              <div className="max-w-3xl mx-auto flex gap-2">
-                <input
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
-                  placeholder="Ask a question or send a command..."
-                  className="flex-1 px-4 py-2.5 text-sm border rounded-full dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200 focus:ring-2 focus:ring-indigo-300 focus:outline-none"
-                />
-                <button
-                  onClick={sendChat}
-                  disabled={!chatInput.trim() || chatSending}
-                  className="px-5 py-2.5 text-sm font-medium rounded-full bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 transition-colors"
-                >
-                  {chatSending ? '⏳' : '↑'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ═══ Stats Tab ═══ */}
         {activeTab === 'stats' && stats && (
@@ -905,6 +879,80 @@ export default function KnowledgeBasePage() {
         )}
         {activeTab === 'stats' && !stats && (
           <div className="flex-1 flex items-center justify-center text-slate-400">Loading stats...</div>
+        )}
+
+        {/* ═══ Q&A Tab ═══ */}
+        {activeTab === 'qa' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              <div className="max-w-3xl mx-auto space-y-3">
+                {chatMessages.length === 0 && (
+                  <div className="text-center text-slate-400 dark:text-zinc-600 mt-16">
+                    <div className="text-4xl mb-3">❓</div>
+                    <p className="font-medium">Q&A — Ask your Knowledge Base</p>
+                    <p className="text-sm mt-1">Ask any question about your imported sources. The agent will search the KB and respond with citations.</p>
+                  </div>
+                )}
+                {chatMessages.map(msg => {
+                  const isHuman = msg.sender_type === 'human'
+                  return (
+                    <div key={msg.message_id} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                        isHuman
+                          ? 'bg-indigo-500 text-white'
+                          : 'bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200'
+                      }`}>
+                        {!isHuman && (
+                          <div className="text-[10px] font-medium text-indigo-500 dark:text-indigo-400 mb-1">
+                            🤖 {msg.sender_id.length > 20 ? msg.sender_id.slice(0, 16) + '…' : msg.sender_id}
+                          </div>
+                        )}
+                        <div className={`text-sm whitespace-pre-wrap break-words ${isHuman ? '' : 'prose prose-sm dark:prose-invert max-w-none prose-headings:text-base prose-p:my-1'}`}>
+                          {isHuman ? msg.content : (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm, remarkMath]}
+                              rehypePlugins={[rehypeKatex]}
+                              components={{
+                                code({ className, children }) {
+                                  const match = /language-(\w+)/.exec(className || '')
+                                  if (match) return <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div" customStyle={{ borderRadius: '0.375rem', fontSize: '0.8rem' }}>{String(children).replace(/\n$/, '')}</SyntaxHighlighter>
+                                  return <code className="bg-slate-100 dark:bg-zinc-700 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+                                },
+                              }}
+                            >
+                              {msg.content}
+                            </ReactMarkdown>
+                          )}
+                        </div>
+                        <div className={`text-[10px] mt-1 ${isHuman ? 'text-indigo-200' : 'text-slate-400 dark:text-zinc-500'}`}>
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div ref={chatEndRef} />
+              </div>
+            </div>
+            <div className="border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
+              <div className="max-w-3xl mx-auto flex gap-2">
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
+                  placeholder="Ask a question about your knowledge base..."
+                  className="flex-1 px-4 py-2.5 text-sm border rounded-full dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200 focus:ring-2 focus:ring-indigo-300 focus:outline-none"
+                />
+                <button
+                  onClick={sendChat}
+                  disabled={!chatInput.trim() || chatSending}
+                  className="px-5 py-2.5 text-sm font-medium rounded-full bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+                >
+                  {chatSending ? '⏳' : '↑'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
