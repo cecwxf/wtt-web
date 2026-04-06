@@ -21,7 +21,7 @@ mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose
 
 /**
  * Sanitize article markdown to fix common agent output issues:
- * - Strip uniform 4-space indentation (agent wraps all content in indented blocks)
+ * - Strip 4-space indentation on structural lines (headings, code fences, lists)
  * - Fix broken LaTeX: \f (form-feed) before "rac" → \frac
  * - Normalize math delimiters: ensure $$ blocks are not indented
  */
@@ -33,11 +33,12 @@ function sanitizeArticleMarkdown(raw: string): string {
   md = md.replace(/\x0crac\{/g, '\\frac{')
   md = md.replace(/\x0crac /g, '\\frac ')
 
-  // Detect uniform 4-space indentation: if >60% of non-empty lines start with 4 spaces, strip it
+  // If any heading/code-fence/list is 4-space indented, strip the prefix from all indented lines
   const lines = md.split('\n')
-  const nonEmpty = lines.filter(l => l.trim().length > 0)
-  const indented = nonEmpty.filter(l => l.startsWith('    '))
-  if (nonEmpty.length > 0 && indented.length / nonEmpty.length > 0.5) {
+  const hasIndentedStructure = lines.some(l =>
+    /^    (#{1,6} |```|- |\* |\d+\. |\$\$)/.test(l)
+  )
+  if (hasIndentedStructure) {
     md = lines.map(l => l.startsWith('    ') ? l.slice(4) : l).join('\n')
   }
 
