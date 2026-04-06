@@ -19,6 +19,39 @@ import mermaid from 'mermaid'
 
 mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' })
 
+/**
+ * Sanitize article markdown to fix common agent output issues:
+ * - Strip uniform 4-space indentation (agent wraps all content in indented blocks)
+ * - Fix broken LaTeX: \f (form-feed) before "rac" → \frac
+ * - Normalize math delimiters: ensure $$ blocks are not indented
+ */
+function sanitizeArticleMarkdown(raw: string): string {
+  if (!raw) return raw
+  let md = raw
+
+  // Fix \f (form-feed char 0x0C) before "rac" → \frac  (agent's \frac gets mangled)
+  md = md.replace(/\x0crac\{/g, '\\frac{')
+  md = md.replace(/\x0crac /g, '\\frac ')
+
+  // Detect uniform 4-space indentation: if >60% of non-empty lines start with 4 spaces, strip it
+  const lines = md.split('\n')
+  const nonEmpty = lines.filter(l => l.trim().length > 0)
+  const indented = nonEmpty.filter(l => l.startsWith('    '))
+  if (nonEmpty.length > 0 && indented.length / nonEmpty.length > 0.5) {
+    md = lines.map(l => l.startsWith('    ') ? l.slice(4) : l).join('\n')
+  }
+
+  // Ensure $$ math blocks are on their own lines (not indented)
+  md = md.replace(/^[ \t]+(\$\$)$/gm, '$1')
+
+  // Fix escaped underscores inside LaTeX that break rendering: \_ → _  inside $..$ blocks
+  md = md.replace(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/g, (match) => {
+    return match.replace(/\\_/g, '_')
+  })
+
+  return md
+}
+
 function MermaidDiagram({ chart }: { chart: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [svg, setSvg] = useState('')
@@ -552,13 +585,31 @@ export default function KnowledgeBasePage() {
                           }
                           if (match) {
                             return (
-                              <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div"
-                                customStyle={{ borderRadius: '0.5rem', fontSize: '0.85rem' }}>
-                                {codeStr}
-                              </SyntaxHighlighter>
+                              <div className="relative group">
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText(codeStr) }}
+                                  className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 text-[10px] rounded bg-zinc-700 text-zinc-300 hover:bg-zinc-600 z-10"
+                                >Copy</button>
+                                <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div"
+                                  customStyle={{ borderRadius: '0.5rem', fontSize: '0.85rem' }}>
+                                  {codeStr}
+                                </SyntaxHighlighter>
+                              </div>
                             )
                           }
                           return <code className="bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-sm font-mono text-indigo-700 dark:text-indigo-300" {...props}>{children}</code>
+                        },
+                        h1({ children, ...props }) {
+                          const id = String(children).toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')
+                          return <h1 id={id} {...props}>{children}</h1>
+                        },
+                        h2({ children, ...props }) {
+                          const id = String(children).toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')
+                          return <h2 id={id} className="group" {...props}><a href={`#${id}`} className="no-underline hover:underline">{children}</a></h2>
+                        },
+                        h3({ children, ...props }) {
+                          const id = String(children).toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')
+                          return <h3 id={id} className="group" {...props}><a href={`#${id}`} className="no-underline hover:underline">{children}</a></h3>
                         },
                         // Convert [[slug]] wiki links to clickable buttons
                         p({ children, ...props }) {
@@ -580,14 +631,23 @@ export default function KnowledgeBasePage() {
                           return <blockquote className="border-l-4 border-indigo-300 dark:border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20 pl-4 py-2 my-4 italic" {...props}>{children}</blockquote>
                         },
                         table({ children, ...props }) {
-                          return <div className="overflow-x-auto my-4"><table className="min-w-full" {...props}>{children}</table></div>
+                          return <div className="overflow-x-auto my-4"><table className="min-w-full border-collapse border border-slate-300 dark:border-zinc-600" {...props}>{children}</table></div>
+                        },
+                        th({ children, ...props }) {
+                          return <th className="border border-slate-300 dark:border-zinc-600 bg-slate-100 dark:bg-zinc-800 px-3 py-2 text-left text-sm font-semibold" {...props}>{children}</th>
+                        },
+                        td({ children, ...props }) {
+                          return <td className="border border-slate-300 dark:border-zinc-600 px-3 py-2 text-sm" {...props}>{children}</td>
                         },
                         img({ src, alt, ...props }) {
                           return <figure className="my-4"><img src={src} alt={alt || ''} className="rounded-lg shadow-md max-w-full" {...props} />{alt && <figcaption className="text-center text-xs text-slate-400 mt-2">{alt}</figcaption>}</figure>
                         },
+                        hr() {
+                          return <hr className="my-8 border-slate-300 dark:border-zinc-600" />
+                        },
                       }}
                     >
-                      {(wikiLang === 'zh' && articleFull.content_markdown_zh) ? articleFull.content_markdown_zh : articleFull.content_markdown}
+                      {sanitizeArticleMarkdown((wikiLang === 'zh' && articleFull.content_markdown_zh) ? articleFull.content_markdown_zh : articleFull.content_markdown)}
                     </ReactMarkdown>
                   </div>
                   </>
