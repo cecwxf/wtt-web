@@ -40,11 +40,6 @@ function MermaidDiagram({ chart }: { chart: string }) {
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false })
 
 /* ── Types ── */
-interface KBSource {
-  id: string; source_type: string; title: string; url: string | null
-  status: string; snippet: string; metadata_json: string
-  created_at: string; updated_at: string
-}
 interface KBArticle {
   id: string; slug: string; title: string; summary: string | null
   category: string | null; tags: string; version: number
@@ -119,7 +114,6 @@ export default function KnowledgeBasePage() {
   const [editMode, setEditMode] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [editSaving, setEditSaving] = useState(false)
-  const [sourcePage, setSourcePage] = useState(0)
   const [fileUploading, setFileUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphContainerRef = useRef<HTMLDivElement>(null)
@@ -133,8 +127,16 @@ export default function KnowledgeBasePage() {
   const { data: tocData, mutate: mutateToc } = useSWR<TOCData>(
     `${base}/tasks/${taskId}/kb/toc`, fetcher, { refreshInterval: 10000 }
   )
-  const { data: sourcesData, mutate: mutateSources } = useSWR(
-    activeTab === 'sources' ? `${base}/tasks/${taskId}/kb/sources?limit=50&offset=${sourcePage * 50}` : null, fetcher
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { data: _sourcesData, mutate: mutateSources } = useSWR(
+    activeTab === 'sources' ? `${base}/tasks/${taskId}/kb/sources?limit=500` : null, fetcher
+  )
+
+  interface TreeSource { id: string; source_type: string; title?: string; url?: string; status: string; snippet?: string; created_at: string }
+  interface TreeArticle { slug: string; title: string; category?: string; tags?: string; version: number; updated_at: string }
+  interface TreeData { raw: TreeSource[]; wiki: TreeArticle[]; outputs: TreeSource[] }
+  const { data: treeData, mutate: mutateTree } = useSWR<TreeData>(
+    activeTab === 'sources' ? `${base}/tasks/${taskId}/kb/sources/tree` : null, fetcher
   )
   const { data: articleFull, mutate: mutateArticle } = useSWR<KBArticleFull>(
     selectedSlug ? `${base}/tasks/${taskId}/kb/articles/${selectedSlug}` : null, fetcher
@@ -159,9 +161,10 @@ export default function KnowledgeBasePage() {
   )
 
   const toc = tocData || { categories: {}, article_count: 0, index_entries: [] }
-  const sources: KBSource[] = sourcesData?.sources || []
   const chatMessages: ChatMsg[] = chatData?.messages || []
   const stats: KBStats | null = statsData || null
+
+  const refreshSources = useCallback(() => { mutateSources(); mutateTree() }, [mutateSources, mutateTree])
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -194,7 +197,7 @@ export default function KnowledgeBasePage() {
         body: JSON.stringify({ url: clipUrl.trim() }),
       })
       setClipUrl('')
-      mutateSources()
+      refreshSources()
     } catch (e) { console.error(e) }
     setClipLoading(false)
   }
@@ -206,7 +209,7 @@ export default function KnowledgeBasePage() {
       body: JSON.stringify({ source_type: 'note', title: noteTitle || 'Untitled Note', content_markdown: noteContent }),
     })
     setNoteTitle(''); setNoteContent('')
-    mutateSources()
+    refreshSources()
   }
 
   const startProgressPolling = useCallback(() => {
@@ -298,7 +301,7 @@ export default function KnowledgeBasePage() {
       if (resp.ok) {
         const data = await resp.json()
         setSyncResult(data)
-        mutateSources()
+        refreshSources()
       }
     } catch (e) { console.error(e) }
     setSyncLoading(false)
@@ -347,7 +350,7 @@ export default function KnowledgeBasePage() {
       } catch (e) { console.error('Upload failed:', file.name, e) }
     }
     setFileUploading(false)
-    mutateSources()
+    refreshSources()
     if (imported || duped) alert(`Imported ${imported} file(s)${duped ? `, ${duped} duplicate(s) skipped` : ''}`)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -761,65 +764,100 @@ export default function KnowledgeBasePage() {
               </details>
             </div>
 
-            {/* Source list */}
-            <div className="max-w-3xl mx-auto space-y-2">
-              <h3 className="text-sm font-semibold text-slate-500 dark:text-zinc-400">
-                {sourcesData?.total || sources.length} sources
-              </h3>
-              {sources.map(s => (
-                <div
-                  key={s.id}
-                  className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:shadow-sm"
-                >
-                  <span className="text-lg">{SOURCE_ICONS[s.source_type] || '📄'}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-700 dark:text-zinc-200 truncate">
-                        {s.title || s.id}
-                      </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLORS[s.status] || ''}`}>
-                        {s.status}
-                      </span>
+            {/* Three-section source tree */}
+            <div className="max-w-3xl mx-auto space-y-6">
+
+              {/* ── 📥 Raw Sources ── */}
+              <details open className="border rounded-lg dark:border-zinc-700 overflow-hidden">
+                <summary className="flex items-center gap-2 px-4 py-3 bg-slate-50 dark:bg-zinc-800/60 cursor-pointer select-none">
+                  <span className="text-lg">📥</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-zinc-200">Raw Sources</span>
+                  <span className="ml-auto text-xs text-slate-400 dark:text-zinc-500">{treeData?.raw?.length || 0} items</span>
+                </summary>
+                <div className="p-3 space-y-2">
+                  {(treeData?.raw || []).map((s: TreeSource) => (
+                    <div key={s.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:shadow-sm">
+                      <span className="text-lg">{SOURCE_ICONS[s.source_type] || '📄'}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-700 dark:text-zinc-200 truncate">{s.title || s.id}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLORS[s.status] || ''}`}>{s.status}</span>
+                        </div>
+                        {s.snippet && <p className="text-xs text-slate-400 dark:text-zinc-500 mt-1 line-clamp-2">{s.snippet}</p>}
+                        <div className="text-[10px] text-slate-400 dark:text-zinc-600 mt-1">
+                          {s.source_type} · {new Date(s.created_at).toLocaleDateString()}
+                          {s.url && <> · <a href={s.url} target="_blank" rel="noopener" className="text-indigo-500 hover:underline">source ↗</a></>}
+                        </div>
+                      </div>
                     </div>
-                    {s.snippet && (
-                      <p className="text-xs text-slate-400 dark:text-zinc-500 mt-1 line-clamp-2">
-                        {s.snippet}
-                      </p>
-                    )}
-                    <div className="text-[10px] text-slate-400 dark:text-zinc-600 mt-1">
-                      {s.source_type} · {new Date(s.created_at).toLocaleDateString()}
-                      {s.url && <> · <a href={s.url} target="_blank" rel="noopener" className="text-indigo-500 hover:underline">source ↗</a></>}
+                  ))}
+                  {(!treeData?.raw || treeData.raw.length === 0) && (
+                    <p className="text-center text-sm text-slate-400 dark:text-zinc-600 py-4">No raw sources. Import files, clip URLs, or sync from tasks.</p>
+                  )}
+                </div>
+              </details>
+
+              {/* ── 📖 Wiki Articles ── */}
+              <details open className="border rounded-lg dark:border-zinc-700 overflow-hidden">
+                <summary className="flex items-center gap-2 px-4 py-3 bg-emerald-50 dark:bg-emerald-950/20 cursor-pointer select-none">
+                  <span className="text-lg">📖</span>
+                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Wiki Articles</span>
+                  <span className="ml-auto text-xs text-emerald-500 dark:text-emerald-400">{treeData?.wiki?.length || 0} articles</span>
+                </summary>
+                <div className="p-3 space-y-2">
+                  {(treeData?.wiki || []).map((a: TreeArticle) => (
+                    <button
+                      key={a.slug}
+                      onClick={() => { setSelectedSlug(a.slug); setActiveTab('wiki') }}
+                      className="w-full flex items-start gap-3 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800/40 bg-white dark:bg-zinc-900 hover:shadow-sm hover:border-emerald-400 dark:hover:border-emerald-600 text-left transition-colors"
+                    >
+                      <span className="text-lg">📄</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-700 dark:text-zinc-200 truncate">{a.title}</span>
+                          {a.category && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">{a.category}</span>}
+                        </div>
+                        <div className="text-[10px] text-slate-400 dark:text-zinc-600 mt-1">
+                          {a.slug} · v{a.version} · {a.tags ? a.tags.split(',').slice(0, 4).join(', ') : ''}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  {(!treeData?.wiki || treeData.wiki.length === 0) && (
+                    <p className="text-center text-sm text-slate-400 dark:text-zinc-600 py-4">No wiki articles yet. Compile sources to generate.</p>
+                  )}
+                </div>
+              </details>
+
+              {/* ── 💬 Q&A Outputs ── */}
+              <details className="border rounded-lg dark:border-zinc-700 overflow-hidden">
+                <summary className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/20 cursor-pointer select-none">
+                  <span className="text-lg">💬</span>
+                  <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">Q&A Archive</span>
+                  <span className="ml-auto text-xs text-amber-500 dark:text-amber-400">{treeData?.outputs?.length || 0} items</span>
+                </summary>
+                <div className="p-3 space-y-2">
+                  {(treeData?.outputs || []).map((s: TreeSource) => (
+                    <div key={s.id} className="flex items-start gap-3 p-3 rounded-lg border border-amber-200 dark:border-amber-800/40 bg-white dark:bg-zinc-900 hover:shadow-sm">
+                      <span className="text-lg">💬</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-700 dark:text-zinc-200 truncate">{s.title || 'Q&A'}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLORS[s.status] || ''}`}>{s.status}</span>
+                        </div>
+                        {s.snippet && <p className="text-xs text-slate-400 dark:text-zinc-500 mt-1 line-clamp-2">{s.snippet}</p>}
+                        <div className="text-[10px] text-slate-400 dark:text-zinc-600 mt-1">
+                          {new Date(s.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
+                  {(!treeData?.outputs || treeData.outputs.length === 0) && (
+                    <p className="text-center text-sm text-slate-400 dark:text-zinc-600 py-4">No Q&A archive yet. Ask questions in the Q&A tab — answers get archived here.</p>
+                  )}
                 </div>
-              ))}
-              {sources.length === 0 && sourcePage === 0 && (
-                <p className="text-center text-slate-400 dark:text-zinc-600 mt-8">
-                  No sources yet. Clip a URL, add a note, or import from a topic.
-                </p>
-              )}
-              {/* Pagination */}
-              {(sourcesData?.total || 0) > 50 && (
-                <div className="flex items-center justify-center gap-3 pt-4">
-                  <button
-                    onClick={() => setSourcePage(p => Math.max(0, p - 1))}
-                    disabled={sourcePage === 0}
-                    className="px-3 py-1 text-xs rounded border border-slate-300 dark:border-zinc-600 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-zinc-800"
-                  >
-                    ← Prev
-                  </button>
-                  <span className="text-xs text-slate-500 dark:text-zinc-400">
-                    Page {sourcePage + 1} of {Math.ceil((sourcesData?.total || 0) / 50)}
-                  </span>
-                  <button
-                    onClick={() => setSourcePage(p => p + 1)}
-                    disabled={(sourcePage + 1) * 50 >= (sourcesData?.total || 0)}
-                    className="px-3 py-1 text-xs rounded border border-slate-300 dark:border-zinc-600 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-zinc-800"
-                  >
-                    Next →
-                  </button>
-                </div>
-              )}
+              </details>
+
             </div>
           </div>
         )}
