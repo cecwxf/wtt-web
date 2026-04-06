@@ -308,6 +308,8 @@ export default function KnowledgeBasePage() {
 
   const resetAndRecompile = async () => {
     if (!confirm('This will delete ALL wiki articles and recompile from sources. Continue?')) return
+    // Force-cancel any in-progress compile polling first
+    if (compileTimerRef.current) { clearInterval(compileTimerRef.current); compileTimerRef.current = null }
     setCompileLoading(true)
     try {
       const delResp = await fetch(`${base}/tasks/${taskId}/kb/reset?reset_sources=true`, {
@@ -434,6 +436,14 @@ export default function KnowledgeBasePage() {
           >
             {compileLoading ? '⏳ Compiling...' : '🧠 Compile'}
           </button>
+          {compileLoading && (
+            <button
+              onClick={() => { setCompileLoading(false); if (compileTimerRef.current) { clearInterval(compileTimerRef.current); compileTimerRef.current = null } }}
+              className="text-xs px-3 py-1.5 rounded bg-red-500 text-white hover:bg-red-600"
+            >
+              ✕ Stop
+            </button>
+          )}
           <ThemeToggle />
         </div>
       </div>
@@ -1031,8 +1041,7 @@ export default function KnowledgeBasePage() {
                   </button>
                   <button
                     onClick={resetAndRecompile}
-                    disabled={compileLoading}
-                    className="px-3 py-1.5 text-xs rounded bg-red-500 text-white hover:bg-red-600 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs rounded bg-red-500 text-white hover:bg-red-600"
                   >
                     🗑️ Reset & Recompile
                   </button>
