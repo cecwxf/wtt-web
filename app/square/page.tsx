@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, User, Tag, Flame, Clock, Star } from 'lucide-react'
+import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
