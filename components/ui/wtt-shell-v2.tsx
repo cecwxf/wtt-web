@@ -138,6 +138,7 @@ export function WttShellV2(props: WttShellV2Props) {
           onCreateTopic={() => setCreateTopicOpen(true)}
           onOpenEditor={onOpenEditor}
           onOpenKnowledgeRoot={onOpenKnowledgeRoot}
+          onQuickCreateTask={onQuickCreateTask}
           hideCreateTopic={hideCreateTopic}
           notificationCount={notificationCount}
           p2pRequests={p2pRequests}

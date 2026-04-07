@@ -93,7 +93,6 @@ const LOCAL_SLASH_COMMANDS: SlashCommandDef[] = [
   { cmd: '/new session', desc: 'Start a new chat session', icon: '💬', mode: 'local' },
   { cmd: '/new topic', desc: 'Create a new topic', icon: '📢', mode: 'local' },
   { cmd: '/run', desc: 'Run the current task', icon: '▶️', mode: 'local' },
-  { cmd: '/rerun', desc: 'Rerun pipeline', icon: '🔄', mode: 'local' },
   { cmd: '/workers', desc: 'List workers for agent', icon: '👷', mode: 'local' },
 ]
 
@@ -256,13 +255,12 @@ const REASONING_EFFORTS = [
   { id: 'high', label: 'High', icon: '🧠' },
 ] as const
 
-export type TaskType = 'code' | 'research' | 'general' | 'pipeline' | null
+export type TaskType = 'code' | 'research' | 'general' | null
 
 const DEFAULT_EFFORT_BY_TASK: Record<string, 'off' | 'low' | 'medium' | 'high'> = {
   code: 'high',
   research: 'high',
   general: 'low',
-  pipeline: 'low',
 }
 
 export interface MentionableAgent {

@@ -53,7 +53,7 @@ function getTopicIcon(type: string, isTask?: boolean) {
 }
 
 type TopicGroupKey = 'p2p' | 'task' | 'discuss' | 'subscriber'
-type TaskTypeKey = 'general' | 'code' | 'pipeline' | 'research'
+type TaskTypeKey = 'general' | 'code' | 'research'
 
 function getTopicGroup(topic: TopicItem): TopicGroupKey {
   if (topic.topic_type === 'p2p') return 'p2p'
@@ -81,7 +81,6 @@ function stripTaskPrefix(name: string): string {
 
 function normalizeTaskType(type?: string, taskMode?: string, execMode?: string): TaskTypeKey {
   const raw = `${String(type || '').toLowerCase()} ${String(taskMode || '').toLowerCase()} ${String(execMode || '').toLowerCase()}`
-  if (raw.includes('pipeline')) return 'pipeline'
   if (raw.includes('research')) return 'research'
   if (raw.includes('code')) return 'code'
   return 'general'
@@ -91,8 +90,6 @@ function taskTypeInitial(type: TaskTypeKey): string {
   switch (type) {
     case 'code':
       return 'C'
-    case 'pipeline':
-      return 'P'
     case 'research':
       return 'R'
     default:
@@ -104,8 +101,6 @@ function taskTypeLabel(type: TaskTypeKey): string {
   switch (type) {
     case 'code':
       return 'Code Task'
-    case 'pipeline':
-      return 'Pipeline Task'
     case 'research':
       return 'Research Task'
     default:
@@ -117,8 +112,6 @@ function taskTypeTone(type: TaskTypeKey): string {
   switch (type) {
     case 'code':
       return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-    case 'pipeline':
-      return 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
     case 'research':
       return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
     default:
@@ -164,7 +157,6 @@ export function TopicColumn({
   const [collapsedTaskTypeGroups, setCollapsedTaskTypeGroups] = useState<Record<TaskTypeKey, boolean>>({
     general: false,
     code: false,
-    pipeline: false,
     research: false,
   })
   const { t } = useI18n()
@@ -647,7 +639,7 @@ export function TopicColumn({
 
             {!collapsed && group === 'task' && (
               <div className="space-y-1">
-                {(['general', 'code', 'pipeline', 'research'] as TaskTypeKey[]).map((taskType) => {
+                {(['general', 'code', 'research'] as TaskTypeKey[]).map((taskType) => {
                   const taskItems = items.filter((it) => normalizeTaskType(it.task_type, it.task_mode, it.exec_mode) === taskType)
                   const taskCollapsed = collapsedTaskTypeGroups[taskType]
                   const unreadTaskTopics = taskItems.filter((it) => Number(it.unread_count || 0) > 0).length

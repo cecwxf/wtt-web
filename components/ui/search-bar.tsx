@@ -1,6 +1,6 @@
 'use client'
 
-import { Search, X, MessageSquare, KanbanSquare, Workflow } from 'lucide-react'
+import { Search, X, MessageSquare, KanbanSquare } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { wttApi } from '@/lib/api/wtt-client'
@@ -13,16 +13,7 @@ interface TaskResult {
   title: string
   status: string
   priority: string
-  pipeline_id?: string
   owner_agent_id?: string
-}
-
-interface PipelineResult {
-  id: string
-  name: string
-  description?: string
-  task_count?: number
-  auto_review?: boolean
 }
 
 interface SearchBarProps {
@@ -33,11 +24,10 @@ interface SearchBarProps {
   agentId?: string
 }
 
-export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds = [], placeholder = 'Search topics, tasks, pipelines...', agentId = '' }: SearchBarProps) {
+export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds = [], placeholder = 'Search topics, tasks...', agentId = '' }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [topics, setTopics] = useState<Topic[]>([])
   const [tasks, setTasks] = useState<TaskResult[]>([])
-  const [pipelines, setPipelines] = useState<PipelineResult[]>([])
   const [loading, setLoading] = useState(false)
   const [showResults, setShowResults] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -59,27 +49,23 @@ export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds 
       if (!q) {
         setTopics([])
         setTasks([])
-        setPipelines([])
         setShowResults(false)
         return
       }
 
       setLoading(true)
       try {
-        const [topicResults, taskResults, pipelineResults] = await Promise.allSettled([
+        const [topicResults, taskResults] = await Promise.allSettled([
           wttApi.searchTopics(q),
           searchTasks(q),
-          searchPipelines(q),
         ])
 
         setTopics(topicResults.status === 'fulfilled' ? topicResults.value : [])
         setTasks(taskResults.status === 'fulfilled' ? taskResults.value : [])
-        setPipelines(pipelineResults.status === 'fulfilled' ? pipelineResults.value : [])
         setShowResults(true)
       } catch {
         setTopics([])
         setTasks([])
-        setPipelines([])
       } finally {
         setLoading(false)
       }
@@ -122,21 +108,14 @@ export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds 
     router.push(buildAgentUrl('/tasks', agentId, { highlight: taskId }))
   }
 
-  const handleSelectPipeline = (pipelineId: string) => {
-    setShowResults(false)
-    setQuery('')
-    router.push(buildAgentUrl('/pipelines', agentId, { edit: pipelineId }))
-  }
-
   const handleClear = () => {
     setQuery('')
     setTopics([])
     setTasks([])
-    setPipelines([])
     setShowResults(false)
   }
 
-  const totalResults = topics.length + tasks.length + pipelines.length
+  const totalResults = topics.length + tasks.length
 
   const statusIcon = (status: string) => {
     switch (status) {
@@ -267,36 +246,6 @@ export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds 
             </div>
           )}
 
-          {!loading && pipelines.length > 0 && (
-            <div>
-              {(topics.length > 0 || tasks.length > 0) && <div className="mx-4 h-px bg-slate-100" />}
-              <div className="flex items-center gap-2 px-4 pt-3 pb-1">
-                <Workflow className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                  Pipelines ({pipelines.length})
-                </span>
-              </div>
-              {pipelines.map((pipeline) => (
-                <button
-                  key={pipeline.id}
-                  onClick={() => handleSelectPipeline(pipeline.id)}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600">
-                    <Workflow className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-800">{pipeline.name}</p>
-                    <p className="text-xs text-slate-400">
-                      {pipeline.task_count != null ? `${pipeline.task_count} tasks` : ''}
-                      {pipeline.auto_review ? ' · auto-review' : ''}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
           <div className="h-1" />
         </div>
       )}
@@ -315,17 +264,4 @@ async function searchTasks(query: string): Promise<TaskResult[]> {
       t.id?.toLowerCase().includes(q) ||
       t.owner_agent_id?.toLowerCase().includes(q)
   ).slice(0, 10)
-}
-
-async function searchPipelines(query: string): Promise<PipelineResult[]> {
-  const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/pipelines`)
-  if (!resp.ok) return []
-  const allPipelines: PipelineResult[] = await resp.json()
-  const q = query.toLowerCase()
-  return allPipelines.filter(
-    (p) =>
-      p.name?.toLowerCase().includes(q) ||
-      p.id?.toLowerCase().includes(q) ||
-      p.description?.toLowerCase().includes(q)
-  ).slice(0, 5)
 }

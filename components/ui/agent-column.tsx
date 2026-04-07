@@ -50,7 +50,7 @@ interface AgentColumnProps {
   maxSubAgents?: number
   agentStats?: AgentStatsMap
   onlineAgentIds?: Set<string>
-  onQuickCreate?: (type: 'code' | 'research' | 'general' | 'pipeline') => void
+  onQuickCreate?: (type: 'code' | 'research' | 'general') => void
   userToken?: string
 }
 
@@ -606,7 +606,6 @@ export function AgentColumn({
               { type: 'general' as const, icon: '💬', label: t('agent.chat') },
               { type: 'code' as const, icon: '💻', label: t('agent.code') },
               { type: 'research' as const, icon: '🔬', label: t('agent.research') },
-              { type: 'pipeline' as const, icon: '🔗', label: t('agent.pipeline') },
             ]).map((item) => (
               <button
                 key={item.type}

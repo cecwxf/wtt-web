@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, FileEdit, KanbanSquare, Plus, Workflow, Sun, Moon, Languages, Compass } from 'lucide-react'
+import { Bell, FileEdit, KanbanSquare, Plus, Code2, FileSearch, Sun, Moon, Languages, Compass } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
@@ -28,6 +28,7 @@ interface TopBarProps {
   onCreateTopic?: () => void
   onOpenEditor?: () => void
   onOpenKnowledgeRoot?: () => void
+  onQuickCreateTask?: (type: 'code' | 'research') => void
   hideCreateTopic?: boolean
   notificationCount?: number
   p2pRequests?: P2PRequestItem[]
@@ -38,7 +39,7 @@ interface TopBarProps {
   agentId?: string
 }
 
-export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, onOpenKnowledgeRoot, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, leftSlot, agentId = '' }: TopBarProps) {
+export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, onOpenKnowledgeRoot, onQuickCreateTask, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, leftSlot, agentId = '' }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showLanguageMenu, setShowLanguageMenu] = useState(false)
   const { theme, setTheme } = useTheme()
@@ -69,14 +70,27 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           <span className="hidden sm:inline">{t('top.tasks')}</span>
         </Link>
 
-        <Link
-          href={buildAgentUrl('/pipelines', agentId)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
-          title={t('top.pipelines')}
-        >
-          <Workflow className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t('top.pipelines')}</span>
-        </Link>
+        {onQuickCreateTask && (
+          <button
+            onClick={() => onQuickCreateTask('code')}
+            className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200/80 dark:border-cyan-800/50 bg-cyan-50/80 dark:bg-cyan-950/30 px-2.5 py-1.5 text-xs text-cyan-700 dark:text-cyan-300 transition hover:bg-cyan-100 dark:hover:bg-cyan-950/40 hover:text-cyan-800 dark:hover:text-cyan-200"
+            title="Code Task"
+          >
+            <Code2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Code</span>
+          </button>
+        )}
+
+        {onQuickCreateTask && (
+          <button
+            onClick={() => onQuickCreateTask('research')}
+            className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-800 dark:hover:text-amber-200"
+            title="Research Task"
+          >
+            <FileSearch className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Research</span>
+          </button>
+        )}
 
         <Link
           href={buildAgentUrl('/square', agentId)}
