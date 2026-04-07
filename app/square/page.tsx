@@ -3,9 +3,11 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, User, Tag, Flame, Clock, Star } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
+import { useI18n } from '@/lib/i18n-provider'
 
-type SortMode = '推荐' | '最新' | '热榜' | 'Agent精选'
+type SortMode = 'recommended' | 'newest' | 'hot' | 'agent_picks'
 
 interface AgentRow {
   agent_id: string
@@ -56,7 +58,6 @@ function timeAgo(ts: string) {
 
 function stripHtmlToText(html: string): string {
   const plain = htmlToPlainText(html)
-
   return stripSourceMarker(
     stripMarkdownImageTokens(plain)
       .replace(/\n{3,}/g, '\n\n')
@@ -64,16 +65,31 @@ function stripHtmlToText(html: string): string {
   )
 }
 
+const SORT_MAP: Record<SortMode, string> = {
+  recommended: '推荐',
+  newest: '最新',
+  hot: '热榜',
+  agent_picks: 'Agent精选',
+}
+
+const SORT_ICONS: Record<SortMode, typeof Star> = {
+  recommended: Star,
+  newest: Clock,
+  hot: Flame,
+  agent_picks: Bot,
+}
+
 export default function SquarePage() {
   const { data: session, status } = useSession()
+  const { t } = useI18n()
 
   const [agents, setAgents] = useState<AgentRow[]>([])
   const [taxonomy, setTaxonomy] = useState<TaxonomyRes | null>(null)
   const [category, setCategory] = useState('')
   const [sub, setSub] = useState('')
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
-  const [sort, setSort] = useState<SortMode>('推荐')
+  const [sort, setSort] = useState<SortMode>('recommended')
   const [searchQ, setSearchQ] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
   const [posts, setPosts] = useState<SquarePost[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -86,7 +102,6 @@ export default function SquarePage() {
     return h
   }, [token])
 
-  // Load taxonomy
   useEffect(() => {
     fetch('/api/wtt/square/taxonomy')
       .then(r => r.json())
@@ -94,15 +109,11 @@ export default function SquarePage() {
       .catch(() => {})
   }, [])
 
-  // Load agents for author name mapping (prefer display_name over agent_id)
   useEffect(() => {
     if (!token) return
     fetch('/api/wtt/agents/my', { headers: authHeaders })
       .then(r => r.json())
-      .then(d => {
-        const list = d.agents || d || []
-        setAgents(list)
-      })
+      .then(d => setAgents(d.agents || d || []))
       .catch(() => {})
   }, [token, authHeaders])
 
@@ -117,16 +128,14 @@ export default function SquarePage() {
     return map
   }, [agents])
 
-  // Bootstrap square schema
   useEffect(() => {
     if (!token) return
     fetch('/api/wtt/square/bootstrap', { method: 'POST', headers: authHeaders }).catch(() => {})
   }, [token, authHeaders])
 
-  // Load posts
   const loadPosts = useCallback(() => {
     setLoading(true)
-    const params = new URLSearchParams({ sort, limit: '120' })
+    const params = new URLSearchParams({ sort: SORT_MAP[sort], limit: '120' })
     if (category) params.set('category', category)
     if (sub) params.set('sub', sub)
     if (searchQ.trim()) params.set('q', searchQ.trim())
@@ -139,17 +148,9 @@ export default function SquarePage() {
 
   useEffect(() => { loadPosts() }, [loadPosts])
 
-  const toggleCat = (c: string) => {
-    setExpandedCats(prev => {
-      const next = new Set(prev)
-      if (next.has(c)) { next.delete(c) } else { next.add(c) }
-      return next
-    })
-  }
-
-  const selectSub = (c: string, s: string) => {
+  const selectCategory = (c: string, s?: string) => {
     setCategory(c)
-    setSub(s)
+    setSub(s || '')
   }
 
   const clearFilter = () => {
@@ -159,204 +160,288 @@ export default function SquarePage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-500 dark:text-gray-400">加载中…</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f6f7f9] dark:bg-[#0e0e10]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-gray-400">{t('square.loading')}</span>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0e0e10]">
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/feed" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
-              ← 返回
+            <Link href="/feed" className="flex items-center gap-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+              <ArrowLeft className="w-4 h-4" />
             </Link>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">若水广场</h1>
-            <span className="text-xs text-gray-400 dark:text-gray-500">Agent × 人类 共建讨论社区</span>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                <Sparkles className="w-3.5 h-3.5 text-white" />
+              </div>
+              <h1 className="text-base font-bold text-gray-900 dark:text-white">{t('square.title')}</h1>
+            </div>
+            <span className="hidden sm:inline text-[11px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+              {t('square.subtitle')}
+            </span>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative">
+
+          <div className="flex items-center gap-2">
+            {/* Search pill */}
+            <div className={`relative flex items-center transition-all duration-200 ${searchFocused ? 'w-64' : 'w-44'}`}>
+              <Search className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
               <input
                 type="text"
-                placeholder="搜索话题…"
+                placeholder={t('square.searchPlaceholder')}
                 value={searchQ}
                 onChange={e => setSearchQ(e.target.value)}
-                className="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-full bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-blue-400 dark:focus:border-blue-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none transition-all"
               />
             </div>
-            {/* Create post */}
             {token && (
               <Link
                 href="/square/compose"
-                className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-full transition-all shadow-sm hover:shadow-md"
               >
-                发布话题
+                <PenSquare className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t('square.compose')}</span>
               </Link>
             )}
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 flex gap-6">
-        {/* Left sidebar: category navigation */}
-        <aside className="w-56 flex-shrink-0 hidden md:block">
-          <div className="sticky top-20 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">分类导航</h2>
-            </div>
-            {/* All */}
-            <button
-              onClick={clearFilter}
-              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                !category
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-              }`}
-            >
-              全部话题
-            </button>
-            {/* Categories */}
-            {taxonomy?.categories.map(cat => (
-              <div key={cat.name}>
+      <div className="max-w-6xl mx-auto px-4 py-5 flex gap-5">
+        {/* ── Left Sidebar ── */}
+        <aside className="w-52 flex-shrink-0 hidden lg:block">
+          <div className="sticky top-[4.5rem] space-y-4">
+            {/* Category chips */}
+            <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 p-4">
+              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{t('square.categories')}</h2>
+              <div className="flex flex-wrap gap-1.5">
                 <button
-                  onClick={() => toggleCat(cat.name)}
-                  className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${
-                    category === cat.name && !sub
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  onClick={clearFilter}
+                  className={`px-2.5 py-1 text-xs rounded-full transition-all ${
+                    !category
+                      ? 'bg-blue-500 text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
-                  <span>{cat.name}</span>
-                  <span className="text-xs text-gray-400">{expandedCats.has(cat.name) ? '▾' : '▸'}</span>
+                  {t('square.allTopics')}
                 </button>
-                {expandedCats.has(cat.name) && (
-                  <div className="bg-gray-50 dark:bg-gray-800/50">
-                    {cat.subs.map(s => (
+                {taxonomy?.categories.map(cat => (
+                  <button
+                    key={cat.name}
+                    onClick={() => selectCategory(cat.name)}
+                    className={`px-2.5 py-1 text-xs rounded-full transition-all ${
+                      category === cat.name && !sub
+                        ? 'bg-blue-500 text-white shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Sub-categories when a category is selected */}
+              {category && taxonomy?.categories.find(c => c.name === category)?.subs && (
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex flex-wrap gap-1.5">
+                    {taxonomy?.categories.find(c => c.name === category)?.subs.map(s => (
                       <button
                         key={s}
-                        onClick={() => selectSub(cat.name, s)}
-                        className={`w-full text-left pl-8 pr-4 py-2 text-sm transition-colors ${
-                          category === cat.name && sub === s
-                            ? 'text-blue-600 dark:text-blue-400 font-medium bg-blue-50/50 dark:bg-blue-900/20'
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-700/30'
+                        onClick={() => selectCategory(category, s)}
+                        className={`px-2 py-0.5 text-[11px] rounded-full transition-all ${
+                          sub === s
+                            ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-medium'
+                            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                         }`}
                       >
                         {s}
                       </button>
                     ))}
                   </div>
-                )}
+                </div>
+              )}
+            </div>
+
+            {/* Quick stats sidebar */}
+            <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 p-4">
+              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{t('square.about')}</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                {t('square.aboutDesc')}
+              </p>
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500">
+                <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {posts.length}</span>
+                <span className="flex items-center gap-1"><Bot className="w-3 h-3" /> {posts.filter(p => p.has_agent_reply).length}</span>
               </div>
-            ))}
+            </div>
           </div>
         </aside>
 
-        {/* Main content: post feed */}
+        {/* ── Main Content ── */}
         <main className="flex-1 min-w-0">
-          {/* Sort tabs */}
-          <div className="flex items-center gap-1 mb-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2">
-            {(['推荐', '最新', '热榜', 'Agent精选'] as SortMode[]).map(s => (
-              <button
-                key={s}
-                onClick={() => setSort(s)}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                  sort === s
-                    ? 'bg-blue-600 text-white font-medium'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+          {/* Sort tabs - Telegram pill style */}
+          <div className="flex items-center gap-1 mb-4 p-1 bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80">
+            {(['recommended', 'newest', 'hot', 'agent_picks'] as SortMode[]).map(s => {
+              const Icon = SORT_ICONS[s]
+              return (
+                <button
+                  key={s}
+                  onClick={() => setSort(s)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 text-sm rounded-xl transition-all flex-1 justify-center ${
+                    sort === s
+                      ? 'bg-blue-500 text-white font-medium shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t(`square.sort.${s}`)}</span>
+                </button>
+              )
+            })}
             {(category || sub) && (
-              <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
-                {category}{sub ? ` / ${sub}` : ''}
-                <button onClick={clearFilter} className="ml-2 text-blue-500 hover:text-blue-600">清除筛选</button>
-              </span>
+              <div className="hidden sm:flex items-center ml-2 pl-2 border-l border-gray-200 dark:border-gray-700 gap-1">
+                <Tag className="w-3 h-3 text-gray-400" />
+                <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">
+                  {category}{sub ? ` / ${sub}` : ''}
+                </span>
+                <button onClick={clearFilter} className="text-xs text-blue-500 hover:text-blue-600 ml-1">×</button>
+              </div>
             )}
           </div>
 
           {/* Post list */}
           {loading ? (
-            <div className="text-center py-12 text-gray-400 dark:text-gray-500">加载中…</div>
+            <div className="flex flex-col items-center py-16 gap-3">
+              <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm text-gray-400">{t('square.loading')}</span>
+            </div>
           ) : posts.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-gray-400 dark:text-gray-500 text-lg mb-2">暂无话题</div>
-              <div className="text-gray-400 dark:text-gray-500 text-sm">
-                {token ? '成为第一个发布者吧！' : '登录后发布话题'}
+            <div className="text-center py-16">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <MessageCircle className="w-7 h-7 text-gray-300 dark:text-gray-600" />
               </div>
+              <p className="text-gray-500 dark:text-gray-400 font-medium mb-1">{t('square.empty')}</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">
+                {token ? t('square.emptyAuth') : t('square.emptyNoAuth')}
+              </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {posts.map(post => (
-                <Link
-                  key={post.id}
-                  href={`/square/post/${post.id}`}
-                  className="block bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-blue-300 dark:hover:border-blue-600 transition-colors group"
-                >
-                  <div className="flex items-start gap-3">
-                    {/* Author badge */}
-                    <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                      post.publisher_type === 'agent'
-                        ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400'
-                        : 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
-                    }`}>
-                      {post.publisher_type === 'agent' ? '🤖' : '👤'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      {/* Meta line */}
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
-                          {post.publisher_type === 'agent'
-                            ? (agentNameById[post.author] || post.author)
-                            : post.author}
-                        </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                          {post.category}/{post.sub}
-                        </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">{timeAgo(post.timestamp)}</span>
+            <div className="space-y-2.5">
+              {posts.map(post => {
+                const previewImg = extractPreviewImage(post.body)
+                const bodyText = stripHtmlToText(post.body)
+                const authorName = post.publisher_type === 'agent'
+                  ? (agentNameById[post.author] || post.author)
+                  : post.author
+                const isAgent = post.publisher_type === 'agent'
+
+                return (
+                  <Link
+                    key={post.id}
+                    href={`/square/post/${post.id}`}
+                    className="group block bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 hover:shadow-lg hover:shadow-gray-200/50 dark:hover:shadow-black/20 transition-all duration-200 overflow-hidden"
+                  >
+                    <div className="flex">
+                      {/* Upvote column - Zhihu style */}
+                      <div className="flex flex-col items-center justify-start py-4 px-3 border-r border-gray-100 dark:border-gray-800/60 min-w-[52px]">
+                        <ChevronUp className="w-5 h-5 text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors" />
+                        <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 mt-0.5">{post.likes || 0}</span>
                       </div>
-                      {/* Title */}
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 mb-1.5 line-clamp-2">
-                        {post.title}
-                      </h3>
-                      {/* Preview */}
-                      {extractPreviewImage(post.body) && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={toThumbnailUrl(extractPreviewImage(post.body) || '')}
-                          alt="preview"
-                          loading="lazy"
-                          decoding="async"
-                          className="mb-2 max-h-40 w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
-                        />
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 p-4">
+                        {/* Author row */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                            isAgent
+                              ? 'bg-gradient-to-br from-purple-400 to-purple-600 text-white'
+                              : 'bg-gradient-to-br from-blue-400 to-blue-600 text-white'
+                          }`}>
+                            {isAgent ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                          </div>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[160px]">
+                            {authorName}
+                          </span>
+                          {isAgent && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full">
+                              Agent
+                            </span>
+                          )}
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500">{timeAgo(post.timestamp)}</span>
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="text-[15px] font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 mb-1.5 line-clamp-2 leading-snug transition-colors">
+                          {post.title}
+                        </h3>
+
+                        {/* Body preview */}
+                        {bodyText && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-2.5 leading-relaxed">
+                            {bodyText}
+                          </p>
+                        )}
+
+                        {/* Footer */}
+                        <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500">
+                          <span className="flex items-center gap-1 hover:text-blue-500 transition-colors">
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            {post.reply_count} {t('square.replies')}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Heart className="w-3.5 h-3.5" />
+                            {post.likes}
+                          </span>
+                          {(post.quality_score ?? 0) > 0 && (
+                            <span className="flex items-center gap-1 text-green-500 dark:text-green-400">
+                              <Star className="w-3 h-3" />
+                              {post.quality_score}
+                            </span>
+                          )}
+                          {post.has_agent_reply && (
+                            <span className="flex items-center gap-1 text-purple-500 dark:text-purple-400">
+                              <Bot className="w-3 h-3" />
+                              {t('square.agentJoined')}
+                            </span>
+                          )}
+                          {(post.source_count ?? 0) > 0 && (
+                            <span className="flex items-center gap-1">
+                              <ExternalLink className="w-3 h-3" />
+                              {post.source_count}
+                            </span>
+                          )}
+                          <span className="hidden sm:inline-flex items-center gap-1 ml-auto bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full text-[10px]">
+                            <Tag className="w-2.5 h-2.5" />
+                            {post.category}/{post.sub}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Thumbnail - right side (Zhihu style) */}
+                      {previewImg && (
+                        <div className="hidden sm:flex items-center pr-4 py-4">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={toThumbnailUrl(previewImg)}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className="w-28 h-20 rounded-xl object-cover flex-shrink-0 border border-gray-200/60 dark:border-gray-700/60"
+                          />
+                        </div>
                       )}
-                      <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 whitespace-pre-wrap">
-                        {stripHtmlToText(post.body)}
-                      </p>
-                      {/* Footer stats */}
-                      <div className="flex items-center gap-4 text-xs text-gray-400 dark:text-gray-500">
-                        <span>💬 {post.reply_count} 回复</span>
-                        <span>❤ {post.likes}</span>
-                        {(post.quality_score ?? 0) > 0 && (
-                          <span className="text-green-600 dark:text-green-400">质量分 {post.quality_score}</span>
-                        )}
-                        {post.has_agent_reply && (
-                          <span className="text-purple-500 dark:text-purple-400">🤖 Agent已参与讨论</span>
-                        )}
-                        {(post.source_count ?? 0) > 0 && (
-                          <span>{post.source_count} 来源</span>
-                        )}
-                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                )
+              })}
             </div>
           )}
         </main>

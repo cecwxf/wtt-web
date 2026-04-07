@@ -6,7 +6,9 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
+import { ArrowLeft, Bot, User, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
+import { useI18n } from '@/lib/i18n-provider'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -73,6 +75,7 @@ function summarizeReplyContent(raw: string): { snippet: string; imageUrl?: strin
 export default function PostDetailPage() {
   const params = useParams()
   const { data: session } = useSession()
+  const { t } = useI18n()
   const postId = params.id as string
 
   const [replyText, setReplyText] = useState('')
@@ -255,81 +258,73 @@ export default function PostDetailPage() {
   }, [])
 
   const renderReplyComposer = (compact = false) => (
-    <div className={`${compact ? 'mt-3' : 'mt-4'} pt-4 border-t border-gray-100 dark:border-gray-700`}>
+    <div className={`${compact ? 'mt-3' : 'mt-4'} pt-3 border-t border-gray-100 dark:border-gray-800`}>
       {replyFullscreen && (
         <button
           type="button"
-          className="fixed inset-0 z-[110] bg-black/40"
+          className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm"
           onClick={() => setReplyFullscreen(false)}
-          aria-label="关闭全屏编辑"
+          aria-label={t('square.detail.closeFullscreen')}
         />
       )}
 
-      <div className={replyFullscreen ? 'fixed inset-4 z-[120] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-2xl overflow-y-auto' : 'relative'}>
-        <div className="mb-2 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-gray-500">
-          {replyTo ? (
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="shrink-0 text-blue-500">回复 @{replyContext?.author}</span>
-              <button
-                onClick={() => { setReplyTo(null); setReplyText(''); setReplyContext(null) }}
-                className="text-red-400 hover:text-red-500"
-              >
-                取消
-              </button>
-            </div>
-          ) : (
-            <span>写下你的观点，支持 @Agent 与图片</span>
-          )}
-          <button
-            type="button"
-            onClick={() => setReplyFullscreen((v) => !v)}
-            className="rounded border border-gray-200 dark:border-gray-600 px-2 py-1 text-gray-500 hover:text-blue-500"
-          >
-            {replyFullscreen ? '退出全屏' : '全屏编辑'}
-          </button>
-        </div>
+      <div className={replyFullscreen ? 'fixed inset-4 z-[120] rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1d] p-5 shadow-2xl overflow-y-auto' : 'relative'}>
+        {/* Reply target indicator */}
+        {replyTo && (
+          <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-400">
+            <Reply className="w-3 h-3 text-blue-500 flex-shrink-0" />
+            <span className="text-xs text-blue-600 dark:text-blue-400 truncate">{t('square.detail.replyingTo')} @{replyContext?.author}</span>
+            <button
+              onClick={() => { setReplyTo(null); setReplyText(''); setReplyContext(null) }}
+              className="ml-auto text-xs text-gray-400 hover:text-red-500 flex-shrink-0"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         <SquareEditor
           variant="mini"
           className={replyFullscreen ? '[&_.ProseMirror]:!min-h-[78vh]' : ''}
-          placeholder="输入回复… 支持图片粘贴/拖拽，@agent 触发AI讨论"
+          placeholder={t('square.detail.replyPlaceholder')}
           onChange={setReplyText}
           onReady={handleReplyEditorReady}
         />
 
-        <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="text-xs text-gray-400 dark:text-gray-500">默认发布为：👤 人类</div>
-
+        <div className="flex items-center justify-between mt-2 gap-2">
+          <div className="flex items-center gap-1.5">
             {agents.length > 0 && (
               <div className="relative">
                 <button
                   onClick={() => setShowAgentPicker(!showAgentPicker)}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
                 >
-                  @ Agent
+                  <Bot className="w-3 h-3" />
+                  <span>@Agent</span>
                 </button>
                 {showAgentPicker && (
-                  <div className="absolute left-0 bottom-full mb-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10 p-2">
+                  <div className="absolute left-0 bottom-full mb-1 w-56 bg-white dark:bg-[#1a1a1d] border border-gray-200 dark:border-gray-800 rounded-xl shadow-xl z-10 p-2 overflow-hidden">
                     <input
                       value={agentQuery}
                       onChange={(e) => setAgentQuery(e.target.value)}
-                      placeholder="搜索 Agent"
-                      className="mb-1 w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs text-gray-700 dark:text-gray-200"
+                      placeholder={t('square.detail.searchAgent')}
+                      className="mb-1.5 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:border-blue-400"
                     />
                     <div className="max-h-44 overflow-y-auto">
                       {filteredAgents.map(a => (
                         <button
                           key={a.agent_id}
                           onClick={() => insertMention(a.agent_id)}
-                          className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-2"
+                          className="w-full text-left px-2.5 py-2 text-xs hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
                         >
-                          <span className="text-purple-500">🤖</span>
+                          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
+                            <Bot className="w-2.5 h-2.5 text-white" />
+                          </div>
                           <span className="font-medium truncate">{a.display_name || a.agent_id}</span>
                         </button>
                       ))}
                       {filteredAgents.length === 0 && (
-                        <div className="px-2 py-1.5 text-xs text-gray-400">无匹配 Agent</div>
+                        <div className="px-2.5 py-2 text-xs text-gray-400">{t('square.detail.noAgents')}</div>
                       )}
                     </div>
                   </div>
@@ -340,23 +335,28 @@ export default function PostDetailPage() {
             <button
               type="button"
               onClick={() => replyEditorRef.current?.openImagePicker?.()}
-              className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             >
-              添加图片
+              <ImagePlus className="w-3 h-3" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setReplyFullscreen((v) => !v)}
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+              {replyFullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
             </button>
           </div>
 
           <button
             onClick={handleReply}
             disabled={submitting}
-            className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 rounded-full transition-all shadow-sm"
           >
-            {submitting ? '发送中…' : '发送'}
+            <Send className="w-3.5 h-3.5" />
+            {submitting ? t('square.detail.sending') : t('square.detail.send')}
           </button>
-        </div>
-
-        <div className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-          支持粗体/斜体/列表/代码/图片 · @agent名称 自动补全 · 回复自动刷新
         </div>
       </div>
     </div>
@@ -445,19 +445,25 @@ export default function PostDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-500 dark:text-gray-400">加载中…</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f6f7f9] dark:bg-[#0e0e10]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-gray-400">{t('square.loading')}</span>
+        </div>
       </div>
     )
   }
 
   if (postError || !post) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-[#f6f7f9] dark:bg-[#0e0e10]">
         <div className="text-center">
-          <div className="text-red-500 text-lg mb-2">加载失败</div>
-          <div className="text-gray-400 text-sm mb-4">{postError?.message || '帖子不存在'}</div>
-          <Link href="/square" className="text-blue-500 hover:text-blue-600">← 返回广场</Link>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+            <MessageCircle className="w-7 h-7 text-red-300 dark:text-red-600" />
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 font-medium mb-1">{t('square.detail.loadFailed')}</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mb-4">{postError?.message || t('square.detail.notFound')}</p>
+          <Link href="/square" className="text-sm text-blue-500 hover:text-blue-600">← {t('square.title')}</Link>
         </div>
       </div>
     )
@@ -469,104 +475,121 @@ export default function PostDetailPage() {
   }
 
   const renderReply = (r: Reply, depth: number = 0) => {
-    const isChild = depth > 0
     const isAgent = r.sender_type === 'agent'
+    const isHuman = !isAgent
     const children = threadedReplies.childMap[r.id] || []
     const totalDescendants = countThreadReplies(r.id)
     const isCollapsed = collapsedThreads.has(r.id)
-    const contentSizeClass = isChild ? 'text-[12px] leading-5' : 'text-[16px] leading-7'
+    const authorName = resolveAuthorName(r.author, r.sender_type)
 
     return (
       <div
         key={r.id}
         id={`reply-${r.id}`}
         className="transition-colors duration-500"
-        style={{ marginLeft: isChild ? `${Math.min(depth, 3) * 10}px` : undefined }}
+        style={{ marginLeft: depth > 0 ? `${Math.min(depth, 3) * 16}px` : undefined }}
       >
-        <div className={`py-3 ${isChild ? 'rounded-lg bg-gray-50/70 dark:bg-gray-900/30 px-3 border-l border-gray-200/80 dark:border-gray-700/80' : ''}`}>
-          <div className="flex items-start gap-2.5">
-            <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-              isAgent
-                ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400'
-                : 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
-            }`}>
-              {isAgent ? '🤖' : '👤'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`${isChild ? 'text-[11px]' : 'text-sm'} font-medium ${
-                  isAgent ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'
-                }`}>
-                  {resolveAuthorName(r.author, r.sender_type)}
-                </span>
-                <span className={`text-xs px-1.5 py-0.5 rounded ${
-                  isAgent
-                    ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
-                    : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                }`}>
-                  {isAgent ? 'Agent' : '人类'}
-                </span>
-                {r.optimized_by_agent && (
-                  <span className="text-xs text-green-500">✨ Agent优化</span>
-                )}
-                <span className="text-xs text-gray-400 dark:text-gray-500">{timeAgo(r.timestamp)}</span>
-              </div>
-              <div className={`${contentSizeClass} text-gray-800 dark:text-gray-200 leading-relaxed space-y-2`}>
-                {parseRichBlocks(r.content).map((block, bi) => {
-                  switch (block.kind) {
-                    case 'image':
-                      return (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img key={`${r.id}-img-${bi}`} src={toThumbnailUrl(block.url)} alt="reply-image"
-                          loading="lazy" decoding="async"
-                          className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover" />
-                      )
-                    case 'html':
-                      return (
-                        <div key={bi}
-                          className="prose prose-sm dark:prose-invert max-w-none [&_img]:max-h-64 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-gray-200 dark:[&_img]:border-gray-700"
-                          dangerouslySetInnerHTML={{ __html: block.html }} />
-                      )
-                    case 'video':
-                      return (
-                        <video key={bi} controls className="max-h-64 w-full rounded-lg border border-gray-200 dark:border-gray-700">
-                          <source src={block.url} />
-                        </video>
-                      )
-                    case 'audio':
-                      return <audio key={bi} controls src={block.url} className="w-full" />
-                    case 'markdown':
-                      return <div key={bi} className="whitespace-pre-wrap">{block.text}</div>
-                    case 'plain':
-                      return block.text?.trim() ? <span key={bi} className="whitespace-pre-wrap">{block.text}</span> : null
-                    default:
-                      return null
-                  }
-                })}
-              </div>
-              <div className="mt-1.5 flex items-center gap-3">
-                {token && (
-                  <button
-                    onClick={() => startReplyTo(r.id, resolveAuthorName(r.author, r.sender_type), r.content)}
-                    className="text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
-                  >
-                    回复
-                  </button>
-                )}
-                {totalDescendants > 0 && (
-                  <button
-                    onClick={() => toggleCollapse(r.id)}
-                    className="text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
-                  >
-                    {isCollapsed ? `展开 ${totalDescendants} 条答复 ▸` : `收起 ${totalDescendants} 条答复 ▾`}
-                  </button>
-                )}
-              </div>
+        {/* Telegram-style bubble */}
+        <div className={`flex gap-2.5 py-2 ${isHuman ? 'flex-row-reverse' : 'flex-row'}`}>
+          {/* Avatar */}
+          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+            isAgent
+              ? 'bg-gradient-to-br from-purple-400 to-purple-600'
+              : 'bg-gradient-to-br from-blue-400 to-blue-600'
+          }`}>
+            {isAgent ? <Bot className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-white" />}
+          </div>
 
-              {token && replyTo === r.id && renderReplyComposer(true)}
+          {/* Bubble */}
+          <div className={`max-w-[80%] min-w-[120px] ${
+            isHuman
+              ? 'bg-blue-500 text-white rounded-2xl rounded-tr-md'
+              : 'bg-white dark:bg-[#2a2a2d] text-gray-800 dark:text-gray-200 rounded-2xl rounded-tl-md border border-gray-200/60 dark:border-gray-700/60'
+          } px-3.5 py-2.5 shadow-sm`}>
+            {/* Author line */}
+            <div className={`flex items-center gap-1.5 mb-1 ${isHuman ? 'justify-end' : ''}`}>
+              <span className={`text-[11px] font-semibold ${isHuman ? 'text-blue-100' : isAgent ? 'text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                {authorName}
+              </span>
+              {isAgent && (
+                <span className="px-1 py-px text-[9px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">Agent</span>
+              )}
+              {r.optimized_by_agent && (
+                <Sparkles className={`w-2.5 h-2.5 ${isHuman ? 'text-blue-200' : 'text-green-500'}`} />
+              )}
+            </div>
+
+            {/* Content */}
+            <div className={`text-sm leading-relaxed space-y-1.5 ${isHuman ? '[&_a]:text-blue-100 [&_a]:underline' : ''}`}>
+              {parseRichBlocks(r.content).map((block, bi) => {
+                switch (block.kind) {
+                  case 'image':
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={`${r.id}-img-${bi}`} src={toThumbnailUrl(block.url)} alt=""
+                        loading="lazy" decoding="async"
+                        className="max-h-48 w-auto max-w-full rounded-lg object-cover" />
+                    )
+                  case 'html':
+                    return (
+                      <div key={bi}
+                        className={`prose prose-sm max-w-none ${isHuman ? 'prose-invert' : 'dark:prose-invert'} [&_img]:max-h-48 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg`}
+                        dangerouslySetInnerHTML={{ __html: block.html }} />
+                    )
+                  case 'video':
+                    return (
+                      <video key={bi} controls className="max-h-48 w-full rounded-lg">
+                        <source src={block.url} />
+                      </video>
+                    )
+                  case 'audio':
+                    return <audio key={bi} controls src={block.url} className="w-full" />
+                  case 'markdown':
+                    return <div key={bi} className="whitespace-pre-wrap">{block.text}</div>
+                  case 'plain':
+                    return block.text?.trim() ? <span key={bi} className="whitespace-pre-wrap">{block.text}</span> : null
+                  default:
+                    return null
+                }
+              })}
+            </div>
+
+            {/* Timestamp + actions */}
+            <div className={`flex items-center gap-2 mt-1.5 ${isHuman ? 'justify-end' : ''}`}>
+              <span className={`text-[10px] ${isHuman ? 'text-blue-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                {timeAgo(r.timestamp)}
+              </span>
+              {token && (
+                <button
+                  onClick={() => startReplyTo(r.id, authorName, r.content)}
+                  className={`text-[10px] ${isHuman ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400'} transition-colors`}
+                >
+                  <Reply className="w-3 h-3 inline" /> {t('square.detail.reply')}
+                </button>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Thread collapse/expand */}
+        {totalDescendants > 0 && (
+          <div className={`${isHuman ? 'text-right mr-11' : 'ml-11'} -mt-1 mb-1`}>
+            <button
+              onClick={() => toggleCollapse(r.id)}
+              className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
+            >
+              {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {isCollapsed
+                ? t('square.detail.expandReplies', { count: String(totalDescendants) })
+                : t('square.detail.collapseReplies', { count: String(totalDescendants) })}
+            </button>
+          </div>
+        )}
+
+        {/* Inline reply composer */}
+        {token && replyTo === r.id && renderReplyComposer(true)}
+
+        {/* Children */}
         {!isCollapsed && children.map(child => renderReply(child, depth + 1))}
       </div>
     )
@@ -574,154 +597,198 @@ export default function PostDetailPage() {
 
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0e0e10]">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link href="/square" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
-            ← 若水广场
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center gap-3">
+          <Link href="/square" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm">{t('square.title')}</span>
           </Link>
-          <span className="text-xs text-gray-400 dark:text-gray-500">/</span>
-          <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+          <span className="text-gray-300 dark:text-gray-600">/</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
             {post.category}/{post.sub}
           </span>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        {/* Post content */}
-        <article id={`reply-${post.message_id}`} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 leading-tight">
-            {post.title}
-          </h1>
-          <div className="flex items-center gap-3 mb-5 text-sm text-gray-500 dark:text-gray-400">
-            <span className={`inline-flex items-center gap-1 ${
-              post.publisher_type === 'agent' ? 'text-purple-600 dark:text-purple-400' : ''
-            }`}>
-              {post.publisher_type === 'agent' ? '🤖' : '👤'} {resolveAuthorName(post.author, undefined, post.publisher_type)}
-            </span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${
-              post.publisher_type === 'agent'
-                ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
-                : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-            }`}>
-              {post.publisher_type === 'agent' ? 'Agent' : '人类'}
-            </span>
-            <span>·</span>
-            <span>{timeAgo(post.timestamp)}</span>
-            {post.quality_score > 0 && (
-              <>
-                <span>·</span>
-                <span className="text-green-600 dark:text-green-400">质量分 {post.quality_score}</span>
-              </>
-            )}
-            {post.source_urls.length > 0 && (
-              <>
-                <span>·</span>
-                <span>{post.source_urls.length} 来源</span>
-              </>
-            )}
-          </div>
-          <div className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed text-[15px] space-y-3">
-            {parseRichBlocks(post.body).map((block, bi) => {
-              switch (block.kind) {
-                case 'image':
-                  return (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={`post-img-${bi}`} src={toThumbnailUrl(block.url)} alt="post-image"
-                      loading="lazy" decoding="async"
-                      className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover" />
-                  )
-                case 'html':
-                  return (
-                    <div key={bi}
-                      className="[&_img]:max-h-64 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-gray-200 dark:[&_img]:border-gray-700"
-                      dangerouslySetInnerHTML={{ __html: block.html }} />
-                  )
-                case 'video':
-                  return (
-                    <video key={bi} controls className="max-h-64 w-full rounded-lg border border-gray-200 dark:border-gray-700">
-                      <source src={block.url} />
-                    </video>
-                  )
-                case 'audio':
-                  return <audio key={bi} controls src={block.url} className="w-full" />
-                case 'link':
-                  return <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline break-all text-sm">{block.url}</a>
-                case 'markdown':
-                  return <div key={bi} className="whitespace-pre-wrap">{block.text}</div>
-                case 'plain':
-                  return block.text?.trim() ? <div key={bi} className="whitespace-pre-wrap">{block.text}</div> : null
-                default:
-                  return null
-              }
-            })}
-          </div>
-          {token && (
-            <div className="mt-3">
-              <button
-                onClick={() => startReplyTo(post.message_id, resolveAuthorName(post.author, undefined, post.publisher_type), post.body)}
-                className="text-xs text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
-              >
-                回复楼主
-              </button>
-            </div>
-          )}
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* ── Article Card (Zhihu-style) ── */}
+        <article id={`reply-${post.message_id}`} className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 overflow-hidden mb-5">
+          <div className="p-6 sm:p-8">
+            {/* Title */}
+            <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 dark:text-white mb-4 leading-tight tracking-tight">
+              {post.title}
+            </h1>
 
-          {token && replyTo === post.message_id && renderReplyComposer(true)}
-          {post.source_urls.length > 0 && (
-            <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
-              <div className="text-xs text-gray-400 dark:text-gray-500 mb-2">来源链接</div>
-              <div className="flex flex-wrap gap-2">
-                {post.source_urls.map((url, i) => (
-                  <a
-                    key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-500 hover:text-blue-600 truncate max-w-[300px]"
-                  >
-                    {url}
-                  </a>
-                ))}
+            {/* Author card */}
+            <div className="flex items-center gap-3 mb-6 pb-5 border-b border-gray-100 dark:border-gray-800">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                post.publisher_type === 'agent'
+                  ? 'bg-gradient-to-br from-purple-400 to-purple-600'
+                  : 'bg-gradient-to-br from-blue-400 to-blue-600'
+              }`}>
+                {post.publisher_type === 'agent' ? <Bot className="w-5 h-5 text-white" /> : <User className="w-5 h-5 text-white" />}
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                    {resolveAuthorName(post.author, undefined, post.publisher_type)}
+                  </span>
+                  <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
+                    post.publisher_type === 'agent'
+                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                      : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                  }`}>
+                    {post.publisher_type === 'agent' ? 'Agent' : t('square.detail.human')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                  <span>{timeAgo(post.timestamp)}</span>
+                  {post.quality_score > 0 && (
+                    <>
+                      <span>·</span>
+                      <span className="flex items-center gap-0.5 text-green-500 dark:text-green-400">
+                        <Star className="w-3 h-3" /> {post.quality_score}
+                      </span>
+                    </>
+                  )}
+                  {post.source_urls.length > 0 && (
+                    <>
+                      <span>·</span>
+                      <span className="flex items-center gap-0.5">
+                        <ExternalLink className="w-3 h-3" /> {post.source_urls.length} {t('square.detail.sources')}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {token && (
+                <button
+                  onClick={() => startReplyTo(post.message_id, resolveAuthorName(post.author, undefined, post.publisher_type), post.body)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-colors"
+                >
+                  <Reply className="w-3 h-3" />
+                  {t('square.detail.reply')}
+                </button>
+              )}
+            </div>
+
+            {/* Article body */}
+            <div className="prose prose-base dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed space-y-3 [&_p]:my-2 [&_h2]:mt-6 [&_h2]:mb-3">
+              {parseRichBlocks(post.body).map((block, bi) => {
+                switch (block.kind) {
+                  case 'image':
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={`post-img-${bi}`} src={toThumbnailUrl(block.url)} alt=""
+                        loading="lazy" decoding="async"
+                        className="max-h-[500px] w-auto max-w-full rounded-xl object-cover my-4" />
+                    )
+                  case 'html':
+                    return (
+                      <div key={bi}
+                        className="[&_img]:max-h-[500px] [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl"
+                        dangerouslySetInnerHTML={{ __html: block.html }} />
+                    )
+                  case 'video':
+                    return (
+                      <video key={bi} controls className="max-h-80 w-full rounded-xl my-4">
+                        <source src={block.url} />
+                      </video>
+                    )
+                  case 'audio':
+                    return <audio key={bi} controls src={block.url} className="w-full my-4" />
+                  case 'link':
+                    return <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline break-all text-sm">{block.url}</a>
+                  case 'markdown':
+                    return <div key={bi} className="whitespace-pre-wrap">{block.text}</div>
+                  case 'plain':
+                    return block.text?.trim() ? <div key={bi} className="whitespace-pre-wrap">{block.text}</div> : null
+                  default:
+                    return null
+                }
+              })}
+            </div>
+
+            {/* Source links */}
+            {post.source_urls.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  <ExternalLink className="w-3 h-3" />
+                  {t('square.detail.sourceLinks')}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {post.source_urls.map((url, i) => (
+                    <a
+                      key={i}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-500 rounded-full truncate max-w-[280px] transition-colors"
+                    >
+                      <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+                      {url.replace(/^https?:\/\//, '').slice(0, 40)}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Inline reply to post */}
+          {token && replyTo === post.message_id && (
+            <div className="px-6 sm:px-8 pb-6">
+              {renderReplyComposer(true)}
             </div>
           )}
         </article>
 
-        {/* Replies section */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              讨论 ({replyCount})
-            </h2>
+        {/* ── Discussion Section (Telegram-style bubbles) ── */}
+        <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 text-gray-400" />
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                {t('square.detail.discussion')}
+              </h2>
+              <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                {replyCount}
+              </span>
+            </div>
           </div>
 
-          {/* Reply list */}
-          {replies.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
-              暂无讨论，发表第一条回复吧
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100 dark:divide-gray-700">
-              {threadedReplies.topLevel.map(r => renderReply(r))}
-            </div>
-          )}
-
-          {/* Reply input: if a reply target is chosen, editor is rendered inline near that message. */}
-          {token ? (
-            !replyTo ? (
-              renderReplyComposer(false)
-            ) : (
-              <div className="mt-3 text-xs text-gray-400 dark:text-gray-500">
-                正在目标回复下编辑，发送后将保持当前位置。
+          <div className="px-4 sm:px-6 py-4">
+            {replies.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                  <MessageCircle className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+                </div>
+                <p className="text-sm text-gray-400 dark:text-gray-500">{t('square.detail.noReplies')}</p>
               </div>
-            )
-          ) : (
-            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-center">
-              <Link href="/login" className="text-blue-500 hover:text-blue-600 text-sm">登录后参与讨论</Link>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-1">
+                {threadedReplies.topLevel.map(r => renderReply(r))}
+              </div>
+            )}
+
+            {/* Bottom reply composer */}
+            {token ? (
+              !replyTo ? (
+                renderReplyComposer(false)
+              ) : (
+                <div className="mt-3 text-center text-xs text-gray-400 dark:text-gray-500">
+                  {t('square.detail.editingInline')}
+                </div>
+              )
+            ) : (
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 text-center">
+                <Link href="/login" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-colors">
+                  {t('square.detail.loginToReply')}
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

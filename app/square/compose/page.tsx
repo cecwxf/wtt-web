@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { ArrowLeft, Send, Plus, X, Lightbulb, Loader2, LogIn } from 'lucide-react'
+import { useI18n } from '@/lib/i18n-provider'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
-  { ssr: false, loading: () => <div className="h-[820px] border border-gray-300 dark:border-gray-600 rounded-lg animate-pulse bg-gray-50 dark:bg-gray-800" /> }
+  { ssr: false, loading: () => <div className="h-[820px] rounded-2xl animate-pulse bg-gray-100 dark:bg-[#1e1e21]" /> }
 )
 
 interface AgentRow {
@@ -30,6 +32,7 @@ interface EditorHelpers {
 export default function ComposePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useI18n()
 
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [taxonomy, setTaxonomy] = useState<TaxonomyRes | null>(null)
@@ -107,10 +110,10 @@ export default function ComposePage() {
     setQualityScore(Math.min(score, 100))
 
     const hints: string[] = []
-    if (titleLen < 10) hints.push('标题可再具体一些')
-    if (bodyLen < 180) hints.push('正文偏短，建议补充背景/依据/结论')
-    if (!hasImages) hints.push('添加图片可增强表达力')
-    if (urls.length < 2) hints.push('建议补充至少2个来源链接')
+    if (titleLen < 10) hints.push(t('square.compose.hintTitle'))
+    if (bodyLen < 180) hints.push(t('square.compose.hintBody'))
+    if (!hasImages) hints.push(t('square.compose.hintImage'))
+    if (urls.length < 2) hints.push(t('square.compose.hintSources'))
     setQualityHints(hints)
   }, [title, bodyHtml, sourceUrls])
 
@@ -118,7 +121,7 @@ export default function ComposePage() {
   const handlePublish = async () => {
     const isEmpty = editorRef.current?.isEmpty() ?? true
     if (!title.trim() || isEmpty || !category || !sub) {
-      alert('请填写完整: 分类、标题、正文')
+      alert(t('square.compose.fillRequired'))
       return
     }
     setPublishing(true)
@@ -144,164 +147,213 @@ export default function ComposePage() {
       const d = await res.json()
       router.push(`/square/post/${d.post_id || d.topic_id}`)
     } catch (e: unknown) {
-      alert(`发布失败: ${e instanceof Error ? e.message : String(e)}`)
+      alert(`${t('square.compose.publishFailed')}: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setPublishing(false)
     }
   }
 
   if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="text-gray-500">加载中…</div></div>
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f6f7f9] dark:bg-[#0e0e10]">
+        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+      </div>
+    )
   }
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-[#f6f7f9] dark:bg-[#0e0e10]">
         <div className="text-center">
-          <div className="text-gray-500 mb-3">请先登录</div>
-          <Link href="/login" className="text-blue-500 hover:text-blue-600">去登录</Link>
+          <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+            <LogIn className="w-6 h-6 text-gray-400" />
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{t('square.compose.loginRequired')}</p>
+          <Link href="/login" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-full transition-all">
+            {t('square.compose.goLogin')}
+          </Link>
         </div>
       </div>
     )
   }
 
+  const scoreColor = qualityScore >= 70 ? 'text-green-500' : qualityScore >= 40 ? 'text-amber-500' : 'text-red-400'
+  const scoreTrack = qualityScore >= 70 ? 'stroke-green-500' : qualityScore >= 40 ? 'stroke-amber-500' : 'stroke-red-400'
+  const circumference = 2 * Math.PI * 28
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0e0e10]">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
+        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/square" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
-              ← 返回广场
+            <Link href="/square" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-sm">{t('square.title')}</span>
             </Link>
-            <h1 className="text-lg font-bold text-gray-900 dark:text-white">发布话题</h1>
+            <span className="text-gray-300 dark:text-gray-600">/</span>
+            <h1 className="text-sm font-semibold text-gray-900 dark:text-white">{t('square.compose.title')}</h1>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handlePublish}
-              disabled={publishing || !title.trim()}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-lg transition-colors"
-            >
-              {publishing ? '发布中…' : '发布话题'}
-            </button>
-          </div>
+          <button
+            onClick={handlePublish}
+            disabled={publishing || !title.trim()}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 rounded-full transition-all shadow-sm disabled:shadow-none"
+          >
+            {publishing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Send className="w-3.5 h-3.5" />
+            )}
+            {publishing ? t('square.compose.publishing') : t('square.compose.publish')}
+          </button>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <div className="space-y-4">
-          {/* Category selector */}
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">分类</label>
-              <select
-                value={category}
-                onChange={e => { setCategory(e.target.value); setSub('') }}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              >
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 overflow-hidden">
+          <div className="p-5 sm:p-6 space-y-5">
+            {/* Category chip selectors */}
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                {t('square.compose.category')}
+              </label>
+              <div className="flex flex-wrap gap-2">
                 {taxonomy?.categories.map(c => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">子分类</label>
-              <select
-                value={sub}
-                onChange={e => setSub(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              >
-                {subs.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="text-xs text-gray-400 dark:text-gray-500">发布身份默认：👤 人类（可在正文中 @Agent 协作）</div>
-
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">标题</label>
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="输入话题标题…"
-              className="w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Rich text body editor */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">正文</label>
-            <SquareEditor
-              variant="full"
-              placeholder="分享你的观点、分析、见解… 支持图片粘贴/拖拽"
-              onChange={setBodyHtml}
-              onReady={handleEditorReady}
-            />
-          </div>
-
-          {/* Source URLs */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">来源链接</label>
-            {sourceUrls.map((url, i) => (
-              <div key={i} className="flex gap-2 mb-2">
-                <input
-                  type="url"
-                  value={url}
-                  onChange={e => {
-                    const next = [...sourceUrls]
-                    next[i] = e.target.value
-                    setSourceUrls(next)
-                  }}
-                  placeholder="https://..."
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                />
-                {sourceUrls.length > 1 && (
                   <button
-                    onClick={() => setSourceUrls(sourceUrls.filter((_, j) => j !== i))}
-                    className="text-red-400 hover:text-red-500 text-sm px-2"
+                    key={c.name}
+                    onClick={() => { setCategory(c.name); setSub(c.subs?.[0] || '') }}
+                    className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
+                      category === c.name
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 font-medium'
+                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
                   >
-                    ×
+                    {c.name}
                   </button>
-                )}
+                ))}
               </div>
-            ))}
-            <button
-              onClick={() => setSourceUrls([...sourceUrls, ''])}
-              className="text-xs text-blue-500 hover:text-blue-600"
-            >
-              + 添加来源
-            </button>
-          </div>
-
-          {/* Quality indicator */}
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm text-gray-600 dark:text-gray-400">质量评分</span>
-              <span className={`text-sm font-bold ${
-                qualityScore >= 70 ? 'text-green-600' : qualityScore >= 40 ? 'text-yellow-600' : 'text-red-500'
-              }`}>
-                {qualityScore}/100
-              </span>
+              {subs.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pl-1">
+                  {subs.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setSub(s)}
+                      className={`px-2.5 py-1 text-xs rounded-full transition-all ${
+                        sub === s
+                          ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-medium'
+                          : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  qualityScore >= 70 ? 'bg-green-500' : qualityScore >= 40 ? 'bg-yellow-500' : 'bg-red-400'
-                }`}
-                style={{ width: `${qualityScore}%` }}
+
+            <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-[8px] text-white">H</span>
+              {t('square.compose.publishAs')}
+            </div>
+
+            {/* Title */}
+            <div>
+              <input
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder={t('square.compose.titlePlaceholder')}
+                className="w-full px-0 py-2 text-xl font-bold border-0 border-b-2 border-gray-100 dark:border-gray-800 bg-transparent text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
               />
             </div>
-            {qualityHints.length > 0 && (
-              <div className="mt-2 space-y-0.5">
-                {qualityHints.map((h, i) => (
-                  <div key={i} className="text-xs text-gray-400 dark:text-gray-500">💡 {h}</div>
-                ))}
+
+            {/* Rich text body editor */}
+            <div>
+              <SquareEditor
+                variant="full"
+                placeholder={t('square.compose.bodyPlaceholder')}
+                onChange={setBodyHtml}
+                onReady={handleEditorReady}
+              />
+            </div>
+
+            {/* Source URLs */}
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                {t('square.compose.sourceLinks')}
+              </label>
+              {sourceUrls.map((url, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={e => {
+                      const next = [...sourceUrls]
+                      next[i] = e.target.value
+                      setSourceUrls(next)
+                    }}
+                    placeholder="https://..."
+                    className="flex-1 px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-[#232326] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition"
+                  />
+                  {sourceUrls.length > 1 && (
+                    <button
+                      onClick={() => setSourceUrls(sourceUrls.filter((_, j) => j !== i))}
+                      className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => setSourceUrls([...sourceUrls, ''])}
+                className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                {t('square.compose.addSource')}
+              </button>
+            </div>
+          </div>
+
+          {/* Quality score — circular indicator */}
+          <div className="px-5 sm:px-6 py-4 bg-gray-50/50 dark:bg-[#141416] border-t border-gray-100 dark:border-gray-800">
+            <div className="flex items-start gap-4">
+              {/* Circular score */}
+              <div className="relative flex-shrink-0">
+                <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+                  <circle cx="32" cy="32" r="28" fill="none" strokeWidth="4" className="stroke-gray-200 dark:stroke-gray-700" />
+                  <circle cx="32" cy="32" r="28" fill="none" strokeWidth="4" strokeLinecap="round" className={scoreTrack}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={circumference - (circumference * qualityScore) / 100}
+                    style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                  />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center text-sm font-bold ${scoreColor}`}>
+                  {qualityScore}
+                </span>
               </div>
-            )}
+
+              {/* Hints */}
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                  {t('square.compose.qualityScore')}
+                </div>
+                {qualityHints.length > 0 ? (
+                  <div className="space-y-1">
+                    {qualityHints.map((h, i) => (
+                      <div key={i} className="flex items-start gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+                        <Lightbulb className="w-3 h-3 mt-0.5 flex-shrink-0 text-amber-400" />
+                        <span>{h}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-green-500 dark:text-green-400">
+                    {t('square.compose.qualityGood')}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
