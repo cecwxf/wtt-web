@@ -88,9 +88,8 @@ function shouldDisplayMessage(semanticTypeRaw: unknown, contentRaw: unknown): bo
   return true
 }
 
-function toChatTaskType(taskTypeRaw?: string, taskModeRaw?: string, execModeRaw?: string): 'code' | 'research' | 'general' | 'pipeline' | null {
+function toChatTaskType(taskTypeRaw?: string, taskModeRaw?: string, execModeRaw?: string): 'code' | 'research' | 'general' | null {
   const raw = `${String(taskTypeRaw || '').toLowerCase()} ${String(taskModeRaw || '').toLowerCase()} ${String(execModeRaw || '').toLowerCase()}`
-  if (raw.includes('pipeline')) return 'pipeline'
   if (raw.includes('research')) return 'research'
   if (raw.includes('code')) return 'code'
   if (raw.includes('general')) return 'general'
@@ -1037,28 +1036,9 @@ function FeedPageInner() {
   }, [topics, searchParams])
 
   // Quick-create a General Task with no title (defaults to "New Task")
-  const handleQuickCreateTask = async (type?: 'code' | 'research' | 'general' | 'pipeline') => {
+  const handleQuickCreateTask = async (type?: 'code' | 'research' | 'general') => {
     if (!selectedAgentId || !session?.accessToken) return
     const taskType = type ?? 'general'
-
-    if (taskType === 'pipeline') {
-      const title = prompt(t('feed.newPipelinePrompt'))
-      if (!title?.trim()) return
-      try {
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/pipelines`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-          body: JSON.stringify({
-            name: title.trim(),
-            owner_agent_id: selectedAgentId,
-          }),
-        })
-        if (!r.ok) { alert(t('feed.failedCreatePipeline')); return }
-        const pipeline = await r.json()
-        router.push(buildAgentUrl(`/pipelines/${pipeline.id}`, selectedAgentId))
-      } catch { alert(t('feed.failedCreatePipeline')) }
-      return
-    }
 
     if (taskType === 'code' || taskType === 'research') {
       const label = taskType === 'code' ? t('feed.newCodeTaskPrompt') : t('feed.newResearchTaskPrompt')

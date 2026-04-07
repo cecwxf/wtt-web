@@ -123,7 +123,7 @@ function TasksPageInner() {
   const [queueIndicator, setQueueIndicator] = useState(false)
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
-  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code' | 'pipeline'>('all')
+  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code'>('all')
   const [kbLoading, setKbLoading] = useState(false)
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
@@ -213,8 +213,6 @@ function TasksPageInner() {
   // Task panel should reflect owner-scoped task truth, independent of topic subscription state.
   const visibleTasks: TaskItem[] = useMemo(
     () => tasks.filter((t) => {
-      // Pipeline filter (mode-based)
-      if (taskTypeFilter === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
       // Type filter
       if (taskTypeFilter === 'all') return true
       if (taskTypeFilter === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
@@ -932,18 +930,16 @@ function TasksPageInner() {
           </div>
         </div>
 
-        {/* Task type filter tabs (unified: type + pipeline) */}
+        {/* Task type filter tabs */}
         <div className="mb-3 flex items-center gap-1">
           {([
             ['all', `📋 ${t('tasks.filterAll')}`],
             ['general', `💬 ${t('tasks.filterGeneral')}`],
             ['code', `💻 ${t('tasks.filterCode')}`],
             ['research', `📄 ${t('tasks.filterResearch')}`],
-            ['pipeline', `🔗 ${t('tasks.filterPipeline')}`],
           ] as const).map(([key, label]) => {
             const count = tasks.filter(t => {
               if (key === 'all') return true
-              if (key === 'pipeline') return (t.task_mode || 'single') === 'pipeline'
               if (key === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
               return t.task_type === key
             }).length
@@ -954,11 +950,11 @@ function TasksPageInner() {
                 onClick={() => setTaskTypeFilter(key)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                   isActive
-                    ? key === 'pipeline' ? 'bg-violet-500 text-white shadow-sm' : 'bg-indigo-500 text-white shadow-sm'
+                    ? 'bg-indigo-500 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
                 }`}
               >
-                {label} <span className={`ml-1 ${isActive ? (key === 'pipeline' ? 'text-violet-200' : 'text-indigo-200') : 'text-slate-400'}`}>({count})</span>
+                {label} <span className={`ml-1 ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>({count})</span>
               </button>
             )
           })}
@@ -1021,7 +1017,6 @@ function TasksPageInner() {
                       <div className="mb-1 flex items-center gap-2">
                         {task.task_type === 'code' && <span className="shrink-0 rounded bg-cyan-100 px-1 text-[10px] font-medium text-cyan-700">💻</span>}
                         {task.task_type === 'research' && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700">📄</span>}
-                        {task.task_mode === 'pipeline' && <span className="shrink-0 rounded bg-violet-100 px-1 text-[10px] font-medium text-violet-700">🔗 {t('tasks.filterPipeline')}</span>}
                         <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
                       </div>
                       {task.topic_id && (

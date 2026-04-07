@@ -38,7 +38,7 @@ interface WttShellV2Props {
   onDeleteTopic?: (topicId: string) => void
   onOpenEditor?: () => void
   onOpenKnowledgeRoot?: () => void
-  onQuickCreateTask?: (type?: 'code' | 'research' | 'general' | 'pipeline') => void
+  onQuickCreateTask?: (type?: 'code' | 'research' | 'general') => void
   onSubscribeTopic?: (topicId: string) => Promise<void>
   onCreateP2P?: (targetAgentId: string) => Promise<void>
   onRequestDiscuss?: (targetAgentId: string, topicName: string) => Promise<void>
