@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic'
 import { ArrowLeft, Bot, User, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
+import { Avatar } from '@/components/ui/avatar'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -476,51 +477,62 @@ export default function PostDetailPage() {
 
   const renderReply = (r: Reply, depth: number = 0) => {
     const isAgent = r.sender_type === 'agent'
-    const isHuman = !isAgent
     const children = threadedReplies.childMap[r.id] || []
     const totalDescendants = countThreadReplies(r.id)
     const isCollapsed = collapsedThreads.has(r.id)
     const authorName = resolveAuthorName(r.author, r.sender_type)
+    const isChild = depth > 0
+
+    // Find parent author name for "replying to" badge
+    let parentAuthorName = ''
+    if (r.reply_to) {
+      const parentReply = replies.find(rr => rr.id === r.reply_to)
+      if (parentReply) {
+        parentAuthorName = resolveAuthorName(parentReply.author, parentReply.sender_type)
+      } else if (r.reply_to === post?.message_id) {
+        parentAuthorName = resolveAuthorName(post.author, undefined, post.publisher_type)
+      }
+    }
 
     return (
       <div
         key={r.id}
         id={`reply-${r.id}`}
         className="transition-colors duration-500"
-        style={{ marginLeft: depth > 0 ? `${Math.min(depth, 3) * 16}px` : undefined }}
       >
-        {/* Telegram-style bubble */}
-        <div className={`flex gap-2.5 py-2 ${isHuman ? 'flex-row-reverse' : 'flex-row'}`}>
+        {/* Reply card — forum style, all left-aligned */}
+        <div className={`flex gap-3 py-3 ${isChild ? 'ml-4 pl-4 border-l-2 border-gray-100 dark:border-gray-800' : ''}`}>
           {/* Avatar */}
-          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-            isAgent
-              ? 'bg-gradient-to-br from-purple-400 to-purple-600'
-              : 'bg-gradient-to-br from-blue-400 to-blue-600'
-          }`}>
-            {isAgent ? <Bot className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-white" />}
-          </div>
+          <Avatar name={authorName} size="sm" className="flex-shrink-0" />
 
-          {/* Bubble */}
-          <div className={`max-w-[80%] min-w-[120px] ${
-            isHuman
-              ? 'bg-blue-500 text-white rounded-2xl rounded-tr-md'
-              : 'bg-white dark:bg-[#2a2a2d] text-gray-800 dark:text-gray-200 rounded-2xl rounded-tl-md border border-gray-200/60 dark:border-gray-700/60'
-          } px-3.5 py-2.5 shadow-sm`}>
-            {/* Author line */}
-            <div className={`flex items-center gap-1.5 mb-1 ${isHuman ? 'justify-end' : ''}`}>
-              <span className={`text-[11px] font-semibold ${isHuman ? 'text-blue-100' : isAgent ? 'text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400'}`}>
+          <div className="flex-1 min-w-0">
+            {/* Author line + reply-to indicator */}
+            <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mb-1">
+              <span className={`text-sm font-semibold ${
+                isAgent ? 'text-purple-600 dark:text-purple-400' : 'text-gray-800 dark:text-gray-200'
+              }`}>
                 {authorName}
               </span>
               {isAgent && (
-                <span className="px-1 py-px text-[9px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">Agent</span>
+                <span className="px-1.5 py-px text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full">Agent</span>
               )}
               {r.optimized_by_agent && (
-                <Sparkles className={`w-2.5 h-2.5 ${isHuman ? 'text-blue-200' : 'text-green-500'}`} />
+                <Sparkles className="w-3 h-3 text-green-500" />
               )}
+              {parentAuthorName && (
+                <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                  <Reply className="w-3 h-3" />
+                  <span>{t('square.detail.replyingTo')}</span>
+                  <span className="font-medium text-gray-500 dark:text-gray-400">{parentAuthorName}</span>
+                </span>
+              )}
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {timeAgo(r.timestamp)}
+              </span>
             </div>
 
             {/* Content */}
-            <div className={`text-sm leading-relaxed space-y-1.5 ${isHuman ? '[&_a]:text-blue-100 [&_a]:underline' : ''}`}>
+            <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 space-y-1.5">
               {parseRichBlocks(r.content).map((block, bi) => {
                 switch (block.kind) {
                   case 'image':
@@ -533,7 +545,7 @@ export default function PostDetailPage() {
                   case 'html':
                     return (
                       <div key={bi}
-                        className={`prose prose-sm max-w-none ${isHuman ? 'prose-invert' : 'dark:prose-invert'} [&_img]:max-h-48 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg`}
+                        className="prose prose-sm max-w-none dark:prose-invert [&_img]:max-h-48 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg"
                         dangerouslySetInnerHTML={{ __html: block.html }} />
                     )
                   case 'video':
@@ -554,42 +566,39 @@ export default function PostDetailPage() {
               })}
             </div>
 
-            {/* Timestamp + actions */}
-            <div className={`flex items-center gap-2 mt-1.5 ${isHuman ? 'justify-end' : ''}`}>
-              <span className={`text-[10px] ${isHuman ? 'text-blue-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                {timeAgo(r.timestamp)}
-              </span>
+            {/* Actions */}
+            <div className="flex items-center gap-3 mt-2">
               {token && (
                 <button
                   onClick={() => startReplyTo(r.id, authorName, r.content)}
-                  className={`text-[10px] ${isHuman ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400'} transition-colors`}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
                 >
-                  <Reply className="w-3 h-3 inline" /> {t('square.detail.reply')}
+                  <Reply className="w-3 h-3" /> {t('square.detail.reply')}
+                </button>
+              )}
+              {totalDescendants > 0 && (
+                <button
+                  onClick={() => toggleCollapse(r.id)}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
+                >
+                  {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {isCollapsed
+                    ? t('square.detail.expandReplies', { count: String(totalDescendants) })
+                    : t('square.detail.collapseReplies', { count: String(totalDescendants) })}
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Thread collapse/expand */}
-        {totalDescendants > 0 && (
-          <div className={`${isHuman ? 'text-right mr-11' : 'ml-11'} -mt-1 mb-1`}>
-            <button
-              onClick={() => toggleCollapse(r.id)}
-              className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
-            >
-              {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              {isCollapsed
-                ? t('square.detail.expandReplies', { count: String(totalDescendants) })
-                : t('square.detail.collapseReplies', { count: String(totalDescendants) })}
-            </button>
+        {/* Inline reply composer */}
+        {token && replyTo === r.id && (
+          <div className={isChild ? 'ml-4 pl-4 border-l-2 border-gray-100 dark:border-gray-800' : ''}>
+            {renderReplyComposer(true)}
           </div>
         )}
 
-        {/* Inline reply composer */}
-        {token && replyTo === r.id && renderReplyComposer(true)}
-
-        {/* Children */}
+        {/* Children — nested with thread line */}
         {!isCollapsed && children.map(child => renderReply(child, depth + 1))}
       </div>
     )
@@ -623,13 +632,7 @@ export default function PostDetailPage() {
 
             {/* Author card */}
             <div className="flex items-center gap-3 mb-6 pb-5 border-b border-gray-100 dark:border-gray-800">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                post.publisher_type === 'agent'
-                  ? 'bg-gradient-to-br from-purple-400 to-purple-600'
-                  : 'bg-gradient-to-br from-blue-400 to-blue-600'
-              }`}>
-                {post.publisher_type === 'agent' ? <Bot className="w-5 h-5 text-white" /> : <User className="w-5 h-5 text-white" />}
-              </div>
+              <Avatar name={resolveAuthorName(post.author, undefined, post.publisher_type)} size="md" className="flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
@@ -767,7 +770,7 @@ export default function PostDetailPage() {
                 <p className="text-sm text-gray-400 dark:text-gray-500">{t('square.detail.noReplies')}</p>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="divide-y divide-gray-100 dark:divide-gray-800/60">
                 {threadedReplies.topLevel.map(r => renderReply(r))}
               </div>
             )}

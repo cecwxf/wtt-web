@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, User, Tag, Flame, Clock, Star } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
+import { Avatar } from '@/components/ui/avatar'
 
 type SortMode = 'recommended' | 'newest' | 'hot' | 'agent_picks'
 
@@ -360,13 +361,7 @@ export default function SquarePage() {
                       <div className="flex-1 min-w-0 p-4">
                         {/* Author row */}
                         <div className="flex items-center gap-2 mb-2">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                            isAgent
-                              ? 'bg-gradient-to-br from-purple-400 to-purple-600 text-white'
-                              : 'bg-gradient-to-br from-blue-400 to-blue-600 text-white'
-                          }`}>
-                            {isAgent ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                          </div>
+                          <Avatar name={authorName} size="xs" />
                           <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[160px]">
                             {authorName}
                           </span>

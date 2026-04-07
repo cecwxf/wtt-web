@@ -5,17 +5,22 @@ import {
   Bot,
   Bell,
   Brush,
+  Camera,
+  Check,
   ClipboardCopy,
+  Loader2,
   Lock,
   RefreshCw,
+  Save,
   Smartphone,
   User,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { CLIENT_WTT_API_BASE } from "@/lib/api/base-url";
 import { useI18n } from "@/lib/i18n-provider";
+import { Avatar } from "@/components/ui/avatar";
 
 type SettingsPage =
   | "profile"
@@ -117,6 +122,110 @@ export function WttSettingsModal({
   // Reset agent token
   const [resettingToken, setResettingToken] = useState<string | null>(null);
   const [agentTokens, setAgentTokens] = useState<Record<string, string>>({});
+
+  // Profile editing state
+  const [profileDisplayName, setProfileDisplayName] = useState("");
+  const [profileBio, setProfileBio] = useState("");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileUploading, setProfileUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const accessToken = (session as any)?.accessToken as string | undefined;
+
+  // Load profile from backend
+  useEffect(() => {
+    if (!accessToken || activePage !== "profile") return;
+    fetch(`${CLIENT_WTT_API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        setProfileDisplayName(d.display_name || "");
+        setProfileBio(d.bio || "");
+        setProfileAvatarUrl(d.avatar_url || null);
+      })
+      .catch(() => {});
+  }, [accessToken, activePage]);
+
+  const handleAvatarUpload = useCallback(
+    async (file: File) => {
+      if (!accessToken) return;
+      setProfileUploading(true);
+      try {
+        // Step 1: Sign
+        const signRes = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            filename: file.name,
+            mime_type: file.type,
+            size: file.size,
+          }),
+        });
+        if (!signRes.ok) throw new Error("Sign failed");
+        const { upload_token, upload_url } = await signRes.json();
+
+        // Step 2: Upload
+        const uploadRes = await fetch(upload_url, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+
+        // Step 3: Commit
+        const commitRes = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ upload_token }),
+        });
+        if (!commitRes.ok) throw new Error("Commit failed");
+        const asset = await commitRes.json();
+        setProfileAvatarUrl(asset.url || asset.thumbnail_url);
+      } catch (e) {
+        console.error("Avatar upload failed:", e);
+      } finally {
+        setProfileUploading(false);
+      }
+    },
+    [accessToken],
+  );
+
+  const handleProfileSave = useCallback(async () => {
+    if (!accessToken) return;
+    setProfileSaving(true);
+    setProfileSaved(false);
+    try {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/auth/profile`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          display_name: profileDisplayName || undefined,
+          avatar_url: profileAvatarUrl,
+          bio: profileBio || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+    } catch (e) {
+      console.error("Profile save failed:", e);
+    } finally {
+      setProfileSaving(false);
+    }
+  }, [accessToken, profileDisplayName, profileAvatarUrl, profileBio]);
 
   const handleResetToken = async (agentId: string) => {
     const token = session?.accessToken as string | undefined;
@@ -466,43 +575,60 @@ export function WttSettingsModal({
                 <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">
                   {t("settings.account")}
                 </p>
-                {session?.user?.image && (
-                  <div className="mb-3 flex items-center gap-3">
-                    <img
-                      src={session.user.image}
-                      alt="avatar"
-                      className="h-14 w-14 rounded-full border-2 border-indigo-200"
+
+                {/* Avatar section */}
+                <div className="mb-4 flex items-center gap-4">
+                  <div className="relative group">
+                    <Avatar
+                      name={profileDisplayName || session?.user?.name || session?.user?.email || "U"}
+                      avatarUrl={profileAvatarUrl || session?.user?.image}
+                      size="lg"
                     />
-                    <div>
-                      <p className="text-base font-semibold text-slate-800">
-                        {session.user.name || session.user.email || ""}
-                      </p>
-                      {session.user.email && (
-                        <p className="text-xs text-slate-400">
-                          {session.user.email}
-                        </p>
+                    <button
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={profileUploading}
+                      className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      {profileUploading ? (
+                        <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      ) : (
+                        <Camera className="w-5 h-5 text-white" />
                       )}
-                    </div>
+                    </button>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleAvatarUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
                   </div>
-                )}
-                {!session?.user?.image && (
-                  <div className="mb-3">
+                  <div>
                     <p className="text-base font-semibold text-slate-800">
-                      {session?.user?.name || session?.user?.email || ""}
+                      {profileDisplayName || session?.user?.name || session?.user?.email || ""}
                     </p>
                     {session?.user?.email && (
                       <p className="text-xs text-slate-400">
                         {session.user.email}
                       </p>
                     )}
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {t("settings.clickToUpload")}
+                    </p>
                   </div>
-                )}
+                </div>
+
                 <label className="block">
                   <span className="mb-2 block text-sm text-slate-500">
                     {t("settings.displayName")}
                   </span>
                   <input
-                    defaultValue={session?.user?.name || ""}
+                    value={profileDisplayName}
+                    onChange={(e) => setProfileDisplayName(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
                 </label>
@@ -522,11 +648,32 @@ export function WttSettingsModal({
                   </span>
                   <textarea
                     rows={3}
+                    value={profileBio}
+                    onChange={(e) => setProfileBio(e.target.value)}
                     placeholder={t("settings.bioPlaceholder")}
+                    maxLength={500}
                     className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
                   />
+                  <span className="text-[10px] text-slate-400">{profileBio.length}/500</span>
                 </label>
+
+                {/* Save button */}
+                <button
+                  onClick={handleProfileSave}
+                  disabled={profileSaving}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-600 disabled:opacity-60"
+                >
+                  {profileSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : profileSaved ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  {profileSaved ? t("settings.saved") : t("settings.saveProfile")}
+                </button>
               </div>
+
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">
                   {t("settings.linkedAgent")}
