@@ -26,7 +26,6 @@ interface TopicColumnProps {
   onSelectTopic: (topicId: string | null) => void
   onLeaveTopic?: (topicId: string) => void
   onDeleteTopic?: (topicId: string) => void
-  onQuickCreateTask?: () => void
   onCreateP2P?: (targetAgentId: string) => Promise<void>
   onRequestDiscuss?: (targetAgentId: string, topicName: string) => Promise<void>
   onRequestMember?: (targetAgentId: string, topicId: string) => Promise<void>
@@ -125,7 +124,6 @@ export function TopicColumn({
   onSelectTopic,
   onLeaveTopic,
   onDeleteTopic,
-  onQuickCreateTask,
   onRequestDiscuss,
   agentName,
   pinScopeKey,
@@ -462,16 +460,6 @@ export function TopicColumn({
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
-        {onQuickCreateTask && (
-          <button
-            onClick={onQuickCreateTask}
-            className="mb-2 flex w-full items-center gap-2 rounded-lg border border-dashed border-indigo-300 dark:border-indigo-700 px-2 py-2.5 text-left text-sm font-medium text-indigo-500 dark:text-indigo-400 transition hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            <span className="truncate">{t('topic.newTask')}</span>
-          </button>
-        )}
-
         {agentOptions && agentOptions.length > 0 && onSelectAgent && selectedAgentId ? (
           <div className="mb-2 rounded-lg border border-slate-200/80 dark:border-zinc-700 bg-white/70 dark:bg-zinc-800/40 px-2 py-2">
             <div className="mb-1 flex items-center justify-between">

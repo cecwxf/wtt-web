@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession, signOut } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
@@ -30,7 +30,7 @@ interface TaskItem {
   task_mode?: string
   pipeline_id?: string
   priority: 'P0' | 'P1' | 'P2' | 'P3'
-  status: 'todo' | 'doing' | 'review' | 'done' | 'blocked'
+  status?: string
   owner_agent_id?: string
   runner_agent_id?: string
   created_by?: string
@@ -47,7 +47,6 @@ interface TaskItem {
   updated_at?: string
 }
 
-const columns: Array<TaskItem['status']> = ['todo', 'doing', 'review', 'done', 'blocked']
 const pieColors = ['#6366f1', '#52d1a8', '#ffd166', '#f78c6b', '#c792ea', '#7fd1f5', '#f5b4e6', '#9be564']
 
 const toMs = (value?: string) => {
@@ -86,14 +85,6 @@ const actorSource = (session: unknown) => {
   return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
-const fallbackProgressByStatus = (status: TaskItem['status']) => {
-  if (status === 'done') return 100
-  if (status === 'review') return 90
-  if (status === 'doing') return 12
-  if (status === 'blocked') return 0
-  return 0
-}
-
 export default function TasksPageWrapper() {
   return <Suspense fallback={null}><TasksPageInner /></Suspense>
 }
@@ -101,21 +92,16 @@ export default function TasksPageWrapper() {
 function TasksPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { t } = useI18n()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
-  const [taskDraft, setTaskDraft] = useState<Partial<TaskItem>>({})
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [runningTaskId, setRunningTaskId] = useState<string | null>(null)
+  // taskDraft removed — no longer used after status system removal
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
   const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
-  const [nowTs, setNowTs] = useState(Date.now())
-  const [showNewTaskModal, setShowNewTaskModal] = useState(false)
-  const [newTaskTitle, setNewTaskTitle] = useState('')
-  const [newTaskType, setNewTaskType] = useState<'code' | 'research' | 'common'>('common')
-  const [newTaskAgentId, setNewTaskAgentId] = useState('')
+  const [creatingTaskType, setCreatingTaskType] = useState<string | null>(null)
   const [panelInput, setPanelInput] = useState('')
   const [panelSending, setPanelSending] = useState(false)
   const panelSendingRef = useRef(false)
@@ -123,26 +109,12 @@ function TasksPageInner() {
   const [queueIndicator, setQueueIndicator] = useState(false)
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
   const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
-  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code'>('all')
+  const initialType = searchParams.get('type')
+  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code'>(
+    initialType === 'code' || initialType === 'research' || initialType === 'general' ? initialType : 'all'
+  )
   const [kbLoading, setKbLoading] = useState(false)
   const chatScrollRef = useRef<HTMLDivElement>(null)
-
-  const statusLabel = useCallback((status: TaskItem['status']) => {
-    switch (status) {
-      case 'todo':
-        return t('chat.statusTodo')
-      case 'doing':
-        return t('chat.statusDoing')
-      case 'review':
-        return t('chat.statusReview')
-      case 'done':
-        return t('chat.statusDone')
-      case 'blocked':
-        return t('chat.statusBlocked')
-      default:
-        return status
-    }
-  }, [t])
 
   const loadAgents = useCallback(async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -162,11 +134,6 @@ function TasksPageInner() {
     }
     if (status === 'authenticated') loadAgents()
   }, [status, router, loadAgents])
-
-  useEffect(() => {
-    const timer = setInterval(() => setNowTs(Date.now()), 5000)
-    return () => clearInterval(timer)
-  }, [])
 
   const { data: subscribedTopicsRaw, mutate: mutateSubscribedTopics } = useSWR(
     selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
@@ -322,11 +289,9 @@ function TasksPageInner() {
       const fresh = visibleTasks.find((t) => t.id === selectedTask.id)
       if (!fresh) {
         setSelectedTask(null)
-        setTaskDraft({})
         return
       }
       setSelectedTask(fresh)
-      setTaskDraft(fresh)
     }
   }, [visibleTasks, selectedTask])
 
@@ -351,32 +316,22 @@ function TasksPageInner() {
     }
   }, [taskContextMenu])
 
-  const grouped = useMemo(() => {
-    const map: Record<string, TaskItem[]> = { todo: [], doing: [], review: [], done: [], blocked: [] }
-    for (const t of visibleTasks) {
-      if (t.status in map) map[t.status].push(t)
-    }
-    return map
-  }, [visibleTasks])
-
   const taskDurationSummary = useMemo(() => {
     const now = Date.now()
     const rows = visibleTasks
       .map((task) => {
-        // Only count doing→review time: started_at (entering doing) to completed_at (entering review)
         const start = toMs(task.started_at)
         if (!start) return null
-        const end = toMs(task.completed_at) ?? (task.status === 'doing' ? now : null)
+        const end = toMs(task.completed_at) ?? (task.status !== 'done' ? now : null)
         if (!end) return null
         const durationMs = Math.max(0, end - start)
         return {
           id: task.id,
           title: task.title,
-          status: task.status,
           durationMs,
         }
       })
-      .filter((x): x is { id: string; title: string; status: TaskItem['status']; durationMs: number } => {
+      .filter((x): x is { id: string; title: string; durationMs: number } => {
         if (!x) return false
         return x.durationMs > 0
       })
@@ -413,12 +368,8 @@ function TasksPageInner() {
     }
 
     for (const task of visibleTasks) {
-      if (task.status === 'done') {
-        map[task.id] = 100
-        continue
-      }
       if (map[task.id] === undefined) {
-        map[task.id] = fallbackProgressByStatus(task.status)
+        map[task.id] = 0
       }
     }
 
@@ -455,77 +406,45 @@ function TasksPageInner() {
     return agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name, unread_count: 0 }))
   }, [agents])
 
-  const createTask = async () => {
-    const title = newTaskTitle.trim()
-    if (!title) return
-    if (!newTaskAgentId) {
-      alert(t('tasks.pickAgentFirst'))
-      return
-    }
-    setShowNewTaskModal(false)
-    setNewTaskTitle('')
-
-    const taskType = newTaskType === 'code' ? 'code' : newTaskType === 'research' ? 'research' : 'feature'
-    const tempId = `temp-${Date.now()}`
-    const optimistic: TaskItem = {
-      id: tempId,
-      title,
-      task_type: taskType,
-      priority: 'P1',
-      status: 'todo',
-      exec_mode: 'reasoning',
-      owner_agent_id: newTaskAgentId || undefined,
-      runner_agent_id: newTaskAgentId || undefined,
-    }
-    mutateTasks((prev: TaskItem[] | undefined) => [...(prev || []), optimistic], { revalidate: false })
+  const quickCreateTask = async (taskType: 'code' | 'research') => {
+    if (!selectedAgentId || !session?.accessToken) return
+    setCreatingTaskType(taskType)
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          Authorization: `Bearer ${session.accessToken}`,
         },
         body: JSON.stringify({
-          title,
+          title: taskType === 'code' ? 'New Code Task' : 'New Research Task',
           task_mode: 'single',
           priority: 'P1',
           status: 'todo',
           task_type: taskType,
           exec_mode: 'reasoning',
-          owner_agent_id: newTaskAgentId || undefined,
-          runner_agent_id: newTaskAgentId || undefined,
+          owner_agent_id: selectedAgentId,
+          runner_agent_id: selectedAgentId,
           created_by: actorSource(session),
         }),
       })
       if (resp.ok) {
         const real = await resp.json()
-        mutateTasks((prev: TaskItem[] | undefined) => (prev || []).map((t) => (t.id === tempId ? { ...t, ...real } : t)), { revalidate: false })
-
-        // Navigate to the appropriate task page
-        if (newTaskType === 'code') {
+        if (taskType === 'code') {
           router.push(buildAgentUrl(`/tasks/code/${real.id}`, selectedAgentId))
-        } else if (newTaskType === 'research') {
+        } else {
           router.push(buildAgentUrl(`/tasks/research/${real.id}`, selectedAgentId))
         }
       } else {
+        alert(t('feed.failedCreateTask'))
         mutateTasks()
       }
     } catch {
+      alert(t('feed.failedCreateTask'))
       mutateTasks()
+    } finally {
+      setCreatingTaskType(null)
     }
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const moveStatus = async (task: TaskItem, status: TaskItem['status']) => {
-    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${task.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.accessToken ?? ''}`,
-      },
-      body: JSON.stringify({ status }),
-    })
-    mutateTasks()
   }
 
   const cancelTask = async (task: TaskItem) => {
@@ -552,7 +471,6 @@ function TasksPageInner() {
 
     if (selectedTask?.id === task.id) {
       setSelectedTask(null)
-      setTaskDraft({})
     }
 
     setTaskContextMenu(null)
@@ -645,116 +563,6 @@ function TasksPageInner() {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const assignCurrent = async (agentId: string) => {
-    if (!selectedTask) return
-    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/assign?agent_id=${encodeURIComponent(agentId)}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-    })
-    mutateTasks()
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const runCurrent = async () => {
-    if (!selectedTask) return
-    setRunningTaskId(selectedTask.id)
-
-    // Optimistic: show "doing" immediately
-    mutateTasks(
-      (prev: TaskItem[] | undefined) =>
-        (prev || []).map((t) => (t.id === selectedTask.id ? { ...t, status: 'doing' as const } : t)),
-      { revalidate: false },
-    )
-
-    try {
-      const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
-        },
-        body: JSON.stringify({
-          trigger_agent_id: actorSource(session) || 'task-runner',
-          runner_agent_id: selectedTask.runner_agent_id || selectedTask.owner_agent_id || selectedAgentId,
-          exec_mode: selectedTask.exec_mode || 'reasoning',
-        }),
-      })
-      if (!resp.ok) {
-        const txt = await resp.text()
-        alert(t('tasks.runFailed', { detail: txt || resp.status }))
-        mutateTasks()
-        return
-      }
-    } catch (e) {
-      alert(t('tasks.runFailed', { detail: e instanceof Error ? e.message : 'unknown error' }))
-      mutateTasks()
-    } finally {
-      setRunningTaskId(null)
-    }
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const reviewCurrent = async (action: 'approve' | 'reject' | 'block') => {
-    if (!selectedTask) return
-
-    if (action === 'reject') {
-      // Reject: post a plain message to the task topic feed
-      const input = window.prompt(t('tasks.rejectPrompt'), '')
-      if (input === null || !input.trim()) return
-      if (selectedTask.topic_id) {
-        await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.accessToken ?? ''}`,
-          },
-          body: JSON.stringify({
-            sender_id: actorSource(session),
-            sender_type: 'HUMAN',
-            content: input.trim(),
-            content_type: 'text',
-            semantic_type: 'reply',
-          }),
-        })
-      }
-      mutateTasks()
-      return
-    }
-
-    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/review`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.accessToken ?? ''}`,
-      },
-      body: JSON.stringify({ action, reviewer: actorSource(session), comment: '' }),
-    })
-    mutateTasks()
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const saveTaskDetails = async () => {
-    if (!selectedTask) return
-    await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.accessToken ?? ''}`,
-      },
-      body: JSON.stringify({
-        description: taskDraft.description || null,
-        acceptance: taskDraft.acceptance || null,
-        runner_agent_id: taskDraft.runner_agent_id || null,
-        exec_mode: taskDraft.exec_mode || null,
-        due_at: taskDraft.due_at || null,
-        estimate_hours: taskDraft.estimate_hours ?? null,
-        dependencies: taskDraft.dependencies || null,
-        notes: taskDraft.notes || null,
-      }),
-    })
-    mutateTasks()
-  }
-
   const sendPanelMessage = async () => {
     const attachmentText = pendingAttachments.join('\n')
     if (!selectedTask || (!panelInput.trim() && !attachmentText)) return
@@ -779,11 +587,8 @@ function TasksPageInner() {
 
     try {
       const fullContent = attachmentText ? `${attachmentText}\n\n${text}` : text
-      // User sends always go through task chat API:
-      // - todo => auto_run=true (todo->doing)
-      // - doing/review/done => auto_run=false (no rerun task)
+      // User sends always go through task chat API
       if (isUser) {
-        const autoRun = selectedTask.status === 'todo'
         const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/chat/send`, {
           method: 'POST',
           headers,
@@ -792,7 +597,7 @@ function TasksPageInner() {
             sender_type: 'HUMAN',
             sender_id: senderId,
             semantic_type: 'reply',
-            auto_run: autoRun,
+            auto_run: true,
           }),
         })
         if (!resp.ok) {
@@ -870,32 +675,6 @@ function TasksPageInner() {
     setQueueIndicator(false)
   }, [selectedTask?.id])
 
-  const taskCardTone = (status: TaskItem['status']) => {
-    if (status === 'doing') return 'border-indigo-300 bg-indigo-50'
-    if (status === 'review') return 'border-yellow-500/40 bg-amber-50'
-    if (status === 'done') return 'border-green-500/40 bg-emerald-50'
-    if (status === 'blocked') return 'border-red-500/40 bg-red-50'
-    return 'border-slate-200 bg-slate-50'
-  }
-
-  const progressBarTone = (status: TaskItem['status']) => {
-    if (status === 'done') return 'bg-green-400'
-    if (status === 'review') return 'bg-yellow-400 animate-pulse'
-    if (status === 'blocked') return 'bg-red-400'
-    if (status === 'doing') return 'task-progress-flow bg-indigo-500'
-    return 'bg-indigo-500'
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const taskTickerText = (task: TaskItem) => {
-    const progress = Math.round(taskProgressMap[task.id] ?? 0)
-    const statusText = task.status.toUpperCase()
-    const start = toMs(task.started_at) ?? toMs(task.created_at)
-    const elapsed = start ? formatDuration(Math.max(0, nowTs - start)) : '--'
-    const updated = task.updated_at ? task.updated_at.replace('T', ' ').slice(0, 16) : '--'
-    return `状态 ${statusText} · 进度 ${progress}% · 已运行 ${elapsed} · 最近更新 ${updated}`
-  }
-
   return (
     <WttShellV2
       agents={agentItems}
@@ -917,16 +696,25 @@ function TasksPageInner() {
       hideTopics
       hideCreateTopic
     >
-      <div className="h-full p-4 text-slate-800">
+      <div className="h-full p-4 text-slate-800 dark:text-zinc-200">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">{t('tasks.title')}</h1>
-            <p className="text-xs text-slate-500">{t('tasks.subtitle')}</p>
+            <p className="text-xs text-slate-500 dark:text-zinc-400">{t('tasks.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-500">{t('tasks.bulkRun')}</button>
-            <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">{t('tasks.bulkCancel')}</button>
-            <button onClick={() => { setNewTaskAgentId(''); setShowNewTaskModal(true) }} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm text-white">+ {t('tasks.newTask')}</button>
+            <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2 text-sm text-indigo-500 dark:text-indigo-300">{t('tasks.bulkRun')}</button>
+            <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{t('tasks.bulkCancel')}</button>
+            <button
+              disabled={creatingTaskType === 'code'}
+              onClick={() => quickCreateTask('code')}
+              className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-600 disabled:opacity-50"
+            >{creatingTaskType === 'code' ? '⏳...' : '💻 '}{t('tasks.newCodeTask')}</button>
+            <button
+              disabled={creatingTaskType === 'research'}
+              onClick={() => quickCreateTask('research')}
+              className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-600 disabled:opacity-50"
+            >{creatingTaskType === 'research' ? '⏳...' : '📄 '}{t('tasks.newResearchTask')}</button>
           </div>
         </div>
 
@@ -984,86 +772,93 @@ function TasksPageInner() {
         </div>
 
         <div className="grid h-[calc(100%-88px)] grid-cols-[1fr_380px] gap-3">
-          <div className="grid min-h-0 grid-cols-5 gap-3">
-            {columns.map((col) => (
-              <div key={col} className="flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-2 overflow-hidden">
-                <div className="mb-2 flex shrink-0 items-center justify-between text-sm font-semibold capitalize">
-                  <span>{statusLabel(col)}</span>
-                  <span className="text-xs text-slate-500">{grouped[col].length}</span>
-                </div>
-                <div className="flex-1 space-y-2 overflow-y-auto">
-                  {grouped[col].map((task) => (
-                    <button
-                      key={task.id}
-                      onClick={(e) => {
-                        setSelectedTask(task)
-                        setTaskDraft(task)
-                        if (e.metaKey || e.ctrlKey) {
-                          setSelectedTaskIds((prev) =>
-                            prev.includes(task.id) ? prev.filter((id) => id !== task.id) : Array.from(new Set([...prev, task.id]))
-                          )
-                        }
-                      }}
-                      onDoubleClick={() => {
-                        if (task.task_type === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
-                        else if (task.task_type === 'research') router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
-                        setTaskContextMenu({ x: e.clientX, y: e.clientY, task })
-                      }}
-                      className={`w-full rounded-lg border p-2 text-left hover:border-indigo-500/60 ${taskCardTone(task.status)} ${task.status === 'doing' ? 'task-card-glow' : ''} ${task.status === 'review' ? 'task-card-pulse' : ''} ${selectedTaskIds.includes(task.id) ? 'ring-2 ring-indigo-400 !bg-indigo-100/80' : ''}`}
-                    >
-                      <div className="mb-1 flex items-center gap-2">
-                        {task.task_type === 'code' && <span className="shrink-0 rounded bg-cyan-100 px-1 text-[10px] font-medium text-cyan-700">💻</span>}
-                        {task.task_type === 'research' && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700">📄</span>}
-                        <p className="truncate text-sm font-medium leading-5" title={task.title}>{task.title}</p>
-                      </div>
-                      {task.topic_id && (
-                        <div className="mb-1">
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) } }}
-                            className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100 hover:border-indigo-300 cursor-pointer transition"
-                            title={t('tasks.viewInFeed')}
-                          >
-                            📡 {t('tasks.feed')}
-                          </span>
-                        </div>
-                      )}
-                      {/* Token & timing badges */}
-                      {(tokenStats[task.id] || task.started_at) && (
-                        <div className="mb-1 flex items-center gap-1.5 flex-wrap">
-                          {tokenStats[task.id] && tokenStats[task.id].estimated_tokens > 0 && (
-                            <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 px-1 py-px text-[9px] font-medium text-emerald-600 dark:text-emerald-400" title={`${tokenStats[task.id].estimated_tokens.toLocaleString()} ${t('tasks.tokens')} (${tokenStats[task.id].message_count} ${t('tasks.messages')})`}>
-                              🪙 {t('tasks.tokenCost')}: {formatTokens(tokenStats[task.id].estimated_tokens)}
-                            </span>
-                          )}
-                          {task.started_at && (task.completed_at || task.status === 'doing') && (
-                            <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 dark:bg-blue-950/30 px-1 py-px text-[9px] font-medium text-blue-600 dark:text-blue-400" title={t('tasks.executionTimeHint')}>
-                              ⏱ {formatDuration(Math.max(0, (toMs(task.completed_at) ?? Date.now()) - (toMs(task.started_at) ?? 0)))}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <div className="mt-2 flex items-center justify-between">
-                        <div className="h-1.5 flex-1 rounded bg-slate-200">
-                          <div className={`h-1.5 rounded transition-all duration-500 ease-out ${progressBarTone(task.status)}`} style={{ width: `${taskProgressMap[task.id] ?? 0}%` }} />
-                        </div>
-                        {(task.task_type === 'code' || task.task_type === 'research') && (
-                          <span className="ml-2 shrink-0 text-[9px] text-slate-400">{t('tasks.doubleClickOpen')}</span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+          {/* Flat task list */}
+          <div className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/50 p-2 space-y-1.5">
+            {visibleTasks.length === 0 && (
+              <p className="py-8 text-center text-sm text-slate-400 dark:text-zinc-500">{t('tasks.noTasks')}</p>
+            )}
+            {visibleTasks.map((task) => {
+              const ts = tokenStats[task.id]
+              const start = toMs(task.started_at)
+              const end = toMs(task.completed_at) ?? (start ? Date.now() : null)
+              const durationMs = start && end ? Math.max(0, end - start) : 0
+              const progress = taskProgressMap[task.id] ?? 0
+              return (
+                <button
+                  key={task.id}
+                  onClick={(e) => {
+                    setSelectedTask(task)
+                    if (e.metaKey || e.ctrlKey) {
+                      setSelectedTaskIds((prev) =>
+                        prev.includes(task.id) ? prev.filter((id) => id !== task.id) : Array.from(new Set([...prev, task.id]))
+                      )
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    if (task.task_type === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
+                    else if (task.task_type === 'research') router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setTaskContextMenu({ x: e.clientX, y: e.clientY, task })
+                  }}
+                  className={`w-full rounded-lg border bg-white dark:bg-zinc-800 p-3 text-left transition hover:border-indigo-400 dark:hover:border-indigo-600 ${
+                    selectedTask?.id === task.id ? 'border-indigo-500 ring-1 ring-indigo-300 dark:ring-indigo-700' : 'border-slate-200 dark:border-zinc-700'
+                  } ${selectedTaskIds.includes(task.id) ? 'ring-2 ring-indigo-400 !bg-indigo-50 dark:!bg-indigo-950/30' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Type badge */}
+                    {task.task_type === 'code' && <span className="shrink-0 rounded-md bg-cyan-100 dark:bg-cyan-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">💻 Code</span>}
+                    {task.task_type === 'research' && <span className="shrink-0 rounded-md bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">📄 Research</span>}
+                    {(!task.task_type || task.task_type === 'general' || task.task_type === 'feature' || task.task_type === 'common') && <span className="shrink-0 rounded-md bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-zinc-300">💬 General</span>}
+
+                    {/* Title */}
+                    <p className="flex-1 truncate text-sm font-medium" title={task.title}>{task.title}</p>
+
+                    {/* Token badge */}
+                    {ts && ts.estimated_tokens > 0 && (
+                      <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400" title={`${ts.estimated_tokens.toLocaleString()} ${t('tasks.tokens')} (${ts.message_count} ${t('tasks.messages')})`}>
+                        🪙 {formatTokens(ts.estimated_tokens)}
+                      </span>
+                    )}
+
+                    {/* Duration badge */}
+                    {durationMs > 0 && (
+                      <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-blue-50 dark:bg-blue-950/30 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                        ⏱ {formatDuration(durationMs)}
+                      </span>
+                    )}
+
+                    {/* Feed link */}
+                    {task.topic_id && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) } }}
+                        className="shrink-0 inline-flex items-center gap-1 rounded-md border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950/50 cursor-pointer transition"
+                        title={t('tasks.viewInFeed')}
+                      >
+                        📡 {t('tasks.feed')}
+                      </span>
+                    )}
+
+                    {(task.task_type === 'code' || task.task_type === 'research') && (
+                      <span className="shrink-0 text-[9px] text-slate-400 dark:text-zinc-500">{t('tasks.doubleClickOpen')}</span>
+                    )}
+                  </div>
+                  {/* Progress bar */}
+                  {progress > 0 && (
+                    <div className="mt-2 h-1 rounded bg-slate-200 dark:bg-zinc-700">
+                      <div className="h-1 rounded bg-indigo-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+                    </div>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
-          <aside className={`flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3 ${selectedTask?.status === 'doing' ? 'task-panel-flow' : ''} ${selectedTask?.status === 'review' ? 'task-panel-review' : ''}`}>
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/50 p-3">
             <div className="mb-3 shrink-0 rounded-lg border border-slate-200 bg-slate-100 p-2">
               <p className="text-xs font-semibold text-slate-600">{t('tasks.durationPieTop8')}</p>
               {taskDurationSummary.slices.length > 0 ? (
@@ -1127,13 +922,6 @@ function TasksPageInner() {
                 {/* Task header */}
                 <div className="flex items-center gap-2 mb-2 px-1">
                   <span className="text-sm font-semibold truncate flex-1">{selectedTask.title}</span>
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    selectedTask.status === 'doing' ? 'bg-indigo-100 text-indigo-600' :
-                    selectedTask.status === 'review' ? 'bg-amber-100 text-amber-600' :
-                    selectedTask.status === 'done' ? 'bg-green-100 text-green-600' :
-                    selectedTask.status === 'blocked' ? 'bg-red-100 text-red-600' :
-                    'bg-slate-200 text-slate-600'
-                  }`}>{statusLabel(selectedTask.status)}</span>
                   <button
                     onClick={async () => {
                       const rerunInput = prompt(t('tasks.rerunPrompt'), '1')
@@ -1146,14 +934,14 @@ function TasksPageInner() {
                       if (r.ok) mutateTasks()
                       else alert(t('tasks.rerunFailed'))
                     }}
-                    className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-amber-600 hover:bg-amber-50 border border-amber-300"
+                    className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-amber-600 hover:bg-amber-50 border border-amber-300 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
                     title={t('tasks.rerunTitle')}
                   >
                     ↻ {t('tasks.rerun')}
                   </button>
                   <div className="flex gap-1">
                     <button
-                      className={`rounded-md px-2 py-0.5 text-[10px] ${(selectedTask.exec_mode || 'reasoning') !== 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                      className={`rounded-md px-2 py-0.5 text-[10px] ${(selectedTask.exec_mode || 'reasoning') !== 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'}`}
                       onClick={async () => {
                         await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
                           method: 'PATCH',
@@ -1164,7 +952,7 @@ function TasksPageInner() {
                       }}
                     >{t('tasks.agentMode')}</button>
                     <button
-                      className={`rounded-md px-2 py-0.5 text-[10px] ${selectedTask.exec_mode === 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                      className={`rounded-md px-2 py-0.5 text-[10px] ${selectedTask.exec_mode === 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'}`}
                       onClick={async () => {
                         await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
                           method: 'PATCH',
@@ -1185,23 +973,23 @@ function TasksPageInner() {
                       const displayContent = item.content
                       return (
                         <div key={item.id || `${item.sender}-${item.created_at}`} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 ${isHuman ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-800'}`}>
-                            <p className={`text-[10px] mb-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-500'}`}>{isHuman ? t('tasks.you') : `🤖 ${item.sender}`}</p>
+                          <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 ${isHuman ? 'bg-indigo-500 text-white' : 'bg-slate-200 dark:bg-zinc-700 text-slate-800 dark:text-zinc-200'}`}>
+                            <p className={`text-[10px] mb-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-500 dark:text-zinc-400'}`}>{isHuman ? t('tasks.you') : `🤖 ${item.sender}`}</p>
                             <p className="text-[11px] leading-4 whitespace-pre-wrap break-words">{stripFileTokens(displayContent) || displayContent}</p>
                             <FileAttachmentPreview content={displayContent} />
-                            <p className={`text-[9px] mt-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-400'}`}>{item.created_at?.replace('T', ' ').slice(0, 19)}</p>
+                            <p className={`text-[9px] mt-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-400 dark:text-zinc-500'}`}>{item.created_at?.replace('T', ' ').slice(0, 19)}</p>
                           </div>
                         </div>
                       )
                     })
                   ) : (
-                    <p className="text-[11px] text-slate-400 text-center py-4">{t('tasks.noMessages')}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-zinc-500 text-center py-4">{t('tasks.noMessages')}</p>
                   )}
                 </div>
 
                 {/* Send box */}
-                <div className="shrink-0 border-t border-slate-200 pt-2 px-1">
-                  <div className="mb-1 text-[10px] text-slate-500">{t('tasks.senderIdentity')}: 👤 {actorSource(session)}</div>
+                <div className="shrink-0 border-t border-slate-200 dark:border-zinc-700 pt-2 px-1">
+                  <div className="mb-1 text-[10px] text-slate-500 dark:text-zinc-400">{t('tasks.senderIdentity')}: 👤 {actorSource(session)}</div>
                   <PendingAttachments attachments={pendingAttachments} onRemove={(i) => setPendingAttachments(prev => prev.filter((_, j) => j !== i))} />
                   <div className="flex gap-1 items-center">
                     <ChatFileUpload
@@ -1210,7 +998,7 @@ function TasksPageInner() {
                       disabled={panelSending}
                     />
                     <input
-                      className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-indigo-400"
+                      className="flex-1 rounded border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2 py-1 text-xs outline-none focus:border-indigo-400 dark:text-zinc-200"
                       placeholder={t('tasks.typeMessage')}
                       value={panelInput}
                       onChange={(e) => setPanelInput(e.target.value)}
@@ -1223,24 +1011,10 @@ function TasksPageInner() {
                     >{panelSending ? '...' : t('tasks.send')}</button>
                   </div>
                   {queueIndicator && <p className="text-[10px] text-amber-500 mt-1">📨 {t('tasks.queuedHint')}</p>}
-                  {(selectedTask.status === 'review' || selectedTask.status === 'doing') && (
-                    <div className="mt-2 flex gap-1">
-                      {selectedTask.status === 'review' && (
-                        <button
-                          onClick={() => reviewCurrent('approve')}
-                          className="flex-1 rounded-md bg-green-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-600"
-                        >✅ {t('tasks.approve')}</button>
-                      )}
-                      <button
-                        onClick={() => reviewCurrent('reject')}
-                        className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50"
-                      >↩ {t('tasks.rejectSupplement')}</button>
-                    </div>
-                  )}
                 </div>
               </>
             ) : (
-              <p className="text-xs text-slate-500">{t('tasks.selectTaskHint')}</p>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">{t('tasks.selectTaskHint')}</p>
             )}
           </aside>
         </div>
@@ -1296,111 +1070,6 @@ function TasksPageInner() {
         />
       )}
 
-      <style jsx>{`
-        .task-progress-flow {
-          background-image: linear-gradient(90deg, rgba(46,166,255,0.65) 0%, rgba(120,205,255,1) 50%, rgba(46,166,255,0.65) 100%);
-          background-size: 180% 100%;
-          animation: progressFlow 1.2s linear infinite;
-        }
-        @keyframes progressFlow {
-          from { background-position: 100% 0; }
-          to { background-position: 0 0; }
-        }
-        .task-card-glow {
-          animation: taskCardGlow 1.6s ease-in-out infinite;
-        }
-        .task-card-pulse {
-          animation: taskCardPulse 1.4s ease-in-out infinite;
-        }
-        .task-panel-flow {
-          animation: taskPanelFlow 2.2s ease-in-out infinite;
-        }
-        .task-panel-review {
-          animation: taskPanelReviewPulse 1.8s ease-in-out infinite;
-        }
-        .task-ticker-scroll {
-          display: inline-block;
-          min-width: 120%;
-          animation: taskTickerScroll 10s linear infinite;
-        }
-        @keyframes taskCardGlow {
-          0%, 100% { box-shadow: 0 0 0 rgba(46,166,255,0.0); }
-          50% { box-shadow: 0 0 0.75rem rgba(46,166,255,0.35); }
-        }
-        @keyframes taskCardPulse {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-1px); }
-        }
-        @keyframes taskPanelFlow {
-          0%, 100% { box-shadow: inset 0 0 0 1px rgba(46,166,255,0.16), 0 0 0 rgba(46,166,255,0); }
-          50% { box-shadow: inset 0 0 0 1px rgba(46,166,255,0.38), 0 0 0.9rem rgba(46,166,255,0.22); }
-        }
-        @keyframes taskPanelReviewPulse {
-          0%, 100% { box-shadow: inset 0 0 0 1px rgba(255,209,102,0.18), 0 0 0 rgba(255,209,102,0); }
-          50% { box-shadow: inset 0 0 0 1px rgba(255,209,102,0.45), 0 0 0.9rem rgba(255,209,102,0.18); }
-        }
-        @keyframes taskTickerScroll {
-          0% { transform: translateX(0%); }
-          100% { transform: translateX(-45%); }
-        }
-      `}</style>
-
-      {/* New Task Modal */}
-      {showNewTaskModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNewTaskModal(false)}>
-          <div className="w-[420px] rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-lg font-semibold text-slate-800">{t('tasks.newTask')}</h3>
-            <input
-              autoFocus
-              className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
-              placeholder={t('tasks.taskTitlePlaceholder')}
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && newTaskTitle.trim()) createTask() }}
-            />
-            <p className="mb-2 text-xs font-medium text-slate-500">{t('tasks.assignAgent')}</p>
-            <select
-              className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
-              value={newTaskAgentId}
-              onChange={(e) => setNewTaskAgentId(e.target.value)}
-            >
-              <option value="">{t('tasks.selectAgent')}</option>
-              {agents.map((a) => (
-                <option key={a.agent_id} value={a.agent_id}>{a.display_name || a.agent_id}</option>
-              ))}
-            </select>
-
-            <p className="mb-2 text-xs font-medium text-slate-500">{t('tasks.taskType')}</p>
-            <div className="mb-5 grid grid-cols-3 gap-3">
-              {([
-                { key: 'code' as const, icon: '💻', label: t('tasks.filterCode'), desc: t('tasks.codeDesc') },
-                { key: 'research' as const, icon: '📄', label: t('tasks.filterResearch'), desc: t('tasks.researchDesc') },
-                { key: 'common' as const, icon: '📋', label: t('tasks.filterGeneral'), desc: t('tasks.generalDesc') },
-              ]).map((t) => (
-                <button
-                  key={t.key}
-                  onClick={() => setNewTaskType(t.key)}
-                  className={`rounded-xl border-2 p-3 text-left transition-all ${
-                    newTaskType === t.key ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <p className="text-2xl">{t.icon}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-800">{t.label}</p>
-                  <p className="text-[11px] text-slate-500">{t.desc}</p>
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowNewTaskModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">{t('common.cancel')}</button>
-              <button
-                onClick={createTask}
-                disabled={!newTaskTitle.trim() || !newTaskAgentId}
-                className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white disabled:opacity-50"
-              >{t('tasks.create')}</button>
-            </div>
-          </div>
-        </div>
-      )}
     </WttShellV2>
   )
 }

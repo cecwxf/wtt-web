@@ -38,7 +38,6 @@ interface WttShellV2Props {
   onDeleteTopic?: (topicId: string) => void
   onOpenEditor?: () => void
   onOpenKnowledgeRoot?: () => void
-  onQuickCreateTask?: (type?: 'code' | 'research' | 'general') => void
   onSubscribeTopic?: (topicId: string) => Promise<void>
   onCreateP2P?: (targetAgentId: string) => Promise<void>
   onRequestDiscuss?: (targetAgentId: string, topicName: string) => Promise<void>
@@ -80,7 +79,6 @@ export function WttShellV2(props: WttShellV2Props) {
     onDeleteTopic,
     onOpenEditor,
     onOpenKnowledgeRoot,
-    onQuickCreateTask,
     onSubscribeTopic,
     onCreateP2P,
     onRequestDiscuss,
@@ -138,7 +136,6 @@ export function WttShellV2(props: WttShellV2Props) {
           onCreateTopic={() => setCreateTopicOpen(true)}
           onOpenEditor={onOpenEditor}
           onOpenKnowledgeRoot={onOpenKnowledgeRoot}
-          onQuickCreateTask={onQuickCreateTask}
           hideCreateTopic={hideCreateTopic}
           notificationCount={notificationCount}
           p2pRequests={p2pRequests}
@@ -209,7 +206,6 @@ export function WttShellV2(props: WttShellV2Props) {
               onSelectTopic={onTopicChange}
               onLeaveTopic={onLeaveTopic}
               onDeleteTopic={onDeleteTopic}
-              onQuickCreateTask={hideCreateTopic ? undefined : onQuickCreateTask}
               onCreateP2P={onCreateP2P}
               onRequestDiscuss={onRequestDiscuss}
               agentName={selectedAgent?.display_name}

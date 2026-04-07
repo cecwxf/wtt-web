@@ -1036,65 +1036,6 @@ function FeedPageInner() {
   }, [topics, searchParams])
 
   // Quick-create a General Task with no title (defaults to "New Task")
-  const handleQuickCreateTask = async (type?: 'code' | 'research' | 'general') => {
-    if (!selectedAgentId || !session?.accessToken) return
-    const taskType = type ?? 'general'
-
-    if (taskType === 'code' || taskType === 'research') {
-      const label = taskType === 'code' ? t('feed.newCodeTaskPrompt') : t('feed.newResearchTaskPrompt')
-      const title = prompt(label)
-      if (!title?.trim()) return
-      try {
-        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-          body: JSON.stringify({
-            title: title.trim(),
-            task_type: taskType,
-            priority: 'P2',
-            status: 'todo',
-            owner_agent_id: selectedAgentId || undefined,
-            runner_agent_id: selectedAgentId || undefined,
-            created_by: selectedAgentId || undefined,
-          }),
-        })
-        if (!r.ok) { alert(t('feed.failedCreateTask')); return }
-        const task = await r.json()
-        if (taskType === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
-        else router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
-      } catch { alert(t('feed.failedCreateTask')) }
-      return
-    }
-
-    // General: instant create with auto-rename
-    try {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-        body: JSON.stringify({
-          title: 'New Task',
-          task_type: 'general',
-          priority: 'P2',
-          status: 'todo',
-          owner_agent_id: selectedAgentId,
-          runner_agent_id: selectedAgentId,
-          created_by: selectedAgentId,
-        }),
-      })
-      if (!r.ok) { alert(t('feed.failedCreateTask')); return }
-      const task = await r.json()
-      if (task.id && task.topic_id) {
-        pendingRenameTaskRef.current = { taskId: task.id, topicId: task.topic_id }
-      }
-      await mutateTopics()
-      if (task.topic_id) {
-        setSelectedTopicId(task.topic_id)
-      }
-    } catch {
-      alert(t('feed.failedCreateTask'))
-    }
-  }
-
   const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig) => {
     if (!selectedTopicId || !selectedAgentId) return
 
@@ -1618,7 +1559,6 @@ function FeedPageInner() {
         subscribedTopicIds={subscribedTopicIds}
         onOpenEditor={() => setEditorOpen(true)}
         onOpenKnowledgeRoot={handleOpenKnowledgeRoot}
-        onQuickCreateTask={handleQuickCreateTask}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
         onBindingChanged={loadAgents}
