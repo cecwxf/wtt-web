@@ -139,7 +139,7 @@ export default function KnowledgeBasePage() {
   const [noteTitle, setNoteTitle] = useState('')
   const [noteContent, setNoteContent] = useState('')
   const [compileLoading, setCompileLoading] = useState(false)
-  const [compileProgress, setCompileProgress] = useState<{ percent: number; compiled: number; total: number; article_count: number } | null>(null)
+  const [compileProgress, setCompileProgress] = useState<{ percent: number; compiled: number; total: number; article_count: number; error?: number } | null>(null)
   const compileTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [syncLoading, setSyncLoading] = useState(false)
   const [syncResult, setSyncResult] = useState<{ total_imported: number; skipped_duplicates: number } | null>(null)
@@ -484,6 +484,7 @@ export default function KnowledgeBasePage() {
             </div>
             <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
               {compileProgress.percent}% — {compileProgress.compiled}/{compileProgress.total} sources → {compileProgress.article_count} articles
+              {(compileProgress.error ?? 0) > 0 && <span className="text-red-500 ml-1">({compileProgress.error} errors)</span>}
             </span>
           </div>
         </div>
