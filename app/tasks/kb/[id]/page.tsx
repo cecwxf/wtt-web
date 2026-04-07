@@ -92,6 +92,7 @@ interface KBStats {
   articles: { total: number; by_category: { cat: string; cnt: number }[] }
   queries: { total: number; answered: number }
   index_entries: number
+  log?: { total: number; recent: { id: string; event_type: string; summary: string; created_at: string }[] }
 }
 interface SearchResult {
   id: string; title: string; slug?: string; snippet: string
@@ -129,7 +130,7 @@ export default function KnowledgeBasePage() {
   const taskId = params.id as string
 
   /* ── Tabs ── */
-  const [activeTab, setActiveTab] = useState<'wiki' | 'graph' | 'sources' | 'search' | 'stats' | 'qa'>('wiki')
+  const [activeTab, setActiveTab] = useState<'wiki' | 'graph' | 'sources' | 'search' | 'stats' | 'qa' | 'schema' | 'log'>('wiki')
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchScope, setSearchScope] = useState<'all' | 'articles' | 'sources'>('all')
@@ -152,6 +153,9 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphContainerRef = useRef<HTMLDivElement>(null)
   const [wikiLang, setWikiLang] = useState<'en' | 'zh'>('en')
+  const [schemaText, setSchemaText] = useState('')
+  const [schemaSaving, setSchemaSaving] = useState(false)
+  const [schemaLoaded, setSchemaLoaded] = useState(false)
   const { data: session } = useSession() as { data: { accessToken?: string } | null }
   const token = session?.accessToken ?? ''
 
@@ -187,6 +191,14 @@ export default function KnowledgeBasePage() {
   const { data: graphData } = useSWR<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
     activeTab === 'graph' ? `${base}/tasks/${taskId}/kb/graph` : null, fetcher
   )
+  // Schema data
+  const { data: schemaData } = useSWR<{ task_id: string; schema: string }>(
+    activeTab === 'schema' ? `${base}/tasks/${taskId}/kb/schema` : null, fetcher
+  )
+  // Log data
+  const { data: logData, mutate: mutateLog } = useSWR<{ entries: { id: string; event_type: string; summary: string; details: Record<string, unknown>; created_at: string }[]; total: number }>(
+    activeTab === 'log' ? `${base}/tasks/${taskId}/kb/log?limit=100` : null, fetcher
+  )
   // Chat messages — poll every 3s when on Q&A tab
   const { data: chatData, mutate: mutateChat } = useSWR<{ messages: ChatMsg[]; topic_id: string }>(
     activeTab === 'qa' ? `${base}/tasks/${taskId}/kb/messages?limit=100` : null,
@@ -199,6 +211,18 @@ export default function KnowledgeBasePage() {
   const stats: KBStats | null = statsData || null
 
   const refreshSources = useCallback(() => { mutateSources(); mutateTree() }, [mutateSources, mutateTree])
+
+  // Load schema text when data arrives
+  useEffect(() => {
+    if (schemaData && !schemaLoaded) {
+      setSchemaText(schemaData.schema || '')
+      setSchemaLoaded(true)
+    }
+  }, [schemaData, schemaLoaded])
+  // Reset loaded flag when switching away from schema tab
+  useEffect(() => {
+    if (activeTab !== 'schema') setSchemaLoaded(false)
+  }, [activeTab])
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -466,13 +490,13 @@ export default function KnowledgeBasePage() {
       )}
 
       {/* Tab bar */}
-      <div className="flex gap-1 px-4 py-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        {(['wiki', 'graph', 'sources', 'search', 'stats', 'qa'] as const).map(tab => (
+      <div className="flex gap-1 px-4 py-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto">
+        {(['wiki', 'graph', 'sources', 'search', 'stats', 'qa', 'schema', 'log'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={tabCls(tab)}>
-            {tab === 'wiki' ? '📖 Wiki' : tab === 'graph' ? '🕸️ Graph' : tab === 'sources' ? '📥 Sources' : tab === 'search' ? '🔍 Search' : tab === 'stats' ? '📊 Stats' : '❓ Q&A'}
+            {tab === 'wiki' ? '📖 Wiki' : tab === 'graph' ? '🕸️ Graph' : tab === 'sources' ? '📥 Sources' : tab === 'search' ? '🔍 Search' : tab === 'stats' ? '📊 Stats' : tab === 'qa' ? '❓ Q&A' : tab === 'schema' ? '📐 Schema' : '📋 Log'}
           </button>
         ))}
-        <span className="ml-auto text-xs text-slate-400 dark:text-zinc-500 self-center">
+        <span className="ml-auto text-xs text-slate-400 dark:text-zinc-500 self-center whitespace-nowrap">
           {toc.article_count} articles
         </span>
       </div>
@@ -519,6 +543,15 @@ export default function KnowledgeBasePage() {
                   <div className="text-4xl mb-2">📚</div>
                   <p>Select an article from the sidebar</p>
                   <p className="text-sm mt-1">or ingest sources and compile the wiki</p>
+                  {/* Auto-navigate to overview if it exists */}
+                  {Object.values(toc.categories).flat().some(a => a.slug === 'overview') && (
+                    <button
+                      onClick={() => setSelectedSlug('overview')}
+                      className="mt-4 px-4 py-2 text-sm bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-lg hover:bg-indigo-200"
+                    >
+                      📖 Open Overview
+                    </button>
+                  )}
                 </div>
               )}
               {selectedSlug && articleFull && (
@@ -1047,6 +1080,25 @@ export default function KnowledgeBasePage() {
                   </button>
                 </div>
               </div>
+
+              {/* Recent activity log */}
+              {stats.log && stats.log.recent.length > 0 && (
+                <div className="col-span-2 md:col-span-4 p-4 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-slate-600 dark:text-zinc-400">Recent Activity ({stats.log.total} total)</h3>
+                    <button onClick={() => setActiveTab('log')} className="text-xs text-indigo-500 hover:text-indigo-700">View all →</button>
+                  </div>
+                  <div className="space-y-1">
+                    {stats.log.recent.slice(0, 5).map(entry => (
+                      <div key={entry.id} className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400">
+                        <span>{entry.event_type === 'ingest' ? '📥' : entry.event_type === 'query' ? '❓' : entry.event_type === 'lint' ? '🔍' : '📝'}</span>
+                        <span className="truncate flex-1">{entry.summary}</span>
+                        <span className="text-slate-400 dark:text-zinc-500 whitespace-nowrap">{new Date(entry.created_at).toLocaleDateString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1124,6 +1176,99 @@ export default function KnowledgeBasePage() {
                   {chatSending ? '⏳' : '↑'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ Schema Tab ═══ */}
+        {activeTab === 'schema' && (
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="max-w-3xl mx-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-zinc-100">📐 Wiki Schema</h2>
+                <button
+                  onClick={async () => {
+                    setSchemaSaving(true)
+                    try {
+                      await fetch(`${base}/tasks/${taskId}/kb/schema`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ schema_text: schemaText }),
+                      })
+                    } catch (e) { console.error(e) }
+                    setSchemaSaving(false)
+                  }}
+                  disabled={schemaSaving}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50"
+                >
+                  {schemaSaving ? '⏳ Saving...' : '💾 Save Schema'}
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 mb-3">
+                This schema tells the agent how to organize your wiki — structure conventions, article format, ingest rules, and categories.
+              </p>
+              <textarea
+                value={schemaText}
+                onChange={e => setSchemaText(e.target.value)}
+                rows={30}
+                className="w-full font-mono text-sm p-4 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 dark:text-zinc-200 focus:ring-2 focus:ring-indigo-300 focus:outline-none resize-y"
+                placeholder="# Knowledge Base Schema&#10;&#10;Define your wiki conventions here..."
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ═══ Log Tab ═══ */}
+        {activeTab === 'log' && (
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="max-w-3xl mx-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-zinc-100">📋 Event Log</h2>
+                <button
+                  onClick={() => mutateLog()}
+                  className="px-3 py-1.5 text-xs rounded bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-600 dark:text-zinc-300"
+                >
+                  🔄 Refresh
+                </button>
+              </div>
+              {logData?.total === 0 && (
+                <p className="text-center text-slate-400 dark:text-zinc-500 py-12">No log entries yet. Compile sources to see activity.</p>
+              )}
+              <div className="space-y-2">
+                {(logData?.entries || []).map(entry => {
+                  const typeIcon: Record<string, string> = { ingest: '📥', query: '❓', lint: '🔍', update: '✏️', file: '📄' }
+                  const typeBg: Record<string, string> = {
+                    ingest: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800',
+                    query: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800',
+                    lint: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800',
+                    update: 'bg-slate-50 border-slate-200 dark:bg-zinc-900 dark:border-zinc-700',
+                    file: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800',
+                  }
+                  return (
+                    <div key={entry.id} className={`p-3 rounded-lg border ${typeBg[entry.event_type] || typeBg.update}`}>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg">{typeIcon[entry.event_type] || '📝'}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium uppercase text-slate-500 dark:text-zinc-400">
+                              {entry.event_type}
+                            </span>
+                            <span className="text-xs text-slate-400 dark:text-zinc-500">
+                              {new Date(entry.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-700 dark:text-zinc-300 mt-0.5">{entry.summary}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {(logData?.total || 0) > 0 && (
+                <p className="text-center text-xs text-slate-400 dark:text-zinc-500 mt-4">
+                  {logData?.total} total entries
+                </p>
+              )}
             </div>
           </div>
         )}
