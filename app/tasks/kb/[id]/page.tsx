@@ -14,6 +14,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { isDesktop, pickLocalFiles, readLocalFile } from '@/lib/desktop'
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 
@@ -421,6 +422,36 @@ export default function KnowledgeBasePage() {
     refreshSources()
     if (imported || duped) alert(`Imported ${imported} file(s)${duped ? `, ${duped} duplicate(s) skipped` : ''}`)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const importLocalFiles = async () => {
+    const files = await pickLocalFiles({
+      title: 'Import to Knowledge Base',
+      filters: [
+        { name: 'Documents', extensions: ['pdf', 'md', 'txt', 'docx', 'html', 'csv', 'json'] },
+        { name: 'Code', extensions: ['py', 'js', 'ts', 'tsx', 'jsx', 'go', 'rs', 'java', 'c', 'cpp', 'rb', 'sh'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+      multiple: true,
+    })
+    if (!files || files.length === 0) return
+    setFileUploading(true)
+    let imported = 0
+    for (const f of files) {
+      try {
+        const content = await readLocalFile(f.path)
+        if (!content) continue
+        const resp = await fetch(`${base}/tasks/${taskId}/kb/sources`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: f.name, content, source_type: 'file' }),
+        })
+        if (resp.ok) imported++
+      } catch (e) { console.error('Local import failed:', f.name, e) }
+    }
+    setFileUploading(false)
+    refreshSources()
+    if (imported) alert(`Imported ${imported} local file(s)`)
   }
 
   // Category colors for graph
@@ -832,7 +863,7 @@ export default function KnowledgeBasePage() {
                 </button>
               </div>
               {/* File import */}
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -848,6 +879,15 @@ export default function KnowledgeBasePage() {
                 >
                   {fileUploading ? '⏳ Uploading...' : '📁 Import Files'}
                 </button>
+                {isDesktop() && (
+                  <button
+                    onClick={importLocalFiles}
+                    disabled={fileUploading}
+                    className="px-4 py-2 text-sm rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+                  >
+                    💻 Browse Local
+                  </button>
+                )}
                 <span className="text-xs text-slate-400 dark:text-zinc-500">
                   PDF, Markdown, TXT, Code, DOCX, CSV, JSON — up to 10MB each
                 </span>
