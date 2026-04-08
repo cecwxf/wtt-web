@@ -130,6 +130,7 @@ export function WttSettingsModal({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -154,6 +155,7 @@ export function WttSettingsModal({
     async (file: File) => {
       if (!accessToken) return;
       setProfileUploading(true);
+      setProfileError("");
       try {
         // Step 1: Sign
         const signRes = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
@@ -171,8 +173,12 @@ export function WttSettingsModal({
         if (!signRes.ok) throw new Error("Sign failed");
         const { upload_token, upload_url } = await signRes.json();
 
-        // Step 2: Upload
-        const uploadRes = await fetch(upload_url, {
+        // Step 2: Upload (upload_url is relative like /media/upload-direct/xxx,
+        // must route through the Next.js proxy)
+        const fullUploadUrl = upload_url.startsWith("/")
+          ? `${CLIENT_WTT_API_BASE}${upload_url}`
+          : upload_url;
+        const uploadRes = await fetch(fullUploadUrl, {
           method: "PUT",
           headers: { "Content-Type": file.type },
           body: file,
@@ -190,14 +196,31 @@ export function WttSettingsModal({
         });
         if (!commitRes.ok) throw new Error("Commit failed");
         const asset = await commitRes.json();
-        setProfileAvatarUrl(asset.url || asset.thumbnail_url);
+        const newUrl = asset.url || asset.thumbnail_url;
+        setProfileAvatarUrl(newUrl);
+
+        // Auto-save avatar to backend immediately
+        const saveRes = await fetch(`${CLIENT_WTT_API_BASE}/auth/profile`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ avatar_url: newUrl }),
+        });
+        if (saveRes.ok) {
+          setProfileSaved(true);
+          setTimeout(() => setProfileSaved(false), 2000);
+        }
       } catch (e) {
         console.error("Avatar upload failed:", e);
+        setProfileError(t("settings.avatarUploadFailed"));
+        setTimeout(() => setProfileError(""), 4000);
       } finally {
         setProfileUploading(false);
       }
     },
-    [accessToken],
+    [accessToken, t],
   );
 
   const handleProfileSave = useCallback(async () => {
@@ -672,6 +695,9 @@ export function WttSettingsModal({
                   )}
                   {profileSaved ? t("settings.saved") : t("settings.saveProfile")}
                 </button>
+                {profileError && (
+                  <p className="mt-2 text-xs text-red-500">{profileError}</p>
+                )}
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -689,11 +715,10 @@ export function WttSettingsModal({
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-800">
-                      移动端扫码登录
+                      {t("settings.mobileLogin")}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Web 已登录账号可通过二维码一键登录到 WTT Android（支持
-                      GitHub/Google/Twitter/邮箱账号）。
+                      {t("settings.mobileLoginDesc")}
                     </p>
                   </div>
                   <Smartphone className="mt-0.5 h-4 w-4 text-indigo-500" />
@@ -710,7 +735,7 @@ export function WttSettingsModal({
                     ) : (
                       <Smartphone className="h-4 w-4" />
                     )}
-                    生成扫码二维码
+                    {t("settings.generateQr")}
                   </button>
                 ) : (
                   <div className="space-y-3">
@@ -722,7 +747,7 @@ export function WttSettingsModal({
                       />
                     </div>
                     <p className="text-xs text-slate-500">
-                      状态：{mobileLoginSession.status}
+                      {t("settings.qrStatus")}{mobileLoginSession.status}
                     </p>
                     <p className="text-xs text-slate-500">
                       sid: {mobileLoginSession.session_id.slice(0, 8)}...
@@ -733,13 +758,13 @@ export function WttSettingsModal({
                         disabled={mobileLoginLoading}
                         className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                       >
-                        刷新二维码
+                        {t("settings.refreshQr")}
                       </button>
                       <button
                         onClick={cancelMobileLoginQr}
                         className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-600 hover:bg-rose-100"
                       >
-                        取消
+                        {t("settings.cancelQr")}
                       </button>
                     </div>
                   </div>
