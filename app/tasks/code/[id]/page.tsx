@@ -641,6 +641,7 @@ function CodeTaskPageInner() {
 
   // ── Desktop (Electron) local project state ──────────
   const [desktopMode, setDesktopMode] = useState(false)
+  const [projectIndexed, setProjectIndexed] = useState(false)
   const [projectRoot, setProjectRoot] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
     try { return localStorage.getItem(`code-project-${params.id as string}`) } catch { return null }
@@ -683,6 +684,14 @@ function CodeTaskPageInner() {
         setFileTree(tree)
         setDesktopMode(true)
         desktopContentCacheRef.current = {}
+        // Re-index on restore so backend has project_context
+        const agId = localStorage.getItem('wtt_selected_agent_id') || ''
+        const token = session?.accessToken
+        if (agId && token) {
+          indexLocalProject(taskId, agId, result.path, result.files, CLIENT_WTT_API_BASE, {
+            'Authorization': `Bearer ${token}`
+          }).then(r => { if (r.ok) setProjectIndexed(true) }).catch(() => {})
+        }
       } catch { /* ignore restore failures */ }
     }
     restore()
@@ -1148,6 +1157,7 @@ function CodeTaskPageInner() {
           }).then(indexResult => {
             if (indexResult.ok) {
               console.log(`[Project] Indexed ${indexResult.indexed_files} files`)
+              setProjectIndexed(true)
             }
           }).catch(() => {})
         }
@@ -2405,7 +2415,9 @@ function CodeTaskPageInner() {
       const senderName = getSessionSenderName(session)
       const built = task?.repo_url
         ? { content: userText, fullCodebase: false }
-        : await buildCodebaseContextMessage(userText)
+        : projectIndexed
+          ? { content: userText, fullCodebase: false }
+          : await buildCodebaseContextMessage(userText)
       const fullContent = built.content
       const displayContent = buildWttUserSourceFlow(senderName, fullContent)
 
