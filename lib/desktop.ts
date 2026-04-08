@@ -236,3 +236,83 @@ export async function watchLocalFolder(
     bridge.localSync.stopWatch(watchId);
   };
 }
+
+// ── File Bridge: register local project for agent on-demand file access ──
+
+/**
+ * Register a local project with the WTT backend so the agent can read files
+ * on demand via WebSocket relay (Desktop file bridge).
+ *
+ * The Desktop's main process WS connection handles incoming file_request
+ * messages and serves files from disk without uploading to the server.
+ */
+export async function registerFileBridge(
+  taskId: string,
+  agentId: string,
+  projectRoot: string,
+  files: ScannedFile[],
+  apiBase: string = '/api/wtt'
+): Promise<boolean> {
+  try {
+    const fileTree = files.map(f => ({
+      path: f.relativePath,
+      name: f.name,
+      size: f.size,
+      isText: f.isText,
+      extension: f.extension,
+    }));
+    const resp = await fetch(`${apiBase}/file-bridge/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task_id: taskId,
+        agent_id: agentId,
+        project_root: projectRoot,
+        file_tree: fileTree,
+      }),
+    });
+    if (!resp.ok) {
+      console.warn('[FileBridge] Registration failed:', resp.status);
+      return false;
+    }
+    console.log(`[FileBridge] Registered project for task ${taskId}: ${projectRoot} (${files.length} files)`);
+    return true;
+  } catch (err) {
+    console.warn('[FileBridge] Registration error:', err);
+    return false;
+  }
+}
+
+/**
+ * Check if file bridge is available for a task.
+ */
+export async function checkFileBridge(
+  taskId: string,
+  apiBase: string = '/api/wtt'
+): Promise<{ registered: boolean; online: boolean }> {
+  try {
+    const resp = await fetch(`${apiBase}/file-bridge/${taskId}/status`);
+    if (!resp.ok) return { registered: false, online: false };
+    return await resp.json();
+  } catch {
+    return { registered: false, online: false };
+  }
+}
+
+/**
+ * Unregister a local project file bridge.
+ */
+export async function unregisterFileBridge(
+  taskId: string,
+  apiBase: string = '/api/wtt'
+): Promise<void> {
+  try {
+    await fetch(`${apiBase}/file-bridge/unregister`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId }),
+    });
+  } catch {
+    // best effort
+  }
+}

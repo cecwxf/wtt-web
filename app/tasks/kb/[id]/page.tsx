@@ -14,7 +14,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
-import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, watchLocalFolder, type ScannedFile } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, watchLocalFolder, registerFileBridge, type ScannedFile } from '@/lib/desktop'
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 
@@ -472,6 +472,11 @@ export default function KnowledgeBasePage() {
     setFolderScan(result)
     // Pre-select all text files
     setFolderSelected(new Set(result.files.filter(f => f.isText).map(f => f.path)))
+    // Register file bridge for on-demand agent access
+    const agentId = typeof window !== 'undefined' ? localStorage.getItem('wtt_selected_agent_id') || '' : ''
+    if (agentId) {
+      registerFileBridge(taskId, agentId, result.path, result.files).catch(() => {})
+    }
   }
 
   const importFolder = async (andCompile: boolean) => {

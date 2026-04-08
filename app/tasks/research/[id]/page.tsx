@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
-import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, registerFileBridge } from '@/lib/desktop'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { CircularProgress } from '@/components/ui/circular-progress'
@@ -621,6 +621,10 @@ function ResearchTaskPageInner() {
   const attachLocalFolder = async () => {
     const result = await pickAndScanFolder('Attach folder to research task')
     if (!result || result.files.length === 0) return
+    // Register file bridge for on-demand agent access
+    if (selectedAgentId) {
+      registerFileBridge(taskId, selectedAgentId, result.path, result.files).catch(() => {})
+    }
     const textFiles = result.files.filter(f => f.isText).slice(0, 20)
     const readResults = await readFilesBatch(textFiles.map(f => f.path))
     if (!readResults) return

@@ -15,7 +15,7 @@ import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
-import { isDesktop, getDesktopBridge, pickAndScanFolder, readLocalFile, watchLocalFolder, type ScannedFile } from '@/lib/desktop'
+import { isDesktop, getDesktopBridge, pickAndScanFolder, readLocalFile, watchLocalFolder, registerFileBridge, type ScannedFile } from '@/lib/desktop'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -1099,6 +1099,11 @@ function CodeTaskPageInner() {
         setDesktopMode(true)
         desktopContentCacheRef.current = {}
         try { localStorage.setItem(`code-project-${taskId}`, result.path) } catch {}
+
+        // Register file bridge so agent can read files on demand via WS relay
+        if (selectedAgentId) {
+          registerFileBridge(taskId, selectedAgentId, result.path, result.files).catch(() => {})
+        }
 
         if (task?.topic_id) {
           const treeText = buildTreeText(tree)
