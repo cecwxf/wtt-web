@@ -348,12 +348,31 @@ interface PendingPatch {
 }
 
 function extractAllPatches(content: string): PendingPatch[] {
-  const re = /\[FILE\]\s+([^\n]+)\n```[\w-]*\n([\s\S]*?)\n```/g
   const patches: PendingPatch[] = []
+  const seen = new Set<string>()
+
+  // Pattern 1: [FILE] path\n```lang\ncode\n```
+  const re1 = /\[FILE\]\s+([^\n]+)\n```[\w-]*\n([\s\S]*?)\n```/g
   let m
-  while ((m = re.exec(content)) !== null) {
-    patches.push({ path: m[1].trim(), code: m[2], status: 'pending' })
+  while ((m = re1.exec(content)) !== null) {
+    const p = m[1].trim()
+    if (!seen.has(p)) { seen.add(p); patches.push({ path: p, code: m[2], status: 'pending' }) }
   }
+
+  // Pattern 2: ```lang:path\ncode\n```  (Cursor-style fenced block with path after colon)
+  const re2 = /```[\w-]*:([^\n`]+)\n([\s\S]*?)\n```/g
+  while ((m = re2.exec(content)) !== null) {
+    const p = m[1].trim()
+    if (!seen.has(p)) { seen.add(p); patches.push({ path: p, code: m[2], status: 'pending' }) }
+  }
+
+  // Pattern 3: **File: path** or **`path`**\n```lang\ncode\n```
+  const re3 = /\*\*(?:File:\s*)?`?([^`*\n]+?)`?\*\*\s*\n```[\w-]*\n([\s\S]*?)\n```/g
+  while ((m = re3.exec(content)) !== null) {
+    const p = m[1].trim()
+    if (p.includes('/') && !seen.has(p)) { seen.add(p); patches.push({ path: p, code: m[2], status: 'pending' }) }
+  }
+
   return patches
 }
 
@@ -2184,7 +2203,20 @@ function CodeTaskPageInner() {
     setPendingPatches(prev => prev.map((p, i) => i === 0 ? { ...p, code: modified } : p))
   }, [fetchFileFromRef])
 
-  // Legacy: enter diff review from [FILE] blocks (fallback)
+  // Legacy: enter diff review from [FILE] blocks (agent file changes)
+  const readLocalOriginal = useCallback(async (filePath: string): Promise<string> => {
+    // Desktop mode: read current file from disk as the "original"
+    if (desktopMode && projectRoot) {
+      const cached = desktopContentCacheRef.current[filePath]
+      if (cached) return cached
+      const fullPath = `${projectRoot}/${filePath}`
+      const content = await readLocalFile(fullPath)
+      if (content) return content
+    }
+    // Fallback to GitHub repo API
+    return fetchFileFromRef(filePath)
+  }, [desktopMode, projectRoot, fetchFileFromRef])
+
   const enterDiffReview = useCallback(async (patches: PendingPatch[]) => {
     if (patches.length === 0) return
     setReviewingPR(null)
@@ -2192,9 +2224,9 @@ function CodeTaskPageInner() {
     setActiveDiffIndex(0)
     setDiffMode(true)
     const first = patches[0]
-    const original = await fetchFileFromRef(first.path)
+    const original = await readLocalOriginal(first.path)
     setDiffOriginalContent(original)
-  }, [fetchFileFromRef])
+  }, [readLocalOriginal])
 
   // Auto-enter diff review when Agent sends [FILE] blocks (fallback)
   const lastReviewedMsgRef = useRef<string | null>(null)
@@ -2238,11 +2270,11 @@ function CodeTaskPageInner() {
       setDiffOriginalContent(original)
       setPendingPatches(prev => prev.map((p, i) => i === index ? { ...p, code: modified } : p))
     } else {
-      // Legacy [FILE] mode
-      const original = await fetchFileFromRef(patch.path)
+      // Local / [FILE] block mode — read original from Desktop or repo
+      const original = await readLocalOriginal(patch.path)
       setDiffOriginalContent(original)
     }
-  }, [pendingPatches, reviewingPR, fetchFileFromRef])
+  }, [pendingPatches, reviewingPR, fetchFileFromRef, readLocalOriginal])
 
   const updatePatchStatus = (index: number, status: 'accepted' | 'rejected') => {
     setPendingPatches(prev => prev.map((p, i) => i === index ? { ...p, status } : p))
