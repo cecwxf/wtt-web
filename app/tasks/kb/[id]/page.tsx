@@ -14,7 +14,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
-import { isDesktop, pickLocalFiles, readLocalFile } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, watchLocalFolder, type ScannedFile } from '@/lib/desktop'
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 
@@ -153,6 +153,11 @@ export default function KnowledgeBasePage() {
   const [fileUploading, setFileUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphContainerRef = useRef<HTMLDivElement>(null)
+  // Folder import state
+  const [folderScan, setFolderScan] = useState<{ path: string; files: ScannedFile[] } | null>(null)
+  const [folderSelected, setFolderSelected] = useState<Set<string>>(new Set())
+  const [folderImporting, setFolderImporting] = useState(false)
+  const [folderWatchCleanup, setFolderWatchCleanup] = useState<(() => void) | null>(null)
   const [wikiLang, setWikiLang] = useState<'en' | 'zh'>('en')
   const [schemaText, setSchemaText] = useState('')
   const [schemaSaving, setSchemaSaving] = useState(false)
@@ -444,7 +449,7 @@ export default function KnowledgeBasePage() {
         const resp = await fetch(`${base}/tasks/${taskId}/kb/sources`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: f.name, content, source_type: 'file' }),
+          body: JSON.stringify({ title: f.name, content_markdown: content, source_type: 'file' }),
         })
         if (resp.ok) imported++
       } catch (e) { console.error('Local import failed:', f.name, e) }
@@ -452,6 +457,120 @@ export default function KnowledgeBasePage() {
     setFileUploading(false)
     refreshSources()
     if (imported) alert(`Imported ${imported} local file(s)`)
+  }
+
+  const scanFolder = async () => {
+    const result = await pickAndScanFolder('Select folder to import to KB')
+    if (!result) return
+    setFolderScan(result)
+    // Pre-select all text files
+    setFolderSelected(new Set(result.files.filter(f => f.isText).map(f => f.path)))
+  }
+
+  const importFolder = async (andCompile: boolean) => {
+    if (!folderScan || folderSelected.size === 0) return
+    setFolderImporting(true)
+    try {
+      const selectedFiles = folderScan.files.filter(f => folderSelected.has(f.path))
+      // Read all selected text files in batch
+      const textFiles = selectedFiles.filter(f => f.isText)
+      const readResults = textFiles.length > 0 ? await readFilesBatch(textFiles.map(f => f.path)) : null
+
+      // Build batch payload
+      const batchFiles: Array<{ title: string; relative_path: string; content: string; source_type: string; content_hash: string; file_size: number }> = []
+      if (readResults) {
+        for (let i = 0; i < textFiles.length; i++) {
+          const file = textFiles[i]
+          const read = readResults[i]
+          if (read?.ok && read.content) {
+            batchFiles.push({
+              title: file.name,
+              relative_path: file.relativePath,
+              content: read.content,
+              source_type: file.extension.match(/^\.(py|js|ts|tsx|jsx|go|rs|java|c|cpp|h|hpp|rb|sh|css|scss|sql)$/) ? 'code' : 'file',
+              content_hash: file.hash,
+              file_size: file.size,
+            })
+          }
+        }
+      }
+
+      // Send batch
+      if (batchFiles.length > 0) {
+        // Send in chunks of 50
+        let totalImported = 0, totalSkipped = 0, totalUpdated = 0
+        for (let i = 0; i < batchFiles.length; i += 50) {
+          const chunk = batchFiles.slice(i, i + 50)
+          const resp = await fetch(`${base}/tasks/${taskId}/kb/sources/batch`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files: chunk }),
+          })
+          if (resp.ok) {
+            const data = await resp.json()
+            totalImported += data.imported || 0
+            totalSkipped += data.skipped || 0
+            totalUpdated += data.updated || 0
+          }
+        }
+
+        refreshSources()
+        const parts = [`${totalImported} imported`]
+        if (totalUpdated) parts.push(`${totalUpdated} updated`)
+        if (totalSkipped) parts.push(`${totalSkipped} unchanged`)
+        alert(`Folder import: ${parts.join(', ')}`)
+      }
+
+      // Binary files (PDF, DOCX) — upload individually via existing endpoint
+      const binaryFiles = selectedFiles.filter(f => !f.isText)
+      if (binaryFiles.length > 0) {
+        // Binary files need the upload endpoint which handles extraction
+        alert(`${binaryFiles.length} binary file(s) (PDF/DOCX) need individual upload — use "Import Files" button`)
+      }
+
+      if (andCompile) {
+        triggerCompile(true)
+      }
+    } catch (e: unknown) {
+      console.error('Folder import failed:', e)
+      alert('Folder import error: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setFolderImporting(false)
+    }
+  }
+
+  const toggleFolderWatch = async () => {
+    if (folderWatchCleanup) {
+      folderWatchCleanup()
+      setFolderWatchCleanup(null)
+      return
+    }
+    if (!folderScan) return
+    const cleanup = await watchLocalFolder(folderScan.path, async (event) => {
+      if (!event.exists) return
+      // Auto-sync changed file
+      const file = folderScan.files.find(f => f.relativePath === event.filename)
+      if (!file || !folderSelected.has(file.path)) return
+      try {
+        const results = await readFilesBatch([event.fullPath])
+        if (results && results[0]?.ok && results[0].content) {
+          await fetch(`${base}/tasks/${taskId}/kb/sources/batch`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files: [{
+              title: file.name,
+              relative_path: file.relativePath,
+              content: results[0].content,
+              source_type: 'file',
+              content_hash: event.hash || '',
+              file_size: results[0].size || 0,
+            }] }),
+          })
+          refreshSources()
+        }
+      } catch (e) { console.error('Watch sync error:', e) }
+    })
+    setFolderWatchCleanup(() => cleanup)
   }
 
   // Category colors for graph
@@ -888,10 +1007,86 @@ export default function KnowledgeBasePage() {
                     💻 Browse Local
                   </button>
                 )}
+                {isDesktop() && (
+                  <button
+                    onClick={scanFolder}
+                    disabled={folderImporting}
+                    className="px-4 py-2 text-sm rounded-lg bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50"
+                  >
+                    📂 Import Folder
+                  </button>
+                )}
                 <span className="text-xs text-slate-400 dark:text-zinc-500">
                   PDF, Markdown, TXT, Code, DOCX, CSV, JSON — up to 10MB each
                 </span>
               </div>
+              {/* Folder scan results (desktop only) */}
+              {folderScan && (
+                <div className="border rounded-lg dark:border-zinc-700 p-3 bg-zinc-50 dark:bg-zinc-900">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium dark:text-zinc-300">
+                      📁 {folderScan.path}
+                    </span>
+                    <button onClick={() => { setFolderScan(null); setFolderSelected(new Set()); if (folderWatchCleanup) { folderWatchCleanup(); setFolderWatchCleanup(null) } }}
+                      className="text-xs text-red-400 hover:text-red-500">✕ Close</button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto space-y-0.5 mb-3">
+                    {folderScan.files.map(f => (
+                      <label key={f.path} className="flex items-center gap-2 text-xs py-0.5 px-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={folderSelected.has(f.path)}
+                          onChange={() => {
+                            const next = new Set(folderSelected)
+                            if (next.has(f.path)) next.delete(f.path); else next.add(f.path)
+                            setFolderSelected(next)
+                          }}
+                          className="rounded"
+                        />
+                        <span className={`flex-1 truncate ${f.isText ? 'dark:text-zinc-300' : 'text-amber-500 dark:text-amber-400'}`}>
+                          {f.relativePath}
+                        </span>
+                        <span className="text-zinc-400 whitespace-nowrap">
+                          {f.size < 1024 ? `${f.size} B` : f.size < 1024 * 1024 ? `${(f.size / 1024).toFixed(1)} KB` : `${(f.size / 1024 / 1024).toFixed(1)} MB`}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {folderSelected.size} of {folderScan.files.length} files selected
+                      ({(folderScan.files.filter(f => folderSelected.has(f.path)).reduce((s, f) => s + f.size, 0) / 1024).toFixed(1)} KB)
+                    </span>
+                    <button
+                      onClick={() => setFolderSelected(new Set(folderScan.files.map(f => f.path)))}
+                      className="text-xs text-indigo-500 hover:underline">Select All</button>
+                    <button
+                      onClick={() => setFolderSelected(new Set())}
+                      className="text-xs text-zinc-400 hover:underline">Select None</button>
+                    <div className="flex-1" />
+                    <button
+                      onClick={() => importFolder(false)}
+                      disabled={folderImporting || folderSelected.size === 0}
+                      className="px-3 py-1.5 text-xs rounded bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50"
+                    >
+                      {folderImporting ? '⏳ Importing...' : '📥 Import Selected'}
+                    </button>
+                    <button
+                      onClick={() => importFolder(true)}
+                      disabled={folderImporting || folderSelected.size === 0}
+                      className="px-3 py-1.5 text-xs rounded bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50"
+                    >
+                      🚀 Import & Compile
+                    </button>
+                    <button
+                      onClick={toggleFolderWatch}
+                      className={`px-3 py-1.5 text-xs rounded ${folderWatchCleanup ? 'bg-amber-500 hover:bg-amber-600' : 'bg-zinc-500 hover:bg-zinc-600'} text-white`}
+                    >
+                      {folderWatchCleanup ? '👁 Watching...' : '👁 Watch'}
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* Quick note */}
               <details className="border rounded-lg dark:border-zinc-700 p-3">
                 <summary className="text-sm font-medium text-slate-600 dark:text-zinc-400 cursor-pointer">📝 Add Note</summary>

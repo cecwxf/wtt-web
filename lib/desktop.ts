@@ -39,6 +39,48 @@ interface SaveDialogResult {
   path: string | null;
 }
 
+export interface ScanFolderOptions {
+  extensions?: string[];
+  maxDepth?: number;
+  maxFileSize?: number;
+  exclude?: string[];
+  includeBinary?: boolean;
+}
+
+export interface ScannedFile {
+  path: string;
+  name: string;
+  relativePath: string;
+  size: number;
+  hash: string;
+  mtime: string;
+  isText: boolean;
+  extension: string;
+}
+
+interface ScanFolderResult {
+  ok: boolean;
+  files: ScannedFile[];
+  error?: string;
+}
+
+interface BatchReadResult {
+  path: string;
+  ok: boolean;
+  content?: string;
+  size?: number;
+  error?: string;
+}
+
+interface FileChangedEvent {
+  watchId: string;
+  eventType: string;
+  filename: string;
+  fullPath: string;
+  exists: boolean;
+  hash: string | null;
+}
+
 interface WttDesktopBridge {
   isDesktop: true;
   platform: string;
@@ -59,6 +101,14 @@ interface WttDesktopBridge {
       defaultPath?: string;
       filters?: Array<{ name: string; extensions: string[] }>;
     }) => Promise<SaveDialogResult>;
+  };
+  localSync: {
+    scanFolder: (folderPath: string, options?: ScanFolderOptions) => Promise<ScanFolderResult>;
+    readFilesBatch: (filePaths: string[]) => Promise<{ results: BatchReadResult[] }>;
+    fileHash: (filePath: string) => Promise<{ ok: boolean; hash?: string; error?: string }>;
+    watchFolder: (folderPath: string) => Promise<{ ok: boolean; watchId?: string; error?: string }>;
+    stopWatch: (watchId: string) => Promise<{ ok: boolean }>;
+    onFileChanged: (callback: (data: FileChangedEvent) => void) => () => void;
   };
   notify: (title: string, body: string) => Promise<void>;
   getVersion: () => Promise<string>;
@@ -121,4 +171,68 @@ export async function pickAndReadFolder(title?: string) {
   if (folder.canceled || !folder.path) return null;
   const contents = await bridge.fs.readDir(folder.path);
   return { path: folder.path, entries: contents.entries };
+}
+
+/**
+ * Scan a local folder recursively and return all supported files.
+ * Desktop only — returns null on web.
+ */
+export async function scanLocalFolder(
+  folderPath: string,
+  options?: ScanFolderOptions
+): Promise<{ path: string; files: ScannedFile[] } | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.localSync) return null;
+  const result = await bridge.localSync.scanFolder(folderPath, options);
+  if (!result.ok) return null;
+  return { path: folderPath, files: result.files };
+}
+
+/**
+ * Pick a folder via native dialog, then scan it for supported files.
+ * Desktop only — returns null on web.
+ */
+export async function pickAndScanFolder(
+  title?: string,
+  options?: ScanFolderOptions
+): Promise<{ path: string; files: ScannedFile[] } | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.localSync) return null;
+  const folder = await bridge.fs.openFolderDialog({ title: title ?? "Select folder to import" });
+  if (folder.canceled || !folder.path) return null;
+  const result = await bridge.localSync.scanFolder(folder.path, options);
+  if (!result.ok) return null;
+  return { path: folder.path, files: result.files };
+}
+
+/**
+ * Read multiple files in batch. Desktop only.
+ */
+export async function readFilesBatch(
+  filePaths: string[]
+): Promise<BatchReadResult[] | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.localSync) return null;
+  const result = await bridge.localSync.readFilesBatch(filePaths);
+  return result.results;
+}
+
+/**
+ * Start watching a folder for changes. Desktop only.
+ * Returns a cleanup function to stop watching, or null.
+ */
+export async function watchLocalFolder(
+  folderPath: string,
+  onChanged: (data: FileChangedEvent) => void
+): Promise<(() => void) | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.localSync) return null;
+  const result = await bridge.localSync.watchFolder(folderPath);
+  if (!result.ok || !result.watchId) return null;
+  const unsub = bridge.localSync.onFileChanged(onChanged);
+  const watchId = result.watchId;
+  return () => {
+    unsub();
+    bridge.localSync.stopWatch(watchId);
+  };
 }
