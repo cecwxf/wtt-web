@@ -15,6 +15,7 @@ import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, watchLocalFolder, indexLocalProject, type ScannedFile } from '@/lib/desktop'
+import { FileTreePanel, scannedToFileNodes, type FileNode } from '@/components/ui/file-tree'
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 
@@ -172,6 +173,13 @@ export default function KnowledgeBasePage() {
   const [localCompileProgress, setLocalCompileProgress] = useState<{ current: number; total: number } | null>(null)
   const localCompileCancelRef = useRef(false)
   const webFolderInputRef = useRef<HTMLInputElement>(null)
+  // File tree panel state
+  const [fileTree, setFileTree] = useState<FileNode[]>([])
+  const [fileTreeRoot, setFileTreeRoot] = useState<string | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [projectIndexed, setProjectIndexed] = useState(false)
+  const [selectedFilePath, setSelectedFilePath] = useState('')
+  const [fileTreeOpen, setFileTreeOpen] = useState(false)
   const [wikiLang, setWikiLang] = useState<'en' | 'zh'>('en')
   const [schemaText, setSchemaText] = useState('')
   const [schemaSaving, setSchemaSaving] = useState(false)
@@ -479,13 +487,32 @@ export default function KnowledgeBasePage() {
     setFolderScan(result)
     // Pre-select all text files
     setFolderSelected(new Set(result.files.filter(f => f.isText).map(f => f.path)))
+    // Build file tree for left panel
+    const tree = scannedToFileNodes(result.files)
+    setFileTree(tree)
+    setFileTreeRoot(result.path)
+    setFileTreeOpen(true)
     // Register file bridge for on-demand agent access
     const agentId = typeof window !== 'undefined' ? localStorage.getItem('wtt_selected_agent_id') || '' : ''
     if (agentId) {
       indexLocalProject(taskId, agentId, result.path, result.files, base, {
         Authorization: `Bearer ${token}`,
-      }).catch(() => {})
+      }).then(r => { if (r && (r as { ok?: boolean }).ok) setProjectIndexed(true) }).catch(() => {})
     }
+  }
+
+  const shareFileToAgent = async (node: FileNode) => {
+    if (node.kind !== 'file' || !task?.topic_id) return
+    const msg = `📎 @file \`${node.path}\`\n_Agent will read this file via MCP tools and compile it into a wiki article._`
+    try {
+      await fetch(`${base}/tasks/${taskId}/kb/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: msg }),
+      })
+      mutateChat()
+      setActiveTab('qa')
+    } catch {}
   }
 
   const importFolder = async (andCompile: boolean) => {
@@ -945,6 +972,15 @@ export default function KnowledgeBasePage() {
               ✕ Stop
             </button>
           )}
+          {isDesktop() && (
+            <button
+              onClick={() => fileTree.length > 0 ? setFileTreeOpen(o => !o) : scanFolder()}
+              className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              title={fileTreeOpen ? 'Hide file tree' : fileTree.length > 0 ? 'Show file tree' : 'Import folder'}
+            >
+              📂 {fileTreeOpen ? 'Hide Files' : fileTree.length > 0 ? 'Show Files' : 'Open Folder'}
+            </button>
+          )}
           <ThemeToggle />
         </div>
       </div>
@@ -983,6 +1019,29 @@ export default function KnowledgeBasePage() {
           </div>
         </div>
       )}
+
+      {/* Below header: flex row with optional file tree + main content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* File tree panel (left) */}
+        {fileTreeOpen && fileTree.length > 0 && (
+          <FileTreePanel
+            fileTree={fileTree}
+            projectRoot={fileTreeRoot}
+            selectedPath={selectedFilePath}
+            onSelect={(node) => {
+              setSelectedFilePath(node.path)
+              if (node.kind === 'file') shareFileToAgent(node)
+            }}
+            onShare={shareFileToAgent}
+            onClose={() => { setFileTreeOpen(false) }}
+            onImportFolder={scanFolder}
+            title="📂 KB Sources"
+            width={240}
+          />
+        )}
+
+        {/* Main content (existing tabs + tab content) */}
+        <div className="flex flex-1 flex-col overflow-hidden">
 
       {/* Tab bar */}
       <div className="flex gap-1 px-4 py-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto">
@@ -1915,6 +1974,10 @@ export default function KnowledgeBasePage() {
             </div>
           </div>
         )}
+      </div>
+      {/* end: Main content (tabs + tab content) */}
+      </div>
+      {/* end: flex row (file tree + main) */}
       </div>
     </div>
   )
