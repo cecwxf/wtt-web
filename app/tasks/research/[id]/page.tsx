@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch } from '@/lib/desktop'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { CircularProgress } from '@/components/ui/circular-progress'
@@ -595,6 +596,47 @@ function ResearchTaskPageInner() {
   }
 
   // ── Chat ─────────────────────────────────────────────
+  const attachLocalFiles = async () => {
+    const files = await pickLocalFiles({
+      title: 'Attach files to research task',
+      filters: [
+        { name: 'Documents', extensions: ['pdf', 'md', 'txt', 'docx', 'html', 'csv', 'json'] },
+        { name: 'Code', extensions: ['py', 'js', 'ts', 'tsx', 'go', 'rs', 'java', 'c', 'cpp', 'rb', 'sh'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+      multiple: true,
+    })
+    if (!files || files.length === 0) return
+    for (const f of files) {
+      const content = await readLocalFile(f.path)
+      if (!content) continue
+      const truncated = content.length > 32000 ? content.slice(0, 32000) + '\n... (truncated)' : content
+      const token = `📎 **${f.name}** (${(f.size / 1024).toFixed(1)} KB)\n\`\`\`\n${truncated}\n\`\`\``
+      setPendingAttachments(prev => [...prev, token])
+    }
+  }
+
+  const attachLocalFolder = async () => {
+    const result = await pickAndScanFolder('Attach folder to research task')
+    if (!result || result.files.length === 0) return
+    const textFiles = result.files.filter(f => f.isText).slice(0, 20)
+    const readResults = await readFilesBatch(textFiles.map(f => f.path))
+    if (!readResults) return
+    let attached = 0
+    for (let i = 0; i < textFiles.length; i++) {
+      const file = textFiles[i]
+      const read = readResults[i]
+      if (!read?.ok || !read.content) continue
+      const truncated = read.content.length > 16000 ? read.content.slice(0, 16000) + '\n... (truncated)' : read.content
+      const token = `📎 **${file.relativePath}** (${(file.size / 1024).toFixed(1)} KB)\n\`\`\`\n${truncated}\n\`\`\``
+      setPendingAttachments(prev => [...prev, token])
+      attached++
+    }
+    if (textFiles.length < result.files.length) {
+      alert(`Attached ${attached} text files. ${result.files.length - textFiles.length} binary/extra files skipped (max 20).`)
+    }
+  }
+
   const sendMessage = async (text?: string) => {
     const attachmentText = pendingAttachments.join('\n')
     const content = (text || chatInput).trim()
@@ -1803,6 +1845,22 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                 onUploaded={(asset) => setPendingAttachments(prev => [...prev, asset.markdownToken])}
                 disabled={sending}
               />
+              {isDesktop() && (
+                <>
+                  <button
+                    onClick={attachLocalFiles}
+                    disabled={sending}
+                    className="rounded-lg border border-emerald-300 px-2 py-2 text-xs text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+                    title="Attach local files"
+                  >📄</button>
+                  <button
+                    onClick={attachLocalFolder}
+                    disabled={sending}
+                    className="rounded-lg border border-cyan-300 px-2 py-2 text-xs text-cyan-600 hover:bg-cyan-50 disabled:opacity-50"
+                    title="Attach local folder"
+                  >📂</button>
+                </>
+              )}
               <textarea
                 data-chat-input
                 className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none resize-none"
