@@ -300,6 +300,60 @@ export async function checkFileBridge(
 }
 
 /**
+ * Register file bridge AND send project index to backend.
+ * Combines registerFileBridge + POST /tasks/{id}/index-project in one call.
+ */
+export async function indexLocalProject(
+  taskId: string,
+  agentId: string,
+  projectRoot: string,
+  files: ScannedFile[],
+  apiBase?: string,
+  headers?: Record<string, string>,
+): Promise<{ ok: boolean; indexed_files?: number; key_files?: string[] }> {
+  // Step 1: Register file bridge for on-demand file access
+  await registerFileBridge(taskId, agentId, projectRoot, files, apiBase);
+
+  // Step 2: Build language stats
+  const extCount: Record<string, number> = {};
+  for (const f of files) {
+    const ext = (f.extension || '').replace(/^\./, '');
+    if (ext) extCount[ext] = (extCount[ext] || 0) + 1;
+  }
+
+  // Step 3: Send project index to backend
+  try {
+    const baseUrl = apiBase || (typeof window !== 'undefined' && (window as unknown as Record<string, string>).__WTT_API_BASE) || '';
+    const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json', ...headers };
+    const resp = await fetch(`${baseUrl}/tasks/${taskId}/index-project`, {
+      method: 'POST',
+      headers: fetchHeaders,
+      body: JSON.stringify({
+        project_root: projectRoot,
+        file_tree: files.map(f => ({
+          path: f.relativePath,
+          name: f.name,
+          size: f.size,
+          isText: f.isText,
+          extension: f.extension,
+        })),
+        language_stats: extCount,
+      }),
+    });
+    if (!resp.ok) {
+      console.warn('[IndexProject] Backend returned', resp.status);
+      return { ok: false };
+    }
+    const data = await resp.json();
+    console.log(`[IndexProject] Indexed ${data.indexed_files} files for task ${taskId}`);
+    return { ok: true, indexed_files: data.indexed_files, key_files: data.key_files };
+  } catch (err) {
+    console.warn('[IndexProject] Error:', err);
+    return { ok: false };
+  }
+}
+
+/**
  * Unregister a local project file bridge.
  */
 export async function unregisterFileBridge(

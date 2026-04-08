@@ -15,7 +15,7 @@ import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
-import { isDesktop, getDesktopBridge, pickAndScanFolder, readLocalFile, watchLocalFolder, registerFileBridge, type ScannedFile } from '@/lib/desktop'
+import { isDesktop, getDesktopBridge, pickAndScanFolder, readLocalFile, watchLocalFolder, registerFileBridge, indexLocalProject, type ScannedFile } from '@/lib/desktop'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -839,7 +839,13 @@ function CodeTaskPageInner() {
   useEffect(() => {
     if (!topicMessages) return
     const mapped: ChatMsg[] = topicMessages
-      .filter((m: Record<string, string>) => !!(m.content || m.message || m.text))
+      .filter((m: Record<string, string>) => {
+        if (!(m.content || m.message || m.text)) return false
+        // Hide PROJECT_INDEX and TASK_REQUEST from chat display
+        const sem = (m.semantic_type || '').toUpperCase()
+        if (sem === 'PROJECT_INDEX') return false
+        return true
+      })
       .map((m: Record<string, string>) => ({
         id: m.id || m.message_id || `${m.sender_id || 'unknown'}-${m.created_at || m.timestamp || Date.now()}`,
         role: String(m.sender_type || '').toUpperCase() === 'HUMAN' ? 'user' : 'assistant',
@@ -1100,9 +1106,15 @@ function CodeTaskPageInner() {
         desktopContentCacheRef.current = {}
         try { localStorage.setItem(`code-project-${taskId}`, result.path) } catch {}
 
-        // Register file bridge so agent can read files on demand via WS relay
+        // Register file bridge + send project index to backend
         if (selectedAgentId) {
-          registerFileBridge(taskId, selectedAgentId, result.path, result.files).catch(() => {})
+          indexLocalProject(taskId, selectedAgentId, result.path, result.files, CLIENT_WTT_API_BASE, {
+            'Authorization': `Bearer ${session?.accessToken ?? ''}`
+          }).then(indexResult => {
+            if (indexResult.ok) {
+              console.log(`[Project] Indexed ${indexResult.indexed_files} files`)
+            }
+          }).catch(() => {})
         }
 
         if (task?.topic_id) {
@@ -2472,6 +2484,18 @@ function CodeTaskPageInner() {
           ) : fileTree.length > 0 ? (
             <span className="rounded bg-violet-100 px-2 py-1 text-[11px] font-medium text-violet-700">📂 Local Mode</span>
           ) : null}
+          {isDesktop() && (
+            <button
+              onClick={openDirectory}
+              className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              title="Import local project folder for agent to index and access"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                <path fillRule="evenodd" d="M3.75 3A1.75 1.75 0 002 4.75v10.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0018 15.25v-8.5A1.75 1.75 0 0016.25 5h-4.836a.25.25 0 01-.177-.073L9.823 3.513A1.75 1.75 0 008.586 3H3.75zM10 10.25a.75.75 0 01.75.75v1.5h1.5a.75.75 0 010 1.5h-1.5v1.5a.75.75 0 01-1.5 0v-1.5h-1.5a.75.75 0 010-1.5h1.5V11a.75.75 0 01.75-.75z" clipRule="evenodd" />
+              </svg>
+              Import Folder
+            </button>
+          )}
           {task?.repo_url && (
             <button onClick={() => void loadRepoTree()} className={`rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1 text-xs ${tc.textMuted}`}>{repoLoading ? '...' : 'Refresh Tree'}</button>
           )}

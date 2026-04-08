@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
-import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, registerFileBridge } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, indexLocalProject } from '@/lib/desktop'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { CircularProgress } from '@/components/ui/circular-progress'
@@ -348,13 +348,21 @@ function ResearchTaskPageInner() {
   // ── Effects ──────────────────────────────────────────
   useEffect(() => {
     if (!topicMessages) return
-    const mapped: ChatMsg[] = topicMessages.map((m: Record<string, string>) => ({
-      id: m.message_id,
-      role: m.sender_id === selectedAgentId ? 'user' : 'assistant',
-      content: m.content,
-      timestamp: m.timestamp,
-      sender_display_name: m.sender_display_name || agents.find(a => a.agent_id === m.sender_id)?.display_name || m.sender_id,
-    }))
+    const mapped: ChatMsg[] = topicMessages
+      .filter((m: Record<string, string>) => {
+        if (!m.content) return false
+        // Hide PROJECT_INDEX from chat display
+        const sem = (m.semantic_type || '').toUpperCase()
+        if (sem === 'PROJECT_INDEX') return false
+        return true
+      })
+      .map((m: Record<string, string>) => ({
+        id: m.message_id,
+        role: m.sender_id === selectedAgentId ? 'user' : 'assistant',
+        content: m.content,
+        timestamp: m.timestamp,
+        sender_display_name: m.sender_display_name || agents.find(a => a.agent_id === m.sender_id)?.display_name || m.sender_id,
+      }))
     setChatMessages(mapped)
   }, [topicMessages, selectedAgentId])
 
@@ -621,9 +629,15 @@ function ResearchTaskPageInner() {
   const attachLocalFolder = async () => {
     const result = await pickAndScanFolder('Attach folder to research task')
     if (!result || result.files.length === 0) return
-    // Register file bridge for on-demand agent access
+    // Register file bridge + send project index to backend
     if (selectedAgentId) {
-      registerFileBridge(taskId, selectedAgentId, result.path, result.files).catch(() => {})
+      indexLocalProject(taskId, selectedAgentId, result.path, result.files, CLIENT_WTT_API_BASE, {
+        'Authorization': `Bearer ${session?.accessToken ?? ''}`
+      }).then(indexResult => {
+        if (indexResult.ok) {
+          console.log(`[Project] Indexed ${indexResult.indexed_files} files`)
+        }
+      }).catch(() => {})
     }
     const textFiles = result.files.filter(f => f.isText).slice(0, 20)
     const readResults = await readFilesBatch(textFiles.map(f => f.path))
@@ -900,6 +914,18 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-slate-400 dark:text-zinc-500">{papers.length} papers</span>
+          {isDesktop() && (
+            <button
+              onClick={attachLocalFolder}
+              className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              title="Import local project folder for agent to index and access"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                <path fillRule="evenodd" d="M3.75 3A1.75 1.75 0 002 4.75v10.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0018 15.25v-8.5A1.75 1.75 0 0016.25 5h-4.836a.25.25 0 01-.177-.073L9.823 3.513A1.75 1.75 0 008.586 3H3.75zM10 10.25a.75.75 0 01.75.75v1.5h1.5a.75.75 0 010 1.5h-1.5v1.5a.75.75 0 01-1.5 0v-1.5h-1.5a.75.75 0 010-1.5h1.5V11a.75.75 0 01.75-.75z" clipRule="evenodd" />
+              </svg>
+              Import Folder
+            </button>
+          )}
           <button
             onClick={() => router.push(buildAgentUrl(`/tasks/kb/${taskId}`, selectedAgentId))}
             className="text-[10px] px-2 py-1 rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300 hover:bg-indigo-200"
