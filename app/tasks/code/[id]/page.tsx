@@ -15,6 +15,7 @@ import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
+import { isDesktop, getDesktopBridge, pickAndScanFolder, readLocalFile, watchLocalFolder, type ScannedFile } from '@/lib/desktop'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -117,6 +118,49 @@ async function readDirectory(dirHandle: FileSystemDirectoryHandle, parentPath = 
     return a.name.localeCompare(b.name)
   })
   return entries
+}
+
+/** Convert flat ScannedFile[] (from Electron localSync.scanFolder) into a hierarchical FileNode[] tree. */
+function scannedToFileNodes(files: ScannedFile[]): FileNode[] {
+  const root: FileNode[] = []
+  const dirs = new Map<string, FileNode>()
+
+  const ensureDir = (dirPath: string): FileNode => {
+    if (dirs.has(dirPath)) return dirs.get(dirPath)!
+    const parts = dirPath.split('/')
+    const name = parts[parts.length - 1]
+    const node: FileNode = { name, path: dirPath, kind: 'directory', children: [] }
+    dirs.set(dirPath, node)
+    if (parts.length === 1) {
+      root.push(node)
+    } else {
+      const parent = ensureDir(parts.slice(0, -1).join('/'))
+      parent.children!.push(node)
+    }
+    return node
+  }
+
+  for (const f of files) {
+    const parts = f.relativePath.split('/')
+    const fileNode: FileNode = { name: parts[parts.length - 1], path: f.relativePath, kind: 'file' }
+    if (parts.length === 1) {
+      root.push(fileNode)
+    } else {
+      const parentDir = ensureDir(parts.slice(0, -1).join('/'))
+      parentDir.children!.push(fileNode)
+    }
+  }
+
+  // Sort recursively: directories first, then alphabetical
+  const sortNodes = (nodes: FileNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    for (const n of nodes) if (n.children) sortNodes(n.children)
+  }
+  sortNodes(root)
+  return root
 }
 
 // ── File icons by extension (VSCode-style) ─────────────
@@ -560,6 +604,15 @@ function CodeTaskPageInner() {
   const remoteContentCacheRef = useRef<Record<string, string>>({})
   const [sshRemoteDirName, setSshRemoteDirName] = useState('')
 
+  // ── Desktop (Electron) local project state ──────────
+  const [desktopMode, setDesktopMode] = useState(false)
+  const [projectRoot, setProjectRoot] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try { return localStorage.getItem(`code-project-${params.id as string}`) } catch { return null }
+  })
+  const desktopContentCacheRef = useRef<Record<string, string>>({})
+  const desktopWatchCleanupRef = useRef<(() => void) | null>(null)
+
   // ── Local relay detection ──────────────────────────
   const [relayAvailable, setRelayAvailable] = useState<boolean | null>(null)
   const sshApiBase = relayAvailable ? LOCAL_RELAY_URL : REMOTE_SSH_FALLBACK
@@ -580,6 +633,53 @@ function CodeTaskPageInner() {
     check()
     return () => { cancelled = true }
   }, [agentMode])
+
+  // ── Desktop: auto-restore saved project on mount ───
+  useEffect(() => {
+    if (!isDesktop() || !projectRoot || fileTree.length > 0) return
+    let cancelled = false
+    const restore = async () => {
+      try {
+        const result = await import('@/lib/desktop').then(m => m.scanLocalFolder(projectRoot))
+        if (cancelled || !result) return
+        const tree = scannedToFileNodes(result.files)
+        const folderName = result.path.split(/[/\\]/).pop() || result.path
+        setDirName(folderName)
+        setFileTree(tree)
+        setDesktopMode(true)
+        desktopContentCacheRef.current = {}
+      } catch { /* ignore restore failures */ }
+    }
+    restore()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectRoot])
+
+  // ── Desktop: file watcher for external changes ─────
+  useEffect(() => {
+    if (!desktopMode || !projectRoot) return
+    let cleanup: (() => void) | null = null
+    watchLocalFolder(projectRoot, (event) => {
+      if (event.eventType === 'rename') {
+        // File added/removed: re-scan project tree
+        void (async () => {
+          try {
+            const result = await import('@/lib/desktop').then(m => m.scanLocalFolder(projectRoot))
+            if (!result) return
+            setFileTree(scannedToFileNodes(result.files))
+          } catch { /* ignore */ }
+        })()
+      }
+    }).then(c => {
+      cleanup = c
+      desktopWatchCleanupRef.current = c
+    })
+    return () => {
+      cleanup?.()
+      desktopWatchCleanupRef.current = null
+    }
+  }, [desktopMode, projectRoot])
+
   const { data: task, mutate: mutateTask } = useSWR(
     session?.accessToken ? [`task-${taskId}`, session.accessToken] : null,
     async () => {
@@ -633,11 +733,23 @@ function CodeTaskPageInner() {
               for (const p of requested) {
                 const node = findFileNodeByPath(activeTree, p)
                 if (!node || node.kind !== 'file') continue
-                if (agentMode === 'local' && !node.handle) continue
+                // In desktop mode, we don't need node.handle; in browser local mode we do
+                if (agentMode === 'local' && !desktopMode && !node.handle) continue
                 try {
                   let content: string
                   if (selectedFile && selectedFile.path === node.path) {
                     content = modifiedContent
+                  } else if (desktopMode && projectRoot) {
+                    // Desktop: read via Electron IPC
+                    const cached = desktopContentCacheRef.current[node.path]
+                    if (cached !== undefined) {
+                      content = cached
+                    } else {
+                      const read = await readLocalFile(`${projectRoot}/${node.path}`)
+                      if (read === null) continue
+                      content = read
+                      desktopContentCacheRef.current[node.path] = content
+                    }
                   } else if (agentMode === 'remote') {
                     // Read remote file via SSH
                     const cached = remoteContentCacheRef.current[node.path]
@@ -680,7 +792,7 @@ function CodeTaskPageInner() {
         }
       }
     },
-    [task?.topic_id, streamAgentId, fileTree, selectedFile, modifiedContent, session?.accessToken, agentMode, sshTree, sshConfig],
+    [task?.topic_id, streamAgentId, fileTree, selectedFile, modifiedContent, session?.accessToken, agentMode, sshTree, sshConfig, desktopMode, projectRoot],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
@@ -974,6 +1086,33 @@ function CodeTaskPageInner() {
 
   // ── Open Directory ─────────────────────────────────
   const openDirectory = async () => {
+    // Desktop (Electron): use native folder picker + recursive scan
+    if (isDesktop()) {
+      try {
+        const result = await pickAndScanFolder('Open project folder')
+        if (!result) return // cancelled
+        const tree = scannedToFileNodes(result.files)
+        const folderName = result.path.split(/[/\\]/).pop() || result.path
+        setDirName(folderName)
+        setFileTree(tree)
+        setProjectRoot(result.path)
+        setDesktopMode(true)
+        desktopContentCacheRef.current = {}
+        try { localStorage.setItem(`code-project-${taskId}`, result.path) } catch {}
+
+        if (task?.topic_id) {
+          const treeText = buildTreeText(tree)
+          await publishToTopic(
+            `[CODEBASE] ${folderName}\n\`\`\`\n${folderName}/\n${treeText}\n\`\`\`\nCodebase opened with ${countFiles(tree)} files. Ask me to share specific files for analysis.`,
+            'notification',
+          )
+        }
+      } catch {
+        // User cancelled or error
+      }
+      return
+    }
+    // Browser: use File System Access API
     try {
       const dirHandle = await (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker()
       setDirName(dirHandle.name)
@@ -1144,6 +1283,34 @@ function CodeTaskPageInner() {
       }
       return
     }
+    // Desktop (Electron) local mode: read via IPC
+    if (desktopMode && projectRoot && node.kind === 'file') {
+      setSelectedFile(node)
+      setFileLoading(true)
+      setFileContent('')
+      setModifiedContent('// Loading file content...')
+      setIsModified(false)
+      try {
+        const fullPath = `${projectRoot}/${node.path}`
+        const content = await readLocalFile(fullPath)
+        if (content === null) throw new Error('Failed to read file')
+        desktopContentCacheRef.current[node.path] = content
+        setFileContent(content)
+        setModifiedContent(content)
+        setIsModified(false)
+        if (!openFiles.find((f) => f.path === node.path)) {
+          setOpenFiles((prev) => [...prev, node])
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'unknown error'
+        setFileContent('')
+        setModifiedContent(`// Failed to load file\n// ${msg}`)
+      } finally {
+        setFileLoading(false)
+      }
+      return
+    }
+    // Browser File System Access API fallback
     if (!node.handle || node.kind !== 'file') return
     try {
       const content = await readFileContent(node.handle as FileSystemFileHandle)
@@ -1162,8 +1329,24 @@ function CodeTaskPageInner() {
   // ── Save file ──────────────────────────────────────
   const saveFile = async () => {
     if (!isModified || !selectedFile?.path) return
+    // Desktop (Electron) local mode: save via IPC
+    if (desktopMode && projectRoot) {
+      try {
+        const bridge = getDesktopBridge()
+        if (!bridge) throw new Error('Desktop bridge not available')
+        const fullPath = `${projectRoot}/${selectedFile.path}`
+        const result = await bridge.fs.writeFile(fullPath, modifiedContent)
+        if (!result.ok) throw new Error(result.error || 'Write failed')
+        desktopContentCacheRef.current[selectedFile.path] = modifiedContent
+        setFileContent(modifiedContent)
+        setIsModified(false)
+      } catch (e) {
+        alert(`Save failed: ${e instanceof Error ? e.message : 'unknown'}`)
+      }
+      return
+    }
     if (selectedFile?.handle) {
-      // Local filesystem save
+      // Browser File System Access API save
       try {
         const handle = selectedFile.handle as FileSystemFileHandle
         const writable = await handle.createWritable()
@@ -1301,7 +1484,7 @@ function CodeTaskPageInner() {
       return { content: parts.join('\n'), fullCodebase: true }
     }
 
-    // Local mode: existing behavior
+    // Local mode: desktop (Electron IPC) or browser (File System Access API)
     const allFiles: FileNode[] = []
     const collect = (nodes: FileNode[]) => {
       for (const n of nodes) {
@@ -1318,7 +1501,7 @@ function CodeTaskPageInner() {
       const indexed = [
         text,
         '',
-        `[CODEBASE INDEX] ${dirName || 'workspace'}`,
+        `[CODEBASE INDEX] ${dirName || 'workspace'}${desktopMode ? ' (desktop)' : ''}`,
         `files_in_workspace=${allFiles.length}`,
         '',
         '[PROJECT TREE]',
@@ -1341,13 +1524,27 @@ function CodeTaskPageInner() {
     const fileBlocks: string[] = []
 
     for (const f of allFiles) {
-      if (!f.handle) continue
       try {
         let content = ''
         if (selectedFile && f.path === selectedFile.path) {
           content = modifiedContent
-        } else {
+        } else if (desktopMode && projectRoot) {
+          // Desktop: read via Electron IPC (use cache when available)
+          const cached = desktopContentCacheRef.current[f.path]
+          if (cached !== undefined) {
+            content = cached
+          } else {
+            const read = await readLocalFile(`${projectRoot}/${f.path}`)
+            if (read === null) { skipped++; continue }
+            content = read
+            desktopContentCacheRef.current[f.path] = content
+          }
+        } else if (f.handle) {
+          // Browser: File System Access API
           content = await readFileContent(f.handle as FileSystemFileHandle)
+        } else {
+          skipped++
+          continue
         }
         const lang = langFromPath(f.path)
         const block = `\n[FILE] ${f.path}\n\
@@ -1366,7 +1563,7 @@ function CodeTaskPageInner() {
 
     const treeText = buildTreeText(fileTree)
     const header = [
-      `[CODEBASE CONTEXT] ${dirName || 'workspace'}`,
+      `[CODEBASE CONTEXT] ${dirName || 'workspace'}${desktopMode ? ' (desktop)' : ''}`,
       `files_in_workspace=${allFiles.length}, files_included=${included}, files_skipped=${skipped}`,
       `\n[PROJECT TREE]\n\
 \`\`\`\n${dirName || 'workspace'}/\n${treeText}\n\`\`\``,
@@ -2031,6 +2228,52 @@ function CodeTaskPageInner() {
     const rejected = pendingPatches.filter(p => p.status === 'rejected')
     const pending = pendingPatches.filter(p => p.status === 'pending')
 
+    // Desktop local mode: write accepted patches directly to disk
+    if (desktopMode && projectRoot && !reviewingPR && accepted.length > 0) {
+      const bridge = getDesktopBridge()
+      if (bridge) {
+        const applied: string[] = []
+        const failed: string[] = []
+        for (const patch of accepted) {
+          try {
+            const fullPath = `${projectRoot}/${patch.path}`
+            const result = await bridge.fs.writeFile(fullPath, patch.code)
+            if (result.ok) {
+              applied.push(patch.path)
+              desktopContentCacheRef.current[patch.path] = patch.code
+              // Refresh editor if this file is currently open
+              if (selectedFile?.path === patch.path) {
+                setFileContent(patch.code)
+                setModifiedContent(patch.code)
+                setIsModified(false)
+              }
+            } else {
+              failed.push(patch.path)
+            }
+          } catch {
+            failed.push(patch.path)
+          }
+        }
+        const parts: string[] = [`## Code Changes Applied to Disk`]
+        if (applied.length > 0) {
+          parts.push(`\n✅ **Written** (${applied.length} file${applied.length > 1 ? 's' : ''})：`)
+          applied.forEach(p => parts.push(`- ${p}`))
+        }
+        if (failed.length > 0) {
+          parts.push(`\n❌ **Failed** (${failed.length} file${failed.length > 1 ? 's' : ''})：`)
+          failed.forEach(p => parts.push(`- ${p}`))
+        }
+        if (rejected.length > 0) {
+          parts.push(`\n🚫 **Rejected** (${rejected.length} file${rejected.length > 1 ? 's' : ''})：`)
+          rejected.forEach(p => parts.push(`- ${p.path}`))
+        }
+        setChatInput(parts.join('\n'))
+        setRightTab('chat')
+        exitDiffReview()
+        return
+      }
+    }
+
     if (reviewingPR) {
       // PR-based review
       const parts: string[] = [`## PR #${reviewingPR.number} Review: ${reviewingPR.title}`]
@@ -2148,18 +2391,38 @@ function CodeTaskPageInner() {
   }, [chatMessages, awaitingAgent])
 
   // legacy local/remote helpers kept temporarily; mark as used until full cleanup
-  void setAgentMode
   void sshConnecting
   void sshTesting
   void sshTestResult
   void sshPanelOpen
-  void openDirectory
   void testSshConnection
   void connectSsh
   void refreshSshTree
+  void setAgentMode
 
   const activeTree = task?.repo_url ? repoTree : (agentMode === 'remote' ? sshTree : fileTree)
   const fileCount = useMemo(() => countFiles(activeTree), [activeTree])
+
+  // Project summary for local mode
+  const projectSummary = useMemo(() => {
+    if (!fileTree.length || task?.repo_url) return null
+    const byExt = new Map<string, number>()
+    const configs: string[] = []
+    const CONFIG_NAMES = new Set(['package.json', 'requirements.txt', 'cargo.toml', 'go.mod', 'pyproject.toml', 'pom.xml', 'build.gradle', 'tsconfig.json', 'makefile', 'cmakelists.txt'])
+    const walk = (nodes: FileNode[]) => {
+      for (const n of nodes) {
+        if (n.kind === 'file') {
+          const ext = n.name.includes('.') ? n.name.split('.').pop()!.toLowerCase() : '(no ext)'
+          byExt.set(ext, (byExt.get(ext) || 0) + 1)
+          if (CONFIG_NAMES.has(n.name.toLowerCase())) configs.push(n.path)
+        }
+        if (n.children) walk(n.children)
+      }
+    }
+    walk(fileTree)
+    const topLangs = Array.from(byExt.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    return { topLangs, configs }
+  }, [fileTree, task?.repo_url])
 
   if (status === 'loading') {
     return (
@@ -2190,7 +2453,13 @@ function CodeTaskPageInner() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">🐙 GitHub Repo Mode</span>
+          {task?.repo_url ? (
+            <span className="rounded bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">🐙 GitHub Repo Mode</span>
+          ) : desktopMode ? (
+            <span className="rounded bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700">💻 Desktop Local</span>
+          ) : fileTree.length > 0 ? (
+            <span className="rounded bg-violet-100 px-2 py-1 text-[11px] font-medium text-violet-700">📂 Local Mode</span>
+          ) : null}
           {task?.repo_url && (
             <button onClick={() => void loadRepoTree()} className={`rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1 text-xs ${tc.textMuted}`}>{repoLoading ? '...' : 'Refresh Tree'}</button>
           )}
@@ -2363,13 +2632,60 @@ function CodeTaskPageInner() {
                 </>
               )}
             </>
+          ) : fileTree.length > 0 ? (
+            /* Local project open (desktop or browser) */
+            <>
+              <div className={`mb-2 rounded border ${desktopMode ? 'border-blue-200 bg-blue-50' : 'border-violet-200 bg-violet-50'} p-2 text-[10px] ${desktopMode ? 'text-blue-700' : 'text-violet-700'}`}>
+                <div className="flex items-center gap-1 font-semibold truncate" title={projectRoot || dirName}>
+                  <span>{desktopMode ? '💻' : '📂'}</span>
+                  <span className="truncate">{dirName || 'Local Project'}</span>
+                  {desktopMode && <span className="ml-auto rounded bg-blue-200 px-1 text-[9px] font-medium">Desktop</span>}
+                </div>
+                {projectRoot && <div className="mt-0.5 truncate text-[9px] opacity-70">{projectRoot}</div>}
+                {projectSummary && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {projectSummary.topLangs.map(([ext, count]) => (
+                      <span key={ext} className={`rounded ${desktopMode ? 'bg-blue-100' : 'bg-violet-100'} px-1 py-0 text-[9px]`}>.{ext} ({count})</span>
+                    ))}
+                  </div>
+                )}
+                {projectSummary?.configs.length ? (
+                  <div className="mt-0.5 text-[9px] opacity-80">📦 {projectSummary.configs.map(c => c.split('/').pop()).join(', ')}</div>
+                ) : null}
+              </div>
+              <div className="mb-1 flex items-center justify-between">
+                <p className={`text-xs font-semibold ${tc.textMuted}`}>EXPLORER</p>
+                <div className="flex items-center gap-0.5">
+                  <button onClick={() => void openDirectory()} className={`rounded p-0.5 text-[10px] ${tc.textMuted} hover:bg-slate-200`} title="Open Another Folder">📂↻</button>
+                  <button onClick={() => setCollapseSignal(s => s + 1)} className={`rounded p-0.5 text-[10px] ${tc.textMuted} hover:bg-slate-200`} title="Collapse All">⊟</button>
+                  <span className={`ml-1 text-[9px] ${tc.textMuted}`}>{fileCount}</span>
+                </div>
+              </div>
+              {fileTree.map((node) => (
+                <FileTreeNode
+                  key={node.path}
+                  node={node}
+                  depth={0}
+                  selectedPath={selectedFile?.path || ''}
+                  onSelect={selectFile}
+                  forceExpanded={forceExpandedPaths}
+                  collapseSignal={collapseSignal}
+                />
+              ))}
+            </>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-              <p className="text-3xl">🐙</p>
-              <p className={`text-sm ${tc.textMuted}`}>GitHub repo is required for Code Task</p>
-              <div className="flex gap-2">
-                <button onClick={linkRepo} disabled={repoLinking} className={`rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1.5 text-xs ${tc.textMuted} disabled:opacity-50`}>{repoLinking ? 'Linking...' : 'Link Repo'}</button>
-                <button onClick={createRepo} disabled={repoCreating} className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white disabled:opacity-50">{repoCreating ? 'Creating...' : 'Create Repo'}</button>
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-3">
+              <p className="text-3xl">💻</p>
+              <p className={`text-sm font-medium ${tc.text}`}>Open a Project</p>
+              <p className={`text-[11px] ${tc.textMuted}`}>Open a local folder or link a GitHub repo</p>
+              <div className="flex flex-col gap-2 w-full">
+                <button onClick={() => void openDirectory()} className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs text-white hover:bg-blue-600">
+                  {isDesktop() ? '📂 Open Local Folder' : '📂 Open Directory'}
+                </button>
+                <div className="flex gap-2">
+                  <button onClick={linkRepo} disabled={repoLinking} className={`flex-1 rounded-lg border ${tc.border} ${tc.inputBg} px-3 py-1.5 text-xs ${tc.textMuted} disabled:opacity-50`}>{repoLinking ? 'Linking...' : '🐙 Link Repo'}</button>
+                  <button onClick={createRepo} disabled={repoCreating} className="flex-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white disabled:opacity-50">{repoCreating ? 'Creating...' : '➕ Create Repo'}</button>
+                </div>
               </div>
             </div>
           )}
