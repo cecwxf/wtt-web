@@ -158,6 +158,13 @@ export default function KnowledgeBasePage() {
   const [folderSelected, setFolderSelected] = useState<Set<string>>(new Set())
   const [folderImporting, setFolderImporting] = useState(false)
   const [folderWatchCleanup, setFolderWatchCleanup] = useState<(() => void) | null>(null)
+  // Local compile state (client-orchestrated, no server upload)
+  interface LocalKBSource { path: string; name: string; relativePath: string; sourceType: string; size: number; hash: string; status: 'pending' | 'compiling' | 'compiled' | 'error' }
+  const [localSources, setLocalSources] = useState<LocalKBSource[]>([])
+  const [localCompiling, setLocalCompiling] = useState(false)
+  const [localCompileProgress, setLocalCompileProgress] = useState<{ current: number; total: number } | null>(null)
+  const localCompileCancelRef = useRef(false)
+  const webFolderInputRef = useRef<HTMLInputElement>(null)
   const [wikiLang, setWikiLang] = useState<'en' | 'zh'>('en')
   const [schemaText, setSchemaText] = useState('')
   const [schemaSaving, setSchemaSaving] = useState(false)
@@ -573,6 +580,220 @@ export default function KnowledgeBasePage() {
     setFolderWatchCleanup(() => cleanup)
   }
 
+  // ── Local Compile (client-orchestrated, no server upload) ──
+
+  /** Build local source list from folder scan without uploading */
+  const buildLocalSources = () => {
+    if (!folderScan || folderSelected.size === 0) return
+    const sources: LocalKBSource[] = folderScan.files
+      .filter(f => folderSelected.has(f.path) && f.isText)
+      .map(f => ({
+        path: f.path,
+        name: f.name,
+        relativePath: f.relativePath,
+        sourceType: f.extension.match(/^\.(py|js|ts|tsx|jsx|go|rs|java|c|cpp|h|hpp|rb|sh|css|scss|sql)$/) ? 'code' : 'file',
+        size: f.size,
+        hash: f.hash,
+        status: 'pending' as const,
+      }))
+    setLocalSources(sources)
+    return sources
+  }
+
+  /** Wait for a new article to appear in kb_articles after a compile message */
+  const waitForArticle = async (startTime: number, timeoutMs: number): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      if (localCompileCancelRef.current) return false
+      await new Promise(r => setTimeout(r, 5000))
+      try {
+        const r = await fetch(`${base}/tasks/${taskId}/kb/toc`, { headers: { Authorization: `Bearer ${token}` } })
+        if (r.ok) {
+          const data = await r.json()
+          const articles = data.articles || data.toc || []
+          const recent = articles.find((a: { created_at?: string; updated_at?: string }) => {
+            const t = new Date(a.updated_at || a.created_at || 0).getTime()
+            return t > startTime
+          })
+          if (recent) return true
+        }
+      } catch { /* retry */ }
+    }
+    return false
+  }
+
+  /** Client-orchestrated compile: read files locally, send content in topic messages */
+  const compileLocal = async (sources?: LocalKBSource[]) => {
+    const srcs = sources || localSources
+    if (srcs.length === 0 || !task?.topic_id) return
+    setLocalCompiling(true)
+    localCompileCancelRef.current = false
+    setLocalCompileProgress({ current: 0, total: srcs.length })
+    setActiveTab('qa')
+
+    for (let i = 0; i < srcs.length; i++) {
+      if (localCompileCancelRef.current) break
+      const src = srcs[i]
+      setLocalCompileProgress({ current: i + 1, total: srcs.length })
+      setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'compiling' } : s))
+
+      // Read file content locally
+      let content: string | null = null
+      if (isDesktop()) {
+        content = await readLocalFile(src.path)
+      }
+      if (!content) {
+        setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
+        continue
+      }
+
+      // Truncate very large files
+      const maxLen = 60000
+      const truncated = content.length > maxLen ? content.slice(0, maxLen) + '\n... (truncated)' : content
+
+      // Build compile prompt with inline content
+      const prompt = [
+        `[AUTOMATED KB COMPILE — DO NOT GREET, JUST EXECUTE]`,
+        ``,
+        `Read the following source content and write wiki article(s).`,
+        `Use wtt_kb_write(task_id="${taskId}", slug=..., title=..., content=..., source_ids="${src.relativePath}") to save each article.`,
+        `Write in Chinese, keep technical terms in English. Min 2000 chars per article.`,
+        ``,
+        `Source: "${src.name}" (type: ${src.sourceType}, path: ${src.relativePath})`,
+        `---`,
+        truncated,
+      ].join('\n')
+
+      const beforeSend = Date.now()
+      try {
+        await fetch(`${base}/tasks/${taskId}/kb/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ content: prompt }),
+        })
+      } catch (e) {
+        console.error('Failed to send compile message:', e)
+        setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
+        continue
+      }
+
+      // Wait for article creation (up to 2 minutes per source)
+      const created = await waitForArticle(beforeSend, 120_000)
+      setLocalSources(prev => prev.map(s =>
+        s.path === src.path ? { ...s, status: created ? 'compiled' : 'error' } : s
+      ))
+      if (created) mutateToc()
+    }
+
+    setLocalCompiling(false)
+    mutateToc()
+    mutateChat()
+  }
+
+  const cancelLocalCompile = () => { localCompileCancelRef.current = true }
+
+  /** Folder scan + direct compile (no server upload) */
+  const scanAndCompileLocal = async () => {
+    if (!folderScan || folderSelected.size === 0) return
+    const sources = buildLocalSources()
+    if (sources && sources.length > 0) {
+      compileLocal(sources)
+    }
+  }
+
+  /** Web browser: scan folder via <input webkitdirectory> */
+  const handleWebFolderScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files
+    if (!fileList || fileList.length === 0) return
+    const textExts = /\.(md|mdx|txt|rst|org|py|js|ts|tsx|jsx|go|rs|java|c|cpp|h|hpp|rb|sh|css|scss|sql|json|yaml|yml|toml|xml|csv|html|htm)$/i
+    const files = Array.from(fileList).filter(f => textExts.test(f.name) && f.size > 0 && f.size < 5 * 1024 * 1024)
+    if (files.length === 0) { alert('No supported text files found in folder.'); return }
+
+    // Build local sources directly from web File objects (no server upload)
+    const sources: LocalKBSource[] = []
+    const webFileContents: Record<string, string> = {}
+    for (const file of files.slice(0, 100)) {
+      try {
+        const content = await file.text()
+        const relativePath = file.webkitRelativePath || file.name
+        webFileContents[relativePath] = content
+        sources.push({
+          path: relativePath,
+          name: file.name,
+          relativePath,
+          sourceType: file.name.match(/\.(py|js|ts|tsx|jsx|go|rs|java|c|cpp|h|hpp|rb|sh|css|scss|sql)$/) ? 'code' : 'file',
+          size: file.size,
+          hash: '',
+          status: 'pending',
+        })
+      } catch { /* skip binary */ }
+    }
+    setLocalSources(sources)
+    // Store content in a ref-like closure for compileLocalWeb
+    if (sources.length > 0) {
+      compileLocalWeb(sources, webFileContents)
+    }
+    if (e.target) e.target.value = ''
+  }
+
+  /** Web compile: files already read into memory, send inline */
+  const compileLocalWeb = async (srcs: LocalKBSource[], contents: Record<string, string>) => {
+    if (srcs.length === 0 || !task?.topic_id) return
+    setLocalCompiling(true)
+    localCompileCancelRef.current = false
+    setLocalCompileProgress({ current: 0, total: srcs.length })
+    setActiveTab('qa')
+
+    for (let i = 0; i < srcs.length; i++) {
+      if (localCompileCancelRef.current) break
+      const src = srcs[i]
+      setLocalCompileProgress({ current: i + 1, total: srcs.length })
+      setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'compiling' } : s))
+
+      const content = contents[src.relativePath]
+      if (!content) {
+        setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
+        continue
+      }
+
+      const maxLen = 60000
+      const truncated = content.length > maxLen ? content.slice(0, maxLen) + '\n... (truncated)' : content
+      const prompt = [
+        `[AUTOMATED KB COMPILE — DO NOT GREET, JUST EXECUTE]`,
+        ``,
+        `Read the following source content and write wiki article(s).`,
+        `Use wtt_kb_write(task_id="${taskId}", slug=..., title=..., content=..., source_ids="${src.relativePath}") to save each article.`,
+        `Write in Chinese, keep technical terms in English. Min 2000 chars per article.`,
+        ``,
+        `Source: "${src.name}" (type: ${src.sourceType}, path: ${src.relativePath})`,
+        `---`,
+        truncated,
+      ].join('\n')
+
+      const beforeSend = Date.now()
+      try {
+        await fetch(`${base}/tasks/${taskId}/kb/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ content: prompt }),
+        })
+      } catch {
+        setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
+        continue
+      }
+
+      const created = await waitForArticle(beforeSend, 120_000)
+      setLocalSources(prev => prev.map(s =>
+        s.path === src.path ? { ...s, status: created ? 'compiled' : 'error' } : s
+      ))
+      if (created) mutateToc()
+    }
+
+    setLocalCompiling(false)
+    mutateToc()
+    mutateChat()
+  }
+
   // Category colors for graph
   const CATEGORY_COLORS: Record<string, string> = {
     technology: '#6366f1', research: '#8b5cf6', engineering: '#3b82f6',
@@ -644,6 +865,23 @@ export default function KnowledgeBasePage() {
               {compileProgress.percent}% — {compileProgress.compiled}/{compileProgress.total} sources → {compileProgress.article_count} articles
               {(compileProgress.error ?? 0) > 0 && <span className="text-red-500 ml-1">({compileProgress.error} errors)</span>}
             </span>
+          </div>
+        </div>
+      )}
+      {localCompiling && localCompileProgress && (
+        <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-200 dark:border-emerald-800">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-3 bg-emerald-100 dark:bg-emerald-900 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.round((localCompileProgress.current / localCompileProgress.total) * 100)}%` }}
+              />
+            </div>
+            <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+              💻 Local: {localCompileProgress.current}/{localCompileProgress.total} sources
+              ({localSources.filter(s => s.status === 'compiled').length} done, {localSources.filter(s => s.status === 'error').length} errors)
+            </span>
+            <button onClick={cancelLocalCompile} className="text-xs text-red-500 hover:text-red-600">⏹ Stop</button>
           </div>
         </div>
       )}
@@ -998,24 +1236,33 @@ export default function KnowledgeBasePage() {
                 >
                   {fileUploading ? '⏳ Uploading...' : '📁 Import Files'}
                 </button>
-                {isDesktop() && (
+                {isDesktop() ? (
+                  <>
+                    <button
+                      onClick={importLocalFiles}
+                      disabled={fileUploading}
+                      className="px-4 py-2 text-sm rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+                    >
+                      💻 Browse Local
+                    </button>
+                    <button
+                      onClick={scanFolder}
+                      disabled={folderImporting || localCompiling}
+                      className="px-4 py-2 text-sm rounded-lg bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50"
+                    >
+                      📂 Import Folder
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={importLocalFiles}
-                    disabled={fileUploading}
-                    className="px-4 py-2 text-sm rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
-                  >
-                    💻 Browse Local
-                  </button>
-                )}
-                {isDesktop() && (
-                  <button
-                    onClick={scanFolder}
-                    disabled={folderImporting}
+                    onClick={() => webFolderInputRef.current?.click()}
+                    disabled={localCompiling}
                     className="px-4 py-2 text-sm rounded-lg bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50"
                   >
-                    📂 Import Folder
+                    📂 Local Folder
                   </button>
                 )}
+                <input ref={webFolderInputRef} type="file" className="hidden" onChange={handleWebFolderScan} {...{ webkitdirectory: '', directory: '' } as Record<string, string>} />
                 <span className="text-xs text-slate-400 dark:text-zinc-500">
                   PDF, Markdown, TXT, Code, DOCX, CSV, JSON — up to 10MB each
                 </span>
@@ -1079,6 +1326,14 @@ export default function KnowledgeBasePage() {
                       🚀 Import & Compile
                     </button>
                     <button
+                      onClick={scanAndCompileLocal}
+                      disabled={localCompiling || folderSelected.size === 0}
+                      className="px-3 py-1.5 text-xs rounded bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+                      title="Compile directly — files stay local, only articles saved to server"
+                    >
+                      {localCompiling ? '⏳ Compiling...' : '💻 Compile Local'}
+                    </button>
+                    <button
                       onClick={toggleFolderWatch}
                       className={`px-3 py-1.5 text-xs rounded ${folderWatchCleanup ? 'bg-amber-500 hover:bg-amber-600' : 'bg-zinc-500 hover:bg-zinc-600'} text-white`}
                     >
@@ -1114,6 +1369,52 @@ export default function KnowledgeBasePage() {
 
             {/* Three-section source tree */}
             <div className="max-w-3xl mx-auto space-y-6">
+
+              {/* ── 💻 Local Sources (not uploaded) ── */}
+              {localSources.length > 0 && (
+                <details open className="border rounded-lg dark:border-zinc-700 overflow-hidden">
+                  <summary className="flex items-center gap-2 px-4 py-3 bg-emerald-50 dark:bg-emerald-950/20 cursor-pointer select-none">
+                    <span className="text-lg">💻</span>
+                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Local Sources (not uploaded)</span>
+                    <span className="ml-auto text-xs text-emerald-500 dark:text-emerald-400">
+                      {localSources.filter(s => s.status === 'compiled').length}/{localSources.length} compiled
+                    </span>
+                  </summary>
+                  <div className="p-3 space-y-1">
+                    {localSources.map(s => (
+                      <div key={s.path} className="flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                        <span>{s.status === 'compiled' ? '✅' : s.status === 'compiling' ? '🔄' : s.status === 'error' ? '❌' : '⏳'}</span>
+                        <span className="flex-1 truncate text-slate-600 dark:text-zinc-400">{s.relativePath}</span>
+                        <span className="text-zinc-400 whitespace-nowrap">
+                          {s.size < 1024 ? `${s.size} B` : `${(s.size / 1024).toFixed(1)} KB`}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                          s.status === 'compiled' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
+                            : s.status === 'compiling' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                            : s.status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                            : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                        }`}>{s.status}</span>
+                      </div>
+                    ))}
+                    {!localCompiling && localSources.some(s => s.status === 'pending' || s.status === 'error') && (
+                      <div className="flex gap-2 mt-2 pt-2 border-t dark:border-zinc-700">
+                        <button
+                          onClick={() => compileLocal()}
+                          className="px-3 py-1.5 text-xs rounded bg-emerald-500 text-white hover:bg-emerald-600"
+                        >
+                          💻 Compile Remaining
+                        </button>
+                        <button
+                          onClick={() => setLocalSources([])}
+                          className="px-3 py-1.5 text-xs rounded bg-zinc-400 text-white hover:bg-zinc-500"
+                        >
+                          ✕ Clear
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
 
               {/* ── 📥 Raw Sources ── */}
               <details open className="border rounded-lg dark:border-zinc-700 overflow-hidden">

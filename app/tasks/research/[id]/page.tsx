@@ -171,6 +171,8 @@ function ResearchTaskPageInner() {
   const [sending, setSending] = useState(false)
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const webFileRef = useRef<HTMLInputElement>(null)
+  const webFolderRef = useRef<HTMLInputElement>(null)
 
   // Quote-to-chat & context menu
   const readerRef = useRef<HTMLDivElement>(null)
@@ -635,6 +637,44 @@ function ResearchTaskPageInner() {
     if (textFiles.length < result.files.length) {
       alert(`Attached ${attached} text files. ${result.files.length - textFiles.length} binary/extra files skipped (max 20).`)
     }
+  }
+
+  // Web fallback: attach files via <input type="file">
+  const handleWebFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    for (const file of Array.from(files)) {
+      if (file.size > 5 * 1024 * 1024) continue
+      try {
+        const content = await file.text()
+        const truncated = content.length > 32000 ? content.slice(0, 32000) + '\n... (truncated)' : content
+        const token = `📎 **${file.name}** (${(file.size / 1024).toFixed(1)} KB)\n\`\`\`\n${truncated}\n\`\`\``
+        setPendingAttachments(prev => [...prev, token])
+      } catch { /* binary file, skip */ }
+    }
+    if (e.target) e.target.value = ''
+  }
+
+  // Web fallback: attach folder via <input webkitdirectory>
+  const handleWebFolderAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    const textFiles = Array.from(files).filter(f => f.size < 2 * 1024 * 1024 && f.size > 0).slice(0, 20)
+    let attached = 0
+    for (const file of textFiles) {
+      try {
+        const content = await file.text()
+        const truncated = content.length > 16000 ? content.slice(0, 16000) + '\n... (truncated)' : content
+        const relativePath = file.webkitRelativePath || file.name
+        const token = `📎 **${relativePath}** (${(file.size / 1024).toFixed(1)} KB)\n\`\`\`\n${truncated}\n\`\`\``
+        setPendingAttachments(prev => [...prev, token])
+        attached++
+      } catch { /* binary file, skip */ }
+    }
+    if (attached < Array.from(files).length) {
+      alert(`Attached ${attached} text files. ${Array.from(files).length - attached} files skipped (binary/too large/max 20).`)
+    }
+    if (e.target) e.target.value = ''
   }
 
   const sendMessage = async (text?: string) => {
@@ -1859,6 +1899,24 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
                     className="rounded-lg border border-cyan-300 px-2 py-2 text-xs text-cyan-600 hover:bg-cyan-50 disabled:opacity-50"
                     title="Attach local folder"
                   >📂</button>
+                </>
+              )}
+              {!isDesktop() && (
+                <>
+                  <button
+                    onClick={() => webFileRef.current?.click()}
+                    disabled={sending}
+                    className="rounded-lg border border-emerald-300 px-2 py-2 text-xs text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+                    title="Attach local files (no upload)"
+                  >📄</button>
+                  <button
+                    onClick={() => webFolderRef.current?.click()}
+                    disabled={sending}
+                    className="rounded-lg border border-cyan-300 px-2 py-2 text-xs text-cyan-600 hover:bg-cyan-50 disabled:opacity-50"
+                    title="Attach local folder (no upload)"
+                  >📂</button>
+                  <input ref={webFileRef} type="file" multiple accept=".pdf,.md,.txt,.docx,.html,.csv,.json,.py,.js,.ts,.tsx,.go,.rs,.java,.c,.cpp,.rb,.sh" className="hidden" onChange={handleWebFileAttach} />
+                  <input ref={webFolderRef} type="file" className="hidden" onChange={handleWebFolderAttach} {...{ webkitdirectory: '', directory: '' } as Record<string, string>} />
                 </>
               )}
               <textarea
