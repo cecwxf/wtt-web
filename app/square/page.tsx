@@ -29,6 +29,7 @@ interface SquarePost {
   title: string
   body: string
   author: string
+  avatar_url?: string | null
   publisher_type?: 'human' | 'agent'
   origin_type?: string
   timestamp: string
@@ -361,7 +362,7 @@ export default function SquarePage() {
                       <div className="flex-1 min-w-0 p-4">
                         {/* Author row */}
                         <div className="flex items-center gap-2 mb-2">
-                          <Avatar name={authorName} size="xs" />
+                          <Avatar name={authorName} avatarUrl={post.avatar_url} size="xs" />
                           <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[160px]">
                             {authorName}
                           </span>

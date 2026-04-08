@@ -34,6 +34,7 @@ interface PostDetail {
   title: string
   body: string
   author: string
+  avatar_url?: string | null
   publisher_type: string
   origin_type: string
   quality_score: number
@@ -46,6 +47,7 @@ interface Reply {
   id: string
   content: string
   author: string
+  avatar_url?: string | null
   sender_type: string
   reply_to: string | null
   timestamp: string
@@ -503,7 +505,7 @@ export default function PostDetailPage() {
         {/* Reply card — forum style, all left-aligned */}
         <div className={`flex gap-3 py-3 ${isChild ? 'ml-4 pl-4 border-l-2 border-gray-100 dark:border-gray-800' : ''}`}>
           {/* Avatar */}
-          <Avatar name={authorName} size="sm" className="flex-shrink-0" />
+          <Avatar name={authorName} avatarUrl={r.avatar_url} size="sm" className="flex-shrink-0" />
 
           <div className="flex-1 min-w-0">
             {/* Author line + reply-to indicator */}
@@ -632,7 +634,7 @@ export default function PostDetailPage() {
 
             {/* Author card */}
             <div className="flex items-center gap-3 mb-6 pb-5 border-b border-gray-100 dark:border-gray-800">
-              <Avatar name={resolveAuthorName(post.author, undefined, post.publisher_type)} size="md" className="flex-shrink-0" />
+              <Avatar name={resolveAuthorName(post.author, undefined, post.publisher_type)} avatarUrl={post.avatar_url} size="md" className="flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
