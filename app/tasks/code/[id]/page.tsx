@@ -2360,11 +2360,18 @@ function CodeTaskPageInner() {
         if (!r.ok) throw new Error(await r.text())
         void mutateTask()
       } else {
-        const transport = await publishToTopic(displayContent, 'post', 'HUMAN')
-        // Only do immediate HTTP backfill when WS is not connected and publish used HTTP fallback.
-        if (transport === 'http' && wsState !== 'connected') {
-          void mutateTopicMessages()
-        }
+        // Local mode: also use chat/send to trigger proper inference pipeline
+        const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          },
+          signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+          body: JSON.stringify({ content: displayContent, sender_type: 'HUMAN', semantic_type: 'post', auto_run: task?.status === 'todo', include_task_context: task?.status === 'todo' }),
+        })
+        if (!r.ok) throw new Error(await r.text())
+        void mutateTask()
         if (built.fullCodebase) {
           const at = agentMode === 'remote' ? sshTree : fileTree
           const adn = agentMode === 'remote' ? sshRemoteDirName : dirName

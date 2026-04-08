@@ -601,21 +601,63 @@ export default function KnowledgeBasePage() {
   }
 
   /** Wait for a new article to appear in kb_articles after a compile message */
-  const waitForArticle = async (startTime: number, timeoutMs: number): Promise<boolean> => {
+  /** Parse ---ARTICLE_START--- format from agent text response */
+  const parseTextArticle = (text: string): { title: string; slug: string; content: string } | null => {
+    const m = text.match(/---ARTICLE_START---\s*\n\s*TITLE:\s*(.+)\n\s*SLUG:\s*(.+)\n\s*---\n([\s\S]*?)---ARTICLE_END---/)
+    if (!m) return null
+    return { title: m[1].trim(), slug: m[2].trim(), content: m[3].trim() }
+  }
+
+  /** Save a text-based article directly via REST API */
+  const saveArticleDirect = async (title: string, slug: string, content: string, sourceId: string): Promise<boolean> => {
+    try {
+      const resp = await fetch(`${base}/tasks/${taskId}/kb/articles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          slug, title, content_markdown: content,
+          content_markdown_zh: content, source_ids: sourceId,
+          summary: content.slice(0, 200), category: 'local',
+        }),
+      })
+      return resp.ok
+    } catch { return false }
+  }
+
+  const waitForArticle = async (startTime: number, timeoutMs: number, sourceId?: string): Promise<boolean> => {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
       if (localCompileCancelRef.current) return false
       await new Promise(r => setTimeout(r, 5000))
       try {
+        // Check if article was created via MCP tool
         const r = await fetch(`${base}/tasks/${taskId}/kb/toc`, { headers: { Authorization: `Bearer ${token}` } })
         if (r.ok) {
           const data = await r.json()
           const articles = data.articles || data.toc || []
           const recent = articles.find((a: { created_at?: string; updated_at?: string }) => {
             const t = new Date(a.updated_at || a.created_at || 0).getTime()
-            return t > startTime
+            return t > startTime - 3000
           })
           if (recent) return true
+        }
+
+        // Fallback: check chat messages for text-based article output
+        const chatResp = await fetch(`${base}/tasks/${taskId}/kb/messages?limit=5`, { headers: { Authorization: `Bearer ${token}` } })
+        if (chatResp.ok) {
+          const msgs = await chatResp.json()
+          const agentMsgs = (msgs.messages || msgs || []).filter(
+            (m: { sender_type?: string; created_at?: string }) =>
+              m.sender_type?.toUpperCase() === 'AGENT' &&
+              new Date(m.created_at || 0).getTime() > startTime - 3000
+          )
+          for (const msg of agentMsgs) {
+            const parsed = parseTextArticle(msg.content || '')
+            if (parsed) {
+              const saved = await saveArticleDirect(parsed.title, parsed.slug, parsed.content, sourceId || '')
+              if (saved) return true
+            }
+          }
         }
       } catch { /* retry */ }
     }
@@ -655,9 +697,24 @@ export default function KnowledgeBasePage() {
       const prompt = [
         `[AUTOMATED KB COMPILE — DO NOT GREET, JUST EXECUTE]`,
         ``,
-        `Read the following source content and write wiki article(s).`,
-        `Use wtt_kb_write(task_id="${taskId}", slug=..., title=..., content=..., source_ids="${src.relativePath}") to save each article.`,
-        `Write in Chinese, keep technical terms in English. Min 2000 chars per article.`,
+        `You are a wiki compiler. Read the source content below and write a comprehensive wiki article.`,
+        ``,
+        `IMPORTANT: You MUST save the article using the wtt_kb_write MCP tool:`,
+        `  wtt_kb_write(task_id="${taskId}", slug="<url-friendly-slug>", title="<article title>", content_markdown="<full article in markdown>", source_ids="${src.relativePath}")`,
+        ``,
+        `If the MCP tool is not available, output the article in this exact format:`,
+        `---ARTICLE_START---`,
+        `TITLE: <article title>`,
+        `SLUG: <url-friendly-slug>`,
+        `---`,
+        `<full article content in markdown>`,
+        `---ARTICLE_END---`,
+        ``,
+        `Requirements:`,
+        `- Write in Chinese, keep technical terms in English`,
+        `- Minimum 2000 characters per article`,
+        `- Include code examples if the source contains code`,
+        `- Organize with clear headings (## / ###)`,
         ``,
         `Source: "${src.name}" (type: ${src.sourceType}, path: ${src.relativePath})`,
         `---`,
@@ -666,11 +723,16 @@ export default function KnowledgeBasePage() {
 
       const beforeSend = Date.now()
       try {
-        await fetch(`${base}/tasks/${taskId}/kb/chat`, {
+        const resp = await fetch(`${base}/tasks/${taskId}/kb/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ content: prompt }),
         })
+        if (!resp.ok) {
+          console.error('[KB] compile chat/send failed:', resp.status)
+          setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
+          continue
+        }
       } catch (e) {
         console.error('Failed to send compile message:', e)
         setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
@@ -678,7 +740,7 @@ export default function KnowledgeBasePage() {
       }
 
       // Wait for article creation (up to 2 minutes per source)
-      const created = await waitForArticle(beforeSend, 120_000)
+      const created = await waitForArticle(beforeSend, 120_000, src.relativePath)
       setLocalSources(prev => prev.map(s =>
         s.path === src.path ? { ...s, status: created ? 'compiled' : 'error' } : s
       ))
@@ -761,9 +823,24 @@ export default function KnowledgeBasePage() {
       const prompt = [
         `[AUTOMATED KB COMPILE — DO NOT GREET, JUST EXECUTE]`,
         ``,
-        `Read the following source content and write wiki article(s).`,
-        `Use wtt_kb_write(task_id="${taskId}", slug=..., title=..., content=..., source_ids="${src.relativePath}") to save each article.`,
-        `Write in Chinese, keep technical terms in English. Min 2000 chars per article.`,
+        `You are a wiki compiler. Read the source content below and write a comprehensive wiki article.`,
+        ``,
+        `IMPORTANT: You MUST save the article using the wtt_kb_write MCP tool:`,
+        `  wtt_kb_write(task_id="${taskId}", slug="<url-friendly-slug>", title="<article title>", content_markdown="<full article in markdown>", source_ids="${src.relativePath}")`,
+        ``,
+        `If the MCP tool is not available, output the article in this exact format:`,
+        `---ARTICLE_START---`,
+        `TITLE: <article title>`,
+        `SLUG: <url-friendly-slug>`,
+        `---`,
+        `<full article content in markdown>`,
+        `---ARTICLE_END---`,
+        ``,
+        `Requirements:`,
+        `- Write in Chinese, keep technical terms in English`,
+        `- Minimum 2000 characters per article`,
+        `- Include code examples if the source contains code`,
+        `- Organize with clear headings (## / ###)`,
         ``,
         `Source: "${src.name}" (type: ${src.sourceType}, path: ${src.relativePath})`,
         `---`,
@@ -772,17 +849,22 @@ export default function KnowledgeBasePage() {
 
       const beforeSend = Date.now()
       try {
-        await fetch(`${base}/tasks/${taskId}/kb/chat`, {
+        const resp = await fetch(`${base}/tasks/${taskId}/kb/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ content: prompt }),
         })
+        if (!resp.ok) {
+          console.error('[KB] compile chat/send failed:', resp.status)
+          setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
+          continue
+        }
       } catch {
         setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
         continue
       }
 
-      const created = await waitForArticle(beforeSend, 120_000)
+      const created = await waitForArticle(beforeSend, 120_000, src.relativePath)
       setLocalSources(prev => prev.map(s =>
         s.path === src.path ? { ...s, status: created ? 'compiled' : 'error' } : s
       ))

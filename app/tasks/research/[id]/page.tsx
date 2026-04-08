@@ -691,11 +691,11 @@ function ResearchTaskPageInner() {
     let fullContent = userContent
     if (selectedPaperFull && centerTab === 'read') {
       const ctx = `[Context Paper: ${selectedPaperFull.title || 'Untitled'}]\nURL: ${selectedPaperFull.source_url || 'N/A'}\n${selectedPaperFull.doi ? `DOI: ${selectedPaperFull.doi}` : ''}\n---\n`
-      fullContent = ctx + content
+      fullContent = ctx + userContent
     }
 
     try {
-      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/send`, {
+      const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/send`, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -705,6 +705,7 @@ function ResearchTaskPageInner() {
           auto_run: task?.status === 'todo',
         }),
       })
+      if (!resp.ok) console.error('[Research] chat/send failed:', resp.status, await resp.text().catch(() => ''))
       mutateMessages()
     } catch { /* ignore */ } finally {
       setSending(false)
