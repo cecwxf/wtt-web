@@ -130,6 +130,13 @@ export default function KnowledgeBasePage() {
   const params = useParams()
   const taskId = params.id as string
 
+  // Desktop-only: redirect to tasks board if accessed from browser
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isDesktop()) {
+      router.replace('/tasks')
+    }
+  }, [router])
+
   /* ── Tabs ── */
   const [activeTab, setActiveTab] = useState<'wiki' | 'graph' | 'sources' | 'search' | 'stats' | 'qa' | 'schema' | 'log'>('wiki')
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)

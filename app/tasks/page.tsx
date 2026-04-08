@@ -13,6 +13,7 @@ import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-colu
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { useI18n } from '@/lib/i18n-provider'
+import { isDesktop } from '@/lib/desktop'
 
 interface Agent {
   id: string
@@ -102,6 +103,8 @@ function TasksPageInner() {
   const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [creatingTaskType, setCreatingTaskType] = useState<string | null>(null)
+  const [desktop, setDesktop] = useState(false)
+  useEffect(() => { setDesktop(isDesktop()) }, [])
   const [panelInput, setPanelInput] = useState('')
   const [panelSending, setPanelSending] = useState(false)
   const panelSendingRef = useRef(false)
@@ -180,12 +183,14 @@ function TasksPageInner() {
   // Task panel should reflect owner-scoped task truth, independent of topic subscription state.
   const visibleTasks: TaskItem[] = useMemo(
     () => tasks.filter((t) => {
+      // Browser: hide code/research tasks (desktop-only features)
+      if (!desktop && (t.task_type === 'code' || t.task_type === 'research')) return false
       // Type filter
       if (taskTypeFilter === 'all') return true
       if (taskTypeFilter === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
       return t.task_type === taskTypeFilter
     }),
-    [tasks, taskTypeFilter]
+    [tasks, taskTypeFilter, desktop]
   )
 
   // Worker (sub-agent) grouping — same as feed page
@@ -705,16 +710,16 @@ function TasksPageInner() {
           <div className="flex items-center gap-2">
             <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2 text-sm text-indigo-500 dark:text-indigo-300">{t('tasks.bulkRun')}</button>
             <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{t('tasks.bulkCancel')}</button>
-            <button
+            {desktop && <button
               disabled={creatingTaskType === 'code'}
               onClick={() => quickCreateTask('code')}
               className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-600 disabled:opacity-50"
-            >{creatingTaskType === 'code' ? '⏳...' : '💻 '}{t('tasks.newCodeTask')}</button>
-            <button
+            >{creatingTaskType === 'code' ? '⏳...' : '💻 '}{t('tasks.newCodeTask')}</button>}
+            {desktop && <button
               disabled={creatingTaskType === 'research'}
               onClick={() => quickCreateTask('research')}
               className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-600 disabled:opacity-50"
-            >{creatingTaskType === 'research' ? '⏳...' : '📄 '}{t('tasks.newResearchTask')}</button>
+            >{creatingTaskType === 'research' ? '⏳...' : '📄 '}{t('tasks.newResearchTask')}</button>}
           </div>
         </div>
 
@@ -723,9 +728,8 @@ function TasksPageInner() {
           {([
             ['all', `📋 ${t('tasks.filterAll')}`],
             ['general', `💬 ${t('tasks.filterGeneral')}`],
-            ['code', `💻 ${t('tasks.filterCode')}`],
-            ['research', `📄 ${t('tasks.filterResearch')}`],
-          ] as const).map(([key, label]) => {
+            ...(desktop ? [['code', `💻 ${t('tasks.filterCode')}`], ['research', `📄 ${t('tasks.filterResearch')}`]] : []),
+          ] as [string, string][]).map(([key, label]) => {
             const count = tasks.filter(t => {
               if (key === 'all') return true
               if (key === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
@@ -735,7 +739,7 @@ function TasksPageInner() {
             return (
               <button
                 key={key}
-                onClick={() => setTaskTypeFilter(key)}
+                onClick={() => setTaskTypeFilter(key as typeof taskTypeFilter)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                   isActive
                     ? 'bg-indigo-500 text-white shadow-sm'
@@ -746,6 +750,7 @@ function TasksPageInner() {
               </button>
             )
           })}
+          {desktop && <>
           <div className="mx-2 h-5 w-px bg-slate-300 dark:bg-zinc-600" />
           <button
             disabled={kbLoading}
@@ -769,6 +774,7 @@ function TasksPageInner() {
           >
             {kbLoading ? '⏳...' : '📚 Knowledge Root'}
           </button>
+          </>}
         </div>
 
         <div className="grid h-[calc(100%-88px)] grid-cols-[1fr_380px] gap-3">

@@ -138,6 +138,13 @@ function ResearchTaskPageInner() {
   const params = useParams()
   const taskId = params.id as string
 
+  // Desktop-only: redirect to tasks board if accessed from browser
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isDesktop()) {
+      router.replace('/tasks')
+    }
+  }, [router])
+
   // L4 fullscreen mode
   const [l4Fullscreen, setL4Fullscreen] = useState(false)
 

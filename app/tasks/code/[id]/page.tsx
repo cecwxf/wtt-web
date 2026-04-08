@@ -548,6 +548,13 @@ function CodeTaskPageInner() {
   const params = useParams()
   const taskId = params.id as string
 
+  // Desktop-only: redirect to tasks board if accessed from browser
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isDesktop()) {
+      router.replace('/tasks')
+    }
+  }, [router])
+
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [fileTree, setFileTree] = useState<FileNode[]>([])
