@@ -279,7 +279,8 @@ export default function KnowledgeBasePage() {
         if (r.ok) {
           const p = await r.json()
           setCompileProgress(p)
-          if (p.percent >= 100) {
+          // Stop polling when done (100%) or worker finished/cancelled
+          if (p.percent >= 100 || (p.worker_status && p.worker_status !== 'running')) {
             if (compileTimerRef.current) clearInterval(compileTimerRef.current)
             compileTimerRef.current = null
             setCompileLoading(false)
@@ -304,7 +305,9 @@ export default function KnowledgeBasePage() {
         const r = await fetch(`${base}/tasks/${taskId}/kb/compile/progress`)
         if (r.ok && !cancelled) {
           const p = await r.json()
-          if (p.total > 0 && p.percent < 100 && p.raw > 0) {
+          // Auto-resume polling if compile is still running (either raw sources
+          // remaining or background worker is active)
+          if (p.total > 0 && p.percent < 100 && (p.raw > 0 || p.compiling > 0 || p.worker_status === 'running')) {
             setCompileLoading(true)
             setCompileProgress(p)
             startProgressPolling()
@@ -332,8 +335,13 @@ export default function KnowledgeBasePage() {
 
   const resetAndRecompile = async () => {
     if (!confirm('This will delete ALL wiki articles and recompile from sources. Continue?')) return
-    // Force-cancel any in-progress compile polling first
+    // Stop background compile worker and frontend polling
     if (compileTimerRef.current) { clearInterval(compileTimerRef.current); compileTimerRef.current = null }
+    try {
+      await fetch(`${base}/tasks/${taskId}/kb/compile/stop`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {}
     setCompileLoading(true)
     try {
       const delResp = await fetch(`${base}/tasks/${taskId}/kb/reset?reset_sources=true`, {
