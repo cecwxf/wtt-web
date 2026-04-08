@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
-import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, indexLocalProject } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, indexLocalProject } from '@/lib/desktop'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { CircularProgress } from '@/components/ui/circular-progress'
@@ -173,6 +173,11 @@ function ResearchTaskPageInner() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const webFileRef = useRef<HTMLInputElement>(null)
   const webFolderRef = useRef<HTMLInputElement>(null)
+
+  // Local file browser
+  const [localFiles, setLocalFiles] = useState<Array<{ path: string; relativePath: string; name: string; size: number; isText: boolean; extension: string }>>([])
+  const [localProjectRoot, setLocalProjectRoot] = useState<string | null>(null)
+  const [localFilesExpanded, setLocalFilesExpanded] = useState(true) // eslint-disable-line @typescript-eslint/no-unused-vars
 
   // Quote-to-chat & context menu
   const readerRef = useRef<HTMLDivElement>(null)
@@ -639,22 +644,40 @@ function ResearchTaskPageInner() {
         }
       }).catch(() => {})
     }
-    const textFiles = result.files.filter(f => f.isText).slice(0, 20)
-    const readResults = await readFilesBatch(textFiles.map(f => f.path))
-    if (!readResults) return
-    let attached = 0
-    for (let i = 0; i < textFiles.length; i++) {
-      const file = textFiles[i]
-      const read = readResults[i]
-      if (!read?.ok || !read.content) continue
-      const truncated = read.content.length > 16000 ? read.content.slice(0, 16000) + '\n... (truncated)' : read.content
-      const token = `📎 **${file.relativePath}** (${(file.size / 1024).toFixed(1)} KB)\n\`\`\`\n${truncated}\n\`\`\``
-      setPendingAttachments(prev => [...prev, token])
-      attached++
-    }
-    if (textFiles.length < result.files.length) {
-      alert(`Attached ${attached} text files. ${result.files.length - textFiles.length} binary/extra files skipped (max 20).`)
-    }
+    // Set file browser state (no file content read!)
+    setLocalFiles(result.files.map(f => ({
+      path: f.path, relativePath: f.relativePath, name: f.name,
+      size: f.size, isText: f.isText, extension: f.extension,
+    })))
+    setLocalProjectRoot(result.path)
+    // Show compact notification in chat
+    const folderName = result.path.split(/[/\\]/).pop() || result.path
+    setChatMessages(prev => [...prev, {
+      id: `import-${Date.now()}`,
+      role: 'user' as const,
+      content: `📁 Folder attached: **${folderName}** (${result.files.length} files)\n_Agent can access files via MCP tools._`,
+      timestamp: new Date().toISOString(),
+      sender_display_name: session?.user?.name || 'You',
+    }])
+  }
+
+  const shareFilesToAgent = async (filePaths: string[]) => {
+    if (!task?.topic_id || filePaths.length === 0) return
+    const fileList = filePaths.map(p => {
+      const f = localFiles.find(lf => lf.relativePath === p)
+      const sizeStr = f ? (f.size > 1024 ? `${(f.size / 1024).toFixed(1)}KB` : `${f.size}B`) : ''
+      return `  📎 \`${p}\` ${sizeStr}`
+    }).join('\n')
+    const msg = `[RESEARCH_FILES]\n${fileList}\n\nPlease analyze these files. Use wtt_local_read to access their content.`
+    setSending(true)
+    try {
+      await fetch(`${CLIENT_WTT_API_BASE}/tasks/${taskId}/chat/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
+        body: JSON.stringify({ content: msg, include_task_context: true }),
+      })
+    } catch {}
+    setSending(false)
   }
 
   // Web fallback: attach files via <input type="file">
@@ -1023,6 +1046,49 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
             className="w-[3px] shrink-0 cursor-col-resize hover:bg-indigo-400 transition-colors bg-transparent"
             onMouseDown={(e) => startResize('projects', e)}
           />
+        )}
+
+        {/* ═══ LOCAL FILES BROWSER ═══ */}
+        {localFiles.length > 0 && !l4Fullscreen && (
+          <div className="flex w-56 flex-col border-r border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-700 px-2 py-1.5">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-300">📂 Local Files</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    const textFiles = localFiles.filter(f => f.isText).map(f => f.relativePath)
+                    if (textFiles.length > 0) shareFilesToAgent(textFiles.slice(0, 10))
+                  }}
+                  className="rounded p-1 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Share all text files to agent"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 8.5l5-5 5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                </button>
+                <button onClick={() => { setLocalFiles([]); setLocalProjectRoot(null) }} className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-700" title="Close files">×</button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto text-[11px]">
+              {localFiles.filter(f => f.isText).map(f => (
+                <div
+                  key={f.path}
+                  className="flex items-center gap-1 px-2 py-0.5 hover:bg-slate-50 dark:hover:bg-zinc-800 cursor-pointer group"
+                  onClick={() => shareFilesToAgent([f.relativePath])}
+                  title={`Click to share ${f.relativePath} with agent`}
+                >
+                  <span className="text-slate-400 dark:text-zinc-500 text-[9px]">{f.extension.replace('.', '')}</span>
+                  <span className="flex-1 truncate text-slate-600 dark:text-zinc-300">{f.relativePath}</span>
+                  <span className="text-slate-300 dark:text-zinc-600 text-[9px] opacity-0 group-hover:opacity-100">→</span>
+                </div>
+              ))}
+              {localFiles.filter(f => !f.isText).length > 0 && (
+                <div className="px-2 py-1 text-[9px] text-slate-300 dark:text-zinc-600">
+                  + {localFiles.filter(f => !f.isText).length} binary files
+                </div>
+              )}
+            </div>
+            <div className="border-t border-slate-200 dark:border-zinc-700 px-2 py-1 text-[9px] text-slate-400 dark:text-zinc-500">
+              {localProjectRoot?.split(/[/\\]/).pop()} · {localFiles.length} files
+            </div>
+          </div>
         )}
 
         {/* ═══ LEFT: Library Panel ═══ */}

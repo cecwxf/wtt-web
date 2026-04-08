@@ -14,7 +14,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
-import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, watchLocalFolder, registerFileBridge, type ScannedFile } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, readFilesBatch, watchLocalFolder, indexLocalProject, type ScannedFile } from '@/lib/desktop'
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 
@@ -475,7 +475,9 @@ export default function KnowledgeBasePage() {
     // Register file bridge for on-demand agent access
     const agentId = typeof window !== 'undefined' ? localStorage.getItem('wtt_selected_agent_id') || '' : ''
     if (agentId) {
-      registerFileBridge(taskId, agentId, result.path, result.files).catch(() => {})
+      indexLocalProject(taskId, agentId, result.path, result.files, base, {
+        Authorization: `Bearer ${token}`,
+      }).catch(() => {})
     }
   }
 
@@ -684,30 +686,30 @@ export default function KnowledgeBasePage() {
       setLocalCompileProgress({ current: i + 1, total: srcs.length })
       setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'compiling' } : s))
 
-      // Read file content locally
-      let content: string | null = null
+      // Try to read file content locally as fallback (only used if MCP bridge unavailable)
+      let fallbackContent = ''
       if (isDesktop()) {
-        content = await readLocalFile(src.path)
-      }
-      if (!content) {
-        setLocalSources(prev => prev.map(s => s.path === src.path ? { ...s, status: 'error' } : s))
-        continue
+        const content = await readLocalFile(src.path)
+        if (content) {
+          const maxLen = 30000
+          fallbackContent = content.length > maxLen ? content.slice(0, maxLen) + '\n... (truncated)' : content
+        }
       }
 
-      // Truncate very large files
-      const maxLen = 60000
-      const truncated = content.length > maxLen ? content.slice(0, maxLen) + '\n... (truncated)' : content
-
-      // Build compile prompt with inline content
+      // Build compile prompt with file reference (agent reads via MCP)
       const prompt = [
         `[AUTOMATED KB COMPILE — DO NOT GREET, JUST EXECUTE]`,
         ``,
-        `You are a wiki compiler. Read the source content below and write a comprehensive wiki article.`,
+        `You are a wiki compiler. Read the source file and write a comprehensive wiki article.`,
         ``,
-        `IMPORTANT: You MUST save the article using the wtt_kb_write MCP tool:`,
+        `STEP 1: Read the source file using MCP tool:`,
+        `  wtt_local_read(task_id="${taskId}", file_path="${src.relativePath}")`,
+        ``,
+        `STEP 2: After reading, save the article using MCP tool:`,
         `  wtt_kb_write(task_id="${taskId}", slug="<url-friendly-slug>", title="<article title>", content_markdown="<full article in markdown>", source_ids="${src.relativePath}")`,
         ``,
-        `If the MCP tool is not available, output the article in this exact format:`,
+        `If wtt_local_read is not available (no Desktop file bridge), use the content provided below.`,
+        `If wtt_kb_write is not available, output in this format:`,
         `---ARTICLE_START---`,
         `TITLE: <article title>`,
         `SLUG: <url-friendly-slug>`,
@@ -722,16 +724,18 @@ export default function KnowledgeBasePage() {
         `- Organize with clear headings (## / ###)`,
         ``,
         `Source: "${src.name}" (type: ${src.sourceType}, path: ${src.relativePath})`,
-        `---`,
-        truncated,
       ].join('\n')
+
+      const fullPrompt = fallbackContent
+        ? prompt + `\n\n---\nFallback content (use wtt_local_read instead if available):\n${fallbackContent}`
+        : prompt
 
       const beforeSend = Date.now()
       try {
         const resp = await fetch(`${base}/tasks/${taskId}/kb/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ content: prompt }),
+          body: JSON.stringify({ content: fullPrompt }),
         })
         if (!resp.ok) {
           console.error('[KB] compile chat/send failed:', resp.status)

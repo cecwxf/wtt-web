@@ -15,7 +15,7 @@ import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
-import { isDesktop, getDesktopBridge, pickAndScanFolder, readLocalFile, watchLocalFolder, registerFileBridge, indexLocalProject, type ScannedFile } from '@/lib/desktop'
+import { isDesktop, getDesktopBridge, pickAndScanFolder, readLocalFile, watchLocalFolder, indexLocalProject, type ScannedFile } from '@/lib/desktop'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 const MonacoDiffEditor = dynamic(() => import('@monaco-editor/react').then(m => ({ default: m.DiffEditor })), { ssr: false })
@@ -425,11 +425,12 @@ const SYMBOL_ICONS: Record<string, string> = {
 
 // ── File Tree Component (VSCode-style) ─────────────────
 function FileTreeNode({
-  node, depth, selectedPath, onSelect, onContextMenu, forceExpanded, collapseSignal,
+  node, depth, selectedPath, onSelect, onContextMenu, onShare, forceExpanded, collapseSignal,
 }: {
   node: FileNode; depth: number; selectedPath: string
   onSelect: (node: FileNode) => void
   onContextMenu?: (e: React.MouseEvent, node: FileNode) => void
+  onShare?: (node: FileNode) => void
   forceExpanded?: Set<string>
   collapseSignal?: number
 }) {
@@ -500,10 +501,18 @@ function FileTreeNode({
               className="rounded px-0.5 text-[10px] text-slate-400 hover:bg-slate-300 hover:text-slate-700" title="New file">+</button>
           </div>
         )}
+        {/* Share to Agent button for files */}
+        {!isDir && onShare && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onShare(node) }}
+            className="ml-auto hidden shrink-0 rounded px-0.5 pr-1 text-[10px] text-slate-400 hover:bg-indigo-100 hover:text-indigo-600 group-hover:inline-flex"
+            title="Share to Agent"
+          >⇨</button>
+        )}
       </div>
       {isDir && expanded && node.children?.map((child) => (
         <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath}
-          onSelect={onSelect} onContextMenu={onContextMenu} forceExpanded={forceExpanded} collapseSignal={collapseSignal} />
+          onSelect={onSelect} onContextMenu={onContextMenu} onShare={onShare} forceExpanded={forceExpanded} collapseSignal={collapseSignal} />
       ))}
     </div>
   )
@@ -843,7 +852,7 @@ function CodeTaskPageInner() {
         if (!(m.content || m.message || m.text)) return false
         // Hide PROJECT_INDEX and TASK_REQUEST from chat display
         const sem = (m.semantic_type || '').toUpperCase()
-        if (sem === 'PROJECT_INDEX') return false
+        if (sem === 'PROJECT_INDEX' || sem === 'TASK_REQUEST') return false
         return true
       })
       .map((m: Record<string, string>) => ({
@@ -1117,13 +1126,14 @@ function CodeTaskPageInner() {
           }).catch(() => {})
         }
 
-        if (task?.topic_id) {
-          const treeText = buildTreeText(tree)
-          await publishToTopic(
-            `[CODEBASE] ${folderName}\n\`\`\`\n${folderName}/\n${treeText}\n\`\`\`\nCodebase opened with ${countFiles(tree)} files. Ask me to share specific files for analysis.`,
-            'notification',
-          )
-        }
+        // Show compact import notification in chat (local only, not sent to topic)
+        setChatMessages(prev => [...prev, {
+          id: `import-${Date.now()}`,
+          role: 'user' as const,
+          content: `📁 Project imported: **${folderName}** (${countFiles(tree)} files)\n_Agent can access files via MCP tools — no file content sent to chat._`,
+          timestamp: new Date().toISOString(),
+          sender_display_name: session?.user?.name || 'You',
+        }])
       } catch {
         // User cancelled or error
       }
@@ -1136,14 +1146,14 @@ function CodeTaskPageInner() {
       const tree = await readDirectory(dirHandle)
       setFileTree(tree)
 
-      // Auto-publish file tree structure to topic so agent can see the codebase
-      if (task?.topic_id) {
-        const treeText = buildTreeText(tree)
-        await publishToTopic(
-          `[CODEBASE] ${dirHandle.name}\n\`\`\`\n${dirHandle.name}/\n${treeText}\n\`\`\`\nCodebase opened with ${countFiles(tree)} files. Ask me to share specific files for analysis.`,
-          'notification',
-        )
-      }
+      // Show compact import notification in chat (local only, not sent to topic)
+      setChatMessages(prev => [...prev, {
+        id: `import-${Date.now()}`,
+        role: 'user' as const,
+        content: `📁 Project imported: **${dirHandle.name}** (${countFiles(tree)} files)`,
+        timestamp: new Date().toISOString(),
+        sender_display_name: session?.user?.name || 'You',
+      }])
     } catch {
       // User cancelled
     }
@@ -1926,6 +1936,11 @@ function CodeTaskPageInner() {
   // ── Context menu state ──
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null)
 
+  const shareFileToAgent = useCallback((node: FileNode) => {
+    const msg = `📎 @file \`${node.path}\`\n_Agent will read this file via MCP tools._`
+    void publishToTopic(msg, 'post')
+  }, [publishToTopic])
+
   const handleTreeContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
     // Quick action from "+" button
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1963,6 +1978,7 @@ function CodeTaskPageInner() {
 
     if (!isDir) {
       items.push({ label: 'Download', icon: '⬇️', onClick: () => handleDownloadFile(node) })
+      items.push({ label: 'Share to Agent', icon: '⇨', onClick: () => shareFileToAgent(node) })
     }
 
     return items
@@ -2629,6 +2645,7 @@ function CodeTaskPageInner() {
                       selectedPath={selectedFile?.path || ''}
                       onSelect={selectFile}
                       onContextMenu={handleTreeContextMenu}
+                      onShare={shareFileToAgent}
                       forceExpanded={forceExpandedPaths}
                       collapseSignal={collapseSignal}
                     />
@@ -2704,6 +2721,7 @@ function CodeTaskPageInner() {
                   depth={0}
                   selectedPath={selectedFile?.path || ''}
                   onSelect={selectFile}
+                  onShare={shareFileToAgent}
                   forceExpanded={forceExpandedPaths}
                   collapseSignal={collapseSignal}
                 />
