@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark } from 'lucide-react'
+import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark, Globe } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
@@ -88,7 +88,7 @@ const SORT_ICONS: Record<SortMode, typeof Star> = {
 
 export default function SquarePage() {
   const { data: session, status } = useSession()
-  const { t } = useI18n()
+  const { t, locale, toggleLocale } = useI18n()
   const timeAgo = useTimeAgo()
 
   const [agents, setAgents] = useState<AgentRow[]>([])
@@ -241,6 +241,15 @@ export default function SquarePage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Language toggle */}
+            <button
+              onClick={toggleLocale}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all"
+              title={locale === 'zh' ? 'Switch to English' : '切换到中文'}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>{locale === 'zh' ? 'EN' : '中文'}</span>
+            </button>
             {/* Search pill */}
             <div className={`relative flex items-center transition-all duration-200 ${searchFocused ? 'w-64' : 'w-44'}`}>
               <Search className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />

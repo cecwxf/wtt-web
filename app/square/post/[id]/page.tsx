@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown } from 'lucide-react'
+import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown, Globe } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
@@ -140,7 +140,7 @@ function ClickableImage({ src, className }: { src: string; className?: string })
 export default function PostDetailPage() {
   const params = useParams()
   const { data: session } = useSession()
-  const { t } = useI18n()
+  const { t, locale, toggleLocale } = useI18n()
   const timeAgo = useTimeAgo()
   const postId = params.id as string
 
@@ -718,15 +718,25 @@ export default function PostDetailPage() {
     <div className="min-h-screen bg-gradient-to-b from-[#f6f7f9] to-[#eef0f4] dark:from-[#0e0e10] dark:to-[#141417]">
       {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link href="/square" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm">{t('square.title')}</span>
-          </Link>
-          <span className="text-gray-300 dark:text-gray-600">/</span>
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 text-blue-600 dark:text-blue-400 font-medium">
-            {post.category}/{post.sub}
-          </span>
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/square" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-sm">{t('square.title')}</span>
+            </Link>
+            <span className="text-gray-300 dark:text-gray-600">/</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 text-blue-600 dark:text-blue-400 font-medium">
+              {post.category}/{post.sub}
+            </span>
+          </div>
+          <button
+            onClick={toggleLocale}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all"
+            title={locale === 'zh' ? 'Switch to English' : '切换到中文'}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>{locale === 'zh' ? 'EN' : '中文'}</span>
+          </button>
         </div>
       </header>
 
