@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark } from 'lucide-react'
+import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
@@ -46,7 +46,7 @@ interface PostDetail {
   bookmarked?: boolean
 }
 
-interface Reply {
+interface ReplyData {
   id: string
   content: string
   author: string
@@ -55,22 +55,28 @@ interface Reply {
   reply_to: string | null
   timestamp: string
   optimized_by_agent?: string
+  likes?: number
+  liked?: boolean
 }
 
-function timeAgo(ts: string) {
-  try {
-    const diff = Date.now() - new Date(ts).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 1) return '刚刚'
-    if (mins < 60) return `${mins}分钟前`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}小时前`
-    const days = Math.floor(hrs / 24)
-    if (days < 30) return `${days}天前`
-    return new Date(ts).toLocaleDateString('zh-CN')
-  } catch {
-    return ts
-  }
+// ── i18n-aware timeAgo ──
+function useTimeAgo() {
+  const { t } = useI18n()
+  return useCallback((ts: string) => {
+    try {
+      const diff = Date.now() - new Date(ts).getTime()
+      const mins = Math.floor(diff / 60000)
+      if (mins < 1) return t('square.timeJustNow')
+      if (mins < 60) return t('square.timeMinutesAgo', { count: String(mins) })
+      const hrs = Math.floor(mins / 60)
+      if (hrs < 24) return t('square.timeHoursAgo', { count: String(hrs) })
+      const days = Math.floor(hrs / 24)
+      if (days < 30) return t('square.timeDaysAgo', { count: String(days) })
+      return new Date(ts).toLocaleDateString()
+    } catch {
+      return ts
+    }
+  }, [t])
 }
 
 function summarizeReplyContent(raw: string): { snippet: string; imageUrl?: string } {
@@ -78,10 +84,64 @@ function summarizeReplyContent(raw: string): { snippet: string; imageUrl?: strin
   return { snippet: summary.text, imageUrl: summary.thumbUrl }
 }
 
+// ── Image Lightbox ──
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handleKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKey)
+      document.body.style.overflow = ''
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/80 hover:bg-black/70 hover:text-white transition-colors"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      />
+    </div>
+  )
+}
+
+// ── Clickable Image ──
+function ClickableImage({ src, className }: { src: string; className?: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={toThumbnailUrl(src)}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className={`cursor-zoom-in hover:opacity-90 transition-opacity ${className || ''}`}
+        onClick={() => setOpen(true)}
+      />
+      {open && <ImageLightbox src={src} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
 export default function PostDetailPage() {
   const params = useParams()
   const { data: session } = useSession()
   const { t } = useI18n()
+  const timeAgo = useTimeAgo()
   const postId = params.id as string
 
   const [replyText, setReplyText] = useState('')
@@ -92,13 +152,13 @@ export default function PostDetailPage() {
   const [agentQuery, setAgentQuery] = useState('')
   const [replyContext, setReplyContext] = useState<{ author: string; snippet: string; imageUrl?: string } | null>(null)
   const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set())
+  const [replySortByLikes, setReplySortByLikes] = useState(true)
   const replyEditorRef = useRef<EditorHelpers | null>(null)
   const lastReplyToRef = useRef<string | null>(null)
   const handleReplyEditorReady = useCallback((helpers: EditorHelpers) => {
     replyEditorRef.current = helpers
   }, [])
 
-  // Agent list for @mention
   const [agents, setAgents] = useState<Array<{ agent_id: string; display_name: string }>>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
 
@@ -139,7 +199,6 @@ export default function PostDetailPage() {
     return author
   }, [agentNameById])
 
-  // Auto-poll post detail via SWR (3s interval for real-time replies)
   const { data: postData, error: postError, isLoading, mutate: mutatePost } = useSWR(
     postId ? ['square-post', postId, token] : null,
     async () => {
@@ -151,10 +210,9 @@ export default function PostDetailPage() {
   )
 
   const post: PostDetail | null = postData?.post ?? null
-  const replies: Reply[] = postData?.replies ?? []
+  const replies: ReplyData[] = postData?.replies ?? []
   const replyCount: number = postData?.reply_count ?? 0
 
-  // Load agents
   useEffect(() => {
     if (!token) return
     fetch('/api/wtt/agents/my', { headers: authHeaders })
@@ -172,12 +230,9 @@ export default function PostDetailPage() {
     if (!replyFullscreen) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
+    return () => { document.body.style.overflow = prev }
   }, [replyFullscreen])
 
-  // Submit reply — no quote injection; threading handles context visually
   const handleReply = async () => {
     const html = replyEditorRef.current?.getHTML() || replyText.trim()
     const isEmpty = replyEditorRef.current?.isEmpty() ?? !replyText.trim()
@@ -209,15 +264,14 @@ export default function PostDetailPage() {
       setShowAgentPicker(false)
       await mutatePost()
 
-      // Keep viewport anchored on the replied content; do not jump to bottom.
       requestAnimationFrame(() => {
         const target = scrollTarget
           ? document.getElementById(`reply-${scrollTarget}`)
           : null
         if (target) {
           target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          target.classList.add('bg-blue-50', 'dark:bg-blue-900/20')
-          setTimeout(() => target.classList.remove('bg-blue-50', 'dark:bg-blue-900/20'), 2000)
+          target.classList.add('bg-blue-50/50', 'dark:bg-blue-900/10')
+          setTimeout(() => target.classList.remove('bg-blue-50/50', 'dark:bg-blue-900/10'), 2000)
         }
       })
     } catch (e: unknown) {
@@ -227,7 +281,6 @@ export default function PostDetailPage() {
     }
   }
 
-  // Insert @agent mention
   const insertMention = (agentId: string) => {
     const agent = agents.find(a => a.agent_id === agentId)
     const name = agent?.display_name || agentId
@@ -241,12 +294,10 @@ export default function PostDetailPage() {
     setAgentQuery('')
   }
 
-  // Set reply target and keep editor near target message
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const startReplyTo = (replyId: string, authorName: string, _rawContent: string) => {
     setReplyTo(replyId)
     setReplyContext({ author: authorName, snippet: '', imageUrl: undefined })
-
     requestAnimationFrame(() => {
       const target = document.getElementById(`reply-${replyId}`)
       target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -266,7 +317,6 @@ export default function PostDetailPage() {
   const toggleLike = async () => {
     if (!post || !token) return
     const wasLiked = post.liked
-    // Optimistic update
     mutatePost((prev: Record<string, unknown>) => prev ? {
       ...prev,
       post: { ...(prev.post as PostDetail), liked: !wasLiked, likes: ((prev.post as PostDetail).likes ?? 0) + (wasLiked ? -1 : 1) }
@@ -294,6 +344,31 @@ export default function PostDetailPage() {
     } catch { /* revert on next SWR refresh */ }
   }
 
+  const toggleReplyLike = async (replyId: string) => {
+    if (!token) return
+    const reply = replies.find(r => r.id === replyId)
+    if (!reply) return
+    const wasLiked = reply.liked
+
+    // Optimistic update via SWR
+    mutatePost((prev: Record<string, unknown>) => {
+      if (!prev) return prev
+      const updatedReplies = (prev.replies as ReplyData[]).map(r =>
+        r.id === replyId
+          ? { ...r, liked: !wasLiked, likes: (r.likes ?? 0) + (wasLiked ? -1 : 1) }
+          : r
+      )
+      return { ...prev, replies: updatedReplies }
+    }, false)
+
+    try {
+      await fetch(`/api/wtt/square/posts/${postId}/replies/${replyId}/like`, {
+        method: wasLiked ? 'DELETE' : 'POST',
+        headers: authHeaders,
+      })
+    } catch { /* revert on next SWR refresh */ }
+  }
+
   const renderReplyComposer = (compact = false) => (
     <div className={`${compact ? 'mt-3' : 'mt-4'} pt-3 border-t border-gray-100 dark:border-gray-800`}>
       {replyFullscreen && (
@@ -306,7 +381,6 @@ export default function PostDetailPage() {
       )}
 
       <div className={replyFullscreen ? 'fixed inset-4 z-[120] rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1d] p-5 shadow-2xl overflow-y-auto' : 'relative'}>
-        {/* Reply target indicator */}
         {replyTo && (
           <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-400">
             <Reply className="w-3 h-3 text-blue-500 flex-shrink-0" />
@@ -399,9 +473,9 @@ export default function PostDetailPage() {
     </div>
   )
 
-  // Build threaded reply structure
+  // Build threaded reply structure — sort top-level by likes when enabled
   const threadedReplies = useMemo(() => {
-    type ReplyWithLocal = Reply & { __reply_to?: string | null }
+    type ReplyWithLocal = ReplyData & { __reply_to?: string | null }
 
     const topLevel: ReplyWithLocal[] = []
     const childMap: Record<string, ReplyWithLocal[]> = {}
@@ -435,8 +509,6 @@ export default function PostDetailPage() {
         }
       }
 
-      // Heuristic: agent reply often misses reply_to in discuss stream.
-      // Priority: latest explicit reply anchor -> latest human message.
       if (r.sender_type === 'agent' && !r.__reply_to) {
         const anchor = (
           latestHumanReplyAnchor && (ts - latestHumanReplyAnchor.ts <= 15 * 60 * 1000)
@@ -445,7 +517,6 @@ export default function PostDetailPage() {
               ? latestHumanMessage
               : null
         )
-
         if (anchor) {
           r.__reply_to = anchor.id
         }
@@ -459,15 +530,18 @@ export default function PostDetailPage() {
       }
     }
 
-    return { topLevel, childMap }
-  }, [replies, post])
+    // Sort top-level replies by likes (descending) when enabled
+    if (replySortByLikes) {
+      topLevel.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0))
+    }
 
-  // 默认收起「回答中的答复」：有子回复的楼层初始折叠，避免信息流过长。
+    return { topLevel, childMap }
+  }, [replies, post, replySortByLikes])
+
   useEffect(() => {
     setCollapsedThreads((prev) => {
       const next = new Set(prev)
       let changed = false
-
       for (const top of threadedReplies.topLevel) {
         const childCount = (threadedReplies.childMap[top.id] || []).length
         if (childCount > 0 && !next.has(top.id)) {
@@ -475,7 +549,6 @@ export default function PostDetailPage() {
           changed = true
         }
       }
-
       return changed ? next : prev
     })
   }, [threadedReplies])
@@ -511,7 +584,7 @@ export default function PostDetailPage() {
     return children.reduce((sum, child) => sum + 1 + countThreadReplies(child.id), 0)
   }
 
-  const renderReply = (r: Reply, depth: number = 0) => {
+  const renderReply = (r: ReplyData, depth: number = 0) => {
     const isAgent = r.sender_type === 'agent'
     const children = threadedReplies.childMap[r.id] || []
     const totalDescendants = countThreadReplies(r.id)
@@ -519,7 +592,6 @@ export default function PostDetailPage() {
     const authorName = resolveAuthorName(r.author, r.sender_type)
     const isChild = depth > 0
 
-    // Find parent author name for "replying to" badge
     let parentAuthorName = ''
     if (r.reply_to) {
       const parentReply = replies.find(rr => rr.id === r.reply_to)
@@ -534,23 +606,20 @@ export default function PostDetailPage() {
       <div
         key={r.id}
         id={`reply-${r.id}`}
-        className="transition-colors duration-500"
+        className="transition-colors duration-500 rounded-xl"
       >
-        {/* Reply card — forum style, all left-aligned */}
-        <div className={`flex gap-3 py-3 ${isChild ? 'ml-4 pl-4 border-l-2 border-gray-100 dark:border-gray-800' : ''}`}>
-          {/* Avatar */}
-          <Avatar name={authorName} avatarUrl={r.avatar_url} size="sm" className="flex-shrink-0" />
+        <div className={`flex gap-3 py-4 ${isChild ? 'ml-4 pl-4 border-l-2 border-gray-100 dark:border-gray-800' : ''}`}>
+          <Avatar name={authorName} avatarUrl={r.avatar_url} size="sm" className="flex-shrink-0 ring-2 ring-white dark:ring-gray-900" />
 
           <div className="flex-1 min-w-0">
-            {/* Author line + reply-to indicator */}
-            <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mb-1">
+            <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mb-1.5">
               <span className={`text-sm font-semibold ${
                 isAgent ? 'text-purple-600 dark:text-purple-400' : 'text-gray-800 dark:text-gray-200'
               }`}>
                 {authorName}
               </span>
               {isAgent && (
-                <span className="px-1.5 py-px text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full">Agent</span>
+                <span className="px-1.5 py-px text-[10px] font-medium bg-gradient-to-r from-purple-100 to-violet-100 dark:from-purple-900/30 dark:to-violet-900/30 text-purple-600 dark:text-purple-400 rounded-full">Agent</span>
               )}
               {r.optimized_by_agent && (
                 <Sparkles className="w-3 h-3 text-green-500" />
@@ -567,26 +636,21 @@ export default function PostDetailPage() {
               </span>
             </div>
 
-            {/* Content */}
-            <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 space-y-1.5">
+            {/* Content with clickable images */}
+            <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 space-y-2">
               {parseRichBlocks(r.content).map((block, bi) => {
                 switch (block.kind) {
                   case 'image':
-                    return (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={`${r.id}-img-${bi}`} src={toThumbnailUrl(block.url)} alt=""
-                        loading="lazy" decoding="async"
-                        className="max-h-48 w-auto max-w-full rounded-lg object-cover" />
-                    )
+                    return <ClickableImage key={`${r.id}-img-${bi}`} src={block.url} className="max-h-64 w-auto max-w-full rounded-xl object-cover" />
                   case 'html':
                     return (
                       <div key={bi}
-                        className="prose prose-sm max-w-none dark:prose-invert [&_img]:max-h-48 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-lg"
+                        className="prose prose-sm max-w-none dark:prose-invert [&_img]:max-h-64 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl [&_img]:cursor-zoom-in"
                         dangerouslySetInnerHTML={{ __html: block.html }} />
                     )
                   case 'video':
                     return (
-                      <video key={bi} controls className="max-h-48 w-full rounded-lg">
+                      <video key={bi} controls className="max-h-64 w-full rounded-xl">
                         <source src={block.url} />
                       </video>
                     )
@@ -602,14 +666,25 @@ export default function PostDetailPage() {
               })}
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-3 mt-2">
+            {/* Actions: reply + like */}
+            <div className="flex items-center gap-4 mt-2.5">
+              <button
+                onClick={() => toggleReplyLike(r.id)}
+                className={`flex items-center gap-1 text-xs transition-all ${
+                  r.liked
+                    ? 'text-rose-500 font-medium'
+                    : 'text-gray-400 hover:text-rose-500 dark:text-gray-500 dark:hover:text-rose-400'
+                }`}
+              >
+                <Heart className={`w-3.5 h-3.5 transition-transform ${r.liked ? 'fill-current scale-110' : 'hover:scale-110'}`} />
+                {(r.likes ?? 0) > 0 && <span>{r.likes}</span>}
+              </button>
               {token && (
                 <button
                   onClick={() => startReplyTo(r.id, authorName, r.content)}
                   className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
                 >
-                  <Reply className="w-3 h-3" /> {t('square.detail.reply')}
+                  <Reply className="w-3.5 h-3.5" /> {t('square.detail.reply')}
                 </button>
               )}
               {totalDescendants > 0 && (
@@ -627,14 +702,12 @@ export default function PostDetailPage() {
           </div>
         </div>
 
-        {/* Inline reply composer */}
         {token && replyTo === r.id && (
           <div className={isChild ? 'ml-4 pl-4 border-l-2 border-gray-100 dark:border-gray-800' : ''}>
             {renderReplyComposer(true)}
           </div>
         )}
 
-        {/* Children — nested with thread line */}
         {!isCollapsed && children.map(child => renderReply(child, depth + 1))}
       </div>
     )
@@ -642,7 +715,7 @@ export default function PostDetailPage() {
 
 
   return (
-    <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0e0e10]">
+    <div className="min-h-screen bg-gradient-to-b from-[#f6f7f9] to-[#eef0f4] dark:from-[#0e0e10] dark:to-[#141417]">
       {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center gap-3">
@@ -651,24 +724,23 @@ export default function PostDetailPage() {
             <span className="text-sm">{t('square.title')}</span>
           </Link>
           <span className="text-gray-300 dark:text-gray-600">/</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+          <span className="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 text-blue-600 dark:text-blue-400 font-medium">
             {post.category}/{post.sub}
           </span>
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* ── Article Card (Zhihu-style) ── */}
-        <article id={`reply-${post.message_id}`} className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 overflow-hidden mb-5">
+        {/* ── Article Card ── */}
+        <article id={`reply-${post.message_id}`} className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 shadow-sm overflow-hidden mb-5">
           <div className="p-6 sm:p-8">
-            {/* Title */}
-            <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 dark:text-white mb-4 leading-tight tracking-tight">
+            <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 dark:text-white mb-5 leading-tight tracking-tight">
               {post.title}
             </h1>
 
             {/* Author card */}
             <div className="flex items-center gap-3 mb-6 pb-5 border-b border-gray-100 dark:border-gray-800">
-              <Avatar name={resolveAuthorName(post.author, undefined, post.publisher_type)} avatarUrl={post.avatar_url} size="md" className="flex-shrink-0" />
+              <Avatar name={resolveAuthorName(post.author, undefined, post.publisher_type)} avatarUrl={post.avatar_url} size="md" className="flex-shrink-0 ring-2 ring-gray-100 dark:ring-gray-800" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
@@ -676,8 +748,8 @@ export default function PostDetailPage() {
                   </span>
                   <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
                     post.publisher_type === 'agent'
-                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
-                      : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                      ? 'bg-gradient-to-r from-purple-100 to-violet-100 dark:from-purple-900/30 dark:to-violet-900/30 text-purple-600 dark:text-purple-400'
+                      : 'bg-gradient-to-r from-blue-100 to-sky-100 dark:from-blue-900/30 dark:to-sky-900/30 text-blue-600 dark:text-blue-400'
                   }`}>
                     {post.publisher_type === 'agent' ? 'Agent' : t('square.detail.human')}
                   </span>
@@ -706,56 +778,51 @@ export default function PostDetailPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={toggleLike}
-                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
                       post.liked
-                        ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20'
+                        ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 shadow-sm shadow-rose-100 dark:shadow-none'
                         : 'text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-600 dark:hover:text-rose-400'
                     }`}
                   >
-                    <Heart className={`w-3 h-3 ${post.liked ? 'fill-current' : ''}`} />
+                    <Heart className={`w-3.5 h-3.5 transition-transform ${post.liked ? 'fill-current scale-110' : ''}`} />
                     {(post.likes ?? 0) > 0 && (post.likes ?? 0)}
                   </button>
                   <button
                     onClick={toggleBookmark}
-                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
                       post.bookmarked
-                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20'
+                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 shadow-sm shadow-amber-100 dark:shadow-none'
                         : 'text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-600 dark:hover:text-amber-400'
                     }`}
                   >
-                    <Bookmark className={`w-3 h-3 ${post.bookmarked ? 'fill-current' : ''}`} />
+                    <Bookmark className={`w-3.5 h-3.5 ${post.bookmarked ? 'fill-current' : ''}`} />
                   </button>
                   <button
                     onClick={() => startReplyTo(post.message_id, resolveAuthorName(post.author, undefined, post.publisher_type), post.body)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-all"
                   >
-                    <Reply className="w-3 h-3" />
+                    <Reply className="w-3.5 h-3.5" />
                     {t('square.detail.reply')}
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Article body */}
+            {/* Article body with clickable images */}
             <div className="prose prose-base dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed space-y-3 [&_p]:my-2 [&_h2]:mt-6 [&_h2]:mb-3">
               {parseRichBlocks(post.body).map((block, bi) => {
                 switch (block.kind) {
                   case 'image':
-                    return (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={`post-img-${bi}`} src={toThumbnailUrl(block.url)} alt=""
-                        loading="lazy" decoding="async"
-                        className="max-h-[500px] w-auto max-w-full rounded-xl object-cover my-4" />
-                    )
+                    return <ClickableImage key={`post-img-${bi}`} src={block.url} className="max-h-[500px] w-auto max-w-full rounded-xl object-cover my-4 shadow-sm" />
                   case 'html':
                     return (
                       <div key={bi}
-                        className="[&_img]:max-h-[500px] [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl"
+                        className="[&_img]:max-h-[500px] [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl [&_img]:cursor-zoom-in [&_img]:shadow-sm"
                         dangerouslySetInnerHTML={{ __html: block.html }} />
                     )
                   case 'video':
                     return (
-                      <video key={bi} controls className="max-h-80 w-full rounded-xl my-4">
+                      <video key={bi} controls className="max-h-80 w-full rounded-xl my-4 shadow-sm">
                         <source src={block.url} />
                       </video>
                     )
@@ -776,7 +843,7 @@ export default function PostDetailPage() {
             {/* Source links */}
             {post.source_urls.length > 0 && (
               <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-2.5">
                   <ExternalLink className="w-3 h-3" />
                   {t('square.detail.sourceLinks')}
                 </div>
@@ -787,7 +854,7 @@ export default function PostDetailPage() {
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-500 rounded-full truncate max-w-[280px] transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-50 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg truncate max-w-[300px] transition-colors border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
                     >
                       <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
                       {url.replace(/^https?:\/\//, '').slice(0, 40)}
@@ -798,7 +865,6 @@ export default function PostDetailPage() {
             )}
           </div>
 
-          {/* Inline reply to post */}
           {token && replyTo === post.message_id && (
             <div className="px-6 sm:px-8 pb-6">
               {renderReplyComposer(true)}
@@ -806,35 +872,43 @@ export default function PostDetailPage() {
           )}
         </article>
 
-        {/* ── Discussion Section (Telegram-style bubbles) ── */}
-        <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 overflow-hidden">
+        {/* ── Discussion Section ── */}
+        <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MessageCircle className="w-4 h-4 text-gray-400" />
+              <MessageCircle className="w-4 h-4 text-blue-500" />
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                 {t('square.detail.discussion')}
               </h2>
-              <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+              <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full font-medium">
                 {replyCount}
               </span>
             </div>
+            {replyCount > 1 && (
+              <button
+                onClick={() => setReplySortByLikes(v => !v)}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                <ArrowUpDown className="w-3 h-3" />
+                {replySortByLikes ? t('square.detail.sortByLikes') : t('square.detail.sortByTime')}
+              </button>
+            )}
           </div>
 
           <div className="px-4 sm:px-6 py-4">
             {replies.length === 0 ? (
-              <div className="text-center py-10">
-                <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+              <div className="text-center py-12">
+                <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gradient-to-br from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center">
                   <MessageCircle className="w-6 h-6 text-gray-300 dark:text-gray-600" />
                 </div>
                 <p className="text-sm text-gray-400 dark:text-gray-500">{t('square.detail.noReplies')}</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100 dark:divide-gray-800/60">
+              <div className="divide-y divide-gray-100/80 dark:divide-gray-800/60">
                 {threadedReplies.topLevel.map(r => renderReply(r))}
               </div>
             )}
 
-            {/* Bottom reply composer */}
             {token ? (
               !replyTo ? (
                 renderReplyComposer(false)

@@ -44,20 +44,23 @@ interface SquarePost {
   bookmarked?: boolean
 }
 
-function timeAgo(ts: string) {
-  try {
-    const diff = Date.now() - new Date(ts).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 1) return '刚刚'
-    if (mins < 60) return `${mins}分钟前`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}小时前`
-    const days = Math.floor(hrs / 24)
-    if (days < 30) return `${days}天前`
-    return new Date(ts).toLocaleDateString('zh-CN')
-  } catch {
-    return ts
-  }
+function useTimeAgo() {
+  const { t } = useI18n()
+  return useCallback((ts: string) => {
+    try {
+      const diff = Date.now() - new Date(ts).getTime()
+      const mins = Math.floor(diff / 60000)
+      if (mins < 1) return t('square.timeJustNow')
+      if (mins < 60) return t('square.timeMinutesAgo', { count: String(mins) })
+      const hrs = Math.floor(mins / 60)
+      if (hrs < 24) return t('square.timeHoursAgo', { count: String(hrs) })
+      const days = Math.floor(hrs / 24)
+      if (days < 30) return t('square.timeDaysAgo', { count: String(days) })
+      return new Date(ts).toLocaleDateString()
+    } catch {
+      return ts
+    }
+  }, [t])
 }
 
 function stripHtmlToText(html: string): string {
@@ -86,6 +89,7 @@ const SORT_ICONS: Record<SortMode, typeof Star> = {
 export default function SquarePage() {
   const { data: session, status } = useSession()
   const { t } = useI18n()
+  const timeAgo = useTimeAgo()
 
   const [agents, setAgents] = useState<AgentRow[]>([])
   const [taxonomy, setTaxonomy] = useState<TaxonomyRes | null>(null)
