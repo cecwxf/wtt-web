@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles } from 'lucide-react'
+import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
@@ -41,6 +41,9 @@ interface PostDetail {
   source_urls: string[]
   agent_trace: unknown[]
   timestamp: string
+  likes?: number
+  liked?: boolean
+  bookmarked?: boolean
 }
 
 interface Reply {
@@ -259,6 +262,37 @@ export default function PostDetailPage() {
       return next
     })
   }, [])
+
+  const toggleLike = async () => {
+    if (!post || !token) return
+    const wasLiked = post.liked
+    // Optimistic update
+    mutatePost((prev: Record<string, unknown>) => prev ? {
+      ...prev,
+      post: { ...(prev.post as PostDetail), liked: !wasLiked, likes: ((prev.post as PostDetail).likes ?? 0) + (wasLiked ? -1 : 1) }
+    } : prev, false)
+    try {
+      await fetch(`/api/wtt/square/posts/${postId}/like`, {
+        method: wasLiked ? 'DELETE' : 'POST',
+        headers: authHeaders,
+      })
+    } catch { /* revert on next SWR refresh */ }
+  }
+
+  const toggleBookmark = async () => {
+    if (!post || !token) return
+    const wasBookmarked = post.bookmarked
+    mutatePost((prev: Record<string, unknown>) => prev ? {
+      ...prev,
+      post: { ...(prev.post as PostDetail), bookmarked: !wasBookmarked }
+    } : prev, false)
+    try {
+      await fetch(`/api/wtt/square/posts/${postId}/bookmark`, {
+        method: wasBookmarked ? 'DELETE' : 'POST',
+        headers: authHeaders,
+      })
+    } catch { /* revert on next SWR refresh */ }
+  }
 
   const renderReplyComposer = (compact = false) => (
     <div className={`${compact ? 'mt-3' : 'mt-4'} pt-3 border-t border-gray-100 dark:border-gray-800`}>
@@ -669,13 +703,36 @@ export default function PostDetailPage() {
                 </div>
               </div>
               {token && (
-                <button
-                  onClick={() => startReplyTo(post.message_id, resolveAuthorName(post.author, undefined, post.publisher_type), post.body)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-colors"
-                >
-                  <Reply className="w-3 h-3" />
-                  {t('square.detail.reply')}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={toggleLike}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                      post.liked
+                        ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20'
+                        : 'text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-600 dark:hover:text-rose-400'
+                    }`}
+                  >
+                    <Heart className={`w-3 h-3 ${post.liked ? 'fill-current' : ''}`} />
+                    {(post.likes ?? 0) > 0 && (post.likes ?? 0)}
+                  </button>
+                  <button
+                    onClick={toggleBookmark}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                      post.bookmarked
+                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20'
+                        : 'text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-600 dark:hover:text-amber-400'
+                    }`}
+                  >
+                    <Bookmark className={`w-3 h-3 ${post.bookmarked ? 'fill-current' : ''}`} />
+                  </button>
+                  <button
+                    onClick={() => startReplyTo(post.message_id, resolveAuthorName(post.author, undefined, post.publisher_type), post.body)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-colors"
+                  >
+                    <Reply className="w-3 h-3" />
+                    {t('square.detail.reply')}
+                  </button>
+                </div>
               )}
             </div>
 

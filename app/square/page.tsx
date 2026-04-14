@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star } from 'lucide-react'
+import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
@@ -40,6 +40,8 @@ interface SquarePost {
   quality_score?: number
   source_count?: number
   source_urls?: string[]
+  liked?: boolean
+  bookmarked?: boolean
 }
 
 function timeAgo(ts: string) {
@@ -158,6 +160,49 @@ export default function SquarePage() {
   const clearFilter = () => {
     setCategory('')
     setSub('')
+  }
+
+  const toggleLike = async (e: React.MouseEvent, postId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!token) return
+    const post = posts.find(p => p.id === postId)
+    if (!post) return
+    const wasLiked = post.liked
+    // Optimistic update
+    setPosts(prev => prev.map(p =>
+      p.id === postId ? { ...p, liked: !wasLiked, likes: wasLiked ? Math.max(0, p.likes - 1) : p.likes + 1 } : p
+    ))
+    try {
+      const res = await fetch(`/api/wtt/square/posts/${postId}/like`, {
+        method: wasLiked ? 'DELETE' : 'POST',
+        headers: authHeaders,
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, liked: data.liked, likes: data.likes ?? p.likes } : p
+        ))
+      }
+    } catch { /* revert on next refresh */ }
+  }
+
+  const toggleBookmark = async (e: React.MouseEvent, postId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!token) return
+    const post = posts.find(p => p.id === postId)
+    if (!post) return
+    const wasBookmarked = post.bookmarked
+    setPosts(prev => prev.map(p =>
+      p.id === postId ? { ...p, bookmarked: !wasBookmarked } : p
+    ))
+    try {
+      await fetch(`/api/wtt/square/posts/${postId}/bookmark`, {
+        method: wasBookmarked ? 'DELETE' : 'POST',
+        headers: authHeaders,
+      })
+    } catch { /* revert on next refresh */ }
   }
 
   if (status === 'loading') {
@@ -353,9 +398,12 @@ export default function SquarePage() {
                   >
                     <div className="flex">
                       {/* Upvote column - Zhihu style */}
-                      <div className="flex flex-col items-center justify-start py-4 px-3 border-r border-gray-100 dark:border-gray-800/60 min-w-[52px]">
-                        <ChevronUp className="w-5 h-5 text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors" />
-                        <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 mt-0.5">{post.likes || 0}</span>
+                      <div
+                        className="flex flex-col items-center justify-start py-4 px-3 border-r border-gray-100 dark:border-gray-800/60 min-w-[52px] cursor-pointer"
+                        onClick={(e) => toggleLike(e, post.id)}
+                      >
+                        <ChevronUp className={`w-5 h-5 transition-colors ${post.liked ? 'text-rose-500' : 'text-gray-300 dark:text-gray-600 group-hover:text-blue-400'}`} />
+                        <span className={`text-sm font-semibold mt-0.5 ${post.liked ? 'text-rose-500' : 'text-gray-500 dark:text-gray-400'}`}>{post.likes || 0}</span>
                       </div>
 
                       {/* Content */}
@@ -392,10 +440,19 @@ export default function SquarePage() {
                             <MessageCircle className="w-3.5 h-3.5" />
                             {post.reply_count} {t('square.replies')}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Heart className="w-3.5 h-3.5" />
-                            {post.likes}
-                          </span>
+                          <button
+                            onClick={(e) => toggleLike(e, post.id)}
+                            className={`flex items-center gap-1 transition-colors ${post.liked ? 'text-rose-500' : 'hover:text-rose-500'}`}
+                          >
+                            <Heart className={`w-3.5 h-3.5 ${post.liked ? 'fill-current' : ''}`} />
+                            {post.likes > 0 && post.likes}
+                          </button>
+                          <button
+                            onClick={(e) => toggleBookmark(e, post.id)}
+                            className={`flex items-center gap-1 transition-colors ${post.bookmarked ? 'text-amber-500' : 'hover:text-amber-500'}`}
+                          >
+                            <Bookmark className={`w-3.5 h-3.5 ${post.bookmarked ? 'fill-current' : ''}`} />
+                          </button>
                           {(post.quality_score ?? 0) > 0 && (
                             <span className="flex items-center gap-1 text-green-500 dark:text-green-400">
                               <Star className="w-3 h-3" />
