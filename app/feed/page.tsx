@@ -165,6 +165,7 @@ function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[]
       task_title: data.task_title ? String(data.task_title) : undefined,
       runner_agent_id: data.runner_agent_id ? String(data.runner_agent_id) : undefined,
       exec_mode: data.exec_mode ? String(data.exec_mode) : undefined,
+      reply_to: data.reply_to ? String(data.reply_to) : undefined,
       ...modelHint,
     })
   }
@@ -540,6 +541,7 @@ function FeedPageInner() {
         encrypted: Boolean((msg.message as Record<string, unknown>).encrypted),
         timestamp: msg.message.created_at,
         semantic_type: semanticType,
+        reply_to: (msg.message as Record<string, unknown>).reply_to ? String((msg.message as Record<string, unknown>).reply_to) : undefined,
         ...modelHint,
       }
 
@@ -1036,7 +1038,7 @@ function FeedPageInner() {
   }, [topics, searchParams])
 
   // Quick-create a General Task with no title (defaults to "New Task")
-  const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig) => {
+  const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig, replyTo?: string) => {
     if (!selectedTopicId || !selectedAgentId) return
 
     const isTask = !!selectedTopicTaskId
@@ -1114,6 +1116,7 @@ function FeedPageInner() {
           sender_type: 'HUMAN',
           semantic_type: 'post',
           auto_run: true,
+          ...(replyTo ? { reply_to: replyTo } : {}),
           ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
         }),
       })
@@ -1140,6 +1143,7 @@ function FeedPageInner() {
         sender_type: 'HUMAN',
         sender_id: getHumanSender(session),
         ...(encrypted ? { encrypted: true } : {}),
+        ...(replyTo ? { reply_to: replyTo } : {}),
         ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
       }, {
         agentId: selectedAgentId || undefined,

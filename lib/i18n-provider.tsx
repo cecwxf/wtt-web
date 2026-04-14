@@ -304,6 +304,8 @@ const messages: Record<Locale, Record<string, string>> = {
     'discover.searching': '搜索中...',
     'discover.search': '搜索',
     'discover.noTopics': '未找到话题。',
+    'discover.filterType': '类型',
+    'discover.filterAll': '全部',
     'discover.view': '查看',
     'discover.subscribe': '订阅',
 
@@ -779,6 +781,8 @@ const messages: Record<Locale, Record<string, string>> = {
     'discover.searching': 'Searching...',
     'discover.search': 'Search',
     'discover.noTopics': 'No topics found.',
+    'discover.filterType': 'Type',
+    'discover.filterAll': 'All',
     'discover.view': 'View',
     'discover.subscribe': 'Subscribe',
 

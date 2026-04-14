@@ -32,6 +32,7 @@ export interface ChatMessage {
   exec_mode?: string
   model_hint?: string
   reasoning_hint?: 'off' | 'low' | 'medium' | 'high'
+  reply_to?: string
 }
 
 export interface ChatModelConfig {
@@ -318,7 +319,7 @@ interface ChatViewProps {
   taskId?: string
   messages: ChatMessage[]
   currentAgentId: string
-  onSendMessage: (content: string, modelConfig?: ChatModelConfig) => Promise<void>
+  onSendMessage: (content: string, modelConfig?: ChatModelConfig, replyTo?: string) => Promise<void>
   onLoadOlder?: () => Promise<void>
   onExport?: (format: 'md') => void
   hasOlder?: boolean
@@ -578,7 +579,7 @@ export function ChatView({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
-  const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string; imageUrl?: string } | null>(null)
+  const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string; imageUrl?: string; replyToId?: string } | null>(null)
 
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -931,6 +932,7 @@ export function ChatView({
   }, [composerExpanded])
 
   const isDiscussTopic = topicType === 'discussion'
+  const isBroadcastTopic = topicType === 'broadcast'
   const isNonTaskDiscussTopic = isDiscussTopic && !isTaskTopic
   const isModelCommand = useCallback((cmd: string) => {
     const c = cmd.trim().toLowerCase()
@@ -1006,6 +1008,7 @@ export function ChatView({
       sender: senderName || message.sender_id,
       snippet: summary.text,
       imageUrl: summary.thumbUrl,
+      replyToId: message.message_id,
     })
 
     // Only inject @mention into draft, no quoted content
@@ -1263,7 +1266,7 @@ export function ChatView({
 
     setSending(true)
     try {
-      await onSendMessage(content, modelConfig)
+      await onSendMessage(content, modelConfig, replyContext?.replyToId)
       setDraft('')
       setReplyContext(null)
     } catch (error) {
@@ -1610,6 +1613,49 @@ export function ChatView({
                 const isMine = message.sender_type === 'human'
                 const label = senderLabelText(message.sender_display_name, message.sender_id)
 
+                // Broadcast card view — render as content card instead of chat bubble
+                if (isBroadcastTopic) {
+                  const body = stripMetaBlocks(message.content || '').body
+                  const blocks = parseRichBlocks(body)
+                  const firstImage = blocks.find(b => b.kind === 'image')
+                  return (
+                    <div key={message.message_id} className="rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <button
+                          type="button"
+                          onClick={() => message.sender_type === 'agent'
+                            ? openAgentCard(message.sender_id, message.sender_display_name, message.sender_avatar_url)
+                            : openHumanCard(message.sender_id, message.sender_display_name, message.sender_avatar_url)}
+                          className="h-7 w-7 shrink-0 overflow-hidden rounded-full border text-[10px] font-semibold shadow-sm"
+                          style={message.sender_avatar_url ? undefined : avatarTone(message.sender_id || 'agent', message.sender_type)}
+                        >
+                          {message.sender_avatar_url ? (
+                            <img src={message.sender_avatar_url} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center">{avatarInitial(message.sender_display_name || message.sender_id, message.sender_type === 'agent' ? 'A' : 'U')}</span>
+                          )}
+                        </button>
+                        <span className="text-xs font-medium text-slate-700 dark:text-zinc-300">{label}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 ml-auto">{formatTime(message.timestamp)}</span>
+                      </div>
+                      {firstImage && (
+                        <img src={firstImage.url} alt="" className="w-full max-h-[300px] object-cover rounded-lg mb-3" loading="lazy" />
+                      )}
+                      <div className="text-sm text-slate-700 dark:text-zinc-300 leading-relaxed rich-content-block">
+                        {blocks.filter(b => b.kind !== 'image' || b !== firstImage).map((block, bi) => {
+                          switch (block.kind) {
+                            case 'html': return <div key={bi} dangerouslySetInnerHTML={{ __html: block.html }} />
+                            case 'plain': return <p key={bi} className="whitespace-pre-wrap">{block.text}</p>
+                            case 'markdown': return <ReactMarkdown key={bi} remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+                            case 'image': return <img key={bi} src={block.url} alt="" className="max-h-[200px] rounded-lg my-2" loading="lazy" />
+                            default: return null
+                          }
+                        })}
+                      </div>
+                    </div>
+                  )
+                }
+
                 return (
                   <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                     <div className={`flex max-w-[96%] items-start gap-1.5 ${isMine ? 'flex-row-reverse' : ''}`}>
@@ -1657,6 +1703,20 @@ export function ChatView({
                               : 'bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-200'
                           } ${isMine ? 'rounded-br-md' : 'rounded-bl-md'} shadow-[0_1px_0_rgba(0,0,0,0.08)]`}
                         >
+                          {/* Reply-to quote preview */}
+                          {message.reply_to && (() => {
+                            const quoted = messages.find(m => m.message_id === message.reply_to)
+                            if (!quoted) return null
+                            const qSender = senderLabelText(quoted.sender_display_name, quoted.sender_id) || quoted.sender_id
+                            const qBody = stripMetaBlocks(quoted.content || '').body
+                            const qSummary = summarizeForReply(qBody)
+                            return (
+                              <div className="mb-2 rounded-lg border-l-2 border-sky-400 bg-black/5 dark:bg-white/5 px-2.5 py-1.5 text-[12px]">
+                                <span className="font-medium text-sky-600 dark:text-sky-400">{qSender}</span>
+                                <p className="line-clamp-2 text-slate-500 dark:text-zinc-400 mt-0.5">{qSummary.text || '...'}</p>
+                              </div>
+                            )
+                          })()}
                           {(() => {
                             const task = parseTaskContent(message.content || '')
                         if (task.isTask) {

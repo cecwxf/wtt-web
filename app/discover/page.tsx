@@ -45,7 +45,7 @@ function DiscoverPageInner() {
   const [randomTalkRunning, setRandomTalkRunning] = useState(false)
   const [randomTalkPreview, setRandomTalkPreview] = useState<Array<{ id: string; name: string }>>([])
   const [randomTalkSelected, setRandomTalkSelected] = useState<string[]>([])
-  const [typeFilter] = useState<'all' | 'broadcast' | 'discussion' | 'collaborative'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'broadcast' | 'discussion' | 'p2p'>('all')
   const [joinFilter] = useState<'all' | 'open' | 'invite_only'>('all')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
@@ -444,6 +444,24 @@ function DiscoverPageInner() {
             </button>
           )}
         </form>
+
+        {/* Type filter chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-slate-400 uppercase tracking-wide">{t('discover.filterType')}:</span>
+          {(['all', 'discussion', 'broadcast', 'p2p'] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => setTypeFilter(type)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                typeFilter === type
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              {type === 'all' ? t('discover.filterAll') : type.charAt(0).toUpperCase() + type.slice(1)}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
