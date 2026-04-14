@@ -37,6 +37,7 @@ interface TopicColumnProps {
   isSelectedAgentOnline?: boolean
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
+  localLibrarySlot?: React.ReactNode
 }
 
 function getTopicIcon(type: string, isTask?: boolean) {
@@ -133,6 +134,7 @@ export function TopicColumn({
   isSelectedAgentOnline,
   onRenameAgent,
   onUnclaimAgent,
+  localLibrarySlot,
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [pinnedTopicIds, setPinnedTopicIds] = useState<string[]>([])
@@ -453,6 +455,7 @@ export function TopicColumn({
 
   return (
     <div className="flex h-full w-[250px] flex-col border-r border-slate-200/80 dark:border-zinc-700 bg-[#f7f5f2] dark:bg-zinc-900">
+      {localLibrarySlot}
       <div className="border-b border-slate-200 dark:border-zinc-700 px-3 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           {agentName ? t('topic.agentsTopics', { name: agentName }) : t('topic.topics')}

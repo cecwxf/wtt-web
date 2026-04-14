@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, Video } from 'lucide-react'
+import { Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -13,6 +13,8 @@ import {
 } from '@/lib/rich-content'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
+import { isDesktop, saveToLocal } from '@/lib/desktop'
+import { buildFileContext } from '@/lib/file-context'
 
 export interface ChatMessage {
   message_id: string
@@ -632,6 +634,67 @@ export function ChatView({
   const [humanCardError, setHumanCardError] = useState<string | null>(null)
   const [humanCardRequestingAgentId, setHumanCardRequestingAgentId] = useState<string | null>(null)
   const [humanCard, setHumanCard] = useState<HumanProfileSummary | null>(null)
+
+  // Desktop: drag-drop file overlay
+  const [dragOver, setDragOver] = useState(false)
+
+  // Desktop: listen for "Analyze with Agent" events from Local Library
+  useEffect(() => {
+    if (!isDesktop()) return
+    const handler = async (e: Event) => {
+      const { files } = (e as CustomEvent).detail as { files: Array<{ path: string; name: string }> }
+      if (!files?.length) return
+      const ctx = await buildFileContext(files)
+      if (ctx) {
+        setDraft(prev => prev ? `${prev}\n\n${ctx}\n\n` : `${ctx}\n\nPlease analyze this file:\n`)
+        textareaRef.current?.focus()
+      }
+    }
+    window.addEventListener('wtt:analyze-files', handler)
+    return () => window.removeEventListener('wtt:analyze-files', handler)
+  }, [])
+
+  // Desktop: drag-drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!isDesktop()) return
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    if (!isDesktop()) return
+
+    // Extract file paths from drag data
+    const files: Array<{ path: string; name: string }> = []
+    const items = e.dataTransfer?.files
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const f = items[i]
+        // In Electron, File objects have a .path property
+        const filePath = (f as File & { path?: string }).path
+        if (filePath) {
+          files.push({ path: filePath, name: f.name })
+        }
+      }
+    }
+    if (files.length === 0) return
+
+    const ctx = await buildFileContext(files)
+    if (ctx) {
+      setDraft(prev => prev ? `${prev}\n\n${ctx}\n\n` : `${ctx}\n\nPlease analyze:\n`)
+      textareaRef.current?.focus()
+    }
+  }, [])
 
   const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
 
@@ -1529,9 +1592,19 @@ export function ChatView({
 
   return (
     <div
-      className="flex h-full flex-col"
+      className={`relative flex h-full flex-col ${dragOver ? 'ring-2 ring-inset ring-indigo-400' : ''}`}
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif' }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-indigo-50/60 dark:bg-indigo-900/30">
+          <div className="rounded-xl bg-white dark:bg-zinc-800 px-6 py-4 shadow-lg border-2 border-dashed border-indigo-400">
+            <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">📄 Drop files to analyze with Agent</p>
+          </div>
+        </div>
+      )}
       <div className={`border-b border-slate-200 dark:border-zinc-700 ${compactUi ? 'px-2 py-0.5' : 'px-3 py-1.5'}`}>
         <div className={`flex items-center justify-between ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
           <div className="min-w-0">
@@ -1994,6 +2067,21 @@ export function ChatView({
                           <Reply className="h-3 w-3" />
                           回复
                         </button>
+                        {isDesktop() && message.sender_type === 'agent' && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const content = message.content || ''
+                              const timestamp = new Date().toISOString().slice(0, 10)
+                              const name = `${message.sender_display_name || 'agent'}-${timestamp}.md`
+                              await saveToLocal(content, name)
+                            }}
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 transition hover:bg-black/5 dark:hover:bg-white/10"
+                            title="Save to Local"
+                          >
+                            <HardDriveDownload className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

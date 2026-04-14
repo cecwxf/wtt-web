@@ -81,6 +81,30 @@ interface FileChangedEvent {
   hash: string | null;
 }
 
+export interface WorkspaceInfo {
+  path: string;
+  name: string;
+  addedAt: string;
+  lastScanAt?: string;
+  fileCount: number;
+  error?: string;
+}
+
+export interface RecentFile {
+  path: string;
+  name: string;
+  workspacePath: string;
+  accessedAt: string;
+  extension: string;
+}
+
+export interface SearchMatch {
+  filePath: string;
+  relativePath: string;
+  lineNumber: number;
+  lineContent: string;
+}
+
 interface WttDesktopBridge {
   isDesktop: true;
   platform: string;
@@ -101,6 +125,16 @@ interface WttDesktopBridge {
       defaultPath?: string;
       filters?: Array<{ name: string; extensions: string[] }>;
     }) => Promise<SaveDialogResult>;
+  };
+  workspace?: {
+    list: () => Promise<WorkspaceInfo[]>;
+    add: (folderPath?: string) => Promise<WorkspaceInfo | { error: string } | null>;
+    remove: (folderPath: string) => Promise<boolean>;
+    updateMeta: (folderPath: string, meta: { fileCount?: number; lastScanAt?: string }) => Promise<boolean>;
+    search: (folderPath: string, query: string, maxResults?: number) =>
+      Promise<{ ok: boolean; results: SearchMatch[]; error?: string }>;
+    recentFiles: () => Promise<RecentFile[]>;
+    trackRecent: (file: { path: string; name: string; workspacePath: string; extension: string }) => Promise<boolean>;
   };
   localSync: {
     scanFolder: (folderPath: string, options?: ScanFolderOptions) => Promise<ScanFolderResult>;
@@ -235,6 +269,100 @@ export async function watchLocalFolder(
     unsub();
     bridge.localSync.stopWatch(watchId);
   };
+}
+
+// ── Workspace management helpers ──
+
+/**
+ * List all registered local workspaces. Desktop only.
+ */
+export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.workspace) return [];
+  const result = await bridge.workspace.list();
+  return Array.isArray(result) ? result : [];
+}
+
+/**
+ * Add a local folder as a workspace. Opens native folder dialog if no path given.
+ * Desktop only — returns null on web.
+ */
+export async function addWorkspace(folderPath?: string): Promise<WorkspaceInfo | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.workspace) return null;
+  const result = await bridge.workspace.add(folderPath);
+  if (!result || 'error' in result) return null;
+  return result as WorkspaceInfo;
+}
+
+/**
+ * Remove a workspace from the list (does not delete files).
+ */
+export async function removeWorkspace(folderPath: string): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.workspace) return false;
+  return bridge.workspace.remove(folderPath);
+}
+
+/**
+ * Search file contents within a workspace folder. Desktop only.
+ */
+export async function searchWorkspace(
+  folderPath: string,
+  query: string,
+  maxResults?: number
+): Promise<SearchMatch[]> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.workspace) return [];
+  const result = await bridge.workspace.search(folderPath, query, maxResults);
+  return result.ok ? result.results : [];
+}
+
+/**
+ * Get list of recently accessed files. Desktop only.
+ */
+export async function getRecentFiles(): Promise<RecentFile[]> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.workspace) return [];
+  return bridge.workspace.recentFiles();
+}
+
+/**
+ * Track a file as recently accessed. Desktop only.
+ */
+export async function trackRecentFile(file: {
+  path: string;
+  name: string;
+  workspacePath: string;
+  extension: string;
+}): Promise<void> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.workspace) return;
+  bridge.workspace.trackRecent(file);
+}
+
+/**
+ * Save content to a local file via save dialog. Desktop only.
+ */
+export async function saveToLocal(
+  content: string,
+  defaultName?: string,
+  filters?: Array<{ name: string; extensions: string[] }>
+): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge) return false;
+  const result = await bridge.fs.saveFileDialog({
+    title: 'Save to Local',
+    defaultPath: defaultName,
+    filters: filters ?? [
+      { name: 'Markdown', extensions: ['md'] },
+      { name: 'Text', extensions: ['txt'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (result.canceled || !result.path) return false;
+  const writeResult = await bridge.fs.writeFile(result.path, content);
+  return writeResult.ok;
 }
 
 // ── File Bridge: register local project for agent on-demand file access ──
