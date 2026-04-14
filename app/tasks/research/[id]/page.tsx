@@ -958,12 +958,14 @@ Do NOT dump PPTX content as text. Generate the file, upload it, send the URL.`
               Import Folder
             </button>
           )}
+          {/* KB hidden — feature temporarily disabled
           <button
             onClick={() => router.push(buildAgentUrl(`/tasks/kb/${taskId}`, selectedAgentId))}
             className="text-[10px] px-2 py-1 rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300 hover:bg-indigo-200"
           >
             📚 Knowledge Root
           </button>
+          */}
           <ThemeToggle />
         </div>
       </div>

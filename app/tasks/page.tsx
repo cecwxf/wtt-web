@@ -116,7 +116,7 @@ function TasksPageInner() {
   const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code'>(
     initialType === 'code' || initialType === 'research' || initialType === 'general' ? initialType : 'all'
   )
-  const [kbLoading, setKbLoading] = useState(false)
+  // const [kbLoading, setKbLoading] = useState(false) // KB hidden
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const loadAgents = useCallback(async () => {
@@ -751,6 +751,7 @@ function TasksPageInner() {
             )
           })}
           {desktop && <>
+          {/* KB hidden — feature temporarily disabled
           <div className="mx-2 h-5 w-px bg-slate-300 dark:bg-zinc-600" />
           <button
             disabled={kbLoading}
@@ -774,6 +775,7 @@ function TasksPageInner() {
           >
             {kbLoading ? '⏳...' : '📚 Knowledge Root'}
           </button>
+          */}
           </>}
         </div>
 

@@ -39,7 +39,7 @@ interface TopBarProps {
   agentId?: string
 }
 
-export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, onOpenKnowledgeRoot, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, leftSlot, agentId = '' }: TopBarProps) {
+export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, onCreateTopic, onOpenEditor, hideCreateTopic, notificationCount = 0, p2pRequests = [], onAcceptP2PRequest, onRejectP2PRequest, userMenu, leftSlot, agentId = '' }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showLanguageMenu, setShowLanguageMenu] = useState(false)
   const { theme, setTheme } = useTheme()
@@ -103,6 +103,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           <span className="hidden sm:inline">若水广场</span>
         </Link>
 
+        {/* KB hidden — feature temporarily disabled to reduce token consumption
         {desktop && onOpenKnowledgeRoot && (
           <button
             onClick={onOpenKnowledgeRoot}
@@ -113,6 +114,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
             <span className="hidden sm:inline">Knowledge Root</span>
           </button>
         )}
+        */}
 
         {!hideCreateTopic && (
           <button
