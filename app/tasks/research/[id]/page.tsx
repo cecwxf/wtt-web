@@ -12,7 +12,6 @@ import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachme
 import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, indexLocalProject } from '@/lib/desktop'
 import { FileTreePanel, scannedToFileNodes, type FileNode } from '@/components/ui/file-tree'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
-import { TaskAgentSidebar } from '@/components/ui/task-agent-sidebar'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { formatTime } from '@/lib/time'
@@ -29,7 +28,8 @@ interface ChatMsg {
 
 // ── Helpers ────────────────────────────────────────────
 const isMarkdownPath = (p: string) => /\.(md|mdx|markdown)$/i.test(p)
-const isBinaryPath = (p: string) => /\.(png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|pdf|zip|tar|gz|exe|dll|so|dylib|wasm|mp[34]|mov|avi|webm)$/i.test(p)
+const isBinaryPath = (p: string) => /\.(png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|zip|tar|gz|exe|dll|so|dylib|wasm|mp[34]|mov|avi|webm)$/i.test(p)
+const isDocumentPath = (p: string) => /\.(pdf|docx?|xlsx?|pptx?)$/i.test(p)
 const langFromExt = (p: string): string => {
   const ext = p.split('.').pop()?.toLowerCase() || ''
   const m: Record<string, string> = {
@@ -152,7 +152,7 @@ function ResearchTaskPageInner() {
 
   // ── Open Folder ────────────────────────────────────
   const openFolder = async () => {
-    const result = await pickAndScanFolder('Open folder for research')
+    const result = await pickAndScanFolder('Open folder for research', { includeBinary: true })
     if (!result || result.files.length === 0) return
     setFileTree(scannedToFileNodes(result.files))
     setLocalProjectRoot(result.path)
@@ -185,6 +185,14 @@ function ResearchTaskPageInner() {
     const fullPath = localProjectRoot ? `${localProjectRoot}/${node.path}` : node.path
     setSelectedFilePath(node.path)
     setFileLoading(true)
+    if (isDocumentPath(node.path)) {
+      // PDF/Word/Excel — show info card, agent can analyze via MCP
+      const ext = node.path.split('.').pop()?.toUpperCase() || 'DOC'
+      const name = node.path.split(/[/\\]/).pop() || node.path
+      setFileContent(`__DOCUMENT__\n${ext}\n${name}\n${fullPath}`)
+      setFileLoading(false)
+      return
+    }
     try {
       const content = await readLocalFile(fullPath)
       setFileContent(content || '(empty file)')
@@ -360,15 +368,6 @@ function ResearchTaskPageInner() {
       {/* ── Main two-column area ──────────────────── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* Agent sidebar (thin, collapsible) */}
-        <TaskAgentSidebar
-          agents={agents.map(a => ({ agent_id: a.agent_id, display_name: a.display_name }))}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={setSelectedAgentId}
-          currentUserName={session?.user?.name ?? undefined}
-          defaultCollapsed
-        />
-
         {/* ═══ LEFT COLUMN: File tree + content viewer ═══ */}
         <div className="flex flex-1 overflow-hidden">
           {/* File tree sidebar */}
@@ -417,7 +416,27 @@ function ResearchTaskPageInner() {
                     <div className="flex h-full items-center justify-center">
                       <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-500" />
                     </div>
-                  ) : isMarkdownPath(selectedFilePath) ? (
+                  ) : fileContent?.startsWith('__DOCUMENT__\n') ? (() => {
+                    const lines = fileContent.split('\n')
+                    const ext = lines[1] || 'DOC'
+                    const name = lines[2] || 'Document'
+                    const icons: Record<string, string> = { PDF: '📕', DOCX: '📘', DOC: '📘', XLSX: '📗', PPTX: '📙' }
+                    return (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="text-center px-6">
+                          <p className="text-6xl">{icons[ext] || '📄'}</p>
+                          <p className="mt-3 text-sm font-medium text-slate-700 dark:text-zinc-300">{name}</p>
+                          <p className="mt-1 text-[11px] text-slate-400 dark:text-zinc-500">{ext} document · Click below to send to agent for analysis</p>
+                          <button
+                            onClick={() => shareFilesToAgent([selectedFilePath])}
+                            className="mt-4 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600"
+                          >
+                            🤖 Send to Agent
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })() : isMarkdownPath(selectedFilePath) ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none p-4">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{fileContent}</ReactMarkdown>
                     </div>
