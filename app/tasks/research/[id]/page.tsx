@@ -152,7 +152,7 @@ function ResearchTaskPageInner() {
 
   // ── Open Folder ────────────────────────────────────
   const openFolder = async () => {
-    const result = await pickAndScanFolder('Open folder for research', { includeBinary: true })
+    const result = await pickAndScanFolder('Open folder for research', { includeAll: true, maxFileSize: 50 * 1024 * 1024 })
     if (!result || result.files.length === 0) return
     setFileTree(scannedToFileNodes(result.files))
     setLocalProjectRoot(result.path)

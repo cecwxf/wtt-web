@@ -45,6 +45,7 @@ export interface ScanFolderOptions {
   maxFileSize?: number;
   exclude?: string[];
   includeBinary?: boolean;
+  includeAll?: boolean;
 }
 
 export interface ScannedFile {
