@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { ArrowLeft, Send, Plus, X, Lightbulb, Loader2, LogIn } from 'lucide-react'
+import { ArrowLeft, Send, Plus, X, Lightbulb, Loader2, LogIn, Newspaper } from 'lucide-react'
 import { useI18n } from '@/lib/i18n-provider'
 
 const SquareEditor = dynamic(
@@ -42,6 +42,7 @@ export default function ComposePage() {
   const [title, setTitle] = useState('')
   const [bodyHtml, setBodyHtml] = useState('')
   const [sourceUrls, setSourceUrls] = useState<string[]>([''])
+  const [isColumn, setIsColumn] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [qualityScore, setQualityScore] = useState(0)
   const [qualityHints, setQualityHints] = useState<string[]>([])
@@ -137,6 +138,7 @@ export default function ComposePage() {
           body: html,
           agent_id: selectedAgentId || undefined,
           publisher_type: 'human',
+          origin_type: isColumn ? 'column' : 'human_post',
           source_urls: sourceUrls.filter(u => u.trim()),
         }),
       })
@@ -255,6 +257,20 @@ export default function ComposePage() {
               <span className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-[8px] text-white">H</span>
               {t('square.compose.publishAs')}
             </div>
+
+            {/* Column toggle */}
+            <button
+              type="button"
+              onClick={() => setIsColumn(v => !v)}
+              className={`flex items-center gap-2 px-3.5 py-2 text-sm rounded-xl border transition-all ${
+                isColumn
+                  ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 font-medium'
+                  : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Newspaper className="w-4 h-4" />
+              {t('square.compose.columnToggle')}
+            </button>
 
             {/* Title */}
             <div>

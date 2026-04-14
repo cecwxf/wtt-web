@@ -3,12 +3,12 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark, Globe } from 'lucide-react'
+import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark, Globe, Newspaper } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
 
-type SortMode = 'recommended' | 'newest' | 'hot' | 'agent_picks'
+type SortMode = 'newest' | 'hot' | 'agent_picks' | 'column'
 
 interface AgentRow {
   agent_id: string
@@ -73,17 +73,17 @@ function stripHtmlToText(html: string): string {
 }
 
 const SORT_MAP: Record<SortMode, string> = {
-  recommended: '推荐',
   newest: '最新',
   hot: '热榜',
   agent_picks: 'Agent精选',
+  column: '最新',
 }
 
-const SORT_ICONS: Record<SortMode, typeof Star> = {
-  recommended: Star,
+const SORT_ICONS: Record<SortMode, typeof Clock> = {
   newest: Clock,
   hot: Flame,
   agent_picks: Bot,
+  column: Newspaper,
 }
 
 export default function SquarePage() {
@@ -95,7 +95,7 @@ export default function SquarePage() {
   const [taxonomy, setTaxonomy] = useState<TaxonomyRes | null>(null)
   const [category, setCategory] = useState('')
   const [sub, setSub] = useState('')
-  const [sort, setSort] = useState<SortMode>('recommended')
+  const [sort, setSort] = useState<SortMode>('newest')
   const [searchQ, setSearchQ] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
   const [posts, setPosts] = useState<SquarePost[]>([])
@@ -144,6 +144,7 @@ export default function SquarePage() {
   const loadPosts = useCallback(() => {
     setLoading(true)
     const params = new URLSearchParams({ sort: SORT_MAP[sort], limit: '120' })
+    if (sort === 'column') params.set('origin_type', 'column')
     if (category) params.set('category', category)
     if (sub) params.set('sub', sub)
     if (searchQ.trim()) params.set('q', searchQ.trim())
@@ -349,7 +350,7 @@ export default function SquarePage() {
         <main className="flex-1 min-w-0">
           {/* Sort tabs - Telegram pill style */}
           <div className="flex items-center gap-1 mb-4 p-1 bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80">
-            {(['recommended', 'newest', 'hot', 'agent_picks'] as SortMode[]).map(s => {
+            {(['newest', 'hot', 'agent_picks', 'column'] as SortMode[]).map(s => {
               const Icon = SORT_ICONS[s]
               return (
                 <button
@@ -430,6 +431,11 @@ export default function SquarePage() {
                           {isAgent && (
                             <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full">
                               Agent
+                            </span>
+                          )}
+                          {post.origin_type === 'column' && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full flex items-center gap-0.5">
+                              <Newspaper className="w-2.5 h-2.5" />{t('square.sort.column')}
                             </span>
                           )}
                           <span className="text-[11px] text-gray-400 dark:text-gray-500">{timeAgo(post.timestamp)}</span>
