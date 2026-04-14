@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -15,6 +16,9 @@ import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { formatTime } from '@/lib/time'
+
+const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer'), { ssr: false })
+const AnnotationOverlay = dynamic(() => import('@/components/ui/annotation-overlay'), { ssr: false })
 
 // ── Types ──────────────────────────────────────────────
 interface Agent { id: string; agent_id: string; display_name: string; is_primary: boolean }
@@ -118,6 +122,23 @@ function ResearchTaskPageInner() {
   const resizeStartX = useRef(0)
   const resizeStartW = useRef(0)
 
+  // PDF viewer
+  const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null)
+
+  // Quote-to-chat + context menu
+  const readerRef = useRef<HTMLDivElement>(null)
+  const [quoteBtn, setQuoteBtn] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; text: string | null } | null>(null)
+
+  // Notes (localStorage per file)
+  const [fileNotes, setFileNotes] = useState<Record<string, string>>({})
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [noteDialog, setNoteDialog] = useState<{ quote: string; comment: string } | null>(null)
+
+  // Annotation overlay
+  const [showAnnotationTools, setShowAnnotationTools] = useState(0)
+  const [annotationAnchor, setAnnotationAnchor] = useState<{ x: number; y: number } | null>(null)
+
   // ── Auth + Data fetching ───────────────────────────
   const authHeaders = useCallback(() => ({
     Authorization: `Bearer ${session?.accessToken ?? ''}`,
@@ -186,6 +207,15 @@ function ResearchTaskPageInner() {
     if (typeof window !== 'undefined') localStorage.setItem('research-right-w', String(rightW))
   }, [rightW])
 
+  // Load file notes from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const saved = localStorage.getItem(`research-notes-${taskId}`)
+      if (saved) setFileNotes(JSON.parse(saved))
+    } catch {}
+  }, [taskId])
+
   // ── Open Folder ────────────────────────────────────
   const openFolder = async () => {
     const result = await pickAndScanFolder('Open folder for research', { includeAll: true, maxFileSize: 50 * 1024 * 1024 })
@@ -234,11 +264,19 @@ function ResearchTaskPageInner() {
     const fullPath = localProjectRoot ? `${localProjectRoot}/${node.path}` : node.path
     setSelectedFilePath(node.path)
     setFileLoading(true)
+    setPdfDataUrl(null)
     if (isDocumentPath(node.path)) {
       const ext = node.path.split('.').pop()?.toUpperCase() || 'DOC'
       const name = node.path.split(/[/\\]/).pop() || node.path
       setFileContent(`__DOCUMENT__\n${ext}\n${name}\n${fullPath}`)
       setReadingLevel(1)
+      // For PDFs, also try to load for inline viewing
+      if (ext === 'PDF') {
+        try {
+          const base64 = await readLocalFile(fullPath, 'base64')
+          if (base64) setPdfDataUrl(`data:application/pdf;base64,${base64}`)
+        } catch { /* PDF inline view not available */ }
+      }
       setFileLoading(false)
       return
     }
@@ -341,6 +379,55 @@ function ResearchTaskPageInner() {
     if (prompt) sendMessage(prompt)
   }
 
+  // ── Quote to Chat ─────────────────────────────────
+  const quoteToChat = (text: string) => {
+    const charCount = text.length
+    const lineCount = text.split('\n').length
+    const preview = text.slice(0, 100).replace(/\n/g, ' ').trim()
+    const ellipsis = charCount > 100 ? '...' : ''
+    const fileName = selectedFilePath.split(/[/\\]/).pop() || 'Document'
+    const ref = `📌 [Ref: "${fileName}" — ${charCount} chars, ${lineCount} lines]\n> "${preview}${ellipsis}"`
+    setChatInput(prev => prev ? `${prev}\n\n${ref}\n\n` : `${ref}\n\n`)
+    setQuoteBtn(null); setCtxMenu(null)
+    window.getSelection()?.removeAllRanges()
+  }
+
+  // ── Notes ─────────────────────────────────────────
+  const addToNotes = (text: string) => {
+    setCtxMenu(null); setQuoteBtn(null)
+    window.getSelection()?.removeAllRanges()
+    setNoteDialog({ quote: text, comment: '' })
+  }
+
+  const saveFileNote = (filePath: string, noteEntry: string) => {
+    const updated = { ...fileNotes, [filePath]: (fileNotes[filePath] || '') + noteEntry }
+    setFileNotes(updated)
+    try { localStorage.setItem(`research-notes-${taskId}`, JSON.stringify(updated)) } catch {}
+  }
+
+  const saveNote = () => {
+    if (!selectedFilePath || !noteDialog) return
+    const timestamp = new Date().toLocaleString()
+    const parts = [`\n---\n📌 ${timestamp}`]
+    if (noteDialog.quote) parts.push(`> ${noteDialog.quote.split('\n').join('\n> ')}`)
+    if (noteDialog.comment.trim()) parts.push(`\n${noteDialog.comment.trim()}`)
+    const entry = parts.join('\n') + '\n'
+    saveFileNote(selectedFilePath, entry)
+    setNotesOpen(true)
+    setNoteDialog(null)
+  }
+
+  const clearFileNotes = () => {
+    if (!selectedFilePath) return
+    const updated = { ...fileNotes }
+    delete updated[selectedFilePath]
+    setFileNotes(updated)
+    try { localStorage.setItem(`research-notes-${taskId}`, JSON.stringify(updated)) } catch {}
+  }
+
+  const currentNotes = selectedFilePath ? fileNotes[selectedFilePath] : null
+  const noteCount = currentNotes ? (currentNotes.match(/📌/g) || []).length : 0
+
   // ── Resize handler (drag from left to adjust right panel width) ──
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -365,6 +452,40 @@ function ResearchTaskPageInner() {
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  // ── Text selection: Quote to Chat + Context Menu ──
+  useEffect(() => {
+    const handleSelection = () => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+        setQuoteBtn(null); return
+      }
+      const node = sel.anchorNode
+      if (!node || !readerRef.current?.contains(node)) {
+        setQuoteBtn(null); return
+      }
+      const range = sel.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      setQuoteBtn({ x: rect.left + rect.width / 2, y: rect.top - 8, text: sel.toString().trim() })
+    }
+    const handleContextMenu = (e: MouseEvent) => {
+      if (!readerRef.current?.contains(e.target as Node)) return
+      const sel = window.getSelection()
+      const hasText = sel && !sel.isCollapsed && sel.toString().trim()
+      e.preventDefault()
+      setCtxMenu({ x: e.clientX, y: e.clientY, text: hasText ? sel!.toString().trim() : null })
+      setQuoteBtn(null)
+    }
+    const dismissCtx = () => setCtxMenu(null)
+    document.addEventListener('mouseup', handleSelection)
+    document.addEventListener('contextmenu', handleContextMenu)
+    document.addEventListener('click', dismissCtx)
+    return () => {
+      document.removeEventListener('mouseup', handleSelection)
+      document.removeEventListener('contextmenu', handleContextMenu)
+      document.removeEventListener('click', dismissCtx)
+    }
   }, [])
 
   // ── Render ─────────────────────────────────────────
@@ -478,6 +599,12 @@ function ResearchTaskPageInner() {
                       className="rounded px-1.5 py-0.5 text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
                       title="Send to agent for analysis"
                     >@Agent</button>
+                    {currentNotes && (
+                      <button
+                        onClick={() => setNotesOpen(!notesOpen)}
+                        className="rounded px-1.5 py-0.5 text-[10px] text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/30"
+                      >📝 {noteCount}</button>
+                    )}
                     <button
                       onClick={() => { setSelectedFilePath(''); setFileContent(null) }}
                       className="rounded px-1 py-0.5 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"
@@ -486,7 +613,7 @@ function ResearchTaskPageInner() {
                 </div>
 
                 {/* File content — reading-level aware */}
-                <div className="flex-1 overflow-auto">
+                <div ref={readerRef} className="flex-1 overflow-auto">
                   {fileLoading ? (
                     <div className="flex h-full items-center justify-center">
                       <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-500" />
@@ -514,28 +641,68 @@ function ResearchTaskPageInner() {
                             </div>
                           </div>
                         </div>
-                        {/* Agent analysis prompt for L2+ */}
-                        {readingLevel >= 2 && (
+                        {/* Notes for current file (document) */}
+                        {currentNotes && (
+                          <div className="rounded-lg border border-amber-100 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/20">
+                            <button
+                              onClick={() => setNotesOpen(!notesOpen)}
+                              className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-400"
+                            >
+                              <span>📝 Notes ({noteCount})</span>
+                              <span className="text-xs">{notesOpen ? '▼' : '▶'}</span>
+                            </button>
+                            {notesOpen && (
+                              <div className="px-4 pb-3 space-y-2 max-h-60 overflow-y-auto">
+                                <div className="prose prose-sm max-w-none text-slate-600 dark:text-zinc-300">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentNotes}</ReactMarkdown>
+                                </div>
+                                <button onClick={() => { if (confirm('Clear all notes for this file?')) clearFileNotes() }} className="text-[10px] text-red-400 hover:text-red-600">🗑 Clear notes</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {/* L2: Agent summary prompt */}
+                        {readingLevel >= 2 && readingLevel <= 3 && (
                           <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-950/20 p-4">
                             <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
-                              {readingLevel === 2 ? '📋 Abstract / Summary' : readingLevel === 3 ? '🎯 Conclusion / Key Points' : '📄 Full Content'}
+                              {readingLevel === 2 ? '📋 Abstract / Summary' : '🎯 Conclusion / Key Points'}
                             </h4>
                             <p className="text-[12px] text-blue-600/70 dark:text-blue-400/60 mb-3">
-                              This is a binary document. Send it to your agent for {readingLevel === 2 ? 'summary extraction' : readingLevel === 3 ? 'key points analysis' : 'full content analysis'}.
+                              This is a binary document. Send it to your agent for {readingLevel === 2 ? 'summary extraction' : 'key points analysis'}.
                             </p>
                             <button
                               onClick={() => sendMessage(
                                 readingLevel === 2
                                   ? `Please read the file \`${selectedFilePath}\` and extract its abstract or executive summary.`
-                                  : readingLevel === 3
-                                  ? `Please read the file \`${selectedFilePath}\` and extract the conclusion and key findings.`
-                                  : `Please read the file \`${selectedFilePath}\` and provide a comprehensive analysis of its full content.`
+                                  : `Please read the file \`${selectedFilePath}\` and extract the conclusion and key findings.`
                               )}
                               className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600"
                             >
-                              🤖 Ask Agent to {readingLevel === 2 ? 'Extract Summary' : readingLevel === 3 ? 'Extract Key Points' : 'Analyze Full Content'}
+                              🤖 Ask Agent to {readingLevel === 2 ? 'Extract Summary' : 'Extract Key Points'}
                             </button>
                           </div>
+                        )}
+                        {/* L4: PDF inline viewer or agent full-content prompt */}
+                        {readingLevel >= 4 && (
+                          pdfDataUrl ? (
+                            <div className="rounded-lg border border-slate-200 dark:border-zinc-700 overflow-hidden relative">
+                              <PdfViewer url={pdfDataUrl} />
+                              <AnnotationOverlay storageKey={`research-${taskId}-${selectedFilePath}`} showToolbar={showAnnotationTools} toolbarAnchor={annotationAnchor} />
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-950/20 p-4">
+                              <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">📄 Full Content</h4>
+                              <p className="text-[12px] text-blue-600/70 dark:text-blue-400/60 mb-3">
+                                This is a binary document. Send it to your agent for full content analysis.
+                              </p>
+                              <button
+                                onClick={() => sendMessage(`Please read the file \`${selectedFilePath}\` and provide a comprehensive analysis of its full content.`)}
+                                className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600"
+                              >
+                                🤖 Ask Agent to Analyze Full Content
+                              </button>
+                            </div>
+                          )
                         )}
                       </div>
                     )
@@ -558,6 +725,27 @@ function ResearchTaskPageInner() {
                           <span className="text-slate-600 dark:text-zinc-300">{fileContent.split('\n').length.toLocaleString()}</span>
                         </div>
                       </div>
+
+                      {/* Notes for current file (text) */}
+                      {currentNotes && (
+                        <div className="rounded-lg border border-amber-100 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/20">
+                          <button
+                            onClick={() => setNotesOpen(!notesOpen)}
+                            className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-400"
+                          >
+                            <span>📝 Notes ({noteCount})</span>
+                            <span className="text-xs">{notesOpen ? '▼' : '▶'}</span>
+                          </button>
+                          {notesOpen && (
+                            <div className="px-4 pb-3 space-y-2 max-h-60 overflow-y-auto">
+                              <div className="prose prose-sm max-w-none text-slate-600 dark:text-zinc-300">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentNotes}</ReactMarkdown>
+                              </div>
+                              <button onClick={() => { if (confirm('Clear all notes for this file?')) clearFileNotes() }} className="text-[10px] text-red-400 hover:text-red-600">🗑 Clear notes</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* L2: Abstract / Summary */}
                       {readingLevel >= 2 && (
@@ -600,17 +788,26 @@ function ResearchTaskPageInner() {
                       )}
                     </div>
                   ) : isMarkdownPath(selectedFilePath) ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none p-4">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{fileContent}</ReactMarkdown>
+                    <div className="relative min-h-full">
+                      <div className="prose prose-sm dark:prose-invert max-w-none p-4">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{fileContent}</ReactMarkdown>
+                      </div>
+                      <AnnotationOverlay storageKey={`research-${taskId}-${selectedFilePath}`} showToolbar={showAnnotationTools} toolbarAnchor={annotationAnchor} />
                     </div>
                   ) : langFromExt(selectedFilePath) ? (
-                    <pre className="p-4 text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-words">
-                      <code className={`language-${langFromExt(selectedFilePath)} text-slate-700 dark:text-zinc-300`}>{fileContent}</code>
-                    </pre>
+                    <div className="relative min-h-full">
+                      <pre className="p-4 text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-words">
+                        <code className={`language-${langFromExt(selectedFilePath)} text-slate-700 dark:text-zinc-300`}>{fileContent}</code>
+                      </pre>
+                      <AnnotationOverlay storageKey={`research-${taskId}-${selectedFilePath}`} showToolbar={showAnnotationTools} toolbarAnchor={annotationAnchor} />
+                    </div>
                   ) : (
-                    <pre className="p-4 text-[12px] leading-relaxed text-slate-700 dark:text-zinc-300 font-mono whitespace-pre-wrap break-words">
-                      {fileContent}
-                    </pre>
+                    <div className="relative min-h-full">
+                      <pre className="p-4 text-[12px] leading-relaxed text-slate-700 dark:text-zinc-300 font-mono whitespace-pre-wrap break-words">
+                        {fileContent}
+                      </pre>
+                      <AnnotationOverlay storageKey={`research-${taskId}-${selectedFilePath}`} showToolbar={showAnnotationTools} toolbarAnchor={annotationAnchor} />
+                    </div>
                   )}
                 </div>
               </>
@@ -787,6 +984,76 @@ function ResearchTaskPageInner() {
           </div>
         </div>
       </div>
+
+      {/* ── Floating Quote Button ─────────────────── */}
+      {quoteBtn && !ctxMenu && (
+        <div
+          className="fixed z-[100] flex items-center gap-0.5 rounded-lg bg-slate-800 shadow-lg -translate-x-1/2 -translate-y-full"
+          style={{ left: quoteBtn.x, top: quoteBtn.y }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <button onClick={() => quoteToChat(quoteBtn.text)} className="px-2.5 py-1.5 text-xs text-white hover:bg-slate-700 rounded-l-lg">💬 Chat</button>
+          <div className="w-px h-4 bg-slate-600" />
+          <button onClick={() => addToNotes(quoteBtn.text)} className="px-2.5 py-1.5 text-xs text-white hover:bg-slate-700 rounded-r-lg">📝 Note</button>
+        </div>
+      )}
+
+      {/* ── Context Menu ──────────────────────────── */}
+      {ctxMenu && (
+        <div
+          className="fixed z-[100] rounded-lg bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 shadow-xl py-1 min-w-[160px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {ctxMenu.text && (
+            <>
+              <button onClick={() => quoteToChat(ctxMenu.text!)} className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-600">💬 Quote to Chat</button>
+              <button onClick={() => addToNotes(ctxMenu.text!)} className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600">📝 Add to Notes</button>
+            </>
+          )}
+          <button
+            onClick={() => { setAnnotationAnchor(ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : null); setShowAnnotationTools(prev => prev + 1); setCtxMenu(null) }}
+            className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+          >🖊️ Annotate</button>
+        </div>
+      )}
+
+      {/* ── Note Dialog Modal ─────────────────────── */}
+      {noteDialog && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30" onClick={() => setNoteDialog(null)}>
+          <div className="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl w-[480px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3 border-b border-slate-100 dark:border-zinc-700 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200">📝 Add Note</h3>
+              <button onClick={() => setNoteDialog(null)} className="text-lg text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {noteDialog.quote && (
+                <div className="rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 px-3 py-2 text-xs text-slate-600 dark:text-zinc-400 max-h-32 overflow-y-auto">
+                  <p className="text-[10px] text-slate-400 mb-1 font-medium">Selected text:</p>
+                  <p className="italic">{noteDialog.quote}</p>
+                </div>
+              )}
+              <textarea
+                autoFocus rows={4}
+                className="w-full rounded-lg border border-slate-200 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none resize-none"
+                placeholder="Write your thoughts, annotations..."
+                value={noteDialog.comment}
+                onChange={(e) => setNoteDialog({ ...noteDialog, comment: e.target.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNote() } }}
+              />
+              <p className="text-[10px] text-slate-400">⌘/Ctrl + Enter to save</p>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 dark:border-zinc-700 flex justify-end gap-2">
+              <button onClick={() => setNoteDialog(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700">Cancel</button>
+              <button
+                onClick={saveNote}
+                disabled={!noteDialog.comment.trim() && !noteDialog.quote}
+                className="px-4 py-1.5 text-xs font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-lg disabled:opacity-50"
+              >Save Note</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
