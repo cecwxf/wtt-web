@@ -9,7 +9,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
-import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, indexLocalProject } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, indexLocalProject, checkFileBridge } from '@/lib/desktop'
 import { FileTreePanel, scannedToFileNodes, type FileNode } from '@/components/ui/file-tree'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
@@ -103,6 +103,7 @@ function ResearchTaskPageInner() {
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [fileLoading, setFileLoading] = useState(false)
   const [readingLevel, setReadingLevel] = useState<1 | 2 | 3 | 4>(4)
+  const [bridgeOnline, setBridgeOnline] = useState(false)
 
   // Chat
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
@@ -196,11 +197,15 @@ function ResearchTaskPageInner() {
     if (selectedAgentId) {
       indexLocalProject(taskId, selectedAgentId, result.path, result.files, CLIENT_WTT_API_BASE, {
         Authorization: `Bearer ${session?.accessToken ?? ''}`
-      }).then(r => {
+      }).then(async (r) => {
         if (r.ok) {
           setProjectIndexed(true)
           console.log(`[Research] Indexed ${r.indexed_files} files`)
         }
+        // Check file bridge status (WS relay for agent to read local files)
+        const status = await checkFileBridge(taskId, CLIENT_WTT_API_BASE)
+        setBridgeOnline(status.online)
+        console.log(`[Research] File bridge: registered=${status.registered} online=${status.online}`)
       }).catch(() => {})
     }
     // Compact chat notification
@@ -208,7 +213,7 @@ function ResearchTaskPageInner() {
     setChatMessages(prev => [...prev, {
       id: `import-${Date.now()}`,
       role: 'user' as const,
-      content: `📁 Folder opened: **${folderName}** (${result.files.length} files)\n_Agent can access files via MCP tools._`,
+      content: `📁 Folder opened: **${folderName}** (${result.files.length} files)\n_Agent can read files on demand — no upload needed._`,
       timestamp: new Date().toISOString(),
       sender_display_name: session?.user?.name || 'You',
     }])
@@ -393,9 +398,18 @@ function ResearchTaskPageInner() {
         </div>
         <div className="flex items-center gap-2">
           {localProjectRoot && (
-            <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate max-w-[180px]" title={localProjectRoot}>
-              📁 {localProjectRoot.split(/[/\\]/).pop()}
-            </span>
+            <>
+              <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate max-w-[180px]" title={localProjectRoot}>
+                📁 {localProjectRoot.split(/[/\\]/).pop()}
+              </span>
+              <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                bridgeOnline
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                  : 'bg-slate-100 dark:bg-zinc-700 text-slate-400 dark:text-zinc-500'
+              }`} title={bridgeOnline ? 'Agent can read local files via WS relay (no upload)' : 'File bridge not connected — agent cannot read local files'}>
+                {bridgeOnline ? '🔗 Bridge' : '⚠ Offline'}
+              </span>
+            </>
           )}
           <button
             onClick={openFolder}

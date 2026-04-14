@@ -147,6 +147,11 @@ interface WttDesktopBridge {
   };
   notify: (title: string, body: string) => Promise<void>;
   getVersion: () => Promise<string>;
+  wsPush?: {
+    connect: (opts: { agentId: string; apiUrl?: string }) => Promise<{ ok: boolean }>;
+    disconnect: () => Promise<{ ok: boolean }>;
+    status: () => Promise<{ connected: boolean; agentId?: string; unreadCount?: number }>;
+  };
 }
 
 declare global {
@@ -369,6 +374,28 @@ export async function saveToLocal(
 // ── File Bridge: register local project for agent on-demand file access ──
 
 /**
+ * Ensure the Desktop's main-process WebSocket is connected to the WTT backend.
+ * This WS connection is needed for the file bridge relay: when the remote agent
+ * calls wtt_local_read/write/tree MCP tools, the backend relays the request
+ * to the Desktop via WS, Desktop reads the local file, and responds via WS.
+ * No file content is uploaded to the server — only relayed in real-time.
+ */
+export async function connectDesktopWs(agentId: string): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.wsPush) return false;
+  try {
+    const status = await bridge.wsPush.status();
+    if (status.connected) return true; // already connected
+    await bridge.wsPush.connect({ agentId });
+    console.log(`[DesktopWS] Connected for file bridge relay (agent=${agentId})`);
+    return true;
+  } catch (err) {
+    console.warn('[DesktopWS] Connection failed:', err);
+    return false;
+  }
+}
+
+/**
  * Register a local project with the WTT backend so the agent can read files
  * on demand via WebSocket relay (Desktop file bridge).
  *
@@ -443,14 +470,18 @@ export async function indexLocalProject(
   // Step 1: Register file bridge for on-demand file access
   await registerFileBridge(taskId, agentId, projectRoot, files, apiBase);
 
-  // Step 2: Build language stats
+  // Step 2: Ensure Desktop WS is connected for file bridge relay
+  // (agent calls wtt_local_read → backend WS relay → Desktop reads file → responds)
+  connectDesktopWs(agentId).catch(() => {});
+
+  // Step 3: Build language stats
   const extCount: Record<string, number> = {};
   for (const f of files) {
     const ext = (f.extension || '').replace(/^\./, '');
     if (ext) extCount[ext] = (extCount[ext] || 0) + 1;
   }
 
-  // Step 3: Send project index to backend
+  // Step 4: Send project index to backend
   try {
     const baseUrl = apiBase || (typeof window !== 'undefined' && (window as unknown as Record<string, string>).__WTT_API_BASE) || '';
     const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json', ...headers };
