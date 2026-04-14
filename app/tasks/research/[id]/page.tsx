@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -41,6 +41,40 @@ const langFromExt = (p: string): string => {
   return m[ext] || ''
 }
 
+// ── Text extraction helpers (for reading levels) ───────
+const cleanPdfText = (text: string): string => {
+  let s = text
+  s = s.replace(/(\w)-\n(\w)/g, '$1$2')
+  s = s.replace(/([^.!?\n])\n([a-z])/g, '$1 $2')
+  s = s.replace(/[^\S\n]+/g, ' ')
+  s = s.replace(/\n{3,}/g, '\n\n')
+  return s.trim()
+}
+
+const extractAbstract = (content: string): string | null => {
+  const m = content.match(/(?:^|\n)#{1,3}\s*Abstract\s*\n([\s\S]*?)(?=\n#{1,3}\s|\n\n\n|\n(?:Introduction|1[\.\s]))/i)
+    || content.match(/(?:^|\n)Abstract[:\s]*\n([\s\S]*?)(?=\n\n\n|\n(?:Introduction|Keywords|1[\.\s]))/i)
+  if (m) return cleanPdfText(m[1].trim()).slice(0, 3000)
+  const lines = content.split('\n').filter(l => l.trim())
+  if (lines.length > 3) {
+    const excerpt = lines.slice(1, 12).join('\n').trim()
+    if (excerpt.length > 80) return cleanPdfText(excerpt).slice(0, 1500)
+  }
+  return null
+}
+
+const extractConclusion = (content: string): string | null => {
+  const m = content.match(/(?:^|\n)#{1,3}\s*(?:Conclusions?|Summary|Discussion and Conclusions?|Concluding Remarks)\s*\n([\s\S]*?)(?=\n#{1,3}\s*(?:References|Bibliography|Acknowledgments|Appendix)|\n\n\n|$)/i)
+    || content.match(/(?:^|\n)(?:Conclusions?|Summary)\s*\n([\s\S]*?)(?=\n(?:References|Bibliography)|$)/i)
+  if (m) return cleanPdfText(m[1].trim()).slice(0, 5000)
+  const refIdx = content.search(/\n#{1,3}\s*References/i)
+  const end = refIdx > 0 ? content.slice(Math.max(0, refIdx - 2000), refIdx) : content.slice(-2000)
+  const cleaned = cleanPdfText(end)
+  return cleaned.length > 100 ? cleaned : null
+}
+
+const LEVEL_LABELS = ['', '📋 Metadata', '📋 Abstract', '🎯 Conclusion', '📄 Full Text'] as const
+
 // ── Page ───────────────────────────────────────────────
 export default function ResearchTaskPageWrapper() {
   return <Suspense fallback={null}><ResearchTaskPageInner /></Suspense>
@@ -68,6 +102,7 @@ function ResearchTaskPageInner() {
   const [selectedFilePath, setSelectedFilePath] = useState('')
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [fileLoading, setFileLoading] = useState(false)
+  const [readingLevel, setReadingLevel] = useState<1 | 2 | 3 | 4>(4)
 
   // Chat
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
@@ -179,6 +214,15 @@ function ResearchTaskPageInner() {
     }])
   }
 
+  // Computed extractions for reading levels
+  const abstractText = useMemo(() => (fileContent && !fileContent.startsWith('__DOCUMENT__')) ? extractAbstract(fileContent) : null, [fileContent])
+  const conclusionText = useMemo(() => (fileContent && !fileContent.startsWith('__DOCUMENT__')) ? extractConclusion(fileContent) : null, [fileContent])
+  const fileSizeStr = useMemo(() => {
+    if (!fileContent || fileContent.startsWith('__DOCUMENT__')) return ''
+    const bytes = new Blob([fileContent]).size
+    return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`
+  }, [fileContent])
+
   // ── View a file ────────────────────────────────────
   const viewFile = async (node: FileNode) => {
     if (node.kind !== 'file' || isBinaryPath(node.path)) return
@@ -186,18 +230,20 @@ function ResearchTaskPageInner() {
     setSelectedFilePath(node.path)
     setFileLoading(true)
     if (isDocumentPath(node.path)) {
-      // PDF/Word/Excel — show info card, agent can analyze via MCP
       const ext = node.path.split('.').pop()?.toUpperCase() || 'DOC'
       const name = node.path.split(/[/\\]/).pop() || node.path
       setFileContent(`__DOCUMENT__\n${ext}\n${name}\n${fullPath}`)
+      setReadingLevel(1)
       setFileLoading(false)
       return
     }
     try {
       const content = await readLocalFile(fullPath)
       setFileContent(content || '(empty file)')
+      setReadingLevel(4)
     } catch {
       setFileContent('(failed to read file)')
+      setReadingLevel(4)
     } finally {
       setFileLoading(false)
     }
@@ -389,16 +435,30 @@ function ResearchTaskPageInner() {
           <div className="flex-1 overflow-hidden flex flex-col min-w-0">
             {fileContent !== null ? (
               <>
-                {/* File header bar */}
+                {/* File header bar with L1-L4 buttons */}
                 <div className="flex h-8 shrink-0 items-center justify-between border-b border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 px-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[11px] font-medium text-slate-600 dark:text-zinc-300 truncate">{selectedFilePath.split(/[/\\]/).pop()}</span>
-                    <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">{selectedFilePath}</span>
                     {langFromExt(selectedFilePath) && (
                       <span className="rounded bg-slate-100 dark:bg-zinc-700 px-1 py-0.5 text-[9px] text-slate-500 dark:text-zinc-400">{langFromExt(selectedFilePath)}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {/* Reading level buttons */}
+                    <div className="flex items-center border border-slate-200 dark:border-zinc-600 rounded overflow-hidden mr-2">
+                      {([1, 2, 3, 4] as const).map(level => (
+                        <button
+                          key={level}
+                          onClick={() => setReadingLevel(level)}
+                          className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                            readingLevel === level
+                              ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300'
+                              : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
+                          }`}
+                          title={LEVEL_LABELS[level]}
+                        >L{level}</button>
+                      ))}
+                    </div>
                     <button
                       onClick={() => shareFilesToAgent([selectedFilePath])}
                       className="rounded px-1.5 py-0.5 text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
@@ -410,7 +470,8 @@ function ResearchTaskPageInner() {
                     >✕</button>
                   </div>
                 </div>
-                {/* File content */}
+
+                {/* File content — reading-level aware */}
                 <div className="flex-1 overflow-auto">
                   {fileLoading ? (
                     <div className="flex h-full items-center justify-center">
@@ -420,23 +481,111 @@ function ResearchTaskPageInner() {
                     const lines = fileContent.split('\n')
                     const ext = lines[1] || 'DOC'
                     const name = lines[2] || 'Document'
+                    const docPath = lines[3] || ''
                     const icons: Record<string, string> = { PDF: '📕', DOCX: '📘', DOC: '📘', XLSX: '📗', PPTX: '📙' }
                     return (
-                      <div className="flex h-full items-center justify-center">
-                        <div className="text-center px-6">
-                          <p className="text-6xl">{icons[ext] || '📄'}</p>
-                          <p className="mt-3 text-sm font-medium text-slate-700 dark:text-zinc-300">{name}</p>
-                          <p className="mt-1 text-[11px] text-slate-400 dark:text-zinc-500">{ext} document · Click below to send to agent for analysis</p>
-                          <button
-                            onClick={() => shareFilesToAgent([selectedFilePath])}
-                            className="mt-4 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600"
-                          >
-                            🤖 Send to Agent
-                          </button>
+                      <div className="p-4 space-y-4">
+                        {/* L1: Document metadata */}
+                        <div className="rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50/80 dark:bg-zinc-800/50 p-4">
+                          <div className="flex items-start gap-4">
+                            <span className="text-5xl">{icons[ext] || '📄'}</span>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-base font-semibold text-slate-700 dark:text-zinc-200">{name}</h3>
+                              <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+                                <span className="text-slate-400">Type</span>
+                                <span className="text-slate-600 dark:text-zinc-300">{ext} Document</span>
+                                <span className="text-slate-400">Path</span>
+                                <span className="text-slate-600 dark:text-zinc-300 truncate" title={docPath}>{docPath}</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
+                        {/* Agent analysis prompt for L2+ */}
+                        {readingLevel >= 2 && (
+                          <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-950/20 p-4">
+                            <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              {readingLevel === 2 ? '📋 Abstract / Summary' : readingLevel === 3 ? '🎯 Conclusion / Key Points' : '📄 Full Content'}
+                            </h4>
+                            <p className="text-[12px] text-blue-600/70 dark:text-blue-400/60 mb-3">
+                              This is a binary document. Send it to your agent for {readingLevel === 2 ? 'summary extraction' : readingLevel === 3 ? 'key points analysis' : 'full content analysis'}.
+                            </p>
+                            <button
+                              onClick={() => sendMessage(
+                                readingLevel === 2
+                                  ? `Please read the file \`${selectedFilePath}\` and extract its abstract or executive summary.`
+                                  : readingLevel === 3
+                                  ? `Please read the file \`${selectedFilePath}\` and extract the conclusion and key findings.`
+                                  : `Please read the file \`${selectedFilePath}\` and provide a comprehensive analysis of its full content.`
+                              )}
+                              className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600"
+                            >
+                              🤖 Ask Agent to {readingLevel === 2 ? 'Extract Summary' : readingLevel === 3 ? 'Extract Key Points' : 'Analyze Full Content'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )
-                  })() : isMarkdownPath(selectedFilePath) ? (
+                  })() : readingLevel < 4 ? (
+                    /* L1-L3: Progressive reading cards for text files */
+                    <div className="p-4 space-y-4">
+                      {/* L1: File metadata — always shown */}
+                      <div className="rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50/80 dark:bg-zinc-800/50 p-4">
+                        <h4 className="text-sm font-medium text-slate-600 dark:text-zinc-300 mb-2">📋 File Info</h4>
+                        <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12px]">
+                          <span className="text-slate-400">Name</span>
+                          <span className="font-medium text-slate-700 dark:text-zinc-200">{selectedFilePath.split(/[/\\]/).pop()}</span>
+                          <span className="text-slate-400">Path</span>
+                          <span className="text-slate-600 dark:text-zinc-300 truncate">{selectedFilePath}</span>
+                          <span className="text-slate-400">Type</span>
+                          <span className="text-slate-600 dark:text-zinc-300">{langFromExt(selectedFilePath) || selectedFilePath.split('.').pop()?.toUpperCase() || 'Text'}</span>
+                          <span className="text-slate-400">Size</span>
+                          <span className="text-slate-600 dark:text-zinc-300">{fileSizeStr}</span>
+                          <span className="text-slate-400">Lines</span>
+                          <span className="text-slate-600 dark:text-zinc-300">{fileContent.split('\n').length.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {/* L2: Abstract / Summary */}
+                      {readingLevel >= 2 && (
+                        <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-950/20 p-4">
+                          <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">📋 Abstract / Summary</h4>
+                          {abstractText ? (
+                            <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-relaxed">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{abstractText}</ReactMarkdown>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-[12px] text-blue-600/60 dark:text-blue-400/50 mb-2">No abstract detected. Ask your agent to summarize.</p>
+                              <button
+                                onClick={() => sendMessage(`Please read the file \`${selectedFilePath}\` and provide a brief abstract or summary.`)}
+                                className="rounded bg-blue-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-blue-600"
+                              >🤖 Generate Summary</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* L3: Conclusion / Key Points */}
+                      {readingLevel >= 3 && (
+                        <div className="rounded-lg border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 dark:bg-emerald-950/20 p-4">
+                          <h4 className="text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-2">🎯 Conclusion / Key Points</h4>
+                          {conclusionText ? (
+                            <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-relaxed">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{conclusionText}</ReactMarkdown>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-[12px] text-emerald-600/60 dark:text-emerald-400/50 mb-2">No conclusion detected. Ask your agent to extract key points.</p>
+                              <button
+                                onClick={() => sendMessage(`Please read the file \`${selectedFilePath}\` and extract the conclusion or key findings.`)}
+                                className="rounded bg-emerald-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-600"
+                              >🤖 Extract Key Points</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : isMarkdownPath(selectedFilePath) ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none p-4">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{fileContent}</ReactMarkdown>
                     </div>
@@ -460,7 +609,7 @@ function ResearchTaskPageInner() {
                     {fileTree.length > 0 ? 'Select a file to view' : 'Open a folder to browse files'}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-400 dark:text-zinc-500 max-w-[240px] mx-auto">
-                    Browse files and chat with your AI research assistant. Files stay local — the agent reads them via MCP tools.
+                    Browse files with L1–L4 reading levels. L1 Metadata → L2 Abstract → L3 Key Points → L4 Full Text.
                   </p>
                   {fileTree.length === 0 && (
                     <button
