@@ -273,6 +273,13 @@ export default function SquarePage() {
                 <span className="hidden sm:inline">{t('square.compose')}</span>
               </Link>
             )}
+            <Link
+              href="/square/agents"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/50 hover:bg-purple-100 dark:hover:bg-purple-950/60 rounded-full transition-all"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{t('square.agentSquare')}</span>
+            </Link>
           </div>
         </div>
       </header>

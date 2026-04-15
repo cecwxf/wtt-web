@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown, Globe } from 'lucide-react'
+import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown, Globe, Coins, Loader2, Zap, AlertCircle } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
@@ -162,6 +162,21 @@ export default function PostDetailPage() {
   const [agents, setAgents] = useState<Array<{ agent_id: string; display_name: string }>>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
 
+  // @Agent dispatch state
+  const [showDispatch, setShowDispatch] = useState(false)
+  const [dispatchTags, setDispatchTags] = useState<string[]>([])
+  const [dispatching, setDispatching] = useState(false)
+  const [dispatchError, setDispatchError] = useState('')
+  const [dispatchSuccess, setDispatchSuccess] = useState('')
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
+  const [availableTags, setAvailableTags] = useState<Array<{ key: string; label: string }>>([])
+
+  const TAG_ICONS: Record<string, string> = {
+    coding: '💻', medical: '🏥', art: '🎨', emotional: '💝',
+    research: '🔬', finance: '📊', education: '📚', writing: '✍️',
+    translation: '🌐', legal: '⚖️',
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
 
@@ -170,6 +185,46 @@ export default function PostDetailPage() {
     if (token) h['Authorization'] = `Bearer ${token}`
     return h
   }, [token])
+
+  // Load economy data when dispatch modal opens
+  useEffect(() => {
+    if (!showDispatch || !token) return
+    fetch('/api/wtt/economy/credits', { headers: authHeaders })
+      .then(r => r.json())
+      .then(d => setCreditBalance(d.balance ?? null))
+      .catch(() => {})
+    fetch('/api/wtt/economy/tags')
+      .then(r => r.json())
+      .then(d => setAvailableTags(d.tags || []))
+      .catch(() => {})
+  }, [showDispatch, token, authHeaders])
+
+  const handleDispatchAgent = async () => {
+    if (dispatchTags.length === 0) { setDispatchError(t('economy.requestSelectTags')); return }
+    setDispatching(true)
+    setDispatchError('')
+    setDispatchSuccess('')
+    try {
+      const res = await fetch('/api/wtt/economy/request-agent', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ post_id: postId, tags: dispatchTags }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        if (res.status === 402) setDispatchError(t('economy.insufficientCredits'))
+        else setDispatchError(d.detail || t('economy.requestFailed'))
+        return
+      }
+      setDispatchSuccess(t('economy.requestSuccess'))
+      setCreditBalance(prev => prev !== null ? prev - 10 : null)
+      setTimeout(() => { setShowDispatch(false); setDispatchSuccess(''); setDispatchTags([]) }, 2000)
+    } catch {
+      setDispatchError(t('economy.requestFailed'))
+    } finally {
+      setDispatching(false)
+    }
+  }
 
   const filteredAgents = useMemo(() => {
     const q = agentQuery.trim().toLowerCase()
@@ -715,6 +770,7 @@ export default function PostDetailPage() {
 
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-b from-[#f6f7f9] to-[#eef0f4] dark:from-[#0e0e10] dark:to-[#141417]">
       {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
@@ -894,15 +950,26 @@ export default function PostDetailPage() {
                 {replyCount}
               </span>
             </div>
-            {replyCount > 1 && (
-              <button
-                onClick={() => setReplySortByLikes(v => !v)}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                <ArrowUpDown className="w-3 h-3" />
-                {replySortByLikes ? t('square.detail.sortByLikes') : t('square.detail.sortByTime')}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {replyCount > 1 && (
+                <button
+                  onClick={() => setReplySortByLikes(v => !v)}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <ArrowUpDown className="w-3 h-3" />
+                  {replySortByLikes ? t('square.detail.sortByLikes') : t('square.detail.sortByTime')}
+                </button>
+              )}
+              {token && (
+                <button
+                  onClick={() => { setShowDispatch(true); setDispatchError(''); setDispatchSuccess(''); setDispatchTags([]) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/50 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-950/60 transition"
+                >
+                  <Zap className="w-3 h-3" />
+                  {t('economy.requestAgent')}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="px-4 sm:px-6 py-4">
@@ -938,5 +1005,59 @@ export default function PostDetailPage() {
         </div>
       </div>
     </div>
+
+    {/* ── @Agent Dispatch Modal ── */}
+    {showDispatch && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowDispatch(false)}>
+        <div className="w-full max-w-sm mx-4 p-5 rounded-2xl bg-white dark:bg-[#1e1e21] border border-gray-200 dark:border-gray-700 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-purple-500" />
+              {t('economy.requestAgent')}
+            </h3>
+            <button onClick={() => setShowDispatch(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"><X className="w-4 h-4" /></button>
+          </div>
+
+          <div className="flex items-center justify-between mb-4 p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
+            <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1"><Coins className="w-3 h-3" />{t('economy.creditsBalance')}</span>
+            <span className="font-bold text-amber-700 dark:text-amber-300">{creditBalance ?? '—'}</span>
+          </div>
+
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{t('economy.requestSelectTags')}</label>
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {availableTags.map(tag => (
+              <button
+                key={tag.key}
+                onClick={() => setDispatchTags(prev => prev.includes(tag.key) ? prev.filter(k => k !== tag.key) : [...prev, tag.key])}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
+                  dispatchTags.includes(tag.key)
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+              >
+                {TAG_ICONS[tag.key] || '🏷️'} {tag.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="text-xs text-gray-400 dark:text-gray-500 mb-3 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" /> {t('economy.requestCost')}
+          </div>
+
+          {dispatchError && <div className="text-xs text-red-500 mb-3 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{dispatchError}</div>}
+          {dispatchSuccess && <div className="text-xs text-green-500 mb-3 flex items-center gap-1">✓ {dispatchSuccess}</div>}
+
+          <button
+            onClick={handleDispatchAgent}
+            disabled={dispatching || dispatchTags.length === 0 || !!dispatchSuccess}
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm font-medium disabled:opacity-50 hover:shadow-md transition flex items-center justify-center gap-2"
+          >
+            {dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            {dispatching ? t('economy.requesting') : t('economy.requestAgent')}
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
