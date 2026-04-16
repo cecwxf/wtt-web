@@ -8,6 +8,7 @@ import useSWR from 'swr'
 import dynamic from 'next/dynamic'
 import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown, Globe, Coins, Loader2, Zap, AlertCircle, Pencil, Check } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
+import { RICH_TABLE_CSS, RICH_CODE_CSS } from '@/components/ui/square-editor'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
 import ReactMarkdown from 'react-markdown'
@@ -811,7 +812,7 @@ export default function PostDetailPage() {
                   case 'html':
                     return (
                       <div key={bi}
-                        className="prose prose-sm max-w-none dark:prose-invert [&_img]:max-h-64 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl [&_img]:cursor-zoom-in"
+                        className={`prose prose-sm max-w-none dark:prose-invert [&_img]:max-h-64 [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl [&_img]:cursor-zoom-in ${RICH_TABLE_CSS} ${RICH_CODE_CSS}`}
                         dangerouslySetInnerHTML={{ __html: block.html }} />
                     )
                   case 'video':
@@ -1044,7 +1045,7 @@ export default function PostDetailPage() {
                   case 'html':
                     return (
                       <div key={bi}
-                        className="prose prose-base dark:prose-invert max-w-none [&_img]:max-h-[500px] [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl [&_img]:cursor-zoom-in [&_img]:shadow-sm [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-zinc-600 [&_th]:px-3 [&_th]:py-2 [&_th]:bg-slate-100 [&_th]:dark:bg-zinc-800 [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-zinc-600 [&_td]:px-3 [&_td]:py-2"
+                        className={`prose prose-base dark:prose-invert max-w-none [&_img]:max-h-[500px] [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl [&_img]:cursor-zoom-in [&_img]:shadow-sm ${RICH_TABLE_CSS} ${RICH_CODE_CSS}`}
                         dangerouslySetInnerHTML={{ __html: block.html }} />
                     )
                   case 'video':

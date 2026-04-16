@@ -45,6 +45,10 @@ import TextAlign from '@tiptap/extension-text-align'
 const CLIENT_WTT_API_BASE = '/api/wtt'
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
+/* Shared rich-content CSS for editor & viewer (code blocks, tables, inline code) */
+export const RICH_TABLE_CSS = '[&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-zinc-600 [&_th]:px-3 [&_th]:py-2 [&_th]:bg-slate-100 [&_th]:dark:bg-zinc-800 [&_th]:font-semibold [&_th]:text-left [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-zinc-600 [&_td]:px-3 [&_td]:py-2'
+export const RICH_CODE_CSS = '[&_pre]:bg-slate-900 [&_pre]:dark:bg-zinc-900 [&_pre]:text-slate-50 [&_pre]:rounded-lg [&_pre]:p-4 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:text-sm [&_pre]:leading-relaxed [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-inherit [&_pre_code]:text-sm [&_code]:bg-slate-100 [&_code]:dark:bg-zinc-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono [&_code]:text-indigo-700 [&_code]:dark:text-indigo-300'
+
 /* ------------------------------------------------------------------ */
 /*  Markdown → HTML converter                                          */
 /* ------------------------------------------------------------------ */
@@ -302,8 +306,8 @@ export function SquareEditor({
     editorProps: {
       attributes: {
         class: isMini
-          ? 'prose prose-sm dark:prose-invert max-w-none outline-none px-3 py-3 min-h-[360px] [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-zinc-600 [&_th]:px-3 [&_th]:py-2 [&_th]:bg-slate-100 [&_th]:dark:bg-zinc-800 [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-zinc-600 [&_td]:px-3 [&_td]:py-2'
-          : 'prose prose-base dark:prose-invert max-w-none outline-none px-4 py-4 min-h-[820px] [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-zinc-600 [&_th]:px-3 [&_th]:py-2 [&_th]:bg-slate-100 [&_th]:dark:bg-zinc-800 [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-zinc-600 [&_td]:px-3 [&_td]:py-2',
+          ? `prose prose-sm dark:prose-invert max-w-none outline-none px-3 py-3 min-h-[360px] ${RICH_TABLE_CSS} ${RICH_CODE_CSS}`
+          : `prose prose-base dark:prose-invert max-w-none outline-none px-4 py-4 min-h-[820px] ${RICH_TABLE_CSS} ${RICH_CODE_CSS}`,
       },
       handleDrop: (_view, event) => {
         const files = event.dataTransfer?.files
