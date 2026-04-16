@@ -279,7 +279,13 @@ export function parseRichBlocks(content: string): ParsedRichBlock[] {
     return blocks.length > 0 ? blocks : [{ kind: 'html', html: proxyHtmlMedia(c) }]
   }
 
-  // HTML without images: collapse to plain text and re-parse
+  // Rich HTML (headings, lists, tables, blockquotes) — preserve as HTML
+  const HAS_RICH_HTML = /<(?:h[1-6]|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|pre|code)\b/i
+  if (HAS_HTML_TAG.test(c) && HAS_RICH_HTML.test(c)) {
+    return [{ kind: 'html', html: proxyHtmlMedia(c) }]
+  }
+
+  // Simple HTML without rich elements: collapse to plain text and re-parse
   if (HAS_HTML_TAG.test(c)) {
     const plain = htmlToPlainText(c)
     if (!plain) return [{ kind: 'plain', text: '' }]

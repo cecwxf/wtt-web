@@ -1044,7 +1044,7 @@ export default function PostDetailPage() {
                   case 'html':
                     return (
                       <div key={bi}
-                        className="[&_img]:max-h-[500px] [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl [&_img]:cursor-zoom-in [&_img]:shadow-sm"
+                        className="prose prose-base dark:prose-invert max-w-none [&_img]:max-h-[500px] [&_img]:w-auto [&_img]:max-w-full [&_img]:rounded-xl [&_img]:cursor-zoom-in [&_img]:shadow-sm [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-zinc-600 [&_th]:px-3 [&_th]:py-2 [&_th]:bg-slate-100 [&_th]:dark:bg-zinc-800 [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-zinc-600 [&_td]:px-3 [&_td]:py-2"
                         dangerouslySetInnerHTML={{ __html: block.html }} />
                     )
                   case 'video':
