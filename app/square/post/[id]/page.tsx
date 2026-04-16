@@ -6,10 +6,14 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown, Globe, Coins, Loader2, Zap, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown, Globe, Coins, Loader2, Zap, AlertCircle, Pencil, Check } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -137,6 +141,58 @@ function ClickableImage({ src, className }: { src: string; className?: string })
   )
 }
 
+// ── Markdown Renderer ──
+function MarkdownBlock({ text, className }: { text: string; className?: string }) {
+  return (
+    <div className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ className: cn, children, ...props }) {
+            const match = /language-(\w+)/.exec(cn || '')
+            const codeStr = String(children).replace(/\n$/, '')
+            if (match) {
+              return (
+                <div className="relative group">
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(codeStr) }}
+                    className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 text-[10px] rounded bg-zinc-700 text-zinc-300 hover:bg-zinc-600 z-10"
+                  >Copy</button>
+                  <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div"
+                    customStyle={{ borderRadius: '0.5rem', fontSize: '0.85rem' }}>
+                    {codeStr}
+                  </SyntaxHighlighter>
+                </div>
+              )
+            }
+            return <code className="bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-sm font-mono text-indigo-700 dark:text-indigo-300" {...props}>{children}</code>
+          },
+          table({ children, ...props }) {
+            return <div className="overflow-x-auto my-4"><table className="min-w-full border-collapse border border-slate-300 dark:border-zinc-600" {...props}>{children}</table></div>
+          },
+          th({ children, ...props }) {
+            return <th className="border border-slate-300 dark:border-zinc-600 bg-slate-100 dark:bg-zinc-800 px-3 py-2 text-left text-sm font-semibold" {...props}>{children}</th>
+          },
+          td({ children, ...props }) {
+            return <td className="border border-slate-300 dark:border-zinc-600 px-3 py-2 text-sm" {...props}>{children}</td>
+          },
+          blockquote({ children, ...props }) {
+            return <blockquote className="border-l-4 border-indigo-300 dark:border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20 pl-4 py-2 my-4 italic" {...props}>{children}</blockquote>
+          },
+          img({ src, alt, ...props }) {
+            return <figure className="my-4"><img src={src} alt={alt || ''} className="rounded-lg shadow-md max-w-full" {...props} />{alt && <figcaption className="text-center text-xs text-slate-400 mt-2">{alt}</figcaption>}</figure>
+          },
+          hr() {
+            return <hr className="my-8 border-slate-300 dark:border-zinc-600" />
+          },
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
 export default function PostDetailPage() {
   const params = useParams()
   const { data: session } = useSession()
@@ -172,6 +228,15 @@ export default function PostDetailPage() {
   const [dailyLimit, setDailyLimit] = useState(10)
   const [availableTags, setAvailableTags] = useState<Array<{ key: string; label: string }>>([])
 
+  // Edit state
+  const [isEditing, setIsEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editBody, setEditBody] = useState('')
+  const [saving, setSaving] = useState(false)
+  const editEditorRef = useRef<EditorHelpers | null>(null)
+  const handleEditEditorReady = useCallback((helpers: EditorHelpers) => {
+    editEditorRef.current = helpers
+  }, [])
   const TAG_ICONS: Record<string, string> = {
     coding: '💻', medical: '🏥', art: '🎨', emotional: '💝',
     research: '🔬', finance: '📊', education: '📚', writing: '✍️',
@@ -272,6 +337,47 @@ export default function PostDetailPage() {
   const post: PostDetail | null = postData?.post ?? null
   const replies: ReplyData[] = postData?.replies ?? []
   const replyCount: number = postData?.reply_count ?? 0
+  const isAuthor: boolean = postData?.is_author ?? false
+
+  const startEditing = useCallback(() => {
+    if (!post) return
+    setEditTitle(post.title)
+    setEditBody(post.body)
+    setIsEditing(true)
+  }, [post])
+
+  const cancelEditing = useCallback(() => {
+    setIsEditing(false)
+    setEditTitle('')
+    setEditBody('')
+  }, [])
+
+  const saveEdit = useCallback(async () => {
+    if (!post || saving) return
+    const html = editEditorRef.current?.getHTML() || editBody
+    const finalTitle = editTitle.trim()
+    const finalBody = html.trim()
+    if (!finalTitle && !finalBody) return
+
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/wtt/square/posts/${postId}`, {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({ title: finalTitle || undefined, body: finalBody || undefined }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.detail || `${res.status}`)
+      }
+      setIsEditing(false)
+      mutatePost()
+    } catch (e) {
+      alert(`${t('square.edit.saveFailed')}: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setSaving(false)
+    }
+  }, [post, saving, editTitle, editBody, postId, authHeaders, mutatePost, t])
 
   useEffect(() => {
     if (!token) return
@@ -717,7 +823,7 @@ export default function PostDetailPage() {
                   case 'audio':
                     return <audio key={bi} controls src={block.url} className="w-full" />
                   case 'markdown':
-                    return <div key={bi} className="whitespace-pre-wrap">{block.text}</div>
+                    return <MarkdownBlock key={bi} text={block.text} className="prose prose-sm dark:prose-invert max-w-none" />
                   case 'plain':
                     return block.text?.trim() ? <span key={bi} className="whitespace-pre-wrap">{block.text}</span> : null
                   default:
@@ -805,9 +911,59 @@ export default function PostDetailPage() {
         {/* ── Article Card ── */}
         <article id={`reply-${post.message_id}`} className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 shadow-sm overflow-hidden mb-5">
           <div className="p-6 sm:p-8">
-            <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 dark:text-white mb-5 leading-tight tracking-tight">
-              {post.title}
-            </h1>
+            {isEditing ? (
+              /* ── Edit Mode ── */
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  className="w-full text-2xl sm:text-[28px] font-bold text-gray-900 dark:text-white bg-transparent border-b-2 border-blue-400 dark:border-blue-500 focus:outline-none pb-2"
+                  placeholder={t('square.edit.titlePlaceholder')}
+                />
+                <SquareEditor
+                  variant="full"
+                  placeholder={t('square.edit.bodyPlaceholder')}
+                  initialContent={editBody}
+                  onChange={setEditBody}
+                  onReady={handleEditEditorReady}
+                />
+                <div className="flex items-center gap-3 justify-end pt-2">
+                  <button
+                    onClick={cancelEditing}
+                    disabled={saving}
+                    className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    {t('square.edit.cancel')}
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    {t('square.edit.save')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ── View Mode ── */
+              <>
+            <div className="flex items-start justify-between gap-3 mb-5">
+              <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 dark:text-white leading-tight tracking-tight flex-1">
+                {post.title}
+              </h1>
+              {isAuthor && token && (
+                <button
+                  onClick={startEditing}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all flex-shrink-0"
+                  title={t('square.edit.editPost')}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>{t('square.edit.edit')}</span>
+                </button>
+              )}
+            </div>
 
             {/* Author card */}
             <div className="flex items-center gap-3 mb-6 pb-5 border-b border-gray-100 dark:border-gray-800">
@@ -902,7 +1058,7 @@ export default function PostDetailPage() {
                   case 'link':
                     return <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline break-all text-sm">{block.url}</a>
                   case 'markdown':
-                    return <div key={bi} className="whitespace-pre-wrap">{block.text}</div>
+                    return <MarkdownBlock key={bi} text={block.text} />
                   case 'plain':
                     return block.text?.trim() ? <div key={bi} className="whitespace-pre-wrap">{block.text}</div> : null
                   default:
@@ -933,6 +1089,8 @@ export default function PostDetailPage() {
                   ))}
                 </div>
               </div>
+            )}
+              </>
             )}
           </div>
 
