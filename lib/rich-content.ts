@@ -267,6 +267,11 @@ export function parseRichBlocks(content: string): ParsedRichBlock[] {
 
   // Tiptap HTML with images — preserve HTML rendering
   if (HAS_IMG_TAG.test(c)) {
+    // If content also has rich structural HTML, render the whole thing as HTML
+    const HAS_RICH_HTML_INNER = /<(?:h[1-6]|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|pre|code)\b/i
+    if (HAS_RICH_HTML_INNER.test(c)) {
+      return [{ kind: 'html', html: proxyHtmlMedia(c) }]
+    }
     const blocks: ParsedRichBlock[] = []
     const firstTagIdx = c.search(HAS_IMG_TAG)
     if (firstTagIdx > 0) {
