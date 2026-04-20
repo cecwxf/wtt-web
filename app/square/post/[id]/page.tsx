@@ -39,6 +39,7 @@ interface PostDetail {
   title: string
   body: string
   author: string
+  author_display_name?: string
   avatar_url?: string | null
   publisher_type: string
   origin_type: string
@@ -55,6 +56,7 @@ interface ReplyData {
   id: string
   content: string
   author: string
+  author_display_name?: string
   avatar_url?: string | null
   sender_type: string
   reply_to: string | null
@@ -218,6 +220,8 @@ export default function PostDetailPage() {
 
   const [agents, setAgents] = useState<Array<{ agent_id: string; display_name: string }>>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [agentProfileNameById, setAgentProfileNameById] = useState<Record<string, string>>({})
+  const fetchedAgentProfileIdsRef = useRef<Set<string>>(new Set())
 
   // @Agent dispatch state
   const [showDispatch, setShowDispatch] = useState(false)
@@ -306,7 +310,7 @@ export default function PostDetailPage() {
     )
   }, [agents, agentQuery])
 
-  const agentNameById = useMemo(() => {
+  const claimedAgentNameById = useMemo(() => {
     const map: Record<string, string> = {}
     for (const a of agents) {
       const id = String(a.agent_id || '').trim()
@@ -317,7 +321,14 @@ export default function PostDetailPage() {
     return map
   }, [agents])
 
-  const resolveAuthorName = useCallback((author: string, senderType?: string, publisherType?: string) => {
+  const agentNameById = useMemo(
+    () => ({ ...agentProfileNameById, ...claimedAgentNameById }),
+    [agentProfileNameById, claimedAgentNameById],
+  )
+
+  const resolveAuthorName = useCallback((author: string, senderType?: string, publisherType?: string, displayName?: string) => {
+    const preferred = String(displayName || '').trim()
+    if (preferred) return preferred
     const kind = String(senderType || publisherType || '').toLowerCase()
     if (kind === 'agent') {
       return agentNameById[author] || author
@@ -336,9 +347,61 @@ export default function PostDetailPage() {
   )
 
   const post: PostDetail | null = postData?.post ?? null
-  const replies: ReplyData[] = postData?.replies ?? []
+  const replies: ReplyData[] = useMemo(() => {
+    if (!postData || !Array.isArray(postData.replies)) return []
+    return postData.replies as ReplyData[]
+  }, [postData])
   const replyCount: number = postData?.reply_count ?? 0
   const isAuthor: boolean = postData?.is_author ?? false
+
+  useEffect(() => {
+    const candidateIds = new Set<string>()
+    if (post && String(post.publisher_type || '').toLowerCase() === 'agent' && post.author) {
+      candidateIds.add(String(post.author))
+    }
+    for (const r of replies) {
+      if (String(r.sender_type || '').toLowerCase() === 'agent' && r.author) {
+        candidateIds.add(String(r.author))
+      }
+      if (r.optimized_by_agent) {
+        candidateIds.add(String(r.optimized_by_agent))
+      }
+    }
+
+    const pending = Array.from(candidateIds)
+      .map((id) => id.trim())
+      .filter((id) => id)
+      .filter((id) => !agentNameById[id])
+      .filter((id) => !fetchedAgentProfileIdsRef.current.has(id))
+
+    if (pending.length === 0) return
+
+    pending.forEach((id) => fetchedAgentProfileIdsRef.current.add(id))
+
+    let cancelled = false
+    ;(async () => {
+      const updates: Record<string, string> = {}
+      await Promise.all(
+        pending.map(async (agentId) => {
+          try {
+            const res = await fetch(`/api/wtt/agents/${encodeURIComponent(agentId)}/profile`, { headers: authHeaders })
+            if (!res.ok) return
+            const data = await res.json()
+            const displayName = String(data?.display_name || '').trim()
+            if (displayName) updates[agentId] = displayName
+          } catch {
+            // noop
+          }
+        }),
+      )
+      if (cancelled || Object.keys(updates).length === 0) return
+      setAgentProfileNameById((prev) => ({ ...prev, ...updates }))
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [post, replies, agentNameById, authHeaders])
 
   const startEditing = useCallback(() => {
     if (!post) return
@@ -756,16 +819,16 @@ export default function PostDetailPage() {
     const children = threadedReplies.childMap[r.id] || []
     const totalDescendants = countThreadReplies(r.id)
     const isCollapsed = collapsedThreads.has(r.id)
-    const authorName = resolveAuthorName(r.author, r.sender_type)
+    const authorName = resolveAuthorName(r.author, r.sender_type, undefined, r.author_display_name)
     const isChild = depth > 0
 
     let parentAuthorName = ''
     if (r.reply_to) {
       const parentReply = replies.find(rr => rr.id === r.reply_to)
       if (parentReply) {
-        parentAuthorName = resolveAuthorName(parentReply.author, parentReply.sender_type)
+        parentAuthorName = resolveAuthorName(parentReply.author, parentReply.sender_type, undefined, parentReply.author_display_name)
       } else if (r.reply_to === post?.message_id) {
-        parentAuthorName = resolveAuthorName(post.author, undefined, post.publisher_type)
+        parentAuthorName = resolveAuthorName(post.author, undefined, post.publisher_type, post.author_display_name)
       }
     }
 
@@ -968,11 +1031,11 @@ export default function PostDetailPage() {
 
             {/* Author card */}
             <div className="flex items-center gap-3 mb-6 pb-5 border-b border-gray-100 dark:border-gray-800">
-              <Avatar name={resolveAuthorName(post.author, undefined, post.publisher_type)} avatarUrl={post.avatar_url} size="md" className="flex-shrink-0 ring-2 ring-gray-100 dark:ring-gray-800" />
+              <Avatar name={resolveAuthorName(post.author, undefined, post.publisher_type, post.author_display_name)} avatarUrl={post.avatar_url} size="md" className="flex-shrink-0 ring-2 ring-gray-100 dark:ring-gray-800" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                    {resolveAuthorName(post.author, undefined, post.publisher_type)}
+                    {resolveAuthorName(post.author, undefined, post.publisher_type, post.author_display_name)}
                   </span>
                   <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
                     post.publisher_type === 'agent'
@@ -1026,7 +1089,7 @@ export default function PostDetailPage() {
                     <Bookmark className={`w-3.5 h-3.5 ${post.bookmarked ? 'fill-current' : ''}`} />
                   </button>
                   <button
-                    onClick={() => startReplyTo(post.message_id, resolveAuthorName(post.author, undefined, post.publisher_type), post.body)}
+                    onClick={() => startReplyTo(post.message_id, resolveAuthorName(post.author, undefined, post.publisher_type, post.author_display_name), post.body)}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-all"
                   >
                     <Reply className="w-3.5 h-3.5" />

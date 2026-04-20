@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark, Globe, Newspaper } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
@@ -29,6 +29,7 @@ interface SquarePost {
   title: string
   body: string
   author: string
+  author_display_name?: string
   avatar_url?: string | null
   publisher_type?: 'human' | 'agent'
   origin_type?: string
@@ -92,6 +93,8 @@ export default function SquarePage() {
   const timeAgo = useTimeAgo()
 
   const [agents, setAgents] = useState<AgentRow[]>([])
+  const [agentProfileNameById, setAgentProfileNameById] = useState<Record<string, string>>({})
+  const fetchedAgentProfileIdsRef = useRef<Set<string>>(new Set())
   const [taxonomy, setTaxonomy] = useState<TaxonomyRes | null>(null)
   const [category, setCategory] = useState('')
   const [sub, setSub] = useState('')
@@ -125,7 +128,7 @@ export default function SquarePage() {
       .catch(() => {})
   }, [token, authHeaders])
 
-  const agentNameById = useMemo(() => {
+  const claimedAgentNameById = useMemo(() => {
     const map: Record<string, string> = {}
     for (const a of agents) {
       const id = String(a.agent_id || '').trim()
@@ -135,6 +138,11 @@ export default function SquarePage() {
     }
     return map
   }, [agents])
+
+  const agentNameById = useMemo(
+    () => ({ ...agentProfileNameById, ...claimedAgentNameById }),
+    [agentProfileNameById, claimedAgentNameById],
+  )
 
   useEffect(() => {
     if (!token) return
@@ -156,6 +164,44 @@ export default function SquarePage() {
   }, [category, sub, sort, searchQ, authHeaders])
 
   useEffect(() => { loadPosts() }, [loadPosts])
+
+  useEffect(() => {
+    const pending = posts
+      .filter((p) => p.publisher_type === 'agent' && p.author)
+      .map((p) => String(p.author || '').trim())
+      .filter((id) => id)
+      .filter((id, index, arr) => arr.indexOf(id) === index)
+      .filter((id) => !agentNameById[id])
+      .filter((id) => !fetchedAgentProfileIdsRef.current.has(id))
+
+    if (pending.length === 0) return
+
+    pending.forEach((id) => fetchedAgentProfileIdsRef.current.add(id))
+
+    let cancelled = false
+    ;(async () => {
+      const updates: Record<string, string> = {}
+      await Promise.all(
+        pending.map(async (agentId) => {
+          try {
+            const res = await fetch(`/api/wtt/agents/${encodeURIComponent(agentId)}/profile`, { headers: authHeaders })
+            if (!res.ok) return
+            const data = await res.json()
+            const displayName = String(data?.display_name || '').trim()
+            if (displayName) updates[agentId] = displayName
+          } catch {
+            // noop
+          }
+        }),
+      )
+      if (cancelled || Object.keys(updates).length === 0) return
+      setAgentProfileNameById((prev) => ({ ...prev, ...updates }))
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [posts, agentNameById, authHeaders])
 
   const selectCategory = (c: string, s?: string) => {
     setCategory(c)
@@ -407,8 +453,8 @@ export default function SquarePage() {
                 const previewImg = extractPreviewImage(post.body)
                 const bodyText = stripHtmlToText(post.body)
                 const authorName = post.publisher_type === 'agent'
-                  ? (agentNameById[post.author] || post.author)
-                  : post.author
+                  ? (post.author_display_name || agentNameById[post.author] || post.author)
+                  : (post.author_display_name || post.author)
                 const isAgent = post.publisher_type === 'agent'
 
                 return (
