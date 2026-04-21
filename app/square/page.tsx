@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark, Globe, Newspaper } from 'lucide-react'
+import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark, Globe, Newspaper, LogIn, UserCircle2 } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
@@ -106,6 +106,9 @@ export default function SquarePage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
+  const sessionUser = (session as { user?: { name?: string | null; email?: string | null; image?: string | null } } | null)?.user
+  const currentUserName = (sessionUser?.name || sessionUser?.email?.split('@')[0] || 'User').trim()
+  const currentUserAvatar = sessionUser?.image || null
 
   const authHeaders = useMemo(() => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -282,62 +285,91 @@ export default function SquarePage() {
   return (
     <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0e0e10]">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/90 dark:bg-[#1a1a1d]/90 border-b border-gray-200/70 dark:border-gray-800/70">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Link href="/feed" className="flex items-center gap-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
               <ArrowLeft className="w-4 h-4" />
             </Link>
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                <Sparkles className="w-3.5 h-3.5 text-white" />
-              </div>
-              <h1 className="text-base font-bold text-gray-900 dark:text-white">{t('square.title')}</h1>
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <Sparkles className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="hidden sm:inline text-[11px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-              {t('square.subtitle')}
-            </span>
+            <h1 className="text-base font-bold text-gray-900 dark:text-white">{t('square.title')}</h1>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Language toggle */}
+          <nav className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={() => setSort('newest')}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-all ${sort !== 'column' ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+            >
+              广场
+            </button>
+            <button
+              onClick={() => setSort('column')}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-all ${sort === 'column' ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+            >
+              专文
+            </button>
+            <Link
+              href="/square/agents"
+              className="px-3 py-1.5 text-sm rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+            >
+              Agent
+            </Link>
+          </nav>
+
+          <div className="relative flex items-center transition-all duration-200 flex-1 max-w-xl ml-0 md:ml-2">
+            <Search className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder={t('square.searchPlaceholder')}
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              className={`w-full pl-8 pr-3 py-1.5 text-sm rounded-full bg-gray-100 dark:bg-gray-800 border text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none transition-all ${searchFocused ? 'border-blue-400 dark:border-blue-500' : 'border-transparent'}`}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
             <button
               onClick={toggleLocale}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all"
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all"
               title={locale === 'zh' ? 'Switch to English' : '切换到中文'}
             >
               <Globe className="w-3.5 h-3.5" />
               <span>{locale === 'zh' ? 'EN' : '中文'}</span>
             </button>
-            {/* Search pill */}
-            <div className={`relative flex items-center transition-all duration-200 ${searchFocused ? 'w-64' : 'w-44'}`}>
-              <Search className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder={t('square.searchPlaceholder')}
-                value={searchQ}
-                onChange={e => setSearchQ(e.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-full bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-blue-400 dark:focus:border-blue-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none transition-all"
-              />
-            </div>
+
             {token && (
               <Link
                 href="/square/compose"
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-full transition-all shadow-sm hover:shadow-md"
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-full transition-all shadow-sm hover:shadow-md"
               >
                 <PenSquare className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{t('square.compose')}</span>
+                <span>{t('square.compose')}</span>
               </Link>
             )}
-            <Link
-              href="/square/agents"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/50 hover:bg-purple-100 dark:hover:bg-purple-950/60 rounded-full transition-all"
-            >
-              <Bot className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t('square.agentSquare')}</span>
-            </Link>
+
+            {token ? (
+              <Link
+                href="/feed"
+                className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+              >
+                <Avatar name={currentUserName} avatarUrl={currentUserAvatar} size="xs" />
+                <span className="hidden md:inline text-sm text-gray-700 dark:text-gray-300 max-w-[110px] truncate">{currentUserName}</span>
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-all"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>登录</span>
+              </Link>
+            )}
+
+            {!token && <UserCircle2 className="hidden sm:block w-4 h-4 text-gray-400" />}
           </div>
         </div>
       </header>
