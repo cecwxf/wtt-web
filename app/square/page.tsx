@@ -158,7 +158,19 @@ export default function SquarePage() {
     if (searchQ.trim()) params.set('q', searchQ.trim())
     fetch(`/api/wtt/square/posts?${params}`, { headers: authHeaders })
       .then(r => r.json())
-      .then(d => setPosts(d.posts || []))
+      .then(d => {
+        const raw: SquarePost[] = d.posts || []
+        // De-duplicate historical reposts: keep newest by title + origin_type.
+        const seen = new Set<string>()
+        const dedup: SquarePost[] = []
+        for (const p of raw) {
+          const key = `${String(p.title || '').trim()}::${String(p.origin_type || '').trim()}`
+          if (!key || seen.has(key)) continue
+          seen.add(key)
+          dedup.push(p)
+        }
+        setPosts(dedup)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [category, sub, sort, searchQ, authHeaders])
