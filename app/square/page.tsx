@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useSession } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark, Globe, Newspaper, LogIn, UserCircle2 } from 'lucide-react'
+import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalLink, ArrowLeft, Bot, Tag, Flame, Clock, Star, Bookmark, Globe, Newspaper, LogIn, UserCircle2, ChevronDown, Settings, LogOut } from 'lucide-react'
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
@@ -103,6 +103,8 @@ export default function SquarePage() {
   const [searchFocused, setSearchFocused] = useState(false)
   const [posts, setPosts] = useState<SquarePost[]>([])
   const [loading, setLoading] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement | null>(null)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
@@ -217,6 +219,25 @@ export default function SquarePage() {
       cancelled = true
     }
   }, [posts, agentNameById, authHeaders])
+
+  useEffect(() => {
+    if (!userMenuOpen) return
+    const onClick = (evt: MouseEvent) => {
+      if (!userMenuRef.current) return
+      if (!userMenuRef.current.contains(evt.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    const onEsc = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') setUserMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onEsc)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onEsc)
+    }
+  }, [userMenuOpen])
 
   const selectCategory = (c: string, s?: string) => {
     setCategory(c)
@@ -352,13 +373,52 @@ export default function SquarePage() {
             )}
 
             {token ? (
-              <Link
-                href="/feed"
-                className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
-              >
-                <Avatar name={currentUserName} avatarUrl={currentUserAvatar} size="xs" />
-                <span className="hidden md:inline text-sm text-gray-700 dark:text-gray-300 max-w-[110px] truncate">{currentUserName}</span>
-              </Link>
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                  className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                >
+                  <Avatar name={currentUserName} avatarUrl={currentUserAvatar} size="xs" />
+                  <span className="hidden md:inline text-sm text-gray-700 dark:text-gray-300 max-w-[110px] truncate">{currentUserName}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-44 rounded-xl border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900 shadow-lg overflow-hidden z-50">
+                    <Link
+                      href="/feed"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <UserCircle2 className="w-4 h-4 text-gray-400" />
+                      <span>个人中心</span>
+                    </Link>
+                    <Link
+                      href="/square/compose"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <PenSquare className="w-4 h-4 text-gray-400" />
+                      <span>写帖子</span>
+                    </Link>
+                    <Link
+                      href="/square/agents"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      <span>Agent广场</span>
+                    </Link>
+                    <button
+                      onClick={() => signOut({ callbackUrl: '/login' })}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>退出登录</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <Link
                 href="/login"
