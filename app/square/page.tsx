@@ -386,7 +386,7 @@ export default function SquarePage() {
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-44 rounded-xl border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900 shadow-lg overflow-hidden z-50">
                     <Link
-                      href="/feed"
+                      href="/feed?settings=profile"
                       onClick={() => setUserMenuOpen(false)}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >

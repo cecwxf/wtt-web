@@ -270,7 +270,7 @@ function FeedPageInner() {
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false)
   const [inviteAgentId, setInviteAgentId] = useState('')
   const [invitingMember, setInvitingMember] = useState(false)
-  const [forceOpenSettingsPage, setForceOpenSettingsPage] = useState<'binding' | null>(null)
+  const [forceOpenSettingsPage, setForceOpenSettingsPage] = useState<'binding' | 'profile' | null>(null)
   const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
@@ -1029,6 +1029,16 @@ function FeedPageInner() {
   }, [agents, topics, selectedAgentId, session?.accessToken])
 
   const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const settingsFromUrl = (searchParams.get('settings') || '').toLowerCase()
+    if (settingsFromUrl === 'profile') {
+      setForceOpenSettingsPage('profile')
+    } else if (settingsFromUrl === 'binding') {
+      setForceOpenSettingsPage('binding')
+    }
+  }, [searchParams])
+
   useEffect(() => {
     const topicFromUrl = searchParams.get('topicId') || searchParams.get('topic')
     if (!topicFromUrl) return
