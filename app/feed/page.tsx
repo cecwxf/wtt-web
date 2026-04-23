@@ -225,6 +225,7 @@ function FeedPageInner() {
       else localStorage.removeItem('wtt_selected_topic_id')
     } catch {}
   }, [])
+  const [composerFocusNonce, setComposerFocusNonce] = useState(0)
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [typingByTopic, setTypingByTopic] = useState<Record<string, { agentId: string; agentName?: string; startedAt: number; expiresAt: number }>>({})
   // Cache successful decrypt results by message_id + ciphertext to avoid repeated CPU work.
@@ -1045,7 +1046,7 @@ function FeedPageInner() {
     if (topics.some((t) => t.topic_id === topicFromUrl)) {
       setSelectedTopicId(topicFromUrl)
     }
-  }, [topics, searchParams])
+  }, [topics, searchParams, setSelectedTopicId])
 
   const handleCreateGeneralTask = useCallback(async () => {
     if (!selectedAgentId || !session?.accessToken) return
@@ -1081,13 +1082,14 @@ function FeedPageInner() {
       const topicId = String(real?.topic_id || '')
       if (topicId) {
         setSelectedTopicId(topicId)
+        setComposerFocusNonce((v) => v + 1)
       } else {
         router.push(buildAgentUrl('/tasks', selectedAgentId, { type: 'general' }))
       }
     } catch {
       alert(t('feed.failedCreateTask'))
     }
-  }, [selectedAgentId, session, mutateRecentTasks, mutateTopics, router, t])
+  }, [selectedAgentId, session, mutateRecentTasks, mutateTopics, router, t, setSelectedTopicId])
 
   const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig, replyTo?: string) => {
     if (!selectedTopicId || !selectedAgentId) return
@@ -1581,7 +1583,7 @@ function FeedPageInner() {
         return { ...row, unread_count: 0 }
       })
     }, false)
-  }, [mutateTopics])
+  }, [mutateTopics, setSelectedTopicId])
 
   if (status === 'loading') {
     return (
@@ -1657,6 +1659,7 @@ function FeedPageInner() {
                 topicType={selectedTopic.topic_type}
                 typingIndicatorText={selectedTopicTypingText}
                 onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
+                autoFocusNonce={composerFocusNonce}
                 compactUi
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (

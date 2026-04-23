@@ -38,6 +38,7 @@ interface TopicColumnProps {
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   onCreateGeneralTask?: () => void
+  onToggleSidebar?: () => void
   localLibrarySlot?: React.ReactNode
 }
 
@@ -136,6 +137,7 @@ export function TopicColumn({
   onRenameAgent,
   onUnclaimAgent,
   onCreateGeneralTask,
+  onToggleSidebar,
   localLibrarySlot,
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -559,17 +561,29 @@ export function TopicColumn({
           </button>
         )}
 
-        <button
-          onClick={() => onSelectTopic(null)}
-          className={`mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left transition ${
-            selectedTopicId === null
-              ? 'bg-slate-50 text-indigo-600'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-        >
-          <Hash className="h-4 w-4 shrink-0" />
-          <span className="truncate text-sm font-medium">{t('topic.allTopics')}</span>
-        </button>
+        <div className="mb-2 flex items-center gap-1.5">
+          <button
+            onClick={() => onSelectTopic(null)}
+            className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2.5 text-left transition ${
+              selectedTopicId === null
+                ? 'bg-slate-50 text-indigo-600'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+            }`}
+          >
+            <Hash className="h-4 w-4 shrink-0" />
+            <span className="truncate text-sm font-medium">{t('topic.allTopics')}</span>
+          </button>
+
+          {onToggleSidebar && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleSidebar() }}
+              className="rounded-lg border border-slate-200 dark:border-zinc-700 px-2 py-2 text-xs text-slate-500 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition"
+              title="Collapse sidebar"
+            >
+              {'<<'}
+            </button>
+          )}
+        </div>
 
         {topics.length === 0 && <p className="px-2 py-4 text-xs text-slate-400">{t('topic.noTopics')}</p>}
 

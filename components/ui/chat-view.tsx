@@ -338,6 +338,7 @@ interface ChatViewProps {
   typingIndicatorText?: string | null
   onRequestPrivateDiscuss?: (targetAgentId: string, targetDisplayName?: string) => Promise<void> | void
   compactUi?: boolean
+  autoFocusNonce?: number
 }
 
 interface AgentProfileSummary {
@@ -575,6 +576,7 @@ export function ChatView({
   typingIndicatorText = null,
   onRequestPrivateDiscuss,
   compactUi = false,
+  autoFocusNonce,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -621,6 +623,19 @@ export function ChatView({
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionStartPos, setMentionStartPos] = useState(-1)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (autoFocusNonce === undefined) return
+    const t = window.setTimeout(() => {
+      textareaRef.current?.focus()
+      const input = textareaRef.current
+      if (input) {
+        const end = input.value.length
+        input.setSelectionRange(end, end)
+      }
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [autoFocusNonce, topicId])
 
   // Avatar/profile card states
   const [agentCardOpen, setAgentCardOpen] = useState(false)

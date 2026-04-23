@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, Menu } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
@@ -163,16 +163,6 @@ export function WttShellV2(props: WttShellV2Props) {
           onAcceptP2PRequest={onAcceptP2PRequest}
           onRejectP2PRequest={onRejectP2PRequest}
           agentId={selectedAgentId}
-          leftSlot={!hideTopics ? (
-            <button
-              onClick={() => setSidebarCollapsed((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
-              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {sidebarCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline">{sidebarCollapsed ? '展开' : '收起'}</span>
-            </button>
-          ) : undefined}
           userMenu={
             <div className="relative">
               <button
@@ -248,8 +238,21 @@ export function WttShellV2(props: WttShellV2Props) {
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
               onCreateGeneralTask={onCreateGeneralTask}
+              onToggleSidebar={() => setSidebarCollapsed(true)}
               localLibrarySlot={<LocalLibrary />}
             />
+          )}
+
+          {!hideTopics && sidebarCollapsed && (
+            <aside className="w-10 border-r border-slate-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-900/60 flex items-start justify-center pt-2">
+              <button
+                onClick={() => setSidebarCollapsed(false)}
+                className="rounded-lg border border-slate-200 dark:border-zinc-700 px-2 py-1.5 text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition"
+                title="Expand sidebar"
+              >
+                {'>>'}
+              </button>
+            </aside>
           )}
 
           <main className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] dark:bg-zinc-900">
