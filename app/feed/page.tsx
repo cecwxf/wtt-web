@@ -1047,7 +1047,48 @@ function FeedPageInner() {
     }
   }, [topics, searchParams])
 
-  // Quick-create a General Task with no title (defaults to "New Task")
+  const handleCreateGeneralTask = useCallback(async () => {
+    if (!selectedAgentId || !session?.accessToken) return
+    try {
+      const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({
+          title: 'New Task',
+          task_mode: 'single',
+          priority: 'P1',
+          status: 'todo',
+          task_type: 'general',
+          exec_mode: 'reasoning',
+          owner_agent_id: selectedAgentId,
+          runner_agent_id: selectedAgentId,
+          created_by: getHumanSender(session),
+        }),
+      })
+
+      if (!resp.ok) {
+        alert(t('feed.failedCreateTask'))
+        return
+      }
+
+      const real = await resp.json()
+      mutateRecentTasks()
+      mutateTopics()
+
+      const topicId = String(real?.topic_id || '')
+      if (topicId) {
+        setSelectedTopicId(topicId)
+      } else {
+        router.push(buildAgentUrl('/tasks', selectedAgentId, { type: 'general' }))
+      }
+    } catch {
+      alert(t('feed.failedCreateTask'))
+    }
+  }, [selectedAgentId, session, mutateRecentTasks, mutateTopics, router, t])
+
   const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig, replyTo?: string) => {
     if (!selectedTopicId || !selectedAgentId) return
 
@@ -1573,6 +1614,7 @@ function FeedPageInner() {
         subscribedTopicIds={subscribedTopicIds}
         onOpenEditor={() => setEditorOpen(true)}
         onOpenKnowledgeRoot={handleOpenKnowledgeRoot}
+        onCreateGeneralTask={handleCreateGeneralTask}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={() => mutateTopics()}
         onBindingChanged={loadAgents}

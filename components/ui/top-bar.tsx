@@ -74,17 +74,6 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
 
         {desktop && (
           <Link
-            href={buildAgentUrl('/tasks', agentId, { type: 'general', create: '1' })}
-            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200/80 dark:border-indigo-800/50 bg-indigo-50/80 dark:bg-indigo-950/30 px-2.5 py-1.5 text-xs text-indigo-700 dark:text-indigo-300 transition hover:bg-indigo-100 dark:hover:bg-indigo-950/40 hover:text-indigo-800 dark:hover:text-indigo-200"
-            title={locale === 'zh' ? '新任务' : 'New Task'}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{locale === 'zh' ? '新任务' : 'New Task'}</span>
-          </Link>
-        )}
-
-        {desktop && (
-          <Link
             href={buildAgentUrl('/tasks', agentId, { type: 'code' })}
             className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200/80 dark:border-cyan-800/50 bg-cyan-50/80 dark:bg-cyan-950/30 px-2.5 py-1.5 text-xs text-cyan-700 dark:text-cyan-300 transition hover:bg-cyan-100 dark:hover:bg-cyan-950/40 hover:text-cyan-800 dark:hover:text-cyan-200"
             title="Code Task"
@@ -142,10 +131,10 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           <button
             onClick={onCreateTopic}
             className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/30 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
-            title="New Task"
+            title={t('top.createTopic')}
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>New Task</span>
+            <span>+{t('top.topic')}</span>
           </button>
         )}
 

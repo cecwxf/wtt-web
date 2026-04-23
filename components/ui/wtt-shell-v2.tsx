@@ -39,6 +39,7 @@ interface WttShellV2Props {
   onDeleteTopic?: (topicId: string) => void
   onOpenEditor?: () => void
   onOpenKnowledgeRoot?: () => void
+  onCreateGeneralTask?: () => void
   onSubscribeTopic?: (topicId: string) => Promise<void>
   onCreateP2P?: (targetAgentId: string) => Promise<void>
   onRequestDiscuss?: (targetAgentId: string, topicName: string) => Promise<void>
@@ -80,6 +81,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onDeleteTopic,
     onOpenEditor,
     onOpenKnowledgeRoot,
+    onCreateGeneralTask,
     onSubscribeTopic,
     onCreateP2P,
     onRequestDiscuss,
@@ -245,6 +247,7 @@ export function WttShellV2(props: WttShellV2Props) {
               isSelectedAgentOnline={isSelectedAgentOnline}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
+              onCreateGeneralTask={onCreateGeneralTask}
               localLibrarySlot={<LocalLibrary />}
             />
           )}

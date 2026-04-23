@@ -37,6 +37,7 @@ interface TopicColumnProps {
   isSelectedAgentOnline?: boolean
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
+  onCreateGeneralTask?: () => void
   localLibrarySlot?: React.ReactNode
 }
 
@@ -134,6 +135,7 @@ export function TopicColumn({
   isSelectedAgentOnline,
   onRenameAgent,
   onUnclaimAgent,
+  onCreateGeneralTask,
   localLibrarySlot,
 }: TopicColumnProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -546,6 +548,16 @@ export function TopicColumn({
             </div>
           </div>
         ) : null}
+
+        {onCreateGeneralTask && (
+          <button
+            onClick={onCreateGeneralTask}
+            className="mb-2 flex w-full items-center gap-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/80 dark:bg-emerald-950/20 px-2 py-2 text-left text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/30 transition"
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="truncate text-sm font-medium">{t('topic.newTask')}</span>
+          </button>
+        )}
 
         <button
           onClick={() => onSelectTopic(null)}
