@@ -624,18 +624,31 @@ export function ChatView({
   const [mentionStartPos, setMentionStartPos] = useState(-1)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  const focusComposerInput = useCallback(() => {
+    const input = textareaRef.current
+    if (!input) return false
+    input.focus({ preventScroll: true })
+    const end = input.value.length
+    input.setSelectionRange(end, end)
+    return document.activeElement === input
+  }, [])
+
   useEffect(() => {
     if (autoFocusNonce === undefined) return
-    const t = window.setTimeout(() => {
-      textareaRef.current?.focus()
-      const input = textareaRef.current
-      if (input) {
-        const end = input.value.length
-        input.setSelectionRange(end, end)
-      }
-    }, 0)
-    return () => window.clearTimeout(t)
-  }, [autoFocusNonce, topicId])
+    let cancelled = false
+    const timers: number[] = []
+    ;[0, 120, 280, 520].forEach((delay) => {
+      const timer = window.setTimeout(() => {
+        if (cancelled) return
+        focusComposerInput()
+      }, delay)
+      timers.push(timer)
+    })
+    return () => {
+      cancelled = true
+      timers.forEach((t) => window.clearTimeout(t))
+    }
+  }, [autoFocusNonce, topicId, focusComposerInput])
 
   // Avatar/profile card states
   const [agentCardOpen, setAgentCardOpen] = useState(false)

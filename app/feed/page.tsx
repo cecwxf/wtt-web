@@ -226,6 +226,7 @@ function FeedPageInner() {
     } catch {}
   }, [])
   const [composerFocusNonce, setComposerFocusNonce] = useState(0)
+  const [pendingComposerFocusTopicId, setPendingComposerFocusTopicId] = useState<string | null>(null)
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [typingByTopic, setTypingByTopic] = useState<Record<string, { agentId: string; agentName?: string; startedAt: number; expiresAt: number }>>({})
   // Cache successful decrypt results by message_id + ciphertext to avoid repeated CPU work.
@@ -1048,6 +1049,17 @@ function FeedPageInner() {
     }
   }, [topics, searchParams, setSelectedTopicId])
 
+  useEffect(() => {
+    if (!pendingComposerFocusTopicId) return
+    if (selectedTopicId !== pendingComposerFocusTopicId) return
+    if (!topics.some((t) => t.topic_id === pendingComposerFocusTopicId)) return
+
+    setComposerFocusNonce((v) => v + 1)
+    const retry = window.setTimeout(() => setComposerFocusNonce((v) => v + 1), 220)
+    setPendingComposerFocusTopicId(null)
+    return () => window.clearTimeout(retry)
+  }, [pendingComposerFocusTopicId, selectedTopicId, topics])
+
   const handleCreateGeneralTask = useCallback(async () => {
     if (!selectedAgentId || !session?.accessToken) return
     try {
@@ -1082,7 +1094,7 @@ function FeedPageInner() {
       const topicId = String(real?.topic_id || '')
       if (topicId) {
         setSelectedTopicId(topicId)
-        setComposerFocusNonce((v) => v + 1)
+        setPendingComposerFocusTopicId(topicId)
       } else {
         router.push(buildAgentUrl('/tasks', selectedAgentId, { type: 'general' }))
       }
