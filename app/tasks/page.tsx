@@ -108,6 +108,7 @@ function TasksPageInner() {
   const [panelInput, setPanelInput] = useState('')
   const [panelSending, setPanelSending] = useState(false)
   const panelSendingRef = useRef(false)
+  const createTaskTriggeredRef = useRef(false)
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
   const [queueIndicator, setQueueIndicator] = useState(false)
   const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
@@ -411,7 +412,7 @@ function TasksPageInner() {
     return agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name, unread_count: 0 }))
   }, [agents])
 
-  const quickCreateTask = async (taskType: 'code' | 'research') => {
+  const quickCreateTask = useCallback(async (taskType: 'code' | 'research' | 'general') => {
     if (!selectedAgentId || !session?.accessToken) return
     setCreatingTaskType(taskType)
     try {
@@ -422,7 +423,7 @@ function TasksPageInner() {
           Authorization: `Bearer ${session.accessToken}`,
         },
         body: JSON.stringify({
-          title: taskType === 'code' ? 'New Code Task' : 'New Research Task',
+          title: taskType === 'code' ? 'New Code Task' : taskType === 'research' ? 'New Research Task' : 'New Task',
           task_mode: 'single',
           priority: 'P1',
           status: 'todo',
@@ -437,8 +438,12 @@ function TasksPageInner() {
         const real = await resp.json()
         if (taskType === 'code') {
           router.push(buildAgentUrl(`/tasks/code/${real.id}`, selectedAgentId))
-        } else {
+        } else if (taskType === 'research') {
           router.push(buildAgentUrl(`/tasks/research/${real.id}`, selectedAgentId))
+        } else {
+          const topicId = String(real.topic_id || '')
+          if (topicId) router.push(buildAgentUrl('/feed', selectedAgentId, { topicId }))
+          else router.push(buildAgentUrl('/tasks', selectedAgentId, { type: 'general' }))
         }
       } else {
         alert(t('feed.failedCreateTask'))
@@ -450,7 +455,26 @@ function TasksPageInner() {
     } finally {
       setCreatingTaskType(null)
     }
-  }
+  }, [selectedAgentId, session, router, t, mutateTasks])
+
+  useEffect(() => {
+    const create = searchParams.get('create')
+    const reqType = searchParams.get('type')
+    if (create !== '1') {
+      createTaskTriggeredRef.current = false
+      return
+    }
+    if (createTaskTriggeredRef.current) return
+    if (!selectedAgentId || !session?.accessToken) return
+
+    const taskType: 'general' | 'code' | 'research' =
+      reqType === 'code' || reqType === 'research' || reqType === 'general'
+        ? reqType
+        : 'general'
+
+    createTaskTriggeredRef.current = true
+    void quickCreateTask(taskType)
+  }, [searchParams, selectedAgentId, session?.accessToken, quickCreateTask])
 
   const cancelTask = async (task: TaskItem) => {
     const ok = window.confirm(t('tasks.cancelTaskConfirm', { title: task.title }))
