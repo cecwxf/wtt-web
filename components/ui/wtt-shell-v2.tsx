@@ -1,6 +1,6 @@
 'use client'
 
-import { Menu } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
@@ -98,6 +98,7 @@ export function WttShellV2(props: WttShellV2Props) {
   } = props
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('profile')
   const [createTopicOpen, setCreateTopicOpen] = useState(false)
   const { t } = useI18n()
@@ -117,6 +118,23 @@ export function WttShellV2(props: WttShellV2Props) {
     setMenuOpen(false)
     onForceOpenHandled?.()
   }, [forceOpenSettingsPage, onForceOpenHandled])
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wtt.sidebarCollapsed')
+      if (saved === '1') setSidebarCollapsed(true)
+    } catch {
+      // noop
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('wtt.sidebarCollapsed', sidebarCollapsed ? '1' : '0')
+    } catch {
+      // noop
+    }
+  }, [sidebarCollapsed])
 
   const agentOptions = agents.map((agent) => ({
     id: agent.agent_id,
@@ -143,6 +161,16 @@ export function WttShellV2(props: WttShellV2Props) {
           onAcceptP2PRequest={onAcceptP2PRequest}
           onRejectP2PRequest={onRejectP2PRequest}
           agentId={selectedAgentId}
+          leftSlot={!hideTopics ? (
+            <button
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{sidebarCollapsed ? '展开' : '收起'}</span>
+            </button>
+          ) : undefined}
           userMenu={
             <div className="relative">
               <button
@@ -200,7 +228,7 @@ export function WttShellV2(props: WttShellV2Props) {
         />
 
         <div className="flex min-h-0 flex-1">
-          {!hideTopics && (
+          {!hideTopics && !sidebarCollapsed && (
             <TopicColumn
               topics={topics}
               selectedTopicId={selectedTopicId}
