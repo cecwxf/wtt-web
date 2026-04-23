@@ -130,11 +130,11 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         {!hideCreateTopic && onCreateTopic && (
           <button
             onClick={onCreateTopic}
-            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/30 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
-            title={t('top.createTopic')}
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/30 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
+            title="New Task"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t('top.topic')}</span>
+            <span>New Task</span>
           </button>
         )}
 
