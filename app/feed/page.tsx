@@ -837,29 +837,49 @@ function FeedPageInner() {
     if (!subscribedTopicsRaw || !Array.isArray(subscribedTopicsRaw)) return []
     const humanSender = getHumanSender(session)
 
-    const mapped = subscribedTopicsRaw.map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; task_mode?: string; exec_mode?: string; last_activity_at?: string }) => {
-      const topicType = ((topic.type || 'discussion').toLowerCase()) as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
-      const isDefaultP2P =
-        topicType === 'p2p' &&
-        !!selectedAgentId &&
-        topic.name.includes(selectedAgentId) &&
-        topic.name.includes(humanSender)
+    const mapped = subscribedTopicsRaw
+      .filter((topic: { name: string; origin_type?: string; originType?: string }) => {
+        const name = String(topic.name || '').trim()
+        // Hide Ruoshui square post threads from feed conversations.
+        if (name.startsWith('若水广场｜') || name.startsWith('若水专文｜')) return false
 
-      return {
-        topic_id: topic.id,
-        name: topic.name,
-        topic_type: topicType,
-        unread_count: Number((topic as Record<string, unknown>).unread_count || 0),
-        can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
-        task_id: topic.task_id,
-        task_type: topic.task_type ? String(topic.task_type) : undefined,
-        task_mode: topic.task_mode ? String(topic.task_mode) : undefined,
-        exec_mode: topic.exec_mode ? String(topic.exec_mode) : undefined,
-        runner_agent_id: topic.runner_agent_id,
-        is_default_p2p: isDefaultP2P,
-        last_activity_at: topic.last_activity_at || '',
-      }
-    })
+        const anyTopic = topic as Record<string, unknown>
+        const isSquareFlag = Boolean(
+          anyTopic.square
+          || anyTopic.is_square
+          || anyTopic.square_post
+          || anyTopic.square_topic
+        )
+        if (isSquareFlag) return false
+
+        const originType = String(topic.origin_type || topic.originType || '').toLowerCase()
+        if (originType === 'column' || originType === 'human_post' || originType.includes('square')) return false
+
+        return true
+      })
+      .map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; task_mode?: string; exec_mode?: string; last_activity_at?: string }) => {
+        const topicType = ((topic.type || 'discussion').toLowerCase()) as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
+        const isDefaultP2P =
+          topicType === 'p2p' &&
+          !!selectedAgentId &&
+          topic.name.includes(selectedAgentId) &&
+          topic.name.includes(humanSender)
+
+        return {
+          topic_id: topic.id,
+          name: topic.name,
+          topic_type: topicType,
+          unread_count: Number((topic as Record<string, unknown>).unread_count || 0),
+          can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
+          task_id: topic.task_id,
+          task_type: topic.task_type ? String(topic.task_type) : undefined,
+          task_mode: topic.task_mode ? String(topic.task_mode) : undefined,
+          exec_mode: topic.exec_mode ? String(topic.exec_mode) : undefined,
+          runner_agent_id: topic.runner_agent_id,
+          is_default_p2p: isDefaultP2P,
+          last_activity_at: topic.last_activity_at || '',
+        }
+      })
 
     return mapped.sort((a, b) => {
       // Default P2P always pinned at top

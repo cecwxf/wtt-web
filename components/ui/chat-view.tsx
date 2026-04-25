@@ -2134,7 +2134,7 @@ export function ChatView({
       )}
 
       {/* Task status bar — shows current task status from the latest message with task info */}
-      {(() => {
+      {false && (() => {
         const lastTaskMsg = [...messages].reverse().find(m => m.task_status)
         if (!lastTaskMsg?.task_status) return null
         const status = lastTaskMsg.task_status
@@ -2179,7 +2179,7 @@ export function ChatView({
         )
       })()}
 
-      {latestHeartbeat && (() => {
+      {false && latestHeartbeat && (() => {
         const isRunning = typeof latestHeartbeat.parsed.inflight === 'boolean'
           ? latestHeartbeat.parsed.inflight
           : latestHeartbeat.isFresh
