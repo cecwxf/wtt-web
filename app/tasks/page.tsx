@@ -476,6 +476,44 @@ function TasksPageInner() {
     void quickCreateTask(taskType)
   }, [searchParams, selectedAgentId, session?.accessToken, quickCreateTask])
 
+  const renameTask = async (task: TaskItem) => {
+    const next = window.prompt(t('tasks.renamePrompt') || 'Rename task', task.title)
+    if (next == null) return
+    const trimmed = next.trim()
+    if (!trimmed || trimmed === task.title) {
+      setTaskContextMenu(null)
+      return
+    }
+    const actingAgent = task.owner_agent_id || selectedAgentId
+    const response = await fetch(
+      `${CLIENT_WTT_API_BASE}/tasks/${task.id}?acting_as_agent_id=${encodeURIComponent(actingAgent)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+        },
+        body: JSON.stringify({ title: trimmed }),
+      }
+    )
+    if (!response.ok) {
+      const txt = await response.text()
+      try {
+        const detail = JSON.parse(txt)?.detail || txt
+        alert(t('tasks.renameTaskFailed', { detail }) || `Rename failed: ${detail}`)
+      } catch {
+        alert(`Rename failed: ${txt || response.status}`)
+      }
+      return
+    }
+    setTaskContextMenu(null)
+    setSelectedTask((prev) => (prev && prev.id === task.id ? { ...prev, title: trimmed } : prev))
+    mutateTasks(
+      (prev: TaskItem[] | undefined) => (prev || []).map((it) => (it.id === task.id ? { ...it, title: trimmed } : it)),
+      { revalidate: true }
+    )
+  }
+
   const cancelTask = async (task: TaskItem) => {
     const ok = window.confirm(t('tasks.cancelTaskConfirm', { title: task.title }))
     if (!ok) return
@@ -955,6 +993,13 @@ function TasksPageInner() {
                 <div className="flex items-center gap-2 mb-2 px-1">
                   <span className="text-sm font-semibold truncate flex-1">{selectedTask.title}</span>
                   <button
+                    onClick={() => renameTask(selectedTask)}
+                    className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 border border-slate-300 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    title={t('tasks.rename') || 'Rename'}
+                  >
+                    ✏️ {t('tasks.rename') || 'Rename'}
+                  </button>
+                  <button
                     onClick={async () => {
                       const rerunInput = prompt(t('tasks.rerunPrompt'), '1')
                       if (!rerunInput) return
@@ -1071,6 +1116,12 @@ function TasksPageInner() {
               {taskContextMenu.task.task_type === 'code' ? '💻' : '📄'} {t('tasks.openInIde')}
             </button>
           )}
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50"
+            onClick={() => renameTask(taskContextMenu.task)}
+          >
+            ✏️ {t('tasks.rename') || 'Rename'}
+          </button>
           {taskContextMenu.task.topic_id && (
             <button
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50"
