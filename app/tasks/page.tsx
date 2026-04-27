@@ -100,6 +100,7 @@ function TasksPageInner() {
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   // taskDraft removed — no longer used after status system removal
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
+  const [renameModal, setRenameModal] = useState<{ task: TaskItem; value: string } | null>(null)
   const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [creatingTaskType, setCreatingTaskType] = useState<string | null>(null)
@@ -476,12 +477,17 @@ function TasksPageInner() {
     void quickCreateTask(taskType)
   }, [searchParams, selectedAgentId, session?.accessToken, quickCreateTask])
 
-  const renameTask = async (task: TaskItem) => {
-    const next = window.prompt(t('tasks.renamePrompt') || 'Rename task', task.title)
-    if (next == null) return
-    const trimmed = next.trim()
+  const renameTask = (task: TaskItem) => {
+    setTaskContextMenu(null)
+    setRenameModal({ task, value: task.title })
+  }
+
+  const submitRename = async () => {
+    if (!renameModal) return
+    const { task, value } = renameModal
+    const trimmed = value.trim()
     if (!trimmed || trimmed === task.title) {
-      setTaskContextMenu(null)
+      setRenameModal(null)
       return
     }
     const actingAgent = task.owner_agent_id || selectedAgentId
@@ -506,7 +512,7 @@ function TasksPageInner() {
       }
       return
     }
-    setTaskContextMenu(null)
+    setRenameModal(null)
     setSelectedTask((prev) => (prev && prev.id === task.id ? { ...prev, title: trimmed } : prev))
     mutateTasks(
       (prev: TaskItem[] | undefined) => (prev || []).map((it) => (it.id === task.id ? { ...it, title: trimmed } : it)),
@@ -1152,6 +1158,47 @@ function TasksPageInner() {
           >
             🗑️ {t('tasks.cancelTask')}
           </button>
+        </div>
+      )}
+
+      {renameModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setRenameModal(null)}
+        >
+          <div
+            className="w-[420px] rounded-xl bg-white dark:bg-zinc-900 p-5 shadow-2xl border border-slate-200 dark:border-zinc-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-3">
+              {t('tasks.renamePrompt') || 'Rename task'}
+            </h3>
+            <input
+              autoFocus
+              type="text"
+              value={renameModal.value}
+              onChange={(e) => setRenameModal({ ...renameModal, value: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); submitRename() }
+                else if (e.key === 'Escape') { e.preventDefault(); setRenameModal(null) }
+              }}
+              className="w-full rounded-md border border-slate-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setRenameModal(null)}
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
+              >
+                {t('common.cancel') || 'Cancel'}
+              </button>
+              <button
+                onClick={submitRename}
+                className="rounded-md bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-600"
+              >
+                {t('common.confirm') || 'OK'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
