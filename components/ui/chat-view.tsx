@@ -205,54 +205,6 @@ export function isProgressMessage(content: string): boolean {
   return PROGRESS_PATTERNS.some(p => p.test(c))
 }
 
-interface ParsedTaskHeartbeat {
-  at?: string
-  status?: string
-  action?: string
-  elapsedSeconds?: number
-  queueDepth?: number
-  queueMode?: string
-  source?: string
-  sessionKey?: string
-  inflight?: boolean
-  heartbeatSeconds?: number
-}
-
-function parseTaskHeartbeat(content: string): ParsedTaskHeartbeat | null {
-  const c = String(content || '').trim()
-  if (!c) return null
-
-  const m = c.match(/^\[([^\]]+)\]\s*状态=([^|]+)\|\s*动作=([^|]+)\|\s*(.*)$/)
-  if (!m) return null
-
-  const tail = String(m[4] || '').trim()
-  const elapsedMatch = tail.match(/elapsed\s*=\s*(\d+)s/i)
-  const queueMatch = tail.match(/queue_depth\s*=\s*(\d+)/i)
-  const modeMatch = tail.match(/queue_mode\s*=\s*([a-zA-Z0-9+_-]+)/i)
-  const sourceMatch = tail.match(/source\s*=\s*([a-zA-Z0-9+_-]+)/i)
-  const sessionMatch = tail.match(/session\s*=\s*([^|]+)/i)
-  const inflightMatch = tail.match(/inflight\s*=\s*(\d+)/i)
-  const hbMatch = tail.match(/心跳\s*=\s*(\d+)s/i)
-
-  const elapsedSeconds = elapsedMatch ? Number(elapsedMatch[1]) : undefined
-  const queueDepth = queueMatch ? Number(queueMatch[1]) : undefined
-  const heartbeatSeconds = hbMatch ? Number(hbMatch[1]) : undefined
-  const inflight = inflightMatch ? Number(inflightMatch[1]) > 0 : undefined
-
-  return {
-    at: String(m[1] || '').trim() || undefined,
-    status: String(m[2] || '').trim() || undefined,
-    action: String(m[3] || '').trim() || undefined,
-    elapsedSeconds: Number.isFinite(elapsedSeconds as number) ? elapsedSeconds : undefined,
-    queueDepth: Number.isFinite(queueDepth as number) ? queueDepth : undefined,
-    queueMode: modeMatch ? String(modeMatch[1]).trim() : undefined,
-    source: sourceMatch ? String(sourceMatch[1]).trim() : undefined,
-    sessionKey: sessionMatch ? String(sessionMatch[1]).trim() : undefined,
-    inflight,
-    heartbeatSeconds: Number.isFinite(heartbeatSeconds as number) ? heartbeatSeconds : undefined,
-  }
-}
-
 const REASONING_EFFORTS = [
   { id: 'off', label: 'Off', icon: '💤' },
   { id: 'low', label: 'Low', icon: '⚡' },
@@ -1606,19 +1558,6 @@ export function ChatView({
     }
   })
 
-  const latestHeartbeat = (() => {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const parsed = parseTaskHeartbeat(messages[i].content || '')
-      if (parsed) {
-        const atMs = parsed.at ? Date.parse(parsed.at) : NaN
-        const isFresh = Number.isFinite(atMs)
-          ? Date.now() - atMs <= Math.max(180000, ((parsed.heartbeatSeconds || 60) * 3000))
-          : false
-        return { parsed, isFresh }
-      }
-    }
-    return null
-  })()
 
   return (
     <div
@@ -2135,79 +2074,6 @@ export function ChatView({
         </div>
       )}
 
-      {/* Task status bar — shows current task status from the latest message with task info */}
-      {false && (() => {
-        const lastTaskMsg = [...messages].reverse().find(m => m.task_status)
-        if (!lastTaskMsg?.task_status) return null
-        const status = lastTaskMsg.task_status
-        const statusConfig: Record<string, { label: string; color: string; bg: string; icon: string; animate?: boolean }> = {
-          todo:    { label: t('chat.statusTodo'),    color: 'text-slate-500',  bg: 'bg-slate-100 dark:bg-zinc-700',   icon: '○' },
-          doing:   { label: t('chat.statusDoing'),   color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-950/30',  icon: '◉', animate: true },
-          review:  { label: t('chat.statusReview'),  color: 'text-sky-600',    bg: 'bg-sky-50 dark:bg-sky-950/30',    icon: '◎' },
-          done:    { label: t('chat.statusDone'),    color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', icon: '●' },
-          blocked: { label: t('chat.statusBlocked'), color: 'text-red-500',    bg: 'bg-red-50 dark:bg-red-950/30',    icon: '✕' },
-        }
-        const cfg = statusConfig[status] || statusConfig.todo
-        const steps = ['todo', 'doing', 'review', 'done']
-        const currentIdx = steps.indexOf(status)
-
-        return (
-          <div className={`mx-2 mb-0.5 rounded-md ${cfg.bg} border border-slate-200/60 dark:border-zinc-700/60 px-2 py-1`}>
-            <div className="flex items-center gap-1.5 leading-none">
-              <span className={`text-[11px] ${cfg.color} ${cfg.animate ? 'animate-pulse' : ''}`}>{cfg.icon}</span>
-              <span className={`text-[11px] font-medium ${cfg.color}`}>{cfg.label}</span>
-              {lastTaskMsg.task_title && (
-                <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate max-w-[180px]">· {lastTaskMsg.task_title}</span>
-              )}
-            </div>
-            {/* Step progress (compact) */}
-            {status !== 'blocked' && (
-              <div className="flex items-center gap-0.5 mt-1">
-                {steps.map((s, i) => {
-                  const isActive = i === currentIdx
-                  const isPast = i < currentIdx
-                  const stepCfg = statusConfig[s] || statusConfig.todo
-                  return (
-                    <div key={s} className="flex items-center gap-0.5 flex-1">
-                      <div className={`h-1 flex-1 rounded-full transition-all ${
-                        isPast || isActive ? 'bg-current ' + stepCfg.color : 'bg-slate-200 dark:bg-zinc-600'
-                      } ${isActive && cfg.animate ? 'animate-pulse' : ''}`} />
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )
-      })()}
-
-      {false && latestHeartbeat && (() => {
-        const isRunning = typeof latestHeartbeat.parsed.inflight === 'boolean'
-          ? latestHeartbeat.parsed.inflight
-          : latestHeartbeat.isFresh
-
-        return (
-          <div className={`mx-2 mb-1 rounded-md border px-2 py-1 text-[11px] ${isRunning
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300'
-            : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
-          }`}>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="font-medium">
-                {isRunning ? 'Session: running' : 'Session: idle'}
-              </span>
-              {latestHeartbeat.parsed.source && <span>source={latestHeartbeat.parsed.source}</span>}
-              {latestHeartbeat.parsed.status && <span>status={latestHeartbeat.parsed.status}</span>}
-              {latestHeartbeat.parsed.queueMode && <span>queue_mode={latestHeartbeat.parsed.queueMode}</span>}
-              {typeof latestHeartbeat.parsed.queueDepth === 'number' && <span>queue_depth={latestHeartbeat.parsed.queueDepth}</span>}
-              {typeof latestHeartbeat.parsed.elapsedSeconds === 'number' && <span>elapsed={latestHeartbeat.parsed.elapsedSeconds}s</span>}
-              {typeof latestHeartbeat.parsed.heartbeatSeconds === 'number' && <span>heartbeat={latestHeartbeat.parsed.heartbeatSeconds}s</span>}
-            </div>
-            {latestHeartbeat.parsed.action && (
-              <p className="mt-1 truncate">action: {latestHeartbeat.parsed.action}</p>
-            )}
-          </div>
-        )
-      })()}
 
       {agentCardOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4" onClick={() => setAgentCardOpen(false)}>
