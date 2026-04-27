@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
-import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, indexLocalProject, checkFileBridge } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, scanLocalFolder, indexLocalProject, checkFileBridge } from '@/lib/desktop'
 import { FileTreePanel, scannedToFileNodes, type FileNode } from '@/components/ui/file-tree'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
@@ -217,7 +217,89 @@ function ResearchTaskPageInner() {
     } catch {}
   }, [taskId])
 
+  // Restore last opened folder + file (per-task)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !taskId || !isDesktop()) return
+    if (status !== 'authenticated') return
+    if (localProjectRoot) return
+    let cancelled = false
+    ;(async () => {
+      let savedFolder: string | null = null
+      let savedFile: string | null = null
+      try {
+        savedFolder = localStorage.getItem(`research-folder-${taskId}`)
+        savedFile = localStorage.getItem(`research-file-${taskId}`)
+      } catch {}
+      if (!savedFolder) return
+      const ok = await loadFolderFromPath(savedFolder, { silent: true })
+      if (cancelled || !ok || !savedFile) return
+      // Re-select the previously viewed file if still present
+      setTimeout(() => {
+        if (cancelled) return
+        setFileTree(prev => {
+          const findNode = (nodes: FileNode[]): FileNode | null => {
+            for (const n of nodes) {
+              if (n.kind === 'file' && n.path === savedFile) return n
+              if (n.kind === 'folder' && n.children) {
+                const found = findNode(n.children)
+                if (found) return found
+              }
+            }
+            return null
+          }
+          const target = findNode(prev)
+          if (target) viewFile(target)
+          return prev
+        })
+      }, 50)
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, status, selectedAgentId])
+
   // ── Open Folder ────────────────────────────────────
+  const persistOpenedFolder = useCallback((folderPath: string) => {
+    if (typeof window === 'undefined' || !taskId) return
+    try { localStorage.setItem(`research-folder-${taskId}`, folderPath) } catch {}
+  }, [taskId])
+
+  const persistSelectedFile = useCallback((filePath: string) => {
+    if (typeof window === 'undefined' || !taskId) return
+    try {
+      if (filePath) localStorage.setItem(`research-file-${taskId}`, filePath)
+      else localStorage.removeItem(`research-file-${taskId}`)
+    } catch {}
+  }, [taskId])
+
+  const loadFolderFromPath = useCallback(async (folderPath: string, opts?: { silent?: boolean }) => {
+    const result = await scanLocalFolder(folderPath, { includeAll: true, maxFileSize: 50 * 1024 * 1024 })
+    if (!result || result.files.length === 0) return false
+    setFileTree(scannedToFileNodes(result.files))
+    setLocalProjectRoot(result.path)
+    setSelectedFilePath('')
+    setFileContent(null)
+    if (selectedAgentId) {
+      indexLocalProject(taskId, selectedAgentId, result.path, result.files, CLIENT_WTT_API_BASE, {
+        Authorization: `Bearer ${session?.accessToken ?? ''}`
+      }).then(async (r) => {
+        if (r.ok) setProjectIndexed(true)
+        const status = await checkFileBridge(taskId, CLIENT_WTT_API_BASE)
+        setBridgeOnline(status.online)
+      }).catch(() => {})
+    }
+    if (!opts?.silent) {
+      const folderName = result.path.split(/[/\\]/).pop() || result.path
+      setChatMessages(prev => [...prev, {
+        id: `import-${Date.now()}`,
+        role: 'user' as const,
+        content: `📁 Folder opened: **${folderName}** (${result.files.length} files)\n_Agent can read files on demand — no upload needed._`,
+        timestamp: new Date().toISOString(),
+        sender_display_name: session?.user?.name || 'You',
+      }])
+    }
+    return true
+  }, [taskId, selectedAgentId, session?.accessToken, session?.user?.name])
+
   const openFolder = async () => {
     const result = await pickAndScanFolder('Open folder for research', { includeAll: true, maxFileSize: 50 * 1024 * 1024 })
     if (!result || result.files.length === 0) return
@@ -225,6 +307,8 @@ function ResearchTaskPageInner() {
     setLocalProjectRoot(result.path)
     setSelectedFilePath('')
     setFileContent(null)
+    persistOpenedFolder(result.path)
+    persistSelectedFile('')
     if (selectedAgentId) {
       indexLocalProject(taskId, selectedAgentId, result.path, result.files, CLIENT_WTT_API_BASE, {
         Authorization: `Bearer ${session?.accessToken ?? ''}`
@@ -264,6 +348,7 @@ function ResearchTaskPageInner() {
     if (node.kind !== 'file' || isBinaryPath(node.path)) return
     const fullPath = localProjectRoot ? `${localProjectRoot}/${node.path}` : node.path
     setSelectedFilePath(node.path)
+    persistSelectedFile(node.path)
     setFileLoading(true)
     setPdfDataUrl(null)
     if (isDocumentPath(node.path)) {
@@ -560,7 +645,15 @@ function ResearchTaskPageInner() {
               selectedPath={selectedFilePath}
               onSelect={(node) => viewFile(node)}
               onShare={(node) => { if (node.kind === 'file') shareFilesToAgent([node.path]) }}
-              onClose={() => { setFileTree([]); setLocalProjectRoot(null); setSelectedFilePath(''); setFileContent(null); setProjectIndexed(false) }}
+              onClose={() => {
+                setFileTree([]); setLocalProjectRoot(null); setSelectedFilePath(''); setFileContent(null); setProjectIndexed(false)
+                if (typeof window !== 'undefined' && taskId) {
+                  try {
+                    localStorage.removeItem(`research-folder-${taskId}`)
+                    localStorage.removeItem(`research-file-${taskId}`)
+                  } catch {}
+                }
+              }}
               onImportFolder={openFolder}
               title="📂 Files"
               width={220}
@@ -614,7 +707,7 @@ function ResearchTaskPageInner() {
                       >📝 {noteCount}</button>
                     )}
                     <button
-                      onClick={() => { setSelectedFilePath(''); setFileContent(null) }}
+                      onClick={() => { setSelectedFilePath(''); setFileContent(null); persistSelectedFile('') }}
                       className="rounded px-1 py-0.5 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"
                     >✕</button>
                   </div>
@@ -898,13 +991,13 @@ function ResearchTaskPageInner() {
               const { meta, body: cleanBody } = stripMetaBlocks(msg.content || '')
               return (
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[90%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${
+                  <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-[1.42] shadow-[0_1px_0_rgba(0,0,0,0.08)] ${
                     msg.role === 'user'
-                      ? 'border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/80 dark:bg-indigo-950/30 text-slate-800 dark:text-zinc-200 rounded-tr-md'
-                      : 'border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-tl-md'
+                      ? 'bg-[#DCF8C6] dark:bg-emerald-900/45 text-slate-800 dark:text-zinc-100 rounded-br-md'
+                      : 'bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 rounded-bl-md'
                   }`}>
                     {msg.sender_display_name && (
-                      <p className={`mb-0.5 text-[10px] font-semibold ${msg.role === 'user' ? 'text-indigo-500' : 'text-emerald-500'}`}>{msg.sender_display_name}</p>
+                      <p className={`mb-0.5 text-[10px] font-semibold ${msg.role === 'user' ? 'text-emerald-700 dark:text-emerald-300' : 'text-emerald-500'}`}>{msg.sender_display_name}</p>
                     )}
                     {meta.length > 0 && (
                       <div className="mb-1.5 space-y-1">
@@ -934,7 +1027,7 @@ function ResearchTaskPageInner() {
                       )}
                     </div>
                     <FileAttachmentPreview content={msg.content} />
-                    <p className="mt-1 text-[10px] text-slate-400">{formatTime(msg.timestamp)}</p>
+                    <p className={`mt-1 text-[10px] ${msg.role === 'user' ? 'text-emerald-700/70 dark:text-emerald-300/70' : 'text-slate-400'}`}>{formatTime(msg.timestamp)}</p>
                   </div>
                 </div>
               )
