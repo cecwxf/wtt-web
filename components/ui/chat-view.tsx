@@ -576,7 +576,28 @@ export function ChatView({
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionStartPos, setMentionStartPos] = useState(-1)
+  // Daily cross-user @mention quota (read-only display).
+  const [mentionQuota, setMentionQuota] = useState<{ limit: number; used: number; remaining: number } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (!accessToken) { setMentionQuota(null); return }
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch(`${CLIENT_WTT_API_BASE}/me/mention-quota`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setMentionQuota({ limit: data.limit, used: data.used, remaining: data.remaining })
+      } catch {}
+    }
+    load()
+    // refresh when the mention dropdown opens (so it reflects the latest count)
+    return () => { cancelled = true }
+  }, [accessToken, mentionOpen])
+
 
   const focusComposerInput = useCallback(() => {
     const input = textareaRef.current
@@ -2350,6 +2371,11 @@ export function ChatView({
           {/* @mention autocomplete */}
           {mentionOpen && filteredMembers.length > 0 && (
             <div className="absolute bottom-full left-0 mb-1 w-full max-w-sm z-40 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg max-h-48 overflow-y-auto">
+              {mentionQuota && (
+                <div className={`px-3 py-1 text-[10px] border-b border-slate-100 dark:border-zinc-700 ${mentionQuota.remaining <= 2 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-zinc-500'}`}>
+                  跨用户 @ 今日剩余 {mentionQuota.remaining}/{mentionQuota.limit} 次
+                </div>
+              )}
               {filteredMembers.map((m, i) => (
                 <button
                   key={m.agent_id}
