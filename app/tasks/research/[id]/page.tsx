@@ -240,7 +240,7 @@ function ResearchTaskPageInner() {
           const findNode = (nodes: FileNode[]): FileNode | null => {
             for (const n of nodes) {
               if (n.kind === 'file' && n.path === savedFile) return n
-              if (n.kind === 'folder' && n.children) {
+              if (n.kind === 'directory' && n.children) {
                 const found = findNode(n.children)
                 if (found) return found
               }

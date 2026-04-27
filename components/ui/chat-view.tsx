@@ -391,6 +391,9 @@ export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: str
   )
   // Strip inline [Model: ... | Effort: ...] and [Switched → Model: ...] tags
   cleaned = cleaned.replace(/\[(Switched\s*→\s*)?Model:\s*[^\]]*\]\s*/g, '')
+  // Strip hidden [FILE_CONTENT ...]...[/FILE_CONTENT] blocks (raw extracted text
+  // from uploaded PDF/DOCX/etc — meant for the inference agent, not the UI).
+  cleaned = cleaned.replace(/\[FILE_CONTENT\b[^\]]*\][\s\S]*?\[\/FILE_CONTENT\]\s*/g, '')
   return { meta, body: cleaned.trim() }
 }
 

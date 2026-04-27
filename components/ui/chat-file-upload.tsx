@@ -12,6 +12,7 @@ export interface UploadedAsset {
   size: number
   mimeType: string
   markdownToken: string
+  extractedText?: string
 }
 
 interface ChatFileUploadProps {
@@ -94,13 +95,25 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
       const isAudio = file.type.startsWith('audio/')
       const isVideo = file.type.startsWith('video/')
       const kind: UploadedAsset['kind'] = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'file'
-      const markdownToken = isImage
+      const baseToken = isImage
         ? `![${file.name}](${asset.url})`
         : isAudio
           ? `[audio:${file.name}](${asset.url})`
           : isVideo
             ? `[video:${file.name}](${asset.url})`
             : `[file:${file.name}](${asset.url})`
+
+      const extractedText: string | undefined = typeof asset?.extracted_text === 'string' && asset.extracted_text.trim()
+        ? asset.extracted_text
+        : undefined
+
+      // When the backend extracted text from the file (PDF/DOCX/text formats),
+      // append it inside a hidden [FILE_CONTENT] block so the inference agent can
+      // read the document text directly without needing extra MCP tools.
+      // The chat UI strips this block via stripFileTokens / stripMetaBlocks.
+      const markdownToken = extractedText
+        ? `${baseToken}\n\n[FILE_CONTENT name="${file.name.replace(/"/g, '\\"')}"]\n${extractedText}\n[/FILE_CONTENT]`
+        : baseToken
 
       onUploaded({
         url: asset.url,
@@ -109,6 +122,7 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
         size: file.size,
         mimeType: file.type,
         markdownToken,
+        extractedText,
       })
     } catch (e) {
       alert(`Upload failed: ${e instanceof Error ? e.message : 'unknown'}`)
@@ -248,6 +262,7 @@ export function FileAttachmentPreview({ content }: { content: string }) {
  */
 export function stripFileTokens(content: string): string {
   return content
+    .replace(/\[FILE_CONTENT\b[^\]]*\][\s\S]*?\[\/FILE_CONTENT\]/g, '')
     .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
     .replace(/\[(?:file|audio|video)(?::[^\]]*)?\]\([^)]+\)/g, '')
     .replace(/\n{3,}/g, '\n\n')
