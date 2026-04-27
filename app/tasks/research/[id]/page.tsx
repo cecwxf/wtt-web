@@ -124,6 +124,7 @@ function ResearchTaskPageInner() {
 
   // PDF viewer
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null)
+  const [docExpanded, setDocExpanded] = useState(false)
 
   // Quote-to-chat + context menu
   const readerRef = useRef<HTMLDivElement>(null)
@@ -552,7 +553,7 @@ function ResearchTaskPageInner() {
         {/* ═══ LEFT COLUMN: File tree + content viewer ═══ */}
         <div className="flex flex-1 overflow-hidden">
           {/* File tree sidebar */}
-          {fileTree.length > 0 && (
+          {fileTree.length > 0 && !docExpanded && (
             <FileTreePanel
               fileTree={fileTree}
               projectRoot={localProjectRoot}
@@ -599,6 +600,13 @@ function ResearchTaskPageInner() {
                       className="rounded px-1.5 py-0.5 text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
                       title="Send to agent for analysis"
                     >@Agent</button>
+                    {fileTree.length > 0 && (
+                      <button
+                        onClick={() => setDocExpanded(v => !v)}
+                        className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-700 dark:text-zinc-400"
+                        title={docExpanded ? '收起：显示文件树' : '展开：隐藏左侧文件树，文档铺满左半区'}
+                      >{docExpanded ? '⤢ 收起' : '⤢ 展开'}</button>
+                    )}
                     {currentNotes && (
                       <button
                         onClick={() => setNotesOpen(!notesOpen)}
