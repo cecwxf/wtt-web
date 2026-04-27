@@ -840,8 +840,10 @@ function FeedPageInner() {
     const mapped = subscribedTopicsRaw
       .filter((topic: { name: string; origin_type?: string; originType?: string }) => {
         const name = String(topic.name || '').trim()
-        // Hide Ruoshui square post threads from feed conversations.
+        // Hide Ruoshui square topics/posts from feed conversations.
+        if (name.startsWith('__SQUARE__/')) return false
         if (name.startsWith('若水广场｜') || name.startsWith('若水专文｜')) return false
+        if (name.startsWith('知乎精选：')) return false
 
         const anyTopic = topic as Record<string, unknown>
         const isSquareFlag = Boolean(

@@ -193,7 +193,9 @@ const PROGRESS_PATTERNS = [
   /^Progress:\s*\d+%\s*$/m,                                        // Standalone "Progress: N%"
   /^\[TASK_STATUS\]/m,                                              // Structured [TASK_STATUS] progress
   /^\[TASK_RUN\]/m,                                                 // Task dispatch metadata
-  /^\[[^\]]+\]\s*状态=.*\|\s*动作=.*心跳=\d+s/m, // WTT heartbeat line
+  /^\[[^\]]+\]\s*状态=.*\|\s*动作=.*心跳=\d+s/m, // WTT heartbeat line (compact)
+  /^\[[^\]]+\]\s*\|\s*状态\s*=\s*doing\b.*心跳=\d+s/m, // WTT heartbeat line (piped legacy)
+  /^\[[^\]]+\]\s*\|\s*状态\s*=\s*doing\b/m, // WTT doing status-only line
   /^🤔\s*Agent thinking/m,                                         // Agent thinking placeholder
 ]
 
