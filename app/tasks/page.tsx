@@ -913,6 +913,18 @@ function TasksPageInner() {
                       </span>
                     )}
 
+                    {/* Rename inline button */}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); renameTask(task) }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); renameTask(task) } }}
+                      className="shrink-0 inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer transition"
+                      title={t('tasks.rename') || 'Rename'}
+                    >
+                      ✏️ {t('tasks.rename') || 'Rename'}
+                    </span>
+
                     {(task.task_type === 'code' || task.task_type === 'research') && (
                       <span className="shrink-0 text-[9px] text-slate-400 dark:text-zinc-500">{t('tasks.doubleClickOpen')}</span>
                     )}
