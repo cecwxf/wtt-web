@@ -518,6 +518,22 @@ function TasksPageInner() {
       (prev: TaskItem[] | undefined) => (prev || []).map((it) => (it.id === task.id ? { ...it, title: trimmed } : it)),
       { revalidate: true }
     )
+    // Also refresh the shared "subscribed topics" cache so the renamed title
+    // appears immediately on the Feed page (otherwise it stays stale up to 60s).
+    mutateSubscribedTopics(
+      (prev: unknown) => {
+        if (!Array.isArray(prev)) return prev
+        return prev.map((row) => {
+          const r = row as Record<string, unknown>
+          if (!r) return r
+          if (r.task_id === task.id || r.topic_id === task.topic_id) {
+            return { ...r, name: trimmed }
+          }
+          return r
+        })
+      },
+      { revalidate: true }
+    )
   }
 
   const cancelTask = async (task: TaskItem) => {

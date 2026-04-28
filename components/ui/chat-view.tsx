@@ -521,7 +521,6 @@ export function ChatView({
   hasOlder = false,
   loading,
   extraHeaderActions,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isTaskTopic = false,
   taskType = null,
   wsConnected = false,
@@ -703,6 +702,16 @@ export function ChatView({
   }, [])
 
   const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
+
+  // Task topics are stored as `TASK-<8hex> <title>` until manually renamed.
+  // Always strip the auto-prefix in the header/placeholder so users see only the title.
+  const displayTopicName = useMemo(() => {
+    if (!topicName) return topicName
+    if (isTaskTopic || /^TASK-[a-f0-9]{8}\s+/i.test(topicName)) {
+      return topicName.replace(/^TASK-[a-f0-9]{8}\s*/i, '') || topicName
+    }
+    return topicName
+  }, [topicName, isTaskTopic])
 
   const filteredMembers = useMemo(() => {
     if (!mentionQuery) return topicMembers
@@ -1602,7 +1611,7 @@ export function ChatView({
         <div className={`flex items-center justify-between ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
           <div className="min-w-0">
             <div className={`flex items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
-              <h2 className={`truncate font-semibold dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}>{topicName}</h2>
+              <h2 className={`truncate font-semibold dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}>{displayTopicName}</h2>
               {!compactUi && (
                 <span className="shrink-0 text-[10px] text-slate-400">
                   {t('chat.messagesLoaded', { count: messages.length })}
@@ -2474,7 +2483,7 @@ export function ChatView({
             value={draft}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
+            placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: displayTopicName }) : t('chat.topicHint', { topic: displayTopicName })}
             rows={1}
             className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${compactUi ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1.5 text-sm'} ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : compactUi ? 'max-h-20 min-h-[30px]' : 'max-h-24 min-h-8'}`}
           />
