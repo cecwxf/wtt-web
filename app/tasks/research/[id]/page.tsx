@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { normalizeAndFilterAgents } from '@/lib/agents'
 import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
-import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, scanLocalFolder, indexLocalProject, checkFileBridge } from '@/lib/desktop'
+import { isDesktop, pickLocalFiles, readLocalFile, pickAndScanFolder, scanLocalFolder, indexLocalProject, checkFileBridge, getDesktopBridge } from '@/lib/desktop'
 import { FileTreePanel, scannedToFileNodes, type FileNode } from '@/components/ui/file-tree'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { stripMetaBlocks, isProgressMessage } from '@/components/ui/chat-view'
@@ -28,6 +28,27 @@ interface ChatMsg {
   content: string
   timestamp: string
   sender_display_name?: string
+  sender_id?: string
+  sender_type?: string
+  semantic_type?: string
+}
+
+interface LocalNotice {
+  id: string
+  content: string
+  timestamp: string
+}
+
+interface PendingSave {
+  requestId: string
+  action: string
+  label: string
+  slug: string
+  targetDir: string
+  preferredBaseName: string
+  sentAt: number
+  expectedSenderId?: string
+  timeoutMs: number
 }
 
 // ── Helpers ────────────────────────────────────────────
@@ -116,6 +137,11 @@ function ResearchTaskPageInner() {
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
+  // Quick-action save tracking (write agent reply as a file in the project folder)
+  const pendingSaveRef = useRef<PendingSave | null>(null)
+  const [localNotices, setLocalNotices] = useState<LocalNotice[]>([])
+  const [savingArtifact, setSavingArtifact] = useState<string | null>(null)
+
   // Layout — right panel width (left takes the rest)
   const [rightW, setRightW] = useState(420)
   const resizingRef = useRef(false)
@@ -179,6 +205,9 @@ function ResearchTaskPageInner() {
         content: m.content,
         timestamp: m.timestamp,
         sender_display_name: m.sender_display_name || agents.find(a => a.agent_id === m.sender_id)?.display_name || m.sender_id,
+        sender_id: m.sender_id,
+        sender_type: m.sender_type,
+        semantic_type: m.semantic_type,
       }))
     setChatMessages(mapped)
   }, [topicMessages, selectedAgentId, agents])
@@ -186,6 +215,76 @@ function ResearchTaskPageInner() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
+
+  // ── Response watcher: when a quick-action is pending, wait for the
+  // matching agent reply and write it to a file in the project folder.
+  useEffect(() => {
+    const pending = pendingSaveRef.current
+    if (!pending) return
+    if (Date.now() - pending.sentAt > pending.timeoutMs) {
+      pendingSaveRef.current = null
+      setSavingArtifact(null)
+      setLocalNotices(prev => [...prev, {
+        id: `notice-timeout-${pending.requestId}`,
+        content: `⚠️ ${pending.label} timed out. Reply not saved automatically — you can copy from chat.`,
+        timestamp: new Date().toISOString(),
+      }])
+      return
+    }
+    // Find the first qualifying message that came AFTER the action was triggered.
+    const candidate = chatMessages.find((m) => {
+      if (m.role !== 'assistant') return false
+      const ts = new Date(m.timestamp).getTime()
+      if (Number.isFinite(ts) && ts < pending.sentAt - 1000) return false
+      const stype = (m.sender_type || '').toString().toLowerCase()
+      if (stype && stype !== 'agent') return false
+      const sem = (m.semantic_type || '').toString().toLowerCase()
+      if (sem && sem !== 'post' && sem !== '') return false
+      if (pending.expectedSenderId && m.sender_id && m.sender_id !== pending.expectedSenderId) return false
+      if (isProgressMessage(m.content)) return false
+      const { body } = stripMetaBlocks(m.content || '')
+      const trimmed = body.trim()
+      if (!trimmed) return false
+      if (/^[🤔💭⏳]\s*Agent thinking/i.test(trimmed)) return false
+      return true
+    })
+    if (!candidate) return
+
+    // Write the artifact.
+    const { body } = stripMetaBlocks(candidate.content || '')
+    const fileName = pickFreeName(pending.preferredBaseName, pending.slug, pending.targetDir)
+    const absPath = `${pending.targetDir.replace(/\\/g, '/')}/${fileName}`
+    const bridge = getDesktopBridge()
+    if (!bridge) {
+      pendingSaveRef.current = null
+      setSavingArtifact(null)
+      return
+    }
+    // Capture the values we need before clearing the ref.
+    const label = pending.label
+    pendingSaveRef.current = null
+
+    ;(async () => {
+      const writeRes = await bridge.fs.writeFile(absPath, body)
+      setSavingArtifact(null)
+      if (!writeRes.ok) {
+        setLocalNotices(prev => [...prev, {
+          id: `notice-err-${Date.now()}`,
+          content: `⚠️ Failed to save ${label}: ${writeRes.error || 'unknown error'}`,
+          timestamp: new Date().toISOString(),
+        }])
+        return
+      }
+      setLocalNotices(prev => [...prev, {
+        id: `notice-ok-${Date.now()}`,
+        content: `📝 Saved **${label}** → \`${fileName}\``,
+        timestamp: new Date().toISOString(),
+      }])
+      // Refresh file tree silently so the new file appears in the left panel.
+      if (localProjectRoot) loadFolderFromPath(localProjectRoot, { silent: true })
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatMessages, localProjectRoot])
 
   const loadAgents = useCallback(async () => {
     const r = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, { headers: authHeaders() })
@@ -449,20 +548,157 @@ function ResearchTaskPageInner() {
   }
 
   // ── Quick actions ──────────────────────────────────
-  const quickAction = (action: string) => {
-    const prompts: Record<string, string> = {
-      summarize: 'Please summarize the key contents of the files in this project.',
-      review: 'Please write a literature review based on the documents in this project.',
-      compare: 'Please compare and analyze the different documents in this project.',
-      gap: 'Please identify research gaps based on the documents in this project.',
-      translate: selectedFilePath
-        ? `Please translate the content of ${selectedFilePath} to Chinese.`
-        : 'Please translate the selected document to Chinese.',
-      draft: 'Based on the documents in this project, please draft a structured research section.',
-      cite: 'Please format the references found in the project documents in APA style.',
+  // Action definitions. `scope='file'` requires a selected source file and saves
+  // the agent's reply next to it. `scope='project'` saves to the project root.
+  type QuickActionKey = 'summarize' | 'review' | 'compare' | 'gap' | 'translate' | 'draft' | 'cite' | 'deep'
+  type QuickActionDef = {
+    key: QuickActionKey
+    label: string
+    tip: string
+    slug: string
+    scope: 'file' | 'project'
+    timeoutMs: number
+    prompt: (sourceRel: string) => string
+  }
+
+  const QUICK_ACTIONS: QuickActionDef[] = [
+    {
+      key: 'summarize', label: '📋 Summarize', tip: 'Summarize project files',
+      slug: 'summary', scope: 'project', timeoutMs: 5 * 60_000,
+      prompt: () => 'Please summarize the key contents of the files in this project. Output the summary directly in markdown without any preamble. Use Chinese.',
+    },
+    {
+      key: 'review', label: '📝 Literature Review', tip: 'Generate literature review',
+      slug: 'literature-review', scope: 'project', timeoutMs: 8 * 60_000,
+      prompt: () => 'Please write a literature review based on the documents in this project. Output the review directly in markdown without any preamble. Use Chinese.',
+    },
+    {
+      key: 'compare', label: '📊 Compare', tip: 'Compare documents',
+      slug: 'comparison', scope: 'project', timeoutMs: 8 * 60_000,
+      prompt: () => 'Please compare and analyze the different documents in this project, in markdown with a comparison table. Use Chinese.',
+    },
+    {
+      key: 'gap', label: '🔍 Gap Analysis', tip: 'Find research gaps',
+      slug: 'gap-analysis', scope: 'project', timeoutMs: 8 * 60_000,
+      prompt: () => 'Please identify research gaps based on the documents in this project. Output as markdown sections (Identified Gaps / Evidence / Suggested Directions). Use Chinese.',
+    },
+    {
+      key: 'translate', label: '🌐 Translate', tip: 'Translate selected file to Chinese',
+      slug: 'translation', scope: 'file', timeoutMs: 10 * 60_000,
+      prompt: (src) => `Please translate the full content of \`${src}\` to Chinese. Preserve markdown structure (headings, lists, tables). Output ONLY the translation in markdown, no preamble like "Here is the translation".`,
+    },
+    {
+      key: 'draft', label: '📄 Draft', tip: 'Draft a research section',
+      slug: 'draft', scope: 'project', timeoutMs: 8 * 60_000,
+      prompt: () => 'Based on the documents in this project, please draft a structured research section in markdown. Use Chinese.',
+    },
+    {
+      key: 'cite', label: '📎 Format Refs', tip: 'Format references in APA style',
+      slug: 'references-apa', scope: 'project', timeoutMs: 5 * 60_000,
+      prompt: () => 'Please format the references found in the project documents in APA style as a numbered markdown list.',
+    },
+    {
+      key: 'deep', label: '🔬 Deep Analysis', tip: 'Generate an in-depth, human-tone analysis article with diagrams',
+      slug: 'deep-analysis', scope: 'file', timeoutMs: 15 * 60_000,
+      prompt: (src) => [
+        `请为论文 \`${src}\` 写一篇深度解析文章，要求如下：`,
+        '',
+        '【文风】',
+        '- 中文输出，口语化、拟人化、像在跟同行聊天一样自然',
+        '- 严禁出现"作为AI"、"以下是"、"综上所述"、"总而言之"等 AI 腔调的套话',
+        '- 段落要有节奏，可以用反问、举例、类比拉近距离',
+        '',
+        '【结构】（用 Markdown 标题层级）',
+        '1. # 标题 —— 一句话点出论文最有意思的角度',
+        '2. ## 一句话总结',
+        '3. ## 这篇论文在解决什么问题（背景与动机）',
+        '4. ## 核心方法剖析（包含 1 个 Mermaid flowchart 描述方法流程）',
+        '5. ## 实验设置与亮点（包含 1 个表格对比 baselines / 数据集）',
+        '6. ## 关键发现与数据（包含 1 个 Mermaid 图，可以是 mindmap、graph、sequenceDiagram 任选）',
+        '7. ## 局限与未解之谜',
+        '8. ## 我的看法 / 可延展的方向',
+        '',
+        '【硬性要求】',
+        '- 字数不少于 1500 字',
+        '- 至少嵌入 2 个 Mermaid 代码块（用 ```mermaid 包裹），确保语法正确',
+        '- 至少包含 1 个 Markdown 表格',
+        '- 不要在最开头写"以下是分析"之类的引导语，直接从一级标题开始输出',
+        '- 不要在最后加"如有疑问请联系"之类的客套话',
+      ].join('\n'),
+    },
+  ]
+
+  // Pick a non-colliding filename in `dir` based on existing files in fileTree.
+  const pickFreeName = (baseName: string, slug: string, dir: string): string => {
+    // Build set of existing relative paths in the tree (relative to localProjectRoot).
+    const existing = new Set<string>()
+    const walk = (nodes: FileNode[]) => {
+      for (const n of nodes) {
+        if (n.kind === 'file') existing.add(n.path)
+        if (n.children) walk(n.children)
+      }
     }
-    const prompt = prompts[action]
-    if (prompt) sendMessage(prompt)
+    walk(fileTree)
+    const root = localProjectRoot || ''
+    const dirRel = root && dir.startsWith(root) ? dir.slice(root.length).replace(/^[\\/]+/, '') : ''
+    const join = (n: string) => (dirRel ? `${dirRel}/${n}` : n)
+    let candidate = `${baseName}.${slug}.md`
+    if (!existing.has(join(candidate))) return candidate
+    for (let i = 2; i < 100; i += 1) {
+      candidate = `${baseName}.${slug}-${i}.md`
+      if (!existing.has(join(candidate))) return candidate
+    }
+    return `${baseName}.${slug}-${Date.now()}.md`
+  }
+
+  const dirnameOf = (absPath: string) => {
+    const idx = Math.max(absPath.lastIndexOf('/'), absPath.lastIndexOf('\\'))
+    return idx >= 0 ? absPath.slice(0, idx) : absPath
+  }
+  const basenameNoExt = (p: string) => {
+    const name = p.split(/[/\\]/).pop() || p
+    const dot = name.lastIndexOf('.')
+    return dot > 0 ? name.slice(0, dot) : name
+  }
+
+  const handleQuickAction = async (key: QuickActionKey) => {
+    const def = QUICK_ACTIONS.find(a => a.key === key)
+    if (!def) return
+    if (!localProjectRoot) {
+      alert('Please open a folder first.')
+      return
+    }
+    if (def.scope === 'file' && !selectedFilePath) {
+      alert(`Please select a file first to use "${def.label}".`)
+      return
+    }
+
+    let targetDir: string
+    let preferredBaseName: string
+    let sourceRelForPrompt = ''
+    if (def.scope === 'file') {
+      sourceRelForPrompt = selectedFilePath
+      const sourceAbs = `${localProjectRoot}/${selectedFilePath}`.replace(/\\/g, '/')
+      targetDir = dirnameOf(sourceAbs)
+      preferredBaseName = basenameNoExt(selectedFilePath)
+    } else {
+      targetDir = localProjectRoot
+      preferredBaseName = 'project'
+    }
+
+    pendingSaveRef.current = {
+      requestId: `qa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      action: def.key,
+      label: def.label,
+      slug: def.slug,
+      targetDir,
+      preferredBaseName,
+      sentAt: Date.now(),
+      expectedSenderId: task?.runner_agent_id || undefined,
+      timeoutMs: def.timeoutMs,
+    }
+    setSavingArtifact(def.label)
+    sendMessage(def.prompt(sourceRelForPrompt))
   }
 
   // ── Quote to Chat ─────────────────────────────────
@@ -955,25 +1191,29 @@ function ResearchTaskPageInner() {
 
           {/* Quick action buttons */}
           <div className="flex flex-wrap gap-1 border-b border-slate-100 dark:border-zinc-700 bg-slate-50/50 dark:bg-zinc-800/50 px-2 py-1.5">
-            {[
-              { key: 'summarize', label: '📋 Summarize', tip: 'Summarize project files' },
-              { key: 'review', label: '📝 Literature Review', tip: 'Generate literature review' },
-              { key: 'compare', label: '📊 Compare', tip: 'Compare documents' },
-              { key: 'gap', label: '🔍 Gap Analysis', tip: 'Find research gaps' },
-              { key: 'translate', label: '🌐 Translate', tip: 'Translate to Chinese' },
-              { key: 'draft', label: '📄 Draft', tip: 'Draft a research section' },
-              { key: 'cite', label: '📎 Format Refs', tip: 'Format references in APA style' },
-            ].map(({ key, label, tip }) => (
-              <button
-                key={key}
-                onClick={() => quickAction(key)}
-                disabled={sending}
-                title={tip}
-                className="rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-600 px-2 py-0.5 text-[10px] text-slate-600 dark:text-zinc-300 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50 transition-colors"
-              >
-                {label}
-              </button>
-            ))}
+            {QUICK_ACTIONS.map(({ key, label, tip, scope }) => {
+              const needsFile = scope === 'file' && !selectedFilePath
+              return (
+                <button
+                  key={key}
+                  onClick={() => handleQuickAction(key)}
+                  disabled={sending || needsFile}
+                  title={needsFile ? `${tip} — select a file first` : tip}
+                  className={`rounded border px-2 py-0.5 text-[10px] transition-colors disabled:opacity-50 ${
+                    key === 'deep'
+                      ? 'border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/50 font-medium'
+                      : 'bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-600 text-slate-600 dark:text-zinc-300 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+            {savingArtifact && (
+              <span className="ml-2 inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300 animate-pulse">
+                ⏳ Awaiting reply for {savingArtifact}…
+              </span>
+            )}
           </div>
 
           {/* Messages */}
@@ -1032,6 +1272,13 @@ function ResearchTaskPageInner() {
                 </div>
               )
             })}
+            {localNotices.map((n) => (
+              <div key={n.id} className="flex justify-center">
+                <div className="max-w-[90%] rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 px-3 py-1.5 text-[12px] text-amber-700 dark:text-amber-300">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{n.content}</ReactMarkdown>
+                </div>
+              </div>
+            ))}
             <div ref={chatEndRef} />
           </div>
 
