@@ -104,8 +104,10 @@ function TasksPageInner() {
   // Local-only labels: rename is a per-browser display alias, not a real
   // task/topic title change. This keeps chat-view, the WTT plugin and the
   // backend topic name untouched.
+  // Synced across devices via /task-labels API; localStorage is offline cache.
   const TASK_LABELS_LS_KEY = 'wtt:task-labels:v1'
   const [taskLabels, setTaskLabels] = useState<Record<string, string>>({})
+  // Load cached labels first (instant UI), then refresh from server.
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -123,11 +125,51 @@ function TasksPageInner() {
       /* ignore corrupt label store */
     }
   }, [])
+  // Fetch the canonical label set from the server whenever auth becomes available.
+  useEffect(() => {
+    if (!session?.accessToken) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const resp = await fetch(`${CLIENT_WTT_API_BASE}/task-labels`, {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        })
+        if (!resp.ok) return
+        const data = await resp.json()
+        if (cancelled || !data || typeof data !== 'object') return
+        const cleaned: Record<string, string> = {}
+        for (const [k, v] of Object.entries(data)) {
+          if (typeof k === 'string' && typeof v === 'string' && v.trim()) cleaned[k] = v
+        }
+        setTaskLabels(cleaned)
+        try { window.localStorage.setItem(TASK_LABELS_LS_KEY, JSON.stringify(cleaned)) } catch { /* quota */ }
+      } catch {
+        /* network down → keep local cache */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [session?.accessToken])
   const persistTaskLabels = useCallback((next: Record<string, string>) => {
     setTaskLabels(next)
     if (typeof window === 'undefined') return
     try { window.localStorage.setItem(TASK_LABELS_LS_KEY, JSON.stringify(next)) } catch { /* quota/private mode */ }
   }, [])
+  // Push a single label change to the server (fire-and-forget; local cache is source of truth for UI).
+  const syncTaskLabelToServer = useCallback(async (taskId: string, label: string | null) => {
+    if (!session?.accessToken) return
+    try {
+      await fetch(`${CLIENT_WTT_API_BASE}/task-labels/${encodeURIComponent(taskId)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ label: label ?? '' }),
+      })
+    } catch {
+      /* offline — server will catch up on next reload via GET /task-labels */
+    }
+  }, [session?.accessToken])
   const labelFor = useCallback(
     (task: { id: string; title?: string | null }) => (taskLabels[task.id]?.trim() || task.title || 'Untitled'),
     [taskLabels],
@@ -524,6 +566,7 @@ function TasksPageInner() {
       if (currentLabel) {
         delete next[task.id]
         persistTaskLabels(next)
+        syncTaskLabelToServer(task.id, null)
       }
       setRenameModal(null)
       return
@@ -534,6 +577,7 @@ function TasksPageInner() {
     }
     next[task.id] = trimmed
     persistTaskLabels(next)
+    syncTaskLabelToServer(task.id, trimmed)
     setRenameModal(null)
   }
 
