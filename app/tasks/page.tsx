@@ -101,6 +101,37 @@ function TasksPageInner() {
   // taskDraft removed — no longer used after status system removal
   const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
   const [renameModal, setRenameModal] = useState<{ task: TaskItem; value: string } | null>(null)
+  // Local-only labels: rename is a per-browser display alias, not a real
+  // task/topic title change. This keeps chat-view, the WTT plugin and the
+  // backend topic name untouched.
+  const TASK_LABELS_LS_KEY = 'wtt:task-labels:v1'
+  const [taskLabels, setTaskLabels] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem(TASK_LABELS_LS_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        const cleaned: Record<string, string> = {}
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof k === 'string' && typeof v === 'string' && v.trim()) cleaned[k] = v
+        }
+        setTaskLabels(cleaned)
+      }
+    } catch {
+      /* ignore corrupt label store */
+    }
+  }, [])
+  const persistTaskLabels = useCallback((next: Record<string, string>) => {
+    setTaskLabels(next)
+    if (typeof window === 'undefined') return
+    try { window.localStorage.setItem(TASK_LABELS_LS_KEY, JSON.stringify(next)) } catch { /* quota/private mode */ }
+  }, [])
+  const labelFor = useCallback(
+    (task: { id: string; title?: string | null }) => (taskLabels[task.id]?.trim() || task.title || 'Untitled'),
+    [taskLabels],
+  )
   const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [creatingTaskType, setCreatingTaskType] = useState<string | null>(null)
@@ -202,7 +233,7 @@ function TasksPageInner() {
       const aid = t.owner_agent_id || t.runner_agent_id
       if (!aid) continue
       if (!map[aid]) map[aid] = []
-      map[aid].push({ id: t.id, title: t.title || 'Untitled', task_type: t.task_type || 'general', status: t.status || 'todo' })
+      map[aid].push({ id: t.id, title: labelFor(t), task_type: t.task_type || 'general', status: t.status || 'todo' })
     }
     return map
   }, [tasks])
@@ -334,7 +365,7 @@ function TasksPageInner() {
         const durationMs = Math.max(0, end - start)
         return {
           id: task.id,
-          title: task.title,
+          title: labelFor(task),
           durationMs,
         }
       })
@@ -479,65 +510,35 @@ function TasksPageInner() {
 
   const renameTask = (task: TaskItem) => {
     setTaskContextMenu(null)
-    setRenameModal({ task, value: task.title })
+    setRenameModal({ task, value: labelFor(task) })
   }
 
   const submitRename = async () => {
     if (!renameModal) return
     const { task, value } = renameModal
     const trimmed = value.trim()
+    const currentLabel = taskLabels[task.id] || ''
+    // Empty (or matches the real title with no existing label) → clear the label.
+    const next = { ...taskLabels }
     if (!trimmed || trimmed === task.title) {
+      if (currentLabel) {
+        delete next[task.id]
+        persistTaskLabels(next)
+      }
       setRenameModal(null)
       return
     }
-    const actingAgent = task.owner_agent_id || selectedAgentId
-    const response = await fetch(
-      `${CLIENT_WTT_API_BASE}/tasks/${task.id}?acting_as_agent_id=${encodeURIComponent(actingAgent)}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
-        },
-        body: JSON.stringify({ title: trimmed }),
-      }
-    )
-    if (!response.ok) {
-      const txt = await response.text()
-      try {
-        const detail = JSON.parse(txt)?.detail || txt
-        alert(t('tasks.renameTaskFailed', { detail }) || `Rename failed: ${detail}`)
-      } catch {
-        alert(`Rename failed: ${txt || response.status}`)
-      }
+    if (trimmed === currentLabel) {
+      setRenameModal(null)
       return
     }
+    next[task.id] = trimmed
+    persistTaskLabels(next)
     setRenameModal(null)
-    setSelectedTask((prev) => (prev && prev.id === task.id ? { ...prev, title: trimmed } : prev))
-    mutateTasks(
-      (prev: TaskItem[] | undefined) => (prev || []).map((it) => (it.id === task.id ? { ...it, title: trimmed } : it)),
-      { revalidate: true }
-    )
-    // Also refresh the shared "subscribed topics" cache so the renamed title
-    // appears immediately on the Feed page (otherwise it stays stale up to 60s).
-    mutateSubscribedTopics(
-      (prev: unknown) => {
-        if (!Array.isArray(prev)) return prev
-        return prev.map((row) => {
-          const r = row as Record<string, unknown>
-          if (!r) return r
-          if (r.task_id === task.id || r.topic_id === task.topic_id) {
-            return { ...r, name: trimmed }
-          }
-          return r
-        })
-      },
-      { revalidate: true }
-    )
   }
 
   const cancelTask = async (task: TaskItem) => {
-    const ok = window.confirm(t('tasks.cancelTaskConfirm', { title: task.title }))
+    const ok = window.confirm(t('tasks.cancelTaskConfirm', { title: labelFor(task) }))
     if (!ok) return
 
     const actingAgent = task.owner_agent_id || selectedAgentId
@@ -905,7 +906,7 @@ function TasksPageInner() {
                     {(!task.task_type || task.task_type === 'general' || task.task_type === 'feature' || task.task_type === 'common') && <span className="shrink-0 rounded-md bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-zinc-300">💬 General</span>}
 
                     {/* Title */}
-                    <p className="flex-1 truncate text-sm font-medium" title={task.title}>{task.title}</p>
+                    <p className="flex-1 truncate text-sm font-medium" title={labelFor(task)}>{labelFor(task)}</p>
 
                     {/* Token badge */}
                     {ts && ts.estimated_tokens > 0 && (
@@ -996,7 +997,7 @@ function TasksPageInner() {
               {(() => {
                 const tokenEntries = visibleTasks
                   .filter(t => tokenStats[t.id] && tokenStats[t.id].estimated_tokens > 0)
-                  .map(t => ({ id: t.id, title: t.title, ...tokenStats[t.id] }))
+                  .map(t => ({ id: t.id, title: labelFor(t), ...tokenStats[t.id] }))
                   .sort((a, b) => b.estimated_tokens - a.estimated_tokens)
                   .slice(0, 8)
                 const totalTokens = tokenEntries.reduce((s, e) => s + e.estimated_tokens, 0)
@@ -1025,7 +1026,7 @@ function TasksPageInner() {
               <>
                 {/* Task header */}
                 <div className="flex items-center gap-2 mb-2 px-1">
-                  <span className="text-sm font-semibold truncate flex-1">{selectedTask.title}</span>
+                  <span className="text-sm font-semibold truncate flex-1">{labelFor(selectedTask)}</span>
                   <button
                     onClick={() => renameTask(selectedTask)}
                     className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 border border-slate-300 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700"
@@ -1162,7 +1163,7 @@ function TasksPageInner() {
               onClick={() => {
                 const t = taskContextMenu.task
                 setTaskContextMenu(null)
-                setShareTarget({ topicId: t.topic_id!, name: t.title })
+                setShareTarget({ topicId: t.topic_id!, name: labelFor(t) })
               }}
             >
               🔗 {t('tasks.shareTo')}
