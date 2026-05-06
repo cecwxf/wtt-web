@@ -42,19 +42,40 @@ export interface ChatModelConfig {
   reasoningEffort: 'off' | 'low' | 'medium' | 'high'
 }
 
-const FALLBACK_MODELS = [
-  { id: 'openai-codex/gpt-5.3-codex', label: 'GPT-5.3 Codex', supports_reasoning: true },
-]
-
 interface ModelOption {
   id: string
   label: string
   supports_reasoning?: boolean
 }
 
+const DEFAULT_MODEL_ID = 'openai-codex/gpt-5.5'
+
+const FALLBACK_MODELS: ModelOption[] = [
+  { id: DEFAULT_MODEL_ID, label: 'GPT-5.5', supports_reasoning: true },
+  { id: 'openai-codex/gpt-5.4', label: 'GPT-5.4', supports_reasoning: true },
+  { id: 'openai-codex/gpt-5.3-codex', label: 'GPT-5.3 Codex', supports_reasoning: true },
+]
+
+function mergeModelOptions(models: ModelOption[]): ModelOption[] {
+  const merged = new Map<string, ModelOption>()
+
+  for (const model of FALLBACK_MODELS) merged.set(model.id, model)
+  for (const model of models) {
+    if (!model?.id) continue
+    merged.set(model.id, {
+      ...model,
+      supports_reasoning: model.supports_reasoning ?? true,
+    })
+  }
+
+  const defaultModel = merged.get(DEFAULT_MODEL_ID) ?? FALLBACK_MODELS[0]
+  const rest = Array.from(merged.values()).filter((model) => model.id !== DEFAULT_MODEL_ID)
+  return [defaultModel, ...rest]
+}
+
 type ModelPref = { model: string; effort: 'off' | 'low' | 'medium' | 'high' }
 
-const MODEL_PREF_STORAGE_PREFIX = 'wtt:model-pref:v1:'
+const MODEL_PREF_STORAGE_PREFIX = 'wtt:model-pref:v2:'
 
 function readStoredModelPref(key: string): ModelPref | null {
   if (typeof window === 'undefined') return null
@@ -842,7 +863,7 @@ export function ChatView({
               label: m.label,
               supports_reasoning: m.supports_reasoning ?? true,
             }))
-            setAvailableModels(models)
+            setAvailableModels(mergeModelOptions(models))
           }
         }
       } catch {}
