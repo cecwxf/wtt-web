@@ -78,6 +78,9 @@ export default function Home() {
             <span>WTT</span>
           </div>
           <nav className="flex items-center gap-3">
+            <Link href="/job-hunt" className="hidden text-sm font-semibold text-indigo-600 hover:text-indigo-500 sm:inline">
+              {zh ? '求职上岸' : 'Job Hunt'}
+            </Link>
             <a href="#features" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:inline">
               {zh ? '功能' : 'Features'}
             </a>
@@ -136,10 +139,17 @@ export default function Home() {
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
-              href={status === 'authenticated' ? '/feed' : '/login'}
+              href="/job-hunt"
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500"
             >
-              {status === 'authenticated' ? (zh ? '进入工作台' : 'Open Console') : (zh ? '开始使用' : 'Get Started')}
+              {zh ? '进入求职上岸助手' : 'Open Job Hunt Assistant'}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              href={status === 'authenticated' ? '/feed' : '/login'}
+              className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-5 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50"
+            >
+              {status === 'authenticated' ? (zh ? '进入工作台' : 'Open Console') : (zh ? '开始使用 WTT' : 'Get Started')}
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
