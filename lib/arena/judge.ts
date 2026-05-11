@@ -22,6 +22,15 @@ interface RawRunResult {
   error_message?: string
 }
 
+interface JudgeOutput {
+  provider: string
+  status: SubmissionStatus
+  score: number
+  runtime_ms: number
+  memory_kb?: number
+  results: SubmissionResult[]
+}
+
 const PYTHON_LANGUAGES = new Set(['python', 'python3', 'py'])
 
 function buildPythonHarness(userCode: string, challenge: Challenge) {
@@ -105,6 +114,26 @@ async function runLocalPython(code: string, stdin: string, timeoutMs: number): P
   }
 }
 
+async function runRemoteJudge(input: JudgeInput, remoteUrl: string): Promise<JudgeOutput> {
+  const response = await fetch(remoteUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      challenge: input.challenge,
+      test_cases: input.testCases,
+      code: input.code,
+      language: input.language,
+      submission_id: input.submissionId,
+    }),
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(`Remote Arena judge failed: ${detail}`)
+  }
+  return (await response.json()) as JudgeOutput
+}
+
 async function runJudge0(code: string, stdin: string, timeoutMs: number): Promise<RawRunResult> {
   const base = process.env.JUDGE0_URL?.replace(/\/+$/, '')
   if (!base) return { status: 'system_error', stdout: '', stderr: '', error_message: 'JUDGE0_URL is not configured' }
@@ -147,10 +176,14 @@ async function runJudge0(code: string, stdin: string, timeoutMs: number): Promis
   }
 }
 
-export async function judgeSubmission({ challenge, testCases, code, language, submissionId }: JudgeInput) {
+export async function judgeSubmission(input: JudgeInput) {
+  const { challenge, testCases, code, language, submissionId } = input
   if (!PYTHON_LANGUAGES.has(language.toLowerCase())) {
     throw new Error(`Unsupported language for MVP: ${language}`)
   }
+  const remoteJudgeUrl = process.env.WTT_ARENA_REMOTE_JUDGE_URL
+  if (remoteJudgeUrl) return runRemoteJudge(input, remoteJudgeUrl)
+
   const configuredProvider = (process.env.WTT_ARENA_JUDGE_PROVIDER || '').toLowerCase()
   const allowAgentLocal = configuredProvider === 'agent-local' || configuredProvider === 'local-python' || process.env.WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE === '1'
   const provider = process.env.JUDGE0_URL && configuredProvider !== 'agent-local' && configuredProvider !== 'local-python'

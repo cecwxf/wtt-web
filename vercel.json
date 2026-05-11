@@ -8,6 +8,7 @@
   "env": {
     "WTT_API_URL": "http://170.106.109.4:8000",
     "NEXT_PUBLIC_WTT_API_URL": "https://www.waxbyte.com",
-    "WTT_ARENA_JUDGE_PROVIDER": "agent-local"
+    "WTT_ARENA_JUDGE_PROVIDER": "remote-agent",
+    "WTT_ARENA_REMOTE_JUDGE_URL": "http://170.106.109.4:8000/arena/judge"
   }
 }
