@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, Hash, Lock, Plus, MoreVertical, Pin, Users, ChevronDown, ChevronRight } from 'lucide-react'
+import { Bot, ClipboardList, Hash, Lock, MessageCircle, MoreVertical, Pin, Plus, Radio, Users, ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
@@ -74,6 +74,39 @@ function getGroupLabelKey(group: TopicGroupKey): string {
       return 'topic.group.discuss'
     case 'subscriber':
       return 'topic.group.subscriber'
+  }
+}
+
+function getGroupChrome(group: TopicGroupKey) {
+  switch (group) {
+    case 'p2p':
+      return {
+        Icon: Lock,
+        header: 'border-indigo-200/70 bg-gradient-to-r from-indigo-50 to-white text-indigo-700 shadow-indigo-100/60 dark:border-indigo-800/60 dark:from-indigo-950/30 dark:to-zinc-900 dark:text-indigo-300 dark:shadow-none',
+        icon: 'bg-indigo-500 text-white shadow-sm shadow-indigo-200 dark:shadow-none',
+        count: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-200',
+      }
+    case 'task':
+      return {
+        Icon: ClipboardList,
+        header: 'border-emerald-200/70 bg-gradient-to-r from-emerald-50 to-white text-emerald-700 shadow-emerald-100/60 dark:border-emerald-800/60 dark:from-emerald-950/30 dark:to-zinc-900 dark:text-emerald-300 dark:shadow-none',
+        icon: 'bg-emerald-500 text-white shadow-sm shadow-emerald-200 dark:shadow-none',
+        count: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200',
+      }
+    case 'discuss':
+      return {
+        Icon: MessageCircle,
+        header: 'border-violet-200/70 bg-gradient-to-r from-violet-50 to-white text-violet-700 shadow-violet-100/60 dark:border-violet-800/60 dark:from-violet-950/30 dark:to-zinc-900 dark:text-violet-300 dark:shadow-none',
+        icon: 'bg-violet-500 text-white shadow-sm shadow-violet-200 dark:shadow-none',
+        count: 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200',
+      }
+    case 'subscriber':
+      return {
+        Icon: Radio,
+        header: 'border-amber-200/70 bg-gradient-to-r from-amber-50 to-white text-amber-700 shadow-amber-100/60 dark:border-amber-800/60 dark:from-amber-950/30 dark:to-zinc-900 dark:text-amber-300 dark:shadow-none',
+        icon: 'bg-amber-500 text-white shadow-sm shadow-amber-200 dark:shadow-none',
+        count: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200',
+      }
   }
 }
 
@@ -590,19 +623,24 @@ export function TopicColumn({
         {groupedTopics.map(({ group, items }) => {
           const collapsed = collapsedGroups[group]
           const unreadTopics = items.filter((it) => Number(it.unread_count || 0) > 0).length
+          const chrome = getGroupChrome(group)
+          const GroupIcon = chrome.Icon
           return (
-          <div key={group} className="mb-1">
-            <div className="mx-1 mb-1 flex items-center justify-between rounded-md bg-slate-50/70 dark:bg-zinc-800/50 px-2 py-1">
+          <div key={group} className="mb-2.5">
+            <div className={`mx-1 mb-1.5 flex items-center justify-between rounded-xl border px-2.5 py-2 shadow-sm ${chrome.header}`}>
               <button
                 onClick={() => toggleGroup(group)}
-                className="inline-flex min-w-0 items-center gap-1.5 rounded px-0.5 py-0.5 text-[11px] font-medium text-slate-500 transition hover:text-slate-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                className="inline-flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left text-[13px] font-bold leading-none transition hover:opacity-80"
                 title={collapsed ? t('topic.expandGroup') : t('topic.collapseGroup')}
               >
-                {collapsed ? <ChevronRight className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />}
-                <span className="truncate">{t(getGroupLabelKey(group))}</span>
-                <span className="rounded-full bg-slate-200/70 dark:bg-zinc-700 px-1.5 py-0 text-[10px] text-slate-500 dark:text-zinc-300">{items.length}</span>
+                {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 opacity-70" /> : <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />}
+                <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${chrome.icon}`}>
+                  <GroupIcon className="h-3.5 w-3.5" />
+                </span>
+                <span className="truncate tracking-[0.01em]">{t(getGroupLabelKey(group))}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold leading-none ${chrome.count}`}>{items.length}</span>
                 {unreadTopics > 0 && (
-                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-semibold leading-none text-white shadow">
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white shadow">
                     {unreadTopics > 99 ? '99+' : unreadTopics}
                   </span>
                 )}
@@ -610,7 +648,7 @@ export function TopicColumn({
               {group === 'discuss' && onRequestDiscuss && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowDiscussForm(!showDiscussForm) }}
-                  className="rounded-md border border-slate-300/80 dark:border-zinc-600 p-0.5 text-slate-600 dark:text-zinc-300 transition hover:bg-slate-200 dark:hover:bg-zinc-700 hover:text-indigo-600"
+                  className="ml-2 rounded-lg border border-white/70 bg-white/70 p-1 text-current shadow-sm transition hover:-translate-y-px hover:bg-white dark:border-zinc-700 dark:bg-zinc-900/60"
                   title={t('topic.requestDiscuss')}
                 >
                   <Plus className="h-4 w-4 stroke-[3]" />
@@ -664,19 +702,19 @@ export function TopicColumn({
                     <div key={taskType} className="mx-1 mb-1">
                       <button
                         onClick={() => toggleTaskTypeGroup(taskType)}
-                        className="mb-1 inline-flex w-full items-center justify-between rounded-md border border-slate-200/70 bg-white/70 px-2 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300"
+                        className="mb-1 inline-flex w-full items-center justify-between rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300"
                       >
                         <span className="inline-flex items-center gap-1.5">
-                          {taskCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                          <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[9px] font-bold ${taskTypeTone(taskType)}`}>
+                          {taskCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${taskTypeTone(taskType)}`}>
                             {taskTypeInitial(taskType)}
                           </span>
                           <span>{taskTypeLabel(taskType)}</span>
                         </span>
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="rounded-full bg-slate-200/70 px-1.5 py-0 text-[10px] text-slate-500 dark:bg-zinc-700 dark:text-zinc-300">{taskItems.length}</span>
+                          <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-semibold leading-none text-slate-500 dark:bg-zinc-700 dark:text-zinc-300">{taskItems.length}</span>
                           {unreadTaskTopics > 0 && (
-                            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-semibold leading-none text-white shadow">
+                            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white shadow">
                               {unreadTaskTopics > 99 ? '99+' : unreadTaskTopics}
                             </span>
                           )}
