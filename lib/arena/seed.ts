@@ -1,3 +1,4 @@
+import { aiInterviewChallenges } from './ai-interviews'
 import { aiKernelChallenges, aiKernelTestCases } from './ai-kernels'
 import type { Challenge, ChallengeTestCase } from './types'
 
@@ -222,5 +223,5 @@ const coreTestCases: ChallengeTestCase[] = [
   },
 ]
 
-export const seedChallenges: Challenge[] = [...coreChallenges, ...aiKernelChallenges]
+export const seedChallenges: Challenge[] = [...aiKernelChallenges, ...aiInterviewChallenges, ...coreChallenges]
 export const seedTestCases: ChallengeTestCase[] = [...coreTestCases, ...aiKernelTestCases]

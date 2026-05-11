@@ -33,6 +33,7 @@ const copy = {
     agentWaiting: '直接在下面和 Agent 对话。', openFull: '打开完整提交 →',
     chatTitle: 'Arena Coach', chatIntro: '真实 WTT Agent 会话；Agent 会读取 Arena 题库长期记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录后可对话。', chatSyncing: '正在连接固定 Arena Agent...',
     aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
+    interviewMode: 'AI 面试练习模式', interviewHint: '这类题不需要提交代码。直接在右侧和 Arena Coach 进行多轮模拟面试、追问、复盘。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
   },
   en: {
     challenges: 'Challenges', playground: 'Playground', discuss: 'Discuss', runner: 'Agent Runner', description: 'Description', submissions: 'Submissions', leaderboard: 'Leaderboard',
@@ -43,6 +44,7 @@ const copy = {
     agentWaiting: 'Chat with the Agent below.', openFull: 'Open full submission →',
     chatTitle: 'Arena Coach', chatIntro: 'Real WTT Agent session. The Agent reads persistent Arena question-bank memory plus the current challenge context.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.', chatLogin: 'Sign in to chat.', chatSyncing: 'Connecting fixed Arena Agent...',
     aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
+    interviewMode: 'AI interview practice mode', interviewHint: 'No code submission is required. Use Arena Coach on the right for mock interview, follow-up questions, and review.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
   },
 } as const
 
@@ -204,6 +206,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   const t = copy[locale]
   const challenge = payload?.challenge
+  const isCoding = challenge?.challenge_type === 'coding'
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
 
   function changeLanguage(next: Language) {
@@ -342,6 +345,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
                   <div className="mt-7 space-y-4">
                     <h2 className="text-lg font-bold text-white">{t.examples}</h2>
+                    {payload.public_cases.length === 0 && <p className="rounded-lg border border-dashed border-gray-800 bg-[#151515] p-4 text-sm leading-6 text-gray-500">{t.noExamples}</p>}
                     {payload.public_cases.map((testCase, index) => (
                       <div key={testCase.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
                         <p className="font-semibold text-gray-300">Example {index + 1}</p>
@@ -396,46 +400,69 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </div>
           </section>
 
-          <section className="grid min-h-0 gap-3 lg:grid-rows-[1fr_210px]">
-            <div className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
-              <div className="flex items-center justify-between gap-3 border-b border-gray-800 bg-[#191919] px-4 py-3">
-                <div>
-                  <p className="text-sm font-bold text-white">main.{language === 'python' ? 'py' : language === 'cpp' ? 'cpp' : 'c'}</p>
-                  <p className="text-xs text-gray-500">Implement {challenge.function_name} · {t.runner}</p>
+          {isCoding ? (
+            <section className="grid min-h-0 gap-3 lg:grid-rows-[1fr_210px]">
+              <div className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
+                <div className="flex items-center justify-between gap-3 border-b border-gray-800 bg-[#191919] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-bold text-white">main.{language === 'python' ? 'py' : language === 'cpp' ? 'cpp' : 'c'}</p>
+                    <p className="text-xs text-gray-500">Implement {challenge.function_name} · {t.runner}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-500">{t.language}</label>
+                    <select value={language} onChange={(event) => changeLanguage(event.target.value as Language)} className="rounded-md border border-gray-800 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]">
+                      <option value="python">Python</option>
+                      <option value="cpp">C++</option>
+                      <option value="c">C</option>
+                    </select>
+                    <button onClick={submitCode} disabled={submitting} className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+                      {submitting ? t.judging : t.run}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-500">{t.language}</label>
-                  <select value={language} onChange={(event) => changeLanguage(event.target.value as Language)} className="rounded-md border border-gray-800 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]">
-                    <option value="python">Python</option>
-                    <option value="cpp">C++</option>
-                    <option value="c">C</option>
-                  </select>
-                  <button onClick={submitCode} disabled={submitting} className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-                    {submitting ? t.judging : t.run}
-                  </button>
+                <div className="h-[calc(100%-57px)] min-h-[360px]">
+                  <Editor language={editorLanguage(language)} theme="vs-dark" value={code} onChange={(value) => setCode(value || '')} options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on', padding: { top: 16 } }} />
                 </div>
               </div>
-              <div className="h-[calc(100%-57px)] min-h-[360px]">
-                <Editor language={editorLanguage(language)} theme="vs-dark" value={code} onChange={(value) => setCode(value || '')} options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on', padding: { top: 16 } }} />
-              </div>
-            </div>
 
-            <section className="overflow-y-auto rounded-lg border border-gray-800 bg-[#1e1e1e] p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="font-bold text-white">{t.console}</h2>
-                <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusTone(submission?.status)}`}>{submission?.status || t.notSubmitted}</span>
-              </div>
-              {submission ? (
-                <div className="mt-4 grid gap-2 text-sm text-gray-400 sm:grid-cols-2">
-                  <p>score: <span className="text-white">{submission.score}</span></p>
-                  <p>runtime: <span className="text-white">{submission.runtime_ms || '-'}ms</span></p>
-                  <p>language: <span className="text-white">{submission.language}</span></p>
-                  <p>provider: <span className="text-white">{submission.judge_provider}</span></p>
-                  <p className="sm:col-span-2 text-gray-500">{t.hidden}</p>
+              <section className="overflow-y-auto rounded-lg border border-gray-800 bg-[#1e1e1e] p-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-bold text-white">{t.console}</h2>
+                  <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusTone(submission?.status)}`}>{submission?.status || t.notSubmitted}</span>
                 </div>
-              ) : <p className="mt-4 text-sm text-gray-500">{locale === 'zh' ? '点击 Run & Submit 后查看 Agent 执行结果。' : 'Click Run & Submit to see Agent execution results.'}</p>}
+                {submission ? (
+                  <div className="mt-4 grid gap-2 text-sm text-gray-400 sm:grid-cols-2">
+                    <p>score: <span className="text-white">{submission.score}</span></p>
+                    <p>runtime: <span className="text-white">{submission.runtime_ms || '-'}ms</span></p>
+                    <p>language: <span className="text-white">{submission.language}</span></p>
+                    <p>provider: <span className="text-white">{submission.judge_provider}</span></p>
+                    <p className="sm:col-span-2 text-gray-500">{t.hidden}</p>
+                  </div>
+                ) : <p className="mt-4 text-sm text-gray-500">{locale === 'zh' ? '点击 Run & Submit 后查看 Agent 执行结果。' : 'Click Run & Submit to see Agent execution results.'}</p>}
+              </section>
             </section>
-          </section>
+          ) : (
+            <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-6">
+              <div className="flex h-full min-h-[560px] flex-col justify-between rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-[#151515] to-[#151515] p-8">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.26em] text-violet-300">{t.interviewMode}</p>
+                  <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight text-white">{challenge.title}</h2>
+                  <p className="mt-5 max-w-2xl text-base leading-8 text-gray-300">{t.interviewHint}</p>
+                  <div className="mt-8 rounded-xl border border-gray-800 bg-[#101010]/80 p-5">
+                    <p className="text-sm font-bold text-white">Suggested flow</p>
+                    <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-400">
+                      <li>• 先给 2 分钟 high-level answer。</li>
+                      <li>• 让 Agent 追问规模、指标、瓶颈和 trade-off。</li>
+                      <li>• 最后让 Agent 按面试官标准打分并给改进版答案。</li>
+                    </ul>
+                  </div>
+                </div>
+                <button onClick={() => setChatInput(locale === 'zh' ? `请作为 AI 面试官，围绕「${challenge.title}」对我进行模拟面试。先让我给出 high-level 方案，然后逐步追问。` : `Act as an AI interviewer for "${challenge.title}". Ask me for a high-level design first, then follow up on trade-offs.`)} className="mt-8 w-fit rounded-md bg-gradient-to-r from-violet-300 to-fuchsia-500 px-5 py-3 text-sm font-black text-black transition-opacity hover:opacity-90">
+                  {locale === 'zh' ? '生成模拟面试开场 →' : 'Start mock interview →'}
+                </button>
+              </div>
+            </section>
+          )}
 
           <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-5 lg:col-span-2 xl:col-span-1">
             <div className="rounded-lg border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4">
