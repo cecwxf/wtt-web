@@ -10,6 +10,8 @@ WTT Arena is the education/challenge slice for real code execution + Agent Tutor
 
 ## API
 
+Web-facing Next API:
+
 - `GET /api/arena/challenges`
 - `GET /api/arena/challenges/[id]`
 - `POST /api/arena/challenges/[id]/submissions`
@@ -17,15 +19,33 @@ WTT Arena is the education/challenge slice for real code execution + Agent Tutor
 - `GET /api/arena/submissions/[id]`
 - `POST /api/arena/submissions/[id]/tutor`
 
+Backend WTT service API:
+
+- `GET /arena/challenges`
+- `GET /arena/challenges/[id]`
+- `GET /arena/challenges/[id]/submissions`
+- `GET /arena/challenges/[id]/leaderboard`
+- `POST /arena/submissions`
+- `GET /arena/submissions/[id]`
+
 ## Persistence
 
-By default the MVP store is in-memory. Set `WTT_ARENA_STORE_PATH` to persist challenges, submissions, and leaderboards as JSON across dev/server restarts:
+Primary persistence now lives in `wtt_service` Postgres via the `arena_submissions` table. The Next Arena API writes judged submissions to the backend and reads submissions/leaderboards from there first.
+
+Backend selection for the Next API:
 
 ```bash
-WTT_ARENA_STORE_PATH=/tmp/wtt-arena-store.json
+WTT_ARENA_BACKEND_URL=http://127.0.0.1:8000  # optional override
+WTT_API_URL=http://127.0.0.1:8000            # normal server-side default
 ```
 
-Seed challenges are merged into the file-backed store on startup, so newly shipped seed problems appear without deleting existing submissions.
+For isolated local MVP smoke tests, the in-memory/file-backed fallback still exists. Set `WTT_ARENA_BACKEND_DISABLED=1` to skip backend calls and optionally set `WTT_ARENA_STORE_PATH` to persist fallback JSON across dev/server restarts:
+
+```bash
+WTT_ARENA_BACKEND_DISABLED=1 WTT_ARENA_STORE_PATH=/tmp/wtt-arena-store.json npm run dev
+```
+
+Seed challenges are merged into the fallback file-backed store on startup, so newly shipped seed problems appear without deleting existing submissions.
 
 ## Judge providers
 

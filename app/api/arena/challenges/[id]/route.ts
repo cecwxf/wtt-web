@@ -1,14 +1,17 @@
+import { backendGetChallenge, backendListSubmissions } from '@/lib/arena/backend'
 import { getChallenge, getChallengeTestCases, listSubmissions } from '@/lib/arena/store'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const challenge = getChallenge(params.id)
+  const backendChallenge = await backendGetChallenge(params.id)
+  const challenge = backendChallenge?.challenge || getChallenge(params.id)
   if (!challenge) return Response.json({ detail: 'Challenge not found' }, { status: 404 })
   const public_cases = getChallengeTestCases(challenge.id)
     .filter((testCase) => !testCase.is_hidden)
     .map(({ expected_output, input, ...rest }) => ({ ...rest, input, expected_output }))
-  const submissions = listSubmissions(challenge.id).slice(0, 10).map((item) => ({
+  const sourceSubmissions = (await backendListSubmissions(challenge.id)) || backendChallenge?.submissions || listSubmissions(challenge.id)
+  const submissions = sourceSubmissions.slice(0, 10).map((item) => ({
     id: item.id,
     challenge_id: item.challenge_id,
     user_id: item.user_id,

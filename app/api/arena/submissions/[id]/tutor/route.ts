@@ -1,3 +1,4 @@
+import { backendGetSubmission, backendSaveSubmission } from '@/lib/arena/backend'
 import { getChallenge, getSubmission, saveSubmission } from '@/lib/arena/store'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,7 @@ function buildTutorMessage(mode: string, status: string, challenge?: { slug: str
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const submission = getSubmission(params.id)
+  const submission = (await backendGetSubmission(params.id)) || getSubmission(params.id)
   if (!submission) return Response.json({ detail: 'Submission not found' }, { status: 404 })
   const challenge = getChallenge(submission.challenge_id)
   let body: { mode?: string } = {}
@@ -41,6 +42,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     updated_at: new Date().toISOString(),
   }
   saveSubmission(updated)
+  await backendSaveSubmission(updated)
   return Response.json({
     tutor: {
       mode,

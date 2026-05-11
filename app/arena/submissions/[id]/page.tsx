@@ -4,6 +4,12 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import type { Submission } from '@/lib/arena/types'
 
+function statusTone(status: string) {
+  if (status === 'accepted') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+  if (status === 'system_error') return 'border-yellow-400/20 bg-yellow-400/10 text-yellow-300'
+  return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
+}
+
 export default function ArenaSubmissionPage({ params }: { params: { id: string } }) {
   const [submission, setSubmission] = useState<Submission | null>(null)
   useEffect(() => {
@@ -13,43 +19,64 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
       .catch(() => undefined)
   }, [params.id])
 
-  if (!submission) return <main className="min-h-screen bg-slate-950 p-8 text-white">Loading submission...</main>
+  if (!submission) return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading submission...</main>
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        <Link href={`/arena/challenges/${submission.challenge_id}`} className="text-sm text-indigo-300 hover:text-indigo-100">← Back to challenge</Link>
-        <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-sm text-slate-500">Submission</p>
-              <h1 className="mt-1 text-2xl font-black">{submission.id}</h1>
-            </div>
-            <span className={`rounded-full px-3 py-1 text-xs font-bold ${submission.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{submission.status}</span>
-          </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-4">
-            <div className="rounded-xl bg-slate-900/70 p-4"><p className="text-xs text-slate-500">Score</p><p className="mt-1 text-xl font-bold">{submission.score}</p></div>
-            <div className="rounded-xl bg-slate-900/70 p-4"><p className="text-xs text-slate-500">Runtime</p><p className="mt-1 text-xl font-bold">{submission.runtime_ms || '-'}ms</p></div>
-            <div className="rounded-xl bg-slate-900/70 p-4"><p className="text-xs text-slate-500">Memory</p><p className="mt-1 text-xl font-bold">{submission.memory_kb || '-'}KB</p></div>
-            <div className="rounded-xl bg-slate-900/70 p-4"><p className="text-xs text-slate-500">Provider</p><p className="mt-1 text-xl font-bold">{submission.judge_provider}</p></div>
-          </div>
-          <h2 className="mt-6 text-lg font-bold">Results</h2>
-          <div className="mt-3 space-y-3">
-            {submission.results.map((result, index) => (
-              <div key={result.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
-                  <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-red-300'}>{result.status}</span>
-                </div>
-                {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-sm text-slate-400">stdout: {result.stdout}</pre>}
-                {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-sm text-red-300">stderr: {result.stderr}</pre>}
-                {result.error_message && <p className="mt-3 text-sm text-amber-300">{result.error_message}</p>}
+    <main className="min-h-screen bg-[#151515] text-gray-100">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute left-1/2 top-[-18rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#3ce8e2]/10 blur-3xl" />
+      </div>
+      <div className="relative mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <nav className="mb-8 flex items-center justify-between">
+          <Link href="/arena" className="bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-2xl font-black text-transparent">WTT Arena</Link>
+          <Link href={`/arena/challenges/${submission.challenge_id}`} className="rounded-md border border-gray-800 bg-[#1e1e1e] px-4 py-2 text-sm font-bold text-gray-300 transition-colors hover:border-[#3ce8e2] hover:text-[#3ce8e2]">Back to Challenge</Link>
+        </nav>
+
+        <section className="overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] shadow-2xl shadow-black/30">
+          <div className="border-b border-gray-800 bg-[#191919] px-6 py-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#3ce8e2]">Submission</p>
+                <h1 className="mt-2 break-all font-mono text-2xl font-black text-white">{submission.id}</h1>
               </div>
-            ))}
+              <span className={`rounded-full border px-3 py-1 text-xs font-black ${statusTone(submission.status)}`}>{submission.status}</span>
+            </div>
           </div>
-          <h2 className="mt-6 text-lg font-bold">Code</h2>
-          <pre className="mt-3 overflow-auto rounded-xl bg-black p-4 text-sm text-slate-200">{submission.code}</pre>
-        </div>
+
+          <div className="grid gap-0 lg:grid-cols-[340px_1fr]">
+            <aside className="border-b border-gray-800 p-6 lg:border-b-0 lg:border-r">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Score</p><p className="mt-1 text-2xl font-black text-[#3ce8e2]">{submission.score}</p></div>
+                <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Runtime</p><p className="mt-1 text-2xl font-black text-white">{submission.runtime_ms || '-'}ms</p></div>
+                <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Memory</p><p className="mt-1 text-2xl font-black text-white">{submission.memory_kb || '-'}KB</p></div>
+                <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Provider</p><p className="mt-1 text-sm font-bold text-white">{submission.judge_provider}</p></div>
+              </div>
+              <div className="mt-5 rounded-md border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 text-sm leading-6 text-[#bffffd]">
+                Hidden tests are redacted by design. Agent Tutor can explain patterns, but the judge remains the final source of truth.
+              </div>
+            </aside>
+
+            <div className="p-6">
+              <h2 className="text-lg font-black text-white">Test Results</h2>
+              <div className="mt-4 space-y-3">
+                {submission.results.map((result, index) => (
+                  <div key={result.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
+                      <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
+                    </div>
+                    {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">stdout: {result.stdout}</pre>}
+                    {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-sm text-rose-300">stderr: {result.stderr}</pre>}
+                    {result.error_message && <p className="mt-3 text-sm text-yellow-300">{result.error_message}</p>}
+                  </div>
+                ))}
+              </div>
+
+              <h2 className="mt-8 text-lg font-black text-white">Submitted Code</h2>
+              <pre className="mt-4 max-h-[520px] overflow-auto rounded-lg border border-gray-800 bg-black p-5 font-mono text-sm leading-6 text-gray-200">{submission.code}</pre>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   )

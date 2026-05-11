@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { backendSaveSubmission } from '@/lib/arena/backend'
 import { getChallenge, getChallengeTestCases, saveSubmission } from '@/lib/arena/store'
 import { judgeSubmission } from '@/lib/arena/judge'
 import type { Submission } from '@/lib/arena/types'
@@ -40,6 +41,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     results: [],
   }
   saveSubmission(base)
+  await backendSaveSubmission(base)
 
   try {
     const judged = await judgeSubmission({
@@ -61,7 +63,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       results: judged.results,
     }
     saveSubmission(submission)
-    return Response.json({ submission })
+    const persisted = await backendSaveSubmission(submission)
+    return Response.json({ submission: persisted || submission })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const submission: Submission = {
@@ -72,6 +75,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       updated_at: new Date().toISOString(),
     }
     saveSubmission(submission)
-    return Response.json({ submission }, { status: 200 })
+    const persisted = await backendSaveSubmission(submission)
+    return Response.json({ submission: persisted || submission }, { status: 200 })
   }
 }

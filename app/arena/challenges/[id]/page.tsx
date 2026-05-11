@@ -14,10 +14,20 @@ type ChallengePayload = {
 }
 
 function statusTone(status?: string) {
-  if (status === 'accepted') return 'border-emerald-300 bg-emerald-50 text-emerald-700'
-  if (!status || status === 'pending' || status === 'judging') return 'border-slate-300 bg-slate-50 text-slate-600'
-  if (status === 'system_error') return 'border-amber-300 bg-amber-50 text-amber-700'
-  return 'border-red-300 bg-red-50 text-red-700'
+  if (status === 'accepted') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+  if (!status || status === 'pending' || status === 'judging') return 'border-gray-700 bg-[#202020] text-gray-400'
+  if (status === 'system_error') return 'border-yellow-400/20 bg-yellow-400/10 text-yellow-300'
+  return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
+}
+
+function difficultyTone(difficulty: string) {
+  if (difficulty === 'easy') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+  if (difficulty === 'medium') return 'border-yellow-400/20 bg-yellow-400/10 text-yellow-300'
+  return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
+}
+
+function formatDifficulty(difficulty: string) {
+  return difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
 }
 
 export default function ArenaChallengePage({ params }: { params: { id: string } }) {
@@ -27,6 +37,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [tutorMessage, setTutorMessage] = useState('')
+  const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
 
   useEffect(() => {
     let alive = true
@@ -60,6 +71,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       })
       const data = await response.json()
       setSubmission(data.submission)
+      setActiveTab('submissions')
       const board = await fetch(`/api/arena/challenges/${challenge.id}/leaderboard`, { cache: 'no-store' }).then((res) => res.json())
       setLeaderboard(board.leaderboard || [])
     } finally {
@@ -79,115 +91,184 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }
 
   if (!payload || !challenge) {
-    return <main className="min-h-screen bg-slate-950 p-8 text-white">Loading Arena...</main>
+    return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading Arena...</main>
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-7xl px-4 py-5">
-        <div className="mb-4 flex items-center justify-between">
-          <Link href="/arena" className="text-sm text-indigo-300 hover:text-indigo-100">← Arena</Link>
-          <div className="text-xs text-slate-500">MVP: Python · Judge0/local-dev · Hidden tests redacted</div>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-[0.95fr_1.15fr_0.9fr]">
-          <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="text-2xl font-black">{challenge.title}</h1>
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">{challenge.difficulty}</span>
+    <main className="min-h-screen bg-[#151515] text-gray-100">
+      <div className="flex h-screen flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center justify-between border-b border-gray-800 bg-[#151515]/95 px-4 py-3 backdrop-blur">
+          <div className="flex items-center gap-5">
+            <Link href="/arena" className="bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-2xl font-black text-transparent">WTT Arena</Link>
+            <div className="hidden items-center gap-4 text-sm text-gray-500 md:flex">
+              <Link href="/arena" className="hover:text-[#3ce8e2]">Challenges</Link>
+              <span>Playground</span>
+              <span>Discuss</span>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {challenge.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">#{tag}</span>)}
-            </div>
-            <pre className="mt-5 whitespace-pre-wrap rounded-xl bg-slate-900/80 p-4 text-sm leading-6 text-slate-200">{challenge.description}</pre>
-            <div className="mt-5 space-y-3">
-              <h2 className="font-bold">公开样例</h2>
-              {payload.public_cases.map((testCase, index) => (
-                <div key={testCase.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-xs">
-                  <p className="font-semibold text-slate-300">Sample {index + 1}</p>
-                  <p className="mt-2 text-slate-400">Input</p>
-                  <code className="mt-1 block break-all text-slate-200">{testCase.input}</code>
-                  <p className="mt-2 text-slate-400">Expected</p>
-                  <code className="mt-1 block text-slate-200">{testCase.expected_output}</code>
-                </div>
-              ))}
-            </div>
-          </section>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-gray-500">
+            <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2]">Python MVP</span>
+            <span>Judge0 / Local Dev</span>
+          </div>
+        </header>
 
-          <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div>
-                <p className="text-sm font-bold">Python Editor</p>
-                <p className="text-xs text-slate-500">实现 {challenge.function_name}({challenge.input_keys.join(', ')})</p>
-              </div>
-              <button
-                onClick={submitCode}
-                disabled={submitting}
-                className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {submitting ? 'Judging...' : '提交运行'}
-              </button>
-            </div>
-            <div className="h-[470px]">
-              <Editor
-                language="python"
-                theme="vs-dark"
-                value={code}
-                onChange={(value) => setCode(value || '')}
-                options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on' }}
-              />
-            </div>
-            <div className="border-t border-white/10 p-4">
-              <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone(submission?.status)}`}>
-                {submission?.status || 'not_submitted'} · score {submission?.score ?? 0}
-              </div>
-              {submission && (
-                <div className="mt-3 space-y-2 text-sm">
-                  <p className="text-slate-400">{passedCount}/{submission.results.length} executed tests accepted · provider: {submission.judge_provider}</p>
-                  {submission.results.map((result, index) => (
-                    <div key={result.id} className="rounded-lg bg-slate-900/70 p-3 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span>{result.is_hidden ? `Hidden #${index + 1}` : `Public #${index + 1}`}</span>
-                        <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-red-300'}>{result.status}</span>
-                      </div>
-                      {!result.is_hidden && result.stdout && <pre className="mt-2 whitespace-pre-wrap text-slate-400">stdout: {result.stdout}</pre>}
-                      {!result.is_hidden && result.stderr && <pre className="mt-2 whitespace-pre-wrap text-red-300">stderr: {result.stderr}</pre>}
-                      {result.error_message && <p className="mt-2 text-amber-300">{result.error_message}</p>}
-                    </div>
-                  ))}
-                  <Link href={`/arena/submissions/${submission.id}`} className="inline-flex text-xs font-semibold text-indigo-300 hover:text-indigo-100">查看提交详情 →</Link>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <aside className="space-y-4">
-            <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-              <h2 className="text-lg font-black">Agent Tutor</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-400">Agent 负责提示、Debug、复盘；不作为最终判题器，也不泄露隐藏测试。</p>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <button onClick={() => askTutor('hint')} disabled={!submission} className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold hover:bg-slate-700 disabled:opacity-40">Hint</button>
-                <button onClick={() => askTutor('debug')} disabled={!submission} className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold hover:bg-slate-700 disabled:opacity-40">Debug</button>
-                <button onClick={() => askTutor('review')} disabled={!submission} className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold hover:bg-slate-700 disabled:opacity-40">Review</button>
-              </div>
-              {tutorMessage && <div className="mt-4 rounded-xl border border-indigo-300/20 bg-indigo-500/10 p-3 text-sm leading-6 text-indigo-100">{tutorMessage}</div>}
-            </section>
-
-            <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-              <h2 className="text-lg font-black">Leaderboard</h2>
-              <div className="mt-3 space-y-2">
-                {leaderboard.length === 0 && <p className="text-sm text-slate-500">暂无 AC 记录，拿下首个榜单位置。</p>}
-                {leaderboard.map((entry, index) => (
-                  <div key={`${entry.user_id}-${entry.best_submission_id}`} className="rounded-xl bg-slate-900/70 p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold">#{index + 1} {entry.user_id}</span>
-                      <span className="text-emerald-300">AC</span>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">submits {entry.submission_count} · {entry.best_runtime_ms || '-'}ms · hint {entry.hint_count}</p>
-                  </div>
+        <div className="flex flex-1 overflow-hidden p-3">
+          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[42%_58%]">
+            <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
+              <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-800 bg-[#191919] px-4 py-3 text-sm">
+                {[
+                  ['description', 'Description'],
+                  ['submissions', 'Submissions'],
+                  ['leaderboard', 'Leaderboard'],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTab(id as typeof activeTab)}
+                    className={`rounded-md px-3 py-1.5 font-medium transition-colors ${activeTab === id ? 'bg-[#3ce8e2]/10 text-[#3ce8e2]' : 'text-gray-500 hover:bg-[#252525] hover:text-gray-300'}`}
+                  >
+                    {label}
+                  </button>
                 ))}
               </div>
+
+              <div className="h-full overflow-y-auto p-5 pb-24">
+                {activeTab === 'description' && (
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h1 className="text-3xl font-black tracking-tight text-white">{challenge.title}</h1>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${difficultyTone(challenge.difficulty)}`}>{formatDifficulty(challenge.difficulty)}</span>
+                          {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-gray-800 bg-[#151515] px-2.5 py-1 text-xs text-gray-400">{tag}</span>)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <pre className="mt-6 whitespace-pre-wrap rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">{challenge.description}</pre>
+
+                    <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">Function</p><p className="mt-1 font-mono text-sm text-[#3ce8e2]">{challenge.function_name}</p></div>
+                      <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">Time Limit</p><p className="mt-1 font-bold">{challenge.time_limit_ms}ms</p></div>
+                      <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">Memory</p><p className="mt-1 font-bold">{challenge.memory_limit_mb}MB</p></div>
+                    </div>
+
+                    <div className="mt-7 space-y-4">
+                      <h2 className="text-lg font-bold text-white">Examples</h2>
+                      {payload.public_cases.map((testCase, index) => (
+                        <div key={testCase.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
+                          <p className="font-semibold text-gray-300">Example {index + 1}</p>
+                          <p className="mt-3 text-xs uppercase tracking-wider text-gray-500">Input</p>
+                          <code className="mt-1 block break-all rounded bg-black/30 p-3 text-gray-200">{testCase.input}</code>
+                          <p className="mt-3 text-xs uppercase tracking-wider text-gray-500">Expected</p>
+                          <code className="mt-1 block rounded bg-black/30 p-3 text-gray-200">{testCase.expected_output}</code>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'submissions' && (
+                  <div className="space-y-3">
+                    {!submission && <p className="text-sm text-gray-500">提交后会在这里看到真实判题结果。历史提交也会持久化到 WTT 后端。</p>}
+                    {submission && (
+                      <div className="space-y-3">
+                        <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone(submission.status)}`}>{submission.status} · score {submission.score}</div>
+                        <p className="text-sm text-gray-500">{passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider}</p>
+                        {submission.results.map((result, index) => (
+                          <div key={result.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
+                              <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
+                            </div>
+                            {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-gray-400">stdout: {result.stdout}</pre>}
+                            {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-rose-300">stderr: {result.stderr}</pre>}
+                            {result.error_message && <p className="mt-3 text-yellow-300">{result.error_message}</p>}
+                          </div>
+                        ))}
+                        <Link href={`/arena/submissions/${submission.id}`} className="inline-flex text-sm font-semibold text-[#3ce8e2] hover:underline">Open full submission →</Link>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'leaderboard' && (
+                  <div className="space-y-3">
+                    {leaderboard.length === 0 && <p className="text-sm text-gray-500">暂无 AC 记录，拿下首个榜单位置。</p>}
+                    {leaderboard.map((entry, index) => (
+                      <div key={`${entry.user_id}-${entry.best_submission_id}`} className="flex items-center justify-between rounded-lg border border-gray-800 bg-[#151515] p-4">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#252525] text-sm font-black text-[#3ce8e2]">#{index + 1}</span>
+                          <div>
+                            <p className="font-bold text-white">{entry.user_id}</p>
+                            <p className="text-xs text-gray-500">submits {entry.submission_count} · hint {entry.hint_count}</p>
+                          </div>
+                        </div>
+                        <div className="text-right text-sm">
+                          <p className="font-bold text-emerald-300">AC</p>
+                          <p className="text-xs text-gray-500">{entry.best_runtime_ms || '-'}ms</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
-          </aside>
+
+            <section className="grid min-h-0 gap-3 lg:grid-rows-[1fr_270px]">
+              <div className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
+                <div className="flex items-center justify-between border-b border-gray-800 bg-[#191919] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-bold text-white">main.py</p>
+                    <p className="text-xs text-gray-500">Implement {challenge.function_name}({challenge.input_keys.join(', ')})</p>
+                  </div>
+                  <button
+                    onClick={submitCode}
+                    disabled={submitting}
+                    className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-5 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submitting ? 'Judging...' : 'Run & Submit'}
+                  </button>
+                </div>
+                <div className="h-[calc(100%-57px)] min-h-[360px]">
+                  <Editor
+                    language="python"
+                    theme="vs-dark"
+                    value={code}
+                    onChange={(value) => setCode(value || '')}
+                    options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on', padding: { top: 16 } }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid min-h-0 gap-3 md:grid-cols-[1fr_1fr]">
+                <section className="overflow-y-auto rounded-lg border border-gray-800 bg-[#1e1e1e] p-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-bold text-white">Console</h2>
+                    <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusTone(submission?.status)}`}>{submission?.status || 'not_submitted'}</span>
+                  </div>
+                  {submission ? (
+                    <div className="mt-4 space-y-2 text-sm text-gray-400">
+                      <p>score: <span className="text-white">{submission.score}</span></p>
+                      <p>runtime: <span className="text-white">{submission.runtime_ms || '-'}ms</span></p>
+                      <p>provider: <span className="text-white">{submission.judge_provider}</span></p>
+                      <p className="text-gray-500">Hidden tests are redacted.</p>
+                    </div>
+                  ) : <p className="mt-4 text-sm text-gray-500">点击 Run & Submit 后查看结果。</p>}
+                </section>
+
+                <section className="overflow-y-auto rounded-lg border border-gray-800 bg-[#1e1e1e] p-4">
+                  <h2 className="font-bold text-white">Agent Tutor</h2>
+                  <p className="mt-2 text-sm leading-6 text-gray-500">提示、Debug、复盘；不做最终判题。</p>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <button onClick={() => askTutor('hint')} disabled={!submission} className="rounded-md bg-[#252525] px-3 py-2 text-xs font-bold text-gray-300 transition-colors hover:text-[#3ce8e2] disabled:opacity-40">Hint</button>
+                    <button onClick={() => askTutor('debug')} disabled={!submission} className="rounded-md bg-[#252525] px-3 py-2 text-xs font-bold text-gray-300 transition-colors hover:text-[#3ce8e2] disabled:opacity-40">Debug</button>
+                    <button onClick={() => askTutor('review')} disabled={!submission} className="rounded-md bg-[#252525] px-3 py-2 text-xs font-bold text-gray-300 transition-colors hover:text-[#3ce8e2] disabled:opacity-40">Review</button>
+                  </div>
+                  {tutorMessage && <div className="mt-4 rounded-md border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-3 text-sm leading-6 text-[#bffffd]">{tutorMessage}</div>}
+                </section>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </main>
