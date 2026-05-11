@@ -151,7 +151,13 @@ export async function judgeSubmission({ challenge, testCases, code, language, su
   if (!PYTHON_LANGUAGES.has(language.toLowerCase())) {
     throw new Error(`Unsupported language for MVP: ${language}`)
   }
-  const provider = process.env.JUDGE0_URL ? 'judge0' : (process.env.WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE === '1' ? 'local-python' : 'not-configured')
+  const configuredProvider = (process.env.WTT_ARENA_JUDGE_PROVIDER || '').toLowerCase()
+  const allowAgentLocal = configuredProvider === 'agent-local' || configuredProvider === 'local-python' || process.env.WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE === '1'
+  const provider = process.env.JUDGE0_URL && configuredProvider !== 'agent-local' && configuredProvider !== 'local-python'
+    ? 'judge0'
+    : allowAgentLocal
+      ? 'agent-local-python'
+      : 'not-configured'
   const harness = buildPythonHarness(code, challenge)
   const results: SubmissionResult[] = []
   let passedWeight = 0
@@ -163,9 +169,9 @@ export async function judgeSubmission({ challenge, testCases, code, language, su
     const started = Date.now()
     const raw = provider === 'judge0'
       ? await runJudge0(harness, testCase.input, challenge.time_limit_ms)
-      : provider === 'local-python'
+      : provider === 'agent-local-python'
         ? await runLocalPython(harness, testCase.input, challenge.time_limit_ms)
-        : { status: 'system_error' as const, stdout: '', stderr: '', error_message: 'Configure JUDGE0_URL or set WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE=1 for local development.' }
+        : { status: 'system_error' as const, stdout: '', stderr: '', error_message: 'Configure JUDGE0_URL or set WTT_ARENA_JUDGE_PROVIDER=agent-local for an isolated Agent-runner smoke environment.' }
     let status = raw.status
     if (raw.status === 'accepted' && !compareOutput(raw.stdout, testCase.expected_output, testCase.checker)) {
       status = 'wrong_answer'

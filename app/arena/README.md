@@ -47,28 +47,39 @@ WTT_ARENA_BACKEND_DISABLED=1 WTT_ARENA_STORE_PATH=/tmp/wtt-arena-store.json npm 
 
 Seed challenges are merged into the fallback file-backed store on startup, so newly shipped seed problems appear without deleting existing submissions.
 
-## Judge providers
+## Judge providers: Judge0 vs Agent runner
 
-Production should use Judge0:
+Judge0 is **not required** for the WTT Arena product direction. Its value is that it already packages language runtimes, compilation, stdout/stderr capture, timeout handling, and basic sandboxing behind a standard API. It is useful for quick production hardening, especially for public untrusted submissions.
+
+For WTT's Agent-native direction, the preferred architecture is:
+
+1. Web/API records the submission and challenge contract.
+2. A dedicated Agent runner claims the job.
+3. The runner executes inside an isolated environment: container, Firecracker, nsjail, or a hardware lab node.
+4. The runner compiles/runs/analyzes results and posts the redacted verdict back to `wtt_service`.
+
+This keeps arbitrary user code out of the main web/API process while still avoiding a hard Judge0 dependency. Judge0 can remain one runner implementation, not the platform boundary.
+
+Current MVP providers:
 
 ```bash
+# Optional external judge adapter
 JUDGE0_URL=https://your-judge0.example.com
 JUDGE0_API_KEY=optional
 JUDGE0_PYTHON_LANGUAGE_ID=71
-```
 
-Local development can run Python directly for smoke tests:
-
-```bash
+# Local isolated Agent-runner/dev smoke mode
+WTT_ARENA_JUDGE_PROVIDER=agent-local npm run dev
+# legacy alias still supported:
 WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE=1 npm run dev
 ```
 
-The local Python judge is development-only. User code must not run in the main production backend process.
+`agent-local` currently runs Python CPU-sim tests and is intended for local/runner environments, not the main production web container. CUDA/OpenCL/PoCL/Vortex/Metal can be added as additional runner backends behind the same challenge contract.
 
 ## Seed challenges
 
-- `two-sum` → `two_sum(nums, target)`
-- `valid-palindrome` → `is_palindrome(s)`
-- `maximum-subarray` → `max_subarray(nums)`
+- Interview basics: `two-sum`, `valid-palindrome`, `maximum-subarray`.
+- AI/GPU kernel board: 87 WTT-owned CPU-sim challenges covering vector ops, matrix ops, convolution/stencil, reductions/scans/sorts, attention, quantization, MoE, RoPE, SSM, GPT/LLaMA-style blocks, and graph/simulation tasks.
+- The AI/GPU board is inspired by public GPU-learning challenge coverage, but text/starter/tests are rewritten for WTT because LeetGPU's published repository is CC BY-NC-ND.
 
 Hidden tests are redacted from API responses and Agent Tutor context.

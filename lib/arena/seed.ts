@@ -1,8 +1,9 @@
+import { aiKernelChallenges, aiKernelTestCases } from './ai-kernels'
 import type { Challenge, ChallengeTestCase } from './types'
 
 const now = new Date().toISOString()
 
-export const seedChallenges: Challenge[] = [
+const coreChallenges: Challenge[] = [
   {
     id: 'two-sum',
     title: 'Two Sum',
@@ -97,7 +98,7 @@ def max_subarray(nums: list[int]) -> int:
   },
 ]
 
-export const seedTestCases: ChallengeTestCase[] = [
+const coreTestCases: ChallengeTestCase[] = [
   {
     id: 'two-sum-public-1',
     challenge_id: 'two-sum',
@@ -220,3 +221,6 @@ export const seedTestCases: ChallengeTestCase[] = [
     checker: 'json_exact',
   },
 ]
+
+export const seedChallenges: Challenge[] = [...coreChallenges, ...aiKernelChallenges]
+export const seedTestCases: ChallengeTestCase[] = [...coreTestCases, ...aiKernelTestCases]

@@ -15,6 +15,8 @@ export default function ArenaPage() {
   const challenges = listChallenges()
   const easyCount = challenges.filter((challenge) => challenge.difficulty === 'easy').length
   const mediumCount = challenges.filter((challenge) => challenge.difficulty === 'medium').length
+  const hardCount = challenges.filter((challenge) => challenge.difficulty === 'hard').length
+  const aiKernelCount = challenges.filter((challenge) => challenge.category === 'ai-kernel').length
   const allTags = Array.from(new Set(challenges.flatMap((challenge) => challenge.tags))).slice(0, 10)
 
   return (
@@ -33,7 +35,7 @@ export default function ArenaPage() {
             <a href="#challenges" className="transition-colors hover:text-[#3ce8e2]">Challenges</a>
             <a href="#leaderboard" className="transition-colors hover:text-[#3ce8e2]">Leaderboard</a>
             <Link href="/feed" className="transition-colors hover:text-[#3ce8e2]">Discuss</Link>
-            <Link href="/arena/challenges/two-sum" className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-4 py-2 text-black transition-opacity hover:opacity-90">
+            <Link href="/arena/challenges/ai-vector-add" className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-4 py-2 text-black transition-opacity hover:opacity-90">
               Start Solving
             </Link>
           </div>
@@ -41,19 +43,19 @@ export default function ArenaPage() {
 
         <div className="mb-20 text-center">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.26em] text-[#3ce8e2]">
-            Real Judge · Agent Tutor · Rankings
+            AI Kernels · CPU-sim Judge · Agent Runner
           </div>
           <h1 className="mx-auto max-w-5xl text-5xl font-black tracking-tight text-white md:text-7xl">
             Code. Judge. Level Up.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-gray-400">
-            面向软件开发求职的真实运行打榜平台：写代码、跑测试、拿 Hint、复盘弱点，把每一道题变成可追踪的学习资产。
+            面向 AI 工程与 GPU 编程学习的真实运行打榜平台：先用 CPU-sim 跑 CUDA/OpenCL 风格算子，后续接入真实硬件 runner。
           </p>
           <div className="mt-10 flex justify-center gap-4">
             <Link href="#challenges" className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-6 py-3 text-sm font-bold text-black transition-opacity hover:opacity-90">
               Browse Challenges
             </Link>
-            <Link href="/arena/challenges/two-sum" className="rounded-md border border-gray-800 bg-[#1e1e1e] px-6 py-3 text-sm font-bold text-white transition-colors hover:border-[#3ce8e2] hover:bg-[#252525]">
+            <Link href="/arena/challenges/ai-vector-add" className="rounded-md border border-gray-800 bg-[#1e1e1e] px-6 py-3 text-sm font-bold text-white transition-colors hover:border-[#3ce8e2] hover:bg-[#252525]">
               Open Playground
             </Link>
           </div>
@@ -76,18 +78,19 @@ export default function ArenaPage() {
                 <span className="rounded-md bg-green-500/5 px-3 py-1.5 font-medium text-green-300/70">Tutor</span>
                 <span className="rounded-md bg-purple-500/5 px-3 py-1.5 font-medium text-purple-300/70">Discuss</span>
               </div>
-              <h2 className="text-2xl font-bold">Maximum Subarray</h2>
-              <p className="mt-3 text-sm leading-6 text-gray-400">Given an integer array nums, find the subarray with the largest sum. Hidden tests stay private; the judge is the source of truth.</p>
-              <div className="mt-6 grid grid-cols-3 gap-3 text-center text-sm">
-                <div className="rounded-md border border-gray-800 bg-[#202020] p-4"><p className="text-2xl font-black text-[#3ce8e2]">{challenges.length}</p><p className="mt-1 text-gray-500">Problems</p></div>
+              <h2 className="text-2xl font-bold">AI Kernel Board</h2>
+              <p className="mt-3 text-sm leading-6 text-gray-400">Vector ops, matmul, convolution, attention, quantization, MoE and model blocks. Hidden tests stay private; the judge is the source of truth.</p>
+              <div className="mt-6 grid grid-cols-4 gap-3 text-center text-sm">
+                <div className="rounded-md border border-gray-800 bg-[#202020] p-4"><p className="text-2xl font-black text-[#3ce8e2]">{aiKernelCount}</p><p className="mt-1 text-gray-500">AI Kernels</p></div>
                 <div className="rounded-md border border-gray-800 bg-[#202020] p-4"><p className="text-2xl font-black text-emerald-300">{easyCount}</p><p className="mt-1 text-gray-500">Easy</p></div>
                 <div className="rounded-md border border-gray-800 bg-[#202020] p-4"><p className="text-2xl font-black text-yellow-300">{mediumCount}</p><p className="mt-1 text-gray-500">Medium</p></div>
+                <div className="rounded-md border border-gray-800 bg-[#202020] p-4"><p className="text-2xl font-black text-rose-300">{hardCount}</p><p className="mt-1 text-gray-500">Hard</p></div>
               </div>
             </div>
             <div className="bg-[#101010] p-6 font-mono text-sm leading-7 text-gray-300">
-              <p><span className="text-purple-300">def</span> <span className="text-[#3ce8e2]">solve</span>(nums):</p>
-              <p className="pl-6 text-gray-500"># write, run, learn</p>
-              <p className="pl-6"><span className="text-purple-300">return</span> max_subarray(nums)</p>
+              <p><span className="text-purple-300">def</span> <span className="text-[#3ce8e2]">ai_vector_add</span>(payload):</p>
+              <p className="pl-6 text-gray-500"># CPU-sim today, hardware runner tomorrow</p>
+              <p className="pl-6"><span className="text-purple-300">return</span> [v + i <span className="text-purple-300">for</span> i, v <span className="text-purple-300">in</span> enumerate(payload[<span className="text-emerald-300">&apos;values&apos;</span>])]</p>
               <div className="mt-8 rounded-md border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 font-sans text-sm text-[#bffffd]">
                 Accepted · 100/100 · Tutor review unlocked
               </div>
@@ -102,7 +105,7 @@ export default function ArenaPage() {
                 <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#3ce8e2]">Challenges</p>
                 <h2 className="mt-2 text-3xl font-black">训练题库</h2>
               </div>
-              <p className="text-sm text-gray-500">真实运行 · 后端持久化 · 隐藏测试脱敏</p>
+              <p className="text-sm text-gray-500">CPU-sim 真实运行 · 后端持久化 · 隐藏测试脱敏</p>
             </div>
             <div className="overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
               <div className="grid grid-cols-[1fr_110px_120px] border-b border-gray-800 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -135,7 +138,7 @@ export default function ArenaPage() {
           <aside id="leaderboard" className="space-y-4">
             <div className="rounded-lg border border-gray-800 bg-[#1e1e1e] p-5">
               <h3 className="font-bold text-white">Track</h3>
-              <p className="mt-2 text-sm leading-6 text-gray-400">从面试核心算法开始，逐步接入 AI 工程、端侧推理和系统设计挑战。</p>
+              <p className="mt-2 text-sm leading-6 text-gray-400">从 AI/GPU kernel 开始：CUDA/OpenCL 风格接口先在 CPU 上验算，未来同一题目可派发到真实硬件。</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {allTags.map((tag) => <span key={tag} className="rounded-md border border-gray-800 bg-[#151515] px-2.5 py-1 text-xs text-gray-400">#{tag}</span>)}
               </div>
@@ -144,7 +147,7 @@ export default function ArenaPage() {
               <h3 className="font-bold text-white">Rules</h3>
               <ul className="mt-3 space-y-3 text-sm text-gray-400">
                 <li>• 最终分数只看真实 Judge。</li>
-                <li>• Agent 只做 Hint / Debug / Review。</li>
+                <li>• Agent 可作为隔离 runner 执行代码。</li>
                 <li>• 隐藏测试不会暴露输入输出。</li>
                 <li>• 通过记录写入 WTT 后端数据库。</li>
               </ul>

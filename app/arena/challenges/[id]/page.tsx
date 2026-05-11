@@ -107,8 +107,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </div>
           </div>
           <div className="flex items-center gap-3 text-xs text-gray-500">
-            <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2]">Python MVP</span>
-            <span>Judge0 / Local Dev</span>
+            <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2]">CPU-sim MVP</span>
+            <span>Judge0 optional / Agent runner</span>
           </div>
         </header>
 
