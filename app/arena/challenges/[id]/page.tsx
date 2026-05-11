@@ -9,6 +9,7 @@ const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
 type Locale = 'zh' | 'en'
 type Language = 'python' | 'cpp' | 'c'
+type ChatMessage = { role: 'user' | 'agent'; content: string; createdAt: string }
 
 type ChallengePayload = {
   challenge: Challenge
@@ -24,6 +25,7 @@ const copy = {
     noSubmission: '提交后会在这里看到真实 Agent/Runner 判题结果。历史提交会持久化到 WTT 后端。', firstAc: '暂无 AC 记录，拿下首个榜单位置。',
     agentTitle: 'Agent 执行与辅导', agentRole: 'Run & Submit 会把你的代码交给远程 Agent/Runner 编译、运行、比对公开/隐藏测试，再把 verdict 回写到 WTT。Tutor 只做提示、Debug、复盘，不泄露隐藏测试。',
     hint: '提示', debug: '调试', review: '复盘', agentWaiting: '先提交一次，Agent 会在这里解释结果。', openFull: '打开完整提交 →',
+    chatTitle: 'Agent 对话', chatIntro: '可以直接问思路、边界条件、报错原因、复杂度或代码契约。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。',
     aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
   },
   en: {
@@ -33,6 +35,7 @@ const copy = {
     noSubmission: 'Submit once to see the real Agent/Runner verdict. Submissions are persisted in the WTT backend.', firstAc: 'No accepted run yet. Take the first spot.',
     agentTitle: 'Agent Execution & Tutor', agentRole: 'Run & Submit sends your code to a remote Agent/Runner, which compiles, executes, checks public/hidden tests, and writes the verdict back to WTT. Tutor gives hints/debug/review without leaking hidden tests.',
     hint: 'Hint', debug: 'Debug', review: 'Review', agentWaiting: 'Submit once and the Agent will explain the result here.', openFull: 'Open full submission →',
+    chatTitle: 'Agent Chat', chatIntro: 'Ask about approach, edge cases, errors, complexity, or the code contract.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.',
     aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
   },
 } as const
@@ -109,6 +112,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [tutorMessage, setTutorMessage] = useState('')
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
 
   useEffect(() => {
@@ -167,6 +173,35 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     })
     const data = await response.json()
     setTutorMessage(data.tutor?.message || '')
+  }
+
+  async function sendAgentChat() {
+    const message = chatInput.trim()
+    if (!challenge || !message || chatSending) return
+    const nextMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: message, createdAt: new Date().toISOString() }]
+    setChatMessages(nextMessages)
+    setChatInput('')
+    setChatSending(true)
+    try {
+      const response = await fetch(`/api/arena/challenges/${challenge.id}/agent-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          messages: nextMessages.slice(-8),
+          locale,
+          language,
+          code,
+          submission_id: submission?.id,
+        }),
+      })
+      const data = await response.json()
+      setChatMessages([...nextMessages, { role: 'agent', content: data.agent?.message || t.chatFallback, createdAt: new Date().toISOString() }])
+    } catch {
+      setChatMessages([...nextMessages, { role: 'agent', content: t.chatFallback, createdAt: new Date().toISOString() }])
+    } finally {
+      setChatSending(false)
+    }
   }
 
   if (!payload || !challenge) {
@@ -322,7 +357,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </section>
           </section>
 
-          <aside className="min-h-0 overflow-y-auto rounded-lg border border-gray-800 bg-[#1e1e1e] p-5 lg:col-span-2 xl:col-span-1">
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-5 lg:col-span-2 xl:col-span-1">
             <div className="rounded-lg border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#3ce8e2]">Agent</p>
               <h2 className="mt-2 text-xl font-black text-white">{t.agentTitle}</h2>
@@ -335,6 +370,32 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </div>
             <div className="mt-4 rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm leading-6 text-gray-400">
               {tutorMessage || (submission ? `${submission.status} · ${submission.judge_output_summary || ''}` : t.agentWaiting)}
+            </div>
+            <div className="mt-4 flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
+              <div className="border-b border-gray-800 px-4 py-3">
+                <h3 className="text-sm font-black text-white">{t.chatTitle}</h3>
+                <p className="mt-1 text-xs leading-5 text-gray-500">{t.chatIntro}</p>
+              </div>
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                {chatMessages.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-gray-800 bg-[#101010] p-3 text-xs leading-5 text-gray-500">{t.chatIntro}</div>
+                )}
+                {chatMessages.map((message, index) => (
+                  <div key={`${message.createdAt}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm leading-6 ${message.role === 'user' ? 'bg-[#3ce8e2] text-black' : 'border border-gray-800 bg-[#202020] text-gray-300'}`}>
+                      {message.content}
+                    </div>
+                  </div>
+                ))}
+                {chatSending && <p className="text-xs text-gray-500">{t.chatThinking}</p>}
+              </div>
+              <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="border-t border-gray-800 p-3">
+                <textarea value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendAgentChat() }} placeholder={t.chatPlaceholder} rows={3} className="w-full resize-none rounded-md border border-gray-800 bg-[#101010] p-3 text-sm text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2]" />
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-600">
+                  <span>{locale === 'zh' ? '⌘/Ctrl + Enter 快速发送' : '⌘/Ctrl + Enter to send'}</span>
+                  <button type="submit" disabled={!chatInput.trim() || chatSending} className="rounded-md bg-[#3ce8e2] px-3 py-1.5 font-black text-black disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
+                </div>
+              </form>
             </div>
             {submission?.results?.length ? (
               <div className="mt-4 space-y-2">
