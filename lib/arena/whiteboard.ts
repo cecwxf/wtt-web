@@ -13,6 +13,9 @@ export type WhiteboardPayload = { ops: WhiteboardOp[]; note?: string }
 
 const WHITEBOARD_OPEN = '[WHITEBOARD_OPS]'
 const WHITEBOARD_CLOSE = '[/WHITEBOARD_OPS]'
+const MAX_WHITEBOARD_OPS = 64
+const MAX_SECTION_ITEMS = 8
+const COORDS = { minX: 40, maxX: 1320, minY: 24, maxY: 760, minW: 80, maxW: 720, minH: 56, maxH: 320 }
 
 function compactText(text: string, max = 62) {
   const normalized = text.replace(/\s+/g, ' ').trim()
@@ -22,6 +25,106 @@ function compactText(text: string, max = 62) {
 function includesAny(challenge: Challenge, words: string[]) {
   const haystack = `${challenge.title} ${challenge.description} ${challenge.tags.join(' ')}`.toLowerCase()
   return words.some((word) => haystack.includes(word.toLowerCase()))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function safeNumber(value: unknown, fallback: number, min: number, max: number) {
+  const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  if (!Number.isFinite(number)) return fallback
+  return clamp(Math.round(number), min, max)
+}
+
+function safeString(value: unknown, max = 1200) {
+  return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
+}
+
+function safeId(value: unknown) {
+  const id = safeString(value, 80).replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  return id || undefined
+}
+
+function safeColor(value: unknown) {
+  const color = safeString(value, 24)
+  return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : undefined
+}
+
+function sanitizeWhiteboardOp(op: unknown, index: number): WhiteboardOp | null {
+  if (!isRecord(op)) return null
+  const type = safeString(op.type, 32)
+  if (type === 'clear') return { type: 'clear' }
+  if (type === 'title') {
+    const text = safeString(op.text, 180)
+    if (!text) return null
+    return { type: 'title', text, x: safeNumber(op.x, 70, COORDS.minX, COORDS.maxX), y: safeNumber(op.y, 45, COORDS.minY, COORDS.maxY) }
+  }
+  if (type === 'text') {
+    const text = safeString(op.text, 800)
+    if (!text) return null
+    const size = op.size === 'sm' || op.size === 'md' || op.size === 'lg' ? op.size : undefined
+    return { type: 'text', text, x: safeNumber(op.x, 80, COORDS.minX, COORDS.maxX), y: safeNumber(op.y, 100 + index * 18, COORDS.minY, COORDS.maxY), size, color: safeColor(op.color) }
+  }
+  if (type === 'box') {
+    const text = safeString(op.text, 360)
+    if (!text) return null
+    return {
+      type: 'box',
+      id: safeId(op.id),
+      text,
+      x: safeNumber(op.x, 80 + (index % 4) * 240, COORDS.minX, COORDS.maxX),
+      y: safeNumber(op.y, 130 + Math.floor(index / 4) * 120, COORDS.minY, COORDS.maxY),
+      w: safeNumber(op.w, 190, COORDS.minW, COORDS.maxW),
+      h: safeNumber(op.h, 86, COORDS.minH, COORDS.maxH),
+      color: safeColor(op.color),
+      bg: safeColor(op.bg),
+    }
+  }
+  if (type === 'arrow') {
+    const from = safeId(op.from)
+    const to = safeId(op.to)
+    const label = safeString(op.label, 80)
+    const color = safeColor(op.color)
+    if (from && to) return { type: 'arrow', from, to, label: label || undefined, color }
+    const hasCoords = [op.x1, op.y1, op.x2, op.y2].every((value) => Number.isFinite(typeof value === 'number' ? value : Number(value)))
+    if (!hasCoords) return null
+    return {
+      type: 'arrow',
+      x1: safeNumber(op.x1, 120, COORDS.minX, COORDS.maxX),
+      y1: safeNumber(op.y1, 160, COORDS.minY, COORDS.maxY),
+      x2: safeNumber(op.x2, 320, COORDS.minX, COORDS.maxX),
+      y2: safeNumber(op.y2, 160, COORDS.minY, COORDS.maxY),
+      label: label || undefined,
+      color,
+    }
+  }
+  if (type === 'section') {
+    const title = safeString(op.title, 120)
+    if (!title) return null
+    const items = Array.isArray(op.items) ? op.items.map((item) => safeString(item, 220)).filter(Boolean).slice(0, MAX_SECTION_ITEMS) : []
+    return {
+      type: 'section',
+      id: safeId(op.id),
+      title,
+      items,
+      x: safeNumber(op.x, 90, COORDS.minX, COORDS.maxX),
+      y: safeNumber(op.y, 310, COORDS.minY, COORDS.maxY),
+      w: safeNumber(op.w, 510, COORDS.minW, COORDS.maxW),
+      color: safeColor(op.color),
+    }
+  }
+  return null
+}
+
+export function sanitizeWhiteboardOps(ops: unknown[]): WhiteboardOp[] {
+  const sanitized = ops.slice(0, MAX_WHITEBOARD_OPS).map(sanitizeWhiteboardOp).filter((op): op is WhiteboardOp => Boolean(op))
+  if (!sanitized.some((op) => op.type === 'clear')) return [{ type: 'clear' }, ...sanitized]
+  return sanitized
 }
 
 export function makeInterviewWhiteboardOps(challenge: Challenge, locale: WhiteboardLocale): WhiteboardOp[] {
@@ -114,7 +217,10 @@ export function extractWhiteboardPayload(content: string): WhiteboardPayload | n
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate.trim()) as Partial<WhiteboardPayload>
-      if (Array.isArray(parsed.ops)) return { ops: parsed.ops.filter(Boolean) as WhiteboardOp[], note: parsed.note }
+      if (Array.isArray(parsed.ops)) {
+        const ops = sanitizeWhiteboardOps(parsed.ops)
+        if (ops.length) return { ops, note: safeString(parsed.note, 240) || undefined }
+      }
     } catch {
       // ignore malformed Agent output and keep chat usable
     }
