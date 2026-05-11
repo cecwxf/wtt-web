@@ -3,19 +3,26 @@
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { useSession } from 'next-auth/react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { useAgentId } from '@/lib/hooks/use-agent-id'
 import type { Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
 type Locale = 'zh' | 'en'
 type Language = 'python' | 'cpp' | 'c'
-type ChatMessage = { role: 'user' | 'agent'; content: string; createdAt: string }
+type ChatMessage = { id?: string; role: 'user' | 'agent'; content: string; createdAt: string }
 
 type ChallengePayload = {
   challenge: Challenge
   public_cases: Array<{ id: string; input: string; expected_output: string; explanation?: string }>
   submissions: Array<Omit<Submission, 'code' | 'results'>>
 }
+
+type AgentBinding = { agent_id: string; display_name?: string; is_primary?: boolean }
+type ArenaWorker = { id: string; agent_id: string; name: string; worker_md?: string; topic_id?: string }
+type TopicMessage = { id?: string; message_id?: string; sender_type?: string; sender_id?: string; semantic_type?: string; content?: string; timestamp?: string; created_at?: string }
 
 const copy = {
   zh: {
@@ -25,7 +32,7 @@ const copy = {
     noSubmission: '提交后会在这里看到真实 Agent/Runner 判题结果。历史提交会持久化到 WTT 后端。', firstAc: '暂无 AC 记录，拿下首个榜单位置。',
     agentTitle: 'Agent 执行与辅导', agentRole: 'Run & Submit 会把你的代码交给远程 Agent/Runner 编译、运行、比对公开/隐藏测试，再把 verdict 回写到 WTT。Tutor 只做提示、Debug、复盘，不泄露隐藏测试。',
     hint: '提示', debug: '调试', review: '复盘', agentWaiting: '先提交一次，Agent 会在这里解释结果。', openFull: '打开完整提交 →',
-    chatTitle: 'Agent 对话', chatIntro: '可以直接问思路、边界条件、报错原因、复杂度或代码契约。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。',
+    chatTitle: 'Agent 对话', chatIntro: '这里走真实 WTT Agent 会话，不再是固定话术；Agent 会读取 Arena 题库记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录并选择 Agent 后可对话。', chatSyncing: '正在同步 Arena 题库到 Agent 记忆...',
     aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
   },
   en: {
@@ -35,7 +42,7 @@ const copy = {
     noSubmission: 'Submit once to see the real Agent/Runner verdict. Submissions are persisted in the WTT backend.', firstAc: 'No accepted run yet. Take the first spot.',
     agentTitle: 'Agent Execution & Tutor', agentRole: 'Run & Submit sends your code to a remote Agent/Runner, which compiles, executes, checks public/hidden tests, and writes the verdict back to WTT. Tutor gives hints/debug/review without leaking hidden tests.',
     hint: 'Hint', debug: 'Debug', review: 'Review', agentWaiting: 'Submit once and the Agent will explain the result here.', openFull: 'Open full submission →',
-    chatTitle: 'Agent Chat', chatIntro: 'Ask about approach, edge cases, errors, complexity, or the code contract.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.',
+    chatTitle: 'Agent Chat', chatIntro: 'This uses a real WTT Agent session, not canned replies. The Agent reads Arena question-bank memory plus the current challenge context.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.', chatLogin: 'Sign in and select an Agent to chat.', chatSyncing: 'Syncing Arena question bank into Agent memory...',
     aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
   },
 } as const
@@ -103,7 +110,95 @@ function localizedDescription(challenge: Challenge, locale: Locale) {
   return challenge.description
 }
 
+function stripSourceBlock(content: string) {
+  return (content || '')
+    .replace(/^┌─ 来源标识 ─+\n(?:│[^\n]*\n)?└─+\n?/, '')
+    .replace(/^\[Worker Context[\s\S]*?---\n/, '')
+    .replace(/^\[Arena Challenge Context[\s\S]*?\[\/Arena Challenge Context\]\n*/m, '')
+    .trim()
+}
+
+function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMessage[] {
+  return (messages || [])
+    .filter((message) => {
+      const semantic = String(message.semantic_type || '').toLowerCase()
+      const content = String(message.content || '')
+      if (semantic === 'system') return false
+      if (content.includes('[system:p2p_init]')) return false
+      return !!stripSourceBlock(content)
+    })
+    .map((message) => {
+      const senderType = String(message.sender_type || '').toUpperCase()
+      const senderId = String(message.sender_id || '')
+      return {
+        id: message.id || message.message_id,
+        role: senderType === 'AGENT' || senderId === agentId ? 'agent' : 'user',
+        content: stripSourceBlock(String(message.content || '')),
+        createdAt: message.timestamp || message.created_at || new Date().toISOString(),
+      }
+    })
+}
+
+function arenaMemoryBlock(challenges: Challenge[]) {
+  const lines = challenges
+    .filter((challenge) => challenge.published !== false)
+    .map((challenge) => `- ${challenge.id} | ${challenge.title} | ${challenge.difficulty} | ${challenge.category} | function=${challenge.function_name}(${challenge.input_keys.join(', ')}) | tags=${challenge.tags.join(', ')}`)
+  const checksum = `${challenges.length}:${lines.join('\n').length}`
+  return [
+    '<!-- WTT_ARENA_QUESTION_BANK_MEMORY_START -->',
+    `# WTT Arena Question Bank Memory`,
+    `checksum: ${checksum}`,
+    `updated_by: wtt-web arena agent chat`,
+    '',
+    'This is persistent local memory for the Arena Agent. Use it when the user asks about Arena problems, categories, difficulty, function contracts, or current challenge context. Do not reveal hidden tests.',
+    '',
+    '## Challenges',
+    ...lines,
+    '<!-- WTT_ARENA_QUESTION_BANK_MEMORY_END -->',
+  ].join('\n')
+}
+
+function mergeArenaMemory(existing: string, block: string) {
+  const start = '<!-- WTT_ARENA_QUESTION_BANK_MEMORY_START -->'
+  const end = '<!-- WTT_ARENA_QUESTION_BANK_MEMORY_END -->'
+  const s = existing || ''
+  const startIdx = s.indexOf(start)
+  const endIdx = s.indexOf(end)
+  if (startIdx >= 0 && endIdx > startIdx) {
+    return `${s.slice(0, startIdx).trimEnd()}\n\n${block}\n\n${s.slice(endIdx + end.length).trimStart()}`.trim() + '\n'
+  }
+  return `${s.trimEnd()}\n\n${block}\n`.trim() + '\n'
+}
+
+function currentChallengeContext(challenge: Challenge, locale: Locale, language: Language, code: string, submission?: Submission | null) {
+  const submissionText = submission
+    ? `latest_submission: ${submission.status}, score=${submission.score}, provider=${submission.judge_provider}, summary=${submission.judge_output_summary || ''}`
+    : 'latest_submission: none'
+  return [
+    '[Arena Challenge Context]',
+    `locale: ${locale}`,
+    `challenge_id: ${challenge.id}`,
+    `title: ${challenge.title}`,
+    `difficulty: ${challenge.difficulty}`,
+    `category: ${challenge.category}`,
+    `tags: ${challenge.tags.join(', ')}`,
+    `function: ${challenge.function_name}(${challenge.input_keys.join(', ')})`,
+    `description: ${challenge.description}`,
+    `selected_language: ${language}`,
+    submissionText,
+    'Current user code:',
+    '```',
+    code.slice(0, 12000),
+    '```',
+    'Hidden tests must stay redacted. Give coaching/debugging based on public context and verdict only.',
+    '[/Arena Challenge Context]',
+  ].join('\n')
+}
+
+
 export default function ArenaChallengePage({ params }: { params: { id: string } }) {
+  const { data: session } = useSession()
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [payload, setPayload] = useState<ChallengePayload | null>(null)
   const [locale, setLocale] = useState<Locale>('zh')
   const [language, setLanguage] = useState<Language>('python')
@@ -115,6 +210,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
+  const [arenaTopicId, setArenaTopicId] = useState('')
+  const [arenaWorkerId, setArenaWorkerId] = useState('')
+  const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
 
   useEffect(() => {
@@ -134,6 +232,44 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id])
+
+  useEffect(() => {
+    if (!session?.accessToken || selectedAgentId) return
+    fetch(`${CLIENT_WTT_API_BASE}/agents/my`, { headers: { Authorization: `Bearer ${session.accessToken}` } })
+      .then((res) => res.ok ? res.json() : [])
+      .then((agents: AgentBinding[]) => {
+        const first = agents.find((agent) => agent.is_primary) || agents[0]
+        if (first?.agent_id) setSelectedAgentId(first.agent_id)
+      })
+      .catch(() => undefined)
+  }, [session?.accessToken, selectedAgentId, setSelectedAgentId])
+
+  const authHeaders = useMemo(() => ({
+    'Content-Type': 'application/json',
+    ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+  }), [session?.accessToken])
+
+  const refreshArenaMessages = async (topicId = arenaTopicId) => {
+    if (!topicId || !selectedAgentId || !session?.accessToken) return [] as ChatMessage[]
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/messages?limit=100&agent_id=${encodeURIComponent(selectedAgentId)}`, { headers: authHeaders })
+    if (!response.ok) return [] as ChatMessage[]
+    const raw = await response.json()
+    const rows: TopicMessage[] = Array.isArray(raw) ? raw : raw.messages || []
+    const mapped = topicMessagesToChat(rows, selectedAgentId)
+    setChatMessages(mapped)
+    return mapped
+  }
+
+  useEffect(() => {
+    if (!arenaTopicId) return
+    let alive = true
+    refreshArenaMessages(arenaTopicId)
+    const timer = window.setInterval(() => {
+      if (alive) refreshArenaMessages(arenaTopicId)
+    }, 3000)
+    return () => { alive = false; window.clearInterval(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arenaTopicId, selectedAgentId, session?.accessToken])
 
   const t = copy[locale]
   const challenge = payload?.challenge
@@ -175,34 +311,101 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setTutorMessage(data.tutor?.message || '')
   }
 
+  async function ensureArenaWorker() {
+    if (!selectedAgentId || !session?.accessToken) throw new Error('missing selected agent')
+    setArenaSyncing(true)
+    try {
+      const workersResp = await fetch(`${CLIENT_WTT_API_BASE}/workers?agent_id=${encodeURIComponent(selectedAgentId)}`, { headers: authHeaders })
+      const workers: ArenaWorker[] = workersResp.ok ? await workersResp.json() : []
+      let worker = workers.find((item) => item.name === 'Arena Coach')
+      if (!worker) {
+        const createdResp = await fetch(`${CLIENT_WTT_API_BASE}/workers`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            agent_id: selectedAgentId,
+            name: 'Arena Coach',
+            description: 'Persistent WTT Arena tutor/runner companion with local question-bank memory.',
+            skills_config: ['arena-tutor', 'coding-coach', 'debugging', 'gpu-kernel'],
+            personality: 'You are a rigorous WTT Arena coding coach. Use the persistent Arena question bank memory, understand the current challenge, help debug without revealing hidden tests, and answer like the Feed chat Agent rather than using canned templates.',
+          }),
+        })
+        if (!createdResp.ok) throw new Error('failed to create Arena Coach worker')
+        worker = await createdResp.json()
+      }
+
+      if (!worker) throw new Error('Arena Coach worker unavailable')
+      const challengeResp = await fetch('/api/arena/challenges', { cache: 'no-store' })
+      const challengeData: { challenges?: Challenge[] } = challengeResp.ok ? await challengeResp.json() : { challenges: challenge ? [challenge] : [] }
+      const bank = arenaMemoryBlock(challengeData.challenges || (challenge ? [challenge] : []))
+      const workerMdResp = await fetch(`${CLIENT_WTT_API_BASE}/workers/${worker.id}/worker-md`, { headers: authHeaders })
+      const workerMdData = workerMdResp.ok ? await workerMdResp.json() : { worker_md: '' }
+      const nextWorkerMd = mergeArenaMemory(workerMdData.worker_md || '', bank)
+      if (nextWorkerMd !== (workerMdData.worker_md || '')) {
+        await fetch(`${CLIENT_WTT_API_BASE}/workers/${worker.id}/worker-md`, {
+          method: 'PUT',
+          headers: authHeaders,
+          body: JSON.stringify({ worker_md: nextWorkerMd }),
+        })
+      }
+
+      const sessionResp = await fetch(`${CLIENT_WTT_API_BASE}/workers/${worker.id}/session`, { method: 'POST', headers: authHeaders })
+      if (!sessionResp.ok) throw new Error('failed to create Arena Agent session')
+      const sessionData = await sessionResp.json()
+      setArenaWorkerId(worker.id)
+      setArenaTopicId(sessionData.topic_id || '')
+      return { worker, topicId: sessionData.topic_id as string, workerMd: nextWorkerMd }
+    } finally {
+      setArenaSyncing(false)
+    }
+  }
+
   async function sendAgentChat() {
     const message = chatInput.trim()
     if (!challenge || !message || chatSending) return
-    const nextMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: message, createdAt: new Date().toISOString() }]
-    setChatMessages(nextMessages)
+    if (!selectedAgentId || !session?.accessToken) {
+      setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
+      return
+    }
     setChatInput('')
     setChatSending(true)
     try {
-      const response = await fetch(`/api/arena/challenges/${challenge.id}/agent-chat`, {
+      const { topicId, workerMd } = arenaTopicId ? { topicId: arenaTopicId, workerMd: '' } : await ensureArenaWorker()
+      const existing = await refreshArenaMessages(topicId)
+      const isFirstMessage = existing.length === 0
+      const context = currentChallengeContext(challenge, locale, language, code, submission)
+      const augmented = [
+        isFirstMessage && workerMd ? `[Worker Context — persistent Arena question-bank memory]\n${workerMd}\n---` : '',
+        context,
+        '',
+        message,
+      ].filter(Boolean).join('\n')
+
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/messages?agent_id=${encodeURIComponent(selectedAgentId)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
-          message,
-          messages: nextMessages.slice(-8),
-          locale,
-          language,
-          code,
-          submission_id: submission?.id,
+          content: augmented,
+          content_type: 'text',
+          semantic_type: 'post',
+          sender_type: 'HUMAN',
+          metadata: {
+            arena: true,
+            arena_challenge_id: challenge.id,
+            arena_worker_id: arenaWorkerId || undefined,
+            model_config: { model: 'openai-codex/gpt-5.5', reasoning_effort: 'high' },
+          },
         }),
       })
-      const data = await response.json()
-      setChatMessages([...nextMessages, { role: 'agent', content: data.agent?.message || t.chatFallback, createdAt: new Date().toISOString() }])
-    } catch {
-      setChatMessages([...nextMessages, { role: 'agent', content: t.chatFallback, createdAt: new Date().toISOString() }])
+      if (!response.ok) throw new Error('failed to send Arena chat')
+      await refreshArenaMessages(topicId)
+    } catch (error) {
+      setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
     } finally {
       setChatSending(false)
     }
   }
+
 
   if (!payload || !challenge) {
     return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading Arena...</main>
@@ -387,13 +590,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     </div>
                   </div>
                 ))}
+                {arenaSyncing && <p className="text-xs text-[#3ce8e2]">{t.chatSyncing}</p>}
                 {chatSending && <p className="text-xs text-gray-500">{t.chatThinking}</p>}
               </div>
               <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="border-t border-gray-800 p-3">
                 <textarea value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendAgentChat() }} placeholder={t.chatPlaceholder} rows={3} className="w-full resize-none rounded-md border border-gray-800 bg-[#101010] p-3 text-sm text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2]" />
                 <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-600">
-                  <span>{locale === 'zh' ? '⌘/Ctrl + Enter 快速发送' : '⌘/Ctrl + Enter to send'}</span>
-                  <button type="submit" disabled={!chatInput.trim() || chatSending} className="rounded-md bg-[#3ce8e2] px-3 py-1.5 font-black text-black disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
+                  <span>{selectedAgentId ? `${locale === 'zh' ? 'Agent' : 'Agent'}: ${selectedAgentId.slice(0, 18)}` : t.chatLogin}</span>
+                  <button type="submit" disabled={!chatInput.trim() || chatSending || arenaSyncing} className="rounded-md bg-[#3ce8e2] px-3 py-1.5 font-black text-black disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
                 </div>
               </form>
             </div>
