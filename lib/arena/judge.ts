@@ -178,11 +178,12 @@ async function runJudge0(code: string, stdin: string, timeoutMs: number): Promis
 
 export async function judgeSubmission(input: JudgeInput) {
   const { challenge, testCases, code, language, submissionId } = input
-  if (!PYTHON_LANGUAGES.has(language.toLowerCase())) {
-    throw new Error(`Unsupported language for MVP: ${language}`)
-  }
   const remoteJudgeUrl = process.env.WTT_ARENA_REMOTE_JUDGE_URL
   if (remoteJudgeUrl) return runRemoteJudge(input, remoteJudgeUrl)
+
+  if (!PYTHON_LANGUAGES.has(language.toLowerCase())) {
+    throw new Error(`Unsupported language without remote runner: ${language}`)
+  }
 
   const configuredProvider = (process.env.WTT_ARENA_JUDGE_PROVIDER || '').toLowerCase()
   const allowAgentLocal = configuredProvider === 'agent-local' || configuredProvider === 'local-python' || process.env.WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE === '1'
