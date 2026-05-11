@@ -24,16 +24,22 @@ interface RawRunResult {
 
 const PYTHON_LANGUAGES = new Set(['python', 'python3', 'py'])
 
-function buildPythonHarness(userCode: string) {
+function buildPythonHarness(userCode: string, challenge: Challenge) {
+  const functionName = JSON.stringify(challenge.function_name)
+  const inputKeys = JSON.stringify(challenge.input_keys)
   return `${userCode}
 
 # --- WTT Arena Judge Harness ---
 if __name__ == "__main__":
     import json, sys
     payload = json.loads(sys.stdin.read() or "{}")
-    if "two_sum" not in globals():
-        raise NameError("Please define function two_sum(nums, target)")
-    result = two_sum(payload.get("nums", []), payload.get("target"))
+    function_name = ${functionName}
+    input_keys = ${inputKeys}
+    if function_name not in globals():
+        raise NameError(f"Please define function {function_name}")
+    fn = globals()[function_name]
+    args = [payload.get(key) for key in input_keys]
+    result = fn(*args)
     print(json.dumps(result, ensure_ascii=False))
 `
 }
@@ -146,7 +152,7 @@ export async function judgeSubmission({ challenge, testCases, code, language, su
     throw new Error(`Unsupported language for MVP: ${language}`)
   }
   const provider = process.env.JUDGE0_URL ? 'judge0' : (process.env.WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE === '1' ? 'local-python' : 'not-configured')
-  const harness = buildPythonHarness(code)
+  const harness = buildPythonHarness(code, challenge)
   const results: SubmissionResult[] = []
   let passedWeight = 0
   const totalWeight = testCases.reduce((sum, testCase) => sum + testCase.weight, 0)

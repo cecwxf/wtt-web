@@ -23,6 +23,8 @@ export interface Challenge {
   time_limit_ms: number
   memory_limit_mb: number
   starter_code: string
+  function_name: string
+  input_keys: string[]
   published: boolean
   created_at: string
   updated_at: string

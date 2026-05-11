@@ -9,6 +9,9 @@ function difficultyTone(difficulty: string) {
 
 export default function ArenaPage() {
   const challenges = listChallenges()
+  const easyCount = challenges.filter((challenge) => challenge.difficulty === 'easy').length
+  const mediumCount = challenges.filter((challenge) => challenge.difficulty === 'medium').length
+  const allTags = Array.from(new Set(challenges.flatMap((challenge) => challenge.tags))).slice(0, 8)
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <section className="mx-auto max-w-6xl px-6 py-10">
@@ -28,7 +31,7 @@ export default function ArenaPage() {
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
             <p className="text-sm text-slate-400">今日目标</p>
-            <p className="mt-2 text-2xl font-bold">完成首题 AC</p>
+            <p className="mt-2 text-2xl font-bold">完成 3 题训练</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
             <p className="text-sm text-slate-400">Judge Provider</p>
@@ -36,7 +39,7 @@ export default function ArenaPage() {
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
             <p className="text-sm text-slate-400">第一阶段</p>
-            <p className="mt-2 text-2xl font-bold">Python 编程题</p>
+            <p className="mt-2 text-2xl font-bold">{challenges.length} 道种子题</p>
           </div>
         </div>
 
@@ -44,8 +47,13 @@ export default function ArenaPage() {
           <div className="mb-4 flex items-end justify-between">
             <div>
               <h2 className="text-2xl font-bold">挑战题库</h2>
-              <p className="mt-1 text-sm text-slate-400">MVP 先跑通 Two Sum 垂直切片，后续扩展 AI 工程/就业/K12。</p>
+              <p className="mt-1 text-sm text-slate-400">当前覆盖哈希、双指针、动态规划三个入门面试题型；后续扩展 AI 工程/就业/K12。</p>
             </div>
+          </div>
+          <div className="mb-4 flex flex-wrap gap-2 text-xs text-slate-300">
+            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-200">Easy {easyCount}</span>
+            <span className="rounded-full bg-amber-500/15 px-3 py-1 text-amber-200">Medium {mediumCount}</span>
+            {allTags.map((tag) => <span key={tag} className="rounded-full bg-white/10 px-3 py-1">#{tag}</span>)}
           </div>
           <div className="grid gap-4">
             {challenges.map((challenge) => (

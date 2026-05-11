@@ -29,6 +29,68 @@ def two_sum(nums: list[int], target: int) -> list[int]:
     # TODO: return the indices of the two numbers
     return []
 `,
+    function_name: 'two_sum',
+    input_keys: ['nums', 'target'],
+    published: true,
+    created_at: now,
+    updated_at: now,
+  },
+  {
+    id: 'valid-palindrome',
+    title: 'Valid Palindrome',
+    slug: 'valid-palindrome',
+    description: `给定一个字符串 s，判断它在只保留字母和数字、忽略大小写后，是否为回文串。
+
+请实现函数：
+
+\`\`\`python
+def is_palindrome(s: str) -> bool:
+    ...
+\`\`\`
+
+示例："A man, a plan, a canal: Panama" 应返回 true。`,
+    difficulty: 'easy',
+    category: 'coding-interview',
+    tags: ['string', 'two-pointers', 'interview'],
+    challenge_type: 'coding',
+    time_limit_ms: 2000,
+    memory_limit_mb: 128,
+    starter_code: `def is_palindrome(s: str) -> bool:
+    # TODO: ignore non-alphanumeric chars and case
+    return False
+`,
+    function_name: 'is_palindrome',
+    input_keys: ['s'],
+    published: true,
+    created_at: now,
+    updated_at: now,
+  },
+  {
+    id: 'maximum-subarray',
+    title: 'Maximum Subarray',
+    slug: 'maximum-subarray',
+    description: `给定一个整数数组 nums，请找出一个具有最大和的连续子数组，并返回其最大和。
+
+请实现函数：
+
+\`\`\`python
+def max_subarray(nums: list[int]) -> int:
+    ...
+\`\`\`
+
+要求优先思考 O(n) 的动态规划 / Kadane 算法。`,
+    difficulty: 'medium',
+    category: 'coding-interview',
+    tags: ['array', 'dynamic-programming', 'interview'],
+    challenge_type: 'coding',
+    time_limit_ms: 2000,
+    memory_limit_mb: 128,
+    starter_code: `def max_subarray(nums: list[int]) -> int:
+    # TODO: return the maximum contiguous subarray sum
+    return 0
+`,
+    function_name: 'max_subarray',
+    input_keys: ['nums'],
     published: true,
     created_at: now,
     updated_at: now,
@@ -82,5 +144,79 @@ export const seedTestCases: ChallengeTestCase[] = [
     is_hidden: true,
     weight: 1,
     checker: 'json_unordered_array',
+  },
+  {
+    id: 'pal-public-1',
+    challenge_id: 'valid-palindrome',
+    input: JSON.stringify({ s: 'A man, a plan, a canal: Panama' }),
+    expected_output: JSON.stringify(true),
+    is_hidden: false,
+    weight: 1,
+    explanation: 'amanaplanacanalpanama is a palindrome',
+    checker: 'json_exact',
+  },
+  {
+    id: 'pal-public-2',
+    challenge_id: 'valid-palindrome',
+    input: JSON.stringify({ s: 'race a car' }),
+    expected_output: JSON.stringify(false),
+    is_hidden: false,
+    weight: 1,
+    checker: 'json_exact',
+  },
+  {
+    id: 'pal-hidden-1',
+    challenge_id: 'valid-palindrome',
+    input: JSON.stringify({ s: ' ' }),
+    expected_output: JSON.stringify(true),
+    is_hidden: true,
+    weight: 1,
+    checker: 'json_exact',
+  },
+  {
+    id: 'pal-hidden-2',
+    challenge_id: 'valid-palindrome',
+    input: JSON.stringify({ s: '0P' }),
+    expected_output: JSON.stringify(false),
+    is_hidden: true,
+    weight: 1,
+    checker: 'json_exact',
+  },
+  {
+    id: 'max-subarray-public-1',
+    challenge_id: 'maximum-subarray',
+    input: JSON.stringify({ nums: [-2, 1, -3, 4, -1, 2, 1, -5, 4] }),
+    expected_output: JSON.stringify(6),
+    is_hidden: false,
+    weight: 1,
+    explanation: '[4, -1, 2, 1] has the largest sum 6',
+    checker: 'json_exact',
+  },
+  {
+    id: 'max-subarray-public-2',
+    challenge_id: 'maximum-subarray',
+    input: JSON.stringify({ nums: [1] }),
+    expected_output: JSON.stringify(1),
+    is_hidden: false,
+    weight: 1,
+    checker: 'json_exact',
+  },
+  {
+    id: 'max-subarray-hidden-1',
+    challenge_id: 'maximum-subarray',
+    input: JSON.stringify({ nums: [5, 4, -1, 7, 8] }),
+    expected_output: JSON.stringify(23),
+    is_hidden: true,
+    weight: 1,
+    checker: 'json_exact',
+  },
+  {
+    id: 'max-subarray-hidden-2',
+    challenge_id: 'maximum-subarray',
+    input: JSON.stringify({ nums: [-3, -2, -5] }),
+    expected_output: JSON.stringify(-2),
+    is_hidden: true,
+    weight: 1,
+    checker: 'json_exact',
   },
 ]

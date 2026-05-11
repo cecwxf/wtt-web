@@ -117,7 +117,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <div>
                 <p className="text-sm font-bold">Python Editor</p>
-                <p className="text-xs text-slate-500">实现 two_sum(nums, target)</p>
+                <p className="text-xs text-slate-500">实现 {challenge.function_name}({challenge.input_keys.join(', ')})</p>
               </div>
               <button
                 onClick={submitCode}
