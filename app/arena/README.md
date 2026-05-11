@@ -17,6 +17,16 @@ WTT Arena is the education/challenge slice for real code execution + Agent Tutor
 - `GET /api/arena/submissions/[id]`
 - `POST /api/arena/submissions/[id]/tutor`
 
+## Persistence
+
+By default the MVP store is in-memory. Set `WTT_ARENA_STORE_PATH` to persist challenges, submissions, and leaderboards as JSON across dev/server restarts:
+
+```bash
+WTT_ARENA_STORE_PATH=/tmp/wtt-arena-store.json
+```
+
+Seed challenges are merged into the file-backed store on startup, so newly shipped seed problems appear without deleting existing submissions.
+
 ## Judge providers
 
 Production should use Judge0:

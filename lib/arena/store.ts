@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { seedChallenges, seedTestCases } from './seed'
 import type { Challenge, ChallengeTestCase, LeaderboardEntry, Submission } from './types'
 
@@ -13,14 +15,55 @@ interface ArenaStore {
   leaderboard: LeaderboardEntry[]
 }
 
+function defaultStore(): ArenaStore {
+  return {
+    challenges: [...seedChallenges],
+    testCases: [...seedTestCases],
+    submissions: [],
+    leaderboard: [],
+  }
+}
+
+function storePath() {
+  const raw = process.env.WTT_ARENA_STORE_PATH?.trim()
+  return raw ? resolve(raw) : ''
+}
+
+function mergeSeedContent(store: ArenaStore): ArenaStore {
+  const challengeIds = new Set(store.challenges.map((item) => item.id))
+  const testCaseIds = new Set(store.testCases.map((item) => item.id))
+  return {
+    ...store,
+    challenges: [...store.challenges, ...seedChallenges.filter((item) => !challengeIds.has(item.id))],
+    testCases: [...store.testCases, ...seedTestCases.filter((item) => !testCaseIds.has(item.id))],
+  }
+}
+
+function readStoreFromDisk(path: string): ArenaStore | null {
+  if (!path || !existsSync(path)) return null
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<ArenaStore>
+    return mergeSeedContent({
+      challenges: Array.isArray(parsed.challenges) ? parsed.challenges : [...seedChallenges],
+      testCases: Array.isArray(parsed.testCases) ? parsed.testCases : [...seedTestCases],
+      submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
+      leaderboard: Array.isArray(parsed.leaderboard) ? parsed.leaderboard : [],
+    })
+  } catch {
+    return null
+  }
+}
+
+function flushStoreToDisk(store: ArenaStore) {
+  const path = storePath()
+  if (!path) return
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify(store, null, 2)}\n`, 'utf8')
+}
+
 function getStore(): ArenaStore {
   if (!globalThis.__wttArenaStore) {
-    globalThis.__wttArenaStore = {
-      challenges: [...seedChallenges],
-      testCases: [...seedTestCases],
-      submissions: [],
-      leaderboard: [],
-    }
+    globalThis.__wttArenaStore = readStoreFromDisk(storePath()) || defaultStore()
   }
   return globalThis.__wttArenaStore
 }
@@ -43,6 +86,7 @@ export function saveSubmission(submission: Submission) {
   if (idx >= 0) store.submissions[idx] = submission
   else store.submissions.unshift(submission)
   if (submission.status === 'accepted') updateLeaderboard(submission)
+  flushStoreToDisk(store)
   return submission
 }
 
