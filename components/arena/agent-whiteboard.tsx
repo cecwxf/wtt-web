@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawElementSkeleton } from '@excalidraw/excalidraw/data/transform'
 import type { WhiteboardOp } from '@/lib/arena/whiteboard'
@@ -15,6 +14,7 @@ type Props = {
   challengeId: string
   locale: Locale
   ops?: WhiteboardOp[]
+  renderMode?: 'full' | 'step'
   busy?: boolean
   onExplain?: () => void
   onStep?: () => void
@@ -174,10 +174,16 @@ function downloadJson(name: string, data: unknown) {
   URL.revokeObjectURL(url)
 }
 
-export function AgentWhiteboard({ challengeId, locale, ops, busy, onExplain, onStep }: Props) {
+export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full', busy, onExplain, onStep }: Props) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
+  const timerRef = useRef<number[]>([])
   const [status, setStatus] = useState(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
   const storageKey = useMemo(() => `arena:whiteboard:${challengeId}`, [challengeId])
+
+  function clearStepTimers() {
+    timerRef.current.forEach((timer) => window.clearTimeout(timer))
+    timerRef.current = []
+  }
 
   useEffect(() => {
     setStatus(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
@@ -185,19 +191,54 @@ export function AgentWhiteboard({ challengeId, locale, ops, busy, onExplain, onS
 
   useEffect(() => {
     if (!ops?.length || !apiRef.current) return
-    const shouldClear = ops.some((op) => op.type === 'clear')
-    const drawable = ops.filter((op) => op.type !== 'clear')
-    const nextElements = convertToExcalidrawElements(opToSkeletons(drawable), { regenerateIds: false })
-    const currentElements = shouldClear ? [] : apiRef.current.getSceneElements()
-    apiRef.current.updateScene({
-      elements: [...currentElements, ...nextElements],
-      appState: defaultAppState,
+    let cancelled = false
+    clearStepTimers()
+
+    void import('@excalidraw/excalidraw').then(({ convertToExcalidrawElements }) => {
+      if (cancelled || !apiRef.current) return
+      const shouldClear = ops.some((op) => op.type === 'clear')
+      const drawable = ops.filter((op) => op.type !== 'clear')
+      const baseElements = shouldClear ? [] : apiRef.current.getSceneElements()
+
+      const renderDrawable = (visibleOps: WhiteboardOp[], label?: string) => {
+        if (cancelled || !apiRef.current) return
+        const nextElements = convertToExcalidrawElements(opToSkeletons(visibleOps), { regenerateIds: false })
+        apiRef.current.updateScene({
+          elements: [...baseElements, ...nextElements],
+          appState: defaultAppState,
+        })
+        if (label) setStatus(label)
+        window.setTimeout(() => apiRef.current?.scrollToContent?.(apiRef.current.getSceneElements(), { fitToContent: true }), 80)
+      }
+
+      if (renderMode !== 'step' || drawable.length <= 2) {
+        renderDrawable(drawable, locale === 'zh' ? `已绘制 ${drawable.length} 个白板步骤` : `Rendered ${drawable.length} whiteboard steps`)
+        return
+      }
+
+      renderDrawable([], locale === 'zh' ? '开始逐步推导…' : 'Starting step derivation…')
+      drawable.forEach((_, index) => {
+        const timer = window.setTimeout(() => {
+          const count = index + 1
+          renderDrawable(
+            drawable.slice(0, count),
+            locale === 'zh' ? `逐步推导 ${count}/${drawable.length}` : `Step derivation ${count}/${drawable.length}`,
+          )
+        }, 240 + index * 520)
+        timerRef.current.push(timer)
+      })
     })
-    setStatus(locale === 'zh' ? `已绘制 ${drawable.length} 个白板步骤` : `Rendered ${drawable.length} whiteboard steps`)
-    window.setTimeout(() => apiRef.current?.scrollToContent?.(apiRef.current.getSceneElements(), { fitToContent: true }), 100)
-  }, [ops, locale])
+
+    return () => {
+      cancelled = true
+      clearStepTimers()
+    }
+  }, [ops, locale, renderMode])
+
+  useEffect(() => () => clearStepTimers(), [])
 
   function clearBoard() {
+    clearStepTimers()
     apiRef.current?.updateScene({ elements: [], appState: defaultAppState })
     window.localStorage.removeItem(storageKey)
     setStatus(locale === 'zh' ? '白板已清空' : 'Whiteboard cleared')
@@ -216,7 +257,7 @@ export function AgentWhiteboard({ challengeId, locale, ops, busy, onExplain, onS
   }
 
   const labels = locale === 'zh'
-    ? { title: 'Agent 白板讲解', subtitle: 'Agent 会把面试答案推导成结构化白板：公示、架构、指标、trade-off。', explain: 'Agent 讲解', step: '逐步推导', clear: '清空', export: '导出 JSON' }
+    ? { title: 'Agent 白板讲解', subtitle: 'Agent 会把面试答案推导成结构化白板：公式、架构、指标、trade-off。', explain: 'Agent 讲解', step: '逐步推导', clear: '清空', export: '导出 JSON' }
     : { title: 'Agent whiteboard', subtitle: 'The Agent turns an interview answer into a structured board: formulas, architecture, metrics, and trade-offs.', explain: 'Agent explain', step: 'Step derivation', clear: 'Clear', export: 'Export JSON' }
 
   return (

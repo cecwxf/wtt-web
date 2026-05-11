@@ -159,6 +159,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
   const [whiteboardOps, setWhiteboardOps] = useState<WhiteboardOp[]>([])
+  const [whiteboardRenderMode, setWhiteboardRenderMode] = useState<'full' | 'step'>('full')
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
 
@@ -306,6 +307,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function requestWhiteboardExplain(stepMode = false) {
     if (!challenge || whiteboardBusy) return
+    setWhiteboardRenderMode(stepMode ? 'step' : 'full')
     const fallbackOps = makeInterviewWhiteboardOps(challenge, locale)
     setWhiteboardOps(fallbackOps)
     const message = makeWhiteboardPrompt(challenge, locale, stepMode)
@@ -515,6 +517,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 challengeId={challenge.id}
                 locale={locale}
                 ops={whiteboardOps}
+                renderMode={whiteboardRenderMode}
                 busy={whiteboardBusy || chatSending || arenaSyncing}
                 onExplain={() => requestWhiteboardExplain(false)}
                 onStep={() => requestWhiteboardExplain(true)}
