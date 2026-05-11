@@ -2,10 +2,12 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import type { Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
+import { extractWhiteboardPayload, makeInterviewWhiteboardOps, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardOp } from '@/lib/arena/whiteboard'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -126,7 +128,7 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMes
       const content = String(message.content || '')
       if (semantic === 'system') return false
       if (content.includes('[system:p2p_init]')) return false
-      return !!stripSourceBlock(content)
+      return !!stripWhiteboardPayload(stripSourceBlock(content))
     })
     .map((message) => {
       const senderType = String(message.sender_type || '').toUpperCase()
@@ -134,7 +136,7 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMes
       return {
         id: message.id || message.message_id,
         role: senderType === 'AGENT' || senderId === agentId ? 'agent' : 'user',
-        content: stripSourceBlock(String(message.content || '')),
+        content: stripWhiteboardPayload(stripSourceBlock(String(message.content || ''))),
         createdAt: message.timestamp || message.created_at || new Date().toISOString(),
       }
     })
@@ -156,6 +158,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [arenaTopicId, setArenaTopicId] = useState('')
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
+  const [whiteboardOps, setWhiteboardOps] = useState<WhiteboardOp[]>([])
+  const [whiteboardBusy, setWhiteboardBusy] = useState(false)
+  const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
 
   useEffect(() => {
     let alive = true
@@ -188,6 +193,19 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     const raw = await response.json()
     const rows: TopicMessage[] = Array.isArray(raw) ? raw : raw.messages || []
     const mapped = topicMessagesToChat(rows, ARENA_AGENT_ID)
+    for (const row of [...rows].reverse()) {
+      const senderType = String(row.sender_type || '').toUpperCase()
+      const senderId = String(row.sender_id || '')
+      const isAgent = senderType === 'AGENT' || senderId === ARENA_AGENT_ID
+      const messageId = row.id || row.message_id || `${row.timestamp || row.created_at || ''}:${String(row.content || '').length}`
+      if (!isAgent || appliedWhiteboardMessageIdsRef.current.has(messageId)) continue
+      const payload = extractWhiteboardPayload(stripSourceBlock(String(row.content || '')))
+      if (payload?.ops?.length) {
+        appliedWhiteboardMessageIdsRef.current.add(messageId)
+        setWhiteboardOps(payload.ops)
+        break
+      }
+    }
     setChatMessages(mapped)
     return mapped
   }
@@ -282,6 +300,44 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
     } finally {
+      setChatSending(false)
+    }
+  }
+
+  async function requestWhiteboardExplain(stepMode = false) {
+    if (!challenge || whiteboardBusy) return
+    const fallbackOps = makeInterviewWhiteboardOps(challenge, locale)
+    setWhiteboardOps(fallbackOps)
+    const message = makeWhiteboardPrompt(challenge, locale, stepMode)
+    if (!session?.accessToken) {
+      setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
+      return
+    }
+    setWhiteboardBusy(true)
+    setChatSending(true)
+    try {
+      const topicId = await ensureArenaSession()
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          topic_id: topicId,
+          challenge_id: challenge.id,
+          message,
+          locale,
+          language,
+          code,
+          submission_id: submission?.id,
+          mode: 'whiteboard_explain',
+          whiteboard_step_mode: stepMode,
+        }),
+      })
+      if (!response.ok) throw new Error('failed to send Arena whiteboard request')
+      await refreshArenaMessages(topicId)
+    } catch (error) {
+      setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
+    } finally {
+      setWhiteboardBusy(false)
       setChatSending(false)
     }
   }
@@ -442,26 +498,28 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               </section>
             </section>
           ) : (
-            <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-6">
-              <div className="flex h-full min-h-[560px] flex-col justify-between rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-[#151515] to-[#151515] p-8">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.26em] text-violet-300">{t.interviewMode}</p>
-                  <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight text-white">{challenge.title}</h2>
-                  <p className="mt-5 max-w-2xl text-base leading-8 text-gray-300">{t.interviewHint}</p>
-                  <div className="mt-8 rounded-xl border border-gray-800 bg-[#101010]/80 p-5">
-                    <p className="text-sm font-bold text-white">Suggested flow</p>
-                    <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-400">
-                      <li>• 先给 2 分钟 high-level answer。</li>
-                      <li>• 让 Agent 追问规模、指标、瓶颈和 trade-off。</li>
-                      <li>• 最后让 Agent 按面试官标准打分并给改进版答案。</li>
-                    </ul>
+            <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_1fr]">
+              <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-[#1e1e1e] to-[#151515] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.26em] text-violet-300">{t.interviewMode}</p>
+                    <h2 className="mt-2 text-2xl font-black tracking-tight text-white">{challenge.title}</h2>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-300">{t.interviewHint}</p>
                   </div>
+                  <button onClick={() => setChatInput(locale === 'zh' ? `请作为 AI 面试官，围绕「${challenge.title}」对我进行模拟面试。先让我给出 high-level 方案，然后逐步追问。` : `Act as an AI interviewer for "${challenge.title}". Ask me for a high-level design first, then follow up on trade-offs.`)} className="rounded-md bg-gradient-to-r from-violet-300 to-fuchsia-500 px-4 py-2 text-xs font-black text-black transition-opacity hover:opacity-90">
+                    {locale === 'zh' ? '生成模拟面试开场 →' : 'Start mock interview →'}
+                  </button>
                 </div>
-                <button onClick={() => setChatInput(locale === 'zh' ? `请作为 AI 面试官，围绕「${challenge.title}」对我进行模拟面试。先让我给出 high-level 方案，然后逐步追问。` : `Act as an AI interviewer for "${challenge.title}". Ask me for a high-level design first, then follow up on trade-offs.`)} className="mt-8 w-fit rounded-md bg-gradient-to-r from-violet-300 to-fuchsia-500 px-5 py-3 text-sm font-black text-black transition-opacity hover:opacity-90">
-                  {locale === 'zh' ? '生成模拟面试开场 →' : 'Start mock interview →'}
-                </button>
-              </div>
-            </section>
+              </section>
+              <AgentWhiteboard
+                challengeId={challenge.id}
+                locale={locale}
+                ops={whiteboardOps}
+                busy={whiteboardBusy || chatSending || arenaSyncing}
+                onExplain={() => requestWhiteboardExplain(false)}
+                onStep={() => requestWhiteboardExplain(true)}
+              />
+            </div>
           )}
 
           <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-5 lg:col-span-2 xl:col-span-1">

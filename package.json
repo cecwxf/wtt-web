@@ -10,6 +10,7 @@
     "smoke:slash": "bash ./scripts/smoke-slash.sh"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@monaco-editor/react": "^4.7.0",
     "@next-auth/prisma-adapter": "^1.0.7",
     "@supabase/supabase-js": "^2.98.0",
