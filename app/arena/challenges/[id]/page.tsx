@@ -25,6 +25,8 @@ type TopicMessage = { id?: string; message_id?: string; sender_type?: string; se
 
 const ARENA_AGENT_ID = 'agent-938ae82a9df0'
 
+type ArenaSession = { accessToken?: string; userId?: string; user?: { name?: string | null; email?: string | null } | null }
+
 const copy = {
   zh: {
     challenges: '题库', playground: '训练场', discuss: '讨论', runner: 'Agent Runner 执行', description: '题目', submissions: '提交', leaderboard: '排行榜',
@@ -121,6 +123,38 @@ function stripSourceBlock(content: string) {
     .trim()
 }
 
+async function responseError(response: Response, fallback: string) {
+  const text = await response.text().catch(() => '')
+  if (!text) return `${fallback}: ${response.status}`
+  try {
+    const data = JSON.parse(text)
+    return `${fallback}: ${response.status} ${data.detail || data.message || text}`
+  } catch {
+    return `${fallback}: ${response.status} ${text}`
+  }
+}
+
+function arenaSessionActor(session: ArenaSession | null | undefined) {
+  return session?.userId || session?.user?.email || session?.user?.name || 'arena-human'
+}
+
+function isLocalArenaChallenge(challenge: Challenge) {
+  return challenge.category === 'ai-interview' || challenge.category === 'ai-kernel'
+}
+
+function arenaChallengeContext(challenge: Challenge, locale: Locale, language: Language, code: string) {
+  return `[Arena Challenge Context]\n` +
+    `id: ${challenge.id}\n` +
+    `title: ${challenge.title}\n` +
+    `category: ${challenge.category}\n` +
+    `difficulty: ${challenge.difficulty}\n` +
+    `locale: ${locale}\n` +
+    `language: ${language}\n` +
+    `description:\n${challenge.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 4000)}\n` +
+    (code ? `current_code:\n${code.slice(0, 4000)}\n` : '') +
+    `[/Arena Challenge Context]`
+}
+
 function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMessage[] {
   return (messages || [])
     .filter((message) => {
@@ -189,7 +223,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   const refreshArenaMessages = async (topicId = arenaTopicId) => {
     if (!topicId || !session?.accessToken) return [] as ChatMessage[]
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/messages?topic_id=${encodeURIComponent(topicId)}&limit=100`, { headers: authHeaders })
+    let response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/messages?topic_id=${encodeURIComponent(topicId)}&limit=100`, { headers: authHeaders })
+    if (!response.ok) {
+      response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?limit=100&agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, { headers: authHeaders })
+    }
     if (!response.ok) return [] as ChatMessage[]
     const raw = await response.json()
     const rows: TopicMessage[] = Array.isArray(raw) ? raw : raw.messages || []
@@ -258,18 +295,68 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (arenaTopicId) return arenaTopicId
     setArenaSyncing(true)
     try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ challenge_id: challenge?.id }),
-      })
-      if (!response.ok) throw new Error('failed to connect Arena Agent')
-      const data = await response.json()
-      setArenaTopicId(data.topic_id || '')
-      return data.topic_id as string
+      const connect = async (challengeId: string | null | undefined) => {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ challenge_id: challengeId }),
+        })
+        if (!response.ok) throw new Error(await responseError(response, 'failed to connect Arena Agent'))
+        const data = await response.json()
+        if (!data.topic_id) throw new Error('failed to connect Arena Agent: missing topic_id')
+        return data.topic_id as string
+      }
+
+      let topicId = ''
+      try {
+        topicId = await connect(challenge?.id)
+      } catch (firstError) {
+        if (!challenge || !isLocalArenaChallenge(challenge)) throw firstError
+        try {
+          // AI interview / local seed problems may not exist in the remote WTT
+          // Arena DB yet. Create a generic Arena Coach session, then include the
+          // local challenge context in the message body below.
+          topicId = await connect(null)
+        } catch {
+          const response = await fetch(`${CLIENT_WTT_API_BASE}/topics`, {
+            method: 'POST',
+            headers: authHeaders,
+            body: JSON.stringify({
+              name: `arena:${challenge.slug}`,
+              description: `Arena Coach chat for ${challenge.title}`,
+              type: 'discussion',
+              visibility: 'private',
+              join_method: 'open',
+              creator_agent_id: arenaSessionActor(session as ArenaSession),
+            }),
+          })
+          if (!response.ok) throw firstError
+          const data = await response.json()
+          topicId = data.id
+        }
+      }
+
+      setArenaTopicId(topicId)
+      return topicId
     } finally {
       setArenaSyncing(false)
     }
+  }
+
+  async function publishArenaFallback(topicId: string, userMessage: string) {
+    if (!challenge) throw new Error('missing challenge')
+    const content = `${arenaChallengeContext(challenge, locale, language, code)}\n\n${userMessage}`
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        content,
+        content_type: 'text',
+        semantic_type: 'post',
+        sender_type: 'HUMAN',
+      }),
+    })
+    if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena fallback message'))
   }
 
   async function sendAgentChat() {
@@ -296,7 +383,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           submission_id: submission?.id,
         }),
       })
-      if (!response.ok) throw new Error('failed to send Arena chat')
+      if (!response.ok) {
+        if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena chat'))
+        await publishArenaFallback(topicId, message)
+      }
       await refreshArenaMessages(topicId)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
@@ -334,7 +424,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           whiteboard_step_mode: stepMode,
         }),
       })
-      if (!response.ok) throw new Error('failed to send Arena whiteboard request')
+      if (!response.ok) {
+        if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena whiteboard request'))
+        await publishArenaFallback(topicId, message)
+      }
       await refreshArenaMessages(topicId)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
