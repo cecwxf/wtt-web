@@ -101,7 +101,7 @@ const char* ${challenge.function_name}(const char* payload_json) {
 }
 
 function localizedDescription(challenge: Challenge, locale: Locale) {
-  if (challenge.category === 'ai-kernel') return `${copy[locale].aiDesc}\n\n${locale === 'zh' ? '函数' : 'Function'}: ${challenge.function_name}(${challenge.input_keys.join(', ')})`
+  if (challenge.category === 'ai-kernel') return challenge.description
   if (locale === 'en') {
     const known: Record<string, string> = {
       'two-sum': 'Given an integer array nums and a target, return the indices of two numbers that add up to target. Return order does not matter.',
@@ -393,7 +393,22 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-gray-800 bg-[#151515] px-2.5 py-1 text-xs text-gray-400">{tag}</span>)}
                   </div>
 
-                  <pre className="mt-6 whitespace-pre-wrap rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">{localizedDescription(challenge, locale)}</pre>
+                  {challenge.description_format === 'html' ? (
+                    <div className="mt-6 rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">
+                      <div
+                        className="space-y-4 [&_code]:rounded [&_code]:bg-black/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-white [&_li]:ml-5 [&_li]:list-disc [&_p]:leading-7 [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-gray-800 [&_pre]:bg-black/30 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-gray-200 [&_table]:w-full [&_td]:border [&_td]:border-gray-800 [&_td]:p-2 [&_th]:border [&_th]:border-gray-800 [&_th]:p-2"
+                        dangerouslySetInnerHTML={{ __html: challenge.description }}
+                      />
+                      {challenge.source_url && (
+                        <p className="mt-6 border-t border-gray-800 pt-4 text-xs leading-5 text-gray-500">
+                          Source: <a href={challenge.source_url} target="_blank" rel="noreferrer" className="text-[#3ce8e2] hover:underline">{challenge.source_name || 'LeetGPU'}</a>
+                          {challenge.source_license ? ` · ${challenge.source_license}` : ''}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <pre className="mt-6 whitespace-pre-wrap rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">{localizedDescription(challenge, locale)}</pre>
+                  )}
 
                   <div className="mt-6 grid gap-3 sm:grid-cols-3">
                     <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">{t.function}</p><p className="mt-1 font-mono text-sm text-[#3ce8e2]">{challenge.function_name}</p></div>
@@ -401,19 +416,21 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">{t.memory}</p><p className="mt-1 font-bold">{challenge.memory_limit_mb}MB</p></div>
                   </div>
 
-                  <div className="mt-7 space-y-4">
-                    <h2 className="text-lg font-bold text-white">{t.examples}</h2>
-                    {payload.public_cases.length === 0 && <p className="rounded-lg border border-dashed border-gray-800 bg-[#151515] p-4 text-sm leading-6 text-gray-500">{t.noExamples}</p>}
-                    {payload.public_cases.map((testCase, index) => (
-                      <div key={testCase.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
-                        <p className="font-semibold text-gray-300">Example {index + 1}</p>
-                        <p className="mt-3 text-xs uppercase tracking-wider text-gray-500">{t.input}</p>
-                        <code className="mt-1 block break-all rounded bg-black/30 p-3 text-gray-200">{testCase.input}</code>
-                        <p className="mt-3 text-xs uppercase tracking-wider text-gray-500">{t.expected}</p>
-                        <code className="mt-1 block rounded bg-black/30 p-3 text-gray-200">{testCase.expected_output}</code>
-                      </div>
-                    ))}
-                  </div>
+                  {challenge.description_format !== 'html' && (
+                    <div className="mt-7 space-y-4">
+                      <h2 className="text-lg font-bold text-white">{t.examples}</h2>
+                      {payload.public_cases.length === 0 && <p className="rounded-lg border border-dashed border-gray-800 bg-[#151515] p-4 text-sm leading-6 text-gray-500">{t.noExamples}</p>}
+                      {payload.public_cases.map((testCase, index) => (
+                        <div key={testCase.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
+                          <p className="font-semibold text-gray-300">Example {index + 1}</p>
+                          <p className="mt-3 text-xs uppercase tracking-wider text-gray-500">{t.input}</p>
+                          <code className="mt-1 block break-all rounded bg-black/30 p-3 text-gray-200">{testCase.input}</code>
+                          <p className="mt-3 text-xs uppercase tracking-wider text-gray-500">{t.expected}</p>
+                          <code className="mt-1 block rounded bg-black/30 p-3 text-gray-200">{testCase.expected_output}</code>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

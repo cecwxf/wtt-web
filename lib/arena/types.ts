@@ -16,6 +16,10 @@ export interface Challenge {
   title: string
   slug: string
   description: string
+  description_format?: 'plain' | 'html'
+  source_url?: string
+  source_name?: string
+  source_license?: string
   difficulty: ChallengeDifficulty
   category: string
   tags: string[]

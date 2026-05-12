@@ -4,8 +4,11 @@ import { getChallenge, getChallengeTestCases, listSubmissions } from '@/lib/aren
 export const dynamic = 'force-dynamic'
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
+  const localChallenge = getChallenge(params.id)
   const backendChallenge = await backendGetChallenge(params.id)
-  const challenge = backendChallenge?.challenge || getChallenge(params.id)
+  // Prefer local AI Kernel metadata because it includes the canonical
+  // LeetGPU statement/examples; keep backend submissions below.
+  const challenge = localChallenge?.category === 'ai-kernel' ? localChallenge : (backendChallenge?.challenge || localChallenge)
   if (!challenge) return Response.json({ detail: 'Challenge not found' }, { status: 404 })
   const public_cases = getChallengeTestCases(challenge.id)
     .filter((testCase) => !testCase.is_hidden)

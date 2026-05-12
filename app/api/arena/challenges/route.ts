@@ -9,7 +9,11 @@ function mergeChallenges(primary: Challenge[] | null, fallback: Challenge[]) {
   const ids = new Set(rows.map((challenge) => challenge.id))
   const slugs = new Set(rows.map((challenge) => challenge.slug))
   for (const challenge of fallback) {
-    if (!ids.has(challenge.id) && !slugs.has(challenge.slug)) rows.push(challenge)
+    const existingIndex = rows.findIndex((row) => row.id === challenge.id || row.slug === challenge.slug)
+    // Local AI Kernel seed carries the canonical LeetGPU statement/examples;
+    // prefer it over older backend seed rows so the page stays exact.
+    if (challenge.category === 'ai-kernel' && existingIndex >= 0) rows[existingIndex] = challenge
+    else if (!ids.has(challenge.id) && !slugs.has(challenge.slug)) rows.push(challenge)
   }
   return rows
 }
