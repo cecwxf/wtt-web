@@ -189,7 +189,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
-  const [arenaTopicId, setArenaTopicId] = useState('')
+  const [arenaTopicByKey, setArenaTopicByKey] = useState<Record<string, string>>({})
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
   const [whiteboardOps, setWhiteboardOps] = useState<WhiteboardOp[]>([])
@@ -215,11 +215,21 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id])
 
+  const challenge = payload?.challenge
+  const arenaActor = arenaSessionActor(session as ArenaSession)
+  const arenaSessionKey = challenge && session?.accessToken ? `${arenaActor}:${challenge.id}` : ''
+  const arenaTopicId = arenaSessionKey ? (arenaTopicByKey[arenaSessionKey] || '') : ''
 
   const authHeaders = useMemo(() => ({
     'Content-Type': 'application/json',
     ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
   }), [session?.accessToken])
+
+  function rememberArenaTopic(topicId: string) {
+    if (!arenaSessionKey || !topicId) return
+    setArenaTopicByKey((prev) => ({ ...prev, [arenaSessionKey]: topicId }))
+    window.localStorage.setItem(`wtt-arena-topic:${arenaSessionKey}`, topicId)
+  }
 
   const refreshArenaMessages = async (topicId = arenaTopicId) => {
     if (!topicId || !session?.accessToken) return [] as ChatMessage[]
@@ -250,6 +260,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
 
   useEffect(() => {
+    setChatMessages([])
+    appliedWhiteboardMessageIdsRef.current.clear()
+    if (!arenaSessionKey) return
+    const cached = window.localStorage.getItem(`wtt-arena-topic:${arenaSessionKey}`)
+    if (cached) setArenaTopicByKey((prev) => ({ ...prev, [arenaSessionKey]: cached }))
+  }, [arenaSessionKey])
+
+  useEffect(() => {
     if (!arenaTopicId) return
     let alive = true
     refreshArenaMessages(arenaTopicId)
@@ -258,10 +276,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }, 3000)
     return () => { alive = false; window.clearInterval(timer) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arenaTopicId, session?.accessToken])
+  }, [arenaTopicId, arenaSessionKey, session?.accessToken])
 
   const t = copy[locale]
-  const challenge = payload?.challenge
   const isCoding = challenge?.challenge_type === 'coding'
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
 
@@ -292,9 +309,34 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function ensureArenaSession() {
     if (!session?.accessToken) throw new Error('missing login session')
+    if (!challenge || !arenaSessionKey) throw new Error('missing Arena challenge/session key')
     if (arenaTopicId) return arenaTopicId
+    const cached = window.localStorage.getItem(`wtt-arena-topic:${arenaSessionKey}`)
+    if (cached) {
+      rememberArenaTopic(cached)
+      return cached
+    }
     setArenaSyncing(true)
     try {
+      const createDedicatedTopic = async () => {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/topics`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            name: `arena:${challenge.slug}:${arenaActor}`.slice(0, 120),
+            description: `Arena Coach chat for ${challenge.title} (${arenaSessionKey})`,
+            type: 'discussion',
+            visibility: 'private',
+            join_method: 'open',
+            creator_agent_id: arenaActor,
+          }),
+        })
+        if (!response.ok) throw new Error(await responseError(response, 'failed to create dedicated Arena session'))
+        const data = await response.json()
+        if (!data.id) throw new Error('failed to create dedicated Arena session: missing topic id')
+        return data.id as string
+      }
+
       const connect = async (challengeId: string | null | undefined) => {
         const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
           method: 'POST',
@@ -307,36 +349,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         return data.topic_id as string
       }
 
-      let topicId = ''
-      try {
-        topicId = await connect(challenge?.id)
-      } catch (firstError) {
-        if (!challenge || !isLocalArenaChallenge(challenge)) throw firstError
-        try {
-          // AI interview / local seed problems may not exist in the remote WTT
-          // Arena DB yet. Create a generic Arena Coach session, then include the
-          // local challenge context in the message body below.
-          topicId = await connect(null)
-        } catch {
-          const response = await fetch(`${CLIENT_WTT_API_BASE}/topics`, {
-            method: 'POST',
-            headers: authHeaders,
-            body: JSON.stringify({
-              name: `arena:${challenge.slug}`,
-              description: `Arena Coach chat for ${challenge.title}`,
-              type: 'discussion',
-              visibility: 'private',
-              join_method: 'open',
-              creator_agent_id: arenaSessionActor(session as ArenaSession),
-            }),
-          })
-          if (!response.ok) throw firstError
-          const data = await response.json()
-          topicId = data.id
-        }
-      }
+      // Local seed boards (AI interview / AI Kernel) must never share a generic
+      // backend Arena session. Force one private topic per human + challenge.
+      const topicId = isLocalArenaChallenge(challenge)
+        ? await createDedicatedTopic()
+        : await connect(challenge.id)
 
-      setArenaTopicId(topicId)
+      rememberArenaTopic(topicId)
       return topicId
     } finally {
       setArenaSyncing(false)
