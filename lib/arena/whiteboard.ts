@@ -13,6 +13,7 @@ export type WhiteboardPayload = { ops: WhiteboardOp[]; note?: string }
 
 const WHITEBOARD_OPEN = '[WHITEBOARD_OPS]'
 const WHITEBOARD_CLOSE = '[/WHITEBOARD_OPS]'
+const WHITEBOARD_SKILL = 'arena-whiteboard-coach'
 const MAX_WHITEBOARD_OPS = 64
 const MAX_SECTION_ITEMS = 8
 const COORDS = { minX: 40, maxX: 1320, minY: 24, maxY: 760, minW: 80, maxW: 720, minH: 56, maxH: 320 }
@@ -236,14 +237,20 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
   const concepts = conceptSummary(challenge)
   const blueprint = whiteboardBlueprint(template, zh)
   const focus = zh
-    ? `白板必须表达“理想答案结构”，不是重排题面。模板=${template}，知识点=${concepts}。${blueprint}`
-    : `The board must express the ideal answer structure, not restate the prompt. Template=${template}, concepts=${concepts}. ${blueprint}`
+    ? `使用 ${WHITEBOARD_SKILL} skill。白板必须表达“理想答案结构”，不是重排题面。模板=${template}，知识点=${concepts}。${blueprint}`
+    : `Use the ${WHITEBOARD_SKILL} skill. The board must express the ideal answer structure, not restate the prompt. Template=${template}, concepts=${concepts}. ${blueprint}`
   const constraints = zh
     ? `题目约束只用于确定场景，不要逐字复制到白板：${challenge.description}`
     : `Problem constraints are only for grounding; do not copy them into the board: ${challenge.description}`
+  const phases = zh
+    ? '按阶段组织：goal 目标/SLO -> inputs 输入/数据/约束 -> core 核心算法/模型/架构 -> serve 在线服务/运行时 -> evaluate 指标/监控/实验 -> tradeoffs 风险/失败场景。'
+    : 'Organize by phases: goal/SLO -> inputs/data/constraints -> core algorithm/model/architecture -> serving/runtime -> evaluation/monitoring/experiments -> trade-offs/failure modes.'
+  const limits = zh
+    ? '控制规模：4-6 个 box、1-2 个 section、3-5 条 arrow，总 ops 不超过 16。短标签，不要密集排版。'
+    : 'Keep it compact: 4-6 boxes, 1-2 sections, 3-5 arrows, at most 16 total ops. Use short labels and avoid dense layouts.'
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${constraints}\n\n请先用自然语言讲解理想答案，然后必须输出一个白板 JSON 块，格式如下：\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"目标/SLO","x":80,"y":130,"w":190,"h":86},{"type":"box","id":"model","text":"核心方案","x":580,"y":130,"w":190,"h":86},{"type":"arrow","from":"goal","to":"model","label":"推导"},{"type":"section","title":"Trade-off / 风险","items":["..."],"x":90,"y":310,"w":510}]}\n${WHITEBOARD_CLOSE}\n\n硬性要求：所有 box/section 都必须写答案组件、设计决策、指标或 trade-off；不要把题目原文、题目要求列表、或“请设计...”画进白板；只输出 JSON ops，不要输出 JS；坐标范围 x 60-1250、y 40-720。`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${constraints}\n\nFirst explain the ideal answer in natural language, then include a whiteboard JSON block exactly like this:\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"Goal/SLO","x":80,"y":130,"w":190,"h":86},{"type":"box","id":"model","text":"Core solution","x":580,"y":130,"w":190,"h":86},{"type":"arrow","from":"goal","to":"model","label":"derive"},{"type":"section","title":"Trade-offs / risks","items":["..."],"x":90,"y":310,"w":510}]}\n${WHITEBOARD_CLOSE}\n\nHard requirements: every box/section must contain answer components, design decisions, metrics, or trade-offs; do not draw the prompt text, requirement list, or “design ...” wording; JSON ops only, no JS; coordinates x 60-1250, y 40-720.`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解理想答案，然后必须输出一个白板 JSON 块，格式如下：\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"目标/SLO"},{"type":"box","id":"core","text":"核心方案"},{"type":"arrow","from":"goal","to":"core","label":"推导"},{"type":"section","title":"Trade-off / 风险","items":["..."]}]}\n${WHITEBOARD_CLOSE}\n\n硬性要求：所有 box/section 都必须写答案组件、设计决策、指标或 trade-off；不要把题目原文、题目要求列表、或“请设计...”画进白板；只输出 JSON ops，不要输出 JS。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain the ideal answer in natural language, then include a whiteboard JSON block exactly like this:\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"Goal/SLO"},{"type":"box","id":"core","text":"Core solution"},{"type":"arrow","from":"goal","to":"core","label":"derive"},{"type":"section","title":"Trade-offs / risks","items":["..."]}]}\n${WHITEBOARD_CLOSE}\n\nHard requirements: every box/section must contain answer components, design decisions, metrics, or trade-offs; do not draw the prompt text, requirement list, or “design ...” wording; JSON ops only, no JS.`
 }
 
 export function extractWhiteboardPayload(content: string): WhiteboardPayload | null {

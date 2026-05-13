@@ -340,6 +340,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const payload = extractWhiteboardPayload(stripSourceBlock(String(row.content || '')))
       if (payload?.ops?.length) {
         appliedWhiteboardMessageIdsRef.current.add(messageId)
+        setWhiteboardRenderMode('step')
         setWhiteboardOps(payload.ops)
         break
       }
@@ -491,7 +492,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function requestWhiteboardExplain(stepMode = false) {
     if (!challenge || whiteboardBusy) return
-    setWhiteboardRenderMode(stepMode ? 'step' : 'full')
+    setWhiteboardRenderMode('step')
     const fallbackOps = makeInterviewWhiteboardOps(challenge, locale)
     setWhiteboardOps(fallbackOps)
     const message = makeWhiteboardPrompt(challenge, locale, stepMode)

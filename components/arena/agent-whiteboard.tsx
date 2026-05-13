@@ -44,6 +44,39 @@ function makeArrowId(index: number) {
   return `wb-arrow-${index}`
 }
 
+function layoutWhiteboardOps(ops: WhiteboardOp[]) {
+  let boxIndex = 0
+  let sectionIndex = 0
+  return ops.map((op, index): WhiteboardOp => {
+    if (op.type === 'title') return { ...op, x: 70, y: 45 }
+    if (op.type === 'text') return { ...op, x: 80, y: index < 3 ? 88 : 640, size: op.size || 'sm' }
+    if (op.type === 'box') {
+      const column = boxIndex % 5
+      const row = Math.floor(boxIndex / 5)
+      boxIndex += 1
+      return {
+        ...op,
+        x: 80 + column * 250,
+        y: 130 + row * 130,
+        w: 190,
+        h: 86,
+      }
+    }
+    if (op.type === 'section') {
+      const column = sectionIndex % 2
+      const row = Math.floor(sectionIndex / 2)
+      sectionIndex += 1
+      return {
+        ...op,
+        x: 90 + column * 590,
+        y: 330 + row * 210,
+        w: 520,
+      }
+    }
+    return op
+  })
+}
+
 function opToSkeletons(ops: WhiteboardOp[]) {
   const skeletons: unknown[] = []
   const boxes = new Map<string, BoxRect>()
@@ -78,7 +111,7 @@ function opToSkeletons(ops: WhiteboardOp[]) {
     })
   }
 
-  ops.forEach((op, index) => {
+  layoutWhiteboardOps(ops).forEach((op, index) => {
     if (op.type === 'clear') return
     if (op.type === 'title') {
       skeletons.push({ type: 'text', x: op.x ?? 70, y: op.y ?? 45, text: safeText(op.text), fontSize: 34, strokeColor: '#0f172a' })
@@ -124,7 +157,7 @@ function opToSkeletons(ops: WhiteboardOp[]) {
     }
   })
 
-  ops.forEach((op, index) => {
+  layoutWhiteboardOps(ops).forEach((op, index) => {
     if (op.type !== 'arrow') return
     const from = op.from ? boxes.get(op.from) : null
     const to = op.to ? boxes.get(op.to) : null
@@ -211,7 +244,8 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
         window.setTimeout(() => apiRef.current?.scrollToContent?.(apiRef.current.getSceneElements(), { fitToContent: true }), 80)
       }
 
-      if (renderMode !== 'step' || drawable.length <= 2) {
+      const shouldStep = renderMode === 'step' || drawable.length > 4
+      if (!shouldStep || drawable.length <= 2) {
         renderDrawable(drawable, locale === 'zh' ? `已绘制 ${drawable.length} 个白板步骤` : `Rendered ${drawable.length} whiteboard steps`)
         return
       }
@@ -224,7 +258,7 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
             drawable.slice(0, count),
             locale === 'zh' ? `逐步推导 ${count}/${drawable.length}` : `Step derivation ${count}/${drawable.length}`,
           )
-        }, 240 + index * 520)
+        }, 240 + index * 720)
         timerRef.current.push(timer)
       })
     })
