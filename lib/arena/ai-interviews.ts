@@ -9,6 +9,9 @@ type InterviewSpec = {
   tags: string[]
   prompt: string
   sources: string[]
+  concepts: string[]
+  whiteboardTemplate: NonNullable<Challenge['whiteboard_template']>
+  followUps: string[]
 }
 
 const specs: InterviewSpec[] = [
@@ -19,6 +22,9 @@ const specs: InterviewSpec[] = [
     tags: ['ml-system-design', 'ranking', 'recommendation'],
     prompt: '设计一个面向千万级用户的信息流/短视频推荐系统。请覆盖候选召回、粗排/精排、特征、在线服务延迟、冷启动、A/B 实验、反馈闭环与反作弊。',
     sources: ['Interview Query ML system design', 'iGotAnOffer ML system design', 'DataInterview ML system design'],
+    concepts: ['candidate generation', 'multi-stage ranking', 'feature freshness', 'feedback loop', 'ab testing'],
+    whiteboardTemplate: 'system_architecture',
+    followUps: ['如何处理新用户和新内容冷启动？', '上线新 ranker 前要保护哪些 guardrail 指标？', '如何发现推荐反馈回路或流行度偏置？'],
   },
   {
     id: 'ai-interview-real-time-fraud',
@@ -27,6 +33,9 @@ const specs: InterviewSpec[] = [
     tags: ['ml-system-design', 'streaming', 'risk'],
     prompt: '设计一个实时风控/欺诈检测系统。重点说明流式特征、规则与模型混合、低延迟推理、误杀控制、人工审核闭环、标签延迟与模型漂移监控。',
     sources: ['Interview Query ML system design', 'Google Rules of ML'],
+    concepts: ['streaming features', 'hybrid rules and models', 'low-latency inference', 'delayed labels', 'drift monitoring'],
+    whiteboardTemplate: 'pipeline',
+    followUps: ['如何控制误杀率同时保持召回？', '标签延迟时如何训练和监控？', '规则和模型冲突时如何仲裁？'],
   },
   {
     id: 'ai-interview-search-ranking',
@@ -35,6 +44,9 @@ const specs: InterviewSpec[] = [
     tags: ['ranking', 'retrieval', 'experimentation'],
     prompt: '为电商搜索设计排序系统。请拆解 query 理解、召回、多阶段排序、特征交叉、业务约束、评价指标，以及如何在不伤害转化率的情况下上线新模型。',
     sources: ['DataInterview ML system design', 'Interview Query ML system design'],
+    concepts: ['query understanding', 'retrieval', 'multi-stage ranking', 'business constraints', 'online experiments'],
+    whiteboardTemplate: 'pipeline',
+    followUps: ['如何平衡相关性和商业目标？', '新排序模型如何做 shadow/canary？', '如何评估长尾 query 的效果？'],
   },
   {
     id: 'ai-interview-feature-store',
@@ -43,6 +55,9 @@ const specs: InterviewSpec[] = [
     tags: ['feature-store', 'mlops', 'data-platform'],
     prompt: '设计一个特征平台，要求训练和在线推理特征一致。说明 point-in-time correctness、离线回填、在线低延迟读取、特征版本、血缘、监控和权限治理。',
     sources: ['Google Rules of ML', 'DataInterview ML system design'],
+    concepts: ['point-in-time correctness', 'training-serving skew', 'feature versioning', 'lineage', 'online latency'],
+    whiteboardTemplate: 'training_serving_consistency',
+    followUps: ['如何避免离线训练的时间穿越？', '在线特征延迟升高时如何降级？', '错误特征定义如何回滚？'],
   },
   {
     id: 'ai-interview-model-monitoring',
@@ -51,6 +66,9 @@ const specs: InterviewSpec[] = [
     tags: ['mlops', 'monitoring', 'reliability'],
     prompt: '设计生产模型监控体系。请覆盖数据质量、特征漂移、预测分布、业务 KPI、延迟/错误率、告警分级、自动回滚，以及没有即时标签时如何判断退化。',
     sources: ['Google Rules of ML', 'iGotAnOffer ML system design'],
+    concepts: ['data quality', 'feature drift', 'prediction distribution', 'business kpi', 'rollback'],
+    whiteboardTemplate: 'evaluation_loop',
+    followUps: ['没有即时标签时如何判断模型退化？', '哪些告警应该 page？', '如何区分季节性和真实 drift？'],
   },
   {
     id: 'ai-interview-rag-assistant',
@@ -59,6 +77,9 @@ const specs: InterviewSpec[] = [
     tags: ['llm', 'rag', 'retrieval'],
     prompt: '设计企业知识库 RAG 助手。请说明文档解析、切分、embedding、召回/重排、权限过滤、引用溯源、幻觉缓解、评测集与在线反馈。',
     sources: ['Interview Query ML system design', 'iGotAnOffer ML system design'],
+    concepts: ['document parsing', 'chunking', 'embedding', 'retrieval', 'reranking', 'grounded generation'],
+    whiteboardTemplate: 'pipeline',
+    followUps: ['权限过滤应该在 pipeline 哪几层做？', '如何构建 RAG 黄金评测集？', '如何处理文档更新和索引增量刷新？'],
   },
   {
     id: 'ai-interview-llm-evaluation',
@@ -67,6 +88,9 @@ const specs: InterviewSpec[] = [
     tags: ['llm', 'evaluation', 'safety'],
     prompt: '设计一个 LLM 应用评测平台。覆盖离线基准、黄金集构建、自动评审与人工评审、回归测试、安全红队、成本/延迟指标和线上 shadow/canary。',
     sources: ['Google Rules of ML', 'DataInterview ML system design'],
+    concepts: ['golden set', 'llm-as-judge', 'human review', 'regression tests', 'red teaming', 'canary'],
+    whiteboardTemplate: 'evaluation_loop',
+    followUps: ['自动评审不可靠时如何校准？', '安全红队如何接入发布流程？', '如何控制评测成本和延迟？'],
   },
   {
     id: 'ai-interview-embedding-search',
@@ -75,6 +99,9 @@ const specs: InterviewSpec[] = [
     tags: ['embedding', 'vector-search', 'retrieval'],
     prompt: '设计语义向量检索系统。说明 embedding 训练/选择、ANN 索引、增量更新、多租户隔离、过滤条件、召回评估、重排和冷启动策略。',
     sources: ['Interview Query ML system design', 'DataInterview ML system design'],
+    concepts: ['embedding selection', 'ann index', 'incremental update', 'tenant isolation', 'recall evaluation', 'reranking'],
+    whiteboardTemplate: 'pipeline',
+    followUps: ['过滤条件和 ANN 检索如何组合？', '如何评估召回而不是只看点击？', '索引增量更新失败如何恢复？'],
   },
   {
     id: 'ai-interview-serving-llm-at-scale',
@@ -83,6 +110,9 @@ const specs: InterviewSpec[] = [
     tags: ['llm-serving', 'inference', 'systems'],
     prompt: '设计大模型推理服务。请覆盖 continuous batching、KV cache、量化、路由、限流、SLO、成本、GPU 利用率、降级策略与多模型灰度发布。',
     sources: ['iGotAnOffer ML system design', 'DataInterview ML system design'],
+    concepts: ['continuous batching', 'kv cache', 'quantization', 'routing', 'slo', 'cost control'],
+    whiteboardTemplate: 'inference_flow',
+    followUps: ['prefill 和 decode 的瓶颈分别是什么？', '什么情况下路由到小模型？', 'GPU 利用率和尾延迟如何权衡？'],
   },
   {
     id: 'ai-interview-training-data-leakage',
@@ -91,6 +121,9 @@ const specs: InterviewSpec[] = [
     tags: ['data-leakage', 'validation', 'ml-debugging'],
     prompt: '面试官给出一个离线 AUC 很高、上线效果很差的模型。请系统排查训练/验证泄漏、时间穿越、样本选择偏差、特征泄漏和指标设计问题。',
     sources: ['Google Rules of ML', 'Interview Query ML system design'],
+    concepts: ['data leakage', 'time travel', 'selection bias', 'feature leakage', 'metric mismatch'],
+    whiteboardTemplate: 'evaluation_loop',
+    followUps: ['如何证明是时间穿越而不是线上分布变化？', '哪些特征最容易泄漏标签？', '如何重建验证集？'],
   },
   {
     id: 'ai-interview-transformer-attention',
@@ -99,6 +132,9 @@ const specs: InterviewSpec[] = [
     tags: ['transformer', 'attention', 'llm'],
     prompt: '解释 self-attention、multi-head attention、causal mask、位置编码与 KV cache。要求能从矩阵形状、计算复杂度和推理加速角度讲清楚。',
     sources: ['Machine Learning interviews GitHub guides', 'LLM system design interview guides'],
+    concepts: ['self-attention', 'multi-head attention', 'causal mask', 'positional encoding', 'kv cache'],
+    whiteboardTemplate: 'inference_flow',
+    followUps: ['KV cache 为什么主要优化 decode？', 'causal mask 如何影响 attention 矩阵？', '多头 attention 的形状如何变化？'],
   },
   {
     id: 'ai-interview-kernel-optimization',
@@ -107,6 +143,9 @@ const specs: InterviewSpec[] = [
     tags: ['gpu', 'kernel', 'performance'],
     prompt: '面试官要求优化 LayerNorm GPU kernel。请分析内存访问、归约、warp/block 组织、shared memory、向量化、数值稳定性和如何设计 benchmark。',
     sources: ['LeetGPU challenge map', 'Tensara GPU challenges'],
+    concepts: ['memory coalescing', 'reduction', 'warp layout', 'shared memory', 'vectorization', 'numerical stability'],
+    whiteboardTemplate: 'pipeline',
+    followUps: ['均值和方差归约如何组织？', '什么时候 shared memory 反而变慢？', 'benchmark 如何避免测量误差？'],
   },
 ]
 
@@ -132,6 +171,16 @@ export const aiInterviewChallenges: Challenge[] = specs.map((spec) => ({
   starter_code: '',
   function_name: 'arena_interview_answer',
   input_keys: ['answer'],
+  teaching_skills: ['explain_answer', 'step_derivation', 'socratic_questioning', 'debug_answer', 'concept_remediation', 'transfer_problem', 'whiteboard_architecture'],
+  concepts: spec.concepts,
+  rubric: [
+    'Clarify goal, constraints, scale, and success metrics.',
+    'Describe the end-to-end architecture or reasoning path.',
+    'Call out trade-offs, bottlenecks, monitoring, and rollback.',
+    'Answer follow-up questions with concrete evidence and examples.',
+  ],
+  follow_up_questions: spec.followUps,
+  whiteboard_template: spec.whiteboardTemplate,
   published: true,
   created_at: createdAt,
   updated_at: createdAt,

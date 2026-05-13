@@ -1,5 +1,29 @@
 export type ChallengeDifficulty = 'easy' | 'medium' | 'hard'
 export type ChallengeType = 'coding' | 'qa' | 'project'
+export type ArenaTeachingSkill =
+  | 'explain_answer'
+  | 'step_derivation'
+  | 'socratic_questioning'
+  | 'debug_answer'
+  | 'concept_remediation'
+  | 'transfer_problem'
+  | 'whiteboard_architecture'
+export type ArenaTeachingIntent =
+  | 'ask_hint'
+  | 'explain'
+  | 'debug'
+  | 'follow_up'
+  | 'whiteboard'
+  | 'recommend_next'
+  | 'concept'
+export type ArenaTeachingStage =
+  | 'diagnose'
+  | 'hint'
+  | 'attempt'
+  | 'debug'
+  | 'explain'
+  | 'follow_up'
+  | 'recommend'
 export type SubmissionStatus =
   | 'pending'
   | 'judging'
@@ -29,6 +53,11 @@ export interface Challenge {
   starter_code: string
   function_name: string
   input_keys: string[]
+  teaching_skills?: ArenaTeachingSkill[]
+  concepts?: string[]
+  rubric?: string[]
+  follow_up_questions?: string[]
+  whiteboard_template?: 'system_architecture' | 'pipeline' | 'training_serving_consistency' | 'inference_flow' | 'evaluation_loop' | 'solution_flow'
   published: boolean
   created_at: string
   updated_at: string
@@ -89,4 +118,29 @@ export interface LeaderboardEntry {
   hint_count: number
   agent_help_used: boolean
   rank_score: number
+}
+
+export interface ArenaSessionState {
+  id: string
+  user_id: string
+  challenge_id: string
+  topic_id?: string
+  stage: ArenaTeachingStage
+  hint_level: number
+  last_action?: ArenaTeachingIntent | string
+  mastery_estimate: number
+  solved: boolean
+  weak_concepts: string[]
+  next_recommendations: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ArenaUserProfile {
+  user_id: string
+  concept_mastery: Record<string, number>
+  weak_concepts: string[]
+  preferred_style: 'socratic' | 'direct' | 'interview' | string
+  recommended_next_challenges: string[]
+  updated_at?: string | null
 }

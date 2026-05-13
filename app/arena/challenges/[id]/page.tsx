@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
-import type { Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
+import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeInterviewWhiteboardOps, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardOp } from '@/lib/arena/whiteboard'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
@@ -27,6 +27,59 @@ const ARENA_AGENT_ID = 'agent-938ae82a9df0'
 
 type ArenaSession = { accessToken?: string; userId?: string; user?: { name?: string | null; email?: string | null } | null }
 
+type CoachAction = {
+  intent: ArenaTeachingIntent
+  zh: string
+  en: string
+  promptZh: (title: string) => string
+  promptEn: (title: string) => string
+}
+
+const coachActions: CoachAction[] = [
+  {
+    intent: 'ask_hint',
+    zh: '提示',
+    en: 'Hint',
+    promptZh: (title) => `我正在做「${title}」。请不要直接给标准答案，先用苏格拉底式问题给我一个下一步提示。`,
+    promptEn: (title) => `I am working on "${title}". Do not give the final answer; ask one Socratic question that gives me the next hint.`,
+  },
+  {
+    intent: 'explain',
+    zh: '讲答案',
+    en: 'Explain',
+    promptZh: (title) => `请完整讲解「${title}」的面试答案结构：目标、架构/推导、trade-off、指标和失败场景。`,
+    promptEn: (title) => `Explain a complete interview answer for "${title}": goal, architecture/derivation, trade-offs, metrics, and failure modes.`,
+  },
+  {
+    intent: 'debug',
+    zh: 'Debug',
+    en: 'Debug',
+    promptZh: (title) => `请 debug 我对「${title}」的当前答案或代码，指出最可能的问题和一个最小修正方向。`,
+    promptEn: (title) => `Debug my current answer or code for "${title}". Identify the most likely issue and one minimal correction.`,
+  },
+  {
+    intent: 'follow_up',
+    zh: '追问',
+    en: 'Follow-up',
+    promptZh: (title) => `请作为面试官，围绕「${title}」提出一个真实追问。先不要给答案，等我回答。`,
+    promptEn: (title) => `Act as the interviewer for "${title}" and ask one realistic follow-up. Do not answer it yet.`,
+  },
+  {
+    intent: 'concept',
+    zh: '补课',
+    en: 'Concept',
+    promptZh: (title) => `请判断「${title}」里我最需要补的一个知识点，简短讲清楚后给我一个小检查问题。`,
+    promptEn: (title) => `Pick the one prerequisite concept I most need for "${title}", teach it briefly, then ask a quick check question.`,
+  },
+  {
+    intent: 'recommend_next',
+    zh: '类题迁移',
+    en: 'Transfer',
+    promptZh: (title) => `基于「${title}」和我的当前状态，请推荐下一道练习题或迁移方向，并说明为什么。`,
+    promptEn: (title) => `Based on "${title}" and my current state, recommend the next practice problem or transfer direction and explain why.`,
+  },
+]
+
 const copy = {
   zh: {
     challenges: '题库', playground: '训练场', discuss: '讨论', runner: 'Agent Runner 执行', description: '题目', submissions: '提交', leaderboard: '排行榜',
@@ -36,6 +89,7 @@ const copy = {
     agentTitle: 'Agent 对话', agentRole: '固定使用 Arena Coach：agent-938ae82a9df0。所有登录用户都可使用，不需要 claim 该 Agent。',
     agentWaiting: '直接在下面和 Agent 对话。', openFull: '打开完整提交 →',
     chatTitle: 'Arena Coach', chatIntro: '真实 WTT Agent 会话；Agent 会读取 Arena 题库长期记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录后可对话。', chatSyncing: '正在连接固定 Arena Agent...',
+    coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
     aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
     interviewMode: 'AI 面试练习模式', interviewHint: '这类题不需要提交代码。直接在右侧和 Arena Coach 进行多轮模拟面试、追问、复盘。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
   },
@@ -47,6 +101,7 @@ const copy = {
     agentTitle: 'Agent Chat', agentRole: 'Fixed Arena Coach: agent-938ae82a9df0. Every signed-in user can use it without claiming this Agent.',
     agentWaiting: 'Chat with the Agent below.', openFull: 'Open full submission →',
     chatTitle: 'Arena Coach', chatIntro: 'Real WTT Agent session. The Agent reads persistent Arena question-bank memory plus the current challenge context.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.', chatLogin: 'Sign in to chat.', chatSyncing: 'Connecting fixed Arena Agent...',
+    coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
     aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
     interviewMode: 'AI interview practice mode', interviewHint: 'No code submission is required. Use Arena Coach on the right for mock interview, follow-up questions, and review.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
   },
@@ -142,6 +197,20 @@ function isLocalArenaChallenge(challenge: Challenge) {
   return challenge.category === 'ai-interview' || challenge.category === 'ai-kernel'
 }
 
+function stageLabel(stage: string | undefined, locale: Locale) {
+  const labels: Record<string, { zh: string; en: string }> = {
+    diagnose: { zh: '诊断', en: 'Diagnose' },
+    hint: { zh: '提示', en: 'Hint' },
+    attempt: { zh: '尝试', en: 'Attempt' },
+    debug: { zh: 'Debug', en: 'Debug' },
+    explain: { zh: '讲解', en: 'Explain' },
+    follow_up: { zh: '追问', en: 'Follow-up' },
+    recommend: { zh: '推荐', en: 'Recommend' },
+  }
+  const row = labels[stage || 'diagnose'] || labels.diagnose
+  return locale === 'zh' ? row.zh : row.en
+}
+
 function arenaChallengeContext(challenge: Challenge, locale: Locale, language: Language, code: string) {
   return `[Arena Challenge Context]\n` +
     `id: ${challenge.id}\n` +
@@ -190,6 +259,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [arenaTopicByKey, setArenaTopicByKey] = useState<Record<string, string>>({})
+  const [arenaSessionState, setArenaSessionState] = useState<ArenaSessionState | null>(null)
+  const [arenaProfile, setArenaProfile] = useState<ArenaUserProfile | null>(null)
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
   const [whiteboardOps, setWhiteboardOps] = useState<WhiteboardOp[]>([])
@@ -231,6 +302,25 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     window.localStorage.setItem(`wtt-arena-topic:${arenaSessionKey}`, topicId)
   }
 
+  const refreshArenaState = async () => {
+    if (!challenge || !session?.accessToken) return
+    const [sessionResponse, profileResponse] = await Promise.all([
+      fetch(`${CLIENT_WTT_API_BASE}/arena/sessions/${encodeURIComponent(challenge.id)}`, { headers: authHeaders }),
+      fetch(`${CLIENT_WTT_API_BASE}/arena/profile/me`, { headers: authHeaders }),
+    ])
+    if (sessionResponse.ok) {
+      const data = await sessionResponse.json()
+      if (data.session) {
+        setArenaSessionState(data.session)
+        if (data.session.topic_id) rememberArenaTopic(data.session.topic_id)
+      }
+    }
+    if (profileResponse.ok) {
+      const data = await profileResponse.json()
+      if (data.profile) setArenaProfile(data.profile)
+    }
+  }
+
   const refreshArenaMessages = async (topicId = arenaTopicId) => {
     if (!topicId || !session?.accessToken) return [] as ChatMessage[]
     let response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/messages?topic_id=${encodeURIComponent(topicId)}&limit=100`, { headers: authHeaders })
@@ -261,11 +351,19 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   useEffect(() => {
     setChatMessages([])
+    setArenaSessionState(null)
+    setArenaProfile(null)
     appliedWhiteboardMessageIdsRef.current.clear()
     if (!arenaSessionKey) return
     const cached = window.localStorage.getItem(`wtt-arena-topic:${arenaSessionKey}`)
     if (cached) setArenaTopicByKey((prev) => ({ ...prev, [arenaSessionKey]: cached }))
   }, [arenaSessionKey])
+
+  useEffect(() => {
+    if (!challenge || !session?.accessToken) return
+    refreshArenaState().catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challenge?.id, session?.accessToken])
 
   useEffect(() => {
     if (!arenaTopicId) return
@@ -318,43 +416,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
     setArenaSyncing(true)
     try {
-      const createDedicatedTopic = async () => {
-        const response = await fetch(`${CLIENT_WTT_API_BASE}/topics`, {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({
-            name: `arena:${challenge.slug}:${arenaActor}`.slice(0, 120),
-            description: `Arena Coach chat for ${challenge.title} (${arenaSessionKey})`,
-            type: 'discussion',
-            visibility: 'private',
-            join_method: 'open',
-            creator_agent_id: arenaActor,
-          }),
-        })
-        if (!response.ok) throw new Error(await responseError(response, 'failed to create dedicated Arena session'))
-        const data = await response.json()
-        if (!data.id) throw new Error('failed to create dedicated Arena session: missing topic id')
-        return data.id as string
-      }
-
-      const connect = async (challengeId: string | null | undefined) => {
-        const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({ challenge_id: challengeId }),
-        })
-        if (!response.ok) throw new Error(await responseError(response, 'failed to connect Arena Agent'))
-        const data = await response.json()
-        if (!data.topic_id) throw new Error('failed to connect Arena Agent: missing topic_id')
-        return data.topic_id as string
-      }
-
-      // Local seed boards (AI interview / AI Kernel) must never share a generic
-      // backend Arena session. Force one private topic per human + challenge.
-      const topicId = isLocalArenaChallenge(challenge)
-        ? await createDedicatedTopic()
-        : await connect(challenge.id)
-
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ challenge_id: challenge.id }),
+      })
+      if (!response.ok) throw new Error(await responseError(response, 'failed to connect Arena Agent'))
+      const data = await response.json()
+      if (data.session) setArenaSessionState(data.session)
+      const topicId = data.topic_id as string
+      if (!topicId) throw new Error('failed to connect Arena Agent: missing topic_id')
       rememberArenaTopic(topicId)
       return topicId
     } finally {
@@ -362,9 +433,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
   }
 
-  async function publishArenaFallback(topicId: string, userMessage: string) {
+  async function publishArenaFallback(topicId: string, userMessage: string, intent?: ArenaTeachingIntent) {
     if (!challenge) throw new Error('missing challenge')
-    const content = `${arenaChallengeContext(challenge, locale, language, code)}\n\n${userMessage}`
+    const content = `${arenaChallengeContext(challenge, locale, language, code)}\n\n${intent ? `teaching_intent: ${intent}\n` : ''}${userMessage}`
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
@@ -378,14 +449,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena fallback message'))
   }
 
-  async function sendAgentChat() {
-    const message = chatInput.trim()
+  async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string) {
+    const message = (explicitMessage ?? chatInput).trim()
     if (!challenge || !message || chatSending) return
     if (!session?.accessToken) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
       return
     }
-    setChatInput('')
+    if (!explicitMessage) setChatInput('')
     setChatSending(true)
     try {
       const topicId = await ensureArenaSession()
@@ -400,13 +471,17 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           language,
           code,
           submission_id: submission?.id,
+          intent,
         }),
       })
       if (!response.ok) {
         if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena chat'))
-        await publishArenaFallback(topicId, message)
+        await publishArenaFallback(topicId, message, intent)
       }
+      const data = await response.json().catch(() => ({}))
+      if (data.session) setArenaSessionState(data.session)
       await refreshArenaMessages(topicId)
+      await refreshArenaState().catch(() => undefined)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
     } finally {
@@ -439,21 +514,31 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           language,
           code,
           submission_id: submission?.id,
+          intent: 'whiteboard',
           mode: 'whiteboard_explain',
           whiteboard_step_mode: stepMode,
         }),
       })
       if (!response.ok) {
         if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena whiteboard request'))
-        await publishArenaFallback(topicId, message)
+        await publishArenaFallback(topicId, message, 'whiteboard')
       }
+      const data = await response.json().catch(() => ({}))
+      if (data.session) setArenaSessionState(data.session)
       await refreshArenaMessages(topicId)
+      await refreshArenaState().catch(() => undefined)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
     } finally {
       setWhiteboardBusy(false)
       setChatSending(false)
     }
+  }
+
+  function runCoachAction(action: CoachAction) {
+    if (!challenge) return
+    const message = locale === 'zh' ? action.promptZh(challenge.title) : action.promptEn(challenge.title)
+    sendAgentChat(action.intent, message)
   }
 
 
@@ -504,6 +589,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${difficultyTone(challenge.difficulty)}`}>{formatDifficulty(challenge.difficulty)}</span>
                     {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-gray-800 bg-[#151515] px-2.5 py-1 text-xs text-gray-400">{tag}</span>)}
                   </div>
+                  {!!challenge.concepts?.length && (
+                    <div className="mt-4 rounded-lg border border-gray-800 bg-[#151515] p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-[#3ce8e2]">Skillset</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {challenge.concepts.slice(0, 8).map((concept) => (
+                          <span key={concept} className="rounded-md border border-gray-800 bg-[#202020] px-2.5 py-1 text-xs text-gray-300">{concept}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {challenge.description_format === 'html' ? (
                     <div className="mt-6 rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">
@@ -608,7 +703,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   </div>
                 </div>
                 <div className="h-[calc(100%-57px)] min-h-[360px]">
-                  <Editor language={editorLanguage(language)} theme="vs-dark" value={code} onChange={(value) => setCode(value || '')} options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on', padding: { top: 16 } }} />
+                  <Editor language={editorLanguage(language)} theme="vs-dark" value={code} onChange={(value: string | undefined) => setCode(value || '')} options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on', padding: { top: 16 } }} />
                 </div>
               </div>
 
@@ -659,6 +754,50 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#3ce8e2]">Agent</p>
               <h2 className="mt-2 text-xl font-black text-white">{t.agentTitle}</h2>
               <p className="mt-3 text-sm leading-6 text-[#bffffd]">{t.agentRole}</p>
+            </div>
+            <div className="mt-4 rounded-lg border border-gray-800 bg-[#151515] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-300">{t.coachFlow}</p>
+                  <p className="mt-1 text-sm text-gray-400">
+                    {t.stage}: <span className="font-bold text-white">{stageLabel(arenaSessionState?.stage, locale)}</span>
+                    {arenaSessionState ? ` · hint ${arenaSessionState.hint_level}` : ''}
+                  </p>
+                </div>
+                <div className="text-right text-xs text-gray-500">
+                  <p>{t.mastery}</p>
+                  <p className="font-mono text-[#3ce8e2]">{Math.round((arenaSessionState?.mastery_estimate || 0) * 100)}%</p>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {coachActions.map((action) => (
+                  <button
+                    key={action.intent}
+                    type="button"
+                    onClick={() => runCoachAction(action)}
+                    disabled={chatSending || arenaSyncing}
+                    className="rounded-md border border-gray-800 bg-[#202020] px-2 py-2 text-xs font-bold text-gray-300 transition-colors hover:border-[#3ce8e2] hover:text-[#3ce8e2] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {locale === 'zh' ? action.zh : action.en}
+                  </button>
+                ))}
+              </div>
+              {(arenaProfile?.weak_concepts?.length || arenaProfile?.recommended_next_challenges?.length) ? (
+                <div className="mt-4 grid gap-3 text-xs text-gray-500 sm:grid-cols-2 xl:grid-cols-1">
+                  {!!arenaProfile?.weak_concepts?.length && (
+                    <div>
+                      <p className="font-bold text-gray-300">{t.weak}</p>
+                      <p className="mt-1 leading-5">{arenaProfile.weak_concepts.slice(0, 4).join(' · ')}</p>
+                    </div>
+                  )}
+                  {!!arenaProfile?.recommended_next_challenges?.length && (
+                    <div>
+                      <p className="font-bold text-gray-300">{t.next}</p>
+                      <p className="mt-1 leading-5">{arenaProfile.recommended_next_challenges.slice(0, 3).join(' · ')}</p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
             <div className="mt-4 flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
               <div className="border-b border-gray-800 px-4 py-3">
