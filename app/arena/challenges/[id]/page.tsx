@@ -299,7 +299,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   function rememberArenaTopic(topicId: string) {
     if (!arenaSessionKey || !topicId) return
     setArenaTopicByKey((prev) => ({ ...prev, [arenaSessionKey]: topicId }))
-    window.localStorage.setItem(`wtt-arena-topic:${arenaSessionKey}`, topicId)
   }
 
   const refreshArenaState = async () => {
@@ -353,10 +352,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setChatMessages([])
     setArenaSessionState(null)
     setArenaProfile(null)
+    setWhiteboardOps([])
+    setWhiteboardRenderMode('step')
     appliedWhiteboardMessageIdsRef.current.clear()
-    if (!arenaSessionKey) return
-    const cached = window.localStorage.getItem(`wtt-arena-topic:${arenaSessionKey}`)
-    if (cached) setArenaTopicByKey((prev) => ({ ...prev, [arenaSessionKey]: cached }))
   }, [arenaSessionKey])
 
   useEffect(() => {
@@ -409,11 +407,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (!session?.accessToken) throw new Error('missing login session')
     if (!challenge || !arenaSessionKey) throw new Error('missing Arena challenge/session key')
     if (arenaTopicId) return arenaTopicId
-    const cached = window.localStorage.getItem(`wtt-arena-topic:${arenaSessionKey}`)
-    if (cached) {
-      rememberArenaTopic(cached)
-      return cached
-    }
     setArenaSyncing(true)
     try {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
@@ -738,7 +731,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 </div>
               </section>
               <AgentWhiteboard
-                challengeId={challenge.id}
+                challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
                 locale={locale}
                 ops={whiteboardOps}
                 renderMode={whiteboardRenderMode}

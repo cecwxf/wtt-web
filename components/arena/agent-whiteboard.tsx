@@ -247,16 +247,15 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
 
     void import('@excalidraw/excalidraw').then(({ convertToExcalidrawElements }) => {
       if (cancelled || !apiRef.current) return
-      const shouldClear = ops.some((op) => op.type === 'clear')
       const drawable = ops.filter((op) => op.type !== 'clear')
-      const baseElements = shouldClear ? [] : apiRef.current.getSceneElements()
+      apiRef.current.updateScene({ elements: [], appState: defaultAppState })
 
       const renderDrawable = (visibleOps: WhiteboardOp[], label?: string) => {
         if (cancelled || !apiRef.current) return
         const skeletons = opToSkeletons(visibleOps) as Parameters<typeof convertToExcalidrawElements>[0]
         const nextElements = convertToExcalidrawElements(skeletons, { regenerateIds: false })
         apiRef.current.updateScene({
-          elements: [...baseElements, ...nextElements],
+          elements: nextElements,
           appState: defaultAppState,
         })
         if (label) setStatus(label)
@@ -331,15 +330,7 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
         <Excalidraw
           excalidrawAPI={(api: ExcalidrawImperativeAPI) => { apiRef.current = api }}
           initialData={async () => {
-            if (typeof window === 'undefined') return { appState: defaultAppState }
-            try {
-              const raw = window.localStorage.getItem(storageKey)
-              if (!raw) return { appState: defaultAppState }
-              const scene = JSON.parse(raw)
-              return { elements: scene.elements || [], appState: { ...defaultAppState, ...(scene.appState || {}) }, files: scene.files || {} }
-            } catch {
-              return { appState: defaultAppState }
-            }
+            return { elements: [], appState: defaultAppState }
           }}
           onChange={(elements, appState, files) => {
             try {
