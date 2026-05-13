@@ -23,7 +23,7 @@ function compactText(text: string, max = 62) {
 }
 
 function includesAny(challenge: Challenge, words: string[]) {
-  const haystack = `${challenge.title} ${challenge.description} ${challenge.tags.join(' ')}`.toLowerCase()
+  const haystack = `${challenge.id} ${challenge.slug} ${challenge.category} ${challenge.title} ${challenge.description} ${challenge.tags.join(' ')}`.toLowerCase()
   return words.some((word) => haystack.includes(word.toLowerCase()))
 }
 
