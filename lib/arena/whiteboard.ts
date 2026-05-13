@@ -231,6 +231,39 @@ export function makeInterviewWhiteboardOps(challenge: Challenge, locale: Whitebo
   ]
 }
 
+export function makeAnswerWhiteboardOps(challenge: Challenge, locale: WhiteboardLocale, answer: string): WhiteboardOp[] {
+  const zh = locale === 'zh'
+  const summary = safeString(answer, 900)
+    .replace(/\[WHITEBOARD_OPS\][\s\S]*?\[\/WHITEBOARD_OPS\]/gi, '')
+    .split(/[\n。.!?；;]+/)
+    .map((item) => item.replace(/^[-*•\d.\s]+/, '').trim())
+    .filter((item) => item.length > 12)
+    .slice(0, 4)
+  const focusItems = summary.length ? summary : [
+    zh ? '先明确目标、约束和核心指标' : 'Clarify goal, constraints, and primary metric',
+    zh ? '用核心方案连接输入、模型和服务路径' : 'Connect inputs, core solution, and serving path',
+    zh ? '补充 trade-off、监控和失败场景' : 'Add trade-offs, monitoring, and failure modes',
+  ]
+
+  return [
+    { type: 'clear' },
+    { type: 'title', text: zh ? `本轮讲解白板：${challenge.title}` : `Answer whiteboard: ${challenge.title}` },
+    { type: 'text', text: zh ? `由本轮 Agent 回答生成 · ${compactText(conceptSummary(challenge), 72)}` : `Generated from the latest Agent answer · ${compactText(conceptSummary(challenge), 72)}`, x: 80, y: 88, size: 'sm', color: '#64748b' },
+    { type: 'box', id: 'goal', text: zh ? '目标 / 指标' : 'Goal / metric', color: '#3ce8e2', bg: '#e6fffb', x: 0, y: 0 },
+    { type: 'box', id: 'inputs', text: zh ? '输入 / 约束' : 'Inputs / constraints', color: '#8b5cf6', bg: '#f3e8ff', x: 0, y: 0 },
+    { type: 'box', id: 'core', text: zh ? '核心方案' : 'Core solution', color: '#f59e0b', bg: '#fff7ed', x: 0, y: 0 },
+    { type: 'box', id: 'serve', text: zh ? '服务 / 验证' : 'Serve / validate', color: '#22c55e', bg: '#ecfdf5', x: 0, y: 0 },
+    { type: 'arrow', from: 'goal', to: 'inputs', label: zh ? '限定' : 'scope' },
+    { type: 'arrow', from: 'inputs', to: 'core', label: zh ? '推导' : 'derive' },
+    { type: 'arrow', from: 'core', to: 'serve', label: zh ? '落地' : 'ship' },
+    { type: 'section', id: 'focus', title: zh ? '本轮重点' : 'This answer emphasizes', items: focusItems, x: 0, y: 0, color: '#3ce8e2' },
+    { type: 'section', id: 'risks', title: zh ? '追问 / 风险' : 'Follow-ups / risks', items: [
+      zh ? '瓶颈在哪里，如何量化？' : 'Where is the bottleneck and how is it measured?',
+      zh ? '上线后如何监控、回滚和迭代？' : 'How is it monitored, rolled back, and iterated after launch?',
+    ], x: 0, y: 0, color: '#a78bfa' },
+  ]
+}
+
 export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLocale, stepMode = false) {
   const zh = locale === 'zh'
   const template = challenge.whiteboard_template || 'solution_flow'

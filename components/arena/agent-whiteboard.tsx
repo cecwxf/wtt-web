@@ -2,8 +2,6 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import type { ExcalidrawElementSkeleton } from '@excalidraw/excalidraw/data/transform'
 import type { WhiteboardOp } from '@/lib/arena/whiteboard'
 
 const Excalidraw = dynamic(async () => (await import('@excalidraw/excalidraw')).Excalidraw, { ssr: false })
@@ -21,6 +19,13 @@ type Props = {
 }
 
 type BoxRect = { id: string; x: number; y: number; w: number; h: number }
+type ExcalidrawImperativeAPI = {
+  getSceneElements: () => unknown[]
+  getAppState: () => Record<string, unknown>
+  getFiles: () => Record<string, unknown>
+  updateScene: (scene: { elements?: unknown[]; appState?: Record<string, unknown> }) => void
+  scrollToContent?: (elements: unknown[], options?: { fitToContent?: boolean }) => void
+}
 
 const defaultAppState = {
   viewBackgroundColor: '#f8fafc',
@@ -47,30 +52,47 @@ function makeArrowId(index: number) {
 function layoutWhiteboardOps(ops: WhiteboardOp[]) {
   let boxIndex = 0
   let sectionIndex = 0
+  let textIndex = 0
+  const boxSlots = [
+    { x: 80, y: 145 },
+    { x: 350, y: 145 },
+    { x: 620, y: 145 },
+    { x: 890, y: 145 },
+    { x: 1160, y: 145 },
+    { x: 620, y: 285 },
+  ]
+  const sectionSlots = [
+    { x: 90, y: 365 },
+    { x: 700, y: 365 },
+    { x: 90, y: 590 },
+    { x: 700, y: 590 },
+  ]
   return ops.map((op, index): WhiteboardOp => {
     if (op.type === 'title') return { ...op, x: 70, y: 45 }
-    if (op.type === 'text') return { ...op, x: 80, y: index < 3 ? 88 : 640, size: op.size || 'sm' }
+    if (op.type === 'text') {
+      const y = textIndex === 0 ? 92 : 650 + textIndex * 34
+      textIndex += 1
+      return { ...op, x: 80, y, size: op.size || 'sm' }
+    }
     if (op.type === 'box') {
-      const column = boxIndex % 5
-      const row = Math.floor(boxIndex / 5)
+      const slot = boxSlots[Math.min(boxIndex, boxSlots.length - 1)]
       boxIndex += 1
       return {
         ...op,
-        x: 80 + column * 250,
-        y: 130 + row * 130,
-        w: 190,
-        h: 86,
+        x: slot.x,
+        y: slot.y,
+        w: 210,
+        h: 92,
       }
     }
     if (op.type === 'section') {
-      const column = sectionIndex % 2
-      const row = Math.floor(sectionIndex / 2)
+      const slot = sectionSlots[Math.min(sectionIndex, sectionSlots.length - 1)]
       sectionIndex += 1
       return {
         ...op,
-        x: 90 + column * 590,
-        y: 330 + row * 210,
-        w: 520,
+        x: slot.x,
+        y: slot.y,
+        w: 560,
       }
     }
     return op
@@ -80,6 +102,7 @@ function layoutWhiteboardOps(ops: WhiteboardOp[]) {
 function opToSkeletons(ops: WhiteboardOp[]) {
   const skeletons: unknown[] = []
   const boxes = new Map<string, BoxRect>()
+  const laidOutOps = layoutWhiteboardOps(ops)
 
   const ensureBox = (op: Extract<WhiteboardOp, { type: 'box' }>, index: number) => {
     const id = op.id || `wb-box-${index}`
@@ -111,7 +134,7 @@ function opToSkeletons(ops: WhiteboardOp[]) {
     })
   }
 
-  layoutWhiteboardOps(ops).forEach((op, index) => {
+  laidOutOps.forEach((op, index) => {
     if (op.type === 'clear') return
     if (op.type === 'title') {
       skeletons.push({ type: 'text', x: op.x ?? 70, y: op.y ?? 45, text: safeText(op.text), fontSize: 34, strokeColor: '#0f172a' })
@@ -128,8 +151,9 @@ function opToSkeletons(ops: WhiteboardOp[]) {
     if (op.type === 'section') {
       const id = op.id || `wb-section-${index}`
       const w = Math.max(260, op.w || 500)
-      const body = [op.title, '', ...(op.items || []).map((item) => `• ${item}`)].join('\n')
-      const h = Math.max(130, 70 + (op.items || []).length * 32)
+      const items = (op.items || []).slice(0, 4)
+      const body = [op.title, '', ...items.map((item) => `• ${item}`)].join('\n')
+      const h = Math.max(150, 78 + items.length * 34)
       boxes.set(id, { id, x: op.x, y: op.y, w, h })
       skeletons.push({
         type: 'rectangle',
@@ -157,14 +181,15 @@ function opToSkeletons(ops: WhiteboardOp[]) {
     }
   })
 
-  layoutWhiteboardOps(ops).forEach((op, index) => {
+  laidOutOps.forEach((op, index) => {
     if (op.type !== 'arrow') return
     const from = op.from ? boxes.get(op.from) : null
     const to = op.to ? boxes.get(op.to) : null
     if (from && to) {
-      const startX = from.x + from.w
+      const leftToRight = to.x >= from.x
+      const startX = leftToRight ? from.x + from.w : from.x
       const startY = from.y + from.h / 2
-      const endX = to.x
+      const endX = leftToRight ? to.x : to.x + to.w
       const endY = to.y + to.h / 2
       skeletons.push({
         type: 'arrow',
@@ -194,7 +219,7 @@ function opToSkeletons(ops: WhiteboardOp[]) {
     }
   })
 
-  return skeletons as ExcalidrawElementSkeleton[]
+  return skeletons
 }
 
 function downloadJson(name: string, data: unknown) {
@@ -310,7 +335,7 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
       </div>
       <div className="relative min-h-[560px] flex-1 bg-slate-50">
         <Excalidraw
-          excalidrawAPI={(api) => { apiRef.current = api }}
+          excalidrawAPI={(api: ExcalidrawImperativeAPI) => { apiRef.current = api }}
           initialData={async () => {
             if (typeof window === 'undefined') return { appState: defaultAppState }
             try {
@@ -322,7 +347,7 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
               return { appState: defaultAppState }
             }
           }}
-          onChange={(elements, appState, files) => {
+          onChange={(elements: unknown[], appState: Record<string, unknown>, files: Record<string, unknown>) => {
             try {
               window.localStorage.setItem(storageKey, JSON.stringify({ elements, appState: { viewBackgroundColor: appState.viewBackgroundColor }, files }))
             } catch {

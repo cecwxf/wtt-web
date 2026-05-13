@@ -7,7 +7,7 @@ import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
-import { extractWhiteboardPayload, makeInterviewWhiteboardOps, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardOp } from '@/lib/arena/whiteboard'
+import { extractWhiteboardPayload, makeAnswerWhiteboardOps, makeInterviewWhiteboardOps, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardOp } from '@/lib/arena/whiteboard'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -322,7 +322,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }
 
   const refreshArenaMessages = async (topicId = arenaTopicId) => {
-    if (!topicId || !session?.accessToken) return [] as ChatMessage[]
+    if (!topicId || !session?.accessToken || !challenge) return [] as ChatMessage[]
     let response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/messages?topic_id=${encodeURIComponent(topicId)}&limit=100`, { headers: authHeaders })
     if (!response.ok) {
       response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?limit=100&agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, { headers: authHeaders })
@@ -337,13 +337,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const isAgent = senderType === 'AGENT' || senderId === ARENA_AGENT_ID
       const messageId = row.id || row.message_id || `${row.timestamp || row.created_at || ''}:${String(row.content || '').length}`
       if (!isAgent || appliedWhiteboardMessageIdsRef.current.has(messageId)) continue
-      const payload = extractWhiteboardPayload(stripSourceBlock(String(row.content || '')))
-      if (payload?.ops?.length) {
-        appliedWhiteboardMessageIdsRef.current.add(messageId)
-        setWhiteboardRenderMode('step')
-        setWhiteboardOps(payload.ops)
-        break
-      }
+      const content = stripSourceBlock(String(row.content || ''))
+      const payload = extractWhiteboardPayload(content)
+      appliedWhiteboardMessageIdsRef.current.add(messageId)
+      setWhiteboardRenderMode('step')
+      setWhiteboardOps(payload?.ops?.length ? payload.ops : makeAnswerWhiteboardOps(challenge, locale, content))
+      break
     }
     setChatMessages(mapped)
     return mapped
