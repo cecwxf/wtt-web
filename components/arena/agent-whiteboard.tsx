@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { WhiteboardOp } from '@/lib/arena/whiteboard'
 
 const Excalidraw = dynamic(async () => (await import('@excalidraw/excalidraw')).Excalidraw, { ssr: false })
@@ -19,14 +20,6 @@ type Props = {
 }
 
 type BoxRect = { id: string; x: number; y: number; w: number; h: number }
-type ExcalidrawImperativeAPI = {
-  getSceneElements: () => unknown[]
-  getAppState: () => Record<string, unknown>
-  getFiles: () => Record<string, unknown>
-  updateScene: (scene: { elements?: unknown[]; appState?: Record<string, unknown> }) => void
-  scrollToContent?: (elements: unknown[], options?: { fitToContent?: boolean }) => void
-}
-
 const defaultAppState = {
   viewBackgroundColor: '#f8fafc',
   currentItemStrokeColor: '#0f172a',
@@ -67,7 +60,7 @@ function layoutWhiteboardOps(ops: WhiteboardOp[]) {
     { x: 90, y: 590 },
     { x: 700, y: 590 },
   ]
-  return ops.map((op, index): WhiteboardOp => {
+  return ops.map((op): WhiteboardOp => {
     if (op.type === 'title') return { ...op, x: 70, y: 45 }
     if (op.type === 'text') {
       const y = textIndex === 0 ? 92 : 650 + textIndex * 34
@@ -260,7 +253,8 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
 
       const renderDrawable = (visibleOps: WhiteboardOp[], label?: string) => {
         if (cancelled || !apiRef.current) return
-        const nextElements = convertToExcalidrawElements(opToSkeletons(visibleOps), { regenerateIds: false })
+        const skeletons = opToSkeletons(visibleOps) as Parameters<typeof convertToExcalidrawElements>[0]
+        const nextElements = convertToExcalidrawElements(skeletons, { regenerateIds: false })
         apiRef.current.updateScene({
           elements: [...baseElements, ...nextElements],
           appState: defaultAppState,
@@ -347,7 +341,7 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
               return { appState: defaultAppState }
             }
           }}
-          onChange={(elements: unknown[], appState: Record<string, unknown>, files: Record<string, unknown>) => {
+          onChange={(elements, appState, files) => {
             try {
               window.localStorage.setItem(storageKey, JSON.stringify({ elements, appState: { viewBackgroundColor: appState.viewBackgroundColor }, files }))
             } catch {
