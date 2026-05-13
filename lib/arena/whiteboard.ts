@@ -55,6 +55,37 @@ function safeColor(value: unknown) {
   return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : undefined
 }
 
+function conceptSummary(challenge: Challenge) {
+  return (challenge.concepts?.length ? challenge.concepts : challenge.tags).slice(0, 6).join(', ')
+}
+
+function whiteboardBlueprint(template: NonNullable<Challenge['whiteboard_template']>, zh: boolean) {
+  const shared = zh
+    ? '必须包含：目标/SLO、输入或数据层、核心算法/模型、在线服务或运行时、指标监控、trade-off 与失败场景。'
+    : 'Must include: goal/SLO, input or data layer, core algorithm/model, serving or runtime path, metrics/monitoring, trade-offs and failure modes.'
+  const byTemplate: Record<NonNullable<Challenge['whiteboard_template']>, string> = {
+    system_architecture: zh
+      ? '画端到端系统架构：入口、召回/候选、特征、模型/排序、服务、实验与反馈闭环。'
+      : 'Draw an end-to-end system architecture: entrypoint, retrieval/candidates, features, model/ranking, serving, experiments, and feedback loop.',
+    pipeline: zh
+      ? '画 pipeline：离线准备、索引/训练、在线查询、重排/生成、评测与迭代。'
+      : 'Draw the pipeline: offline preparation, indexing/training, online query path, rerank/generation, evaluation, and iteration.',
+    training_serving_consistency: zh
+      ? '画训练/在线一致性：point-in-time 数据、离线回填、在线读取、版本、血缘、监控。'
+      : 'Draw training-serving consistency: point-in-time data, offline backfill, online reads, versions, lineage, and monitoring.',
+    inference_flow: zh
+      ? '画推理链路：prefill/decode、KV cache、batching、路由、限流、降级、成本与 SLO。'
+      : 'Draw the inference flow: prefill/decode, KV cache, batching, routing, rate limits, fallback, cost, and SLO.',
+    evaluation_loop: zh
+      ? '画评测闭环：黄金集、自动/人工评测、线上指标、告警、回滚、回归测试。'
+      : 'Draw the evaluation loop: golden set, automated/human judging, online metrics, alerts, rollback, and regression tests.',
+    solution_flow: zh
+      ? '画解题流程：问题抽象、核心不变量、算法步骤、复杂度、边界条件。'
+      : 'Draw the solution flow: abstraction, invariants, algorithm steps, complexity, and edge cases.',
+  }
+  return `${byTemplate[template]} ${shared}`
+}
+
 function sanitizeWhiteboardOp(op: unknown, index: number): WhiteboardOp | null {
   if (!isRecord(op)) return null
   const type = safeString(op.type, 32)
@@ -182,7 +213,7 @@ export function makeInterviewWhiteboardOps(challenge: Challenge, locale: Whitebo
   return [
     { type: 'clear' },
     { type: 'title', text: title, x: 70, y: 45 },
-    { type: 'text', text: compactText(challenge.description.replace(/AI 面试题 \/ Agent 练习题。/g, '').split('\n').find(Boolean) || challenge.title, 96), x: 80, y: 88, size: 'sm', color: '#64748b' },
+    { type: 'text', text: zh ? `答案结构图 · 关键知识点：${compactText(conceptSummary(challenge), 72)}` : `Answer map · concepts: ${compactText(conceptSummary(challenge), 72)}`, x: 80, y: 88, size: 'sm', color: '#64748b' },
     ...boxes.map((box) => ({ type: 'box' as const, ...box, w: 190, h: 86 })),
     { type: 'arrow', from: 'goal', to: 'data', label: zh ? '定义输入' : 'define input' },
     { type: 'arrow', from: 'data', to: 'model', label: zh ? '建模' : 'model' },
@@ -202,13 +233,17 @@ export function makeInterviewWhiteboardOps(challenge: Challenge, locale: Whitebo
 export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLocale, stepMode = false) {
   const zh = locale === 'zh'
   const template = challenge.whiteboard_template || 'solution_flow'
-  const concepts = challenge.concepts?.length ? challenge.concepts.join(', ') : challenge.tags.join(', ')
+  const concepts = conceptSummary(challenge)
+  const blueprint = whiteboardBlueprint(template, zh)
   const focus = zh
-    ? `白板必须表达答案结构，而不是重排题面。模板=${template}，知识点=${concepts}。请画：目标/SLO、核心架构或推导链路、关键 trade-off、指标/监控、失败场景或追问。`
-    : `The board must express the answer structure, not restate the prompt. Template=${template}, concepts=${concepts}. Draw: goal/SLO, core architecture or derivation flow, key trade-offs, metrics/monitoring, and failure cases or follow-ups.`
+    ? `白板必须表达“理想答案结构”，不是重排题面。模板=${template}，知识点=${concepts}。${blueprint}`
+    : `The board must express the ideal answer structure, not restate the prompt. Template=${template}, concepts=${concepts}. ${blueprint}`
+  const constraints = zh
+    ? `题目约束只用于确定场景，不要逐字复制到白板：${challenge.description}`
+    : `Problem constraints are only for grounding; do not copy them into the board: ${challenge.description}`
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}白板推导。\n\n${focus}\n\n请先用自然语言讲解，然后必须输出一个白板 JSON 块，格式如下：\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"...","x":80,"y":130,"w":190,"h":86},{"type":"arrow","from":"goal","to":"model","label":"..."},{"type":"section","title":"...","items":["..."],"x":90,"y":310,"w":510}]}\n${WHITEBOARD_CLOSE}\n\n约束：只输出 JSON ops，不要输出 JS；坐标范围 x 60-1250、y 40-720；用 box/arrow/section/text/title 表达答案推导、架构、公式和 trade-off。题目描述：\n${challenge.description}`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} whiteboard derivation.\n\n${focus}\n\nFirst explain in natural language, then include a whiteboard JSON block exactly like this:\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"...","x":80,"y":130,"w":190,"h":86},{"type":"arrow","from":"goal","to":"model","label":"..."},{"type":"section","title":"...","items":["..."],"x":90,"y":310,"w":510}]}\n${WHITEBOARD_CLOSE}\n\nConstraints: JSON ops only, no JS; coordinates x 60-1250, y 40-720; use box/arrow/section/text/title for derivation, architecture, formulas and trade-offs. Challenge description:\n${challenge.description}`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${constraints}\n\n请先用自然语言讲解理想答案，然后必须输出一个白板 JSON 块，格式如下：\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"目标/SLO","x":80,"y":130,"w":190,"h":86},{"type":"box","id":"model","text":"核心方案","x":580,"y":130,"w":190,"h":86},{"type":"arrow","from":"goal","to":"model","label":"推导"},{"type":"section","title":"Trade-off / 风险","items":["..."],"x":90,"y":310,"w":510}]}\n${WHITEBOARD_CLOSE}\n\n硬性要求：所有 box/section 都必须写答案组件、设计决策、指标或 trade-off；不要把题目原文、题目要求列表、或“请设计...”画进白板；只输出 JSON ops，不要输出 JS；坐标范围 x 60-1250、y 40-720。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${constraints}\n\nFirst explain the ideal answer in natural language, then include a whiteboard JSON block exactly like this:\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"Goal/SLO","x":80,"y":130,"w":190,"h":86},{"type":"box","id":"model","text":"Core solution","x":580,"y":130,"w":190,"h":86},{"type":"arrow","from":"goal","to":"model","label":"derive"},{"type":"section","title":"Trade-offs / risks","items":["..."],"x":90,"y":310,"w":510}]}\n${WHITEBOARD_CLOSE}\n\nHard requirements: every box/section must contain answer components, design decisions, metrics, or trade-offs; do not draw the prompt text, requirement list, or “design ...” wording; JSON ops only, no JS; coordinates x 60-1250, y 40-720.`
 }
 
 export function extractWhiteboardPayload(content: string): WhiteboardPayload | null {
