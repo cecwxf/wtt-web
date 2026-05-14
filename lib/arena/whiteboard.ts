@@ -176,6 +176,22 @@ function labelText(value: unknown) {
   return ''
 }
 
+function elementText(element: ExcalidrawWhiteboardElement) {
+  return safeString(element.text ?? (isRecord(element.label) ? element.label.text : '') ?? '', 900)
+}
+
+function elementId(element: ExcalidrawWhiteboardElement) {
+  return safeString(element.id, 80)
+}
+
+function elementType(element: ExcalidrawWhiteboardElement) {
+  return safeString(element.type, 32)
+}
+
+function elementNumber(element: ExcalidrawWhiteboardElement, key: string, fallback: number) {
+  return safeNumber(element[key], fallback, -2000, 2400)
+}
+
 function companionTextElement(id: string, text: string, x: number, y: number, width: number, fontSize = 20) {
   return textElement(id, text, x, y, fontSize, Math.max(80, width), '#0f172a')
 }
@@ -247,6 +263,154 @@ function sanitizeExcalidrawElement(element: unknown, index: number): ExcalidrawW
   }]
 }
 
+function isShapeElement(element: ExcalidrawWhiteboardElement) {
+  return ['rectangle', 'ellipse', 'diamond'].includes(elementType(element))
+}
+
+function shapeLabel(shape: ExcalidrawWhiteboardElement, byId: Map<string, ExcalidrawWhiteboardElement>) {
+  const id = elementId(shape)
+  const direct = isRecord(shape.customData) ? safeString(shape.customData.label, 240) : ''
+  if (direct) return direct
+  return elementText(byId.get(`${id}-label`) || byId.get(`${id}-text`) || {})
+}
+
+function isInsideShape(text: ExcalidrawWhiteboardElement, shape: ExcalidrawWhiteboardElement) {
+  const textX = elementNumber(text, 'x', 0)
+  const textY = elementNumber(text, 'y', 0)
+  const shapeX = elementNumber(shape, 'x', 0)
+  const shapeY = elementNumber(shape, 'y', 0)
+  const shapeW = elementNumber(shape, 'width', 210)
+  const shapeH = elementNumber(shape, 'height', 92)
+  return textX >= shapeX - 12 && textX <= shapeX + shapeW + 12 && textY >= shapeY - 12 && textY <= shapeY + shapeH + 12
+}
+
+function isSectionLike(shape: ExcalidrawWhiteboardElement, label: string, index: number) {
+  const id = elementId(shape).toLowerCase()
+  const text = label.toLowerCase()
+  const width = elementNumber(shape, 'width', 210)
+  const height = elementNumber(shape, 'height', 92)
+  if (index >= 6) return true
+  if (width >= 330 || height >= 125) return true
+  return ['section', 'risk', 'trade', 'focus', 'framework', 'note', 'follow', 'eval'].some((word) => id.includes(word) || text.includes(word))
+}
+
+function updateTextLayout(element: ExcalidrawWhiteboardElement, x: number, y: number, width: number, fontSize = 20) {
+  const text = elementText(element)
+  return {
+    ...element,
+    x,
+    y,
+    text,
+    originalText: safeString(element.originalText, 900) || text,
+    fontSize,
+    fontFamily: DEFAULT_FONT_FAMILY,
+    lineHeight: DEFAULT_LINE_HEIGHT,
+    width,
+    height: Math.max(28, text.split('\n').length * fontSize * DEFAULT_LINE_HEIGHT),
+    backgroundColor: 'transparent',
+    textAlign: 'left',
+    verticalAlign: 'top',
+  }
+}
+
+function layoutShapeWithText(shape: ExcalidrawWhiteboardElement, label: string, x: number, y: number, width: number, height: number, textId: string, fontSize = 20) {
+  const normalizedShape = {
+    ...shape,
+    x,
+    y,
+    width,
+    height,
+    customData: undefined,
+  }
+  return [
+    normalizedShape,
+    textElement(textId, label, x + 14, y + 18, fontSize, width - 28),
+  ]
+}
+
+function normalizeWhiteboardLayout(elements: ExcalidrawWhiteboardElement[]) {
+  const byId = new Map(elements.map((element) => [elementId(element), element]).filter(([id]) => Boolean(id)) as Array<[string, ExcalidrawWhiteboardElement]>)
+  const consumedTextIds = new Set<string>()
+  const title = elements.find((element) => elementId(element) === 'title' && elementType(element) === 'text')
+    || elements.find((element) => elementType(element) === 'text' && elementNumber(element, 'fontSize', 20) >= 28)
+  const subtitle = elements.find((element) => elementId(element) === 'subtitle' && elementType(element) === 'text')
+
+  if (title) consumedTextIds.add(elementId(title))
+  if (subtitle) consumedTextIds.add(elementId(subtitle))
+
+  const shapes = elements.filter(isShapeElement)
+  const groupedShapes = shapes.map((shape) => {
+    const id = elementId(shape)
+    let label = shapeLabel(shape, byId)
+    let labelElement = byId.get(`${id}-label`) || byId.get(`${id}-text`)
+    if (labelElement) consumedTextIds.add(elementId(labelElement))
+    if (!label) {
+      const contained = elements.find((element) => elementType(element) === 'text' && !consumedTextIds.has(elementId(element)) && isInsideShape(element, shape))
+      if (contained) {
+        labelElement = contained
+        label = elementText(contained)
+        consumedTextIds.add(elementId(contained))
+      }
+    }
+    return { shape, label: label || id || 'Node', labelElement }
+  })
+
+  const boxes = groupedShapes.filter((entry, index) => !isSectionLike(entry.shape, entry.label, index)).slice(0, 6)
+  const sections = groupedShapes.filter((entry, index) => isSectionLike(entry.shape, entry.label, index)).slice(0, 3)
+  const notes = elements
+    .filter((element) => elementType(element) === 'text' && !consumedTextIds.has(elementId(element)))
+    .map(elementText)
+    .filter(Boolean)
+    .slice(0, 4)
+
+  const laidOut: ExcalidrawWhiteboardElement[] = []
+  if (title) laidOut.push(updateTextLayout(title, 70, 45, 960, 34))
+  if (subtitle) laidOut.push(updateTextLayout(subtitle, 80, 92, 760, 18))
+
+  const boxSlots = [
+    { x: 80, y: 145 },
+    { x: 350, y: 145 },
+    { x: 620, y: 145 },
+    { x: 890, y: 145 },
+    { x: 1160, y: 145 },
+    { x: 620, y: 285 },
+  ]
+  boxes.forEach((entry, index) => {
+    const slot = boxSlots[index] || boxSlots[boxSlots.length - 1]
+    const id = elementId(entry.shape) || `box-${index}`
+    laidOut.push(...layoutShapeWithText(entry.shape, entry.label, slot.x, slot.y, 210, 92, `${id}-label`, 20))
+  })
+
+  boxes.slice(0, 5).forEach((entry, index) => {
+    const next = boxes[index + 1]
+    if (!next || index >= 4) return
+    const from = boxSlots[index]
+    const to = boxSlots[index + 1]
+    laidOut.push(arrowElement(`${elementId(entry.shape) || `box-${index}`}-${elementId(next.shape) || `box-${index + 1}`}-arrow`, from.x + 210, from.y + 46, to.x - from.x - 210, 0))
+  })
+
+  const sectionSlots = [
+    { x: 90, y: 365 },
+    { x: 700, y: 365 },
+    { x: 90, y: 590 },
+  ]
+  sections.forEach((entry, index) => {
+    const slot = sectionSlots[index] || sectionSlots[sectionSlots.length - 1]
+    const id = elementId(entry.shape) || `section-${index}`
+    const text = entry.label.split(/[\n;；]/).map((item) => item.trim()).filter(Boolean).slice(0, 5).join('\n')
+    const height = Math.max(150, 78 + text.split('\n').length * 30)
+    laidOut.push(...layoutShapeWithText(entry.shape, text, slot.x, slot.y, 560, height, `${id}-text`, 20))
+  })
+
+  if (notes.length) {
+    const slot = sectionSlots[Math.min(sections.length, sectionSlots.length - 1)]
+    laidOut.push(...sectionElements('notes', '补充要点', notes, slot.x, slot.y, '#64748b'))
+  }
+
+  if (!laidOut.some(isShapeElement) && elements.length) return elements
+  return laidOut.slice(0, MAX_ELEMENTS)
+}
+
 export function sanitizeExcalidrawElements(elements: unknown[]): ExcalidrawWhiteboardElement[] {
   const sanitized: ExcalidrawWhiteboardElement[] = []
   elements.slice(0, MAX_ELEMENTS).forEach((element, index) => {
@@ -265,7 +429,7 @@ export function sanitizeExcalidrawElements(elements: unknown[]): ExcalidrawWhite
       ))
     }
   })
-  return sanitized.slice(0, MAX_ELEMENTS)
+  return normalizeWhiteboardLayout(sanitized.slice(0, MAX_ELEMENTS))
 }
 
 export function makeInterviewWhiteboardElements(challenge: Challenge, locale: WhiteboardLocale): ExcalidrawWhiteboardElement[] {
