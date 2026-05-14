@@ -826,11 +826,18 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 {arenaSyncing && <p className="text-xs text-[#3ce8e2]">{t.chatSyncing}</p>}
                 {chatSending && <p className="text-xs text-gray-500">{t.chatThinking}</p>}
               </div>
-              <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="border-t border-gray-800 p-3">
-                <textarea value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendAgentChat() }} placeholder={t.chatPlaceholder} rows={4} className="w-full resize-none rounded-md border border-gray-800 bg-[#101010] p-3 text-sm text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2]" />
-                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-600">
-                  <span>{session?.accessToken ? `Agent: ${ARENA_AGENT_ID}` : t.chatLogin}</span>
-                  <button type="submit" disabled={!chatInput.trim() || chatSending || arenaSyncing} className="rounded-md bg-[#3ce8e2] px-3 py-1.5 font-black text-black disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
+              <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="shrink-0 border-t border-gray-800 bg-[#151515] p-4">
+                <textarea
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendAgentChat() }}
+                  placeholder={t.chatPlaceholder}
+                  rows={6}
+                  className="min-h-[132px] w-full resize-y rounded-md border border-gray-800 bg-[#101010] p-3 text-sm leading-6 text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2]"
+                />
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
+                  <span className="min-w-0 truncate">{session?.accessToken ? `Agent: ${ARENA_AGENT_ID}` : t.chatLogin}</span>
+                  <button type="submit" disabled={!chatInput.trim() || chatSending || arenaSyncing} className="min-w-[96px] shrink-0 rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
                 </div>
               </form>
             </div>
