@@ -32,8 +32,69 @@ type CoachAction = {
   intent: ArenaTeachingIntent
   zh: string
   en: string
-  promptZh: (title: string) => string
-  promptEn: (title: string) => string
+  promptZh: (challenge: Challenge) => string
+  promptEn: (challenge: Challenge) => string
+}
+
+function extractChallengeFocus(challenge: Challenge) {
+  const match = challenge.description.match(/考察重点：([\s\S]+?)(?:\n\n|$)/)
+  return match?.[1]?.trim() || challenge.description.split(/\n+/).find((line) => line.trim().length > 18)?.trim() || challenge.title
+}
+
+function explainPromptZh(challenge: Challenge) {
+  const focus = extractChallengeFocus(challenge)
+  const concepts = challenge.concepts?.slice(0, 4).join('、') || challenge.tags.slice(0, 4).join('、')
+  const title = challenge.title
+
+  if (challenge.whiteboard_template === 'inference_flow') {
+    return `请讲解「${title}」。这题重点是：${focus} 请围绕 ${concepts}，说明关键机制、张量或缓存如何流动、主要性能瓶颈，以及如何用实验验证结论。`
+  }
+
+  if (challenge.whiteboard_template === 'evaluation_loop') {
+    return `请讲解「${title}」。这题重点是：${focus} 请说明数据如何产生、优化目标如何设定、评测闭环如何建立，以及哪些样本或指标最容易误导判断。`
+  }
+
+  if (challenge.whiteboard_template === 'training_serving_consistency') {
+    return `请讲解「${title}」。这题重点是：${focus} 请把训练侧、在线侧、状态同步、显存或吞吐压力，以及一致性校验路径讲清楚。`
+  }
+
+  if (challenge.whiteboard_template === 'system_architecture') {
+    return `请讲解「${title}」。这题重点是：${focus} 请拆出关键组件、数据流向、在线/离线边界、反馈闭环和上线后的观测点。`
+  }
+
+  if (challenge.whiteboard_template === 'pipeline') {
+    return `请讲解「${title}」。这题重点是：${focus} 请按输入准备、核心处理、关键瓶颈、验证方法和迭代路径展开，不要套通用系统设计模板。`
+  }
+
+  return `请讲解「${title}」。这题重点是：${focus} 请围绕本题的核心概念、推理步骤、边界条件和检查方法展开。`
+}
+
+function explainPromptEn(challenge: Challenge) {
+  const focus = extractChallengeFocus(challenge)
+  const concepts = challenge.concepts?.slice(0, 4).join(', ') || challenge.tags.slice(0, 4).join(', ')
+  const title = challenge.title
+
+  if (challenge.whiteboard_template === 'inference_flow') {
+    return `Explain "${title}". Focus: ${focus} Cover ${concepts}, how tensors or cache state flows, the main performance bottleneck, and how to validate the conclusion experimentally.`
+  }
+
+  if (challenge.whiteboard_template === 'evaluation_loop') {
+    return `Explain "${title}". Focus: ${focus} Cover how the data is produced, how the optimization target is defined, how evaluation closes the loop, and which samples or metrics can mislead the decision.`
+  }
+
+  if (challenge.whiteboard_template === 'training_serving_consistency') {
+    return `Explain "${title}". Focus: ${focus} Connect training, serving, state synchronization, memory or throughput pressure, and consistency checks.`
+  }
+
+  if (challenge.whiteboard_template === 'system_architecture') {
+    return `Explain "${title}". Focus: ${focus} Break down the core components, data flow, online/offline boundary, feedback loop, and production observability points.`
+  }
+
+  if (challenge.whiteboard_template === 'pipeline') {
+    return `Explain "${title}". Focus: ${focus} Walk through input preparation, core processing, bottlenecks, validation, and iteration without using a generic system-design template.`
+  }
+
+  return `Explain "${title}". Focus: ${focus} Cover the core concepts, reasoning path, edge cases, and checks specific to this problem.`
 }
 
 const coachActions: CoachAction[] = [
@@ -41,43 +102,43 @@ const coachActions: CoachAction[] = [
     intent: 'ask_hint',
     zh: '提示',
     en: 'Hint',
-    promptZh: (title) => `我正在做「${title}」。请不要直接给标准答案，先用苏格拉底式问题给我一个下一步提示。`,
-    promptEn: (title) => `I am working on "${title}". Do not give the final answer; ask one Socratic question that gives me the next hint.`,
+    promptZh: (challenge) => `我正在做「${challenge.title}」。请不要直接给标准答案，先围绕“${extractChallengeFocus(challenge)}”问一个能推动我继续思考的问题。`,
+    promptEn: (challenge) => `I am working on "${challenge.title}". Do not give the final answer; ask one Socratic question grounded in this focus: ${extractChallengeFocus(challenge)}.`,
   },
   {
     intent: 'explain',
     zh: '讲答案',
     en: 'Explain',
-    promptZh: (title) => `请完整讲解「${title}」的面试答案结构：目标、架构/推导、trade-off、指标和失败场景。`,
-    promptEn: (title) => `Explain a complete interview answer for "${title}": goal, architecture/derivation, trade-offs, metrics, and failure modes.`,
+    promptZh: explainPromptZh,
+    promptEn: explainPromptEn,
   },
   {
     intent: 'debug',
     zh: 'Debug',
     en: 'Debug',
-    promptZh: (title) => `请 debug 我对「${title}」的当前答案或代码，指出最可能的问题和一个最小修正方向。`,
-    promptEn: (title) => `Debug my current answer or code for "${title}". Identify the most likely issue and one minimal correction.`,
+    promptZh: (challenge) => `请 debug 我对「${challenge.title}」的当前答案或代码，优先检查是否覆盖了“${extractChallengeFocus(challenge)}”，再指出一个最小修正方向。`,
+    promptEn: (challenge) => `Debug my current answer or code for "${challenge.title}". First check whether it addresses this focus: ${extractChallengeFocus(challenge)}. Then identify one minimal correction.`,
   },
   {
     intent: 'follow_up',
     zh: '追问',
     en: 'Follow-up',
-    promptZh: (title) => `请作为面试官，围绕「${title}」提出一个真实追问。先不要给答案，等我回答。`,
-    promptEn: (title) => `Act as the interviewer for "${title}" and ask one realistic follow-up. Do not answer it yet.`,
+    promptZh: (challenge) => `请作为面试官，围绕「${challenge.title}」和“${extractChallengeFocus(challenge)}”提出一个真实追问。先不要给答案，等我回答。`,
+    promptEn: (challenge) => `Act as the interviewer for "${challenge.title}" and ask one realistic follow-up grounded in this focus: ${extractChallengeFocus(challenge)}. Do not answer it yet.`,
   },
   {
     intent: 'concept',
     zh: '补课',
     en: 'Concept',
-    promptZh: (title) => `请判断「${title}」里我最需要补的一个知识点，简短讲清楚后给我一个小检查问题。`,
-    promptEn: (title) => `Pick the one prerequisite concept I most need for "${title}", teach it briefly, then ask a quick check question.`,
+    promptZh: (challenge) => `请判断「${challenge.title}」里我最需要补的一个知识点，必须贴合“${extractChallengeFocus(challenge)}”。简短讲清楚后给我一个小检查问题。`,
+    promptEn: (challenge) => `Pick the one prerequisite concept I most need for "${challenge.title}", grounded in this focus: ${extractChallengeFocus(challenge)}. Teach it briefly, then ask a quick check question.`,
   },
   {
     intent: 'recommend_next',
     zh: '类题迁移',
     en: 'Transfer',
-    promptZh: (title) => `基于「${title}」和我的当前状态，请推荐下一道练习题或迁移方向，并说明为什么。`,
-    promptEn: (title) => `Based on "${title}" and my current state, recommend the next practice problem or transfer direction and explain why.`,
+    promptZh: (challenge) => `基于「${challenge.title}」的考察重点“${extractChallengeFocus(challenge)}”和我的当前状态，请推荐下一道练习题或迁移方向，并说明为什么。`,
+    promptEn: (challenge) => `Based on "${challenge.title}", this focus: ${extractChallengeFocus(challenge)}, and my current state, recommend the next practice problem or transfer direction and explain why.`,
   },
 ]
 
@@ -606,7 +667,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   function runCoachAction(action: CoachAction) {
     if (!challenge) return
-    const message = locale === 'zh' ? action.promptZh(challenge.title) : action.promptEn(challenge.title)
+    const message = locale === 'zh' ? action.promptZh(challenge) : action.promptEn(challenge)
     sendAgentChat(action.intent, message)
   }
 

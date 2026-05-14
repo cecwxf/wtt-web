@@ -103,30 +103,27 @@ function conceptSummary(challenge: Challenge) {
 }
 
 function whiteboardBlueprint(template: NonNullable<Challenge['whiteboard_template']>, zh: boolean) {
-  const shared = zh
-    ? '必须包含：目标/SLO、输入或数据层、核心算法/模型、在线服务或运行时、指标监控、trade-off 与失败场景。'
-    : 'Must include: goal/SLO, input or data layer, core algorithm/model, serving or runtime path, metrics/monitoring, trade-offs and failure modes.'
   const byTemplate: Record<NonNullable<Challenge['whiteboard_template']>, string> = {
     system_architecture: zh
-      ? '画端到端系统架构：入口、召回/候选、特征、模型/排序、服务、实验与反馈闭环。'
-      : 'Draw an end-to-end system architecture: entrypoint, retrieval/candidates, features, model/ranking, serving, experiments, and feedback loop.',
+      ? '按本题领域画系统架构：只保留必要组件，突出数据边界、关键决策点、反馈来源和生产观测。'
+      : 'Draw a domain-specific system architecture: keep only necessary components and highlight data boundaries, key decisions, feedback sources, and production observability.',
     pipeline: zh
-      ? '画 pipeline：离线准备、索引/训练、在线查询、重排/生成、评测与迭代。'
-      : 'Draw the pipeline: offline preparation, indexing/training, online query path, rerank/generation, evaluation, and iteration.',
+      ? '按本题动作链画 pipeline：输入准备、核心处理、资源瓶颈、验证信号和下一轮迭代要相互对应。'
+      : 'Draw a problem-specific pipeline: input preparation, core processing, resource bottlenecks, validation signals, and iteration should connect clearly.',
     training_serving_consistency: zh
-      ? '画训练/在线一致性：point-in-time 数据、离线回填、在线读取、版本、血缘、监控。'
-      : 'Draw training-serving consistency: point-in-time data, offline backfill, online reads, versions, lineage, and monitoring.',
+      ? '画训练侧和服务侧的状态对齐：数据时间点、参数或特征版本、同步路径、校验点和异常处理要落到本题。'
+      : 'Draw state alignment between training and serving: data time point, parameter or feature versions, synchronization path, checks, and issue handling must match the problem.',
     inference_flow: zh
-      ? '画推理链路：prefill/decode、KV cache、batching、路由、限流、降级、成本与 SLO。'
-      : 'Draw the inference flow: prefill/decode, KV cache, batching, routing, rate limits, fallback, cost, and SLO.',
+      ? '画本题推理路径：张量或请求如何流动、缓存/调度在哪里起作用、瓶颈如何形成、验证数据从哪里来。'
+      : 'Draw the problem-specific inference path: how tensors or requests flow, where cache/scheduling matters, how the bottleneck forms, and where validation data comes from.',
     evaluation_loop: zh
-      ? '画评测闭环：黄金集、自动/人工评测、线上指标、告警、回滚、回归测试。'
-      : 'Draw the evaluation loop: golden set, automated/human judging, online metrics, alerts, rollback, and regression tests.',
+      ? '画评测闭环：样本来源、优化信号、人工或自动校准、回归门禁和容易误判的案例要针对本题。'
+      : 'Draw the evaluation loop: sample sources, optimization signal, human or automated calibration, regression gate, and misleading cases should be problem-specific.',
     solution_flow: zh
-      ? '画解题流程：问题抽象、核心不变量、算法步骤、复杂度、边界条件。'
-      : 'Draw the solution flow: abstraction, invariants, algorithm steps, complexity, and edge cases.',
+      ? '画解题流程：抽象、关键机制、推理顺序、边界样例和检查方法要来自本题，而不是通用答题框。'
+      : 'Draw the solution flow: abstraction, key mechanism, reasoning order, boundary examples, and checks should come from this problem, not a generic answer frame.',
   }
-  return `${byTemplate[template]} ${shared}`
+  return byTemplate[template]
 }
 
 function textElement(id: string, text: string, x: number, y: number, fontSize = 20, width = 300, color = '#0f172a'): ExcalidrawWhiteboardElement {
