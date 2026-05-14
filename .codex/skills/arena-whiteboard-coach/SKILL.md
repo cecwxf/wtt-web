@@ -21,7 +21,17 @@ Supported element types: `rectangle`, `text`, `arrow`, `line`, `ellipse`, `diamo
 
 ## Teaching Phases
 
-Order the board in these phases:
+Summarize the current answer first, then choose a diagram pattern that matches the answer. Do not always draw the same goal -> inputs -> core -> serve -> eval chain.
+
+Use these patterns when appropriate:
+
+- `pipeline`: query/request flow, RAG, KV cache, inference, kernel, data processing.
+- `architecture`: services, stores, model components, feedback loops, online systems.
+- `two_lane`: offline vs online, training vs serving, batch vs realtime.
+- `debug`: symptom -> likely cause -> check -> minimal fix -> validation.
+- `concept`: prerequisite -> intuition -> formula/invariant -> example -> trap.
+
+Possible teaching phases:
 
 1. `goal`: goal, scale, SLO, primary metric.
 2. `inputs`: users, data, traffic, constraints.
@@ -35,9 +45,9 @@ Order the board in these phases:
 - Keep the board compact: 4-6 answer boxes, 1-2 section panels, 3-5 arrows, at most 24 elements.
 - Do not copy the problem statement or requirement list into the board.
 - Rectangles and text should contain answer components or decisions, not instructions.
-- Prefer short labels: 2-6 words for boxes, one sentence per section item.
-- Use stable IDs such as `goal`, `inputs`, `core`, `serve`, `eval`, `risks`.
-- Use a simple left-to-right layout: boxes around y=145, sections around y=365, arrows between boxes. Leave spacing; avoid dense coordinate clusters.
+- Prefer short labels: 2-5 words for boxes; put long explanations in section panels.
+- Use content-specific stable IDs such as `retrieval`, `rerank`, `kv-cache`, `offline-features`, `online-read`, `root-cause`, `fix`, `metric`, `rollback`.
+- Coordinates are hints only. The WTT renderer may normalize layout, so encode meaning in element IDs and labels.
 
 ## Quality Bar
 
