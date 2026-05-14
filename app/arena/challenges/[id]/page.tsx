@@ -262,7 +262,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [chatSending, setChatSending] = useState(false)
   const [arenaTopicByKey, setArenaTopicByKey] = useState<Record<string, string>>({})
   const [arenaSessionState, setArenaSessionState] = useState<ArenaSessionState | null>(null)
-  const [arenaProfile, setArenaProfile] = useState<ArenaUserProfile | null>(null)
+  const [, setArenaProfile] = useState<ArenaUserProfile | null>(null)
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
   const [whiteboardElements, setWhiteboardElements] = useState<ExcalidrawWhiteboardElement[]>([])
