@@ -4,6 +4,8 @@ import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import type { ExcalidrawWhiteboardElement, WhiteboardDiagram } from '@/lib/arena/whiteboard'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 
@@ -137,8 +139,8 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
               </div>
             </div>
             {step.markdown ? (
-              <div className="max-w-none overflow-auto text-sm leading-6 text-slate-700 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_li]:ml-5 [&_li]:list-disc [&_p]:my-2 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-100 [&_th]:p-2 [&_th]:text-left">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{step.markdown}</ReactMarkdown>
+              <div className="max-w-none overflow-auto text-sm leading-6 text-slate-700 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_li]:ml-5 [&_li]:list-disc [&_p]:my-2 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-100 [&_th]:p-2 [&_th]:text-left">
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{step.markdown}</ReactMarkdown>
               </div>
             ) : null}
             {step.mermaid ? <MermaidPreview chart={step.mermaid} /> : null}

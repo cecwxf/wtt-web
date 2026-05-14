@@ -518,7 +518,7 @@ function sanitizeDiagramPayload(payload: WhiteboardDiagramPayload): WhiteboardDi
     ? payload.steps.map((step, index) => ({
       stage: safeString(step.stage, 80) || `step-${index + 1}`,
       title: safeString(step.title, 160) || `Step ${index + 1}`,
-      markdown: safeMultilineString(step.markdown, 3000),
+      markdown: safeMultilineString(step.markdown, 6500),
       mermaid: safeMultilineString(step.mermaid || step.source, 5000),
       summary: Array.isArray(step.summary) ? step.summary.map((item) => safeString(item, 180)).filter(Boolean).slice(0, 4) : undefined,
     })).filter((step) => step.markdown || step.mermaid).slice(0, 6)
@@ -529,7 +529,7 @@ function sanitizeDiagramPayload(payload: WhiteboardDiagramPayload): WhiteboardDi
     summary: Array.isArray(payload.summary) ? payload.summary.map((item) => safeString(item, 180)).filter(Boolean).slice(0, 5) : undefined,
     source: safeMultilineString(payload.source || payload.mermaid, 5000),
     mermaid: safeMultilineString(payload.mermaid || payload.source, 5000),
-    markdown: safeMultilineString(payload.markdown, 3000),
+    markdown: safeMultilineString(payload.markdown, 6500),
     steps,
   }
 }
@@ -862,8 +862,8 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ? '白板必须按四步组织：1) Socratic 提问/诊断，2) 架构或概念分析，3) 按题目拆解关键要点，4) 完整答案结构。'
     : 'The board must use four steps: 1) Socratic question/diagnosis, 2) architecture or concept analysis, 3) problem-specific key decomposition, 4) complete answer structure.'
   const limits = zh
-    ? '每一步都可以包含一个紧凑 Markdown 表格和一个 Mermaid 图；Markdown 表格会直接在白板渲染，不要硬塞进 Mermaid 节点。Mermaid 每步 3-7 个节点、2-6 条边，节点名必须来自本轮回答的具体概念。'
-    : 'Each step may include one compact Markdown table and one Mermaid diagram. Markdown tables are rendered directly on the board; do not force table content into Mermaid nodes. Keep each Mermaid diagram to 3-7 nodes and 2-6 edges, with node names from this answer.'
+    ? '每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表；Mermaid 只画结构，不承载长文字。涉及算法复杂度、概率/损失函数、向量检索、系统容量、延迟或评测指标时，公式不能省。Mermaid 每步 3-7 个节点、2-6 条边，节点名必须来自本轮回答的具体概念。'
+    : 'Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Mermaid should show structure only, not long prose. Do not omit formulas for algorithm complexity, probability/loss functions, vector retrieval, capacity, latency, or evaluation metrics. Keep each Mermaid diagram to 3-7 nodes and 2-6 edges, with node names from this answer.'
   const example = JSON.stringify({
     format: 'steps',
     title: '答案白板',
@@ -872,32 +872,32 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
       {
         stage: 'socratic',
         title: '1. Socratic 提问',
-        markdown: '| Focus | Question |\n| --- | --- |\n| Quality bottleneck | Which stage most limits answer correctness? |',
+        markdown: '先确认候选人的判断入口：这题的核心风险不是“能不能拼出链路”，而是能不能定位质量瓶颈并说明如何验证。\n\n| Focus | Question |\n| --- | --- |\n| Quality bottleneck | Which stage most limits answer correctness? |\n| Evidence | What signal would prove it? |',
         mermaid: 'flowchart LR\n  Q["Clarify goal"] --> B{"Main bottleneck?"}\n  B --> R["Retrieval"]\n  B --> G["Generation"]',
       },
       {
         stage: 'architecture_concepts',
         title: '2. 架构 / 概念分析',
-        markdown: '| Layer | Role |\n| --- | --- |\n| Retrieval | Recall grounded evidence |\n| Rerank | Select high-signal context |',
+        markdown: '架构答案要先拆出可独立优化的层：召回解决覆盖率，重排解决相关性，生成解决忠实表达。向量检索常用相似度可以写成：\n\n$$\\cos(q,d)=\\frac{q\\cdot d}{\\|q\\|\\|d\\|}$$\n\n| Layer | Role |\n| --- | --- |\n| Retrieval | Recall grounded evidence |\n| Rerank | Select high-signal context |',
         mermaid: 'flowchart LR\n  Query["Query"] --> Retrieve["Hybrid retrieval"]\n  Retrieve --> Rerank["Rerank"]\n  Rerank --> Answer["Grounded answer"]',
       },
       {
         stage: 'decomposition',
         title: '3. 题目要点拆解',
-        markdown: '| Key point | Check |\n| --- | --- |\n| Permissions | Filter before generation |\n| Metrics | Track recall and faithfulness |',
+        markdown: '拆解时要把“正确性、安全性、可观测性”分开讲，这样追问时能快速落到具体指标。评测不要只说 accuracy，RAG 场景至少要看召回和忠实度。\n\n| Key point | Check |\n| --- | --- |\n| Permissions | Filter before generation |\n| Metrics | Track recall and faithfulness |',
         mermaid: 'flowchart TD\n  Scope["Scope constraints"] --> Safety["Permission filter"]\n  Scope --> Metrics["Eval metrics"]',
       },
       {
         stage: 'complete_answer',
         title: '4. 完整答案',
-        markdown: '| Section | Must cover |\n| --- | --- |\n| Baseline | End-to-end path |\n| Trade-off | Latency vs quality |',
+        markdown: '完整答案应收束到 baseline、trade-off、指标和上线风险。容量或延迟类题要给量化口径，例如端到端延迟可以按关键路径累加：\n\n$$T_{e2e}=T_{retrieve}+T_{rerank}+T_{generate}+T_{network}$$\n\n| Section | Must cover |\n| --- | --- |\n| Baseline | End-to-end path |\n| Trade-off | Latency vs quality |',
         mermaid: 'flowchart LR\n  Baseline["Baseline design"] --> Tradeoff["Trade-offs"]\n  Tradeoff --> Ops["Monitoring + rollback"]',
       },
     ],
   })
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 表格和 Mermaid，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：四个 steps 都要有；每步的 markdown/mermaid 必须总结本轮回答；不要画题目原文；不要输出固定模板；不要输出 WHITEBOARD_OPS。`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown tables and Mermaid, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include all four steps; each step's markdown/mermaid must summarize this reply; do not draw prompt text; do not reuse a fixed template; do not output WHITEBOARD_OPS.`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 段落、表格、LaTeX 公式和 Mermaid，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：四个 steps 都要有；每步的 markdown 至少包含解释文字和必要公式/指标定义，不能只有表格；每步的 markdown/mermaid 必须总结本轮回答；不要画题目原文；不要输出固定模板；不要输出 WHITEBOARD_OPS。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown paragraphs, tables, LaTeX formulas, and Mermaid, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include all four steps; each step markdown must include explanatory prose and required formulas/metric definitions, not just a table; each step's markdown/mermaid must summarize this reply; do not draw prompt text; do not reuse a fixed template; do not output WHITEBOARD_OPS.`
 }
 
 export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardPayload | null {

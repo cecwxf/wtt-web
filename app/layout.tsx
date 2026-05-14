@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import "@excalidraw/excalidraw/index.css";
+import "katex/dist/katex.min.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { NextAuthProvider } from "@/lib/session-provider";
 import { ThemeProvider } from "@/lib/theme-provider";
