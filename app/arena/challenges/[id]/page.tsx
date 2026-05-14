@@ -13,6 +13,7 @@ const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
 type Locale = 'zh' | 'en'
 type Language = 'python' | 'cpp' | 'c'
+type ChatMode = 'socratic' | 'interview_answer' | 'ask'
 type ChatMessage = { id?: string; role: 'user' | 'agent'; content: string; createdAt: string }
 
 type ChallengePayload = {
@@ -80,6 +81,30 @@ const coachActions: CoachAction[] = [
   },
 ]
 
+const chatModes: Array<{ id: ChatMode; zh: string; en: string; hintZh: string; hintEn: string }> = [
+  {
+    id: 'socratic',
+    zh: '苏格拉底',
+    en: 'Socratic',
+    hintZh: 'Agent 先追问和点拨，推动你自己推理。',
+    hintEn: 'The Agent asks guiding questions and nudges your reasoning.',
+  },
+  {
+    id: 'interview_answer',
+    zh: '面试回答',
+    en: 'Interview',
+    hintZh: '你输入答案，Agent 评分、点评并补全。',
+    hintEn: 'You answer; the Agent scores, critiques, and supplements it.',
+  },
+  {
+    id: 'ask',
+    zh: 'Ask',
+    en: 'Ask',
+    hintZh: '直接问答，Agent 给出清晰答案。',
+    hintEn: 'Direct Q&A with a clear answer.',
+  },
+]
+
 const copy = {
   zh: {
     challenges: '题库', playground: '训练场', discuss: '讨论', runner: 'Agent Runner 执行', description: '题目', submissions: '提交', leaderboard: '排行榜',
@@ -89,6 +114,7 @@ const copy = {
     agentTitle: 'Agent 对话', agentRole: '固定使用 Codex Arena Coach：agent-16a45cf0dd8b。所有登录用户都可使用，不需要 claim 该 Agent。',
     agentWaiting: '直接在下面和 Agent 对话。', openFull: '打开完整提交 →',
     chatTitle: 'Arena Coach', chatIntro: '真实 WTT Agent 会话；Agent 会读取 Arena 题库长期记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录后可对话。', chatSyncing: '正在连接固定 Arena Agent...',
+    mode: '模式',
     coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
     aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
     interviewMode: 'AI 面试练习模式', interviewHint: '这类题不需要提交代码。直接在右侧和 Arena Coach 进行多轮模拟面试、追问、复盘。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
@@ -101,6 +127,7 @@ const copy = {
     agentTitle: 'Agent Chat', agentRole: 'Fixed Codex Arena Coach: agent-16a45cf0dd8b. Every signed-in user can use it without claiming this Agent.',
     agentWaiting: 'Chat with the Agent below.', openFull: 'Open full submission →',
     chatTitle: 'Arena Coach', chatIntro: 'Real WTT Agent session. The Agent reads persistent Arena question-bank memory plus the current challenge context.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.', chatLogin: 'Sign in to chat.', chatSyncing: 'Connecting fixed Arena Agent...',
+    mode: 'Mode',
     coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
     aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
     interviewMode: 'AI interview practice mode', interviewHint: 'No code submission is required. Use Arena Coach on the right for mock interview, follow-up questions, and review.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
@@ -224,6 +251,34 @@ function arenaChallengeContext(challenge: Challenge, locale: Locale, language: L
     `[/Arena Challenge Context]`
 }
 
+function modeInstruction(mode: ChatMode, locale: Locale) {
+  if (mode === 'interview_answer') {
+    return locale === 'zh'
+      ? 'chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示评分维度、缺口、补充答案结构。'
+      : 'chat_mode: interview_answer\nTreat the user input as a candidate interview answer. Give a 0-10 score, then identify strengths, gaps, misconceptions, provide a stronger answer skeleton, and ask one next follow-up. Still end with WHITEBOARD_DIAGRAM showing scoring dimensions, gaps, and improved answer structure.'
+  }
+  if (mode === 'ask') {
+    return locale === 'zh'
+      ? 'chat_mode: ask\n请直接回答用户问题，结构清晰、可操作，必要时给公式、示例、trade-off。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，把答案要点同步展示到白板。'
+      : 'chat_mode: ask\nAnswer the user question directly with a clear, actionable structure. Include formulas, examples, and trade-offs when needed. Still end with WHITEBOARD_DIAGRAM so the answer appears on the board.'
+  }
+  return locale === 'zh'
+    ? 'chat_mode: socratic\n请使用苏格拉底式交互：根据用户输入判断当前卡点，优先提出 1-2 个高质量问题和少量提示，推动用户自己推理；不要直接倾倒完整答案，除非用户明确要求。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示当前推理路径和下一步问题。'
+    : 'chat_mode: socratic\nUse Socratic coaching. Diagnose the user’s current blocker, ask 1-2 high-quality questions with light hints, and help the user reason instead of dumping the full answer unless explicitly asked. Still end with WHITEBOARD_DIAGRAM showing the reasoning path and next question.'
+}
+
+function intentForChatMode(mode: ChatMode): ArenaTeachingIntent {
+  if (mode === 'interview_answer') return 'interview_answer'
+  if (mode === 'ask') return 'ask'
+  return 'socratic'
+}
+
+function modeForExplicitIntent(intent?: ArenaTeachingIntent): ChatMode {
+  if (intent === 'ask_hint' || intent === 'follow_up' || intent === 'socratic') return 'socratic'
+  if (intent === 'debug' || intent === 'interview_answer') return 'interview_answer'
+  return 'ask'
+}
+
 function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMessage[] {
   return (messages || [])
     .filter((message) => {
@@ -259,6 +314,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
+  const [chatMode, setChatMode] = useState<ChatMode>('socratic')
   const [chatSending, setChatSending] = useState(false)
   const [arenaTopicByKey, setArenaTopicByKey] = useState<Record<string, string>>({})
   const [arenaSessionState, setArenaSessionState] = useState<ArenaSessionState | null>(null)
@@ -391,6 +447,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   const t = copy[locale]
   const isCoding = challenge?.challenge_type === 'coding'
+  const currentChatMode = chatModes.find((mode) => mode.id === chatMode) || chatModes[0]
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
 
   function changeLanguage(next: Language) {
@@ -441,9 +498,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
   }
 
-  async function publishArenaFallback(topicId: string, userMessage: string, intent?: ArenaTeachingIntent) {
+  async function publishArenaFallback(topicId: string, userMessage: string, intent?: ArenaTeachingIntent, mode: ChatMode = chatMode) {
     if (!challenge) throw new Error('missing challenge')
-    const content = `${arenaChallengeContext(challenge, locale, language, code)}\n\n${intent ? `teaching_intent: ${intent}\n` : ''}${userMessage}`
+    const content = `${arenaChallengeContext(challenge, locale, language, code)}\n\n${modeInstruction(mode, locale)}\n${intent ? `teaching_intent: ${intent}\n` : ''}${userMessage}`
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
@@ -459,6 +516,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string) {
     const message = (explicitMessage ?? chatInput).trim()
+    const mode = explicitMessage ? modeForExplicitIntent(intent) : chatMode
+    const effectiveIntent = intent || intentForChatMode(mode)
     if (!challenge || !message || chatSending) return
     if (!session?.accessToken) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
@@ -479,12 +538,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           language,
           code,
           submission_id: submission?.id,
-          intent,
+          intent: effectiveIntent,
+          chat_mode: mode,
         }),
       })
       if (!response.ok) {
         if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena chat'))
-        await publishArenaFallback(topicId, message, intent)
+        await publishArenaFallback(topicId, message, effectiveIntent, mode)
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
@@ -818,8 +878,20 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   className="min-h-[132px] w-full resize-y rounded-md border border-gray-800 bg-[#101010] p-3 text-sm leading-6 text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2]"
                 />
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
-                  <span className="min-w-0 truncate">{session?.accessToken ? `Agent: ${ARENA_AGENT_ID}` : t.chatLogin}</span>
-                  <button type="submit" disabled={!chatInput.trim() || chatSending || arenaSyncing} className="min-w-[96px] shrink-0 rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
+                  <span className="min-w-0 flex-1 truncate">{locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}</span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <label className="text-xs font-bold text-gray-500">{t.mode}</label>
+                    <select
+                      value={chatMode}
+                      onChange={(event) => setChatMode(event.target.value as ChatMode)}
+                      className="rounded-md border border-gray-800 bg-[#101010] px-2 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]"
+                    >
+                      {chatModes.map((mode) => (
+                        <option key={mode.id} value={mode.id}>{locale === 'zh' ? mode.zh : mode.en}</option>
+                      ))}
+                    </select>
+                    <button type="submit" disabled={!chatInput.trim() || chatSending || arenaSyncing} className="min-w-[96px] shrink-0 rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
+                  </div>
                 </div>
               </form>
             </div>

@@ -9,6 +9,9 @@ export type ArenaTeachingSkill =
   | 'transfer_problem'
   | 'whiteboard_architecture'
 export type ArenaTeachingIntent =
+  | 'socratic'
+  | 'interview_answer'
+  | 'ask'
   | 'ask_hint'
   | 'explain'
   | 'debug'
