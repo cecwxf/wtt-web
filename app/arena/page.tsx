@@ -13,7 +13,14 @@ export default function ArenaPage() {
   const total = challenges.length
   const aiKernelCount = challenges.filter((challenge) => challenge.category === 'ai-kernel').length
   const aiInterviewCount = challenges.filter((challenge) => challenge.category === 'ai-interview').length
-  const featured = challenges.filter((challenge) => ['ai-vector-add', 'ai-gemm', 'ai-softmax-attention', 'ai-interview-recommendation-feed', 'ai-interview-serving-llm-at-scale'].includes(challenge.slug))
+  const featured = challenges.filter((challenge) => [
+    'ai-vector-add',
+    'ai-gemm',
+    'ai-softmax-attention',
+    'ai-interview-pretraining-data-mixture',
+    'ai-interview-runtime-continuous-batching',
+    'ai-interview-npu-gpgpu-attention-kernel',
+  ].includes(challenge.slug))
 
   return (
     <main className="min-h-screen bg-[#151515] text-white">
