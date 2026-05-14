@@ -912,25 +912,7 @@ export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardP
         return { elements, note: safeString(parsed.title, 240) || undefined, diagram }
       }
     } catch {
-      // Ignore malformed diagram payload and try Excalidraw elements.
-    }
-  }
-
-  const tagged = source.match(/\[EXCALIDRAW_ELEMENTS\]([\s\S]*?)\[\/EXCALIDRAW_ELEMENTS\]/i)
-  const candidates = tagged ? [tagged[1]] : []
-  const fenced = source.match(/```(?:json)?\s*([\s\S]*?"elements"[\s\S]*?)```/i)
-  if (fenced) candidates.push(fenced[1])
-  if (!candidates.length && source.trim().startsWith('{') && source.includes('"elements"')) candidates.push(source)
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate.trim()) as Partial<ExcalidrawWhiteboardPayload>
-      if (Array.isArray(parsed.elements)) {
-        const elements = sanitizeExcalidrawElements(parsed.elements)
-        if (elements.length) return { elements, note: safeString(parsed.note, 240) || undefined }
-      }
-    } catch {
-      // Ignore malformed Agent output and keep chat usable.
+      // Ignore malformed diagram payload and keep chat usable.
     }
   }
   return null

@@ -1,86 +1,24 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import type { ExcalidrawWhiteboardElement, WhiteboardDiagram } from '@/lib/arena/whiteboard'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-
-const Excalidraw = dynamic(async () => (await import('@excalidraw/excalidraw')).Excalidraw, { ssr: false })
+import type { WhiteboardDiagram } from '@/lib/arena/whiteboard'
+import { normalizeMarkdownMath } from '@/lib/markdown-math'
 
 type Locale = 'zh' | 'en'
 
 type Props = {
   challengeId: string
   locale: Locale
-  elements?: ExcalidrawWhiteboardElement[]
   diagram?: WhiteboardDiagram | null
-  renderMode?: 'full' | 'step'
   expanded?: boolean
   busy?: boolean
   onExplain?: () => void
   onStep?: () => void
   onToggleExpand?: () => void
-}
-
-const defaultAppState = {
-  viewBackgroundColor: '#f8fafc',
-  currentItemStrokeColor: '#0f172a',
-  currentItemBackgroundColor: 'transparent',
-  currentItemFontFamily: 1,
-  currentItemFontSize: 20,
-}
-
-function elementId(element: ExcalidrawWhiteboardElement) {
-  return typeof element.id === 'string' ? element.id : ''
-}
-
-function elementType(element: ExcalidrawWhiteboardElement) {
-  return typeof element.type === 'string' ? element.type : ''
-}
-
-function groupElementsForSteps(elements: ExcalidrawWhiteboardElement[]) {
-  const entries: Array<[string, ExcalidrawWhiteboardElement]> = []
-  elements.forEach((element) => {
-    const id = elementId(element)
-    if (id) entries.push([id, element])
-  })
-  const byId = new Map(entries)
-  const consumed = new Set<string>()
-  const chunks: ExcalidrawWhiteboardElement[][] = []
-  const firstTexts = elements.filter((element) => ['title', 'subtitle'].includes(elementId(element)))
-  if (firstTexts.length) {
-    chunks.push(firstTexts)
-    firstTexts.forEach((element) => consumed.add(elementId(element)))
-  }
-
-  elements.forEach((element) => {
-    const id = elementId(element)
-    if (!id || consumed.has(id)) return
-    const type = elementType(element)
-    if (type === 'rectangle' || type === 'ellipse' || type === 'diamond') {
-      const group = [element]
-      const label = byId.get(`${id}-label`) || byId.get(`${id}-text`)
-      if (label) {
-        group.push(label)
-        consumed.add(elementId(label))
-      }
-      chunks.push(group)
-      consumed.add(id)
-    }
-  })
-
-  elements.forEach((element) => {
-    const id = elementId(element)
-    if (!id || consumed.has(id)) return
-    chunks.push([element])
-    consumed.add(id)
-  })
-
-  return chunks
 }
 
 function downloadJson(name: string, data: unknown) {
@@ -190,7 +128,7 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
             </div>
             {step.markdown ? (
               <div className={`max-w-none overflow-auto rounded-lg bg-white/70 p-4 text-base leading-8 text-slate-800 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1.5 [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_li]:ml-6 [&_li]:list-disc [&_p]:my-3 [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:text-base [&_td]:border [&_td]:border-slate-200 [&_td]:p-3 [&_th]:border [&_th]:border-slate-200 [&_th]:p-3 [&_th]:text-left ${style.markdown}`}>
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{step.markdown}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMarkdownMath(step.markdown)}</ReactMarkdown>
               </div>
             ) : null}
             {step.mermaid ? <MermaidPreview chart={step.mermaid} /> : null}
@@ -207,100 +145,28 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
   )
 }
 
-export function AgentWhiteboard({ challengeId, locale, elements, diagram, renderMode = 'full', expanded, busy, onExplain, onStep, onToggleExpand }: Props) {
-  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
-  const timerRef = useRef<number[]>([])
+export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, onExplain, onStep, onToggleExpand }: Props) {
   const [status, setStatus] = useState(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
   const [boardCleared, setBoardCleared] = useState(false)
-  const storageKey = useMemo(() => `arena:whiteboard:${challengeId}`, [challengeId])
-  const activeElements = useMemo(() => (boardCleared ? [] : elements), [boardCleared, elements])
   const activeDiagram = boardCleared ? null : diagram
-
-  function clearStepTimers() {
-    timerRef.current.forEach((timer) => window.clearTimeout(timer))
-    timerRef.current = []
-  }
 
   useEffect(() => {
     setBoardCleared(false)
-  }, [challengeId, elements, diagram])
+  }, [challengeId, diagram])
 
   useEffect(() => {
     setStatus(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
   }, [locale])
 
-  useEffect(() => {
-    if (activeDiagram || !activeElements?.length || !apiRef.current) return
-    let cancelled = false
-    clearStepTimers()
-
-    void import('@excalidraw/excalidraw').then(({ convertToExcalidrawElements }) => {
-      if (cancelled || !apiRef.current) return
-      const drawable = activeElements
-      const chunks = groupElementsForSteps(drawable)
-      apiRef.current.updateScene({ elements: [], appState: defaultAppState })
-
-      const renderDrawable = (visibleElements: ExcalidrawWhiteboardElement[], label?: string) => {
-        if (cancelled || !apiRef.current) return
-        const skeletons = visibleElements as Parameters<typeof convertToExcalidrawElements>[0]
-        const nextElements = convertToExcalidrawElements(skeletons, { regenerateIds: false })
-        apiRef.current.updateScene({
-          elements: nextElements,
-          appState: defaultAppState,
-        })
-        if (label) setStatus(label)
-        window.setTimeout(() => apiRef.current?.scrollToContent?.(apiRef.current.getSceneElements(), { fitToContent: true }), 80)
-      }
-
-      const shouldStep = renderMode === 'step' || chunks.length > 4
-      if (!shouldStep || chunks.length <= 2) {
-        renderDrawable(drawable, locale === 'zh' ? `已绘制 ${drawable.length} 个白板步骤` : `Rendered ${drawable.length} whiteboard steps`)
-        return
-      }
-
-      renderDrawable([], locale === 'zh' ? '开始逐步推导…' : 'Starting step derivation…')
-      chunks.forEach((_, index) => {
-        const timer = window.setTimeout(() => {
-          const count = index + 1
-          renderDrawable(
-            chunks.slice(0, count).flat(),
-            locale === 'zh' ? `逐步推导 ${count}/${chunks.length}` : `Step derivation ${count}/${chunks.length}`,
-          )
-        }, 240 + index * 720)
-        timerRef.current.push(timer)
-      })
-    })
-
-    return () => {
-      cancelled = true
-      clearStepTimers()
-    }
-  }, [activeDiagram, activeElements, locale, renderMode])
-
-  useEffect(() => () => clearStepTimers(), [])
-
   function clearBoard() {
-    clearStepTimers()
     setBoardCleared(true)
-    apiRef.current?.updateScene({ elements: [], appState: defaultAppState })
-    window.localStorage.removeItem(storageKey)
     setStatus(locale === 'zh' ? '白板已清空' : 'Whiteboard cleared')
   }
 
   function exportBoard() {
     if (activeDiagram) {
       downloadJson(`arena-whiteboard-${challengeId}.diagram.json`, activeDiagram)
-      return
     }
-    if (!apiRef.current) return
-    downloadJson(`arena-whiteboard-${challengeId}.excalidraw.json`, {
-      type: 'excalidraw',
-      version: 2,
-      source: 'wtt-arena-agent-whiteboard',
-      elements: apiRef.current.getSceneElements(),
-      appState: apiRef.current.getAppState(),
-      files: apiRef.current.getFiles(),
-    })
   }
 
   const labels = locale === 'zh'
@@ -326,21 +192,16 @@ export function AgentWhiteboard({ challengeId, locale, elements, diagram, render
         {activeDiagram ? (
           <DirectDiagramBoard diagram={activeDiagram} locale={locale} />
         ) : (
-          <Excalidraw
-            excalidrawAPI={(api: ExcalidrawImperativeAPI) => { apiRef.current = api }}
-            initialData={async () => {
-              return { elements: [], appState: defaultAppState }
-            }}
-            onChange={(elements, appState, files) => {
-              try {
-                window.localStorage.setItem(storageKey, JSON.stringify({ elements, appState: { viewBackgroundColor: appState.viewBackgroundColor }, files }))
-              } catch {
-                // localStorage can be unavailable in private mode; whiteboard still works in memory.
-              }
-            }}
-            theme="light"
-            UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}
-          />
+          <div className="flex h-full min-h-[560px] items-center justify-center p-8 text-center">
+            <div className="max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="text-base font-black text-slate-800">{locale === 'zh' ? '等待 Agent 生成白板' : 'Waiting for Agent whiteboard'}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                {locale === 'zh'
+                  ? '白板现在只渲染 Markdown、公式和 Mermaid 图表，不再回退到旧的方框画板。'
+                  : 'The board now renders Markdown, formulas, and Mermaid diagrams only, without the old box fallback.'}
+              </p>
+            </div>
+          </div>
         )}
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-500 shadow-sm">{status}</div>
       </div>

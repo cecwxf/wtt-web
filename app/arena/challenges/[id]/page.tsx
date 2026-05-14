@@ -4,10 +4,15 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
-import { extractWhiteboardPayload, makeAnswerWhiteboardElements, makeInterviewWhiteboardElements, makeWhiteboardPrompt, stripWhiteboardPayload, type ExcalidrawWhiteboardElement, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
+import { extractWhiteboardPayload, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
+import { normalizeMarkdownMath } from '@/lib/markdown-math'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -165,6 +170,14 @@ const chatModes: Array<{ id: ChatMode; zh: string; en: string; hintZh: string; h
     hintEn: 'Direct Q&A with a clear answer.',
   },
 ]
+
+function ArenaChatMarkdown({ content }: { content: string }) {
+  return (
+    <div className="max-w-none text-sm leading-6 text-gray-300 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_a]:text-[#3ce8e2] [&_a]:underline [&_code]:rounded [&_code]:bg-black/30 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-gray-100 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-black [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-black [&_h3]:mb-1.5 [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_ol>li]:list-decimal [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-gray-700 [&_td]:p-2 [&_th]:border [&_th]:border-gray-700 [&_th]:bg-gray-800 [&_th]:p-2 [&_th]:text-left">
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMarkdownMath(content)}</ReactMarkdown>
+    </div>
+  )
+}
 
 const copy = {
   zh: {
@@ -382,9 +395,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [, setArenaProfile] = useState<ArenaUserProfile | null>(null)
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
-  const [whiteboardElements, setWhiteboardElements] = useState<ExcalidrawWhiteboardElement[]>([])
   const [whiteboardDiagram, setWhiteboardDiagram] = useState<WhiteboardDiagram | null>(null)
-  const [whiteboardRenderMode, setWhiteboardRenderMode] = useState<'full' | 'step'>('full')
   const [whiteboardExpanded, setWhiteboardExpanded] = useState(false)
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
@@ -463,13 +474,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       if (content.includes('Agent thinking')) continue
       const payload = extractWhiteboardPayload(content)
       appliedWhiteboardMessageIdsRef.current.add(messageId)
-      setWhiteboardRenderMode('step')
       if (payload?.diagram) {
         setWhiteboardDiagram(payload.diagram)
-        setWhiteboardElements(payload.elements || [])
       } else {
         setWhiteboardDiagram(null)
-        setWhiteboardElements(payload?.elements?.length ? payload.elements : makeAnswerWhiteboardElements(challenge, locale, content))
       }
       break
     }
@@ -483,9 +491,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setArenaSessionState(null)
     setArenaProfile(null)
     setWhiteboardDiagram(null)
-    setWhiteboardElements([])
     setWhiteboardExpanded(false)
-    setWhiteboardRenderMode('step')
     appliedWhiteboardMessageIdsRef.current.clear()
   }, [arenaSessionKey])
 
@@ -620,10 +626,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function requestWhiteboardExplain(stepMode = false) {
     if (!challenge || whiteboardBusy) return
-    setWhiteboardRenderMode('step')
-    const previewElements = makeInterviewWhiteboardElements(challenge, locale)
     setWhiteboardDiagram(null)
-    setWhiteboardElements(previewElements)
     const message = makeWhiteboardPrompt(challenge, locale, stepMode)
     if (!session?.accessToken) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
@@ -874,9 +877,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               <AgentWhiteboard
                 challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
                 locale={locale}
-                elements={whiteboardElements}
                 diagram={whiteboardDiagram}
-                renderMode={whiteboardRenderMode}
                 expanded={whiteboardExpanded}
                 busy={whiteboardBusy || chatSending || arenaSyncing}
                 onExplain={() => requestWhiteboardExplain(false)}
@@ -921,8 +922,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 )}
                 {chatMessages.map((message, index) => (
                   <div key={`${message.createdAt}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-6 ${message.role === 'user' ? 'bg-[#3ce8e2] text-black' : 'border border-gray-800 bg-[#202020] text-gray-300'}`}>
-                      {message.content}
+                    <div className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm leading-6 ${message.role === 'user' ? 'bg-[#3ce8e2] text-black' : 'border border-gray-800 bg-[#202020] text-gray-300'}`}>
+                      {message.role === 'agent' ? <ArenaChatMarkdown content={message.content} /> : <span className="whitespace-pre-wrap break-words">{message.content}</span>}
                     </div>
                   </div>
                 ))}
