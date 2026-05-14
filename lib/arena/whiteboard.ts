@@ -52,10 +52,6 @@ function safeMultilineString(value: unknown, max = 1200) {
     .slice(0, max)
 }
 
-function visualLength(text: string) {
-  return Array.from(text).reduce((total, char) => total + (/[\u4e00-\u9fff]/.test(char) ? 2 : 1), 0)
-}
-
 function wrapLine(line: string, maxVisualLength: number) {
   const chunks: string[] = []
   let current = ''
