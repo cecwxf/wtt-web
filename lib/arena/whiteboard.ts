@@ -3,7 +3,10 @@ import type { Challenge } from './types'
 export type WhiteboardLocale = 'zh' | 'en'
 export type ExcalidrawWhiteboardElement = Record<string, unknown>
 export type ExcalidrawWhiteboardPayload = { elements: ExcalidrawWhiteboardElement[]; note?: string }
+type WhiteboardDiagramPayload = { format?: string; title?: string; summary?: string[]; source?: string; mermaid?: string }
 
+const DIAGRAM_OPEN = '[WHITEBOARD_DIAGRAM]'
+const DIAGRAM_CLOSE = '[/WHITEBOARD_DIAGRAM]'
 const EXCALIDRAW_OPEN = '[EXCALIDRAW_ELEMENTS]'
 const EXCALIDRAW_CLOSE = '[/EXCALIDRAW_ELEMENTS]'
 const WHITEBOARD_SKILL = 'arena-whiteboard-coach'
@@ -431,6 +434,84 @@ function nodeIdFromText(text: string, fallback: string) {
   return safeId(normalized, fallback)
 }
 
+function cleanMermaidLabel(label: string) {
+  return safeMultilineString(label, 180)
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseMermaidNode(token: string) {
+  const trimmed = token.trim().replace(/;$/, '').replace(/^[&\s]+|[&\s]+$/g, '')
+  const match = trimmed.match(/^([A-Za-z0-9_-]+)\s*(?:\[\[([\s\S]+?)\]\]|\[([\s\S]+?)\]|\(([\s\S]+?)\)|\{([\s\S]+?)\})?$/)
+  if (!match) return null
+  const id = safeId(match[1], `node-${Math.random().toString(36).slice(2, 7)}`)
+  const label = cleanMermaidLabel(match[2] || match[3] || match[4] || match[5] || match[1])
+  const shape = match[5] ? 'diamond' : 'rectangle'
+  return { id, label, shape }
+}
+
+function diagramPayloadToElements(payload: WhiteboardDiagramPayload): ExcalidrawWhiteboardElement[] {
+  const source = safeMultilineString(payload.source || payload.mermaid || '', 5000)
+  const title = safeString(payload.title, 160) || 'Whiteboard diagram'
+  const summary = Array.isArray(payload.summary) ? payload.summary.map((item) => safeString(item, 180)).filter(Boolean).slice(0, 4) : []
+  if (!source) return []
+
+  const nodes = new Map<string, { id: string; label: string; shape: string }>()
+  const edgeRegex = /(.+?)\s*(?:-->|---|==>|-.->)\s*(?:\|[^|]*\|\s*)?(.+)/
+  source.split('\n').forEach((line) => {
+    const trimmed = line.trim()
+    if (!trimmed || /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt)\b/i.test(trimmed)) return
+    const edge = trimmed.match(edgeRegex)
+    if (edge) {
+      ;[edge[1], edge[2]].forEach((token) => {
+        const parsed = parseMermaidNode(token)
+        if (parsed && !nodes.has(parsed.id)) nodes.set(parsed.id, parsed)
+      })
+      return
+    }
+    const parsed = parseMermaidNode(trimmed)
+    if (parsed && !nodes.has(parsed.id)) nodes.set(parsed.id, parsed)
+  })
+
+  const nodeList = Array.from(nodes.values()).slice(0, 8)
+  if (!nodeList.length) return []
+  const elements: ExcalidrawWhiteboardElement[] = [
+    textElement('title', title, 70, 45, 34, 920),
+    textElement('subtitle', summary[0] || 'Generated from Agent diagram spec', 80, 92, 18, 760, '#64748b'),
+    ...nodeList.map((node, index) => ({
+      type: node.shape,
+      id: node.id,
+      x: 80 + index * 260,
+      y: 145,
+      width: 230,
+      height: 108,
+      strokeColor: colorForIndex(index).stroke,
+      backgroundColor: colorForIndex(index).bg,
+      fillStyle: 'solid',
+      roundness: { type: 3 },
+      customData: { label: node.label },
+    })),
+  ]
+  if (summary.length > 1) {
+    elements.push({
+      type: 'rectangle',
+      id: 'summary-section',
+      x: 90,
+      y: 390,
+      width: 560,
+      height: 180,
+      strokeColor: '#475569',
+      backgroundColor: '#ffffff',
+      fillStyle: 'solid',
+      roundness: { type: 3 },
+      customData: { label: summary.join('\n') },
+    })
+  }
+  return normalizeWhiteboardLayout(elements)
+}
+
 function arrowBetween(id: string, from: { x: number; y: number }, to: { x: number; y: number }, width = 230, height = 108) {
   const dx = to.x - from.x
   const dy = to.y - from.y
@@ -759,25 +840,35 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ? '按阶段组织：goal 目标/SLO -> inputs 输入/数据/约束 -> core 核心算法/模型/架构 -> serve 在线服务/运行时 -> eval 指标/监控/实验 -> risks 风险/失败场景。'
     : 'Organize by phases: goal/SLO -> inputs/data/constraints -> core algorithm/model/architecture -> serving/runtime -> eval/monitoring/experiments -> risks/failure modes.'
   const limits = zh
-    ? '控制规模：4-6 个 answer box、1-2 个 section、3-5 条 arrow，总 elements 不超过 24。短标签，留足间距。'
-    : 'Keep it compact: 4-6 answer boxes, 1-2 sections, 3-5 arrows, at most 24 elements. Use short labels and generous spacing.'
+    ? '控制规模：Mermaid 里 4-8 个节点、3-8 条边；节点名必须来自本轮回答的具体概念。'
+    : 'Keep it compact: 4-8 Mermaid nodes and 3-8 edges; node names must be concrete concepts from this answer.'
   const example = JSON.stringify({
-    elements: [
-      { type: 'text', id: 'title', x: 70, y: 45, text: '答案结构', fontSize: 34, width: 720 },
-      { type: 'rectangle', id: 'goal', x: 80, y: 145, width: 210, height: 92, strokeColor: '#0f766e', backgroundColor: '#ccfbf1', fillStyle: 'solid', roundness: { type: 3 } },
-      { type: 'text', id: 'goal-label', x: 94, y: 163, text: '目标/SLO', fontSize: 20, width: 182 },
-      { type: 'rectangle', id: 'core', x: 620, y: 145, width: 210, height: 92, strokeColor: '#d97706', backgroundColor: '#ffedd5', fillStyle: 'solid', roundness: { type: 3 } },
-      { type: 'text', id: 'core-label', x: 634, y: 163, text: '核心方案', fontSize: 20, width: 182 },
-      { type: 'arrow', id: 'goal-core-arrow', x: 290, y: 191, points: [[0, 0], [330, 0]], endArrowhead: 'arrow', label: { text: '推导', fontSize: 16 } },
-    ],
+    format: 'mermaid',
+    title: '答案流程图',
+    summary: ['先从回答中抽取具体节点，再画流程/架构/双泳道/debug/概念图。'],
+    source: 'flowchart LR\n  A["Chunking"] --> B["Hybrid retrieval"]\n  B --> C{"Permission filter"}\n  C --> D["Rerank"]\n  D --> E["Grounded answer"]',
   })
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解理想答案，然后必须输出一个 Excalidraw-compatible JSON 块，格式如下：\n${EXCALIDRAW_OPEN}\n${example}\n${EXCALIDRAW_CLOSE}\n\n硬性要求：只使用 rectangle/text/arrow/line/ellipse/diamond；所有 rectangle/text 必须写答案组件、设计决策、指标或 trade-off；不要把题目原文、题目要求列表、或“请设计...”画进白板；不要输出 WHITEBOARD_OPS。`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain the ideal answer in natural language, then include an Excalidraw-compatible JSON block exactly like this:\n${EXCALIDRAW_OPEN}\n${example}\n${EXCALIDRAW_CLOSE}\n\nHard requirements: use only rectangle/text/arrow/line/ellipse/diamond; every rectangle/text must contain answer components, design decisions, metrics, or trade-offs; do not draw the prompt text, requirement list, or "design ..." wording; do not output WHITEBOARD_OPS.`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解理想答案，然后必须输出一个白板图协议块。优先用 Mermaid flowchart 表达当前回答的流程图、架构图、双泳道、debug 链路或概念图。格式如下：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：Mermaid 节点必须是本轮答案里的具体概念；不要画题目原文；不要输出固定模板；不要输出 WHITEBOARD_OPS。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain the ideal answer in natural language, then include a whiteboard diagram protocol block. Prefer Mermaid flowchart for the current answer's flow, architecture, two-lane diagram, debug chain, or concept map. Use this exact format:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: Mermaid nodes must be concrete concepts from this answer; do not draw the prompt text; do not reuse a fixed template; do not output WHITEBOARD_OPS.`
 }
 
 export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardPayload | null {
   const source = content || ''
+  const diagramTagged = source.match(/\[WHITEBOARD_DIAGRAM\]([\s\S]*?)\[\/WHITEBOARD_DIAGRAM\]/i)
+  const diagramCandidates = diagramTagged ? [diagramTagged[1]] : []
+  const fencedMermaid = source.match(/```mermaid\s*([\s\S]*?)```/i)
+  if (fencedMermaid) diagramCandidates.push(JSON.stringify({ format: 'mermaid', source: fencedMermaid[1] }))
+  for (const candidate of diagramCandidates) {
+    try {
+      const parsed = JSON.parse(candidate.trim()) as WhiteboardDiagramPayload
+      const elements = diagramPayloadToElements(parsed)
+      if (elements.length) return { elements, note: safeString(parsed.title, 240) || undefined }
+    } catch {
+      // Ignore malformed diagram payload and try Excalidraw elements.
+    }
+  }
+
   const tagged = source.match(/\[EXCALIDRAW_ELEMENTS\]([\s\S]*?)\[\/EXCALIDRAW_ELEMENTS\]/i)
   const candidates = tagged ? [tagged[1]] : []
   const fenced = source.match(/```(?:json)?\s*([\s\S]*?"elements"[\s\S]*?)```/i)
@@ -800,7 +891,9 @@ export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardP
 
 export function stripWhiteboardPayload(content: string) {
   return (content || '')
+    .replace(/\[WHITEBOARD_DIAGRAM\][\s\S]*?\[\/WHITEBOARD_DIAGRAM\]/gi, '')
     .replace(/\[EXCALIDRAW_ELEMENTS\][\s\S]*?\[\/EXCALIDRAW_ELEMENTS\]/gi, '')
+    .replace(/```mermaid\s*[\s\S]*?```/gi, '')
     .replace(/\[WHITEBOARD_OPS\][\s\S]*?\[\/WHITEBOARD_OPS\]/gi, '')
     .replace(/```(?:json)?\s*\{[\s\S]*?"elements"[\s\S]*?\}\s*```/gi, '')
     .trim()

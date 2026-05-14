@@ -1,6 +1,6 @@
 ---
 name: arena-whiteboard-coach
-description: Use when generating WTT Arena interview whiteboards, especially answer-structure diagrams for AI/ML/system-design questions. Produces compact, staged Excalidraw-compatible elements instead of restating the prompt.
+description: Use when generating WTT Arena interview whiteboards, especially answer-structure diagrams for AI/ML/system-design questions. Produces compact Mermaid-based diagram specs that WTT converts into Excalidraw whiteboards.
 ---
 
 # Arena Whiteboard Coach
@@ -9,15 +9,15 @@ Use this skill for WTT Arena whiteboard explanations. The goal is to teach like 
 
 ## Output Contract
 
-Always produce a short explanation followed by one `EXCALIDRAW_ELEMENTS` JSON block. Before drawing, compress your answer into 4-6 answer-specific nodes. The node labels must come from the current reply, not from a reusable template.
+Always produce a short explanation followed by one `WHITEBOARD_DIAGRAM` JSON block. Before drawing, compress your answer into 4-8 answer-specific nodes. The node labels must come from the current reply, not from a reusable template.
 
 ```text
-[EXCALIDRAW_ELEMENTS]
-{"elements":[{"type":"text","id":"title","x":70,"y":45,"text":"答案结构","fontSize":34,"width":720},{"type":"rectangle","id":"goal","x":80,"y":145,"width":210,"height":92,"strokeColor":"#0f766e","backgroundColor":"#ccfbf1","fillStyle":"solid","roundness":{"type":3}},{"type":"text","id":"goal-label","x":94,"y":163,"text":"目标/SLO","fontSize":20,"width":182},{"type":"rectangle","id":"core","x":620,"y":145,"width":210,"height":92,"strokeColor":"#d97706","backgroundColor":"#ffedd5","fillStyle":"solid","roundness":{"type":3}},{"type":"text","id":"core-label","x":634,"y":163,"text":"核心方案","fontSize":20,"width":182},{"type":"arrow","id":"goal-core-arrow","x":290,"y":191,"points":[[0,0],[330,0]],"endArrowhead":"arrow","label":{"text":"推导","fontSize":16}}]}
-[/EXCALIDRAW_ELEMENTS]
+[WHITEBOARD_DIAGRAM]
+{"format":"mermaid","title":"RAG answer architecture","summary":["Separate retrieval quality, permission safety, generation grounding, and evaluation loop."],"source":"flowchart LR\n  Q[\"User query\"] --> P[\"Permission filter\"]\n  P --> H[\"Hybrid retrieval\"]\n  H --> R[\"Rerank\"]\n  R --> G[\"Grounded generation\"]\n  G --> E[\"Eval + feedback\"]"}
+[/WHITEBOARD_DIAGRAM]
 ```
 
-Supported element types: `rectangle`, `text`, `arrow`, `line`, `ellipse`, `diamond`. Do not emit `WHITEBOARD_OPS`.
+Preferred format: Mermaid `flowchart LR` or `flowchart TD`. WTT will convert it to editable Excalidraw elements. Do not emit `WHITEBOARD_OPS`.
 
 ## Teaching Phases
 
@@ -30,6 +30,7 @@ Use these patterns when appropriate:
 - `two_lane`: offline vs online, training vs serving, batch vs realtime.
 - `debug`: symptom -> likely cause -> check -> minimal fix -> validation.
 - `concept`: prerequisite -> intuition -> formula/invariant -> example -> trap.
+- `decision tree`: branch on constraints or failure conditions with Mermaid `{Decision}` nodes.
 
 Possible teaching phases:
 
@@ -44,11 +45,11 @@ Possible teaching phases:
 
 - Keep the board compact: 4-6 answer boxes, 1-2 section panels, 3-5 arrows, at most 24 elements.
 - Do not copy the problem statement or requirement list into the board.
-- Rectangles and text should contain answer components or decisions, not instructions.
+- Mermaid nodes should contain answer components or decisions, not instructions.
 - Prefer short labels: 2-5 words for boxes; put long explanations in section panels. Never put a full sentence inside a small box.
 - Use content-specific stable IDs such as `retrieval`, `rerank`, `kv-cache`, `offline-features`, `online-read`, `root-cause`, `fix`, `metric`, `rollback`.
 - Avoid generic IDs and labels unless the answer itself is generic. Bad: `goal`, `inputs`, `core`, `serve`, `eval` for every response. Good: `chunking`, `permission-filter`, `hybrid-search`, `kv-cache`, `rollback`.
-- Coordinates are hints only. The WTT renderer may normalize layout, so encode meaning in element IDs and labels.
+- Keep Mermaid syntax simple: `A["Label"] --> B["Label"]`, optional `{Decision}` nodes, no subgraphs unless essential.
 
 ## Quality Bar
 
