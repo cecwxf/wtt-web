@@ -9,6 +9,8 @@ const EXCALIDRAW_CLOSE = '[/EXCALIDRAW_ELEMENTS]'
 const WHITEBOARD_SKILL = 'arena-whiteboard-coach'
 const MAX_ELEMENTS = 36
 const MAX_POINTS = 8
+const DEFAULT_FONT_FAMILY = 2
+const DEFAULT_LINE_HEIGHT = 1.25
 const COORDS = { minX: 40, maxX: 1320, minY: 24, maxY: 780, minW: 40, maxW: 760, minH: 32, maxH: 340 }
 const ALLOWED_ELEMENT_TYPES = new Set(['rectangle', 'ellipse', 'diamond', 'arrow', 'line', 'text'])
 
@@ -82,7 +84,24 @@ function whiteboardBlueprint(template: NonNullable<Challenge['whiteboard_templat
 }
 
 function textElement(id: string, text: string, x: number, y: number, fontSize = 20, width = 300, color = '#0f172a'): ExcalidrawWhiteboardElement {
-  return { type: 'text', id, x, y, text: safeString(text, 900), fontSize, width, strokeColor: color }
+  const cleanText = safeString(text, 900)
+  return {
+    type: 'text',
+    id,
+    x,
+    y,
+    text: cleanText,
+    originalText: cleanText,
+    fontSize,
+    fontFamily: DEFAULT_FONT_FAMILY,
+    lineHeight: DEFAULT_LINE_HEIGHT,
+    width,
+    height: Math.max(28, cleanText.split('\n').length * fontSize * DEFAULT_LINE_HEIGHT),
+    strokeColor: color,
+    backgroundColor: 'transparent',
+    textAlign: 'left',
+    verticalAlign: 'top',
+  }
 }
 
 function boxElements(id: string, text: string, x: number, y: number, color: string, bg: string): ExcalidrawWhiteboardElement[] {
@@ -151,15 +170,28 @@ function sanitizePoints(value: unknown) {
   return sanitized.length >= 2 ? sanitized : [[0, 0], [160, 0]]
 }
 
-function sanitizeExcalidrawElement(element: unknown, index: number): ExcalidrawWhiteboardElement | null {
-  if (!isRecord(element)) return null
+function labelText(value: unknown) {
+  if (typeof value === 'string' || typeof value === 'number') return safeString(value, 240)
+  if (isRecord(value)) return safeString(value.text, 240)
+  return ''
+}
+
+function companionTextElement(id: string, text: string, x: number, y: number, width: number, fontSize = 20) {
+  return textElement(id, text, x, y, fontSize, Math.max(80, width), '#0f172a')
+}
+
+function sanitizeExcalidrawElement(element: unknown, index: number): ExcalidrawWhiteboardElement[] {
+  if (!isRecord(element)) return []
   const type = safeString(element.type, 32)
-  if (!ALLOWED_ELEMENT_TYPES.has(type)) return null
+  if (!ALLOWED_ELEMENT_TYPES.has(type)) return []
+  const id = safeId(element.id, `arena-el-${index}`)
+  const x = safeNumber(element.x, 80 + (index % 5) * 250, COORDS.minX, COORDS.maxX)
+  const y = safeNumber(element.y, 120 + Math.floor(index / 5) * 120, COORDS.minY, COORDS.maxY)
   const base: ExcalidrawWhiteboardElement = {
     type,
-    id: safeId(element.id, `arena-el-${index}`),
-    x: safeNumber(element.x, 80 + (index % 5) * 250, COORDS.minX, COORDS.maxX),
-    y: safeNumber(element.y, 120 + Math.floor(index / 5) * 120, COORDS.minY, COORDS.maxY),
+    id,
+    x,
+    y,
     strokeColor: safeColor(element.strokeColor, '#334155'),
     backgroundColor: safeColor(element.backgroundColor, 'transparent'),
     strokeWidth: safeNumber(element.strokeWidth, 2, 1, 4),
@@ -168,36 +200,72 @@ function sanitizeExcalidrawElement(element: unknown, index: number): ExcalidrawW
   }
 
   if (type === 'text') {
-    return {
+    const text = safeString(element.text ?? element.label, 900)
+    if (!text) return []
+    return [{
       ...base,
-      text: safeString(element.text, 900),
+      text,
+      originalText: safeString(element.originalText, 900) || text,
       fontSize: safeNumber(element.fontSize, 20, 14, 36),
+      fontFamily: safeNumber(element.fontFamily, DEFAULT_FONT_FAMILY, 1, 9),
+      lineHeight: typeof element.lineHeight === 'number' ? element.lineHeight : DEFAULT_LINE_HEIGHT,
       width: safeNumber(element.width, 320, COORDS.minW, COORDS.maxW),
-    }
+      height: safeNumber(element.height, Math.max(28, text.split('\n').length * 20 * DEFAULT_LINE_HEIGHT), COORDS.minH, COORDS.maxH),
+      backgroundColor: 'transparent',
+      textAlign: ['left', 'center', 'right'].includes(String(element.textAlign)) ? element.textAlign : 'left',
+      verticalAlign: ['top', 'middle', 'bottom'].includes(String(element.verticalAlign)) ? element.verticalAlign : 'top',
+    }]
   }
 
   if (type === 'arrow' || type === 'line') {
-    const label = isRecord(element.label) ? { text: safeString(element.label.text, 80), fontSize: safeNumber(element.label.fontSize, 16, 12, 24) } : undefined
-    return {
+    const points = sanitizePoints(element.points)
+    const line = {
       ...base,
-      points: sanitizePoints(element.points),
+      points,
       endArrowhead: type === 'arrow' ? 'arrow' : undefined,
-      label,
     }
+    const label = labelText(element.label ?? element.text)
+    if (!label) return [line]
+    const [start, end] = points
+    const labelX = x + (start[0] + end[0]) / 2 - 28
+    const labelY = y + (start[1] + end[1]) / 2 - 22
+    return [line, companionTextElement(`${id}-label`, label, labelX, labelY, 120, safeNumber(isRecord(element.label) ? element.label.fontSize : undefined, 16, 12, 24))]
   }
 
-  return {
+  const width = safeNumber(element.width, 210, COORDS.minW, COORDS.maxW)
+  const height = safeNumber(element.height, 92, COORDS.minH, COORDS.maxH)
+  const shape = {
     ...base,
-    width: safeNumber(element.width, 210, COORDS.minW, COORDS.maxW),
-    height: safeNumber(element.height, 92, COORDS.minH, COORDS.maxH),
+    width,
+    height,
   }
+  const label = labelText(element.text ?? element.label ?? element.title)
+  if (!label) return [shape]
+  return [{
+    ...shape,
+    customData: { label },
+  }]
 }
 
 export function sanitizeExcalidrawElements(elements: unknown[]): ExcalidrawWhiteboardElement[] {
-  return elements
-    .slice(0, MAX_ELEMENTS)
-    .map(sanitizeExcalidrawElement)
-    .filter((element): element is ExcalidrawWhiteboardElement => Boolean(element))
+  const sanitized: ExcalidrawWhiteboardElement[] = []
+  elements.slice(0, MAX_ELEMENTS).forEach((element, index) => {
+    const group = sanitizeExcalidrawElement(element, index)
+    sanitized.push(...group)
+    const shape = group.find((item) => ['rectangle', 'ellipse', 'diamond'].includes(safeString(item.type, 32)))
+    const hasText = group.some((item) => item.type === 'text')
+    const label = isRecord(shape?.customData) ? safeString(shape.customData.label, 240) : ''
+    if (shape && !hasText && label) {
+      sanitized.push(companionTextElement(
+        `${safeId(shape.id, `arena-el-${index}`)}-label`,
+        label,
+        safeNumber(shape.x, 80, COORDS.minX, COORDS.maxX) + 14,
+        safeNumber(shape.y, 120, COORDS.minY, COORDS.maxY) + 18,
+        safeNumber(shape.width, 210, COORDS.minW, COORDS.maxW) - 28,
+      ))
+    }
+  })
+  return sanitized.slice(0, MAX_ELEMENTS)
 }
 
 export function makeInterviewWhiteboardElements(challenge: Challenge, locale: WhiteboardLocale): ExcalidrawWhiteboardElement[] {

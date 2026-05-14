@@ -230,7 +230,9 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMes
       const semantic = String(message.semantic_type || '').toLowerCase()
       const content = String(message.content || '')
       if (semantic === 'system') return false
+      if (semantic === 'notification') return false
       if (content.includes('[system:p2p_init]')) return false
+      if (content.includes('Agent thinking')) return false
       return !!stripWhiteboardPayload(stripSourceBlock(content))
     })
     .map((message) => {
@@ -333,10 +335,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     for (const row of [...rows].reverse()) {
       const senderType = String(row.sender_type || '').toUpperCase()
       const senderId = String(row.sender_id || '')
+      const semantic = String(row.semantic_type || '').toLowerCase()
       const isAgent = senderType === 'AGENT' || senderId === ARENA_AGENT_ID
       const messageId = row.id || row.message_id || `${row.timestamp || row.created_at || ''}:${String(row.content || '').length}`
+      if (semantic === 'notification') continue
       if (!isAgent || appliedWhiteboardMessageIdsRef.current.has(messageId)) continue
       const content = stripSourceBlock(String(row.content || ''))
+      if (content.includes('Agent thinking')) continue
       const payload = extractWhiteboardPayload(content)
       appliedWhiteboardMessageIdsRef.current.add(messageId)
       setWhiteboardRenderMode('step')
