@@ -5,6 +5,8 @@ const createdAt = '2026-05-11T00:00:00.000Z'
 type InterviewSpec = {
   id: string
   title: string
+  moduleTitle: string
+  shortTitle: string
   difficulty: 'easy' | 'medium' | 'hard'
   tags: string[]
   prompt: string
@@ -229,27 +231,50 @@ const modules: ModuleSpec[] = [
 const specs: InterviewSpec[] = modules.flatMap((module) => module.items.map((item) => ({
   id: `ai-interview-${module.key}-${item.id}`,
   title: `${module.title}：${item.title}`,
+  moduleTitle: module.title,
+  shortTitle: item.title,
   difficulty: item.difficulty,
   tags: [...module.tags, module.key],
-  prompt: `${item.focus}\n\n请从面试候选人的角度结构化回答：先澄清目标和约束，再给出核心原理/架构或推导，补充关键公式、指标、trade-off、失败模式和上线/验证方案。`,
+  prompt: item.focus,
   concepts: module.concepts,
   whiteboardTemplate: module.whiteboardTemplate,
   followUps: module.followUps,
 })))
 
+function whiteboardHintFor(spec: InterviewSpec) {
+  if (spec.whiteboardTemplate === 'system_architecture') {
+    return `画出「${spec.shortTitle}」的核心组件、数据流、在线/离线边界、反馈闭环和关键监控点。`
+  }
+
+  if (spec.whiteboardTemplate === 'training_serving_consistency') {
+    return `对齐「${spec.shortTitle}」中的训练侧、服务侧、状态同步、显存/吞吐瓶颈和一致性校验。`
+  }
+
+  if (spec.whiteboardTemplate === 'inference_flow') {
+    return `按 prefill/decode、张量形状、缓存/访存、调度策略和延迟来源拆解「${spec.shortTitle}」。`
+  }
+
+  if (spec.whiteboardTemplate === 'evaluation_loop') {
+    return `围绕「${spec.shortTitle}」画出数据来源、训练或优化目标、评测集、人工校准和回归门禁。`
+  }
+
+  if (spec.whiteboardTemplate === 'solution_flow') {
+    return `把「${spec.shortTitle}」拆成输入特征、模型结构、损失/指标、错误案例和部署路径。`
+  }
+
+  return `画出「${spec.shortTitle}」从输入到输出的关键阶段、瓶颈、验证方法和回滚点。`
+}
+
 function descriptionFor(spec: InterviewSpec) {
-  return `AI 面试题 / Agent 练习题。
+  return `AI 面试题 / ${spec.moduleTitle}
 
 题目：${spec.title}
 
-要求：${spec.prompt}
+考察重点：${spec.prompt}
 
-答题建议：
-- 先明确目标、约束、规模和成功指标。
-- 按数据/模型/训练或推理/系统/评测/监控拆解。
-- 必要时写出公式、复杂度、容量或延迟估算。
-- 给出关键 trade-off、失败场景、排查路径和迭代方案。
-- 可以直接在右侧 Arena Coach 中选择“苏格拉底 / 面试回答 / Ask”模式练习。`
+白板提示：${whiteboardHintFor(spec)}
+
+追问方向：${spec.followUps.join(' / ')}`
 }
 
 export const aiInterviewChallenges: Challenge[] = specs.map((spec) => ({
