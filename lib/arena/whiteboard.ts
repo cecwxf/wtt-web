@@ -7,8 +7,6 @@ type WhiteboardDiagramPayload = { format?: string; title?: string; summary?: str
 
 const DIAGRAM_OPEN = '[WHITEBOARD_DIAGRAM]'
 const DIAGRAM_CLOSE = '[/WHITEBOARD_DIAGRAM]'
-const EXCALIDRAW_OPEN = '[EXCALIDRAW_ELEMENTS]'
-const EXCALIDRAW_CLOSE = '[/EXCALIDRAW_ELEMENTS]'
 const WHITEBOARD_SKILL = 'arena-whiteboard-coach'
 const MAX_ELEMENTS = 36
 const MAX_POINTS = 8
