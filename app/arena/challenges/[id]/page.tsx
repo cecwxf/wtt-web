@@ -118,27 +118,6 @@ const coachActions: CoachAction[] = [
     promptEn: explainPromptEn,
   },
   {
-    intent: 'debug',
-    zh: 'Debug',
-    en: 'Debug',
-    promptZh: (challenge) => `请 debug 我对「${challenge.title}」的当前答案或代码，优先检查是否覆盖了“${extractChallengeFocus(challenge)}”，再指出一个最小修正方向。`,
-    promptEn: (challenge) => `Debug my current answer or code for "${challenge.title}". First check whether it addresses this focus: ${extractChallengeFocus(challenge)}. Then identify one minimal correction.`,
-  },
-  {
-    intent: 'follow_up',
-    zh: '追问',
-    en: 'Follow-up',
-    promptZh: (challenge) => `请作为面试官，围绕「${challenge.title}」和“${extractChallengeFocus(challenge)}”提出一个真实追问。先不要给答案，等我回答。`,
-    promptEn: (challenge) => `Act as the interviewer for "${challenge.title}" and ask one realistic follow-up grounded in this focus: ${extractChallengeFocus(challenge)}. Do not answer it yet.`,
-  },
-  {
-    intent: 'concept',
-    zh: '补课',
-    en: 'Concept',
-    promptZh: (challenge) => `请判断「${challenge.title}」里我最需要补的一个知识点，必须贴合“${extractChallengeFocus(challenge)}”。简短讲清楚后给我一个小检查问题。`,
-    promptEn: (challenge) => `Pick the one prerequisite concept I most need for "${challenge.title}", grounded in this focus: ${extractChallengeFocus(challenge)}. Teach it briefly, then ask a quick check question.`,
-  },
-  {
     intent: 'recommend_next',
     zh: '类题迁移',
     en: 'Transfer',
@@ -179,6 +158,10 @@ function ArenaChatMarkdown({ content }: { content: string }) {
   )
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
 const copy = {
   zh: {
     challenges: '题库', playground: '训练场', discuss: '讨论', runner: 'Agent Runner 执行', description: '题目', submissions: '提交', leaderboard: '排行榜',
@@ -191,7 +174,7 @@ const copy = {
     mode: '模式',
     coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
     aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
-    interviewMode: 'AI 面试练习模式', interviewHint: '这类题不需要提交代码。直接在右侧和 Arena Coach 进行多轮模拟面试、追问、复盘。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
+    interviewMode: 'AI 面试练习模式', interviewHint: '开放式面试题，直接在右侧和 Arena Coach 练习结构化回答。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
   },
   en: {
     challenges: 'Challenges', playground: 'Playground', discuss: 'Discuss', runner: 'Agent Runner', description: 'Description', submissions: 'Submissions', leaderboard: 'Leaderboard',
@@ -204,7 +187,7 @@ const copy = {
     mode: 'Mode',
     coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
     aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
-    interviewMode: 'AI interview practice mode', interviewHint: 'No code submission is required. Use Arena Coach on the right for mock interview, follow-up questions, and review.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
+    interviewMode: 'AI interview practice mode', interviewHint: 'Open-ended interview prompt. Practice a structured answer with Arena Coach on the right.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
   },
 } as const
 
@@ -398,7 +381,33 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardDiagram, setWhiteboardDiagram] = useState<WhiteboardDiagram | null>(null)
   const [whiteboardExpanded, setWhiteboardExpanded] = useState(false)
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
+  const [leftPanelWidth, setLeftPanelWidth] = useState(420)
+  const [chatPanelWidth, setChatPanelWidth] = useState(460)
+  const layoutRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
+
+  function startPanelResize(panel: 'left' | 'chat') {
+    return (event: React.PointerEvent<HTMLDivElement>) => {
+      if (isCoding) return
+      event.preventDefault()
+      const bounds = layoutRef.current?.getBoundingClientRect()
+      if (!bounds) return
+      const handleMove = (moveEvent: PointerEvent) => {
+        if (panel === 'left') {
+          const available = bounds.width - chatPanelWidth - 120
+          setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 280, Math.max(300, available)))
+          return
+        }
+        setChatPanelWidth(clampNumber(bounds.right - moveEvent.clientX, 340, Math.min(720, bounds.width - 420)))
+      }
+      const stop = () => {
+        window.removeEventListener('pointermove', handleMove)
+        window.removeEventListener('pointerup', stop)
+      }
+      window.addEventListener('pointermove', handleMove)
+      window.addEventListener('pointerup', stop)
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -679,6 +688,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading Arena...</main>
   }
 
+  const arenaLayoutStyle = !isCoding
+    ? {
+      gridTemplateColumns: whiteboardExpanded
+        ? `minmax(420px, 1fr) 6px ${chatPanelWidth}px`
+        : `${leftPanelWidth}px 6px minmax(420px, 1fr) 6px ${chatPanelWidth}px`,
+    }
+    : undefined
+
   return (
     <main className="min-h-screen bg-[#151515] text-gray-100">
       <div className="flex h-screen flex-col overflow-hidden">
@@ -700,7 +717,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 gap-3 p-3 xl:grid-cols-[32%_1fr_480px] lg:grid-cols-[38%_62%]">
+        <div
+          ref={layoutRef}
+          className={`grid min-h-0 flex-1 gap-3 overflow-hidden p-3 ${isCoding ? 'xl:grid-cols-[32%_1fr_480px] lg:grid-cols-[38%_62%]' : ''}`}
+          style={arenaLayoutStyle}
+        >
           {(isCoding || !whiteboardExpanded) && (
           <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
             <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-800 bg-[#191919] px-4 py-3 text-sm">
@@ -817,6 +838,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           </section>
           )}
 
+          {!isCoding && !whiteboardExpanded && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onPointerDown={startPanelResize('left')}
+              className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-[#3ce8e2]/50"
+            />
+          )}
+
           {isCoding ? (
             <section className="grid min-h-0 gap-3 lg:grid-rows-[1fr_210px]">
               <div className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
@@ -859,18 +889,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               </section>
             </section>
           ) : (
-            <div className={whiteboardExpanded ? 'min-h-0 xl:col-span-3 lg:col-span-2' : 'grid min-h-0 gap-3 lg:grid-rows-[auto_1fr]'}>
+            <div className="grid min-h-0 gap-2 lg:grid-rows-[auto_1fr]">
               {!whiteboardExpanded && (
-              <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-[#1e1e1e] to-[#151515] p-4">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.26em] text-violet-300">{t.interviewMode}</p>
-                    <h2 className="mt-2 text-2xl font-black tracking-tight text-white">{challenge.title}</h2>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-300">{t.interviewHint}</p>
-                  </div>
-                  <button onClick={() => setChatInput(locale === 'zh' ? `请作为 AI 面试官，围绕「${challenge.title}」对我进行模拟面试。先让我给出 high-level 方案，然后逐步追问。` : `Act as an AI interviewer for "${challenge.title}". Ask me for a high-level design first, then follow up on trade-offs.`)} className="rounded-md bg-gradient-to-r from-violet-300 to-fuchsia-500 px-4 py-2 text-xs font-black text-black transition-opacity hover:opacity-90">
-                    {locale === 'zh' ? '生成模拟面试开场 →' : 'Start mock interview →'}
-                  </button>
+              <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-[#1e1e1e] px-3 py-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <p className="shrink-0 text-[11px] font-black uppercase tracking-[0.18em] text-violet-300">{t.interviewMode}</p>
+                  <p className="min-w-0 truncate text-xs text-gray-400">{t.interviewHint}</p>
                 </div>
               </section>
               )}
@@ -881,16 +905,23 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 expanded={whiteboardExpanded}
                 busy={whiteboardBusy || chatSending || arenaSyncing}
                 onExplain={() => requestWhiteboardExplain(false)}
-                onStep={() => requestWhiteboardExplain(true)}
                 onToggleExpand={() => setWhiteboardExpanded((value) => !value)}
               />
             </div>
           )}
 
-          {(isCoding || !whiteboardExpanded) && (
-          <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-3 lg:col-span-2 xl:col-span-1">
+          {!isCoding && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onPointerDown={startPanelResize('chat')}
+              className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-[#3ce8e2]/50"
+            />
+          )}
+
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 lg:col-span-2 xl:col-span-1">
             <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
-              <div className="border-b border-gray-800 px-4 py-3">
+              <div className="border-b border-gray-800 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-black text-white">{t.chatTitle}</h3>
@@ -902,14 +933,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   </div>
                   <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2.5 py-1 text-[11px] font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
                   {coachActions.map((action) => (
                     <button
                       key={action.intent}
                       type="button"
                       onClick={() => runCoachAction(action)}
                       disabled={chatSending || arenaSyncing}
-                      className="rounded-md border border-gray-800 bg-[#202020] px-2 py-2 text-xs font-bold text-gray-300 transition-colors hover:border-[#3ce8e2] hover:text-[#3ce8e2] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-md border border-[#3ce8e2]/30 bg-[#3ce8e2]/15 px-2 py-1.5 text-[11px] font-black text-[#bffffd] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {locale === 'zh' ? action.zh : action.en}
                     </button>
@@ -930,14 +961,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 {arenaSyncing && <p className="text-xs text-[#3ce8e2]">{t.chatSyncing}</p>}
                 {chatSending && <p className="text-xs text-gray-500">{t.chatThinking}</p>}
               </div>
-              <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="shrink-0 border-t border-gray-800 bg-[#151515] p-4">
+              <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="shrink-0 border-t border-gray-800 bg-[#151515] p-3">
                 <textarea
                   value={chatInput}
                   onChange={(event) => setChatInput(event.target.value)}
                   onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendAgentChat() }}
                   placeholder={t.chatPlaceholder}
-                  rows={6}
-                  className="min-h-[132px] w-full resize-y rounded-md border border-gray-800 bg-[#101010] p-3 text-sm leading-6 text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2]"
+                  rows={4}
+                  className="min-h-[96px] w-full resize-y rounded-md border border-gray-800 bg-[#101010] p-3 text-sm leading-6 text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2]"
                 />
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
                   <span className="min-w-0 flex-1 truncate">{locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}</span>
@@ -958,7 +989,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               </form>
             </div>
           </aside>
-          )}
         </div>
       </div>
     </main>

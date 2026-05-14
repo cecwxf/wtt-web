@@ -17,18 +17,7 @@ type Props = {
   expanded?: boolean
   busy?: boolean
   onExplain?: () => void
-  onStep?: () => void
   onToggleExpand?: () => void
-}
-
-function downloadJson(name: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = name
-  anchor.click()
-  URL.revokeObjectURL(url)
 }
 
 function MermaidPreview({ chart }: { chart: string }) {
@@ -145,7 +134,7 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
   )
 }
 
-export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, onExplain, onStep, onToggleExpand }: Props) {
+export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, onExplain, onToggleExpand }: Props) {
   const [status, setStatus] = useState(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
   const [boardCleared, setBoardCleared] = useState(false)
   const activeDiagram = boardCleared ? null : diagram
@@ -163,15 +152,9 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
     setStatus(locale === 'zh' ? '白板已清空' : 'Whiteboard cleared')
   }
 
-  function exportBoard() {
-    if (activeDiagram) {
-      downloadJson(`arena-whiteboard-${challengeId}.diagram.json`, activeDiagram)
-    }
-  }
-
   const labels = locale === 'zh'
-    ? { title: 'Agent 白板讲解', subtitle: 'Agent 会把面试答案推导成结构化白板：公式、架构、指标、trade-off。', explain: 'Agent 讲解', step: '逐步推导', clear: '清空', export: '导出 JSON', expand: expanded ? '还原' : '展开' }
-    : { title: 'Agent whiteboard', subtitle: 'The Agent turns an interview answer into a structured board: formulas, architecture, metrics, and trade-offs.', explain: 'Agent explain', step: 'Step derivation', clear: 'Clear', export: 'Export JSON', expand: expanded ? 'Restore' : 'Expand' }
+    ? { title: 'Agent 白板讲解', subtitle: 'Markdown / 公式 / Mermaid 图表', explain: '生成白板', clear: '清空', expand: expanded ? '还原' : '展开' }
+    : { title: 'Agent whiteboard', subtitle: 'Markdown / formulas / Mermaid diagrams', explain: 'Generate board', clear: 'Clear', expand: expanded ? 'Restore' : 'Expand' }
 
   return (
     <section className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] ${expanded ? 'h-full' : ''}`}>
@@ -182,10 +165,8 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={onExplain} disabled={busy} className="rounded-md bg-gradient-to-r from-violet-300 to-fuchsia-500 px-3 py-2 text-xs font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{busy ? '...' : labels.explain}</button>
-          <button onClick={onStep} disabled={busy} className="rounded-md border border-violet-400/30 bg-violet-400/10 px-3 py-2 text-xs font-bold text-violet-200 hover:border-violet-300 disabled:cursor-not-allowed disabled:opacity-40">{labels.step}</button>
           {onToggleExpand ? <button onClick={onToggleExpand} className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 hover:border-amber-200">{labels.expand}</button> : null}
           <button onClick={clearBoard} className="rounded-md border border-gray-700 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-300 hover:border-gray-500">{labels.clear}</button>
-          <button onClick={exportBoard} className="rounded-md border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-3 py-2 text-xs font-bold text-[#bffffd] hover:border-[#3ce8e2]">{labels.export}</button>
         </div>
       </div>
       <div className="relative min-h-[560px] flex-1 bg-slate-50">
