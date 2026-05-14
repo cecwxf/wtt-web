@@ -1,6 +1,6 @@
 ---
 name: arena-whiteboard-coach
-description: Use when generating WTT Arena interview whiteboards, especially answer-structure diagrams for AI/ML/system-design questions. Produces compact, staged Excalidraw-compatible WHITEBOARD_OPS instead of restating the prompt.
+description: Use when generating WTT Arena interview whiteboards, especially answer-structure diagrams for AI/ML/system-design questions. Produces compact, staged Excalidraw-compatible elements instead of restating the prompt.
 ---
 
 # Arena Whiteboard Coach
@@ -9,15 +9,15 @@ Use this skill for WTT Arena whiteboard explanations. The goal is to teach like 
 
 ## Output Contract
 
-Always produce a short explanation followed by one `WHITEBOARD_OPS` JSON block:
+Always produce a short explanation followed by one `EXCALIDRAW_ELEMENTS` JSON block:
 
 ```text
-[WHITEBOARD_OPS]
-{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"..."},{"type":"arrow","from":"goal","to":"core"},{"type":"section","title":"Trade-offs","items":["..."]}]}
-[/WHITEBOARD_OPS]
+[EXCALIDRAW_ELEMENTS]
+{"elements":[{"type":"text","id":"title","x":70,"y":45,"text":"答案结构","fontSize":34,"width":720},{"type":"rectangle","id":"goal","x":80,"y":145,"width":210,"height":92,"strokeColor":"#0f766e","backgroundColor":"#ccfbf1","fillStyle":"solid","roundness":{"type":3}},{"type":"text","id":"goal-label","x":94,"y":163,"text":"目标/SLO","fontSize":20,"width":182},{"type":"rectangle","id":"core","x":620,"y":145,"width":210,"height":92,"strokeColor":"#d97706","backgroundColor":"#ffedd5","fillStyle":"solid","roundness":{"type":3}},{"type":"text","id":"core-label","x":634,"y":163,"text":"核心方案","fontSize":20,"width":182},{"type":"arrow","id":"goal-core-arrow","x":290,"y":191,"points":[[0,0],[330,0]],"endArrowhead":"arrow","label":{"text":"推导","fontSize":16}}]}
+[/EXCALIDRAW_ELEMENTS]
 ```
 
-Supported ops: `clear`, `title`, `text`, `box`, `arrow`, `section`.
+Supported element types: `rectangle`, `text`, `arrow`, `line`, `ellipse`, `diamond`. Do not emit `WHITEBOARD_OPS`.
 
 ## Teaching Phases
 
@@ -32,12 +32,12 @@ Order the board in these phases:
 
 ## Layout Rules
 
-- Keep the board compact: 4-6 boxes, 1-2 sections, 3-5 arrows.
+- Keep the board compact: 4-6 answer boxes, 1-2 section panels, 3-5 arrows, at most 24 elements.
 - Do not copy the problem statement or requirement list into the board.
-- Boxes should contain answer components or decisions, not instructions.
+- Rectangles and text should contain answer components or decisions, not instructions.
 - Prefer short labels: 2-6 words for boxes, one sentence per section item.
 - Use stable IDs such as `goal`, `inputs`, `core`, `serve`, `eval`, `risks`.
-- Let the renderer handle coordinates; include coordinates only if required by the schema.
+- Use a simple left-to-right layout: boxes around y=145, sections around y=365, arrows between boxes. Leave spacing; avoid dense coordinate clusters.
 
 ## Quality Bar
 

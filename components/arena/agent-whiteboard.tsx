@@ -2,24 +2,29 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import type { WhiteboardOp } from '@/lib/arena/whiteboard'
+import type { ExcalidrawWhiteboardElement } from '@/lib/arena/whiteboard'
 
 const Excalidraw = dynamic(async () => (await import('@excalidraw/excalidraw')).Excalidraw, { ssr: false })
 
 type Locale = 'zh' | 'en'
+type ExcalidrawImperativeAPI = {
+  getSceneElements: () => unknown[]
+  getAppState: () => Record<string, unknown>
+  getFiles: () => Record<string, unknown>
+  updateScene: (scene: { elements?: unknown[]; appState?: Record<string, unknown> }) => void
+  scrollToContent?: (elements: unknown[], options?: { fitToContent?: boolean }) => void
+}
 
 type Props = {
   challengeId: string
   locale: Locale
-  ops?: WhiteboardOp[]
+  elements?: ExcalidrawWhiteboardElement[]
   renderMode?: 'full' | 'step'
   busy?: boolean
   onExplain?: () => void
   onStep?: () => void
 }
 
-type BoxRect = { id: string; x: number; y: number; w: number; h: number }
 const defaultAppState = {
   viewBackgroundColor: '#f8fafc',
   currentItemStrokeColor: '#0f172a',
@@ -28,191 +33,53 @@ const defaultAppState = {
   currentItemFontSize: 20,
 }
 
-function safeText(value: unknown, fallback = '') {
-  return String(value ?? fallback).slice(0, 1200)
+function elementId(element: ExcalidrawWhiteboardElement) {
+  return typeof element.id === 'string' ? element.id : ''
 }
 
-function fontSize(size?: 'sm' | 'md' | 'lg') {
-  if (size === 'sm') return 18
-  if (size === 'lg') return 32
-  return 22
+function elementType(element: ExcalidrawWhiteboardElement) {
+  return typeof element.type === 'string' ? element.type : ''
 }
 
-function makeArrowId(index: number) {
-  return `wb-arrow-${index}`
-}
-
-function layoutWhiteboardOps(ops: WhiteboardOp[]) {
-  let boxIndex = 0
-  let sectionIndex = 0
-  let textIndex = 0
-  const boxSlots = [
-    { x: 80, y: 145 },
-    { x: 350, y: 145 },
-    { x: 620, y: 145 },
-    { x: 890, y: 145 },
-    { x: 1160, y: 145 },
-    { x: 620, y: 285 },
-  ]
-  const sectionSlots = [
-    { x: 90, y: 365 },
-    { x: 700, y: 365 },
-    { x: 90, y: 590 },
-    { x: 700, y: 590 },
-  ]
-  return ops.map((op): WhiteboardOp => {
-    if (op.type === 'title') return { ...op, x: 70, y: 45 }
-    if (op.type === 'text') {
-      const y = textIndex === 0 ? 92 : 650 + textIndex * 34
-      textIndex += 1
-      return { ...op, x: 80, y, size: op.size || 'sm' }
-    }
-    if (op.type === 'box') {
-      const slot = boxSlots[Math.min(boxIndex, boxSlots.length - 1)]
-      boxIndex += 1
-      return {
-        ...op,
-        x: slot.x,
-        y: slot.y,
-        w: 210,
-        h: 92,
-      }
-    }
-    if (op.type === 'section') {
-      const slot = sectionSlots[Math.min(sectionIndex, sectionSlots.length - 1)]
-      sectionIndex += 1
-      return {
-        ...op,
-        x: slot.x,
-        y: slot.y,
-        w: 560,
-      }
-    }
-    return op
+function groupElementsForSteps(elements: ExcalidrawWhiteboardElement[]) {
+  const entries: Array<[string, ExcalidrawWhiteboardElement]> = []
+  elements.forEach((element) => {
+    const id = elementId(element)
+    if (id) entries.push([id, element])
   })
-}
-
-function opToSkeletons(ops: WhiteboardOp[]) {
-  const skeletons: unknown[] = []
-  const boxes = new Map<string, BoxRect>()
-  const laidOutOps = layoutWhiteboardOps(ops)
-
-  const ensureBox = (op: Extract<WhiteboardOp, { type: 'box' }>, index: number) => {
-    const id = op.id || `wb-box-${index}`
-    const w = Math.max(80, op.w || 190)
-    const h = Math.max(56, op.h || 86)
-    boxes.set(id, { id, x: op.x, y: op.y, w, h })
-    skeletons.push({
-      type: 'rectangle',
-      id,
-      x: op.x,
-      y: op.y,
-      width: w,
-      height: h,
-      strokeColor: op.color || '#334155',
-      backgroundColor: op.bg || 'transparent',
-      fillStyle: op.bg ? 'solid' : 'hachure',
-      roundness: { type: 3 },
-      strokeWidth: 2,
-    })
-    skeletons.push({
-      type: 'text',
-      id: `${id}-label`,
-      x: op.x + 14,
-      y: op.y + 18,
-      width: w - 28,
-      text: safeText(op.text),
-      fontSize: 20,
-      strokeColor: '#0f172a',
-    })
+  const byId = new Map(entries)
+  const consumed = new Set<string>()
+  const chunks: ExcalidrawWhiteboardElement[][] = []
+  const firstTexts = elements.filter((element) => ['title', 'subtitle'].includes(elementId(element)))
+  if (firstTexts.length) {
+    chunks.push(firstTexts)
+    firstTexts.forEach((element) => consumed.add(elementId(element)))
   }
 
-  laidOutOps.forEach((op, index) => {
-    if (op.type === 'clear') return
-    if (op.type === 'title') {
-      skeletons.push({ type: 'text', x: op.x ?? 70, y: op.y ?? 45, text: safeText(op.text), fontSize: 34, strokeColor: '#0f172a' })
-      return
-    }
-    if (op.type === 'text') {
-      skeletons.push({ type: 'text', x: op.x, y: op.y, text: safeText(op.text), fontSize: fontSize(op.size), strokeColor: op.color || '#334155', width: 760 })
-      return
-    }
-    if (op.type === 'box') {
-      ensureBox(op, index)
-      return
-    }
-    if (op.type === 'section') {
-      const id = op.id || `wb-section-${index}`
-      const w = Math.max(260, op.w || 500)
-      const items = (op.items || []).slice(0, 4)
-      const body = [op.title, '', ...items.map((item) => `• ${item}`)].join('\n')
-      const h = Math.max(150, 78 + items.length * 34)
-      boxes.set(id, { id, x: op.x, y: op.y, w, h })
-      skeletons.push({
-        type: 'rectangle',
-        id,
-        x: op.x,
-        y: op.y,
-        width: w,
-        height: h,
-        strokeColor: op.color || '#64748b',
-        backgroundColor: '#ffffff',
-        fillStyle: 'solid',
-        roundness: { type: 3 },
-        strokeWidth: 2,
-      })
-      skeletons.push({
-        type: 'text',
-        id: `${id}-text`,
-        x: op.x + 18,
-        y: op.y + 16,
-        width: w - 36,
-        text: safeText(body),
-        fontSize: 20,
-        strokeColor: '#0f172a',
-      })
+  elements.forEach((element) => {
+    const id = elementId(element)
+    if (!id || consumed.has(id)) return
+    const type = elementType(element)
+    if (type === 'rectangle' || type === 'ellipse' || type === 'diamond') {
+      const group = [element]
+      const label = byId.get(`${id}-label`) || byId.get(`${id}-text`)
+      if (label) {
+        group.push(label)
+        consumed.add(elementId(label))
+      }
+      chunks.push(group)
+      consumed.add(id)
     }
   })
 
-  laidOutOps.forEach((op, index) => {
-    if (op.type !== 'arrow') return
-    const from = op.from ? boxes.get(op.from) : null
-    const to = op.to ? boxes.get(op.to) : null
-    if (from && to) {
-      const leftToRight = to.x >= from.x
-      const startX = leftToRight ? from.x + from.w : from.x
-      const startY = from.y + from.h / 2
-      const endX = leftToRight ? to.x : to.x + to.w
-      const endY = to.y + to.h / 2
-      skeletons.push({
-        type: 'arrow',
-        id: makeArrowId(index),
-        x: startX,
-        y: startY,
-        points: [[0, 0], [endX - startX, endY - startY]],
-        strokeColor: op.color || '#475569',
-        strokeWidth: 2,
-        endArrowhead: 'arrow',
-        label: op.label ? { text: safeText(op.label, ''), fontSize: 16 } : undefined,
-      })
-      return
-    }
-    if (typeof op.x1 === 'number' && typeof op.y1 === 'number' && typeof op.x2 === 'number' && typeof op.y2 === 'number') {
-      skeletons.push({
-        type: 'arrow',
-        id: makeArrowId(index),
-        x: op.x1,
-        y: op.y1,
-        points: [[0, 0], [op.x2 - op.x1, op.y2 - op.y1]],
-        strokeColor: op.color || '#475569',
-        strokeWidth: 2,
-        endArrowhead: 'arrow',
-        label: op.label ? { text: safeText(op.label, ''), fontSize: 16 } : undefined,
-      })
-    }
+  elements.forEach((element) => {
+    const id = elementId(element)
+    if (!id || consumed.has(id)) return
+    chunks.push([element])
+    consumed.add(id)
   })
 
-  return skeletons
+  return chunks
 }
 
 function downloadJson(name: string, data: unknown) {
@@ -225,7 +92,7 @@ function downloadJson(name: string, data: unknown) {
   URL.revokeObjectURL(url)
 }
 
-export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full', busy, onExplain, onStep }: Props) {
+export function AgentWhiteboard({ challengeId, locale, elements, renderMode = 'full', busy, onExplain, onStep }: Props) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const timerRef = useRef<number[]>([])
   const [status, setStatus] = useState(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
@@ -241,18 +108,19 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
   }, [locale])
 
   useEffect(() => {
-    if (!ops?.length || !apiRef.current) return
+    if (!elements?.length || !apiRef.current) return
     let cancelled = false
     clearStepTimers()
 
     void import('@excalidraw/excalidraw').then(({ convertToExcalidrawElements }) => {
       if (cancelled || !apiRef.current) return
-      const drawable = ops.filter((op) => op.type !== 'clear')
+      const drawable = elements
+      const chunks = groupElementsForSteps(drawable)
       apiRef.current.updateScene({ elements: [], appState: defaultAppState })
 
-      const renderDrawable = (visibleOps: WhiteboardOp[], label?: string) => {
+      const renderDrawable = (visibleElements: ExcalidrawWhiteboardElement[], label?: string) => {
         if (cancelled || !apiRef.current) return
-        const skeletons = opToSkeletons(visibleOps) as Parameters<typeof convertToExcalidrawElements>[0]
+        const skeletons = visibleElements as Parameters<typeof convertToExcalidrawElements>[0]
         const nextElements = convertToExcalidrawElements(skeletons, { regenerateIds: false })
         apiRef.current.updateScene({
           elements: nextElements,
@@ -262,19 +130,19 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
         window.setTimeout(() => apiRef.current?.scrollToContent?.(apiRef.current.getSceneElements(), { fitToContent: true }), 80)
       }
 
-      const shouldStep = renderMode === 'step' || drawable.length > 4
-      if (!shouldStep || drawable.length <= 2) {
+      const shouldStep = renderMode === 'step' || chunks.length > 4
+      if (!shouldStep || chunks.length <= 2) {
         renderDrawable(drawable, locale === 'zh' ? `已绘制 ${drawable.length} 个白板步骤` : `Rendered ${drawable.length} whiteboard steps`)
         return
       }
 
       renderDrawable([], locale === 'zh' ? '开始逐步推导…' : 'Starting step derivation…')
-      drawable.forEach((_, index) => {
+      chunks.forEach((_, index) => {
         const timer = window.setTimeout(() => {
           const count = index + 1
           renderDrawable(
-            drawable.slice(0, count),
-            locale === 'zh' ? `逐步推导 ${count}/${drawable.length}` : `Step derivation ${count}/${drawable.length}`,
+            chunks.slice(0, count).flat(),
+            locale === 'zh' ? `逐步推导 ${count}/${chunks.length}` : `Step derivation ${count}/${chunks.length}`,
           )
         }, 240 + index * 720)
         timerRef.current.push(timer)
@@ -285,7 +153,7 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
       cancelled = true
       clearStepTimers()
     }
-  }, [ops, locale, renderMode])
+  }, [elements, locale, renderMode])
 
   useEffect(() => () => clearStepTimers(), [])
 
@@ -332,7 +200,7 @@ export function AgentWhiteboard({ challengeId, locale, ops, renderMode = 'full',
           initialData={async () => {
             return { elements: [], appState: defaultAppState }
           }}
-          onChange={(elements, appState, files) => {
+          onChange={(elements: unknown[], appState: Record<string, unknown>, files: Record<string, unknown>) => {
             try {
               window.localStorage.setItem(storageKey, JSON.stringify({ elements, appState: { viewBackgroundColor: appState.viewBackgroundColor }, files }))
             } catch {

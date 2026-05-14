@@ -1,26 +1,20 @@
 import type { Challenge } from './types'
 
 export type WhiteboardLocale = 'zh' | 'en'
-export type WhiteboardOp =
-  | { type: 'clear' }
-  | { type: 'title'; text: string; x?: number; y?: number }
-  | { type: 'text'; text: string; x: number; y: number; size?: 'sm' | 'md' | 'lg'; color?: string }
-  | { type: 'box'; id?: string; text: string; x: number; y: number; w?: number; h?: number; color?: string; bg?: string }
-  | { type: 'arrow'; from?: string; to?: string; x1?: number; y1?: number; x2?: number; y2?: number; label?: string; color?: string }
-  | { type: 'section'; id?: string; title: string; items: string[]; x: number; y: number; w?: number; color?: string }
+export type ExcalidrawWhiteboardElement = Record<string, unknown>
+export type ExcalidrawWhiteboardPayload = { elements: ExcalidrawWhiteboardElement[]; note?: string }
 
-export type WhiteboardPayload = { ops: WhiteboardOp[]; note?: string }
-
-const WHITEBOARD_OPEN = '[WHITEBOARD_OPS]'
-const WHITEBOARD_CLOSE = '[/WHITEBOARD_OPS]'
+const EXCALIDRAW_OPEN = '[EXCALIDRAW_ELEMENTS]'
+const EXCALIDRAW_CLOSE = '[/EXCALIDRAW_ELEMENTS]'
 const WHITEBOARD_SKILL = 'arena-whiteboard-coach'
-const MAX_WHITEBOARD_OPS = 64
-const MAX_SECTION_ITEMS = 8
-const COORDS = { minX: 40, maxX: 1320, minY: 24, maxY: 760, minW: 80, maxW: 720, minH: 56, maxH: 320 }
+const MAX_ELEMENTS = 36
+const MAX_POINTS = 8
+const COORDS = { minX: 40, maxX: 1320, minY: 24, maxY: 780, minW: 40, maxW: 760, minH: 32, maxH: 340 }
+const ALLOWED_ELEMENT_TYPES = new Set(['rectangle', 'ellipse', 'diamond', 'arrow', 'line', 'text'])
 
 function compactText(text: string, max = 62) {
   const normalized = text.replace(/\s+/g, ' ').trim()
-  return normalized.length > max ? `${normalized.slice(0, max - 1)}…` : normalized
+  return normalized.length > max ? `${normalized.slice(0, max - 1)}...` : normalized
 }
 
 function includesAny(challenge: Challenge, words: string[]) {
@@ -46,14 +40,14 @@ function safeString(value: unknown, max = 1200) {
   return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
-function safeId(value: unknown) {
+function safeId(value: unknown, fallback: string) {
   const id = safeString(value, 80).replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
-  return id || undefined
+  return id || fallback
 }
 
-function safeColor(value: unknown) {
+function safeColor(value: unknown, fallback: string) {
   const color = safeString(value, 24)
-  return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : undefined
+  return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : fallback
 }
 
 function conceptSummary(challenge: Challenge) {
@@ -87,79 +81,126 @@ function whiteboardBlueprint(template: NonNullable<Challenge['whiteboard_templat
   return `${byTemplate[template]} ${shared}`
 }
 
-function sanitizeWhiteboardOp(op: unknown, index: number): WhiteboardOp | null {
-  if (!isRecord(op)) return null
-  const type = safeString(op.type, 32)
-  if (type === 'clear') return { type: 'clear' }
-  if (type === 'title') {
-    const text = safeString(op.text, 180)
-    if (!text) return null
-    return { type: 'title', text, x: safeNumber(op.x, 70, COORDS.minX, COORDS.maxX), y: safeNumber(op.y, 45, COORDS.minY, COORDS.maxY) }
+function textElement(id: string, text: string, x: number, y: number, fontSize = 20, width = 300, color = '#0f172a'): ExcalidrawWhiteboardElement {
+  return { type: 'text', id, x, y, text: safeString(text, 900), fontSize, width, strokeColor: color }
+}
+
+function boxElements(id: string, text: string, x: number, y: number, color: string, bg: string): ExcalidrawWhiteboardElement[] {
+  return [
+    {
+      type: 'rectangle',
+      id,
+      x,
+      y,
+      width: 210,
+      height: 92,
+      strokeColor: color,
+      backgroundColor: bg,
+      fillStyle: 'solid',
+      roundness: { type: 3 },
+      strokeWidth: 2,
+    },
+    textElement(`${id}-label`, text, x + 14, y + 18, 20, 182),
+  ]
+}
+
+function arrowElement(id: string, x: number, y: number, dx: number, dy: number, label?: string): ExcalidrawWhiteboardElement {
+  return {
+    type: 'arrow',
+    id,
+    x,
+    y,
+    points: [[0, 0], [dx, dy]],
+    strokeColor: '#475569',
+    strokeWidth: 2,
+    endArrowhead: 'arrow',
+    label: label ? { text: safeString(label, 60), fontSize: 16 } : undefined,
   }
+}
+
+function sectionElements(id: string, title: string, items: string[], x: number, y: number, color: string): ExcalidrawWhiteboardElement[] {
+  const visibleItems = items.slice(0, 4).map((item) => `- ${safeString(item, 180)}`)
+  const body = [title, '', ...visibleItems].join('\n')
+  return [
+    {
+      type: 'rectangle',
+      id,
+      x,
+      y,
+      width: 560,
+      height: Math.max(150, 78 + visibleItems.length * 34),
+      strokeColor: color,
+      backgroundColor: '#ffffff',
+      fillStyle: 'solid',
+      roundness: { type: 3 },
+      strokeWidth: 2,
+    },
+    textElement(`${id}-text`, body, x + 18, y + 16, 20, 524),
+  ]
+}
+
+function sanitizePoints(value: unknown) {
+  const points = Array.isArray(value) ? value : []
+  const sanitized = points.slice(0, MAX_POINTS).map((point) => {
+    if (!Array.isArray(point)) return null
+    return [
+      safeNumber(point[0], 0, -1400, 1400),
+      safeNumber(point[1], 0, -900, 900),
+    ]
+  }).filter((point): point is number[] => Boolean(point))
+  return sanitized.length >= 2 ? sanitized : [[0, 0], [160, 0]]
+}
+
+function sanitizeExcalidrawElement(element: unknown, index: number): ExcalidrawWhiteboardElement | null {
+  if (!isRecord(element)) return null
+  const type = safeString(element.type, 32)
+  if (!ALLOWED_ELEMENT_TYPES.has(type)) return null
+  const base: ExcalidrawWhiteboardElement = {
+    type,
+    id: safeId(element.id, `arena-el-${index}`),
+    x: safeNumber(element.x, 80 + (index % 5) * 250, COORDS.minX, COORDS.maxX),
+    y: safeNumber(element.y, 120 + Math.floor(index / 5) * 120, COORDS.minY, COORDS.maxY),
+    strokeColor: safeColor(element.strokeColor, '#334155'),
+    backgroundColor: safeColor(element.backgroundColor, 'transparent'),
+    strokeWidth: safeNumber(element.strokeWidth, 2, 1, 4),
+    fillStyle: ['solid', 'hachure', 'cross-hatch'].includes(String(element.fillStyle)) ? element.fillStyle : 'solid',
+    roundness: isRecord(element.roundness) ? element.roundness : { type: 3 },
+  }
+
   if (type === 'text') {
-    const text = safeString(op.text, 800)
-    if (!text) return null
-    const size = op.size === 'sm' || op.size === 'md' || op.size === 'lg' ? op.size : undefined
-    return { type: 'text', text, x: safeNumber(op.x, 80, COORDS.minX, COORDS.maxX), y: safeNumber(op.y, 100 + index * 18, COORDS.minY, COORDS.maxY), size, color: safeColor(op.color) }
-  }
-  if (type === 'box') {
-    const text = safeString(op.text, 360)
-    if (!text) return null
     return {
-      type: 'box',
-      id: safeId(op.id),
-      text,
-      x: safeNumber(op.x, 80 + (index % 4) * 240, COORDS.minX, COORDS.maxX),
-      y: safeNumber(op.y, 130 + Math.floor(index / 4) * 120, COORDS.minY, COORDS.maxY),
-      w: safeNumber(op.w, 190, COORDS.minW, COORDS.maxW),
-      h: safeNumber(op.h, 86, COORDS.minH, COORDS.maxH),
-      color: safeColor(op.color),
-      bg: safeColor(op.bg),
+      ...base,
+      text: safeString(element.text, 900),
+      fontSize: safeNumber(element.fontSize, 20, 14, 36),
+      width: safeNumber(element.width, 320, COORDS.minW, COORDS.maxW),
     }
   }
-  if (type === 'arrow') {
-    const from = safeId(op.from)
-    const to = safeId(op.to)
-    const label = safeString(op.label, 80)
-    const color = safeColor(op.color)
-    if (from && to) return { type: 'arrow', from, to, label: label || undefined, color }
-    const hasCoords = [op.x1, op.y1, op.x2, op.y2].every((value) => Number.isFinite(typeof value === 'number' ? value : Number(value)))
-    if (!hasCoords) return null
+
+  if (type === 'arrow' || type === 'line') {
+    const label = isRecord(element.label) ? { text: safeString(element.label.text, 80), fontSize: safeNumber(element.label.fontSize, 16, 12, 24) } : undefined
     return {
-      type: 'arrow',
-      x1: safeNumber(op.x1, 120, COORDS.minX, COORDS.maxX),
-      y1: safeNumber(op.y1, 160, COORDS.minY, COORDS.maxY),
-      x2: safeNumber(op.x2, 320, COORDS.minX, COORDS.maxX),
-      y2: safeNumber(op.y2, 160, COORDS.minY, COORDS.maxY),
-      label: label || undefined,
-      color,
+      ...base,
+      points: sanitizePoints(element.points),
+      endArrowhead: type === 'arrow' ? 'arrow' : undefined,
+      label,
     }
   }
-  if (type === 'section') {
-    const title = safeString(op.title, 120)
-    if (!title) return null
-    const items = Array.isArray(op.items) ? op.items.map((item) => safeString(item, 220)).filter(Boolean).slice(0, MAX_SECTION_ITEMS) : []
-    return {
-      type: 'section',
-      id: safeId(op.id),
-      title,
-      items,
-      x: safeNumber(op.x, 90, COORDS.minX, COORDS.maxX),
-      y: safeNumber(op.y, 310, COORDS.minY, COORDS.maxY),
-      w: safeNumber(op.w, 510, COORDS.minW, COORDS.maxW),
-      color: safeColor(op.color),
-    }
+
+  return {
+    ...base,
+    width: safeNumber(element.width, 210, COORDS.minW, COORDS.maxW),
+    height: safeNumber(element.height, 92, COORDS.minH, COORDS.maxH),
   }
-  return null
 }
 
-export function sanitizeWhiteboardOps(ops: unknown[]): WhiteboardOp[] {
-  const sanitized = ops.slice(0, MAX_WHITEBOARD_OPS).map(sanitizeWhiteboardOp).filter((op): op is WhiteboardOp => Boolean(op))
-  if (!sanitized.some((op) => op.type === 'clear')) return [{ type: 'clear' }, ...sanitized]
-  return sanitized
+export function sanitizeExcalidrawElements(elements: unknown[]): ExcalidrawWhiteboardElement[] {
+  return elements
+    .slice(0, MAX_ELEMENTS)
+    .map(sanitizeExcalidrawElement)
+    .filter((element): element is ExcalidrawWhiteboardElement => Boolean(element))
 }
 
-export function makeInterviewWhiteboardOps(challenge: Challenge, locale: WhiteboardLocale): WhiteboardOp[] {
+export function makeInterviewWhiteboardElements(challenge: Challenge, locale: WhiteboardLocale): ExcalidrawWhiteboardElement[] {
   const zh = locale === 'zh'
   const isRag = includesAny(challenge, ['rag', 'retrieval', 'embedding', 'search'])
   const isLlm = includesAny(challenge, ['llm', 'transformer', 'kv cache', 'serving'])
@@ -168,99 +209,90 @@ export function makeInterviewWhiteboardOps(challenge: Challenge, locale: Whitebo
   const isMonitoring = includesAny(challenge, ['monitoring', 'drift'])
   const isKernel = includesAny(challenge, ['gpu', 'kernel', 'layernorm'])
 
-  const title = zh ? `白板推导：${challenge.title}` : `Whiteboard derivation: ${challenge.title}`
-  const goal = zh ? '目标 / 约束 / 指标' : 'Goal / constraints / metrics'
   const data = isRag
-    ? zh ? '文档解析 / Chunk / Embedding' : 'Parsing / chunks / embeddings'
+    ? zh ? 'Chunk + Embed' : 'Chunk + embed'
     : isFeature
-      ? zh ? '离线特征 / 在线特征 / PIT' : 'Offline / online features / PIT'
+      ? zh ? '离线/在线特征' : 'Offline/online features'
       : isRisk
-        ? zh ? '实时事件流 / 标签延迟' : 'Realtime stream / delayed labels'
-        : zh ? '数据与特征层' : 'Data and feature layer'
-  const model = isKernel
-    ? zh ? 'Kernel 算法 / 并行拆分' : 'Kernel algorithm / parallelization'
+        ? zh ? '实时事件流' : 'Realtime stream'
+        : zh ? '数据/特征' : 'Data/features'
+  const core = isKernel
+    ? zh ? 'Kernel 并行化' : 'Kernel parallelism'
     : isLlm
-      ? zh ? '模型 / Prompt / KV Cache' : 'Model / prompt / KV cache'
+      ? zh ? '模型 + KV Cache' : 'Model + KV cache'
       : isRag
-        ? zh ? '召回 / 重排 / 生成' : 'Retrieval / rerank / generation'
-        : zh ? '模型与排序策略' : 'Model and ranking strategy'
-  const serving = isKernel
-    ? zh ? 'Benchmark / 数值验证 / 性能瓶颈' : 'Benchmark / correctness / bottlenecks'
+        ? zh ? '召回/重排/生成' : 'Retrieve/rerank/generate'
+        : zh ? '核心模型/策略' : 'Core model/strategy'
+  const serve = isKernel
+    ? zh ? 'Benchmark + 验证' : 'Benchmark + verify'
     : isLlm
-      ? zh ? '推理服务 / Batching / 降级' : 'Serving / batching / fallback'
-      : zh ? '在线服务与实验' : 'Serving and experimentation'
-  const feedback = isMonitoring
-    ? zh ? '漂移监控 / 告警 / 回滚' : 'Drift monitoring / alert / rollback'
-    : zh ? '反馈闭环 / 监控 / 迭代' : 'Feedback / monitoring / iteration'
-
-  const boxes = [
-    { id: 'goal', text: goal, x: 80, y: 130, color: '#3ce8e2', bg: '#e6fffb' },
-    { id: 'data', text: data, x: 330, y: 130, color: '#8b5cf6', bg: '#f3e8ff' },
-    { id: 'model', text: model, x: 580, y: 130, color: '#f59e0b', bg: '#fff7ed' },
-    { id: 'serving', text: serving, x: 830, y: 130, color: '#22c55e', bg: '#ecfdf5' },
-    { id: 'feedback', text: feedback, x: 1080, y: 130, color: '#ef4444', bg: '#fff1f2' },
-  ]
+      ? zh ? 'Batching + 降级' : 'Batching + fallback'
+      : zh ? '在线服务/实验' : 'Serving/experiments'
+  const evalNode = isMonitoring
+    ? zh ? '漂移/告警/回滚' : 'Drift/alert/rollback'
+    : zh ? '指标/监控/迭代' : 'Metrics/monitor/iterate'
 
   const checklist = isRag
-    ? [zh ? '权限过滤必须在召回前后都校验' : 'Apply permission filters before/after retrieval', zh ? '引用溯源降低幻觉' : 'Citations reduce hallucination', zh ? '离线评测 + 在线反馈闭环' : 'Offline eval + online feedback loop']
+    ? [zh ? '权限过滤前后都要校验' : 'Check permissions before and after retrieval', zh ? '引用溯源降低幻觉' : 'Use citations to reduce hallucination', zh ? '离线评测连接线上反馈' : 'Connect offline eval to online feedback']
     : isLlm
       ? [zh ? '吞吐：continuous batching / KV cache' : 'Throughput: continuous batching / KV cache', zh ? '成本：量化、路由、缓存' : 'Cost: quantization, routing, caching', zh ? 'SLO：延迟、错误率、降级' : 'SLO: latency, errors, fallback']
       : isFeature
         ? [zh ? 'Point-in-time correctness' : 'Point-in-time correctness', zh ? '训练/在线一致性' : 'Training/serving consistency', zh ? '血缘、版本、监控' : 'Lineage, versions, monitoring']
         : isKernel
-          ? [zh ? '内存访问模式与 coalescing' : 'Memory access and coalescing', zh ? '归约与 warp/block 划分' : 'Reduction and warp/block layout', zh ? '数值稳定性与 benchmark' : 'Numerical stability and benchmark']
-          : [zh ? '指标先行：业务指标 + 模型指标' : 'Metrics first: business + model metrics', zh ? '多阶段架构，先简单可靠' : 'Multi-stage design, simple first', zh ? 'A/B、监控、回滚保证上线安全' : 'A/B, monitoring, rollback for safe launch']
+          ? [zh ? '内存访问与 coalescing' : 'Memory access and coalescing', zh ? '归约与 block/warp 划分' : 'Reduction and block/warp layout', zh ? '数值稳定性与 benchmark' : 'Numerical stability and benchmark']
+          : [zh ? '指标先行：业务 + 模型' : 'Metrics first: business + model', zh ? '多阶段架构，先简单可靠' : 'Multi-stage design, simple first', zh ? 'A/B、监控、回滚保证上线安全' : 'A/B, monitoring, rollback for launch safety']
 
   return [
-    { type: 'clear' },
-    { type: 'title', text: title, x: 70, y: 45 },
-    { type: 'text', text: zh ? `答案结构图 · 关键知识点：${compactText(conceptSummary(challenge), 72)}` : `Answer map · concepts: ${compactText(conceptSummary(challenge), 72)}`, x: 80, y: 88, size: 'sm', color: '#64748b' },
-    ...boxes.map((box) => ({ type: 'box' as const, ...box, w: 190, h: 86 })),
-    { type: 'arrow', from: 'goal', to: 'data', label: zh ? '定义输入' : 'define input' },
-    { type: 'arrow', from: 'data', to: 'model', label: zh ? '建模' : 'model' },
-    { type: 'arrow', from: 'model', to: 'serving', label: zh ? '上线' : 'serve' },
-    { type: 'arrow', from: 'serving', to: 'feedback', label: zh ? '观测' : 'observe' },
-    { type: 'section', title: zh ? '面试回答框架' : 'Answer framework', items: [
-      zh ? '1. 先复述目标、用户规模、SLO 与核心指标。' : '1. Restate goal, scale, SLO, and primary metrics.',
-      zh ? '2. 画端到端链路：数据 → 模型 → 服务 → 反馈。' : '2. Draw E2E path: data → model → serving → feedback.',
-      zh ? '3. 主动讲 trade-off：延迟/准确率/成本/安全。' : '3. Explain trade-offs: latency / quality / cost / safety.',
-      zh ? '4. 最后落到实验、监控、回滚和下一步迭代。' : '4. End with experiments, monitoring, rollback, and iteration.',
-    ], x: 90, y: 310, w: 510, color: '#3ce8e2' },
-    { type: 'section', title: zh ? '关键追问点' : 'Likely follow-ups', items: checklist, x: 670, y: 310, w: 510, color: '#a78bfa' },
-    { type: 'text', text: zh ? '提示：让 Agent 继续追问“规模、指标、瓶颈、失败场景”，白板可继续迭代。' : 'Tip: ask the Agent to follow up on scale, metrics, bottlenecks, and failure cases; iterate the board.', x: 90, y: 575, size: 'sm', color: '#64748b' },
+    textElement('title', zh ? `答案结构：${challenge.title}` : `Answer map: ${challenge.title}`, 70, 45, 34, 920),
+    textElement('subtitle', zh ? `关键知识点：${compactText(conceptSummary(challenge), 72)}` : `Concepts: ${compactText(conceptSummary(challenge), 72)}`, 80, 92, 18, 760, '#64748b'),
+    ...boxElements('goal', zh ? '目标 / SLO' : 'Goal / SLO', 80, 145, '#0f766e', '#ccfbf1'),
+    ...boxElements('inputs', data, 350, 145, '#7c3aed', '#ede9fe'),
+    ...boxElements('core', core, 620, 145, '#d97706', '#ffedd5'),
+    ...boxElements('serve', serve, 890, 145, '#16a34a', '#dcfce7'),
+    ...boxElements('eval', evalNode, 1160, 145, '#dc2626', '#fee2e2'),
+    arrowElement('goal-inputs-arrow', 290, 191, 60, 0, zh ? '限定' : 'scope'),
+    arrowElement('inputs-core-arrow', 560, 191, 60, 0, zh ? '推导' : 'derive'),
+    arrowElement('core-serve-arrow', 830, 191, 60, 0, zh ? '上线' : 'ship'),
+    arrowElement('serve-eval-arrow', 1100, 191, 60, 0, zh ? '观测' : 'observe'),
+    ...sectionElements('framework', zh ? '面试回答框架' : 'Answer framework', [
+      zh ? '先复述目标、规模、SLO 与核心指标。' : 'Restate goal, scale, SLO, and primary metrics.',
+      zh ? '画数据 -> 模型 -> 服务 -> 反馈闭环。' : 'Draw data -> model -> serving -> feedback.',
+      zh ? '主动讲延迟、准确率、成本、安全 trade-off。' : 'Explain latency, quality, cost, and safety trade-offs.',
+      zh ? '最后落到实验、监控、回滚和迭代。' : 'End with experiments, monitoring, rollback, and iteration.',
+    ], 90, 365, '#0f766e'),
+    ...sectionElements('risks', zh ? '关键追问点' : 'Likely follow-ups', checklist, 700, 365, '#7c3aed'),
   ]
 }
 
-export function makeAnswerWhiteboardOps(challenge: Challenge, locale: WhiteboardLocale, answer: string): WhiteboardOp[] {
+export function makeAnswerWhiteboardElements(challenge: Challenge, locale: WhiteboardLocale, answer: string): ExcalidrawWhiteboardElement[] {
   const zh = locale === 'zh'
   const summary = safeString(answer, 900)
-    .replace(/\[WHITEBOARD_OPS\][\s\S]*?\[\/WHITEBOARD_OPS\]/gi, '')
+    .replace(/\[EXCALIDRAW_ELEMENTS\][\s\S]*?\[\/EXCALIDRAW_ELEMENTS\]/gi, '')
     .split(/[\n。.!?；;]+/)
     .map((item) => item.replace(/^[-*•\d.\s]+/, '').trim())
     .filter((item) => item.length > 12)
     .slice(0, 4)
   const focusItems = summary.length ? summary : [
-    zh ? '先明确目标、约束和核心指标' : 'Clarify goal, constraints, and primary metric',
-    zh ? '用核心方案连接输入、模型和服务路径' : 'Connect inputs, core solution, and serving path',
+    zh ? '明确目标、约束和核心指标' : 'Clarify goal, constraints, and primary metric',
+    zh ? '连接输入、核心方案和服务路径' : 'Connect inputs, core solution, and serving path',
     zh ? '补充 trade-off、监控和失败场景' : 'Add trade-offs, monitoring, and failure modes',
   ]
 
   return [
-    { type: 'clear' },
-    { type: 'title', text: zh ? `本轮讲解白板：${challenge.title}` : `Answer whiteboard: ${challenge.title}` },
-    { type: 'text', text: zh ? `由本轮 Agent 回答生成 · ${compactText(conceptSummary(challenge), 72)}` : `Generated from the latest Agent answer · ${compactText(conceptSummary(challenge), 72)}`, x: 80, y: 88, size: 'sm', color: '#64748b' },
-    { type: 'box', id: 'goal', text: zh ? '目标 / 指标' : 'Goal / metric', color: '#3ce8e2', bg: '#e6fffb', x: 0, y: 0 },
-    { type: 'box', id: 'inputs', text: zh ? '输入 / 约束' : 'Inputs / constraints', color: '#8b5cf6', bg: '#f3e8ff', x: 0, y: 0 },
-    { type: 'box', id: 'core', text: zh ? '核心方案' : 'Core solution', color: '#f59e0b', bg: '#fff7ed', x: 0, y: 0 },
-    { type: 'box', id: 'serve', text: zh ? '服务 / 验证' : 'Serve / validate', color: '#22c55e', bg: '#ecfdf5', x: 0, y: 0 },
-    { type: 'arrow', from: 'goal', to: 'inputs', label: zh ? '限定' : 'scope' },
-    { type: 'arrow', from: 'inputs', to: 'core', label: zh ? '推导' : 'derive' },
-    { type: 'arrow', from: 'core', to: 'serve', label: zh ? '落地' : 'ship' },
-    { type: 'section', id: 'focus', title: zh ? '本轮重点' : 'This answer emphasizes', items: focusItems, x: 0, y: 0, color: '#3ce8e2' },
-    { type: 'section', id: 'risks', title: zh ? '追问 / 风险' : 'Follow-ups / risks', items: [
+    textElement('title', zh ? `本轮答案结构：${challenge.title}` : `This answer: ${challenge.title}`, 70, 45, 34, 920),
+    textElement('subtitle', zh ? `由本轮 Agent 回答生成：${compactText(conceptSummary(challenge), 72)}` : `Generated from the latest Agent answer: ${compactText(conceptSummary(challenge), 72)}`, 80, 92, 18, 760, '#64748b'),
+    ...boxElements('goal', zh ? '目标 / 指标' : 'Goal / metric', 80, 145, '#0f766e', '#ccfbf1'),
+    ...boxElements('inputs', zh ? '输入 / 约束' : 'Inputs / constraints', 350, 145, '#7c3aed', '#ede9fe'),
+    ...boxElements('core', zh ? '核心方案' : 'Core solution', 620, 145, '#d97706', '#ffedd5'),
+    ...boxElements('serve', zh ? '服务 / 验证' : 'Serve / validate', 890, 145, '#16a34a', '#dcfce7'),
+    arrowElement('goal-inputs-arrow', 290, 191, 60, 0, zh ? '限定' : 'scope'),
+    arrowElement('inputs-core-arrow', 560, 191, 60, 0, zh ? '推导' : 'derive'),
+    arrowElement('core-serve-arrow', 830, 191, 60, 0, zh ? '落地' : 'ship'),
+    ...sectionElements('focus', zh ? '本轮重点' : 'This answer emphasizes', focusItems, 90, 365, '#0f766e'),
+    ...sectionElements('risks', zh ? '追问 / 风险' : 'Follow-ups / risks', [
       zh ? '瓶颈在哪里，如何量化？' : 'Where is the bottleneck and how is it measured?',
       zh ? '上线后如何监控、回滚和迭代？' : 'How is it monitored, rolled back, and iterated after launch?',
-    ], x: 0, y: 0, color: '#a78bfa' },
+    ], 700, 365, '#7c3aed'),
   ]
 }
 
@@ -276,33 +308,43 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ? `题目约束只用于确定场景，不要逐字复制到白板：${challenge.description}`
     : `Problem constraints are only for grounding; do not copy them into the board: ${challenge.description}`
   const phases = zh
-    ? '按阶段组织：goal 目标/SLO -> inputs 输入/数据/约束 -> core 核心算法/模型/架构 -> serve 在线服务/运行时 -> evaluate 指标/监控/实验 -> tradeoffs 风险/失败场景。'
-    : 'Organize by phases: goal/SLO -> inputs/data/constraints -> core algorithm/model/architecture -> serving/runtime -> evaluation/monitoring/experiments -> trade-offs/failure modes.'
+    ? '按阶段组织：goal 目标/SLO -> inputs 输入/数据/约束 -> core 核心算法/模型/架构 -> serve 在线服务/运行时 -> eval 指标/监控/实验 -> risks 风险/失败场景。'
+    : 'Organize by phases: goal/SLO -> inputs/data/constraints -> core algorithm/model/architecture -> serving/runtime -> eval/monitoring/experiments -> risks/failure modes.'
   const limits = zh
-    ? '控制规模：4-6 个 box、1-2 个 section、3-5 条 arrow，总 ops 不超过 16。短标签，不要密集排版。'
-    : 'Keep it compact: 4-6 boxes, 1-2 sections, 3-5 arrows, at most 16 total ops. Use short labels and avoid dense layouts.'
+    ? '控制规模：4-6 个 answer box、1-2 个 section、3-5 条 arrow，总 elements 不超过 24。短标签，留足间距。'
+    : 'Keep it compact: 4-6 answer boxes, 1-2 sections, 3-5 arrows, at most 24 elements. Use short labels and generous spacing.'
+  const example = JSON.stringify({
+    elements: [
+      { type: 'text', id: 'title', x: 70, y: 45, text: '答案结构', fontSize: 34, width: 720 },
+      { type: 'rectangle', id: 'goal', x: 80, y: 145, width: 210, height: 92, strokeColor: '#0f766e', backgroundColor: '#ccfbf1', fillStyle: 'solid', roundness: { type: 3 } },
+      { type: 'text', id: 'goal-label', x: 94, y: 163, text: '目标/SLO', fontSize: 20, width: 182 },
+      { type: 'rectangle', id: 'core', x: 620, y: 145, width: 210, height: 92, strokeColor: '#d97706', backgroundColor: '#ffedd5', fillStyle: 'solid', roundness: { type: 3 } },
+      { type: 'text', id: 'core-label', x: 634, y: 163, text: '核心方案', fontSize: 20, width: 182 },
+      { type: 'arrow', id: 'goal-core-arrow', x: 290, y: 191, points: [[0, 0], [330, 0]], endArrowhead: 'arrow', label: { text: '推导', fontSize: 16 } },
+    ],
+  })
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解理想答案，然后必须输出一个白板 JSON 块，格式如下：\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"目标/SLO"},{"type":"box","id":"core","text":"核心方案"},{"type":"arrow","from":"goal","to":"core","label":"推导"},{"type":"section","title":"Trade-off / 风险","items":["..."]}]}\n${WHITEBOARD_CLOSE}\n\n硬性要求：所有 box/section 都必须写答案组件、设计决策、指标或 trade-off；不要把题目原文、题目要求列表、或“请设计...”画进白板；只输出 JSON ops，不要输出 JS。`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain the ideal answer in natural language, then include a whiteboard JSON block exactly like this:\n${WHITEBOARD_OPEN}\n{"ops":[{"type":"clear"},{"type":"title","text":"..."},{"type":"box","id":"goal","text":"Goal/SLO"},{"type":"box","id":"core","text":"Core solution"},{"type":"arrow","from":"goal","to":"core","label":"derive"},{"type":"section","title":"Trade-offs / risks","items":["..."]}]}\n${WHITEBOARD_CLOSE}\n\nHard requirements: every box/section must contain answer components, design decisions, metrics, or trade-offs; do not draw the prompt text, requirement list, or “design ...” wording; JSON ops only, no JS.`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解理想答案，然后必须输出一个 Excalidraw-compatible JSON 块，格式如下：\n${EXCALIDRAW_OPEN}\n${example}\n${EXCALIDRAW_CLOSE}\n\n硬性要求：只使用 rectangle/text/arrow/line/ellipse/diamond；所有 rectangle/text 必须写答案组件、设计决策、指标或 trade-off；不要把题目原文、题目要求列表、或“请设计...”画进白板；不要输出 WHITEBOARD_OPS。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain the ideal answer in natural language, then include an Excalidraw-compatible JSON block exactly like this:\n${EXCALIDRAW_OPEN}\n${example}\n${EXCALIDRAW_CLOSE}\n\nHard requirements: use only rectangle/text/arrow/line/ellipse/diamond; every rectangle/text must contain answer components, design decisions, metrics, or trade-offs; do not draw the prompt text, requirement list, or "design ..." wording; do not output WHITEBOARD_OPS.`
 }
 
-export function extractWhiteboardPayload(content: string): WhiteboardPayload | null {
+export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardPayload | null {
   const source = content || ''
-  const tagged = source.match(/\[WHITEBOARD_OPS\]([\s\S]*?)\[\/WHITEBOARD_OPS\]/i)
+  const tagged = source.match(/\[EXCALIDRAW_ELEMENTS\]([\s\S]*?)\[\/EXCALIDRAW_ELEMENTS\]/i)
   const candidates = tagged ? [tagged[1]] : []
-  const fenced = source.match(/```(?:json)?\s*([\s\S]*?"ops"[\s\S]*?)```/i)
+  const fenced = source.match(/```(?:json)?\s*([\s\S]*?"elements"[\s\S]*?)```/i)
   if (fenced) candidates.push(fenced[1])
-  if (!candidates.length && source.trim().startsWith('{') && source.includes('"ops"')) candidates.push(source)
+  if (!candidates.length && source.trim().startsWith('{') && source.includes('"elements"')) candidates.push(source)
 
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(candidate.trim()) as Partial<WhiteboardPayload>
-      if (Array.isArray(parsed.ops)) {
-        const ops = sanitizeWhiteboardOps(parsed.ops)
-        if (ops.length) return { ops, note: safeString(parsed.note, 240) || undefined }
+      const parsed = JSON.parse(candidate.trim()) as Partial<ExcalidrawWhiteboardPayload>
+      if (Array.isArray(parsed.elements)) {
+        const elements = sanitizeExcalidrawElements(parsed.elements)
+        if (elements.length) return { elements, note: safeString(parsed.note, 240) || undefined }
       }
     } catch {
-      // ignore malformed Agent output and keep chat usable
+      // Ignore malformed Agent output and keep chat usable.
     }
   }
   return null
@@ -310,7 +352,8 @@ export function extractWhiteboardPayload(content: string): WhiteboardPayload | n
 
 export function stripWhiteboardPayload(content: string) {
   return (content || '')
+    .replace(/\[EXCALIDRAW_ELEMENTS\][\s\S]*?\[\/EXCALIDRAW_ELEMENTS\]/gi, '')
     .replace(/\[WHITEBOARD_OPS\][\s\S]*?\[\/WHITEBOARD_OPS\]/gi, '')
-    .replace(/```(?:json)?\s*\{[\s\S]*?"ops"[\s\S]*?\}\s*```/gi, '')
+    .replace(/```(?:json)?\s*\{[\s\S]*?"elements"[\s\S]*?\}\s*```/gi, '')
     .trim()
 }
