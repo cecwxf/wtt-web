@@ -862,8 +862,8 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ? '白板必须按四步组织：1) Socratic 提问/诊断，2) 架构或概念分析，3) 按题目拆解关键要点，4) 完整答案结构。'
     : 'The board must use four steps: 1) Socratic question/diagnosis, 2) architecture or concept analysis, 3) problem-specific key decomposition, 4) complete answer structure.'
   const limits = zh
-    ? '每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表；Mermaid 只画结构，不承载长文字。涉及算法复杂度、概率/损失函数、向量检索、系统容量、延迟或评测指标时，公式不能省。Mermaid 每步 3-7 个节点、2-6 条边，节点名必须来自本轮回答的具体概念。'
-    : 'Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Mermaid should show structure only, not long prose. Do not omit formulas for algorithm complexity, probability/loss functions, vector retrieval, capacity, latency, or evaluation metrics. Keep each Mermaid diagram to 3-7 nodes and 2-6 edges, with node names from this answer.'
+    ? '每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表；Mermaid 只画结构，不承载长文字。涉及算法复杂度、概率/损失函数、向量检索、系统容量、延迟或评测指标时，公式不能省。Mermaid 每步 3-7 个节点、2-6 条边，节点名必须来自本轮回答的具体概念，并用 classDef/class 至少区分 3 类颜色：输入/数据、核心/模型、风险/决策、指标/运维。'
+    : 'Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Mermaid should show structure only, not long prose. Do not omit formulas for algorithm complexity, probability/loss functions, vector retrieval, capacity, latency, or evaluation metrics. Keep each Mermaid diagram to 3-7 nodes and 2-6 edges, with node names from this answer, and use classDef/class for at least three semantic colors: input/data, core/model, risk/decision, metrics/ops.'
   const example = JSON.stringify({
     format: 'steps',
     title: '答案白板',
@@ -873,25 +873,25 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
         stage: 'socratic',
         title: '1. Socratic 提问',
         markdown: '先确认候选人的判断入口：这题的核心风险不是“能不能拼出链路”，而是能不能定位质量瓶颈并说明如何验证。\n\n| Focus | Question |\n| --- | --- |\n| Quality bottleneck | Which stage most limits answer correctness? |\n| Evidence | What signal would prove it? |',
-        mermaid: 'flowchart LR\n  Q["Clarify goal"] --> B{"Main bottleneck?"}\n  B --> R["Retrieval"]\n  B --> G["Generation"]',
+        mermaid: 'flowchart LR\n  Q["Clarify goal"] --> B{"Main bottleneck?"}\n  B --> R["Retrieval quality"]\n  B --> G["Generation grounding"]\n  classDef input fill:#dbeafe,stroke:#2563eb,color:#0f172a;\n  classDef risk fill:#fef3c7,stroke:#d97706,color:#451a03;\n  classDef core fill:#ede9fe,stroke:#7c3aed,color:#2e1065;\n  class Q input;\n  class B risk;\n  class R,G core;',
       },
       {
         stage: 'architecture_concepts',
         title: '2. 架构 / 概念分析',
         markdown: '架构答案要先拆出可独立优化的层：召回解决覆盖率，重排解决相关性，生成解决忠实表达。向量检索常用相似度可以写成：\n\n$$\\cos(q,d)=\\frac{q\\cdot d}{\\|q\\|\\|d\\|}$$\n\n| Layer | Role |\n| --- | --- |\n| Retrieval | Recall grounded evidence |\n| Rerank | Select high-signal context |',
-        mermaid: 'flowchart LR\n  Query["Query"] --> Retrieve["Hybrid retrieval"]\n  Retrieve --> Rerank["Rerank"]\n  Rerank --> Answer["Grounded answer"]',
+        mermaid: 'flowchart LR\n  Query["User query"] --> Retrieve["Hybrid retrieval"]\n  Retrieve --> Rerank["Cross-encoder rerank"]\n  Rerank --> Answer["Grounded answer"]\n  Answer --> Eval["Faithfulness eval"]\n  classDef input fill:#dbeafe,stroke:#2563eb,color:#0f172a;\n  classDef core fill:#ede9fe,stroke:#7c3aed,color:#2e1065;\n  classDef metric fill:#dcfce7,stroke:#16a34a,color:#052e16;\n  class Query input;\n  class Retrieve,Rerank,Answer core;\n  class Eval metric;',
       },
       {
         stage: 'decomposition',
         title: '3. 题目要点拆解',
         markdown: '拆解时要把“正确性、安全性、可观测性”分开讲，这样追问时能快速落到具体指标。评测不要只说 accuracy，RAG 场景至少要看召回和忠实度。\n\n| Key point | Check |\n| --- | --- |\n| Permissions | Filter before generation |\n| Metrics | Track recall and faithfulness |',
-        mermaid: 'flowchart TD\n  Scope["Scope constraints"] --> Safety["Permission filter"]\n  Scope --> Metrics["Eval metrics"]',
+        mermaid: 'flowchart TD\n  Scope["Scope constraints"] --> Safety["Permission filter"]\n  Scope --> Metrics["Recall + faithfulness"]\n  Safety --> Fail{"Unsafe evidence?"}\n  Fail --> Block["Block or redact"]\n  classDef input fill:#dbeafe,stroke:#2563eb,color:#0f172a;\n  classDef risk fill:#fef3c7,stroke:#d97706,color:#451a03;\n  classDef metric fill:#dcfce7,stroke:#16a34a,color:#052e16;\n  class Scope input;\n  class Safety,Fail,Block risk;\n  class Metrics metric;',
       },
       {
         stage: 'complete_answer',
         title: '4. 完整答案',
         markdown: '完整答案应收束到 baseline、trade-off、指标和上线风险。容量或延迟类题要给量化口径，例如端到端延迟可以按关键路径累加：\n\n$$T_{e2e}=T_{retrieve}+T_{rerank}+T_{generate}+T_{network}$$\n\n| Section | Must cover |\n| --- | --- |\n| Baseline | End-to-end path |\n| Trade-off | Latency vs quality |',
-        mermaid: 'flowchart LR\n  Baseline["Baseline design"] --> Tradeoff["Trade-offs"]\n  Tradeoff --> Ops["Monitoring + rollback"]',
+        mermaid: 'flowchart LR\n  Baseline["Baseline path"] --> Tradeoff{"Latency vs quality"}\n  Tradeoff --> Optimize["Cache + rerank budget"]\n  Tradeoff --> Ops["Monitor + rollback"]\n  classDef core fill:#ede9fe,stroke:#7c3aed,color:#2e1065;\n  classDef risk fill:#fef3c7,stroke:#d97706,color:#451a03;\n  classDef metric fill:#dcfce7,stroke:#16a34a,color:#052e16;\n  class Baseline,Optimize core;\n  class Tradeoff risk;\n  class Ops metric;',
       },
     ],
   })

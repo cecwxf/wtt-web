@@ -19,9 +19,11 @@ type Props = {
   elements?: ExcalidrawWhiteboardElement[]
   diagram?: WhiteboardDiagram | null
   renderMode?: 'full' | 'step'
+  expanded?: boolean
   busy?: boolean
   onExplain?: () => void
   onStep?: () => void
+  onToggleExpand?: () => void
 }
 
 const defaultAppState = {
@@ -101,7 +103,22 @@ function MermaidPreview({ chart }: { chart: string }) {
     setSvg('')
     setError('')
     import('mermaid').then(({ default: mermaid }) => {
-      mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' })
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'base',
+        securityLevel: 'loose',
+        flowchart: { curve: 'basis', padding: 18 },
+        themeVariables: {
+          primaryColor: '#dbeafe',
+          primaryBorderColor: '#2563eb',
+          primaryTextColor: '#0f172a',
+          secondaryColor: '#ccfbf1',
+          tertiaryColor: '#fef3c7',
+          lineColor: '#64748b',
+          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          fontSize: '18px',
+        },
+      })
       return mermaid.render(id, chart.trim())
     }).then(({ svg: nextSvg }) => {
       if (!cancelled) setSvg(nextSvg)
@@ -112,34 +129,67 @@ function MermaidPreview({ chart }: { chart: string }) {
   }, [chart])
 
   if (error) return <pre className="max-h-[360px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">{chart}</pre>
-  if (!svg) return <div className="flex min-h-[180px] items-center justify-center text-sm font-semibold text-slate-400">Rendering diagram...</div>
-  return <div className="flex justify-center overflow-auto rounded-md bg-white p-3 [&_svg]:max-h-[420px] [&_svg]:max-w-full" dangerouslySetInnerHTML={{ __html: svg }} />
+  if (!svg) return <div className="flex min-h-[240px] items-center justify-center text-base font-semibold text-slate-400">Rendering diagram...</div>
+  return <div className="mt-4 flex justify-center overflow-auto rounded-lg border border-slate-200 bg-white p-5 [&_svg]:max-h-[560px] [&_svg]:max-w-full [&_svg_text]:font-semibold" dangerouslySetInnerHTML={{ __html: svg }} />
 }
+
+const stepStyles = [
+  {
+    shell: 'border-cyan-200 bg-cyan-50/40',
+    badge: 'bg-cyan-600',
+    stage: 'text-cyan-700',
+    title: 'text-cyan-950',
+    markdown: '[&_th]:bg-cyan-100 [&_th]:text-cyan-950 [&_td]:bg-white',
+  },
+  {
+    shell: 'border-violet-200 bg-violet-50/40',
+    badge: 'bg-violet-600',
+    stage: 'text-violet-700',
+    title: 'text-violet-950',
+    markdown: '[&_th]:bg-violet-100 [&_th]:text-violet-950 [&_td]:bg-white',
+  },
+  {
+    shell: 'border-amber-200 bg-amber-50/50',
+    badge: 'bg-amber-600',
+    stage: 'text-amber-700',
+    title: 'text-amber-950',
+    markdown: '[&_th]:bg-amber-100 [&_th]:text-amber-950 [&_td]:bg-white',
+  },
+  {
+    shell: 'border-emerald-200 bg-emerald-50/45',
+    badge: 'bg-emerald-600',
+    stage: 'text-emerald-700',
+    title: 'text-emerald-950',
+    markdown: '[&_th]:bg-emerald-100 [&_th]:text-emerald-950 [&_td]:bg-white',
+  },
+]
 
 function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; locale: Locale }) {
   const steps = diagram.steps?.length
     ? diagram.steps
     : [{ title: diagram.title || (locale === 'zh' ? '白板图' : 'Whiteboard diagram'), markdown: diagram.markdown, mermaid: diagram.mermaid || diagram.source, summary: diagram.summary }]
   return (
-    <div className="h-full min-h-[560px] overflow-auto bg-slate-50 p-5 text-slate-900">
-      <div className="mx-auto max-w-6xl space-y-4">
-        {diagram.title ? <h3 className="text-xl font-black text-slate-950">{diagram.title}</h3> : null}
+    <div className="h-full min-h-[640px] overflow-auto bg-slate-50 p-6 text-slate-900">
+      <div className="mx-auto max-w-7xl space-y-5">
+        {diagram.title ? <h3 className="text-3xl font-black tracking-tight text-slate-950">{diagram.title}</h3> : null}
         {diagram.summary?.length ? (
-          <div className="rounded-md border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-600">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 text-base leading-7 text-slate-600 shadow-sm">
             {diagram.summary.map((item, index) => <p key={index}>{item}</p>)}
           </div>
         ) : null}
-        {steps.map((step, index) => (
-          <section key={`${step.stage || 'step'}-${index}`} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center gap-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">{index + 1}</span>
+        {steps.map((step, index) => {
+          const style = stepStyles[index % stepStyles.length]
+          return (
+          <section key={`${step.stage || 'step'}-${index}`} className={`rounded-xl border p-5 shadow-sm ${style.shell}`}>
+            <div className="mb-4 flex items-center gap-3">
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black text-white shadow-sm ${style.badge}`}>{index + 1}</span>
               <div>
-                <p className="text-sm font-black text-slate-950">{step.title || step.stage || `Step ${index + 1}`}</p>
-                {step.stage ? <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{step.stage}</p> : null}
+                <p className={`text-lg font-black ${style.title}`}>{step.title || step.stage || `Step ${index + 1}`}</p>
+                {step.stage ? <p className={`text-sm font-semibold uppercase tracking-wide ${style.stage}`}>{step.stage}</p> : null}
               </div>
             </div>
             {step.markdown ? (
-              <div className="max-w-none overflow-auto text-sm leading-6 text-slate-700 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_li]:ml-5 [&_li]:list-disc [&_p]:my-2 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-100 [&_th]:p-2 [&_th]:text-left">
+              <div className={`max-w-none overflow-auto rounded-lg bg-white/70 p-4 text-base leading-8 text-slate-800 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1.5 [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_li]:ml-6 [&_li]:list-disc [&_p]:my-3 [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:text-base [&_td]:border [&_td]:border-slate-200 [&_td]:p-3 [&_th]:border [&_th]:border-slate-200 [&_th]:p-3 [&_th]:text-left ${style.markdown}`}>
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{step.markdown}</ReactMarkdown>
               </div>
             ) : null}
@@ -150,13 +200,14 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
               </ul>
             ) : null}
           </section>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
 
-export function AgentWhiteboard({ challengeId, locale, elements, diagram, renderMode = 'full', busy, onExplain, onStep }: Props) {
+export function AgentWhiteboard({ challengeId, locale, elements, diagram, renderMode = 'full', expanded, busy, onExplain, onStep, onToggleExpand }: Props) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const timerRef = useRef<number[]>([])
   const [status, setStatus] = useState(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
@@ -253,11 +304,11 @@ export function AgentWhiteboard({ challengeId, locale, elements, diagram, render
   }
 
   const labels = locale === 'zh'
-    ? { title: 'Agent 白板讲解', subtitle: 'Agent 会把面试答案推导成结构化白板：公式、架构、指标、trade-off。', explain: 'Agent 讲解', step: '逐步推导', clear: '清空', export: '导出 JSON' }
-    : { title: 'Agent whiteboard', subtitle: 'The Agent turns an interview answer into a structured board: formulas, architecture, metrics, and trade-offs.', explain: 'Agent explain', step: 'Step derivation', clear: 'Clear', export: 'Export JSON' }
+    ? { title: 'Agent 白板讲解', subtitle: 'Agent 会把面试答案推导成结构化白板：公式、架构、指标、trade-off。', explain: 'Agent 讲解', step: '逐步推导', clear: '清空', export: '导出 JSON', expand: expanded ? '还原' : '展开' }
+    : { title: 'Agent whiteboard', subtitle: 'The Agent turns an interview answer into a structured board: formulas, architecture, metrics, and trade-offs.', explain: 'Agent explain', step: 'Step derivation', clear: 'Clear', export: 'Export JSON', expand: expanded ? 'Restore' : 'Expand' }
 
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
+    <section className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] ${expanded ? 'h-full' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 bg-[#191919] px-4 py-3">
         <div>
           <p className="text-sm font-black text-white">{labels.title}</p>
@@ -266,6 +317,7 @@ export function AgentWhiteboard({ challengeId, locale, elements, diagram, render
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={onExplain} disabled={busy} className="rounded-md bg-gradient-to-r from-violet-300 to-fuchsia-500 px-3 py-2 text-xs font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{busy ? '...' : labels.explain}</button>
           <button onClick={onStep} disabled={busy} className="rounded-md border border-violet-400/30 bg-violet-400/10 px-3 py-2 text-xs font-bold text-violet-200 hover:border-violet-300 disabled:cursor-not-allowed disabled:opacity-40">{labels.step}</button>
+          {onToggleExpand ? <button onClick={onToggleExpand} className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 hover:border-amber-200">{labels.expand}</button> : null}
           <button onClick={clearBoard} className="rounded-md border border-gray-700 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-300 hover:border-gray-500">{labels.clear}</button>
           <button onClick={exportBoard} className="rounded-md border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-3 py-2 text-xs font-bold text-[#bffffd] hover:border-[#3ce8e2]">{labels.export}</button>
         </div>

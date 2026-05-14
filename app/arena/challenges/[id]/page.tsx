@@ -268,6 +268,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardElements, setWhiteboardElements] = useState<ExcalidrawWhiteboardElement[]>([])
   const [whiteboardDiagram, setWhiteboardDiagram] = useState<WhiteboardDiagram | null>(null)
   const [whiteboardRenderMode, setWhiteboardRenderMode] = useState<'full' | 'step'>('full')
+  const [whiteboardExpanded, setWhiteboardExpanded] = useState(false)
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
 
@@ -366,6 +367,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setArenaProfile(null)
     setWhiteboardDiagram(null)
     setWhiteboardElements([])
+    setWhiteboardExpanded(false)
     setWhiteboardRenderMode('step')
     appliedWhiteboardMessageIdsRef.current.clear()
   }, [arenaSessionKey])
@@ -575,6 +577,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         </header>
 
         <div className="grid min-h-0 flex-1 gap-3 p-3 xl:grid-cols-[32%_1fr_480px] lg:grid-cols-[38%_62%]">
+          {(isCoding || !whiteboardExpanded) && (
           <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
             <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-800 bg-[#191919] px-4 py-3 text-sm">
               {[
@@ -688,6 +691,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               )}
             </div>
           </section>
+          )}
 
           {isCoding ? (
             <section className="grid min-h-0 gap-3 lg:grid-rows-[1fr_210px]">
@@ -731,7 +735,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               </section>
             </section>
           ) : (
-            <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_1fr]">
+            <div className={whiteboardExpanded ? 'min-h-0 xl:col-span-3 lg:col-span-2' : 'grid min-h-0 gap-3 lg:grid-rows-[auto_1fr]'}>
+              {!whiteboardExpanded && (
               <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-[#1e1e1e] to-[#151515] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
@@ -744,73 +749,50 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   </button>
                 </div>
               </section>
+              )}
               <AgentWhiteboard
                 challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
                 locale={locale}
                 elements={whiteboardElements}
                 diagram={whiteboardDiagram}
                 renderMode={whiteboardRenderMode}
+                expanded={whiteboardExpanded}
                 busy={whiteboardBusy || chatSending || arenaSyncing}
                 onExplain={() => requestWhiteboardExplain(false)}
                 onStep={() => requestWhiteboardExplain(true)}
+                onToggleExpand={() => setWhiteboardExpanded((value) => !value)}
               />
             </div>
           )}
 
-          <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-5 lg:col-span-2 xl:col-span-1">
-            <div className="rounded-lg border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#3ce8e2]">Agent</p>
-              <h2 className="mt-2 text-xl font-black text-white">{t.agentTitle}</h2>
-              <p className="mt-3 text-sm leading-6 text-[#bffffd]">{t.agentRole}</p>
-            </div>
-            <div className="mt-4 rounded-lg border border-gray-800 bg-[#151515] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-300">{t.coachFlow}</p>
-                  <p className="mt-1 text-sm text-gray-400">
-                    {t.stage}: <span className="font-bold text-white">{stageLabel(arenaSessionState?.stage, locale)}</span>
-                    {arenaSessionState ? ` · hint ${arenaSessionState.hint_level}` : ''}
-                  </p>
-                </div>
-                <div className="text-right text-xs text-gray-500">
-                  <p>{t.mastery}</p>
-                  <p className="font-mono text-[#3ce8e2]">{Math.round((arenaSessionState?.mastery_estimate || 0) * 100)}%</p>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {coachActions.map((action) => (
-                  <button
-                    key={action.intent}
-                    type="button"
-                    onClick={() => runCoachAction(action)}
-                    disabled={chatSending || arenaSyncing}
-                    className="rounded-md border border-gray-800 bg-[#202020] px-2 py-2 text-xs font-bold text-gray-300 transition-colors hover:border-[#3ce8e2] hover:text-[#3ce8e2] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {locale === 'zh' ? action.zh : action.en}
-                  </button>
-                ))}
-              </div>
-              {(arenaProfile?.weak_concepts?.length || arenaProfile?.recommended_next_challenges?.length) ? (
-                <div className="mt-4 grid gap-3 text-xs text-gray-500 sm:grid-cols-2 xl:grid-cols-1">
-                  {!!arenaProfile?.weak_concepts?.length && (
-                    <div>
-                      <p className="font-bold text-gray-300">{t.weak}</p>
-                      <p className="mt-1 leading-5">{arenaProfile.weak_concepts.slice(0, 4).join(' · ')}</p>
-                    </div>
-                  )}
-                  {!!arenaProfile?.recommended_next_challenges?.length && (
-                    <div>
-                      <p className="font-bold text-gray-300">{t.next}</p>
-                      <p className="mt-1 leading-5">{arenaProfile.recommended_next_challenges.slice(0, 3).join(' · ')}</p>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div className="mt-4 flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
+          {(isCoding || !whiteboardExpanded) && (
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-3 lg:col-span-2 xl:col-span-1">
+            <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
               <div className="border-b border-gray-800 px-4 py-3">
-                <h3 className="text-sm font-black text-white">{t.chatTitle}</h3>
-                <p className="mt-1 text-xs leading-5 text-gray-500">{t.chatIntro}</p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-black text-white">{t.chatTitle}</h3>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      {t.stage}: <span className="font-bold text-gray-300">{stageLabel(arenaSessionState?.stage, locale)}</span>
+                      {arenaSessionState ? ` · hint ${arenaSessionState.hint_level}` : ''}
+                      {` · ${t.mastery} ${Math.round((arenaSessionState?.mastery_estimate || 0) * 100)}%`}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2.5 py-1 text-[11px] font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {coachActions.map((action) => (
+                    <button
+                      key={action.intent}
+                      type="button"
+                      onClick={() => runCoachAction(action)}
+                      disabled={chatSending || arenaSyncing}
+                      className="rounded-md border border-gray-800 bg-[#202020] px-2 py-2 text-xs font-bold text-gray-300 transition-colors hover:border-[#3ce8e2] hover:text-[#3ce8e2] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {locale === 'zh' ? action.zh : action.en}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                 {chatMessages.length === 0 && (
@@ -842,6 +824,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               </form>
             </div>
           </aside>
+          )}
         </div>
       </div>
     </main>

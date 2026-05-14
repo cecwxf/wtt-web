@@ -17,7 +17,7 @@ Always produce a short explanation followed by one `WHITEBOARD_DIAGRAM` JSON blo
 [/WHITEBOARD_DIAGRAM]
 ```
 
-Preferred Mermaid format: `flowchart LR` or `flowchart TD`. Keep Markdown tables compact, but do not make the whiteboard only tables and diagrams. Do not emit `WHITEBOARD_OPS` or `EXCALIDRAW_ELEMENTS`.
+Preferred Mermaid format: `flowchart LR` or `flowchart TD`. Use Mermaid `classDef` / `class` to apply at least three semantic colors, such as input/data, model/core, risk/decision, metric/ops. Keep Markdown tables compact, but do not make the whiteboard only tables and diagrams. Do not emit `WHITEBOARD_OPS` or `EXCALIDRAW_ELEMENTS`.
 
 ## Teaching Phases
 
@@ -68,9 +68,10 @@ Possible teaching phases:
 - Mermaid nodes should contain answer components or decisions, not instructions.
 - Prefer short labels: 2-5 words for boxes; put long explanations in section panels. Never put a full sentence inside a small box.
 - Put dense comparisons in Markdown tables instead of Mermaid nodes.
+- Use color deliberately: blue for input/query/data, violet for model/core reasoning, amber for bottlenecks/risks/decisions, emerald for metrics/validation/ops. In Mermaid, add `classDef` lines and assign nodes to classes.
 - Use content-specific stable IDs such as `retrieval`, `rerank`, `kv-cache`, `offline-features`, `online-read`, `root-cause`, `fix`, `metric`, `rollback`.
 - Avoid generic IDs and labels unless the answer itself is generic. Bad: `goal`, `inputs`, `core`, `serve`, `eval` for every response. Good: `chunking`, `permission-filter`, `hybrid-search`, `kv-cache`, `rollback`.
-- Keep Mermaid syntax simple: `A["Label"] --> B["Label"]`, optional `{Decision}` nodes, no subgraphs unless essential.
+- Keep Mermaid syntax simple but expressive: `A["Concrete label"] --> B{"Decision"}`, optional subgraphs only for real lanes such as offline/online or prefill/decode.
 
 ## Quality Bar
 
