@@ -2,8 +2,10 @@ import type { Challenge } from './types'
 
 export type WhiteboardLocale = 'zh' | 'en'
 export type ExcalidrawWhiteboardElement = Record<string, unknown>
-export type ExcalidrawWhiteboardPayload = { elements: ExcalidrawWhiteboardElement[]; note?: string }
-type WhiteboardDiagramPayload = { format?: string; title?: string; summary?: string[]; source?: string; mermaid?: string }
+export type WhiteboardDiagramStep = { stage?: string; title?: string; markdown?: string; mermaid?: string; source?: string; summary?: string[] }
+export type WhiteboardDiagram = { format?: string; title?: string; summary?: string[]; source?: string; mermaid?: string; markdown?: string; steps?: WhiteboardDiagramStep[] }
+export type ExcalidrawWhiteboardPayload = { elements: ExcalidrawWhiteboardElement[]; note?: string; diagram?: WhiteboardDiagram }
+type WhiteboardDiagramPayload = WhiteboardDiagram
 
 const DIAGRAM_OPEN = '[WHITEBOARD_DIAGRAM]'
 const DIAGRAM_CLOSE = '[/WHITEBOARD_DIAGRAM]'
@@ -451,7 +453,8 @@ function parseMermaidNode(token: string) {
 }
 
 function diagramPayloadToElements(payload: WhiteboardDiagramPayload): ExcalidrawWhiteboardElement[] {
-  const source = safeMultilineString(payload.source || payload.mermaid || '', 5000)
+  const firstStep = Array.isArray(payload.steps) ? payload.steps.find((step) => step.mermaid || step.source) : undefined
+  const source = safeMultilineString(payload.source || payload.mermaid || firstStep?.mermaid || firstStep?.source || '', 5000)
   const title = safeString(payload.title, 160) || 'Whiteboard diagram'
   const summary = Array.isArray(payload.summary) ? payload.summary.map((item) => safeString(item, 180)).filter(Boolean).slice(0, 4) : []
   if (!source) return []
@@ -508,6 +511,27 @@ function diagramPayloadToElements(payload: WhiteboardDiagramPayload): Excalidraw
     })
   }
   return normalizeWhiteboardLayout(elements)
+}
+
+function sanitizeDiagramPayload(payload: WhiteboardDiagramPayload): WhiteboardDiagram {
+  const steps = Array.isArray(payload.steps)
+    ? payload.steps.map((step, index) => ({
+      stage: safeString(step.stage, 80) || `step-${index + 1}`,
+      title: safeString(step.title, 160) || `Step ${index + 1}`,
+      markdown: safeMultilineString(step.markdown, 3000),
+      mermaid: safeMultilineString(step.mermaid || step.source, 5000),
+      summary: Array.isArray(step.summary) ? step.summary.map((item) => safeString(item, 180)).filter(Boolean).slice(0, 4) : undefined,
+    })).filter((step) => step.markdown || step.mermaid).slice(0, 6)
+    : undefined
+  return {
+    format: safeString(payload.format, 40) || 'mermaid',
+    title: safeString(payload.title, 160),
+    summary: Array.isArray(payload.summary) ? payload.summary.map((item) => safeString(item, 180)).filter(Boolean).slice(0, 5) : undefined,
+    source: safeMultilineString(payload.source || payload.mermaid, 5000),
+    mermaid: safeMultilineString(payload.mermaid || payload.source, 5000),
+    markdown: safeMultilineString(payload.markdown, 3000),
+    steps,
+  }
 }
 
 function arrowBetween(id: string, from: { x: number; y: number }, to: { x: number; y: number }, width = 230, height = 108) {
@@ -835,20 +859,45 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ? `题目约束只用于确定场景，不要逐字复制到白板：${challenge.description}`
     : `Problem constraints are only for grounding; do not copy them into the board: ${challenge.description}`
   const phases = zh
-    ? '按阶段组织：goal 目标/SLO -> inputs 输入/数据/约束 -> core 核心算法/模型/架构 -> serve 在线服务/运行时 -> eval 指标/监控/实验 -> risks 风险/失败场景。'
-    : 'Organize by phases: goal/SLO -> inputs/data/constraints -> core algorithm/model/architecture -> serving/runtime -> eval/monitoring/experiments -> risks/failure modes.'
+    ? '白板必须按四步组织：1) Socratic 提问/诊断，2) 架构或概念分析，3) 按题目拆解关键要点，4) 完整答案结构。'
+    : 'The board must use four steps: 1) Socratic question/diagnosis, 2) architecture or concept analysis, 3) problem-specific key decomposition, 4) complete answer structure.'
   const limits = zh
-    ? '控制规模：Mermaid 里 4-8 个节点、3-8 条边；节点名必须来自本轮回答的具体概念。'
-    : 'Keep it compact: 4-8 Mermaid nodes and 3-8 edges; node names must be concrete concepts from this answer.'
+    ? '每一步都可以包含一个紧凑 Markdown 表格和一个 Mermaid 图；Markdown 表格会直接在白板渲染，不要硬塞进 Mermaid 节点。Mermaid 每步 3-7 个节点、2-6 条边，节点名必须来自本轮回答的具体概念。'
+    : 'Each step may include one compact Markdown table and one Mermaid diagram. Markdown tables are rendered directly on the board; do not force table content into Mermaid nodes. Keep each Mermaid diagram to 3-7 nodes and 2-6 edges, with node names from this answer.'
   const example = JSON.stringify({
-    format: 'mermaid',
-    title: '答案流程图',
-    summary: ['先从回答中抽取具体节点，再画流程/架构/双泳道/debug/概念图。'],
-    source: 'flowchart LR\n  A["Chunking"] --> B["Hybrid retrieval"]\n  B --> C{"Permission filter"}\n  C --> D["Rerank"]\n  D --> E["Grounded answer"]',
+    format: 'steps',
+    title: '答案白板',
+    summary: ['白板直接展示每一步的表格和 Mermaid 图，而不是把表格转成乱线框。'],
+    steps: [
+      {
+        stage: 'socratic',
+        title: '1. Socratic 提问',
+        markdown: '| Focus | Question |\n| --- | --- |\n| Quality bottleneck | Which stage most limits answer correctness? |',
+        mermaid: 'flowchart LR\n  Q["Clarify goal"] --> B{"Main bottleneck?"}\n  B --> R["Retrieval"]\n  B --> G["Generation"]',
+      },
+      {
+        stage: 'architecture_concepts',
+        title: '2. 架构 / 概念分析',
+        markdown: '| Layer | Role |\n| --- | --- |\n| Retrieval | Recall grounded evidence |\n| Rerank | Select high-signal context |',
+        mermaid: 'flowchart LR\n  Query["Query"] --> Retrieve["Hybrid retrieval"]\n  Retrieve --> Rerank["Rerank"]\n  Rerank --> Answer["Grounded answer"]',
+      },
+      {
+        stage: 'decomposition',
+        title: '3. 题目要点拆解',
+        markdown: '| Key point | Check |\n| --- | --- |\n| Permissions | Filter before generation |\n| Metrics | Track recall and faithfulness |',
+        mermaid: 'flowchart TD\n  Scope["Scope constraints"] --> Safety["Permission filter"]\n  Scope --> Metrics["Eval metrics"]',
+      },
+      {
+        stage: 'complete_answer',
+        title: '4. 完整答案',
+        markdown: '| Section | Must cover |\n| --- | --- |\n| Baseline | End-to-end path |\n| Trade-off | Latency vs quality |',
+        mermaid: 'flowchart LR\n  Baseline["Baseline design"] --> Tradeoff["Trade-offs"]\n  Tradeoff --> Ops["Monitoring + rollback"]',
+      },
+    ],
   })
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解理想答案，然后必须输出一个白板图协议块。优先用 Mermaid flowchart 表达当前回答的流程图、架构图、双泳道、debug 链路或概念图。格式如下：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：Mermaid 节点必须是本轮答案里的具体概念；不要画题目原文；不要输出固定模板；不要输出 WHITEBOARD_OPS。`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain the ideal answer in natural language, then include a whiteboard diagram protocol block. Prefer Mermaid flowchart for the current answer's flow, architecture, two-lane diagram, debug chain, or concept map. Use this exact format:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: Mermaid nodes must be concrete concepts from this answer; do not draw the prompt text; do not reuse a fixed template; do not output WHITEBOARD_OPS.`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 表格和 Mermaid，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：四个 steps 都要有；每步的 markdown/mermaid 必须总结本轮回答；不要画题目原文；不要输出固定模板；不要输出 WHITEBOARD_OPS。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown tables and Mermaid, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include all four steps; each step's markdown/mermaid must summarize this reply; do not draw prompt text; do not reuse a fixed template; do not output WHITEBOARD_OPS.`
 }
 
 export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardPayload | null {
@@ -860,8 +909,11 @@ export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardP
   for (const candidate of diagramCandidates) {
     try {
       const parsed = JSON.parse(candidate.trim()) as WhiteboardDiagramPayload
+      const diagram = sanitizeDiagramPayload(parsed)
       const elements = diagramPayloadToElements(parsed)
-      if (elements.length) return { elements, note: safeString(parsed.title, 240) || undefined }
+      if (elements.length || diagram.steps?.length || diagram.mermaid || diagram.markdown) {
+        return { elements, note: safeString(parsed.title, 240) || undefined, diagram }
+      }
     } catch {
       // Ignore malformed diagram payload and try Excalidraw elements.
     }

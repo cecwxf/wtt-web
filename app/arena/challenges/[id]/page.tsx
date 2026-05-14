@@ -7,7 +7,7 @@ import { useSession } from 'next-auth/react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
-import { extractWhiteboardPayload, makeAnswerWhiteboardElements, makeInterviewWhiteboardElements, makeWhiteboardPrompt, stripWhiteboardPayload, type ExcalidrawWhiteboardElement } from '@/lib/arena/whiteboard'
+import { extractWhiteboardPayload, makeAnswerWhiteboardElements, makeInterviewWhiteboardElements, makeWhiteboardPrompt, stripWhiteboardPayload, type ExcalidrawWhiteboardElement, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -266,6 +266,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
   const [whiteboardElements, setWhiteboardElements] = useState<ExcalidrawWhiteboardElement[]>([])
+  const [whiteboardDiagram, setWhiteboardDiagram] = useState<WhiteboardDiagram | null>(null)
   const [whiteboardRenderMode, setWhiteboardRenderMode] = useState<'full' | 'step'>('full')
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
@@ -345,7 +346,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const payload = extractWhiteboardPayload(content)
       appliedWhiteboardMessageIdsRef.current.add(messageId)
       setWhiteboardRenderMode('step')
-      setWhiteboardElements(payload?.elements?.length ? payload.elements : makeAnswerWhiteboardElements(challenge, locale, content))
+      if (payload?.diagram) {
+        setWhiteboardDiagram(payload.diagram)
+        setWhiteboardElements(payload.elements || [])
+      } else {
+        setWhiteboardDiagram(null)
+        setWhiteboardElements(payload?.elements?.length ? payload.elements : makeAnswerWhiteboardElements(challenge, locale, content))
+      }
       break
     }
     setChatMessages(mapped)
@@ -357,6 +364,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setChatMessages([])
     setArenaSessionState(null)
     setArenaProfile(null)
+    setWhiteboardDiagram(null)
     setWhiteboardElements([])
     setWhiteboardRenderMode('step')
     appliedWhiteboardMessageIdsRef.current.clear()
@@ -491,6 +499,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (!challenge || whiteboardBusy) return
     setWhiteboardRenderMode('step')
     const previewElements = makeInterviewWhiteboardElements(challenge, locale)
+    setWhiteboardDiagram(null)
     setWhiteboardElements(previewElements)
     const message = makeWhiteboardPrompt(challenge, locale, stepMode)
     if (!session?.accessToken) {
@@ -739,6 +748,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
                 locale={locale}
                 elements={whiteboardElements}
+                diagram={whiteboardDiagram}
                 renderMode={whiteboardRenderMode}
                 busy={whiteboardBusy || chatSending || arenaSyncing}
                 onExplain={() => requestWhiteboardExplain(false)}
