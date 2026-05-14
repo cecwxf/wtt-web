@@ -47,6 +47,7 @@ function safeString(value: unknown, max = 1200) {
 
 function safeMultilineString(value: unknown, max = 1200) {
   return String(value ?? '')
+    .replace(/\\r\\n|\\n|\\r/g, '\n')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
     .split(/\r?\n+/)
     .map((line) => line.replace(/\s+/g, ' ').trim())
