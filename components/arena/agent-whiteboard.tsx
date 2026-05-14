@@ -5,17 +5,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ExcalidrawWhiteboardElement, WhiteboardDiagram } from '@/lib/arena/whiteboard'
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 
 const Excalidraw = dynamic(async () => (await import('@excalidraw/excalidraw')).Excalidraw, { ssr: false })
 
 type Locale = 'zh' | 'en'
-type ExcalidrawImperativeAPI = {
-  getSceneElements: () => unknown[]
-  getAppState: () => Record<string, unknown>
-  getFiles: () => Record<string, unknown>
-  updateScene: (scene: { elements?: unknown[]; appState?: Record<string, unknown> }) => void
-  scrollToContent?: (elements: unknown[], options?: { fitToContent?: boolean }) => void
-}
 
 type Props = {
   challengeId: string
@@ -283,7 +277,7 @@ export function AgentWhiteboard({ challengeId, locale, elements, diagram, render
             initialData={async () => {
               return { elements: [], appState: defaultAppState }
             }}
-            onChange={(elements: unknown[], appState: Record<string, unknown>, files: Record<string, unknown>) => {
+            onChange={(elements, appState, files) => {
               try {
                 window.localStorage.setItem(storageKey, JSON.stringify({ elements, appState: { viewBackgroundColor: appState.viewBackgroundColor }, files }))
               } catch {
