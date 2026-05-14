@@ -9,7 +9,7 @@ Use this skill for WTT Arena whiteboard explanations. The goal is to teach like 
 
 ## Output Contract
 
-Always produce a short explanation followed by one `EXCALIDRAW_ELEMENTS` JSON block:
+Always produce a short explanation followed by one `EXCALIDRAW_ELEMENTS` JSON block. Before drawing, compress your answer into 4-6 answer-specific nodes. The node labels must come from the current reply, not from a reusable template.
 
 ```text
 [EXCALIDRAW_ELEMENTS]
@@ -21,7 +21,7 @@ Supported element types: `rectangle`, `text`, `arrow`, `line`, `ellipse`, `diamo
 
 ## Teaching Phases
 
-Summarize the current answer first, then choose a diagram pattern that matches the answer. Do not always draw the same goal -> inputs -> core -> serve -> eval chain.
+Summarize the current answer first, then choose a diagram pattern that matches the answer. Do not always draw the same goal -> inputs -> core -> serve -> eval chain. A good board should still make sense if the chat text is hidden.
 
 Use these patterns when appropriate:
 
@@ -45,8 +45,9 @@ Possible teaching phases:
 - Keep the board compact: 4-6 answer boxes, 1-2 section panels, 3-5 arrows, at most 24 elements.
 - Do not copy the problem statement or requirement list into the board.
 - Rectangles and text should contain answer components or decisions, not instructions.
-- Prefer short labels: 2-5 words for boxes; put long explanations in section panels.
+- Prefer short labels: 2-5 words for boxes; put long explanations in section panels. Never put a full sentence inside a small box.
 - Use content-specific stable IDs such as `retrieval`, `rerank`, `kv-cache`, `offline-features`, `online-read`, `root-cause`, `fix`, `metric`, `rollback`.
+- Avoid generic IDs and labels unless the answer itself is generic. Bad: `goal`, `inputs`, `core`, `serve`, `eval` for every response. Good: `chunking`, `permission-filter`, `hybrid-search`, `kv-cache`, `rollback`.
 - Coordinates are hints only. The WTT renderer may normalize layout, so encode meaning in element IDs and labels.
 
 ## Quality Bar

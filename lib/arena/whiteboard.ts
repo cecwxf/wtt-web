@@ -198,6 +198,17 @@ function sectionElements(id: string, title: string, items: string[], x: number, 
   ]
 }
 
+function colorForIndex(index: number) {
+  return [
+    { stroke: '#0f766e', bg: '#ccfbf1' },
+    { stroke: '#7c3aed', bg: '#ede9fe' },
+    { stroke: '#d97706', bg: '#ffedd5' },
+    { stroke: '#2563eb', bg: '#dbeafe' },
+    { stroke: '#dc2626', bg: '#fee2e2' },
+    { stroke: '#475569', bg: '#f1f5f9' },
+  ][index % 6]
+}
+
 function sanitizePoints(value: unknown) {
   const points = Array.isArray(value) ? value : []
   const sanitized = points.slice(0, MAX_POINTS).map((point) => {
@@ -353,21 +364,41 @@ function updateTextLayout(element: ExcalidrawWhiteboardElement, x: number, y: nu
   }
 }
 
-function layoutShapeWithText(shape: ExcalidrawWhiteboardElement, label: string, x: number, y: number, width: number, height: number, textId: string, fontSize = 20) {
-  const maxLineLength = width >= 420 ? 50 : 20
+function nodeSize(label: string, kind: DiagramKind, section = false) {
+  const rawLines = safeMultilineString(label).split('\n').filter(Boolean)
+  const longest = rawLines.reduce((max, line) => Math.max(max, visualLength(line)), 0)
+  if (section) {
+    const width = clamp(longest > 64 ? 610 : longest > 42 ? 540 : 460, 420, 620)
+    const wrapped = wrapText(label, width > 560 ? 58 : 48, 8)
+    const lineCount = wrapped.split('\n').length
+    return { width, height: clamp(78 + lineCount * 25, 128, 260), fontSize: 18, wrapped }
+  }
+  const wideKind = kind === 'architecture' || kind === 'two_lane'
+  const width = clamp(longest > 28 ? 280 : longest > 18 ? 250 : wideKind ? 230 : 220, 210, 300)
+  const maxLineLength = width >= 270 ? 24 : 20
+  const wrapped = wrapText(label, maxLineLength, 4)
+  const lineCount = wrapped.split('\n').length
+  const fontSize = lineCount >= 4 ? 17 : 19
+  return { width, height: clamp(50 + lineCount * fontSize * DEFAULT_LINE_HEIGHT, 82, 132), fontSize, wrapped }
+}
+
+function layoutShapeWithText(shape: ExcalidrawWhiteboardElement, label: string, x: number, y: number, width: number, height: number, textId: string, fontSize = 20, wrappedLabel?: string) {
+  const maxLineLength = width >= 420 ? 50 : 22
   const maxLines = width >= 420 ? Math.max(4, Math.floor((height - 36) / (fontSize * DEFAULT_LINE_HEIGHT))) : Math.max(2, Math.floor((height - 26) / (fontSize * DEFAULT_LINE_HEIGHT)))
-  const wrappedLabel = wrapText(label, maxLineLength, maxLines)
+  const text = wrappedLabel || wrapText(label, maxLineLength, maxLines)
   const normalizedShape = {
     ...shape,
     x,
     y,
     width,
     height,
+    strokeColor: safeColor(shape.strokeColor, '#334155'),
+    backgroundColor: safeColor(shape.backgroundColor, '#ffffff'),
     customData: undefined,
   }
   return [
     normalizedShape,
-    textElement(textId, wrappedLabel, x + 14, y + 18, fontSize, width - 28),
+    textElement(textId, text, x + 14, y + 16, fontSize, width - 28),
   ]
 }
 
@@ -382,55 +413,18 @@ function inferDiagramKind(labels: string[]): DiagramKind {
   return 'architecture'
 }
 
-function boxSlotsForKind(kind: DiagramKind, count: number) {
-  if (kind === 'debug') {
-    return [
-      { x: 120, y: 145 },
-      { x: 120, y: 295 },
-      { x: 430, y: 295 },
-      { x: 740, y: 295 },
-      { x: 1050, y: 295 },
-      { x: 430, y: 145 },
-    ].slice(0, count)
-  }
-  if (kind === 'two_lane') {
-    return [
-      { x: 90, y: 145 },
-      { x: 370, y: 145 },
-      { x: 650, y: 145 },
-      { x: 90, y: 300 },
-      { x: 370, y: 300 },
-      { x: 650, y: 300 },
-    ].slice(0, count)
-  }
-  if (kind === 'concept') {
-    return [
-      { x: 120, y: 145 },
-      { x: 430, y: 145 },
-      { x: 740, y: 145 },
-      { x: 430, y: 300 },
-      { x: 740, y: 300 },
-      { x: 1050, y: 300 },
-    ].slice(0, count)
-  }
-  if (kind === 'architecture') {
-    return [
-      { x: 80, y: 225 },
-      { x: 380, y: 145 },
-      { x: 380, y: 305 },
-      { x: 700, y: 225 },
-      { x: 1010, y: 145 },
-      { x: 1010, y: 305 },
-    ].slice(0, count)
-  }
-  return [
-    { x: 80, y: 145 },
-    { x: 350, y: 145 },
-    { x: 620, y: 145 },
-    { x: 890, y: 145 },
-    { x: 1160, y: 145 },
-    { x: 620, y: 300 },
-  ].slice(0, count)
+function nodeIdFromText(text: string, fallback: string) {
+  const normalized = safeString(text, 64).toLowerCase()
+  if (/(retrieve|retrieval|召回|搜索)/.test(normalized)) return 'retrieval'
+  if (/(rerank|rank|排序|重排)/.test(normalized)) return 'rerank'
+  if (/(generate|生成|llm|model|模型)/.test(normalized)) return 'model'
+  if (/(cache|kv|缓存)/.test(normalized)) return 'cache'
+  if (/(feature|特征|offline|离线)/.test(normalized)) return 'features'
+  if (/(serve|online|服务|在线)/.test(normalized)) return 'serving'
+  if (/(metric|eval|monitor|指标|评测|监控)/.test(normalized)) return 'metrics'
+  if (/(risk|trade|fail|风险|权衡|失败)/.test(normalized)) return 'risks'
+  if (/(fix|debug|修复|定位)/.test(normalized)) return 'fix'
+  return safeId(normalized, fallback)
 }
 
 function arrowBetween(id: string, from: { x: number; y: number }, to: { x: number; y: number }, width = 230, height = 108) {
@@ -444,6 +438,85 @@ function arrowBetween(id: string, from: { x: number; y: number }, to: { x: numbe
   const startY = dy >= 0 ? from.y + height : from.y
   const endY = dy >= 0 ? to.y : to.y + height
   return arrowElement(id, from.x + width / 2, startY, to.x + width / 2 - (from.x + width / 2), endY - startY)
+}
+
+function slotsForNodes(kind: DiagramKind, sizes: Array<{ width: number; height: number }>) {
+  const count = sizes.length
+  if (kind === 'debug') {
+    return [
+      { x: 90, y: 145 },
+      { x: 360, y: 145 },
+      { x: 630, y: 145 },
+      { x: 900, y: 145 },
+      { x: 630, y: 300 },
+      { x: 360, y: 300 },
+    ].slice(0, count)
+  }
+  if (kind === 'two_lane') {
+    const top = Math.ceil(count / 2)
+    return sizes.map((_, index) => ({
+      x: 90 + (index % top) * 300,
+      y: index < top ? 145 : 315,
+    }))
+  }
+  if (kind === 'concept') {
+    return [
+      { x: 555, y: 145 },
+      { x: 185, y: 145 },
+      { x: 925, y: 145 },
+      { x: 185, y: 320 },
+      { x: 555, y: 320 },
+      { x: 925, y: 320 },
+    ].slice(0, count)
+  }
+  if (kind === 'architecture') {
+    return [
+      { x: 555, y: 230 },
+      { x: 135, y: 145 },
+      { x: 135, y: 335 },
+      { x: 930, y: 145 },
+      { x: 930, y: 335 },
+      { x: 555, y: 405 },
+    ].slice(0, count)
+  }
+  return sizes.map((_, index) => ({
+    x: 80 + (index % 4) * 310,
+    y: index < 4 ? 145 : 310,
+  }))
+}
+
+function addDiagramArrows(kind: DiagramKind, laidOut: ExcalidrawWhiteboardElement[], boxes: Array<{ shape: ExcalidrawWhiteboardElement; label: string }>, slots: Array<{ x: number; y: number }>, sizes: Array<{ width: number; height: number }>) {
+  if (boxes.length < 2) return
+  const add = (fromIndex: number, toIndex: number) => {
+    const from = slots[fromIndex]
+    const to = slots[toIndex]
+    if (!from || !to) return
+    laidOut.push(arrowBetween(
+      `${elementId(boxes[fromIndex].shape) || `box-${fromIndex}`}-${elementId(boxes[toIndex].shape) || `box-${toIndex}`}-arrow`,
+      from,
+      to,
+      sizes[fromIndex].width,
+      sizes[fromIndex].height,
+    ))
+  }
+  if (kind === 'architecture') {
+    for (let index = 1; index < boxes.length; index += 1) add(index, 0)
+    return
+  }
+  if (kind === 'concept') {
+    for (let index = 1; index < boxes.length; index += 1) add(0, index)
+    return
+  }
+  if (kind === 'two_lane') {
+    const top = Math.ceil(boxes.length / 2)
+    for (let index = 0; index < top - 1; index += 1) add(index, index + 1)
+    for (let index = top; index < boxes.length - 1; index += 1) add(index, index + 1)
+    for (let index = 0; index < Math.min(top, boxes.length - top); index += 1) add(index, top + index)
+    return
+  }
+  boxes.slice(0, 5).forEach((_, index) => {
+    if (index < boxes.length - 1) add(index, index + 1)
+  })
 }
 
 function normalizeWhiteboardLayout(elements: ExcalidrawWhiteboardElement[]) {
@@ -486,20 +559,23 @@ function normalizeWhiteboardLayout(elements: ExcalidrawWhiteboardElement[]) {
   if (title) laidOut.push(updateTextLayout(title, 70, 45, 960, 34))
   if (subtitle) laidOut.push(updateTextLayout(subtitle, 80, 92, 760, 18))
 
-  const boxSlots = boxSlotsForKind(diagramKind, boxes.length)
+  const boxSizes = boxes.map((entry) => nodeSize(entry.label, diagramKind))
+  const boxSlots = slotsForNodes(diagramKind, boxSizes)
   boxes.forEach((entry, index) => {
     const slot = boxSlots[index] || boxSlots[boxSlots.length - 1]
     const id = elementId(entry.shape) || `box-${index}`
-    laidOut.push(...layoutShapeWithText(entry.shape, entry.label, slot.x, slot.y, 230, 108, `${id}-label`, 18))
+    const size = boxSizes[index]
+    const color = colorForIndex(index)
+    const shape = {
+      ...entry.shape,
+      strokeColor: safeColor(entry.shape.strokeColor, color.stroke),
+      backgroundColor: safeColor(entry.shape.backgroundColor, color.bg),
+      type: diagramKind === 'concept' && index === 0 ? 'diamond' : entry.shape.type,
+    }
+    laidOut.push(...layoutShapeWithText(shape, entry.label, slot.x, slot.y, size.width, size.height, `${id}-label`, size.fontSize, size.wrapped))
   })
 
-  boxes.slice(0, 5).forEach((entry, index) => {
-    const next = boxes[index + 1]
-    if (!next || index >= 4) return
-    const from = boxSlots[index]
-    const to = boxSlots[index + 1]
-    laidOut.push(arrowBetween(`${elementId(entry.shape) || `box-${index}`}-${elementId(next.shape) || `box-${index + 1}`}-arrow`, from, to))
-  })
+  addDiagramArrows(diagramKind, laidOut, boxes, boxSlots, boxSizes)
 
   const sectionY = diagramKind === 'pipeline' ? 335 : 455
   const sectionSlots = [
@@ -511,8 +587,8 @@ function normalizeWhiteboardLayout(elements: ExcalidrawWhiteboardElement[]) {
     const slot = sectionSlots[index] || sectionSlots[sectionSlots.length - 1]
     const id = elementId(entry.shape) || `section-${index}`
     const text = entry.label.split(/[\n;；]/).map((item) => item.trim()).filter(Boolean).slice(0, 5).join('\n')
-    const height = Math.max(175, 86 + wrapText(text, 48, 8).split('\n').length * 24)
-    laidOut.push(...layoutShapeWithText(entry.shape, text, slot.x, slot.y, 560, height, `${id}-text`, 18))
+    const size = nodeSize(text, diagramKind, true)
+    laidOut.push(...layoutShapeWithText(entry.shape, text, slot.x, slot.y, size.width, size.height, `${id}-text`, size.fontSize, size.wrapped))
   })
 
   if (notes.length) {
@@ -622,23 +698,46 @@ export function makeAnswerWhiteboardElements(challenge: Challenge, locale: White
     zh ? '连接输入、核心方案和服务路径' : 'Connect inputs, core solution, and serving path',
     zh ? '补充 trade-off、监控和失败场景' : 'Add trade-offs, monitoring, and failure modes',
   ]
-
-  return [
-    textElement('title', zh ? `本轮答案结构：${challenge.title}` : `This answer: ${challenge.title}`, 70, 45, 34, 920),
-    textElement('subtitle', zh ? `由本轮 Agent 回答生成：${compactText(conceptSummary(challenge), 72)}` : `Generated from the latest Agent answer: ${compactText(conceptSummary(challenge), 72)}`, 80, 92, 18, 760, '#64748b'),
-    ...boxElements('goal', zh ? '目标 / 指标' : 'Goal / metric', 80, 145, '#0f766e', '#ccfbf1'),
-    ...boxElements('inputs', zh ? '输入 / 约束' : 'Inputs / constraints', 350, 145, '#7c3aed', '#ede9fe'),
-    ...boxElements('core', zh ? '核心方案' : 'Core solution', 620, 145, '#d97706', '#ffedd5'),
-    ...boxElements('serve', zh ? '服务 / 验证' : 'Serve / validate', 890, 145, '#16a34a', '#dcfce7'),
-    arrowElement('goal-inputs-arrow', 290, 191, 60, 0, zh ? '限定' : 'scope'),
-    arrowElement('inputs-core-arrow', 560, 191, 60, 0, zh ? '推导' : 'derive'),
-    arrowElement('core-serve-arrow', 830, 191, 60, 0, zh ? '落地' : 'ship'),
-    ...sectionElements('focus', zh ? '本轮重点' : 'This answer emphasizes', focusItems, 90, 365, '#0f766e'),
-    ...sectionElements('risks', zh ? '追问 / 风险' : 'Follow-ups / risks', [
-      zh ? '瓶颈在哪里，如何量化？' : 'Where is the bottleneck and how is it measured?',
-      zh ? '上线后如何监控、回滚和迭代？' : 'How is it monitored, rolled back, and iterated after launch?',
-    ], 700, 365, '#7c3aed'),
+  const diagramKind = inferDiagramKind([answer, challenge.title, challenge.tags.join(' ')])
+  const nodeItems = focusItems.slice(0, 5)
+  const rawElements: ExcalidrawWhiteboardElement[] = [
+    textElement('title', zh ? `本轮白板摘要：${challenge.title}` : `Board summary: ${challenge.title}`, 70, 45, 34, 920),
+    textElement('subtitle', zh ? `根据本轮回答提取 · ${diagramKind}` : `Extracted from this answer · ${diagramKind}`, 80, 92, 18, 760, '#64748b'),
+    ...nodeItems.map((item, index) => ({
+      type: index === 0 && diagramKind === 'concept' ? 'diamond' : 'rectangle',
+      id: nodeIdFromText(item, `answer-node-${index}`),
+      x: 80 + index * 260,
+      y: 145,
+      width: 230,
+      height: 108,
+      strokeColor: colorForIndex(index).stroke,
+      backgroundColor: colorForIndex(index).bg,
+      fillStyle: 'solid',
+      roundness: { type: 3 },
+      customData: { label: item },
+    })),
+    {
+      type: 'rectangle',
+      id: 'followup-section',
+      x: 90,
+      y: 390,
+      width: 520,
+      height: 180,
+      strokeColor: '#7c3aed',
+      backgroundColor: '#ffffff',
+      fillStyle: 'solid',
+      roundness: { type: 3 },
+      customData: {
+        label: [
+          zh ? '追问 / 风险' : 'Follow-ups / risks',
+          zh ? '瓶颈在哪里，如何量化？' : 'Where is the bottleneck and how is it measured?',
+          zh ? '上线后如何监控、回滚和迭代？' : 'How is it monitored, rolled back, and iterated after launch?',
+        ].join('\n'),
+      },
+    },
   ]
+
+  return normalizeWhiteboardLayout(rawElements)
 }
 
 export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLocale, stepMode = false) {
