@@ -1,5 +1,6 @@
 import { aiInterviewChallenges } from './ai-interviews'
 import { aiKernelChallenges, aiKernelTestCases } from './ai-kernels'
+import { educationChallenges } from './education-banks'
 import { generalInterviewChallenges } from './interview-banks'
 import type { Challenge, ChallengeTestCase } from './types'
 
@@ -224,5 +225,5 @@ const coreTestCases: ChallengeTestCase[] = [
   },
 ]
 
-export const seedChallenges: Challenge[] = [...aiKernelChallenges, ...aiInterviewChallenges, ...generalInterviewChallenges, ...coreChallenges]
+export const seedChallenges: Challenge[] = [...aiKernelChallenges, ...aiInterviewChallenges, ...generalInterviewChallenges, ...educationChallenges, ...coreChallenges]
 export const seedTestCases: ChallengeTestCase[] = [...coreTestCases, ...aiKernelTestCases]

@@ -1,36 +1,25 @@
 import type { Challenge } from './types'
 
-export type ArenaSectionSlug =
-  | 'ai-kernel'
-  | 'ai-interview'
-  | 'linux-kernel-interview'
-  | 'android-interview'
-  | 'ai-infra-interview'
-  | 'ic-chip-interview'
-  | 'hardware-interview'
-  | 'virtualization-interview'
-  | 'programming-interview'
-  | 'arm-riscv-interview'
-  | 'firmware-interview'
-  | 'rtos-interview'
-  | 'coding-interview'
+export type ArenaSectionSlug = string
 
 export type ArenaSection = {
   slug: ArenaSectionSlug
+  parentSlug?: ArenaSectionSlug
   title: string
   titleZh: string
   eyebrow: string
   description: string
   descriptionZh: string
-  category: string
+  category?: string
   accent: string
   href: string
   sources: Array<{ label: string; url: string }>
 }
 
-export const arenaSections: ArenaSection[] = [
+const technologySections: ArenaSection[] = [
   {
     slug: 'ai-kernel',
+    parentSlug: 'technology',
     title: 'AI Kernel',
     titleZh: 'AI Kernel 板块',
     eyebrow: 'GPU · CUDA/OpenCL · AI Operators',
@@ -46,6 +35,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'ai-interview',
+    parentSlug: 'technology',
     title: 'AI Interview',
     titleZh: 'AI 面试板块',
     eyebrow: 'ML System Design · LLM · MLOps',
@@ -63,6 +53,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'coding-interview',
+    parentSlug: 'technology',
     title: 'Coding Interview',
     titleZh: '编程面试板块',
     eyebrow: 'DSA · Online Judge · Agent Review',
@@ -77,6 +68,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'linux-kernel-interview',
+    parentSlug: 'technology',
     title: 'Linux Kernel Interview',
     titleZh: 'Linux Kernel 面试板块',
     eyebrow: 'Drivers · Scheduler · MM · Debug',
@@ -93,6 +85,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'android-interview',
+    parentSlug: 'technology',
     title: 'Android Interview',
     titleZh: 'Android 面试板块',
     eyebrow: 'App · Framework · HAL · BSP',
@@ -109,6 +102,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'ai-infra-interview',
+    parentSlug: 'technology',
     title: 'AI Infra Interview',
     titleZh: 'AI Infra 面试板块',
     eyebrow: 'PCIe · RDMA · Networking · Cluster',
@@ -125,6 +119,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'ic-chip-interview',
+    parentSlug: 'technology',
     title: 'IC Chip Interview',
     titleZh: 'IC 芯片面试板块',
     eyebrow: 'DV · RTL · STA · PD · Tapeout',
@@ -141,6 +136,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'hardware-interview',
+    parentSlug: 'technology',
     title: 'Hardware Interview',
     titleZh: '硬件面试板块',
     eyebrow: 'Schematic · PCB · SI/PI · EMC',
@@ -157,6 +153,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'virtualization-interview',
+    parentSlug: 'technology',
     title: 'Virtualization Interview',
     titleZh: '虚拟化面试板块',
     eyebrow: 'KVM · Xen · pKVM · L4Re',
@@ -173,6 +170,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'programming-interview',
+    parentSlug: 'technology',
     title: 'Programming Interview',
     titleZh: '编程面试板块',
     eyebrow: 'C · C++ · Python · Systems',
@@ -189,6 +187,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'arm-riscv-interview',
+    parentSlug: 'technology',
     title: 'ARM/RISC-V Interview',
     titleZh: 'ARM/RISC-V 体系结构面试板块',
     eyebrow: 'ISA · MMU · Interrupt · Coherency',
@@ -205,6 +204,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'firmware-interview',
+    parentSlug: 'technology',
     title: 'Firmware Interview',
     titleZh: '固件面试板块',
     eyebrow: 'U-Boot · UEFI · Secure Boot · Bring-up',
@@ -221,6 +221,7 @@ export const arenaSections: ArenaSection[] = [
   },
   {
     slug: 'rtos-interview',
+    parentSlug: 'technology',
     title: 'RTOS Interview',
     titleZh: 'RTOS 面试板块',
     eyebrow: 'FreeRTOS · Zephyr · Scheduler · Drivers',
@@ -237,14 +238,160 @@ export const arenaSections: ArenaSection[] = [
   },
 ]
 
+const educationStages = [
+  {
+    key: 'primary',
+    title: 'Primary Education',
+    titleZh: '小学阶段',
+    eyebrow: '小学 · 基础 · 兴趣',
+    description: 'Primary-school learning drills for mathematics, olympiad math, English, coding and Chinese.',
+    descriptionZh: '小学数学、奥赛、英语、少儿编程和语文，强调概念理解、图示表达和兴趣启发。',
+    accent: 'from-sky-200 to-cyan-500',
+    subjects: [
+      ['math', 'Primary Mathematics', '小学普通数学', '数与运算 · 图形 · 应用题', '对齐小学数学常见题型：数与运算、分数小数、图形测量、统计和应用题。'],
+      ['olympiad', 'Primary Olympiad Math', '小学奥赛', '计数 · 数论 · 几何 · 逻辑', '参考 MOEMS/AMC8 风格，覆盖小学竞赛常见的计数、数论、几何、逻辑和构造题。'],
+      ['english', 'Primary English', '小学英语', 'Phonics · Grammar · Reading · Writing', '覆盖自然拼读、词汇语法、阅读理解、完形和基础写作。'],
+      ['coding', 'Kids Coding', '少儿编程', 'Scratch · Python · Debug · Project', '覆盖顺序、条件、循环、变量、函数、事件、调试和小项目设计。'],
+      ['chinese', 'Primary Chinese', '小学语文', '字词 · 阅读 · 古诗 · 写作', '覆盖字词句、阅读理解、古诗文积累、修辞和习作表达。'],
+    ],
+  },
+  {
+    key: 'junior',
+    title: 'Junior Secondary',
+    titleZh: '初级中学阶段',
+    eyebrow: '中考 · 学科基础 · 推理',
+    description: 'Junior-high drills for Chinese middle-school exam and international checkpoint-style practice.',
+    descriptionZh: '初中数学、奥赛、物理、英语、化学、生物、语文，面向中考、模拟题和能力迁移。',
+    accent: 'from-emerald-200 to-teal-500',
+    subjects: [
+      ['math', 'Junior Mathematics', '初中数学', '方程 · 函数 · 几何 · 统计', '覆盖方程不等式、函数、几何证明、统计概率和中考压轴题型。'],
+      ['olympiad', 'Junior Olympiad Math', '初中奥赛', '数论 · 组合 · 几何 · 代数', '参考 AMC8/AMC10、MOEMS 和初中竞赛风格，强调证明、构造和分类讨论。'],
+      ['physics', 'Junior Physics', '初中物理', '力学 · 电学 · 光热声', '覆盖力学、电学、光学、热学、声学、实验探究和中考综合题。'],
+      ['english', 'Junior English', '初中英语', 'Grammar · Cloze · Reading · Writing', '覆盖语法、完形、阅读、任务型阅读、听说和书面表达。'],
+      ['chemistry', 'Junior Chemistry', '初中化学', '物质 · 反应 · 实验 · 计算', '覆盖物质分类、化学方程式、实验探究、溶液和基础计算。'],
+      ['biology', 'Junior Biology', '初中生物', '细胞 · 生理 · 遗传 · 生态', '覆盖细胞、生物体结构、生理、遗传、生态和实验分析。'],
+      ['chinese', 'Junior Chinese', '初中语文', '现代文 · 文言文 · 作文', '覆盖现代文阅读、文言文、古诗鉴赏、综合性学习和作文。'],
+    ],
+  },
+  {
+    key: 'senior',
+    title: 'Senior Secondary',
+    titleZh: '高级中学阶段',
+    eyebrow: '高考 · 竞赛 · 综合能力',
+    description: 'Senior-high practice for Gaokao-style, olympiad-style and international upper-secondary questions.',
+    descriptionZh: '高中数学、奥赛、物理、英语、化学、生物、语文，面向高考、模拟题、竞赛和综合素养。',
+    accent: 'from-violet-200 to-fuchsia-500',
+    subjects: [
+      ['math', 'Senior Mathematics', '高中数学', '函数 · 解析几何 · 概率 · 导数', '覆盖函数导数、三角、数列、立体几何、解析几何、概率统计和高考压轴。'],
+      ['olympiad', 'Senior Olympiad Math', '高中奥赛', 'IMO · 代数 · 几何 · 组合', '覆盖代数、几何、数论、组合与不等式，强调完整证明和构造。'],
+      ['physics', 'Senior Physics', '高中物理', '力电磁 · 实验 · 模型', '覆盖力学、电磁学、热学、光学、近代物理、实验和高考模型题。'],
+      ['english', 'Senior English', '高中英语', 'Reading · Cloze · Grammar · Writing', '覆盖阅读理解、七选五、完形、语法填空、应用文和读后续写。'],
+      ['chemistry', 'Senior Chemistry', '高中化学', '反应原理 · 有机 · 实验 · 工艺流程', '覆盖反应原理、元素化合物、有机、实验设计、工艺流程和计算。'],
+      ['biology', 'Senior Biology', '高中生物', '遗传 · 代谢 · 稳态 · 实验', '覆盖分子与细胞、遗传进化、稳态调节、生态、实验设计和图表分析。'],
+      ['chinese', 'Senior Chinese', '高中语文', '论述文 · 古诗文 · 作文', '覆盖论述类文本、文学类文本、古诗文、语言运用和高考作文。'],
+    ],
+  },
+] as const
+
+const educationStageSections: ArenaSection[] = educationStages.map((stage) => ({
+  slug: `education-${stage.key}`,
+  parentSlug: 'education',
+  title: stage.title,
+  titleZh: stage.titleZh,
+  eyebrow: stage.eyebrow,
+  description: stage.description,
+  descriptionZh: stage.descriptionZh,
+  accent: stage.accent,
+  href: `/arena/sections/education-${stage.key}`,
+  sources: [
+    { label: '义务教育数学课程标准 2022', url: 'https://www.moe.gov.cn/srcsite/A26/s8001/202204/W020220420582346895190.pdf' },
+    { label: '中国教育考试网高考', url: 'https://gaokao.neea.edu.cn/' },
+    { label: 'Cambridge Checkpoint resources', url: 'https://www.cambridgeinternational.org/' },
+  ],
+}))
+
+const educationSubjectSections: ArenaSection[] = educationStages.flatMap((stage) => stage.subjects.map(([key, title, titleZh, eyebrow, descriptionZh]) => ({
+  slug: `education-${stage.key}-${key}`,
+  parentSlug: `education-${stage.key}`,
+  title,
+  titleZh,
+  eyebrow,
+  description: descriptionZh,
+  descriptionZh,
+  category: `education-${stage.key}-${key}`,
+  accent: stage.accent,
+  href: `/arena/sections/education-${stage.key}-${key}`,
+  sources: [
+    { label: '中国教育考试网高考', url: 'https://gaokao.neea.edu.cn/' },
+    { label: 'MAA AMC', url: 'https://maa.org/student-programs/amc/' },
+    { label: 'MOEMS', url: 'https://moems.org/' },
+    { label: 'Cambridge Checkpoint', url: 'https://www.cambridgeinternational.org/' },
+  ],
+})))
+
+export const arenaSections: ArenaSection[] = [
+  {
+    slug: 'technology',
+    title: 'Technology',
+    titleZh: '技术板块',
+    eyebrow: 'IT · AI · Kernel · Hardware · Coding',
+    description: 'A unified entry for technical interview, systems, AI kernel and coding boards.',
+    descriptionZh: '统一收纳 AI Kernel、AI/系统/硬件/芯片/固件/RTOS/编程等技术训练和面试板块。',
+    accent: 'from-[#3ce8e2] to-[#00b3b3]',
+    href: '/arena/sections/technology',
+    sources: [
+      { label: 'LeetGPU challenge map', url: 'https://github.com/AlphaGPU/leetgpu-challenges' },
+      { label: 'Linux kernel docs map', url: 'https://github.com/tamnd/kernel-index' },
+      { label: 'RISC-V ISA manual', url: 'https://github.com/riscv/riscv-isa-manual' },
+    ],
+  },
+  {
+    slug: 'education',
+    title: 'Education',
+    titleZh: '教育板块',
+    eyebrow: '小学 · 初中 · 高中 · Coach',
+    description: 'Stage-based learning boards with Arena Coach and whiteboard support.',
+    descriptionZh: '按小学、初中、高中组织学科训练；每道题复用 Arena Chat 和白板讲解。',
+    accent: 'from-amber-200 to-pink-500',
+    href: '/arena/sections/education',
+    sources: [
+      { label: '义务教育数学课程标准 2022', url: 'https://www.moe.gov.cn/srcsite/A26/s8001/202204/W020220420582346895190.pdf' },
+      { label: '中国教育考试网高考', url: 'https://gaokao.neea.edu.cn/' },
+      { label: 'MAA AMC', url: 'https://maa.org/student-programs/amc/' },
+    ],
+  },
+  ...technologySections,
+  ...educationStageSections,
+  ...educationSubjectSections,
+]
+
 export function getArenaSection(slug: string) {
   return arenaSections.find((section) => section.slug === slug) || null
 }
 
-export function challengesForSection(challenges: Challenge[], slug: string) {
+export function childSections(slug: string) {
+  return arenaSections.filter((section) => section.parentSlug === slug)
+}
+
+export function rootArenaSections() {
+  return arenaSections.filter((section) => !section.parentSlug)
+}
+
+function categorySetForSection(slug: string): Set<string> {
   const section = getArenaSection(slug)
-  if (!section) return []
-  return challenges.filter((challenge) => challenge.category === section.category)
+  const categories = new Set<string>()
+  if (!section) return categories
+  if (section.category) categories.add(section.category)
+  childSections(slug).forEach((child) => {
+    categorySetForSection(child.slug).forEach((category) => categories.add(category))
+  })
+  return categories
+}
+
+export function challengesForSection(challenges: Challenge[], slug: string) {
+  const categories = categorySetForSection(slug)
+  if (!categories.size) return []
+  return challenges.filter((challenge) => categories.has(challenge.category))
 }
 
 export function sectionStats(challenges: Challenge[], slug: string) {

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { listChallenges } from '@/lib/arena/store'
-import { challengesForSection, getArenaSection, sectionStats } from '@/lib/arena/sections'
+import { challengesForSection, childSections, getArenaSection, sectionStats } from '@/lib/arena/sections'
 
 function difficultyTone(difficulty: string) {
   if (difficulty === 'easy') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
@@ -10,7 +10,7 @@ function difficultyTone(difficulty: string) {
 }
 
 function typeLabel(type: string) {
-  if (type === 'qa') return 'Interview'
+  if (type === 'qa') return 'Coach'
   if (type === 'project') return 'Project'
   return 'Judge'
 }
@@ -20,6 +20,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
   if (!section) notFound()
 
   const challenges = listChallenges()
+  const children = childSections(section.slug)
   const rows = challengesForSection(challenges, section.slug)
   const stats = sectionStats(challenges, section.slug)
 
@@ -58,30 +59,53 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-          <section className="overflow-hidden rounded-xl border border-gray-800 bg-[#1e1e1e]">
-            <div className="grid grid-cols-[1fr_120px_120px_120px] border-b border-gray-800 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              <span>Problem</span>
-              <span>Type</span>
-              <span>Difficulty</span>
-              <span className="text-right">Action</span>
-            </div>
-            {rows.map((challenge, index) => (
-              <Link key={challenge.id} href={`/arena/challenges/${challenge.slug}`} className="group grid grid-cols-[1fr_120px_120px_120px] items-center border-b border-gray-800/70 px-5 py-4 transition-colors last:border-b-0 hover:bg-[#252525]">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm text-gray-500">{String(index + 1).padStart(2, '0')}</span>
-                    <h3 className="truncate text-base font-bold text-white group-hover:text-[#3ce8e2]">{challenge.title}</h3>
+          {children.length > 0 ? (
+            <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {children.map((child) => {
+                const childStats = sectionStats(challenges, child.slug)
+                return (
+                  <Link key={child.slug} href={child.href} className="group overflow-hidden rounded-2xl border border-gray-800 bg-[#1b1b1b] p-6 transition hover:-translate-y-1 hover:border-[#3ce8e2]/40 hover:bg-[#202020]">
+                    <div className={`mb-5 h-1.5 w-24 rounded-full bg-gradient-to-r ${child.accent}`} />
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">{child.eyebrow}</p>
+                    <h3 className="mt-3 text-2xl font-black text-white group-hover:text-[#3ce8e2]">{child.titleZh}</h3>
+                    <p className="mt-4 min-h-[72px] text-sm leading-6 text-gray-400">{child.descriptionZh}</p>
+                    <div className="mt-6 grid grid-cols-4 gap-2 text-center text-xs">
+                      <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className="text-lg font-black text-white">{childStats.total}</p><p className="text-gray-500">题</p></div>
+                      <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className="text-lg font-black text-emerald-300">{childStats.easy}</p><p className="text-gray-500">Easy</p></div>
+                      <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className="text-lg font-black text-yellow-300">{childStats.medium}</p><p className="text-gray-500">Med</p></div>
+                      <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className="text-lg font-black text-rose-300">{childStats.hard}</p><p className="text-gray-500">Hard</p></div>
+                    </div>
+                    <div className="mt-6 text-right text-sm font-black text-[#3ce8e2]">进入 →</div>
+                  </Link>
+                )
+              })}
+            </section>
+          ) : (
+            <section className="overflow-hidden rounded-xl border border-gray-800 bg-[#1e1e1e]">
+              <div className="grid grid-cols-[1fr_120px_120px_120px] border-b border-gray-800 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <span>Problem</span>
+                <span>Type</span>
+                <span>Difficulty</span>
+                <span className="text-right">Action</span>
+              </div>
+              {rows.map((challenge, index) => (
+                <Link key={challenge.id} href={`/arena/challenges/${challenge.slug}`} className="group grid grid-cols-[1fr_120px_120px_120px] items-center border-b border-gray-800/70 px-5 py-4 transition-colors last:border-b-0 hover:bg-[#252525]">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-sm text-gray-500">{String(index + 1).padStart(2, '0')}</span>
+                      <h3 className="truncate text-base font-bold text-white group-hover:text-[#3ce8e2]">{challenge.title}</h3>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 pl-9">
+                      {challenge.tags.slice(0, 4).map((tag) => <span key={tag} className="rounded bg-[#151515] px-2 py-0.5 text-xs text-gray-400">{tag}</span>)}
+                    </div>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2 pl-9">
-                    {challenge.tags.slice(0, 4).map((tag) => <span key={tag} className="rounded bg-[#151515] px-2 py-0.5 text-xs text-gray-400">{tag}</span>)}
-                  </div>
-                </div>
-                <span className="text-sm font-bold text-gray-300">{typeLabel(challenge.challenge_type)}</span>
-                <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${difficultyTone(challenge.difficulty)}`}>{challenge.difficulty}</span>
-                <span className="text-right text-sm font-semibold text-[#3ce8e2]">进入 →</span>
-              </Link>
-            ))}
-          </section>
+                  <span className="text-sm font-bold text-gray-300">{typeLabel(challenge.challenge_type)}</span>
+                  <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${difficultyTone(challenge.difficulty)}`}>{challenge.difficulty}</span>
+                  <span className="text-right text-sm font-semibold text-[#3ce8e2]">进入 →</span>
+                </Link>
+              ))}
+            </section>
+          )}
 
           <aside className="space-y-4">
             <div className="rounded-xl border border-gray-800 bg-[#1e1e1e] p-5">
@@ -99,7 +123,8 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
               <h2 className="font-black text-white">使用方式</h2>
               <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-400">
                 <li>• Judge 题：进入后可用 Python/C/C++ 提交给 Agent Runner。</li>
-                <li>• Interview 题：进入后直接用右侧 Arena Coach 做多轮模拟面试。</li>
+                <li>• Coach 题：进入后直接用右侧 Arena Coach 做苏格拉底、答题点评或 Ask 问答。</li>
+                <li>• 白板会根据 Agent 回答同步生成图表、公式和解题结构。</li>
                 <li>• 隐藏测试和上下文注入仍保持脱敏。</li>
               </ul>
             </div>

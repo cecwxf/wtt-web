@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { listChallenges } from '@/lib/arena/store'
-import { arenaSections, sectionStats } from '@/lib/arena/sections'
+import { rootArenaSections, sectionStats } from '@/lib/arena/sections'
 
 function difficultyTone(difficulty: string) {
   if (difficulty === 'easy') return 'text-emerald-300'
@@ -10,9 +10,10 @@ function difficultyTone(difficulty: string) {
 
 export default function ArenaPage() {
   const challenges = listChallenges()
+  const sections = rootArenaSections()
   const total = challenges.length
-  const aiKernelCount = challenges.filter((challenge) => challenge.category === 'ai-kernel').length
-  const interviewCount = challenges.filter((challenge) => challenge.challenge_type === 'qa' && challenge.category.endsWith('-interview')).length
+  const technologyCount = sectionStats(challenges, 'technology').total
+  const educationCount = sectionStats(challenges, 'education').total
   const featured = challenges.filter((challenge) => [
     'ai-vector-add',
     'ai-gemm',
@@ -20,6 +21,9 @@ export default function ArenaPage() {
     'ai-interview-pretraining-data-mixture',
     'ai-interview-runtime-continuous-batching',
     'ai-interview-npu-gpgpu-attention-kernel',
+    'education-primary-math-number-classic',
+    'education-junior-physics-mechanics-classic',
+    'education-senior-math-function-classic',
   ].includes(challenge.slug))
 
   return (
@@ -52,12 +56,12 @@ export default function ArenaPage() {
             Choose a Board. Solve Deep.
           </h1>
           <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-gray-400">
-            Arena 改为板块入口：AI Kernel 覆盖算子题；面试板块扩展到 AI、Linux Kernel、Android、AI Infra、IC、硬件、虚拟化和编程方向；进入板块后再选择具体题目。
+            Arena 改为两级入口：技术板块统一收纳 AI Kernel、系统/硬件/芯片/固件/RTOS/编程训练；教育板块按小学、初中、高中拆分学科，进入后再选择具体题目。
           </p>
           <div className="mt-10 grid gap-3 text-center sm:grid-cols-3">
             <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-[#3ce8e2]">{total}</p><p className="mt-1 text-sm text-gray-500">Total Problems</p></div>
-            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-cyan-300">{aiKernelCount}</p><p className="mt-1 text-sm text-gray-500">AI Kernel</p></div>
-            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-violet-300">{interviewCount}</p><p className="mt-1 text-sm text-gray-500">Interview QA</p></div>
+            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-cyan-300">{technologyCount}</p><p className="mt-1 text-sm text-gray-500">Technology</p></div>
+            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-amber-300">{educationCount}</p><p className="mt-1 text-sm text-gray-500">Education</p></div>
           </div>
         </div>
 
@@ -70,7 +74,7 @@ export default function ArenaPage() {
             <p className="text-sm text-gray-500">板块 → 题目列表 → 题目详情 / Agent 对话</p>
           </div>
           <div className="grid gap-5 lg:grid-cols-3">
-            {arenaSections.map((section) => {
+            {sections.map((section) => {
               const stats = sectionStats(challenges, section.slug)
               return (
                 <Link key={section.slug} href={section.href} className="group overflow-hidden rounded-2xl border border-gray-800 bg-[#1b1b1b] p-6 transition hover:-translate-y-1 hover:border-[#3ce8e2]/40 hover:bg-[#202020]">
@@ -127,8 +131,8 @@ export default function ArenaPage() {
               <h3 className="font-bold text-white">Navigation</h3>
               <ul className="mt-3 space-y-3 text-sm text-gray-400">
                 <li>• 首页只做板块选择，不再直接淹没在长题库里。</li>
-                <li>• AI Kernel 板块按 LeetGPU 风格题型完整覆盖。</li>
-                <li>• AI 面试板块可直接用右侧固定 Arena Coach 练习。</li>
+                <li>• 技术板块收纳全部 IT/工程面试和 Kernel 训练。</li>
+                <li>• 教育板块按学段、学科展开，每题都可用 Arena Coach 和白板。</li>
                 <li>• 后端 Judge / Agent Runner 路径保持不变。</li>
               </ul>
             </div>
