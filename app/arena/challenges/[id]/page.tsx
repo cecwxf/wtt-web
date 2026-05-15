@@ -12,6 +12,7 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
+import { gaokaoKnowledgeContextMarkdown } from '@/lib/arena/gaokao-knowledge'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
@@ -175,6 +176,7 @@ const copy = {
     coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
     aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
     interviewMode: 'AI 面试练习模式', interviewHint: '开放式面试题，直接在右侧和 Arena Coach 练习结构化回答。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
+    consultation: '咨询说明', gaokaoIntro: '高考志愿 Ask 咨询。不是刷题 Problem；请直接输入省份、科类/选科、分数、位次、专业兴趣和城市偏好。',
   },
   en: {
     challenges: 'Challenges', playground: 'Playground', discuss: 'Discuss', runner: 'Agent Runner', description: 'Description', submissions: 'Submissions', leaderboard: 'Leaderboard',
@@ -188,6 +190,7 @@ const copy = {
     coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
     aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
     interviewMode: 'AI interview practice mode', interviewHint: 'Open-ended interview prompt. Practice a structured answer with Arena Coach on the right.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
+    consultation: 'Consultation', gaokaoIntro: 'Gaokao volunteer Ask consultation. This is not a problem; describe province, subject track, score, rank, interests, and city preferences.',
   },
 } as const
 
@@ -300,6 +303,9 @@ function stageLabel(stage: string | undefined, locale: Locale) {
 }
 
 function arenaChallengeContext(challenge: Challenge, locale: Locale, language: Language, code: string) {
+  const gaokaoKnowledge = isGaokaoVolunteerChallenge(challenge)
+    ? `\n[Gaokao Local Knowledge]\n${gaokaoKnowledgeContextMarkdown()}\n[/Gaokao Local Knowledge]\n`
+    : ''
   return `[Arena Challenge Context]\n` +
     `id: ${challenge.id}\n` +
     `title: ${challenge.title}\n` +
@@ -308,6 +314,7 @@ function arenaChallengeContext(challenge: Challenge, locale: Locale, language: L
     `locale: ${locale}\n` +
     `language: ${language}\n` +
     `problem_constraints_do_not_copy_to_whiteboard:\n${challenge.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 4000)}\n` +
+    gaokaoKnowledge +
     (code ? `current_code:\n${code.slice(0, 4000)}\n` : '') +
     `[/Arena Challenge Context]`
 }
@@ -769,11 +776,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           {(isCoding || !whiteboardExpanded) && (
           <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
             <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-800 bg-[#191919] px-4 py-3 text-sm">
-              {[
-                ['description', t.description],
-                ['submissions', t.submissions],
-                ['leaderboard', t.leaderboard],
-              ].map(([id, label]) => (
+              {(isGaokaoVolunteer
+                ? [['description', t.consultation]]
+                : [
+                  ['description', t.description],
+                  ['submissions', t.submissions],
+                  ['leaderboard', t.leaderboard],
+                ]).map(([id, label]) => (
                 <button key={id} onClick={() => setActiveTab(id as typeof activeTab)} className={`rounded-md px-3 py-1.5 font-medium transition-colors ${activeTab === id ? 'bg-[#3ce8e2]/10 text-[#3ce8e2]' : 'text-gray-500 hover:bg-[#252525] hover:text-gray-300'}`}>
                   {label}
                 </button>
@@ -785,9 +794,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 <div>
                   <h1 className="text-3xl font-black tracking-tight text-white">{challenge.title}</h1>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${difficultyTone(challenge.difficulty)}`}>{formatDifficulty(challenge.difficulty)}</span>
+                    {isGaokaoVolunteer ? (
+                      <span className="rounded-full border border-blue-400/20 bg-blue-400/10 px-2.5 py-1 text-xs font-semibold text-blue-200">Ask 咨询</span>
+                    ) : (
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${difficultyTone(challenge.difficulty)}`}>{formatDifficulty(challenge.difficulty)}</span>
+                    )}
                     {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-gray-800 bg-[#151515] px-2.5 py-1 text-xs text-gray-400">{tag}</span>)}
                   </div>
+                  {isGaokaoVolunteer && (
+                    <p className="mt-4 rounded-lg border border-blue-400/20 bg-blue-400/10 p-4 text-sm leading-6 text-blue-100">{t.gaokaoIntro}</p>
+                  )}
                   {!!challenge.concepts?.length && (
                     <div className="mt-4 rounded-lg border border-gray-800 bg-[#151515] p-4">
                       <p className="text-xs font-black uppercase tracking-[0.22em] text-[#3ce8e2]">Skillset</p>
@@ -816,13 +832,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     <pre className="mt-6 whitespace-pre-wrap rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">{localizedDescription(challenge, locale)}</pre>
                   )}
 
-                  <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                  {!isGaokaoVolunteer && <div className="mt-6 grid gap-3 sm:grid-cols-3">
                     <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">{t.function}</p><p className="mt-1 font-mono text-sm text-[#3ce8e2]">{challenge.function_name}</p></div>
                     <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">{t.timeLimit}</p><p className="mt-1 font-bold">{challenge.time_limit_ms}ms</p></div>
                     <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">{t.memory}</p><p className="mt-1 font-bold">{challenge.memory_limit_mb}MB</p></div>
-                  </div>
+                  </div>}
 
-                  {challenge.description_format !== 'html' && (
+                  {challenge.description_format !== 'html' && !isGaokaoVolunteer && (
                     <div className="mt-7 space-y-4">
                       <h2 className="text-lg font-bold text-white">{t.examples}</h2>
                       {payload.public_cases.length === 0 && <p className="rounded-lg border border-dashed border-gray-800 bg-[#151515] p-4 text-sm leading-6 text-gray-500">{t.noExamples}</p>}

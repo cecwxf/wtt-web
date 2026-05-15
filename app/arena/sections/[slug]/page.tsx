@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { listChallenges } from '@/lib/arena/store'
 import { challengesForSection, childSections, getArenaSection, sectionStats } from '@/lib/arena/sections'
+import { c9Universities, doubleFirstClassUniversities, project211Universities, project985Universities, strongNon985211ByProvince, universityFactProfiles } from '@/lib/arena/gaokao-knowledge'
 
 function difficultyTone(difficulty: string) {
   if (difficulty === 'easy') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
@@ -23,6 +24,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
   const children = childSections(section.slug)
   const rows = challengesForSection(challenges, section.slug)
   const stats = sectionStats(challenges, section.slug)
+  const isGaokaoVolunteer = section.slug === 'gaokao-volunteer'
 
   return (
     <main className="min-h-screen bg-[#151515] text-white">
@@ -50,16 +52,81 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
               <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-400">{section.descriptionZh}</p>
             </div>
             <div className="grid grid-cols-4 gap-2 text-center text-sm">
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-4"><p className="text-2xl font-black text-white">{stats.total}</p><p className="text-gray-500">题目</p></div>
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-4"><p className="text-2xl font-black text-emerald-300">{stats.easy}</p><p className="text-gray-500">Easy</p></div>
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-4"><p className="text-2xl font-black text-yellow-300">{stats.medium}</p><p className="text-gray-500">Medium</p></div>
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-4"><p className="text-2xl font-black text-rose-300">{stats.hard}</p><p className="text-gray-500">Hard</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-4"><p className="text-2xl font-black text-white">{isGaokaoVolunteer ? 'Ask' : stats.total}</p><p className="text-gray-500">{isGaokaoVolunteer ? '咨询' : '题目'}</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-4"><p className="text-2xl font-black text-emerald-300">{isGaokaoVolunteer ? c9Universities.length : stats.easy}</p><p className="text-gray-500">{isGaokaoVolunteer ? 'C9' : 'Easy'}</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-4"><p className="text-2xl font-black text-yellow-300">{isGaokaoVolunteer ? project985Universities.length : stats.medium}</p><p className="text-gray-500">{isGaokaoVolunteer ? '985' : 'Medium'}</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-4"><p className="text-2xl font-black text-rose-300">{isGaokaoVolunteer ? project211Universities.length : stats.hard}</p><p className="text-gray-500">{isGaokaoVolunteer ? '211' : 'Hard'}</p></div>
             </div>
           </div>
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-          {children.length > 0 ? (
+          {isGaokaoVolunteer ? (
+            <section className="space-y-6">
+              <div className="rounded-xl border border-blue-400/20 bg-[#1e1e1e] p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-black text-white">高考志愿咨询入口</h2>
+                    <p className="mt-2 text-sm leading-6 text-gray-400">这里不是刷题 Problem。进入后只保留 Ask 咨询，Agent 会读取本地院校知识库和当前咨询上下文。</p>
+                  </div>
+                  {rows[0] && (
+                    <Link href={`/arena/challenges/${rows[0].slug}`} className="rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black hover:opacity-90">开始咨询 →</Link>
+                  )}
+                </div>
+              </div>
+
+              {[
+                ['C9 联盟', c9Universities],
+                ['985 工程高校', project985Universities],
+                ['211 工程高校', project211Universities],
+                ['第二轮双一流建设高校（本地名单）', doubleFirstClassUniversities],
+              ].map(([title, list]) => (
+                <div key={title as string} className="rounded-xl border border-gray-800 bg-[#1e1e1e] p-5">
+                  <h2 className="font-black text-white">{title as string} <span className="text-sm text-gray-500">({(list as string[]).length})</span></h2>
+                  <div className="mt-4 flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1">
+                    {(list as string[]).map((name) => <span key={name} className="rounded-md border border-gray-800 bg-[#151515] px-2.5 py-1 text-xs text-gray-300">{name}</span>)}
+                  </div>
+                </div>
+              ))}
+
+              <div className="rounded-xl border border-gray-800 bg-[#1e1e1e] p-5">
+                <h2 className="font-black text-white">各省非 985/211 强势大学</h2>
+                <p className="mt-2 text-sm leading-6 text-gray-400">用于冲稳保补充判断，不代表一定优于 985/211；专业强度、城市机会和就业路径要一起看。</p>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {strongNon985211ByProvince.map((group) => (
+                    <div key={group.province} className="rounded-lg border border-gray-800 bg-[#151515] p-4">
+                      <h3 className="font-bold text-[#3ce8e2]">{group.province}</h3>
+                      <div className="mt-3 space-y-2 text-sm text-gray-300">
+                        {group.universities.map((item) => (
+                          <p key={item.name}><span className="font-bold text-white">{item.name}</span>：{item.strengths.join(' / ')}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-800 bg-[#1e1e1e] p-5">
+                <h2 className="font-black text-white">已索引院校事实包</h2>
+                <p className="mt-2 text-sm leading-6 text-gray-400">经费、就业、师资、分数线只引用有来源的字段；缺失字段会让 Agent 标为“待核验”。</p>
+                <div className="mt-4 grid gap-3">
+                  {universityFactProfiles.map((item) => (
+                    <div key={item.name} className="rounded-lg border border-gray-800 bg-[#151515] p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-black text-white">{item.name}</h3>
+                        {item.tiers.map((tier) => <span key={tier} className="rounded-full border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 text-[11px] font-bold text-blue-200">{tier}</span>)}
+                      </div>
+                      <p className="mt-2 text-sm text-gray-400">强项：{item.strengths.join('、')}</p>
+                      <div className="mt-3 grid gap-2 text-xs leading-5 text-gray-400 md:grid-cols-2">
+                        <p>经费：{item.budget?.fact || '待核验预算/决算公开'}</p>
+                        <p>就业：{item.employment?.fact || '待核验就业质量报告'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : children.length > 0 ? (
             <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {children.map((child) => {
                 const childStats = sectionStats(challenges, child.slug)
