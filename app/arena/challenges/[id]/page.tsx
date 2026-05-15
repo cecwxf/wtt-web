@@ -724,7 +724,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const arenaLayoutStyle = !isCoding
     ? {
       gridTemplateColumns: isGaokaoVolunteer
-        ? `${leftPanelWidth}px 6px minmax(560px, 1fr)`
+        ? `${leftPanelWidth}px minmax(560px, 1fr)`
         : whiteboardExpanded
         ? `minmax(420px, 1fr) 6px ${chatPanelWidth}px`
         : `${leftPanelWidth}px 6px minmax(420px, 1fr) 6px ${chatPanelWidth}px`,
