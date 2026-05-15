@@ -278,7 +278,7 @@ function arenaSessionActor(session: ArenaSession | null | undefined) {
 }
 
 function isLocalArenaChallenge(challenge: Challenge) {
-  return challenge.category === 'ai-interview' || challenge.category === 'ai-kernel'
+  return challenge.category === 'ai-kernel' || (challenge.challenge_type === 'qa' && challenge.category.endsWith('-interview'))
 }
 
 function stageLabel(stage: string | undefined, locale: Locale) {

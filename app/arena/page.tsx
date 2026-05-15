@@ -12,7 +12,7 @@ export default function ArenaPage() {
   const challenges = listChallenges()
   const total = challenges.length
   const aiKernelCount = challenges.filter((challenge) => challenge.category === 'ai-kernel').length
-  const aiInterviewCount = challenges.filter((challenge) => challenge.category === 'ai-interview').length
+  const interviewCount = challenges.filter((challenge) => challenge.challenge_type === 'qa' && challenge.category.endsWith('-interview')).length
   const featured = challenges.filter((challenge) => [
     'ai-vector-add',
     'ai-gemm',
@@ -52,12 +52,12 @@ export default function ArenaPage() {
             Choose a Board. Solve Deep.
           </h1>
           <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-gray-400">
-            Arena 改为板块入口：AI Kernel 板块覆盖 LeetGPU 风格算子题；AI 面试板块聚合权威 ML/LLM 系统设计面试方向；进入板块后再选择具体题目。
+            Arena 改为板块入口：AI Kernel 覆盖算子题；面试板块扩展到 AI、Linux Kernel、Android、AI Infra、IC、硬件、虚拟化和编程方向；进入板块后再选择具体题目。
           </p>
           <div className="mt-10 grid gap-3 text-center sm:grid-cols-3">
             <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-[#3ce8e2]">{total}</p><p className="mt-1 text-sm text-gray-500">Total Problems</p></div>
             <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-cyan-300">{aiKernelCount}</p><p className="mt-1 text-sm text-gray-500">AI Kernel</p></div>
-            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-violet-300">{aiInterviewCount}</p><p className="mt-1 text-sm text-gray-500">AI Interview</p></div>
+            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-5"><p className="text-3xl font-black text-violet-300">{interviewCount}</p><p className="mt-1 text-sm text-gray-500">Interview QA</p></div>
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 import { aiInterviewChallenges } from './ai-interviews'
 import { aiKernelChallenges, aiKernelTestCases } from './ai-kernels'
+import { generalInterviewChallenges } from './interview-banks'
 import type { Challenge, ChallengeTestCase } from './types'
 
 const now = new Date().toISOString()
@@ -223,5 +224,5 @@ const coreTestCases: ChallengeTestCase[] = [
   },
 ]
 
-export const seedChallenges: Challenge[] = [...aiKernelChallenges, ...aiInterviewChallenges, ...coreChallenges]
+export const seedChallenges: Challenge[] = [...aiKernelChallenges, ...aiInterviewChallenges, ...generalInterviewChallenges, ...coreChallenges]
 export const seedTestCases: ChallengeTestCase[] = [...coreTestCases, ...aiKernelTestCases]
