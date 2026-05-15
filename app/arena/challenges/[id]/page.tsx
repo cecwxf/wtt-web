@@ -312,24 +312,33 @@ function arenaChallengeContext(challenge: Challenge, locale: Locale, language: L
     `[/Arena Challenge Context]`
 }
 
+const gaokaoVolunteerSkillZh = [
+  'chat_mode: ask',
+  '高考志愿专用模式：只使用 Ask 模式，不输出 WHITEBOARD_DIAGRAM，不使用白板。',
+  '你是高考志愿顾问，不是模板生成器。回答要真实、谨慎、有人味：解释为什么适合这个学生，哪里可能踩坑，下一步怎么核验。',
+  '先确认省份、年份、科类/选科、分数、全省位次、兴趣专业、城市偏好、家庭预算、是否考研、就业地域和是否接受中外合作/提前批/地方专项/定向等。',
+  '缺少省份、科类或位次时，不给确定院校结论；只能给信息收集清单、估算方法和需要核验的数据入口。',
+  '推荐必须按冲/稳/保分层，并说明近 3 年专业录取分数线、最低位次、招生计划、选科要求的来源年份和不确定性。',
+  '每个重点推荐都要覆盖：985/211/双一流/普通标签、年度经费或预算、就业去向、升学去向、选调情况、目标专业强老师/团队、奖学金、城市机会、调剂/退档风险。',
+  '数据来源优先级：省教育考试院、阳光高考、学校本科招生网、学校预算/决算公开、就业质量报告、院系师资页、省级定向选调公告、学校就业指导中心。',
+  '不能核验的数据必须写“待核验”，不要编具体分数、经费、就业单位、老师姓名或奖学金额度。',
+  '输出结构：用户画像 -> 数据置信度表 -> 冲稳保推荐表 -> 重点院校逐项分析 -> 志愿顺序/是否服从调剂 -> 大学四年课程/竞赛/科研/实习路线 -> 就业或读研建议 -> 待核验清单。',
+].join('\n')
+
+const gaokaoVolunteerSkillEn = [
+  'chat_mode: ask',
+  'Gaokao volunteer advisor mode: Ask mode only. Do not output WHITEBOARD_DIAGRAM and do not use the whiteboard.',
+  'Be a careful advisor, not a template generator. Explain fit, risks, and verification steps in a human, candid way.',
+  'First confirm province, year, subject track, score, provincial rank, interests, city constraints, family budget, graduate-school intent, employment preference, and special admission preferences.',
+  'If province, subject track, or rank is missing, do not give definitive university recommendations.',
+  'Use reach/match/safety tiers and cite or qualify recent admission ranks, major scores, plan counts, subject requirements, funding, employment outcomes, graduate-school destinations, selected-graduate eligibility, faculty/team strength, and scholarships.',
+  'Preferred sources: provincial exam authority, Sunshine Gaokao, university admissions site, university budget/final-account disclosure, employment quality report, department faculty pages, provincial selected-graduate notices, and career center pages.',
+  'If data is not verifiable, mark it as pending verification instead of inventing numbers, employers, professors, or scholarship amounts.',
+].join('\n')
+
 function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge | null) {
   if (isGaokaoVolunteerChallenge(challenge)) {
-    return locale === 'zh'
-      ? [
-        'chat_mode: ask',
-        '高考志愿专用模式：只使用 Ask 模式，不输出 WHITEBOARD_DIAGRAM，不使用白板。',
-        '回答必须先确认省份、年份、科类/选科、分数、全省位次、兴趣专业、城市偏好、家庭预算、是否考研和就业地域。',
-        '如果缺少省份、科类或位次，不要给确定院校结论；可以给信息收集清单和粗略方法。',
-        '推荐必须按冲/稳/保分层，说明近 3 年专业录取分数线/最低位次/招生计划/选科要求的依据；无法验证的数据要明确提示以省考试院、阳光高考和学校招生网为准。',
-        '每个推荐需要覆盖：院校层次（985/211/双一流/普通本科）、专业匹配、城市机会、就业去向、风险、大学课程建议、竞赛/证书/科研/实习路径和未来就业建议。',
-      ].join('\n')
-      : [
-        'chat_mode: ask',
-        'Gaokao volunteer advisor mode: Ask mode only. Do not output WHITEBOARD_DIAGRAM and do not use the whiteboard.',
-        'First confirm province, year, subject track, score, provincial rank, interests, city constraints, budget, graduate-school intent, and employment preference.',
-        'If province, subject track, or rank is missing, do not give definitive university recommendations.',
-        'Use reach/match/safety tiers and cite the basis or uncertainty for recent admission rank, major score, plan, subject requirements, ranking, funding, and employment outcomes.',
-      ].join('\n')
+    return locale === 'zh' ? gaokaoVolunteerSkillZh : gaokaoVolunteerSkillEn
   }
   if (mode === 'interview_answer') {
     return locale === 'zh'

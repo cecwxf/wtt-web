@@ -197,10 +197,26 @@ const rtosModules: InterviewModule[] = [
   { key: 'debug-test', title: '调试/测试', focus: 'trace、SEGGER SystemView、Zephyr shell、logging、unit test、HIL、fault injection 和死锁定位', tags: ['debug', 'test'], concepts: ['SystemView', 'Zephyr shell', 'logging', 'HIL', 'fault injection'], whiteboardTemplate: 'evaluation_loop' },
 ]
 
+const aiCompilerRuntimeModules: InterviewModule[] = [
+  { key: 'llvm-ir', title: 'LLVM/IR', focus: 'SSA、IRBuilder、PassManager、analysis/transform、SelectionDAG/GlobalISel、target lowering 和优化验证', tags: ['llvm', 'compiler'], concepts: ['LLVM IR', 'SSA', 'PassManager', 'target lowering', 'GlobalISel'], whiteboardTemplate: 'pipeline' },
+  { key: 'mlir', title: 'MLIR', focus: 'dialect、operation/interface、region、canonicalize、conversion、bufferization 和多层 lowering', tags: ['mlir', 'compiler'], concepts: ['MLIR dialect', 'operation', 'region', 'conversion', 'bufferization'], whiteboardTemplate: 'system_architecture' },
+  { key: 'triton', title: 'Triton 编译栈', focus: 'program_id、block program、tl.load/store mask、tl.dot、autotune、shared memory 和 PTX lowering', tags: ['triton', 'gpu-kernel'], concepts: ['Triton block', 'program_id', 'tl.dot', 'autotune', 'PTX lowering'], whiteboardTemplate: 'pipeline' },
+  { key: 'cuda', title: 'CUDA Kernel', focus: 'thread/block/warp、memory coalescing、shared memory、occupancy、stream/event、graph capture 和 Nsight profiling', tags: ['cuda', 'gpu'], concepts: ['warp', 'coalescing', 'shared memory', 'occupancy', 'CUDA stream'], whiteboardTemplate: 'inference_flow' },
+  { key: 'pytorch-compiler', title: 'PyTorch 2 编译器', focus: 'torch.compile、Dynamo、FX Graph、AOTAutograd、Inductor、graph break、guard 和 fallback', tags: ['pytorch', 'torch-compile'], concepts: ['torch.compile', 'Dynamo', 'FX Graph', 'AOTAutograd', 'Inductor'], whiteboardTemplate: 'system_architecture' },
+  { key: 'pytorch-runtime', title: 'PyTorch Runtime', focus: 'Dispatcher、ATen、TensorImpl、Autograd engine、custom op、memory format、allocator 和 CUDA extension', tags: ['pytorch', 'runtime'], concepts: ['Dispatcher', 'ATen', 'TensorImpl', 'Autograd engine', 'custom op'], whiteboardTemplate: 'pipeline' },
+  { key: 'ai-runtime', title: 'AI Runtime', focus: 'graph executor、memory planner、stream scheduler、kernel registry、shape cache、async error 和 profiling', tags: ['ai-runtime', 'executor'], concepts: ['graph executor', 'memory planner', 'stream scheduler', 'kernel registry', 'shape cache'], whiteboardTemplate: 'system_architecture' },
+  { key: 'fusion-layout', title: '算子融合/Layout', focus: 'operator fusion、layout transform、tiling、vectorization、memory reuse、numerical stability 和 fallback', tags: ['fusion', 'layout'], concepts: ['operator fusion', 'layout transform', 'tiling', 'vectorization', 'memory reuse'], whiteboardTemplate: 'pipeline' },
+  { key: 'quant-lowering', title: '量化 Lowering', focus: 'INT8/FP8、calibration、scale/zero-point、QDQ、TensorCore、accuracy regression 和 mixed precision', tags: ['quantization', 'lowering'], concepts: ['INT8', 'FP8', 'QDQ', 'TensorCore', 'calibration'], whiteboardTemplate: 'solution_flow' },
+  { key: 'xla-tvm-iree', title: 'XLA/TVM/IREE', focus: 'HLO/StableHLO、Relay/TIR、schedule、autotuning、VM/runtime、backend codegen 和 deployment', tags: ['xla', 'tvm', 'iree'], concepts: ['StableHLO', 'Relay', 'TIR', 'autotuning', 'runtime VM'], whiteboardTemplate: 'system_architecture' },
+  { key: 'distributed-runtime', title: '分布式 Runtime', focus: 'NCCL collectives、tensor/pipeline parallel、overlap、rendezvous、checkpoint、elastic recovery 和故障隔离', tags: ['distributed', 'nccl'], concepts: ['NCCL', 'AllReduce', 'tensor parallel', 'overlap', 'elastic recovery'], whiteboardTemplate: 'inference_flow' },
+  { key: 'debug-profiler', title: 'Compiler/Runtime Debug', focus: 'IR dump、graph break 定位、kernel bisect、Nsight/torch profiler、perf counter、numerical diff 和回归门禁', tags: ['debug', 'profiler'], concepts: ['IR dump', 'graph break', 'Nsight', 'torch profiler', 'numerical diff'], whiteboardTemplate: 'evaluation_loop' },
+]
+
 const banks: InterviewBank[] = [
   { prefix: 'linux-kernel', category: 'linux-kernel-interview', title: 'Linux Kernel 面试', tags: ['linux-kernel', 'kernel'], count: 200, modules: linuxModules, patterns: longPatterns },
   { prefix: 'android', category: 'android-interview', title: 'Android 面试', tags: ['android', 'framework'], count: 200, modules: androidModules, patterns: longPatterns },
   { prefix: 'ai-infra', category: 'ai-infra-interview', title: 'AI Infra 面试', tags: ['ai-infra', 'rdma', 'pcie'], count: 100, modules: aiInfraModules, patterns: shortPatterns },
+  { prefix: 'ai-compiler-runtime', category: 'ai-compiler-runtime-interview', title: 'AI 编译器/Runtime 面试', tags: ['ai-compiler', 'runtime', 'llvm', 'mlir', 'cuda', 'pytorch', 'triton'], count: 120, modules: aiCompilerRuntimeModules, patterns: shortPatterns },
   { prefix: 'ic-chip', category: 'ic-chip-interview', title: 'IC 芯片面试', tags: ['ic', 'vlsi'], count: 150, modules: icModules, patterns: shortPatterns },
   { prefix: 'hardware', category: 'hardware-interview', title: '硬件面试', tags: ['hardware', 'pcb'], count: 100, modules: hardwareModules, patterns: shortPatterns },
   { prefix: 'virtualization', category: 'virtualization-interview', title: '虚拟化面试', tags: ['virtualization', 'hypervisor'], count: 100, modules: virtualizationModules, patterns: shortPatterns },
