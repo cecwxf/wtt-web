@@ -30,7 +30,7 @@ type EducationBank = {
 }
 
 const patterns: EducationPattern[] = [
-  { key: 'classic', difficulty: 'easy', title: '经典例题求解', focus: '先读题提取条件，再列式/建模，最后检查答案单位和合理性。' },
+  { key: 'classic', difficulty: 'easy', title: '经典例题求解', focus: '准确理解题意，写出关键步骤，最后检查答案是否合理。' },
   { key: 'concept', difficulty: 'easy', title: '核心概念辨析', focus: '解释定义、适用条件、反例和易混点。' },
   { key: 'model', difficulty: 'medium', title: '图示或表格建模', focus: '把题意转化为图、表、线段图、函数图像或流程图。' },
   { key: 'error', difficulty: 'medium', title: '错因诊断与订正', focus: '定位常见错误，说明为什么错，并给出最小订正路径。' },
@@ -316,26 +316,177 @@ const banks: EducationBank[] = [
   { prefix: 'education-senior-chinese', category: 'education-senior-chinese', stage: '高中', subject: '语文', tags: ['senior', 'chinese'], modules: seniorChinese },
 ]
 
+function mathProblem(bank: EducationBank, module: EducationModule) {
+  const key = module.key
+  if (bank.stage === '小学') {
+    if (key === 'number') return '计算 36 × 25 - 480 ÷ 12 + 168，并说明你先算哪一步、为什么。'
+    if (key === 'fraction') return '一根彩带长 3/4 米，第一次用去 1/6 米，第二次用去剩下的 2/5。还剩多少米？'
+    if (key === 'geometry') return '长方形长 18 cm、宽 12 cm，从一角剪去一个边长 4 cm 的正方形。剩余图形的面积和周长分别是多少？'
+    if (key === 'measurement') return '一个水箱长 8 dm、宽 5 dm、高 6 dm，已经装水 120 L。还可以再装多少升水？'
+    if (key === 'word-problem') return '鸡和兔共有 28 只，脚共有 88 只。鸡和兔各有多少只？请列式或画图说明。'
+    if (key === 'equation') return '一个数的 3 倍比 56 少 8。这个数是多少？请列方程解答并检验。'
+    if (key === 'ratio') return '学校合唱队男生和女生人数比为 3:5，女生比男生多 12 人。合唱队一共有多少人？'
+    if (key === 'statistics') return '五天阅读页数分别是 18、24、21、27、30 页。平均每天读多少页？哪一天高于平均数最多？'
+    if (key === 'pattern') return '观察数列 2、5、10、17、26、37，写出后两项，并说明规律。'
+    if (key === 'spatial') return '一个正方体六个面分别写 A、B、C、D、E、F，展开图中 A 与 D 相对、B 与 E 相对。请判断 C 的相对面并说明。'
+  }
+  if (bank.subject === '奥赛') {
+    if (key.includes('counting') || key === 'combinatorics') return '用数字 1、2、3、4、5 组成没有重复数字的三位数，其中百位比个位大。这样的三位数有多少个？'
+    if (key.includes('number')) return '求所有满足 100 < n < 200 且 n 被 6 除余 1、被 8 除余 3 的整数 n。'
+    if (key.includes('geometry')) return '正方形 ABCD 边长为 12，点 E、F 分别是 AB、AD 的中点。求三角形 CEF 的面积。'
+    if (key === 'logic') return '甲、乙、丙三人中只有一人说真话。甲说“乙得第一”，乙说“我不是第一”，丙说“甲得第一”。谁得第一？'
+    if (key === 'pigeonhole') return '从 1 到 30 中任取 16 个不同整数，证明其中一定有两个数的差为 15。'
+    if (key === 'inclusion') return '一个班 40 人，喜欢足球的 22 人，喜欢篮球的 18 人，两项都喜欢的 9 人。两项都不喜欢的有多少人？'
+    if (key === 'parity' || key === 'invariant') return '黑板上写着 1 到 20。每次擦去两个数并写上它们的差。最后剩下的数可能是 0 吗？'
+    if (key === 'rate') return '甲、乙两人相距 60 km 相向而行，甲每小时 12 km，乙每小时 8 km。若甲先出发 1 小时，乙出发后多久相遇？'
+    if (key === 'age') return '今年父亲年龄是小明的 4 倍，6 年后父亲年龄是小明的 3 倍。小明今年几岁？'
+    return '把 1、2、3、4、5、6 填入一个 2×3 方格，使每行和相等。给出一种填法并说明理由。'
+  }
+  if (bank.stage === '初中') {
+    if (key === 'number-algebra' || key === 'algebra') return '化简并求值：(2x - 3)(x + 4) - 2x(x - 1)，其中 x = -2。'
+    if (key === 'equation') return '某商品连续两次降价后价格从 200 元降到 162 元。若两次降价率相同，求每次降价率。'
+    if (key === 'function' || key === 'functional') return '已知一次函数 y = kx + b 经过点 (2, 5) 和 (-1, -4)，求函数表达式并判断 y 随 x 如何变化。'
+    if (key.includes('geometry')) return '在三角形 ABC 中，AB = AC，点 D 是 BC 中点。证明 AD 垂直 BC，并说明用到的判定。'
+    if (key === 'coordinate') return '点 A(1, 2)、B(5, 2)、C(5, 6)，求三角形 ABC 的面积，并写出 AB、BC 的长度。'
+    if (key === 'statistics') return '一组数据 6、8、8、10、12、14，求平均数、中位数、众数和方差。'
+    if (key === 'trigonometry') return '某斜坡长 20 m，坡角为 30°。求斜坡的竖直高度。'
+    if (key === 'construction') return '只用尺规作一个已知线段 AB 的垂直平分线，并说明作图依据。'
+    if (key === 'application') return '甲工程队单独完成需 12 天，乙工程队单独完成需 18 天。两队合作 4 天后，剩下由乙完成，还需几天？'
+    return '抛物线 y = x² - 4x + 3 与 x 轴交于 A、B 两点，求 A、B 坐标及顶点坐标。'
+  }
+  if (key === 'function') return '已知 f(x)=x³-3x²+2。求 f(x) 的单调区间、极值，并判断方程 f(x)=0 的实根个数。'
+  if (key === 'trigonometry') return '在三角形 ABC 中，a=6，b=8，夹角 C=60°。求边 c 和三角形面积。'
+  if (key === 'sequence') return '数列 {a_n} 满足 a1=2，a_{n+1}=2a_n+3。求 a_n 的通项公式。'
+  if (key === 'solid-geometry') return '正四棱锥底面边长 4，高 3。求体积，并求侧棱长。'
+  if (key === 'analytic-geometry') return '椭圆 x²/9 + y²/4 = 1，过点 P(3,0) 的直线斜率为 -1/2。求直线与椭圆另一个交点。'
+  if (key === 'probability') return '袋中有 3 个红球、2 个白球，不放回抽取 2 个。求恰好一个红球的概率。'
+  if (key === 'vector') return '已知向量 a=(2,-1)，b=(1,3)。求 a·b、|a+b|，并判断 a 与 b 的夹角是锐角还是钝角。'
+  if (key === 'inequality') return '证明对任意正数 x、y，有 x/y + y/x ≥ 2，并说明等号成立条件。'
+  if (key === 'complex') return '已知复数 z=1+2i，求 z²、|z|，并在复平面上描述 z 对应的点。'
+  return '已知函数 f(x)=ln x - ax 在 x=1 处取得极值。求 a，并讨论 f(x) 的零点个数。'
+}
+
+function englishProblem(bank: EducationBank, module: EducationModule) {
+  if (bank.stage === '小学') {
+    if (module.key === 'phonics') return '读单词 cake、bike、home、cute，找出每个单词中的长元音字母，并写出一个同类单词。'
+    if (module.key === 'grammar') return '用 am/is/are 填空：My mother ___ a teacher. I ___ ten. They ___ my friends.'
+    if (module.key === 'writing') return '请写 5 句话介绍你最喜欢的一天，至少包含天气、活动和感受。'
+    return '阅读短文：Tom has a small dog. It is black and white. Every morning Tom walks it in the park. 问：What color is the dog? Where does Tom walk it?'
+  }
+  if (bank.stage === '初中') {
+    if (module.key === 'grammar') return '用正确形式填空：By the time I arrived at school, the first class ___ (begin). 并说明时态依据。'
+    if (module.key === 'writing') return '假设你是李华，请写一封约 80 词的邮件邀请外教参加班级读书分享会，包含时间、地点和活动安排。'
+    return '阅读句子：Many students choose bikes because they are cheap, healthy and environmentally friendly. 问：Why do students choose bikes? 推断作者态度。'
+  }
+  if (module.key === 'continuation') return '读后续写：A boy lost his wallet on the bus. An old man picked it up and looked around. 请续写两段，体现人物善意和冲突解决。'
+  if (module.key === 'writing') return '请写一篇约 100 词的建议信：学校准备减少体育课时间，请你表达观点并给出两个理由。'
+  return '阅读句子：The new policy may not solve every problem, but it gives rural schools more choices. 请判断作者观点，并解释 but 在句中的作用。'
+}
+
+function chineseProblem(bank: EducationBank, module: EducationModule) {
+  if (module.key.includes('composition')) return '作文题：以“那一次，我真正理解了坚持”为题写一篇文章。要求有具体事件、细节描写和明确中心。'
+  if (module.key.includes('classical')) return '阅读文言句：“学而时习之，不亦说乎？”请解释“时”“说”的意思，并翻译全句。'
+  if (module.key.includes('poetry')) return '阅读诗句“海日生残夜，江春入旧年”。请分析其中的时间变化和表达的情感。'
+  if (module.key.includes('language') || module.key.includes('sentence')) return '修改病句：通过这次活动，使我明白了合作的重要性。请写出正确句子并说明原因。'
+  if (module.key.includes('reading') || module.key.includes('modern')) return '阅读材料：雨停后，操场上的水洼映着晚霞，孩子们绕着水洼奔跑。请概括画面内容，并分析“映着晚霞”的表达效果。'
+  return `请围绕“${module.title}”完成作答：从材料“校园里的老槐树见证了一届又一届学生的成长”中提炼主题，并写出两条可用于文章的细节。`
+}
+
+function codingProblem(module: EducationModule) {
+  if (module.key === 'sequence') return '小海龟从坐标 (0,0) 出发，依次执行：前进 50、右转 90°、前进 30、右转 90°、前进 50。请写出最终位置并画出路径。'
+  if (module.key === 'condition') return '输入一个整数 score，如果 score ≥ 90 输出 A，80-89 输出 B，60-79 输出 C，否则输出 D。请写出伪代码。'
+  if (module.key === 'loop') return '请用循环计算 1+2+...+100，并说明循环变量如何变化。'
+  if (module.key === 'variable') return '有变量 count 初始为 0，连续执行 count=count+3、count=count*2、count=count-4。最后 count 是多少？'
+  if (module.key === 'function') return '设计函数 square_sum(a,b)，返回 a²+b²。请写出 Python 代码并用 a=3、b=4 测试。'
+  if (module.key === 'event') return 'Scratch 中点击绿旗后角色说“开始”，按空格键角色跳起。请描述需要哪些事件积木和状态变量。'
+  if (module.key === 'debug') return '代码 for i in range(1, 5): total = total + i 报错。请指出错误原因，并补全可运行代码。'
+  if (module.key === 'array') return '列表 nums=[4,7,2,9,5]，请找出最大值并计算所有奇数的和。'
+  if (module.key === 'recursion') return '用递归思想解释 5! 如何计算，并写出停止条件。'
+  return '设计一个猜数字小游戏：电脑给出 1-20 的秘密数字，玩家输入数字后提示“大了/小了/猜对了”。请写出流程。'
+}
+
+function scienceProblem(bank: EducationBank, module: EducationModule) {
+  const subject = bank.subject
+  const key = module.key
+  if (subject === '物理') {
+    if (key === 'mechanics') return '一辆小车 10 s 内从静止加速到 20 m/s，若加速度恒定，求加速度和这 10 s 内的位移。'
+    if (key === 'electricity' || key === 'circuit') return '电路中电源电压 6 V，电阻 R1=2 Ω、R2=4 Ω 串联。求电流、各电阻两端电压和总功率。'
+    if (key === 'optics') return '物体放在凸透镜前 30 cm，透镜焦距 10 cm。判断成像性质，并用作图思路说明。'
+    if (key === 'thermal' || key === 'thermo') return '质量 0.5 kg 的水温度从 20°C 升到 80°C，水的比热容为 4.2×10³ J/(kg·°C)。吸收多少热量？'
+    if (key === 'magnetism') return '导体棒长 0.5 m，以 4 m/s 垂直切割 0.2 T 的匀强磁场。求感应电动势。'
+    if (key === 'experiment') return '用伏安法测电阻，三次测得电压/电流分别为 2.0V/0.20A、2.5V/0.24A、3.0V/0.31A。求电阻平均值并分析误差。'
+    return '根据图像信息：物体速度从 0 到 12 m/s 线性增加，用时 6 s。求加速度，并画出对应 v-t 图的关键点。'
+  }
+  if (subject === '化学') {
+    if (key === 'equation') return '配平并说明质量守恒：Fe + O2 -> Fe3O4。'
+    if (key === 'solution') return '把 20 g 食盐加入 180 g 水中完全溶解，求所得溶液的质量分数。'
+    if (key === 'calculation') return '实验室用 10 g CaCO3 与足量稀盐酸反应，理论上可生成多少克 CO2？'
+    if (key === 'experiment') return '要鉴别 NaCl 溶液、Na2CO3 溶液和稀盐酸，请设计最少步骤的实验并写出现象。'
+    if (key === 'organic') return '某有机物分子式为 C2H6O，可能是乙醇或二甲醚。请写出两种结构式并说明如何鉴别。'
+    if (key === 'electrochem') return '锌铜原电池中，锌片和铜片插入稀硫酸并用导线连接。请写出电子流向和电极反应。'
+    return '某流程以铁矿石为原料制备 FeSO4 溶液，请指出酸溶、过滤、除杂、结晶各步骤的目的。'
+  }
+  if (subject === '生物') {
+    if (key.includes('cell')) return '显微镜下观察洋葱表皮细胞，请写出细胞壁、细胞核、液泡的位置特征，并说明染色目的。'
+    if (key.includes('genetics')) return '豌豆高茎 T 对矮茎 t 为显性。Tt 与 tt 杂交，子代表型比例是多少？请画遗传图解。'
+    if (key.includes('experiment')) return '探究光照对植物光合作用的影响，设计对照实验：写出自变量、因变量、控制变量和预期结果。'
+    if (key.includes('ecology')) return '草原生态系统中有草、兔、狐、鹰。请写出两条食物链，并说明狐数量下降可能造成的影响。'
+    if (key.includes('homeostasis')) return '饭后血糖升高，人体如何通过胰岛素调节血糖？请用流程图说明。'
+    return '给出 DNA 片段模板链 TAC GGA CTT，请写出对应 mRNA 序列，并说明转录方向。'
+  }
+  return ''
+}
+
+function concreteProblemFor(bank: EducationBank, module: EducationModule) {
+  if (bank.subject === '少儿编程') return codingProblem(module)
+  if (bank.subject === '英语') return englishProblem(bank, module)
+  if (bank.subject === '语文') return chineseProblem(bank, module)
+  if (['物理', '化学', '生物'].includes(bank.subject)) return scienceProblem(bank, module)
+  return mathProblem(bank, module)
+}
+
+function taskForPattern(pattern: EducationPattern) {
+  if (pattern.key === 'concept') return '请先直接作答，再解释本题用到的核心概念和一个容易混淆的点。'
+  if (pattern.key === 'model') return '请用图示、表格、公式或流程把题意建模，再完成解答。'
+  if (pattern.key === 'error') return '请写出完整答案，并假设一名同学犯了一个常见错误，指出错误在哪里、如何订正。'
+  if (pattern.key === 'exam') return '请按考试答题格式分步骤作答，标出关键得分点。'
+  if (pattern.key === 'proof') return '请给出理由充分的解释、证明或实验论证，不能只写结论。'
+  if (pattern.key === 'compare') return '请至少给出两种解法或两种表达方式，并比较它们的适用场景。'
+  if (pattern.key === 'application') return '请联系一个生活、实验、阅读或项目场景，说明这个知识点如何迁移使用。'
+  if (pattern.key === 'extension') return '请在完成原题后，改变一个条件并分析答案或方法会如何变化。'
+  if (pattern.key === 'whiteboard') return '请把解题过程整理成适合白板展示的步骤：条件、模型、关键推理、结论、易错点。'
+  return '请直接解答，并写出关键步骤。'
+}
+
+function shortProblemTitle(problem: string) {
+  return problem.replace(/\s+/g, ' ').replace(/[。？?].*$/, '').slice(0, 34)
+}
+
 function descriptionFor(bank: EducationBank, module: EducationModule, pattern: EducationPattern) {
+  const problem = concreteProblemFor(bank, module)
+  const task = taskForPattern(pattern)
   return `${bank.stage}${bank.subject} / ${module.title}
 
 题目：${bank.stage}${bank.subject}：${module.title}：${pattern.title}
 
-经典题型：围绕 ${module.focus} 设计一道有代表性的练习。请先说明题意、关键条件和目标，再给出分步解法。
+具体题干：${problem}
+
+作答任务：${task}
 
 考察重点：${pattern.focus}
 
 白板提示：用 ${module.concepts.slice(0, 5).join('、')} 组织图示、公式、表格或流程，突出本题的关键步骤、易错点和迁移变式。
 
-练习要求：Arena Coach 应先用苏格拉底式问题确认学生理解，再逐步讲解；必要时写出公式、单位、图像、实验变量或作文提纲。`
+答题要求：请先独立作答；需要帮助时，可让 Arena Coach 追问、点评或在白板上展开解题结构。`
 }
 
 function makeBankChallenges(bank: EducationBank): Challenge[] {
   return patterns.flatMap((pattern) => bank.modules.map((module) => {
     const id = `${bank.prefix}-${module.key}-${pattern.key}`
+    const problem = concreteProblemFor(bank, module)
     return {
       id,
-      title: `${bank.stage}${bank.subject}：${module.title}：${pattern.title}`,
+      title: `${bank.stage}${bank.subject}：${module.title}：${shortProblemTitle(problem)}`,
       slug: id,
       description: descriptionFor(bank, module, pattern),
       difficulty: pattern.difficulty,
