@@ -10,6 +10,9 @@ export type ArenaSectionSlug =
   | 'hardware-interview'
   | 'virtualization-interview'
   | 'programming-interview'
+  | 'arm-riscv-interview'
+  | 'firmware-interview'
+  | 'rtos-interview'
   | 'coding-interview'
 
 export type ArenaSection = {
@@ -182,6 +185,54 @@ export const arenaSections: ArenaSection[] = [
       { label: 'Python interview questions', url: 'https://github.com/Devinterview-io/python-interview-questions' },
       { label: 'C++ interview prep', url: 'https://github.com/Nabagata/interview-prep' },
       { label: 'LeetCode C++/Python solutions', url: 'https://github.com/zqfang/LeetCode' },
+    ],
+  },
+  {
+    slug: 'arm-riscv-interview',
+    title: 'ARM/RISC-V Interview',
+    titleZh: 'ARM/RISC-V 体系结构面试板块',
+    eyebrow: 'ISA · MMU · Interrupt · Coherency',
+    description: 'Architecture interviews covering ARM and RISC-V privilege models, interrupts, MMU/TLB, cache coherency, atomics, boot, security and debug.',
+    descriptionZh: '覆盖 ARM/RISC-V 特权架构、中断、MMU/TLB、Cache 一致性、原子内存模型、启动、安全扩展和 Debug。',
+    category: 'arm-riscv-interview',
+    accent: 'from-cyan-200 to-indigo-500',
+    href: '/arena/sections/arm-riscv-interview',
+    sources: [
+      { label: 'RISC-V ISA manual', url: 'https://github.com/riscv/riscv-isa-manual' },
+      { label: 'ARM architecture docs', url: 'https://developer.arm.com/documentation' },
+      { label: 'RISC-V Advanced Interrupt Architecture', url: 'https://github.com/riscv/riscv-aia' },
+    ],
+  },
+  {
+    slug: 'firmware-interview',
+    title: 'Firmware Interview',
+    titleZh: '固件面试板块',
+    eyebrow: 'U-Boot · UEFI · Secure Boot · Bring-up',
+    description: 'Firmware interviews covering BootROM, U-Boot, UEFI/EDK2, secure boot, early hardware init, ACPI/device tree, OTA and board porting.',
+    descriptionZh: '覆盖 BootROM、U-Boot、UEFI/EDK2、安全启动、早期硬件初始化、ACPI/设备树、升级恢复和平台移植。',
+    category: 'firmware-interview',
+    accent: 'from-teal-200 to-cyan-500',
+    href: '/arena/sections/firmware-interview',
+    sources: [
+      { label: 'U-Boot source', url: 'https://github.com/u-boot/u-boot' },
+      { label: 'U-Boot UEFI docs', url: 'https://docs.u-boot.org/en/latest/develop/uefi/u-boot_on_efi.html' },
+      { label: 'Tianocore EDK2', url: 'https://github.com/tianocore/edk2' },
+    ],
+  },
+  {
+    slug: 'rtos-interview',
+    title: 'RTOS Interview',
+    titleZh: 'RTOS 面试板块',
+    eyebrow: 'FreeRTOS · Zephyr · Scheduler · Drivers',
+    description: 'RTOS interviews covering FreeRTOS and Zephyr scheduling, tasks, IPC, memory, interrupts, drivers, low power, safety and debugging.',
+    descriptionZh: '覆盖 FreeRTOS/Zephyr 调度、任务、IPC、内存、中断、驱动、低功耗、安全和调试测试。',
+    category: 'rtos-interview',
+    accent: 'from-emerald-200 to-teal-500',
+    href: '/arena/sections/rtos-interview',
+    sources: [
+      { label: 'FreeRTOS kernel', url: 'https://github.com/FreeRTOS/FreeRTOS-Kernel' },
+      { label: 'Zephyr RTOS', url: 'https://github.com/zephyrproject-rtos/zephyr' },
+      { label: 'FreeRTOS interview questions', url: 'https://embeddedprep.com/100-freertos-interview-questions/' },
     ],
   },
 ]

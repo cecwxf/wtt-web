@@ -67,6 +67,12 @@ const linuxModules: InterviewModule[] = [
   { key: 'debug-tracing', title: 'Debug/Tracing', focus: 'ftrace、perf、kprobe/uprobes、tracepoints、crash dump、lockdep、kmemleak', tags: ['debug', 'tracing'], concepts: ['ftrace', 'perf', 'kprobe', 'lockdep', 'crash dump'], whiteboardTemplate: 'evaluation_loop' },
   { key: 'stability-power', title: '稳定性/电源管理', focus: 'suspend/resume、runtime PM、thermal、watchdog、panic、hung task、reboot reason', tags: ['stability', 'power-management'], concepts: ['runtime PM', 'suspend', 'thermal', 'watchdog', 'panic'], whiteboardTemplate: 'evaluation_loop' },
   { key: 'boot-security', title: '启动/安全/容器', focus: 'bootloader、initcall、module loading、LSM、namespaces、cgroups、seccomp、capability', tags: ['boot', 'security'], concepts: ['initcall', 'LSM', 'namespace', 'cgroup', 'seccomp'], whiteboardTemplate: 'system_architecture' },
+  { key: 'smmu-iommu', title: 'SMMU/IOMMU', focus: 'ARM SMMU、IOMMU domain、stream ID、IOVA、map/unmap、ATS/PRI、设备隔离和 DMA fault', tags: ['smmu', 'iommu'], concepts: ['SMMU', 'IOMMU domain', 'stream ID', 'IOVA', 'DMA fault'], whiteboardTemplate: 'system_architecture' },
+  { key: 'dma', title: 'DMA 子系统', focus: 'dma_map、coherent/streaming DMA、cache maintenance、scatter-gather、DMAengine、IOMMU 和 bounce buffer', tags: ['dma', 'dmaengine'], concepts: ['dma_map', 'coherent DMA', 'scatter-gather', 'DMAengine', 'cache maintenance'], whiteboardTemplate: 'pipeline' },
+  { key: 'pcie', title: 'PCIe 子系统', focus: '枚举、BAR、MSI/MSI-X、ASPM、AER、热插拔、ATS/PRI、endpoint/root complex 驱动', tags: ['pcie', 'aer'], concepts: ['BAR', 'MSI-X', 'ASPM', 'AER', 'root complex'], whiteboardTemplate: 'pipeline' },
+  { key: 'v4l2-media', title: 'V4L2/Media', focus: 'V4L2 device/subdev、media controller、vb2 buffer、mmap/userptr/dmabuf、pipeline link 和 streaming', tags: ['v4l2', 'media'], concepts: ['V4L2', 'media controller', 'vb2', 'dmabuf', 'subdev'], whiteboardTemplate: 'pipeline' },
+  { key: 'usb', title: 'USB 框架', focus: 'USB core、host controller、URB、endpoint、descriptor、gadget、Type-C/PD 和 autosuspend', tags: ['usb', 'gadget'], concepts: ['URB', 'endpoint', 'descriptor', 'gadget', 'Type-C'], whiteboardTemplate: 'pipeline' },
+  { key: 'tty-terminal', title: 'TTY/终端', focus: 'TTY core、line discipline、console、pty、termios、串口驱动、输入输出缓冲和 hangup', tags: ['tty', 'serial'], concepts: ['TTY', 'line discipline', 'pty', 'termios', 'console'], whiteboardTemplate: 'solution_flow' },
 ]
 
 const androidModules: InterviewModule[] = [
@@ -106,6 +112,11 @@ const icModules: InterviewModule[] = [
   { key: 'power-signoff', title: '低功耗/Signoff', focus: 'UPF、power domain、level shifter、isolation、IR drop、EM、功耗分析', tags: ['low-power', 'signoff'], concepts: ['UPF', 'power domain', 'IR drop', 'EM', 'isolation'], whiteboardTemplate: 'evaluation_loop' },
   { key: 'dfm-tapeout', title: 'DFM/流片', focus: 'DRC/LVS/ERC、antenna、density、metal fill、mask、tapeout checklist 和风险签核', tags: ['dfm', 'tapeout'], concepts: ['DRC', 'LVS', 'antenna', 'metal fill', 'checklist'], whiteboardTemplate: 'evaluation_loop' },
   { key: 'silicon', title: '硅后验证', focus: 'bring-up、ATE、JTAG、scan dump、性能/功耗实测、bug 归因和 ECO 策略', tags: ['post-silicon', 'bringup'], concepts: ['ATE', 'JTAG', 'bring-up', 'ECO', 'silicon debug'], whiteboardTemplate: 'pipeline' },
+  { key: 'smmu-ip', title: 'SMMU/IOMMU IP', focus: 'context bank、stream table、TLB、page table walker、ATS/PRI、fault reporting 和 coherency', tags: ['smmu', 'iommu'], concepts: ['context bank', 'stream table', 'TLB', 'PTW', 'ATS/PRI'], whiteboardTemplate: 'system_architecture' },
+  { key: 'dma-ip', title: 'DMA IP', focus: 'descriptor ring、scatter-gather、AXI master、interrupt coalescing、cache coherency、backpressure 和 QoS', tags: ['dma', 'axi'], concepts: ['descriptor ring', 'scatter-gather', 'AXI master', 'coherency', 'QoS'], whiteboardTemplate: 'pipeline' },
+  { key: 'axi', title: 'AXI/ACE/CHI 协议', focus: 'AXI channels、burst、ID/order、outstanding、ACE snoop、CHI transaction 和 deadlock avoidance', tags: ['axi', 'protocol'], concepts: ['AXI channel', 'burst', 'outstanding', 'ACE', 'CHI'], whiteboardTemplate: 'inference_flow' },
+  { key: 'cmn-noc', title: 'CMN/NoC', focus: 'ARM CMN、mesh NoC、RN/HN/SN、home node、snoop filter、QoS、路由和拥塞控制', tags: ['cmn', 'noc'], concepts: ['CMN', 'mesh NoC', 'home node', 'snoop filter', 'QoS'], whiteboardTemplate: 'system_architecture' },
+  { key: 'ddr-memory-ip', title: 'DDR/内存控制器 IP', focus: 'DDR controller、PHY training、refresh、bank conflict、QoS、ECC、DFI 和带宽/延迟权衡', tags: ['ddr', 'memory-controller'], concepts: ['DDR controller', 'PHY training', 'refresh', 'ECC', 'DFI'], whiteboardTemplate: 'pipeline' },
 ]
 
 const hardwareModules: InterviewModule[] = [
@@ -147,14 +158,56 @@ const programmingModules: InterviewModule[] = [
   { key: 'perf-security', title: '性能/安全', focus: 'cache locality、profiling、内存越界、整数溢出、注入、序列化和安全编码', tags: ['performance', 'security'], concepts: ['cache locality', 'profiling', 'overflow', 'injection', 'serialization'], whiteboardTemplate: 'evaluation_loop' },
 ]
 
+const armRiscvModules: InterviewModule[] = [
+  { key: 'isa', title: 'ISA/特权架构', focus: 'ARMv8/AArch64、RISC-V RV64、EL/M/S/U privilege、异常级切换和系统寄存器', tags: ['arm', 'riscv', 'isa'], concepts: ['AArch64', 'RV64', 'EL', 'privilege', 'CSR'], whiteboardTemplate: 'solution_flow' },
+  { key: 'exception-interrupt', title: '异常/中断', focus: 'ARM GIC、RISC-V CLINT/PLIC/AIA、向量表、优先级、嵌套、中断延迟和上下文保存', tags: ['interrupt', 'gic', 'plic'], concepts: ['GIC', 'PLIC', 'AIA', 'vector table', 'interrupt latency'], whiteboardTemplate: 'inference_flow' },
+  { key: 'mmu-tlb', title: 'MMU/TLB', focus: '页表格式、stage-1/stage-2、ASID/VMID、TLB shootdown、page attribute 和 huge page', tags: ['mmu', 'tlb'], concepts: ['page table', 'stage-2', 'ASID', 'VMID', 'TLB'], whiteboardTemplate: 'pipeline' },
+  { key: 'cache-coherency', title: 'Cache/一致性', focus: 'cache hierarchy、MESI/MOESI、barrier、shareability、snoop、DMA coherency 和 false sharing', tags: ['cache', 'coherency'], concepts: ['MESI', 'barrier', 'shareability', 'snoop', 'DMA coherency'], whiteboardTemplate: 'system_architecture' },
+  { key: 'atomic-memory-model', title: '原子/内存模型', focus: 'ARM acquire/release、RISC-V aq/rl、fence、LL/SC、AMO、锁实现和乱序可见性', tags: ['atomic', 'memory-model'], concepts: ['acquire/release', 'fence', 'LL/SC', 'AMO', 'memory order'], whiteboardTemplate: 'solution_flow' },
+  { key: 'boot-reset', title: '启动/复位', focus: 'reset vector、SPL/BL、EL3/EL2/EL1、RISC-V M-mode、设备树/ACPI 和 SMP bring-up', tags: ['boot', 'smp'], concepts: ['reset vector', 'EL3', 'M-mode', 'device tree', 'SMP'], whiteboardTemplate: 'pipeline' },
+  { key: 'security', title: '安全扩展', focus: 'TrustZone、ARM CCA/RME、PMP/ePMP、TEE、secure monitor、memory attribution 和攻击面', tags: ['trustzone', 'security'], concepts: ['TrustZone', 'RME', 'PMP', 'TEE', 'secure monitor'], whiteboardTemplate: 'system_architecture' },
+  { key: 'vector-simd', title: '向量/SIMD', focus: 'NEON/SVE/SVE2、RISC-V Vector、VL、predicate、alignment、吞吐和编译器自动向量化', tags: ['simd', 'vector'], concepts: ['NEON', 'SVE', 'RVV', 'predicate', 'auto-vectorization'], whiteboardTemplate: 'pipeline' },
+  { key: 'debug-trace', title: 'Debug/Trace', focus: 'JTAG、CoreSight、ETM/STM、RISC-V debug module、trace buffer、watchpoint 和性能计数器', tags: ['debug', 'trace'], concepts: ['JTAG', 'CoreSight', 'ETM', 'debug module', 'PMU'], whiteboardTemplate: 'evaluation_loop' },
+  { key: 'virtualization', title: '虚拟化扩展', focus: 'ARM EL2/stage-2、GIC virtualization、RISC-V H extension、vCPU trap、IOMMU 和设备直通', tags: ['virtualization', 'el2'], concepts: ['EL2', 'stage-2', 'GICv', 'H extension', 'trap'], whiteboardTemplate: 'system_architecture' },
+]
+
+const firmwareModules: InterviewModule[] = [
+  { key: 'boot-flow', title: '启动流程', focus: 'BootROM、SPL/TPL、U-Boot proper、UEFI SEC/PEI/DXE/BDS、handoff 和 boot args', tags: ['bootloader', 'boot-flow'], concepts: ['BootROM', 'SPL', 'DXE', 'BDS', 'handoff'], whiteboardTemplate: 'pipeline' },
+  { key: 'uboot', title: 'U-Boot', focus: 'driver model、device tree、environment、bootcmd、FIT image、bootm/booti、SPL size 和 board porting', tags: ['u-boot', 'spl'], concepts: ['driver model', 'device tree', 'FIT', 'bootcmd', 'SPL'], whiteboardTemplate: 'system_architecture' },
+  { key: 'uefi', title: 'UEFI', focus: 'Boot Services、Runtime Services、protocol/handle、HOB、ACPI/SMBIOS、Secure Boot 和 capsule update', tags: ['uefi', 'edk2'], concepts: ['Boot Services', 'Runtime Services', 'protocol', 'ACPI', 'Secure Boot'], whiteboardTemplate: 'system_architecture' },
+  { key: 'secure-boot', title: '安全启动', focus: 'ROM trust anchor、签名链、FIT/UEFI Secure Boot、rollback protection、key ladder 和 fuse/OTP', tags: ['secure-boot', 'crypto'], concepts: ['trust anchor', 'signature chain', 'rollback', 'fuse', 'key ladder'], whiteboardTemplate: 'pipeline' },
+  { key: 'device-init', title: '早期硬件初始化', focus: 'DDR training、PMIC、clock/reset、pinmux、PCIe/USB init、console 和 board id', tags: ['bringup', 'ddr-training'], concepts: ['DDR training', 'PMIC', 'clock', 'pinmux', 'console'], whiteboardTemplate: 'pipeline' },
+  { key: 'acpi-dt', title: 'ACPI/Device Tree', focus: 'DTB、overlay、ACPI table、AML、硬件描述边界、Linux handoff 和兼容性', tags: ['acpi', 'device-tree'], concepts: ['DTB', 'overlay', 'ACPI', 'AML', 'handoff'], whiteboardTemplate: 'solution_flow' },
+  { key: 'update-recovery', title: '升级/恢复', focus: 'A/B slot、OTA、capsule、recovery mode、watchdog、断电保护和回滚策略', tags: ['ota', 'recovery'], concepts: ['A/B slot', 'capsule', 'watchdog', 'rollback', 'recovery'], whiteboardTemplate: 'evaluation_loop' },
+  { key: 'debug', title: '固件 Debug', focus: '串口、JTAG、semihosting、early log、panic reset reason、trace buffer 和 QEMU 仿真', tags: ['firmware-debug', 'jtag'], concepts: ['UART', 'JTAG', 'early log', 'reset reason', 'QEMU'], whiteboardTemplate: 'evaluation_loop' },
+  { key: 'uefi-uboot-choice', title: 'U-Boot/UEFI 取舍', focus: '嵌入式与服务器启动差异、标准 API、驱动模型、体积、生态、调试和认证要求', tags: ['u-boot', 'uefi'], concepts: ['standard API', 'driver model', 'footprint', 'ecosystem', 'certification'], whiteboardTemplate: 'solution_flow' },
+  { key: 'platform-porting', title: '平台移植', focus: '新增 SoC/board、Kconfig、defconfig、linker script、memory map、clock tree 和 upstream 策略', tags: ['porting', 'soc'], concepts: ['Kconfig', 'defconfig', 'memory map', 'clock tree', 'upstream'], whiteboardTemplate: 'pipeline' },
+]
+
+const rtosModules: InterviewModule[] = [
+  { key: 'scheduler', title: '调度器', focus: 'FreeRTOS priority scheduler、Zephyr scheduler、tick/tickless、preemption、timeslice 和实时性', tags: ['scheduler', 'freertos', 'zephyr'], concepts: ['priority', 'tickless', 'preemption', 'timeslice', 'latency'], whiteboardTemplate: 'solution_flow' },
+  { key: 'tasks', title: '任务/线程', focus: 'task/thread lifecycle、stack、priority inversion、idle task、hook、context switch 和栈溢出检测', tags: ['task', 'thread'], concepts: ['task lifecycle', 'stack', 'context switch', 'idle task', 'stack overflow'], whiteboardTemplate: 'pipeline' },
+  { key: 'ipc-sync', title: 'IPC/同步', focus: 'queue、semaphore、mutex、event group、message queue、mailbox、priority inheritance 和 ISR safe API', tags: ['ipc', 'sync'], concepts: ['queue', 'semaphore', 'mutex', 'event group', 'priority inheritance'], whiteboardTemplate: 'pipeline' },
+  { key: 'memory', title: '内存管理', focus: 'FreeRTOS heap_1-5、Zephyr k_heap/slab/mempool、静态分配、碎片、MPU 和内存保护', tags: ['memory', 'heap'], concepts: ['heap_4', 'slab', 'mempool', 'MPU', 'fragmentation'], whiteboardTemplate: 'evaluation_loop' },
+  { key: 'interrupt', title: '中断与延迟', focus: 'ISR、deferred work、bottom half、critical section、interrupt latency、jitter 和优先级屏蔽', tags: ['interrupt', 'latency'], concepts: ['ISR', 'deferred work', 'critical section', 'jitter', 'latency'], whiteboardTemplate: 'inference_flow' },
+  { key: 'drivers', title: '驱动模型', focus: 'Zephyr device model/devicetree、FreeRTOS HAL、GPIO/I2C/SPI/UART、DMA、power management 和 async API', tags: ['driver', 'devicetree'], concepts: ['devicetree', 'HAL', 'I2C', 'SPI', 'DMA'], whiteboardTemplate: 'system_architecture' },
+  { key: 'network-fs', title: '网络/文件系统', focus: 'TCP/IP stack、MQTT、BLE、littlefs/FATFS、flash wear leveling、socket 和 buffer 管理', tags: ['network', 'filesystem'], concepts: ['TCP/IP', 'MQTT', 'BLE', 'littlefs', 'wear leveling'], whiteboardTemplate: 'pipeline' },
+  { key: 'low-power', title: '低功耗', focus: 'tickless idle、sleep state、wakeup source、clock gating、PM policy、设备 runtime PM 和功耗测量', tags: ['low-power', 'pm'], concepts: ['tickless', 'wakeup source', 'clock gating', 'PM policy', 'runtime PM'], whiteboardTemplate: 'evaluation_loop' },
+  { key: 'safety-security', title: '安全/功能安全', focus: 'MPU、TrustZone-M、secure boot、OTA、watchdog、ASIL/SIL 思路和故障注入', tags: ['safety', 'security'], concepts: ['MPU', 'TrustZone-M', 'watchdog', 'OTA', 'fault injection'], whiteboardTemplate: 'evaluation_loop' },
+  { key: 'debug-test', title: '调试/测试', focus: 'trace、SEGGER SystemView、Zephyr shell、logging、unit test、HIL、fault injection 和死锁定位', tags: ['debug', 'test'], concepts: ['SystemView', 'Zephyr shell', 'logging', 'HIL', 'fault injection'], whiteboardTemplate: 'evaluation_loop' },
+]
+
 const banks: InterviewBank[] = [
   { prefix: 'linux-kernel', category: 'linux-kernel-interview', title: 'Linux Kernel 面试', tags: ['linux-kernel', 'kernel'], count: 200, modules: linuxModules, patterns: longPatterns },
   { prefix: 'android', category: 'android-interview', title: 'Android 面试', tags: ['android', 'framework'], count: 200, modules: androidModules, patterns: longPatterns },
   { prefix: 'ai-infra', category: 'ai-infra-interview', title: 'AI Infra 面试', tags: ['ai-infra', 'rdma', 'pcie'], count: 100, modules: aiInfraModules, patterns: shortPatterns },
-  { prefix: 'ic-chip', category: 'ic-chip-interview', title: 'IC 芯片面试', tags: ['ic', 'vlsi'], count: 100, modules: icModules, patterns: shortPatterns },
+  { prefix: 'ic-chip', category: 'ic-chip-interview', title: 'IC 芯片面试', tags: ['ic', 'vlsi'], count: 150, modules: icModules, patterns: shortPatterns },
   { prefix: 'hardware', category: 'hardware-interview', title: '硬件面试', tags: ['hardware', 'pcb'], count: 100, modules: hardwareModules, patterns: shortPatterns },
   { prefix: 'virtualization', category: 'virtualization-interview', title: '虚拟化面试', tags: ['virtualization', 'hypervisor'], count: 100, modules: virtualizationModules, patterns: shortPatterns },
   { prefix: 'programming', category: 'programming-interview', title: '编程面试', tags: ['programming', 'c', 'cpp', 'python'], count: 100, modules: programmingModules, patterns: shortPatterns },
+  { prefix: 'arm-riscv', category: 'arm-riscv-interview', title: 'ARM/RISC-V 体系结构面试', tags: ['arm', 'riscv', 'architecture'], count: 100, modules: armRiscvModules, patterns: shortPatterns },
+  { prefix: 'firmware', category: 'firmware-interview', title: '固件面试', tags: ['firmware', 'uboot', 'uefi'], count: 100, modules: firmwareModules, patterns: shortPatterns },
+  { prefix: 'rtos', category: 'rtos-interview', title: 'RTOS 面试', tags: ['rtos', 'freertos', 'zephyr'], count: 100, modules: rtosModules, patterns: shortPatterns },
 ]
 
 function descriptionFor(bank: InterviewBank, module: InterviewModule, pattern: QuestionPattern) {
@@ -170,7 +223,7 @@ function descriptionFor(bank: InterviewBank, module: InterviewModule, pattern: Q
 }
 
 function makeBankChallenges(bank: InterviewBank): Challenge[] {
-  const rows = bank.modules.flatMap((module) => bank.patterns.map((pattern) => {
+  const rows = bank.patterns.flatMap((pattern) => bank.modules.map((module) => {
     const id = `${bank.prefix}-${module.key}-${pattern.key}`
     return {
       id,
