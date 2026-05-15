@@ -73,19 +73,6 @@ const primaryOlympiad = [
   m('construction', '构造题', '从目标倒推、极端例子、策略和验证', 'system_architecture'),
 ]
 
-const primaryEnglish = [
-  m('phonics', 'Phonics 自然拼读', '字母组合、发音规则、重音和拼读迁移'),
-  m('vocabulary', '词汇与短语', '近义词、反义词、词形变化、搭配和语境猜词'),
-  m('grammar', '基础语法', '时态、人称、冠词、介词、疑问句和否定句'),
-  m('reading-main', '阅读主旨', '标题、主题句、段落大意和信息定位'),
-  m('reading-infer', '阅读推断', '指代、因果、人物态度和隐含信息'),
-  m('cloze', '完形填空', '上下文线索、语法搭配和逻辑连接'),
-  m('writing', '基础写作', '看图写话、日记、邮件、人物和事件描述', 'pipeline'),
-  m('speaking', '听说表达', '情景问答、复述、表达喜好和礼貌交际'),
-  m('sentence', '句型转换', '同义句、特殊疑问句、there be 和比较级'),
-  m('culture', '跨文化常识', '节日、学校生活、家庭、食物和礼仪'),
-]
-
 const primaryCoding = [
   m('sequence', '顺序执行', '指令顺序、角色移动、画图和过程分解', 'pipeline'),
   m('condition', '条件判断', 'if/else、比较、布尔表达式和分支测试'),
@@ -149,19 +136,6 @@ const juniorPhysics = [
   m('estimate', '估算与单位', '数量级、单位换算、合理性判断和近似计算'),
   m('comprehensive', '中考综合', '力电热综合、实际装置、图表和多步骤推理'),
   m('debug', '错题诊断', '概念混淆、公式误用、条件遗漏和单位错误', 'evaluation_loop'),
-]
-
-const juniorEnglish = [
-  m('grammar', '语法', '时态语态、从句、非谓语、情态动词和主谓一致'),
-  m('vocabulary', '词汇', '构词法、短语搭配、熟词生义和语境猜词'),
-  m('cloze', '完形填空', '上下文、逻辑连接、词义辨析和篇章结构'),
-  m('reading', '阅读理解', '细节、主旨、推断、态度和标题'),
-  m('task-reading', '任务型阅读', '信息筛选、归纳概括、表格补全和表达转换'),
-  m('listening-speaking', '听说', '情景反应、信息转述、观点表达和交际策略'),
-  m('writing', '书面表达', '审题、要点覆盖、结构、连接词和润色', 'pipeline'),
-  m('sentence', '句型转换', '同义句、被动语态、宾语从句和条件句'),
-  m('culture', '文化语境', '节日、校园、旅行、环保和跨文化理解'),
-  m('exam-strategy', '考试策略', '时间分配、定位信息、排除法和检查'),
 ]
 
 const juniorChemistry = [
@@ -242,19 +216,6 @@ const seniorPhysics = [
   m('final-problem', '高考压轴', '多过程、多对象、临界条件、图像和数学推导', 'system_architecture'),
 ]
 
-const seniorEnglish = [
-  m('reading', '阅读理解', '主旨、细节、推断、态度、篇章结构和词义猜测'),
-  m('seven-five', '七选五', '段落逻辑、指代衔接、主题句和过渡句'),
-  m('cloze', '完形填空', '语篇逻辑、词义辨析、情感线索和搭配'),
-  m('grammar-fill', '语法填空', '谓语非谓语、从句、介词、冠词和词形变化'),
-  m('writing', '应用文写作', '邮件、通知、倡议、邀请、建议信和语言得体', 'pipeline'),
-  m('continuation', '读后续写', '情节推进、人物情感、冲突解决和语言衔接', 'pipeline'),
-  m('translation', '翻译与表达', '长难句、从句、非谓语和语义准确'),
-  m('listening', '听力', '场景、数字、态度、推断和信息筛选'),
-  m('culture', '跨文化阅读', '社会文化、科技、环保、教育和价值判断'),
-  m('exam-strategy', '高考策略', '题型顺序、时间控制、证据定位和复查'),
-]
-
 const seniorChemistry = [
   m('principle', '化学反应原理', '热化学、速率、平衡、电化学和水溶液离子平衡', 'pipeline'),
   m('inorganic', '元素化合物', '钠铝铁铜、氯硫氮、性质转化和推断'),
@@ -297,20 +258,17 @@ const seniorChinese = [
 const banks: EducationBank[] = [
   { prefix: 'education-primary-math', category: 'education-primary-math', stage: '小学', subject: '普通数学', tags: ['primary', 'math'], modules: primaryMath },
   { prefix: 'education-primary-olympiad', category: 'education-primary-olympiad', stage: '小学', subject: '奥赛', tags: ['primary', 'math-olympiad'], modules: primaryOlympiad },
-  { prefix: 'education-primary-english', category: 'education-primary-english', stage: '小学', subject: '英语', tags: ['primary', 'english'], modules: primaryEnglish },
   { prefix: 'education-primary-coding', category: 'education-primary-coding', stage: '小学', subject: '少儿编程', tags: ['primary', 'coding'], modules: primaryCoding },
   { prefix: 'education-primary-chinese', category: 'education-primary-chinese', stage: '小学', subject: '语文', tags: ['primary', 'chinese'], modules: primaryChinese },
   { prefix: 'education-junior-math', category: 'education-junior-math', stage: '初中', subject: '数学', tags: ['junior', 'math'], modules: juniorMath },
   { prefix: 'education-junior-olympiad', category: 'education-junior-olympiad', stage: '初中', subject: '奥赛', tags: ['junior', 'math-olympiad'], modules: juniorOlympiad },
   { prefix: 'education-junior-physics', category: 'education-junior-physics', stage: '初中', subject: '物理', tags: ['junior', 'physics'], modules: juniorPhysics },
-  { prefix: 'education-junior-english', category: 'education-junior-english', stage: '初中', subject: '英语', tags: ['junior', 'english'], modules: juniorEnglish },
   { prefix: 'education-junior-chemistry', category: 'education-junior-chemistry', stage: '初中', subject: '化学', tags: ['junior', 'chemistry'], modules: juniorChemistry },
   { prefix: 'education-junior-biology', category: 'education-junior-biology', stage: '初中', subject: '生物', tags: ['junior', 'biology'], modules: juniorBiology },
   { prefix: 'education-junior-chinese', category: 'education-junior-chinese', stage: '初中', subject: '语文', tags: ['junior', 'chinese'], modules: juniorChinese },
   { prefix: 'education-senior-math', category: 'education-senior-math', stage: '高中', subject: '数学', tags: ['senior', 'math'], modules: seniorMath },
   { prefix: 'education-senior-olympiad', category: 'education-senior-olympiad', stage: '高中', subject: '奥赛', tags: ['senior', 'math-olympiad'], modules: seniorOlympiad },
   { prefix: 'education-senior-physics', category: 'education-senior-physics', stage: '高中', subject: '物理', tags: ['senior', 'physics'], modules: seniorPhysics },
-  { prefix: 'education-senior-english', category: 'education-senior-english', stage: '高中', subject: '英语', tags: ['senior', 'english'], modules: seniorEnglish },
   { prefix: 'education-senior-chemistry', category: 'education-senior-chemistry', stage: '高中', subject: '化学', tags: ['senior', 'chemistry'], modules: seniorChemistry },
   { prefix: 'education-senior-biology', category: 'education-senior-biology', stage: '高中', subject: '生物', tags: ['senior', 'biology'], modules: seniorBiology },
   { prefix: 'education-senior-chinese', category: 'education-senior-chinese', stage: '高中', subject: '语文', tags: ['senior', 'chinese'], modules: seniorChinese },
@@ -364,23 +322,6 @@ function mathProblem(bank: EducationBank, module: EducationModule) {
   if (key === 'inequality') return '证明对任意正数 x、y，有 x/y + y/x ≥ 2，并说明等号成立条件。'
   if (key === 'complex') return '已知复数 z=1+2i，求 z²、|z|，并在复平面上描述 z 对应的点。'
   return '已知函数 f(x)=ln x - ax 在 x=1 处取得极值。求 a，并讨论 f(x) 的零点个数。'
-}
-
-function englishProblem(bank: EducationBank, module: EducationModule) {
-  if (bank.stage === '小学') {
-    if (module.key === 'phonics') return '读单词 cake、bike、home、cute，找出每个单词中的长元音字母，并写出一个同类单词。'
-    if (module.key === 'grammar') return '用 am/is/are 填空：My mother ___ a teacher. I ___ ten. They ___ my friends.'
-    if (module.key === 'writing') return '请写 5 句话介绍你最喜欢的一天，至少包含天气、活动和感受。'
-    return '阅读短文：Tom has a small dog. It is black and white. Every morning Tom walks it in the park. 问：What color is the dog? Where does Tom walk it?'
-  }
-  if (bank.stage === '初中') {
-    if (module.key === 'grammar') return '用正确形式填空：By the time I arrived at school, the first class ___ (begin). 并说明时态依据。'
-    if (module.key === 'writing') return '假设你是李华，请写一封约 80 词的邮件邀请外教参加班级读书分享会，包含时间、地点和活动安排。'
-    return '阅读句子：Many students choose bikes because they are cheap, healthy and environmentally friendly. 问：Why do students choose bikes? 推断作者态度。'
-  }
-  if (module.key === 'continuation') return '读后续写：A boy lost his wallet on the bus. An old man picked it up and looked around. 请续写两段，体现人物善意和冲突解决。'
-  if (module.key === 'writing') return '请写一篇约 100 词的建议信：学校准备减少体育课时间，请你表达观点并给出两个理由。'
-  return '阅读句子：The new policy may not solve every problem, but it gives rural schools more choices. 请判断作者观点，并解释 but 在句中的作用。'
 }
 
 function chineseProblem(bank: EducationBank, module: EducationModule) {
@@ -439,7 +380,6 @@ function scienceProblem(bank: EducationBank, module: EducationModule) {
 
 function concreteProblemFor(bank: EducationBank, module: EducationModule) {
   if (bank.subject === '少儿编程') return codingProblem(module)
-  if (bank.subject === '英语') return englishProblem(bank, module)
   if (bank.subject === '语文') return chineseProblem(bank, module)
   if (['物理', '化学', '生物'].includes(bank.subject)) return scienceProblem(bank, module)
   return mathProblem(bank, module)

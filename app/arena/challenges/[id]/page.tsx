@@ -278,7 +278,11 @@ function arenaSessionActor(session: ArenaSession | null | undefined) {
 }
 
 function isLocalArenaChallenge(challenge: Challenge) {
-  return challenge.category === 'ai-kernel' || (challenge.challenge_type === 'qa' && challenge.category.endsWith('-interview'))
+  return challenge.category === 'ai-kernel' || challenge.category === 'gaokao-volunteer' || challenge.category.startsWith('education-') || (challenge.challenge_type === 'qa' && challenge.category.endsWith('-interview'))
+}
+
+function isGaokaoVolunteerChallenge(challenge?: Challenge | null) {
+  return challenge?.category === 'gaokao-volunteer'
 }
 
 function stageLabel(stage: string | undefined, locale: Locale) {
@@ -308,7 +312,25 @@ function arenaChallengeContext(challenge: Challenge, locale: Locale, language: L
     `[/Arena Challenge Context]`
 }
 
-function modeInstruction(mode: ChatMode, locale: Locale) {
+function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge | null) {
+  if (isGaokaoVolunteerChallenge(challenge)) {
+    return locale === 'zh'
+      ? [
+        'chat_mode: ask',
+        '高考志愿专用模式：只使用 Ask 模式，不输出 WHITEBOARD_DIAGRAM，不使用白板。',
+        '回答必须先确认省份、年份、科类/选科、分数、全省位次、兴趣专业、城市偏好、家庭预算、是否考研和就业地域。',
+        '如果缺少省份、科类或位次，不要给确定院校结论；可以给信息收集清单和粗略方法。',
+        '推荐必须按冲/稳/保分层，说明近 3 年专业录取分数线/最低位次/招生计划/选科要求的依据；无法验证的数据要明确提示以省考试院、阳光高考和学校招生网为准。',
+        '每个推荐需要覆盖：院校层次（985/211/双一流/普通本科）、专业匹配、城市机会、就业去向、风险、大学课程建议、竞赛/证书/科研/实习路径和未来就业建议。',
+      ].join('\n')
+      : [
+        'chat_mode: ask',
+        'Gaokao volunteer advisor mode: Ask mode only. Do not output WHITEBOARD_DIAGRAM and do not use the whiteboard.',
+        'First confirm province, year, subject track, score, provincial rank, interests, city constraints, budget, graduate-school intent, and employment preference.',
+        'If province, subject track, or rank is missing, do not give definitive university recommendations.',
+        'Use reach/match/safety tiers and cite the basis or uncertainty for recent admission rank, major score, plan, subject requirements, ranking, funding, and employment outcomes.',
+      ].join('\n')
+  }
   if (mode === 'interview_answer') {
     return locale === 'zh'
       ? 'chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示评分维度、缺口、补充答案结构。'
@@ -481,6 +503,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       if (!isAgent || appliedWhiteboardMessageIdsRef.current.has(messageId)) continue
       const content = stripSourceBlock(String(row.content || ''))
       if (content.includes('Agent thinking')) continue
+      if (isGaokaoVolunteerChallenge(challenge)) {
+        appliedWhiteboardMessageIdsRef.current.add(messageId)
+        setWhiteboardDiagram(null)
+        break
+      }
       const payload = extractWhiteboardPayload(content)
       appliedWhiteboardMessageIdsRef.current.add(messageId)
       if (payload?.diagram) {
@@ -523,8 +550,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   const t = copy[locale]
   const isCoding = challenge?.challenge_type === 'coding'
-  const currentChatMode = chatModes.find((mode) => mode.id === chatMode) || chatModes[0]
+  const isGaokaoVolunteer = isGaokaoVolunteerChallenge(challenge)
+  const availableChatModes = isGaokaoVolunteer ? chatModes.filter((mode) => mode.id === 'ask') : chatModes
+  const currentChatMode = availableChatModes.find((mode) => mode.id === chatMode) || availableChatModes[0]
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
+
+  useEffect(() => {
+    if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
+  }, [chatMode, isGaokaoVolunteer])
 
   function changeLanguage(next: Language) {
     setLanguage(next)
@@ -576,7 +609,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function publishArenaFallback(topicId: string, userMessage: string, intent?: ArenaTeachingIntent, mode: ChatMode = chatMode) {
     if (!challenge) throw new Error('missing challenge')
-    const content = `${arenaChallengeContext(challenge, locale, language, code)}\n\n${modeInstruction(mode, locale)}\n${intent ? `teaching_intent: ${intent}\n` : ''}${userMessage}`
+    const content = `${arenaChallengeContext(challenge, locale, language, code)}\n\n${modeInstruction(mode, locale, challenge)}\n${intent ? `teaching_intent: ${intent}\n` : ''}${userMessage}`
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
@@ -592,7 +625,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string) {
     const message = (explicitMessage ?? chatInput).trim()
-    const mode = explicitMessage ? modeForExplicitIntent(intent) : chatMode
+    const mode = isGaokaoVolunteerChallenge(challenge) ? 'ask' : explicitMessage ? modeForExplicitIntent(intent) : chatMode
     const effectiveIntent = intent || intentForChatMode(mode)
     if (!challenge || !message || chatSending) return
     if (!session?.accessToken) {
@@ -690,7 +723,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   const arenaLayoutStyle = !isCoding
     ? {
-      gridTemplateColumns: whiteboardExpanded
+      gridTemplateColumns: isGaokaoVolunteer
+        ? `${leftPanelWidth}px 6px minmax(560px, 1fr)`
+        : whiteboardExpanded
         ? `minmax(420px, 1fr) 6px ${chatPanelWidth}px`
         : `${leftPanelWidth}px 6px minmax(420px, 1fr) 6px ${chatPanelWidth}px`,
     }
@@ -838,7 +873,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           </section>
           )}
 
-          {!isCoding && !whiteboardExpanded && (
+          {!isCoding && !isGaokaoVolunteer && !whiteboardExpanded && (
             <div
               role="separator"
               aria-orientation="vertical"
@@ -888,7 +923,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 ) : <p className="mt-4 text-sm text-gray-500">{locale === 'zh' ? '点击 Run & Submit 后查看 Agent 执行结果。' : 'Click Run & Submit to see Agent execution results.'}</p>}
               </section>
             </section>
-          ) : (
+          ) : isGaokaoVolunteer ? null : (
             <div className="grid min-h-0 gap-2 lg:grid-rows-[auto_1fr]">
               {!whiteboardExpanded && (
               <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-[#1e1e1e] px-3 py-2">
@@ -910,7 +945,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </div>
           )}
 
-          {!isCoding && (
+          {!isCoding && !isGaokaoVolunteer && (
             <div
               role="separator"
               aria-orientation="vertical"
@@ -919,7 +954,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             />
           )}
 
-          <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 lg:col-span-2 xl:col-span-1">
+          <aside className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 ${isGaokaoVolunteer ? '' : 'lg:col-span-2 xl:col-span-1'}`}>
             <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
               <div className="border-b border-gray-800 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -933,7 +968,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   </div>
                   <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2.5 py-1 text-[11px] font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>
                 </div>
-                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {!isGaokaoVolunteer && <div className="mt-2 grid grid-cols-3 gap-1.5">
                   {coachActions.map((action) => (
                     <button
                       key={action.intent}
@@ -945,7 +980,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                       {locale === 'zh' ? action.zh : action.en}
                     </button>
                   ))}
-                </div>
+                </div>}
               </div>
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                 {chatMessages.length === 0 && (
@@ -974,15 +1009,19 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   <span className="min-w-0 flex-1 truncate">{locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}</span>
                   <div className="flex shrink-0 items-center gap-2">
                     <label className="text-xs font-bold text-gray-500">{t.mode}</label>
+                    {isGaokaoVolunteer ? (
+                      <span className="rounded-md border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-xs font-black text-blue-200">Ask</span>
+                    ) : (
                     <select
                       value={chatMode}
                       onChange={(event) => setChatMode(event.target.value as ChatMode)}
                       className="rounded-md border border-gray-800 bg-[#101010] px-2 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]"
                     >
-                      {chatModes.map((mode) => (
+                      {availableChatModes.map((mode) => (
                         <option key={mode.id} value={mode.id}>{locale === 'zh' ? mode.zh : mode.en}</option>
                       ))}
                     </select>
+                    )}
                     <button type="submit" disabled={!chatInput.trim() || chatSending || arenaSyncing} className="min-w-[96px] shrink-0 rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
                   </div>
                 </div>
