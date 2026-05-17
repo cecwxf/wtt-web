@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { backendSaveSubmission } from '@/lib/arena/backend'
 import { getChallenge, getChallengeTestCases, saveSubmission } from '@/lib/arena/store'
-import { judgeSubmission } from '@/lib/arena/judge'
+import { OPENCL_MAC_SKILL, judgeSubmission } from '@/lib/arena/judge'
 import type { Submission } from '@/lib/arena/types'
 
 export const dynamic = 'force-dynamic'
@@ -51,6 +51,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
       language,
       submissionId,
     })
+    const testCases = getChallengeTestCases(challenge.id)
+    const acceptedCount = judged.results.filter((result) => result.status === 'accepted').length
+    const metricSummary = [
+      `${acceptedCount}/${testCases.length} tests accepted`,
+      `runtime ${judged.runtime_ms}ms`,
+      judged.memory_kb ? `memory ${judged.memory_kb}KB` : undefined,
+      judged.provider === OPENCL_MAC_SKILL ? `skill ${OPENCL_MAC_SKILL}` : undefined,
+    ].filter(Boolean).join(' · ')
     const submission: Submission = {
       ...base,
       status: judged.status,
@@ -58,7 +66,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       runtime_ms: judged.runtime_ms,
       memory_kb: judged.memory_kb,
       judge_provider: judged.provider,
-      judge_output_summary: `${judged.results.filter((result) => result.status === 'accepted').length}/${getChallengeTestCases(challenge.id).length} tests accepted`,
+      judge_output_summary: metricSummary,
       updated_at: new Date().toISOString(),
       results: judged.results,
     }

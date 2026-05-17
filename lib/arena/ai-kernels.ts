@@ -185,7 +185,7 @@ export const aiKernelChallenges: Challenge[] = aiKernelSpecs.map((spec) => ({
   source_license: LEETGPU_ATTRIBUTION.license,
   difficulty: spec.difficulty,
   category: 'ai-kernel',
-  tags: Array.from(new Set(spec.tags.concat(['macos-runner']))),
+  tags: Array.from(new Set(spec.tags.concat(['macos-runner', 'agent-mac-opencl-kernel']))),
   challenge_type: 'coding',
   time_limit_ms: spec.difficulty === 'hard' ? 4000 : 2500,
   memory_limit_mb: spec.difficulty === 'hard' ? 256 : 128,

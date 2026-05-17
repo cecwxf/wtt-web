@@ -33,6 +33,7 @@ interface JudgeOutput {
 
 const PYTHON_LANGUAGES = new Set(['python', 'python3', 'py'])
 const OPENCL_LANGUAGES = new Set(['opencl', 'opencl-c', 'cl'])
+export const OPENCL_MAC_SKILL = 'agent-mac-opencl-kernel'
 
 function buildPythonHarness(userCode: string, challenge: Challenge) {
   const functionName = JSON.stringify(challenge.function_name)
@@ -602,7 +603,7 @@ export async function judgeSubmission(input: JudgeInput) {
   const configuredProvider = (process.env.WTT_ARENA_JUDGE_PROVIDER || '').toLowerCase()
   const allowAgentLocal = configuredProvider === 'agent-local' || configuredProvider === 'local-python' || process.env.WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE === '1'
   const provider = OPENCL_LANGUAGES.has(normalizedLanguage)
-    ? 'agent-local-opencl-macos'
+    ? OPENCL_MAC_SKILL
     : process.env.JUDGE0_URL && configuredProvider !== 'agent-local' && configuredProvider !== 'local-python'
       ? 'judge0'
     : allowAgentLocal
@@ -619,7 +620,7 @@ export async function judgeSubmission(input: JudgeInput) {
     const started = Date.now()
     const raw = provider === 'judge0'
       ? await runJudge0(harness, testCase.input, challenge.time_limit_ms)
-      : provider === 'agent-local-opencl-macos'
+      : provider === OPENCL_MAC_SKILL
         ? await runLocalOpenCL(harness, testCase.input, testCase.expected_output, challenge.time_limit_ms, challenge)
       : provider === 'agent-local-python'
         ? await runLocalPython(harness, testCase.input, challenge.time_limit_ms)
