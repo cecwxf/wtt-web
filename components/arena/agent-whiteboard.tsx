@@ -352,7 +352,10 @@ function missingHtmlBody(payload: WhiteboardPlayerPayload) {
 }
 
 function buildWhiteboardHtmlDocument(payload: WhiteboardPlayerPayload) {
-  const body = payload.html ? `<div class="shell custom-html">${sanitizeEmbeddedHtml(payload.html)}</div>` : missingHtmlBody(payload)
+  const renderNormalizer = `<style id="whiteboard-render-normalizer">
+    .custom-html{font-size:16px;line-height:1.75}.custom-html section,.custom-html article{width:100%;max-width:100%;margin-inline:auto}.custom-html svg{display:block;width:100%!important;max-width:100%!important;height:auto;min-height:360px;border-radius:18px}.custom-html table{width:100%;border-collapse:collapse;margin:18px 0;background:#fff;border-radius:14px;overflow:hidden}.custom-html th,.custom-html td{border:1px solid #dbe3ef;padding:12px 14px;text-align:left;vertical-align:top}.custom-html th{background:#eef6ff;color:#0f172a}.custom-html p,.custom-html li{font-size:16px;line-height:1.75}.custom-html h1,.custom-html h2{letter-spacing:-.04em}.custom-html .formula,.custom-html code{font-size:15px}.custom-html .caption,.custom-html .explain,.custom-html .note{color:#475569;line-height:1.75}
+  </style>`
+  const body = payload.html ? `<div class="shell custom-html">${sanitizeEmbeddedHtml(payload.html)}${renderNormalizer}</div>` : missingHtmlBody(payload)
   return `<!doctype html>
 <html lang="${payload.locale}">
 <head>
