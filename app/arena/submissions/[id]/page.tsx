@@ -72,6 +72,8 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
                       <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                     </div>
                     <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · {inlineMemoryLabel} {result.memory_kb || '-'}KB</p>
+                    {!result.is_hidden && result.input && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">input: {result.input}</pre>}
+                    {!result.is_hidden && result.expected_output && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">expected: {result.expected_output}</pre>}
                     {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">stdout: {result.stdout}</pre>}
                     {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-sm text-rose-300">stderr: {result.stderr}</pre>}
                     {result.error_message && <p className="mt-3 text-sm text-yellow-300">{result.error_message}</p>}

@@ -84,6 +84,8 @@ export interface SubmissionResult {
   status: SubmissionStatus
   runtime_ms?: number
   memory_kb?: number
+  input?: string
+  expected_output?: string
   stdout?: string
   stderr?: string
   compile_output?: string

@@ -75,6 +75,19 @@ function compareOutput(actual: string, expected: string, checker: ChallengeTestC
   }
 }
 
+function attachPublicCaseData(results: SubmissionResult[], testCases: ChallengeTestCase[]) {
+  const casesById = new Map(testCases.map((testCase) => [testCase.id, testCase]))
+  return results.map((result) => {
+    const testCase = casesById.get(result.test_case_id)
+    if (!testCase || testCase.is_hidden) return result
+    return {
+      ...result,
+      input: result.input || testCase.input,
+      expected_output: result.expected_output || testCase.expected_output,
+    }
+  })
+}
+
 async function runLocalPython(code: string, stdin: string, timeoutMs: number): Promise<RawRunResult> {
   const dir = await mkdtemp(join(tmpdir(), 'wtt-arena-'))
   const file = join(dir, 'main.py')
@@ -1014,7 +1027,11 @@ async function runRemoteJudge(input: JudgeInput, remoteUrl: string): Promise<Jud
     const detail = await response.text()
     throw new Error(`Remote Arena judge failed: ${detail}`)
   }
-  return (await response.json()) as JudgeOutput
+  const output = (await response.json()) as JudgeOutput
+  return {
+    ...output,
+    results: attachPublicCaseData(output.results || [], input.testCases),
+  }
 }
 
 async function runRemoteOpenCLVectorAdapter(input: JudgeInput, remoteUrl: string): Promise<JudgeOutput> {
@@ -1128,9 +1145,13 @@ async function runJudge0(code: string, stdin: string, timeoutMs: number): Promis
 export async function judgeSubmission(input: JudgeInput) {
   const { challenge, testCases, code, language, submissionId } = input
   const normalizedLanguage = language.toLowerCase()
+  const isOpenCL = OPENCL_LANGUAGES.has(normalizedLanguage)
+  const shouldUseLocalOpenCL = isOpenCL && process.platform === 'darwin' && process.env.WTT_ARENA_DISABLE_LOCAL_OPENCL !== '1' && process.env.WTT_ARENA_FORCE_REMOTE_JUDGE !== '1'
+  const macOpenCLJudgeUrl = process.env.WTT_ARENA_MAC_OPENCL_JUDGE_URL
   const remoteJudgeUrl = process.env.WTT_ARENA_REMOTE_JUDGE_URL
-  if (remoteJudgeUrl) {
-    if (OPENCL_LANGUAGES.has(normalizedLanguage)) {
+  if (!shouldUseLocalOpenCL && isOpenCL && macOpenCLJudgeUrl) return runRemoteJudge(input, macOpenCLJudgeUrl)
+  if (!shouldUseLocalOpenCL && remoteJudgeUrl) {
+    if (isOpenCL) {
       if (canUseRemoteOpenCLMatrixAdapter(challenge, testCases)) return runRemoteOpenCLMatrixAdapter(input, remoteJudgeUrl)
       if (canUseRemoteOpenCLMatrixElementAdapter(challenge, testCases)) return runRemoteOpenCLMatrixElementAdapter(input, remoteJudgeUrl)
       if (canUseRemoteOpenCLVectorAdapter(challenge, testCases)) return runRemoteOpenCLVectorAdapter(input, remoteJudgeUrl)
@@ -1138,13 +1159,13 @@ export async function judgeSubmission(input: JudgeInput) {
     return runRemoteJudge(input, remoteJudgeUrl)
   }
 
-  if (!PYTHON_LANGUAGES.has(normalizedLanguage) && !OPENCL_LANGUAGES.has(normalizedLanguage)) {
+  if (!PYTHON_LANGUAGES.has(normalizedLanguage) && !isOpenCL) {
     throw new Error(`Unsupported language without remote runner: ${language}`)
   }
 
   const configuredProvider = (process.env.WTT_ARENA_JUDGE_PROVIDER || '').toLowerCase()
   const allowAgentLocal = configuredProvider === 'agent-local' || configuredProvider === 'local-python' || process.env.WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE === '1'
-  const provider = OPENCL_LANGUAGES.has(normalizedLanguage)
+  const provider = isOpenCL
     ? OPENCL_MAC_SKILL
     : process.env.JUDGE0_URL && configuredProvider !== 'agent-local' && configuredProvider !== 'local-python'
       ? 'judge0'
@@ -1183,6 +1204,8 @@ export async function judgeSubmission(input: JudgeInput) {
       status,
       runtime_ms: runtime,
       memory_kb: raw.memory_kb,
+      input: testCase.is_hidden ? undefined : testCase.input,
+      expected_output: testCase.is_hidden ? undefined : testCase.expected_output,
       stdout: testCase.is_hidden ? undefined : raw.stdout,
       stderr: testCase.is_hidden ? undefined : raw.stderr,
       compile_output: testCase.is_hidden ? undefined : raw.compile_output,
