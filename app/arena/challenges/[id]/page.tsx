@@ -553,6 +553,32 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return mapped
   }
 
+  function chatMessageKey(message: ChatMessage) {
+    return message.id || `${message.role}:${message.createdAt}:${message.content.length}`
+  }
+
+  function hasNewAgentMessage(messages: ChatMessage[], baselineKeys: Set<string>) {
+    return messages.some((message) => message.role === 'agent' && !baselineKeys.has(chatMessageKey(message)))
+  }
+
+  function sleep(ms: number) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms))
+  }
+
+  async function waitForArenaAgentMessage(topicId: string, baselineKeys: Set<string>, timeoutMs = 180000) {
+    const startedAt = Date.now()
+    let latest = await refreshArenaMessages(topicId)
+    if (hasNewAgentMessage(latest, baselineKeys)) return true
+
+    while (Date.now() - startedAt < timeoutMs) {
+      await sleep(1500)
+      latest = await refreshArenaMessages(topicId)
+      if (hasNewAgentMessage(latest, baselineKeys)) return true
+    }
+
+    return false
+  }
+
 
   useEffect(() => {
     setChatMessages([])
@@ -674,6 +700,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setChatSending(true)
     try {
       const topicId = await ensureArenaSession()
+      const baselineMessages = await refreshArenaMessages(topicId)
+      const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -695,7 +723,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
-      await refreshArenaMessages(topicId)
+      await waitForArenaAgentMessage(topicId, baselineKeys)
       await refreshArenaState().catch(() => undefined)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
@@ -716,6 +744,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setChatSending(true)
     try {
       const topicId = await ensureArenaSession()
+      const baselineMessages = await refreshArenaMessages(topicId)
+      const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -738,7 +768,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
-      await refreshArenaMessages(topicId)
+      await waitForArenaAgentMessage(topicId, baselineKeys, 240000)
       await refreshArenaState().catch(() => undefined)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
