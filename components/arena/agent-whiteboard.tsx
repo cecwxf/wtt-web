@@ -8,7 +8,7 @@ import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import type { WhiteboardDiagram } from '@/lib/arena/whiteboard'
+import type { WhiteboardDiagram, WhiteboardDiagramStep } from '@/lib/arena/whiteboard'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
 
 type Locale = 'zh' | 'en'
@@ -123,13 +123,48 @@ function MermaidPreview({ chart }: { chart: string }) {
   if (error) return <pre className="max-h-[360px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">{chart}</pre>
   if (!svg) return <div className="flex min-h-[240px] items-center justify-center text-base font-semibold text-slate-400">Rendering diagram...</div>
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.98, y: 8 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.36, ease: 'easeOut' }}
-      className="mt-4 flex justify-center overflow-auto rounded-lg border border-slate-200 bg-white p-5 shadow-sm [&_svg]:max-h-[560px] [&_svg]:max-w-full [&_svg_text]:font-semibold"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+    <>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.36, ease: 'easeOut' }}
+        className="arena-mermaid-draw mt-4 flex justify-center overflow-auto rounded-lg border border-slate-200 bg-white p-5 shadow-sm [&_svg]:max-h-[560px] [&_svg]:max-w-full [&_svg_text]:font-semibold"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+      <style jsx global>{`
+        .arena-mermaid-draw svg .node,
+        .arena-mermaid-draw svg .edgeLabel,
+        .arena-mermaid-draw svg .cluster {
+          opacity: 0;
+          animation: arena-node-reveal 460ms ease-out forwards;
+        }
+        .arena-mermaid-draw svg .node:nth-of-type(1) { animation-delay: 80ms; }
+        .arena-mermaid-draw svg .node:nth-of-type(2) { animation-delay: 160ms; }
+        .arena-mermaid-draw svg .node:nth-of-type(3) { animation-delay: 240ms; }
+        .arena-mermaid-draw svg .node:nth-of-type(4) { animation-delay: 320ms; }
+        .arena-mermaid-draw svg .node:nth-of-type(5) { animation-delay: 400ms; }
+        .arena-mermaid-draw svg .node:nth-of-type(6) { animation-delay: 480ms; }
+        .arena-mermaid-draw svg .edgePaths path,
+        .arena-mermaid-draw svg path.flowchart-link {
+          stroke-dasharray: 720;
+          stroke-dashoffset: 720;
+          animation: arena-line-draw 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        .arena-mermaid-draw svg .edgePaths path:nth-of-type(1) { animation-delay: 140ms; }
+        .arena-mermaid-draw svg .edgePaths path:nth-of-type(2) { animation-delay: 240ms; }
+        .arena-mermaid-draw svg .edgePaths path:nth-of-type(3) { animation-delay: 340ms; }
+        .arena-mermaid-draw svg .edgePaths path:nth-of-type(4) { animation-delay: 440ms; }
+        .arena-mermaid-draw svg .edgePaths path:nth-of-type(5) { animation-delay: 540ms; }
+        .arena-mermaid-draw svg .edgePaths path:nth-of-type(6) { animation-delay: 640ms; }
+        @keyframes arena-line-draw {
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes arena-node-reveal {
+          from { opacity: 0; transform: translateY(8px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
+    </>
   )
 }
 
@@ -168,6 +203,47 @@ const stepStyles = [
   },
 ]
 
+function ProcessRail({ steps, locale }: { steps: WhiteboardDiagramStep[]; locale: Locale }) {
+  const visibleSteps = steps.slice(0, 6)
+  if (visibleSteps.length <= 1) return null
+  return (
+    <motion.div variants={cardVariants} className="overflow-hidden rounded-xl border border-slate-200 bg-white/88 p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+          {locale === 'zh' ? '过程动画' : 'Process animation'}
+        </p>
+        <p className="text-xs font-semibold text-slate-400">
+          {locale === 'zh' ? '按阶段展开公式、架构图和解释' : 'Formulas, architecture, and explanation unfold by stage'}
+        </p>
+      </div>
+      <div className="relative grid gap-2" style={{ gridTemplateColumns: `repeat(${visibleSteps.length}, minmax(0, 1fr))` }}>
+        <motion.div
+          className="absolute left-0 right-0 top-5 h-0.5 bg-gradient-to-r from-cyan-400 via-violet-400 to-emerald-400"
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 0.95, ease: smoothEase }}
+          style={{ transformOrigin: 'left' }}
+        />
+        {visibleSteps.map((step, index) => (
+          <motion.div
+            key={`${step.stage || step.title || 'stage'}-${index}`}
+            className="relative min-w-0 text-center"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 * index + 0.12, duration: 0.36, ease: 'easeOut' }}
+          >
+            <span className="relative z-10 mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-950 text-sm font-black text-white shadow-sm">
+              {index + 1}
+            </span>
+            <p className="mt-2 truncate text-xs font-black text-slate-800">{step.stage || step.title || `Step ${index + 1}`}</p>
+            <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">{step.title || step.stage || ''}</p>
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
 function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; locale: Locale }) {
   const steps = diagram.steps?.length
     ? diagram.steps
@@ -190,6 +266,7 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
             {diagram.summary.map((item, index) => <p key={index}>{item}</p>)}
           </motion.div>
         ) : null}
+        <ProcessRail steps={steps} locale={locale} />
         {steps.map((step, index) => {
           const style = stepStyles[index % stepStyles.length]
           return (
