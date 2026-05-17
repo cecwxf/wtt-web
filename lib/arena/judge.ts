@@ -225,6 +225,7 @@ static int get_global_size(int dim) { (void)dim; return __wtt_global_size; }
 static float __wtt_fmax(float a, float b) { return a > b ? a : b; }
 static float __wtt_fmin(float a, float b) { return a < b ? a : b; }
 static float __wtt_fabs(float x) { return x < 0.0f ? -x : x; }
+static float __wtt_round(float x) { return x >= 0.0f ? (float)((int)(x + 0.5f)) : (float)((int)(x - 0.5f)); }
 static float __wtt_exp(float x) {
   if (x < -20.0f) return 0.0f;
   if (x > 20.0f) x = 20.0f;
@@ -242,6 +243,8 @@ static float __wtt_exp(float x) {
 #define fminf(a,b) __wtt_fmin((float)(a), (float)(b))
 #define fabs(a) __wtt_fabs((float)(a))
 #define fabsf(a) __wtt_fabs((float)(a))
+#define round(a) __wtt_round((float)(a))
+#define roundf(a) __wtt_round((float)(a))
 #define exp(a) __wtt_exp((float)(a))
 #define expf(a) __wtt_exp((float)(a))
 
@@ -336,6 +339,7 @@ const char* ${functionName}(const char* payload_json) {
   if (strcmp(op, "softmax") == 0 && input_n > 4) kernel_n = output_n = 4;
   else if (strcmp(op, "conv1d") == 0 && input_n > 0) output_n = input_n - 1;
   else if (strcmp(op, "topk") == 0) output_n = input_n < 3 ? input_n : 3;
+  else if (strcmp(op, "grayscale") == 0) output_n = 1;
   else if (strcmp(op, "interleave") == 0) output_n = 6;
   else if (output_kind != 0) output_n = 1;
   if (input_n <= 0) {
