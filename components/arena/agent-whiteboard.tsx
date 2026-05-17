@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -270,38 +270,6 @@ function FinalDiagramPanel({ chart, locale }: { chart: string; locale: Locale })
   )
 }
 
-function stripOuterHtmlDocument(html: string) {
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
-  if (bodyMatch?.[1]) return bodyMatch[1]
-  return html
-    .replace(/<!doctype[\s\S]*?>/gi, '')
-    .replace(/<\/?html[^>]*>/gi, '')
-    .replace(/<\/?head[^>]*>/gi, '')
-    .replace(/<\/?body[^>]*>/gi, '')
-    .replace(/<meta[\s\S]*?>/gi, '')
-    .trim()
-}
-
-function buildAnimationSrcDoc(html: string) {
-  const body = stripOuterHtmlDocument(html)
-  return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; script-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';" />
-  <style>
-    html,body{margin:0;min-height:100%;background:#f8fafc;color:#0f172a;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    body{box-sizing:border-box;padding:0;overflow:auto}
-    *{box-sizing:border-box}
-    svg{max-width:100%;height:auto}
-    code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
-  </style>
-</head>
-<body>${body}</body>
-</html>`
-}
-
 function htmlForDiagram(diagram: WhiteboardDiagram) {
   if (diagram.html?.trim()) return diagram.html.trim()
   const stepHtml = (diagram.steps || [])
@@ -312,8 +280,52 @@ function htmlForDiagram(diagram: WhiteboardDiagram) {
   return stepHtml.join('\n')
 }
 
-function HtmlAnimationBoard({ html, locale }: { html: string; locale: Locale }) {
-  const srcDoc = useMemo(() => buildAnimationSrcDoc(html), [html])
+function compactMarkdown(markdown: string, max = 420) {
+  return markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\|/g, ' ')
+    .replace(/[#*_>`~\-[\]]/g, ' ')
+    .replace(/\$\$?/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max)
+}
+
+function playerPayloadForDiagram(diagram: WhiteboardDiagram, locale: Locale) {
+  const steps = diagram.steps?.length
+    ? diagram.steps
+    : [{ title: diagram.title || (locale === 'zh' ? '白板图' : 'Whiteboard diagram'), markdown: diagram.markdown, mermaid: diagram.mermaid || diagram.source, summary: diagram.summary }]
+  return {
+    locale,
+    title: diagram.title || (locale === 'zh' ? '原理动画白板' : 'Animated principle board'),
+    summary: diagram.summary || [],
+    html: htmlForDiagram(diagram),
+    mermaid: diagram.mermaid || diagram.source || '',
+    steps: steps.slice(0, 6).map((step, index) => ({
+      index: index + 1,
+      stage: step.stage || '',
+      title: step.title || step.stage || `${locale === 'zh' ? '步骤' : 'Step'} ${index + 1}`,
+      summary: step.summary || [],
+      markdown: compactMarkdown(step.markdown || ''),
+      mermaid: step.mermaid || step.source || '',
+      html: step.html || '',
+    })),
+  }
+}
+
+function HtmlAnimationBoard({ diagram, locale }: { diagram: WhiteboardDiagram; locale: Locale }) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const payload = useMemo(() => playerPayloadForDiagram(diagram, locale), [diagram, locale])
+
+  useEffect(() => {
+    const post = () => {
+      iframeRef.current?.contentWindow?.postMessage({ type: 'arena-whiteboard-render', payload }, '*')
+    }
+    post()
+    const timer = window.setTimeout(post, 120)
+    return () => window.clearTimeout(timer)
+  }, [payload])
+
   return (
     <motion.section variants={cardVariants} className="overflow-hidden rounded-xl border border-cyan-200 bg-slate-950 p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between px-1">
@@ -325,11 +337,13 @@ function HtmlAnimationBoard({ html, locale }: { html: string; locale: Locale }) 
         </p>
       </div>
       <iframe
+        ref={iframeRef}
         title={locale === 'zh' ? '白板 HTML 动画' : 'Whiteboard HTML animation'}
-        sandbox=""
+        src="/arena-whiteboard-player.html"
+        sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         className="h-[680px] w-full rounded-lg border border-white/10 bg-slate-50"
-        srcDoc={srcDoc}
+        onLoad={() => iframeRef.current?.contentWindow?.postMessage({ type: 'arena-whiteboard-render', payload }, '*')}
       />
     </motion.section>
   )
@@ -340,8 +354,7 @@ function DirectDiagramBoard({ diagram, locale, viewMode }: { diagram: Whiteboard
     ? diagram.steps
     : [{ title: diagram.title || (locale === 'zh' ? '白板图' : 'Whiteboard diagram'), markdown: diagram.markdown, mermaid: diagram.mermaid || diagram.source, summary: diagram.summary }]
   const finalChart = finalChartForDiagram(diagram, steps, locale)
-  const animationHtml = htmlForDiagram(diagram)
-  const resolvedMode = viewMode === 'html' && animationHtml ? 'html' : 'diagram'
+  const resolvedMode = viewMode
 
   return (
     <div className={`h-full min-h-[640px] overflow-auto text-slate-900 ${resolvedMode === 'html' ? 'bg-slate-950 p-3' : 'bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6'}`}>
@@ -351,8 +364,8 @@ function DirectDiagramBoard({ diagram, locale, viewMode }: { diagram: Whiteboard
         initial="hidden"
         animate="show"
       >
-        {resolvedMode === 'html' && animationHtml ? (
-          <HtmlAnimationBoard html={animationHtml} locale={locale} />
+        {resolvedMode === 'html' ? (
+          <HtmlAnimationBoard diagram={diagram} locale={locale} />
         ) : (
           <>
             {diagram.title ? (
@@ -415,7 +428,6 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
   const [status, setStatus] = useState(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
   const [boardCleared, setBoardCleared] = useState(false)
   const activeDiagram = boardCleared ? null : diagram
-  const activeHtml = activeDiagram ? htmlForDiagram(activeDiagram) : ''
   const [viewMode, setViewMode] = useState<BoardViewMode>('html')
 
   useEffect(() => {
@@ -423,8 +435,8 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
   }, [challengeId, diagram])
 
   useEffect(() => {
-    setViewMode(activeHtml ? 'html' : 'diagram')
-  }, [activeHtml, challengeId])
+    setViewMode(activeDiagram ? 'html' : 'diagram')
+  }, [activeDiagram, challengeId])
 
   useEffect(() => {
     setStatus(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
@@ -451,16 +463,15 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
             <div className="mr-1 inline-flex rounded-md border border-gray-700 bg-[#101010] p-1">
               <button
                 type="button"
-                onClick={() => activeHtml && setViewMode('html')}
-                disabled={!activeHtml}
-                className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${viewMode === 'html' && activeHtml ? 'bg-[#3ce8e2] text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+                onClick={() => setViewMode('html')}
+                className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'html' ? 'bg-[#3ce8e2] text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
               >
                 {locale === 'zh' ? 'HTML' : 'HTML'}
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('diagram')}
-                className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'diagram' || !activeHtml ? 'bg-white text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+                className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'diagram' ? 'bg-white text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
               >
                 {locale === 'zh' ? 'Markdown' : 'Markdown'}
               </button>
@@ -475,7 +486,7 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
         <AnimatePresence mode="wait">
           {activeDiagram ? (
             <motion.div key="diagram" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}>
-              <DirectDiagramBoard diagram={activeDiagram} locale={locale} viewMode={activeHtml ? viewMode : 'diagram'} />
+              <DirectDiagramBoard diagram={activeDiagram} locale={locale} viewMode={viewMode} />
             </motion.div>
           ) : (
             <motion.div key="empty" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="flex h-full min-h-[560px] items-center justify-center p-8 text-center">
