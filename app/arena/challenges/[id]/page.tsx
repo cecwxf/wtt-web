@@ -1067,7 +1067,7 @@ async function responseError(response: Response, fallback: string) {
 }
 
 function arenaSessionActor(session: ArenaSession | null | undefined) {
-  return session?.userId || session?.user?.email || session?.user?.name || 'arena-human'
+  return session?.user?.name || session?.user?.email || session?.userId || 'arena-human'
 }
 
 function isLocalArenaChallenge(challenge: Challenge) {
