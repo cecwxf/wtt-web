@@ -63,16 +63,29 @@ function normalizeJson(value: string): unknown {
 }
 
 function compareOutput(actual: string, expected: string, checker: ChallengeTestCase['checker']) {
+  const normalizedActual = normalizeProgramStdout(actual)
   try {
-    const a = normalizeJson(actual)
+    const a = normalizeJson(normalizedActual)
     const e = normalizeJson(expected)
     if (checker === 'json_unordered_array' && Array.isArray(a) && Array.isArray(e)) {
       return JSON.stringify([...a].sort()) === JSON.stringify([...e].sort())
     }
     return JSON.stringify(a) === JSON.stringify(e)
   } catch {
-    return actual.trim() === expected.trim()
+    return normalizedActual.trim() === expected.trim()
   }
+}
+
+function normalizeProgramStdout(stdout: string) {
+  const trimmed = stdout.trim()
+  const pattern = /(?:^|\n)\s*output\s*=\s*([^\n]+)\s*/g
+  let output: string | null = null
+  let match: RegExpExecArray | null = pattern.exec(trimmed)
+  while (match) {
+    output = match[1].trim()
+    match = pattern.exec(trimmed)
+  }
+  return output || trimmed
 }
 
 function attachPublicCaseData(results: SubmissionResult[], testCases: ChallengeTestCase[]) {

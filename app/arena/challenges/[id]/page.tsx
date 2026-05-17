@@ -475,7 +475,7 @@ __kernel void ${challenge.function_name}(__global const float* input,
     if (challenge.tags.includes('max-subarray')) return '    if (gid == 0) {\n        float best = values[0];\n        float cur = values[0];\n        for (int i = 1; i < n; ++i) {\n            cur = fmax(values[i], cur + values[i]);\n            best = fmax(best, cur);\n        }\n        output[0] = best;\n    }'
     if (challenge.tags.includes('grayscale')) return '    if (gid == 0) output[0] = round(0.299f * 120.0f + 0.587f * (values[0] + 80.0f) + 0.114f * 40.0f);'
     if (challenge.tags.includes('interleave')) return '    if (gid == 0) output[0] = values[0];\n    else if (gid == 1) output[1] = 10.0f;\n    else if (gid == 2) output[2] = values[1];\n    else if (gid == 3) output[3] = 20.0f;\n    else if (gid == 4) output[4] = values[2];\n    else if (gid == 5) output[5] = 30.0f;'
-    return '    // Generic example for larger AI-kernel tasks in this board.\n    // It writes the WTT checksum expected by the deterministic examples.\n    if (gid == 0) {\n        int checksum = 0;\n        for (int i = 0; i < n; ++i) checksum += ((int)(values[i] * 1000.0f)) * (i + 1);\n        output[0] = (float)checksum;\n    }'
+    return '    // Generic deterministic checksum example for larger AI-kernel tasks.\n    if (gid == 0) {\n        int checksum = 0;\n        for (int i = 0; i < n; ++i) checksum += ((int)(values[i] * 1000.0f)) * (i + 1);\n        output[0] = (float)checksum;\n    }'
   })()
 
   return `// Device kernel: vector/scalar AI operator.
@@ -614,7 +614,14 @@ function openClStarter(challenge: Challenge) {
 #include <stdlib.h>
 
 static const char* KERNEL_NAME = "${challenge.function_name}";
-static const char* KERNEL_SOURCE = ${JSON.stringify(kernelSource)};
+
+#define OPENCL_KERNEL_SOURCE(...) #__VA_ARGS__
+
+// Edit the device kernel inside this block. It is stringified for
+// clCreateProgramWithSource, but remains readable as normal OpenCL C.
+static const char* KERNEL_SOURCE = OPENCL_KERNEL_SOURCE(
+${kernelSource.trim()}
+);
 
 static void fail(const char* label, cl_int err) {
   fprintf(stderr, "%s failed: %d\\n", label, err);
