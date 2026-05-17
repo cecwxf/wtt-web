@@ -363,8 +363,8 @@ function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge |
     return locale === 'zh' ? gaokaoVolunteerSkillZh : gaokaoVolunteerSkillEn
   }
   const whiteboardProtocol = locale === 'zh'
-    ? '本轮只输出正常 Arena Chat 回答，不要输出 WHITEBOARD_DIAGRAM。前端会在收到你的回答后自动发起 whiteboard_auto 二次推理请求，把本轮回答转换成 Markdown 白板和 HTML/SVG 动画白板。'
-    : 'For this turn, output only the normal Arena Chat answer and do not output WHITEBOARD_DIAGRAM. After your answer arrives, the frontend will automatically send a whiteboard_auto second-pass request to convert this answer into a Markdown board and HTML/SVG animated board.'
+    ? '本轮先输出正常 Arena Chat 回答，然后在末尾必须附带一个 WHITEBOARD_DIAGRAM JSON 协议块；前端会隐藏协议块，只在 chat 中显示正文，并同步渲染右侧 Markdown/HTML 白板。WHITEBOARD_DIAGRAM 必须包含 format/title/summary/mermaid/html/steps 字段。html 必须基于你刚刚写出的回答生成，不要按 Markdown 四步标题组织；要绘制大尺寸 SVG 主图（viewBox 至少约 1200x560，宽度 100%，主图高度不少于 420px），必须有真实 CSS 动画（@keyframes、stroke-dasharray/stroke-dashoffset 或 transform/opacity），箭头/路径动画结束后要完整可见；必须包含图旁文字说明、公式逐项说明、一个简单示例、动画说明和结论检查清单。不要使用通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。'
+    : 'First output the normal Arena Chat answer, then append one WHITEBOARD_DIAGRAM JSON protocol block at the end. The frontend hides the protocol block from chat and renders the Markdown/HTML board on the right. WHITEBOARD_DIAGRAM must include format/title/summary/mermaid/html/steps. The html must be generated from the answer you just wrote and must not use the four Markdown step headings. Draw a large SVG main diagram with a viewBox of at least about 1200x560, width 100%, and main diagram height at least 420px. Include real CSS animation using @keyframes, stroke-dasharray/stroke-dashoffset, or transform/opacity; arrow/path animation must end fully visible. Include adjacent text explanations, formula-by-formula explanation, one simple example, animation explanation, and conclusion checklist. Do not use generic templates, placeholders, script, JavaScript, iframe, external resources, network images, or forms.'
   if (mode === 'interview_answer') {
     return locale === 'zh'
       ? `chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。${whiteboardProtocol}`
@@ -585,16 +585,17 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         return false
       }
       const payload = extractWhiteboardPayload(content)
-      appliedWhiteboardMessageIdsRef.current.add(messageId)
       if (payload?.diagram) {
+        appliedWhiteboardMessageIdsRef.current.add(messageId)
         setWhiteboardDiagram(payload.diagram)
         return true
-      } else {
-        setWhiteboardDiagram(null)
       }
-      break
     }
     return false
+  }
+
+  function hasNewAppliedWhiteboard(baselineWhiteboardIds: Set<string>) {
+    return Array.from(appliedWhiteboardMessageIdsRef.current).some((id) => !baselineWhiteboardIds.has(id))
   }
 
   const refreshArenaMessages = async (topicId = arenaTopicId) => {
@@ -923,6 +924,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const topicId = await ensureArenaSession()
       const baselineMessages = await refreshArenaMessages(topicId)
       const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
+      const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -947,7 +949,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       await waitForArenaAgentMessage(topicId, baselineKeys)
       const latestMessages = await refreshArenaMessages(topicId)
       const newAgentAnswer = latestNewAgentMessage(latestMessages, baselineKeys)
-      if (newAgentAnswer?.content.trim()) {
+      if (newAgentAnswer?.content.trim() && !hasNewAppliedWhiteboard(baselineWhiteboardIds)) {
         void requestAutoWhiteboardFromAnswer(topicId, newAgentAnswer, message)
       }
       await refreshArenaState().catch(() => undefined)
