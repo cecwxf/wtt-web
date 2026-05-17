@@ -31,6 +31,18 @@ type InterviewBank = {
   patterns: QuestionPattern[]
 }
 
+type ConcreteModuleContext = {
+  scenario: string
+  artifact: string
+  corePath: string
+  failure: string
+  evidence: string
+  scale: string
+  boundary: string
+  compare: string
+  lab: string
+}
+
 const longPatterns: QuestionPattern[] = [
   { key: 'core-path', difficulty: 'easy', title: '核心职责、关键数据结构和调用路径分别是什么？', focus: '解释核心职责、关键对象、入口函数、状态流转和常见误区。' },
   { key: 'lifecycle', difficulty: 'medium', title: '从初始化到释放的完整生命周期如何设计？', focus: '覆盖初始化、注册、引用计数、并发访问、错误回滚和资源释放。' },
@@ -100,6 +112,298 @@ const aiInfraModules: InterviewModule[] = [
   { key: 'security', title: '安全与多租户', focus: '租户隔离、GPU/NIC 共享、密钥、镜像供应链、审计和数据访问控制', tags: ['security', 'multi-tenant'], concepts: ['isolation', 'audit', 'supply chain', 'secret', 'ACL'], whiteboardTemplate: 'system_architecture' },
   { key: 'incident', title: '故障演练', focus: '节点故障、链路降速、拥塞、OOM、驱动重置、checkpoint 恢复和复盘', tags: ['incident', 'reliability'], concepts: ['fault domain', 'checkpoint', 'OOM', 'driver reset', 'postmortem'], whiteboardTemplate: 'evaluation_loop' },
 ]
+
+const linuxConcreteContexts: Record<string, ConcreteModuleContext> = {
+  drivers: {
+    scenario: '你要为一块 PCIe/平台混合形态的数据采集卡写 Linux 驱动，设备通过 device tree 或 PCI BAR 暴露寄存器，并向用户态提供 char device 与 sysfs 调试入口',
+    artifact: 'probe/remove、devm 资源、irq、dma buffer、file_operations、sysfs/debugfs 节点',
+    corePath: '从 bus match 到 probe，完成资源解析、寄存器映射、中断申请、DMA buffer 准备、字符设备注册，再到 open/ioctl/read/write 的调用链',
+    failure: '少量机器热插拔后 remove 卡死，或者 probe 失败路径遗漏释放导致下一次加载驱动失败',
+    evidence: 'dmesg、dynamic_debug、/proc/interrupts、ftrace function_graph、devres log、lspci/resource、sysfs 节点状态',
+    scale: '同一机器从 1 块卡扩到 8 块卡，并发 open/ioctl 增加到几百路',
+    boundary: '用户态传入非法 ioctl 参数、设备树缺字段、中断风暴、DMA 地址不满足设备 mask、probe 中途失败',
+    compare: '手写 unwind 与 devm、miscdevice 与 cdev、sysfs 与 debugfs、poll/read 与 mmap ring buffer',
+    lab: '写一个最小 platform_driver，故意让第 3 个资源申请失败，验证错误回滚和 remove 幂等性',
+  },
+  scheduler: {
+    scenario: '一台 2 路 NUMA 服务器同时跑在线推理服务和离线 batch job，线上 P99 latency 被周期性拉高，但平均 CPU 利用率不高',
+    artifact: 'task_struct、sched_entity、vruntime、runqueue、cgroup cpu.max/cpu.weight、NUMA balancing、sched tracepoint',
+    corePath: '从 wake_up_new_task/enqueue_task 到 pick_next_task，再到 context switch、负载均衡和 cgroup throttling 的关键路径',
+    failure: '在线服务线程被 batch job 抢占或被 cgroup throttle，出现 200ms 级尾延迟尖刺',
+    evidence: 'perf sched timehist、trace-cmd sched_switch/sched_wakeup、/proc/schedstat、cgroup cpu.stat、numastat、runqlat',
+    scale: '核心数翻倍、容器数量翻倍、在线线程绑定策略从默认改成 cpuset 隔离',
+    boundary: 'RT 线程、NOHZ、NUMA 迁移、软中断占用、CPU quota 周期边界',
+    compare: 'CFS/EEVDF 与 RT/deadline、nice 与 cgroup weight、绑核与自动负载均衡、隔离核与共享核',
+    lab: '用 stress-ng 和一个 latency-sensitive echo server 复现 P99 抖动，再用 perf sched 证明等待来自 runqueue 还是 throttling',
+  },
+  memory: {
+    scenario: '线上服务升级内核后出现 kswapd 飙高、direct reclaim 增多，部分容器触发 OOM，但 free 看起来还有不少内存',
+    artifact: 'page table、zone、buddy、slab/slub、LRU、memcg、watermark、vmstat、OOM report',
+    corePath: '从 page fault 或 kmalloc 进入分配路径，经过 zone watermarks、reclaim/compaction、memcg charge 到 OOM 选择',
+    failure: '高阶页分配失败、slab 泄漏、memcg 限制触发 OOM、NUMA 节点局部内存耗尽',
+    evidence: '/proc/zoneinfo、/proc/vmstat、slabtop、page_owner、memcg memory.events、trace mm_page_alloc/mm_vmscan、OOM log',
+    scale: 'QPS 增加 10 倍后 page cache、slab 和匿名页互相挤压',
+    boundary: 'GFP_ATOMIC、THP、NUMA fallback、memory.high 与 memory.max、swap 开关',
+    compare: 'kmalloc/vmalloc、slab/slub、文件页/匿名页、direct reclaim/kswapd、memcg OOM/system OOM',
+    lab: '用 memcg 限制、page_owner 和 slabtop 构造一个可解释的 OOM 现场，并写出三条验证假设',
+  },
+  filesystem: {
+    scenario: '日志服务在 ext4/xfs 上写入吞吐稳定，但每隔几十秒 fsync 延迟尖刺，业务怀疑是 page cache 或 journal 导致',
+    artifact: 'VFS、inode/dentry、address_space、page cache、writeback、journal transaction、block layer bio',
+    corePath: '从 write/pwrite 进入 VFS，经过 page cache 脏页、writeback、journal、bio 提交到设备完成回调',
+    failure: 'fsync 卡在 journal commit、dirty throttle、inode lock contention 或底层设备 flush/FUA',
+    evidence: 'blktrace/bpftrace、trace writeback/jbd2/ext4、/proc/meminfo dirty、iostat、perf lock、filefrag',
+    scale: '单目录百万文件、单文件多线程 append、从本地 NVMe 切到网络盘',
+    boundary: 'O_DIRECT、rename 原子性、崩溃一致性、page cache 回写策略、overlayfs/FUSE 额外开销',
+    compare: 'buffered I/O 与 O_DIRECT、ext4 ordered/writeback/journal、xfs 与 ext4、sync_file_range 与 fsync',
+    lab: '写 fio profile 对比 buffered write、O_DIRECT 和 fsync=1，画出 VFS 到 block layer 的延迟分布',
+  },
+  networking: {
+    scenario: '一台网关升级后在 25GbE 下小包转发丢包，CPU softirq 占用高，业务怀疑 NAPI budget、qdisc 或 GRO 设置有问题',
+    artifact: 'skb、NAPI poll、GRO/GSO、qdisc、netfilter hook、TCP 拥塞控制、XDP/eBPF 程序',
+    corePath: '从 NIC RX ring 中断/NAPI poll 取包，构造 skb，经过协议栈、netfilter/qdisc，到 TX queue 发出',
+    failure: 'softnet backlog drop、qdisc 排队、GRO 聚合失效、RPS/RSS 不均、驱动 ring 满',
+    evidence: 'ethtool -S、/proc/net/softnet_stat、dropwatch、perf top、bpftool prog/profile、tc -s qdisc、nstat',
+    scale: '从 1GbE 到 25/100GbE，小包 PPS 增加 20 倍并叠加 iptables 规则',
+    boundary: 'NAPI budget、IRQ affinity、XDP drop/pass/redirect、TCP retrans、MTU 和 checksum offload',
+    compare: '内核协议栈、XDP、DPDK、tc eBPF、iptables/nftables 的延迟和可维护性取舍',
+    lab: '用 pktgen + dropwatch 复现 softnet drop，并证明瓶颈在 RX ring、NAPI、qdisc 还是用户态消费',
+  },
+  'block-io': {
+    scenario: 'NVMe SSD 在混合读写下 P99.9 延迟突然升高，应用看到 io_uring submit 很快但 completion 延迟异常',
+    artifact: 'bio、request、blk-mq tag、hardware queue、I/O scheduler、flush/FUA、io_uring SQ/CQ',
+    corePath: '从 io_uring 提交到 VFS/block layer，bio 合并，blk-mq 分配 tag，进入 NVMe queue，再完成中断回调',
+    failure: 'blk-mq tag 耗尽、flush storm、I/O scheduler 合并策略不当、NVMe thermal throttling',
+    evidence: 'blktrace、iostat -x、/sys/block/queue、nvme smart-log、trace block_rq_issue/complete、io_uring stats',
+    scale: '队列深度从 32 提到 1024，盘从单块变 RAID/NVMe-oF',
+    boundary: 'read/write 混部、sync flush、multi-queue CPU affinity、direct I/O 对齐、设备掉速',
+    compare: 'io_uring 与 libaio、mq-deadline/none、buffered/direct I/O、本地 NVMe 与 NVMe-oF',
+    lab: '用 fio 构造 randread + fsync write 混合负载，画出 submit/completion/block 三段延迟',
+  },
+  'sync-irq': {
+    scenario: '驱动在高并发下偶发死锁，现场显示一个 CPU 在 hardirq 中拿锁，另一个进程上下文持锁后等待完成量',
+    artifact: 'hardirq/softirq、tasklet/workqueue、spinlock/mutex、RCU、completion、hrtimer、lockdep',
+    corePath: '区分 hardirq、softirq、workqueue 和进程上下文中能否睡眠、能拿什么锁、如何延后处理',
+    failure: 'irq context 使用 mutex、spin_lock 未关中断导致自死锁、RCU grace period 被阻塞',
+    evidence: 'lockdep splat、/proc/interrupts、ftrace irqsoff/preemptoff、sysrq-l、rcu stall log、trace irq_handler_entry',
+    scale: '中断频率提升 10 倍，单队列改多队列，workqueue 从 ordered 改 unbound',
+    boundary: 'atomic context、sleepable RCU、local_bh_disable、timer callback、CPU hotplug',
+    compare: 'spinlock/mutex/rwsem/RCU、tasklet/workqueue/threaded irq、completion/waitqueue',
+    lab: '构造 irq handler + workqueue 的共享队列，解释为何某个锁必须用 spin_lock_irqsave',
+  },
+  'debug-tracing': {
+    scenario: '生产内核不能重启也不能开重日志，你需要定位一次 30 秒发生一次的 20ms 抖动',
+    artifact: 'ftrace、tracepoint、kprobe/uprobes、perf、BPF、crash dump、lockdep、kmemleak',
+    corePath: '从低开销指标发现异常，再逐步打开 tracepoint/kprobe，缩小到函数、锁或设备路径',
+    failure: '观测本身扰动业务、trace buffer 丢事件、kprobe 打在热路径导致额外延迟',
+    evidence: 'trace-cmd report、perf record/script、bpftool prog profile、/sys/kernel/debug/tracing、vmcore',
+    scale: '从单机复现扩展到 1000 台灰度采样，要求自动归因和低开销',
+    boundary: '生产权限、符号缺失、内核版本差异、BPF verifier、NMI/irq 上下文限制',
+    compare: 'printk、ftrace、perf、BPF、crash dump、vendor tracepoint 的适用边界',
+    lab: '设计一个只打开 5 分钟的 trace plan，定位 runqueue 延迟、block I/O 延迟或锁等待中的一个',
+  },
+  'stability-power': {
+    scenario: '手机/边缘设备在 suspend/resume 后偶发外设不可用，同时 thermal 限频导致后台任务延迟',
+    artifact: 'runtime PM、system suspend、wake lock、thermal zone、watchdog、panic/hung task、reboot reason',
+    corePath: '从设备 runtime suspend 到 system suspend，再到 wakeup source、resume callback 和 thermal governor',
+    failure: '设备 resume 顺序错误、wakeup source 泄漏、thermal trip 配置不合理、watchdog 误触发',
+    evidence: 'dmesg suspend log、/sys/kernel/debug/wakeup_sources、thermal sysfs、pstore/ramoops、ftrace power events',
+    scale: '从开发板到量产设备，外设数量增加且电源域/时钟依赖更复杂',
+    boundary: 'noirq suspend、autosuspend delay、shared regulator、panic 后日志保留、低电量场景',
+    compare: 'runtime PM 与 system suspend、thermal governor 取舍、panic/watchdog/hung task 的定位价值',
+    lab: '设计一次 suspend/resume 压测，要求记录 wakeup source、设备回调耗时和失败后的恢复策略',
+  },
+  'boot-security': {
+    scenario: '一台服务器或 Android 设备启动变慢 8 秒，同时安全团队要求验证 LSM/seccomp/cgroup 隔离没有被绕过',
+    artifact: 'bootloader、initcall、module loading、LSM hook、namespace、cgroup、seccomp、capability',
+    corePath: '从 firmware/bootloader 到 kernel initcall、init 进程，再到服务拉起、namespace/cgroup/seccomp 生效',
+    failure: 'initcall 卡慢、模块签名失败、容器 capability 过大、seccomp profile 漏洞',
+    evidence: 'initcall_debug、systemd-analyze、dmesg、audit log、/proc/self/status、lsns、cgroupfs',
+    scale: '节点从裸机服务扩到多租户容器，启动链路必须可审计和可回滚',
+    boundary: 'secure boot、module signing、LSM stacking、user namespace、privileged container',
+    compare: 'capability/seccomp/LSM/cgroup/namespaces 的隔离层次和缺口',
+    lab: '给一个容器逃逸风险样例，要求画出 namespace/cgroup/seccomp/LSM 分别拦截的位置',
+  },
+  'smmu-iommu': {
+    scenario: 'ARM 服务器上接入一张加速卡，开启 SMMU 后 DMA fault 间歇出现，关闭 IOMMU 后问题消失',
+    artifact: 'IOMMU domain、stream ID、IOVA、page table、map/unmap、ATS/PRI、fault report、TLB invalidation',
+    corePath: '从设备 stream ID 绑定 domain，到 dma_map 生成 IOVA，再由 SMMU 做地址翻译和 fault 上报',
+    failure: 'stream ID 配错、IOVA 生命周期错误、unmap 后设备仍 DMA、ATS/PRI 缓存失效',
+    evidence: 'dmesg IOMMU fault、/sys/kernel/iommu_groups、ftrace iommu_map/unmap、设备寄存器、SMMU event queue',
+    scale: '设备从单 function 到 SR-IOV 多 VF，多租户隔离要求更高',
+    boundary: 'identity mapping、strict/lazy invalidation、DMA mask、coherent/non-coherent 设备',
+    compare: '直通 DMA 与 IOMMU 隔离、SMMU v2/v3、ATS/PRI 开关、strict 与 non-strict 模式',
+    lab: '设计一个 DMA-after-unmap 的复现实验，说明如何从 fault address 反推 buffer 生命周期问题',
+  },
+  dma: {
+    scenario: '网卡驱动在 ARM 平台上偶发收到旧数据，x86 上正常，怀疑 coherent/streaming DMA 或 cache maintenance 使用错误',
+    artifact: 'dma_map_single、dma_alloc_coherent、scatterlist、DMAengine descriptor、cache maintenance、bounce buffer',
+    corePath: '从 CPU buffer 准备、dma_map 建立设备可见地址、设备 DMA、completion 到 dma_unmap/sync 的生命周期',
+    failure: 'streaming DMA 忘记 sync、方向标错、scatterlist 边界错误、IOMMU bounce buffer 影响性能',
+    evidence: 'dma-debug、ftrace dma_map_ops、IOMMU fault、cache miss/perf、设备 descriptor dump',
+    scale: 'buffer 从 4KB 增加到 1MB，单队列变多队列，NUMA 和 IOMMU 都打开',
+    boundary: 'coherent vs non-coherent、DMA_TO_DEVICE/FROM_DEVICE、cache line 对齐、32-bit DMA mask',
+    compare: 'coherent DMA 与 streaming DMA、CPU copy 与 DMAengine、scatter-gather 与连续 buffer',
+    lab: '给一段伪代码找 DMA API 使用错误，并说明为什么只在 ARM non-coherent 平台复现',
+  },
+  pcie: {
+    scenario: 'PCIe 加速卡在某些服务器上只能训练到 Gen3 x8，且 AER 偶发报 Correctable Error，业务吞吐下降',
+    artifact: 'PCIe enumeration、BAR、MSI/MSI-X、ASPM、AER、hotplug、ATS/PRI、root port capability',
+    corePath: '从枚举配置空间、分配 BAR、开启 bus mastering/MSI-X，到驱动建立队列和错误恢复',
+    failure: '链路降速/降宽、MSI-X vector 不足、AER recovery 不完整、ASPM 导致延迟尖刺',
+    evidence: 'lspci -vv、setpci、dmesg AER、pciehp log、ethtool/设备 counters、root port capability',
+    scale: '单卡到 8 卡，拓扑跨 NUMA/root complex，热插拔和错误恢复必须在线完成',
+    boundary: 'BAR 64-bit prefetchable、IOMMU、ACS、ASPM policy、AER fatal/non-fatal/correctable',
+    compare: 'MSI/MSI-X/INTx、polling 与 interrupt、ASPM 开关、SR-IOV VF 与 PF 管理',
+    lab: '设计一套 PCIe bring-up checklist：链路、BAR、中断、DMA、AER、热插拔分别如何验证',
+  },
+  'v4l2-media': {
+    scenario: '摄像头 pipeline 从 sensor 到 ISP 再到 video node，偶发第一帧黑屏或 buffer underrun',
+    artifact: 'V4L2 subdev、media graph、vb2 buffer、mmap/userptr/dmabuf、streamon/streamoff、format negotiation',
+    corePath: '从 media entity link setup、format propagation、queue buffer，到 streamon 启动 sensor/ISP/DMA',
+    failure: 'subdev format 不一致、buffer 生命周期错误、dmabuf cache 同步遗漏、streamoff 回收竞态',
+    evidence: 'media-ctl graph、v4l2-ctl --stream-mmap、trace v4l2/vb2、dmesg、ISP frame counter',
+    scale: '单摄到多摄同步，分辨率从 1080p 到 4K60，buffer 数和带宽压力上升',
+    boundary: 'mmap/userptr/dmabuf、multi-planar format、pipeline link、frame interval、热插拔',
+    compare: 'V4L2 video node 与 subdev、mmap/userptr/dmabuf、同步启动与异步 pipeline',
+    lab: '画出 sensor->CSI->ISP->memory 的 media graph，并指出 format negotiation 失败会在哪里暴露',
+  },
+  usb: {
+    scenario: 'USB 摄像头接在 Type-C dock 后偶发断流，dmesg 出现 reset high-speed USB device 和 autosuspend 相关日志',
+    artifact: 'USB device/config/interface/endpoint descriptor、URB、host controller、gadget、Type-C/PD、autosuspend',
+    corePath: '从枚举读取 descriptor、选择 configuration/interface，到提交 URB、完成回调和错误恢复',
+    failure: 'URB -EPIPE/-ETIMEDOUT、autosuspend 过早、带宽不足、hub reset、Type-C 电源协商异常',
+    evidence: 'usbmon、dmesg、lsusb -v、powertop、host controller counters、Type-C partner sysfs',
+    scale: '单设备扩展到多个高带宽等时设备共享 hub',
+    boundary: 'control/bulk/interrupt/isochronous endpoint、autosuspend delay、U1/U2、gadget role switch',
+    compare: 'bulk 与 isochronous、轮询与中断端点、autosuspend 开关、host 与 gadget 驱动',
+    lab: '用 usbmon 分析一次摄像头断流，要求从 URB 状态码定位是设备、hub、host 还是电源问题',
+  },
+  'tty-terminal': {
+    scenario: '串口控制台在高日志量下丢字符，用户态 pty 程序偶发 hangup 后无法恢复',
+    artifact: 'TTY core、line discipline、tty_driver、uart_port、console、pty、termios、flip buffer',
+    corePath: '从硬件中断收字符进入 flip buffer，经 line discipline 到 read，再到 write/console 输出路径',
+    failure: 'flip buffer overflow、termios 配置错误、console lock contention、hangup 生命周期处理不完整',
+    evidence: 'stty、/proc/tty/driver/serial、ftrace tty/uart、dmesg console loglevel、perf lock',
+    scale: '日志从低频交互变成高频 console dump，串口波特率和 CPU 中断压力成为瓶颈',
+    boundary: 'canonical/raw mode、flow control、console early/normal、pty master/slave、hangup signal',
+    compare: 'console/tty/pty/serial driver、poll/read、硬件流控与软件流控',
+    lab: '设计一个复现串口丢字符的实验，并说明如何判断瓶颈在 UART FIFO、IRQ、TTY buffer 还是用户态读取',
+  },
+}
+
+const aiInfraConcreteContexts: Record<string, ConcreteModuleContext> = {
+  'pcie-cxl': {
+    scenario: '训练集群新上 CXL 内存扩展盒，GPU 通过 PCIe switch 访问 host/CXL memory，部分节点出现链路降速和 DMA timeout',
+    artifact: 'PCIe topology、BAR/MSI-X、DMA mapping、ATS/PRI、CXL.cache/mem、link training、NUMA distance',
+    corePath: '从设备枚举、BAR 映射、DMA/ATS 建立，到 CXL memory 被 runtime/训练进程纳入 NUMA memory pool',
+    failure: 'Gen5 降到 Gen4、ACS/ATS 配置不一致、CXL memory latency 抖动、DMA timeout',
+    evidence: 'lspci -tvvv、cxl list、dmesg AER/CXL、numactl -H、perf c2c、PCIe counters',
+    scale: '单节点 1 个 CXL 盒扩到多 switch、多 GPU、多租户共享 memory pool',
+    boundary: 'NUMA placement、IOMMU strict mode、CXL type-3 memory、hotplug、firmware/BIOS 配置',
+    compare: '本地 DRAM、CXL memory、NVMe spill、GPU HBM 的延迟/带宽/隔离取舍',
+    lab: '设计一个 benchmark 区分 CXL latency 抖动、PCIe 降速和 NUMA 放置错误',
+  },
+  rdma: {
+    scenario: 'RoCEv2 训练网络在 AllReduce 高峰出现吞吐塌陷，PFC pause 帧暴增但应用只看到 NCCL timeout',
+    artifact: 'QP/CQ/MR、RDMA write/read/send、RoCEv2、PFC/ECN、DCQCN、memory registration、NCCL transport',
+    corePath: '从注册内存、建立 QP、post send/recv，到 CQ completion、拥塞反馈和重传/超时处理',
+    failure: 'PFC storm、ECN 标记不足、MR 注册缓存失效、CQ overrun、QP retry exceeded',
+    evidence: 'perftest、rdma res、ethtool -S、switch PFC/ECN counters、NCCL_DEBUG、DCQCN stats',
+    scale: '从 8 卡单机扩到 1024 卡多机，incast 和跨 pod 流量明显增加',
+    boundary: 'lossless 网络假设、MTU、GID/SL/traffic class、NUMA affinity、注册内存大小',
+    compare: 'RoCE 与 InfiniBand、RDMA write/read/send、TCP fallback、PFC 与 ECN/DCQCN',
+    lab: '给一段 NCCL timeout 日志和交换机 PFC counters，要求判断是端侧、网络侧还是拓扑问题',
+  },
+  network: {
+    scenario: 'AI 数据面同时承载训练 AllReduce、checkpoint 上传和在线推理流量，某个 rack 出现周期性丢包和 reorder',
+    artifact: 'DPDK/XDP fast path、RSS、ECMP、QoS queue、ACL、telemetry、flow hashing',
+    corePath: '从 NIC RX/TX queue、RSS hash、内核/XDP/DPDK 处理，到交换机 ECMP/QoS 转发',
+    failure: 'ECMP hash 极化、QoS 队列饿死、RSS 不均、ACL 慢路径、microburst 丢包',
+    evidence: 'switch queue counters、sFlow/INT、ethtool -S、XDP stats、DPDK telemetry、packet capture',
+    scale: '从单 rack 到多 pod，链路 oversubscription 从 1:1 到 3:1',
+    boundary: 'MTU/jumbo frame、RDMA lossless、ECMP seed、QoS mapping、telemetry 采样误差',
+    compare: '内核网络、XDP、DPDK、SmartNIC offload、交换机 QoS 的工程取舍',
+    lab: '设计一次 microburst 复现和观测实验，证明丢包发生在服务器 NIC、ToR 还是 spine',
+  },
+  cluster: {
+    scenario: '一个 512 GPU 训练任务吞吐只有预期 60%，拓扑显示跨 IB spine 的流量异常高，调度器没有感知 NVLink/NUMA',
+    artifact: 'GPU/NPU topology、NVLink、InfiniBand、NCCL graph、MIG、故障域、拓扑感知调度',
+    corePath: '从作业申请资源、调度 placement、NCCL 拓扑发现，到 AllReduce ring/tree 构建',
+    failure: '跨 NUMA/跨 rack 放置、NVLink 断链、MIG 隔离不当、故障域过于集中',
+    evidence: 'nvidia-smi topo -m、NCCL graph dump、ibstat/perfquery、scheduler placement log、DCGM metrics',
+    scale: '从 8 卡扩到 512/4096 卡，通信拓扑和故障恢复成为主瓶颈',
+    boundary: 'heterogeneous GPU、MIG、IB rail、NCCL algorithm、node failure、maintenance drain',
+    compare: 'ring/tree/CollNet、拓扑感知与 binpack、MIG 共享与整卡独占',
+    lab: '给定 4 个 rack 的 GPU/IB 拓扑，要求设计一个 placement 策略并估算 AllReduce 瓶颈',
+  },
+  storage: {
+    scenario: '预训练数据从对象存储读取，GPU 利用率周期性掉到 30%，同时 checkpoint 写入会拖慢训练',
+    artifact: 'object storage、NVMe cache、prefetch queue、dataset shard、checkpoint writer、NVMe-oF',
+    corePath: '从样本索引、远端读取、节点本地缓存、dataloader prefetch，到 GPU batch 消费和 checkpoint 异步写入',
+    failure: '小文件放大、cache miss、checkpoint burst、对象存储限流、数据 shard 热点',
+    evidence: 'GPU util、dataloader time、S3/object metrics、NVMe iostat、cache hit ratio、training step time',
+    scale: '数据从 10TB 到 10PB，训练节点从 8 台到 1000 台',
+    boundary: 'shuffle 随机性、epoch 边界、checkpoint 一致性、恢复时间目标 RTO、缓存淘汰',
+    compare: '对象存储直读、本地 NVMe cache、分布式文件系统、NVMe-oF 的成本和瓶颈',
+    lab: '设计一个数据管道压测，证明 GPU 空转是存储、CPU decode、网络还是 dataloader 造成',
+  },
+  scheduler: {
+    scenario: '平台同时运行预训练、微调、推理和 notebook，VIP 训练任务要求 gang scheduling，但普通用户抱怨排队时间过长',
+    artifact: 'Kubernetes/Slurm queue、quota、priority、gang scheduling、preemption、elastic training、checkpoint',
+    corePath: '从用户提交作业、资源配额检查、队列排序、gang 分配，到抢占/恢复和弹性扩缩',
+    failure: 'gang 任务长期饿死、小任务被大任务阻塞、抢占导致 checkpoint 风暴、GPU 碎片化',
+    evidence: 'scheduler event、queue latency、GPU fragmentation、preemption count、checkpoint duration、tenant quota usage',
+    scale: '租户从 5 个到 200 个，GPU 型号混合，作业时长从分钟到数周',
+    boundary: 'quota hard/soft、priority inversion、heterogeneous GPU、node drain、spot/preemptible capacity',
+    compare: 'Kubernetes 与 Slurm、binpack 与 spread、gang scheduling 与 elastic training、抢占与排队',
+    lab: '给一个队列快照，要求决定是否抢占、抢占谁、如何避免 checkpoint 风暴',
+  },
+  observability: {
+    scenario: '训练平台每天都有 NCCL timeout、GPU Xid、PCIe replay 和 dataloader slowdown，但告警太多无法定位主因',
+    artifact: 'GPU/NIC/PCIe metrics、DCGM、distributed trace、profiling、alert rule、RCA workflow、capacity forecast',
+    corePath: '从端侧指标采集、作业维度聚合、trace 串联 step，到告警降噪和根因候选排序',
+    failure: '指标维度爆炸、采样丢失、时间戳不对齐、告警风暴、根因和症状混淆',
+    evidence: 'DCGM exporter、Prometheus labels、OpenTelemetry trace、NCCL logs、Xid events、PCIe counters',
+    scale: '从百卡到万卡，指标 cardinality 和存储成本成为平台问题',
+    boundary: '租户隔离、日志脱敏、采样率、时钟同步、指标保留周期',
+    compare: 'metrics/logs/traces/profiles、作业视角与节点视角、实时告警与离线 RCA',
+    lab: '设计一个从 NCCL timeout 自动关联到 GPU/NIC/PCIe/网络的 dashboard 和告警树',
+  },
+  serving: {
+    scenario: '多租户 LLM 推理平台在晚高峰 TTFT 超过 SLA，KV cache 显存逼近上限，部分租户请求被排队 20 秒',
+    artifact: 'request router、prefill/decode pool、KV cache、continuous batching、autoscaler、SLA/cost policy',
+    corePath: '从请求进入路由、排队 admission、prefill、decode、streaming output，到计费和指标上报',
+    failure: 'prefill 堵塞 decode、KV cache 碎片、batching 牺牲尾延迟、路由策略导致热点模型过载',
+    evidence: 'TTFT/TPOT、queue time、batch size、KV cache usage、GPU util、OOM log、tenant SLA dashboard',
+    scale: '模型从 3 个扩到 100 个，租户从内部测试到公开 API',
+    boundary: '长上下文、streaming 断连、priority、模型热加载、灰度回滚、安全过滤',
+    compare: '静态 batch、continuous batching、prefill/decode 分离、大小模型级联、serverless 冷启动',
+    lab: '给一组 TTFT/TPOT/KV cache 指标，要求判断该扩 prefill、decode 还是限流长上下文',
+  },
+  security: {
+    scenario: '多租户 AI 平台允许用户上传镜像和数据集，同时共享 GPU/NIC，需要防止数据泄露和供应链攻击',
+    artifact: 'tenant isolation、GPU/NIC sharing、image scanning、secret management、audit log、data ACL、network policy',
+    corePath: '从用户认证授权、镜像准入、作业运行时隔离、数据访问，到日志审计和 incident response',
+    failure: '镜像内嵌密钥、容器越权挂载数据集、GPU memory residual、日志泄露 prompt/data',
+    evidence: 'audit log、Kubernetes admission event、image scan report、IAM policy diff、network flow log、secret access log',
+    scale: '从内部团队共享扩到外部客户多租户，合规和审计要求上升',
+    boundary: 'privileged pod、hostPath、MIG/SR-IOV 隔离、数据分级、密钥轮换、日志脱敏',
+    compare: 'namespace/RBAC/network policy、VM 隔离、MIG、机密计算、镜像签名的边界',
+    lab: '设计一个恶意镜像准入测试，说明 admission、runtime、审计各层如何拦截',
+  },
+  incident: {
+    scenario: '一次大训练在 70% 进度时多节点 NCCL timeout，随后触发驱动 reset 和 OOM，checkpoint 也无法立即恢复',
+    artifact: 'fault domain、node health、driver reset、OOM killer、checkpoint consistency、job restart policy、postmortem',
+    corePath: '从告警发现、止血隔离节点、保留证据、恢复 checkpoint，到根因复盘和长期预防',
+    failure: '自动重试扩大影响、checkpoint 损坏、驱动 reset 后 GPU 不可用、故障节点再次被调度',
+    evidence: 'NCCL logs、dmesg Xid/OOM、scheduler event、checkpoint metadata、network counters、node health history',
+    scale: '从单作业事故扩展到全平台同类故障演练和自动化隔离',
+    boundary: 'RTO/RPO、证据保留、租户通知、自动 drain、灰度恢复、复盘 action owner',
+    compare: '立即重试、降级规模、回滚驱动、隔离 rack、从上一个 checkpoint 恢复的取舍',
+    lab: '写一份 30 分钟止血 runbook：谁看什么信号，何时停止重试，何时恢复训练',
+  },
+}
 
 const icModules: InterviewModule[] = [
   { key: 'spec-arch', title: '规格/架构', focus: 'PRD 到 micro-architecture、接口协议、吞吐/面积/功耗约束和架构评审', tags: ['architecture', 'spec'], concepts: ['micro-architecture', 'PPA', 'interface', 'review', 'constraint'], whiteboardTemplate: 'system_architecture' },
@@ -227,6 +531,29 @@ const banks: InterviewBank[] = [
 ]
 
 function descriptionFor(bank: InterviewBank, module: InterviewModule, pattern: QuestionPattern) {
+  const concrete = concreteQuestionFor(bank, module, pattern)
+  if (concrete) {
+    return `${bank.title} / ${module.title}
+
+题目：${bank.title}：${module.title}：${concrete.title}
+
+真实场景：${concrete.context.scenario}
+
+你需要回答：
+1. 先画出端到端关键路径：${concrete.context.corePath}
+2. 明确关键对象/数据结构/接口：${concrete.context.artifact}
+3. 解释为什么会出现这个问题：${concrete.context.failure}
+4. 给出你会收集的证据：${concrete.context.evidence}
+5. 说明边界条件和容易误判的点：${concrete.context.boundary}
+6. 给一个最小实验或验证方法：${concrete.context.lab}
+
+考察重点：${concrete.focus}
+
+白板提示：画出「正常路径 -> 异常分支 -> 观测信号 -> 验证实验 -> 修复/取舍」；不要画成通用流程图，必须落到 ${module.concepts.slice(0, 5).join('、')}。
+
+追问方向：${concrete.followUps.join(' / ')}`
+  }
+
   return `${bank.title} / ${module.title}
 
 题目：${bank.title}：${module.title}：${pattern.title.replace('{focus}', module.focus)}
@@ -238,12 +565,129 @@ function descriptionFor(bank: InterviewBank, module: InterviewModule, pattern: Q
 追问方向：如果线上出问题先看什么证据？如何证明你的判断？规模或约束变化后方案如何调整？`
 }
 
+function concreteQuestionFor(bank: InterviewBank, module: InterviewModule, pattern: QuestionPattern) {
+  const context = bank.prefix === 'linux-kernel'
+    ? linuxConcreteContexts[module.key]
+    : bank.prefix === 'ai-infra'
+    ? aiInfraConcreteContexts[module.key]
+    : undefined
+  if (!context) return null
+
+  const variants: Record<string, { title: string; focus: string; followUps: string[] }> = {
+    'core-path': {
+      title: `围绕“${context.failure}”，${module.title}的正常关键路径应该怎么走？`,
+      focus: `要求从具体场景出发讲清 ${context.corePath}，并解释 ${context.artifact} 的职责、生命周期和常见误区。`,
+      followUps: [`${context.artifact} 中哪个对象最容易出现生命周期错误？`, '如果只能画一张图，你会把同步路径和异步回调如何区分？', `如何用 ${context.evidence.split('、').slice(0, 2).join(' 和 ')} 证明路径真的被执行？`],
+    },
+    lifecycle: {
+      title: `${context.artifact} 要上线时，初始化、失败回滚和释放路径怎么设计？`,
+      focus: `围绕 ${context.scenario} 设计完整生命周期，特别说明中途失败、并发访问、资源释放和重复初始化的处理。`,
+      followUps: ['中途第 3 个资源申请失败时如何回滚？', '释放路径如何做到幂等？', `哪些资源应该延后到真正使用 ${module.concepts[0]} 时再申请？`],
+    },
+    'perf-debug': {
+      title: `${context.failure} 时，你如何一步步证明性能瓶颈在哪里？`,
+      focus: `不要泛泛说 perf/trace；要基于 ${context.evidence} 设计分层观测，区分等待、排队、硬件、锁和配置问题。`,
+      followUps: ['第一个低成本指标看什么？', '如何设计反事实实验排除错误假设？', `如果 ${context.scale}，瓶颈判断会怎样变化？`],
+    },
+    race: {
+      title: `${context.failure} 背后如果是竞态、死锁或时序问题，你会怀疑哪条路径？`,
+      focus: `结合 ${context.boundary} 说明并发上下文、锁粒度、状态迁移和最小修复，不能只说“加锁”。`,
+      followUps: ['哪些路径可能在中断/异步/回调上下文执行？', '如何证明不是观测工具引入的扰动？', '最小修复和长期重构分别是什么？'],
+    },
+    failure: {
+      title: `线上已经出现 ${context.failure}，请给出 30 分钟内的排查路径。`,
+      focus: `按止血、证据保留、定位、恢复和复盘组织回答，必须说清 ${context.evidence} 的优先级。`,
+      followUps: ['什么时候停止自动重试？', '哪些证据会被重启或恢复动作破坏？', '如何把这次事故变成回归测试？'],
+    },
+    'api-contract': {
+      title: `${context.artifact} 暴露给上层时，接口契约、边界和错误语义怎么定义？`,
+      focus: `基于 ${context.artifact} 说明输入校验、错误码、权限/隔离、版本演进和兼容性，不允许只讲 API 命名。`,
+      followUps: ['哪些错误必须同步返回，哪些适合异步通知？', '如何处理老版本用户态或老固件？', `安全边界如何覆盖 ${context.boundary}？`],
+    },
+    latency: {
+      title: `请把“${context.failure}”拆成可测量的端到端延迟关键路径。`,
+      focus: `拆出同步等待、异步队列、硬件交互、缓存/内存路径，并说明每段用什么证据测量。`,
+      followUps: ['P50 和 P99 分别可能受什么影响？', '如何判断是排队还是执行慢？', `如果 ${context.scale}，哪一段最先恶化？`],
+    },
+    memory: {
+      title: `${context.artifact} 里的 buffer、缓存和对象所有权如何设计，怎样避免泄漏或 use-after-free？`,
+      focus: `结合 ${context.artifact} 讲清分配位置、所有权、释放时机、失败回滚、压力测试和泄漏检测。`,
+      followUps: ['谁拥有 buffer，谁只借用引用？', '如何构造泄漏或 UAF 的最小复现？', `哪些 ${context.boundary} 会改变内存策略？`],
+    },
+    security: {
+      title: `围绕 ${context.boundary}，权限、安全和隔离风险具体在哪里？`,
+      focus: `要求指出攻击面、越权路径、信息泄露点、隔离边界和审计证据，必须落到 ${context.boundary}。`,
+      followUps: ['哪个输入最不可信？', '如何证明隔离边界真的生效？', '日志里哪些字段必须脱敏或限权？'],
+    },
+    testability: {
+      title: `请为“${context.failure}”设计一个能教会新人定位问题的最小实验。`,
+      focus: `实验必须能复现 ${context.failure} 或验证 ${context.corePath}，包含输入、观测、预期结果和失败解释。`,
+      followUps: ['实验如何避免偶然通过？', '哪些指标必须自动采集？', '如何把实验纳入 CI 或回归门禁？'],
+    },
+    bringup: {
+      title: `新机器/新平台第一次 bring-up ${module.title} 时，你会按什么顺序验证 ${context.artifact}？`,
+      focus: `从最小链路开始，逐步验证 ${context.artifact}、配置、硬件/平台依赖和异常恢复。`,
+      followUps: ['第一条必须成功的最小链路是什么？', '失败后如何判断是软件配置还是硬件/固件问题？', '哪些检查必须自动化？'],
+    },
+    compat: {
+      title: `遇到 ${context.boundary} 时，跨版本/跨硬件兼容性最容易踩哪些坑？`,
+      focus: `围绕 ${context.boundary} 说明能力探测、fallback、版本矩阵、灰度和回滚。`,
+      followUps: ['哪些能力不能靠版本号判断？', 'fallback 会牺牲什么指标？', '兼容性测试矩阵如何收敛？'],
+    },
+    observability: {
+      title: `为了定位“${context.failure}”，如果只能加 8 个指标或 trace 点，你会放在哪里？`,
+      focus: `指标必须覆盖 ${context.corePath} 的入口、关键状态、队列/等待、错误分支和恢复结果。`,
+      followUps: ['哪个指标最容易误导？', '如何控制采样成本？', `如何把 ${context.evidence} 关联到同一次请求或作业？`],
+    },
+    bottleneck: {
+      title: `你认为这个场景最可能的第一瓶颈是什么，如何用实验推翻自己？`,
+      focus: `基于 ${context.scale} 和 ${context.compare} 做假设排序，用指标和反事实实验证明或推翻。`,
+      followUps: ['如果实验结果相反，下一假设是什么？', '如何避免只优化局部指标？', '瓶颈移动后白板图怎么改？'],
+    },
+    fallback: {
+      title: `当 ${context.failure} 发生时，如何降级、隔离和恢复而不扩大影响？`,
+      focus: `讨论超时、重试、隔离、回滚、数据一致性和用户/租户可感知影响，不能只说“重启服务”。`,
+      followUps: ['何时降级，何时直接 fail fast？', '自动恢复的停止条件是什么？', '如何验证降级没有破坏一致性或安全边界？'],
+    },
+    'data-flow': {
+      title: `请画出 ${context.failure} 对应的数据流、控制流、状态机和异常分支。`,
+      focus: `图中必须包含 ${context.artifact}、正常路径、${context.failure} 的异常路径、观测点和恢复路径。`,
+      followUps: ['哪些边是同步调用，哪些边是异步回调？', '状态机里哪个状态最容易卡住？', '如何从一条日志定位到图中的节点？'],
+    },
+    compare: {
+      title: `面对 ${context.failure}，${context.compare} 应该如何取舍？`,
+      focus: `比较性能、可靠性、安全、复杂度、可观测性和团队维护成本，必须结合 ${context.scenario}。`,
+      followUps: ['哪个方案短期最安全，哪个长期最可维护？', '如果约束变成低延迟优先，选择会变吗？', '如何用实验而不是偏好做决策？'],
+    },
+    capacity: {
+      title: `如果 ${context.scale}，原方案哪里会先失效？`,
+      focus: `要求做容量估算、热点分析、资源隔离和压测设计，指出第一个会被打满的队列/锁/链路/缓存。`,
+      followUps: ['容量公式里最不确定的参数是什么？', '扩容前能做哪些软件侧优化？', '如何设计压测避免假乐观？'],
+    },
+    incident: {
+      title: `把 ${context.failure} 当成一次真实事故：你如何止血、恢复、复盘？`,
+      focus: `给出时间线、证据保留、影响面、恢复动作、根因验证、长期修复和 owner，不要写抽象流程。`,
+      followUps: ['前 10 分钟做什么？', '哪些动作可能破坏证据？', '复盘 action 如何变成可验证的门禁？'],
+    },
+    'design-review': {
+      title: `评审 ${context.scenario} 的设计文档时，你会抓住哪 6 个具体问题？`,
+      focus: `评审必须覆盖 ${context.corePath}、${context.failure}、${context.evidence}、${context.boundary} 和 ${context.scale}。`,
+      followUps: ['哪个问题如果答不上来就不能上线？', '如何把设计评审转成测试计划？', '哪些风险需要灰度而不是一次性上线？'],
+    },
+  }
+
+  const selected = variants[pattern.key] || variants['core-path']
+  return { ...selected, context }
+}
+
 function makeBankChallenges(bank: InterviewBank): Challenge[] {
   const rows = bank.patterns.flatMap((pattern) => bank.modules.map((module) => {
     const id = `${bank.prefix}-${module.key}-${pattern.key}`
+    const concrete = concreteQuestionFor(bank, module, pattern)
+    const title = concrete?.title || pattern.title.replace('{focus}', module.focus)
     return {
       id,
-      title: `${bank.title}：${module.title}：${pattern.title.replace('{focus}', module.focus)}`,
+      title: `${bank.title}：${module.title}：${title}`,
       slug: id,
       description: descriptionFor(bank, module, pattern),
       difficulty: pattern.difficulty,
@@ -264,9 +708,11 @@ function makeBankChallenges(bank: InterviewBank): Challenge[] {
         '能回答约束变化、故障场景和工程取舍。',
       ],
       follow_up_questions: [
-        `如果 ${module.concepts[0]} 出现异常，你第一步看什么？`,
-        '如何用最小实验验证你的根因判断？',
-        '如果规模扩大 10 倍，哪个环节先成为瓶颈？',
+        ...(concrete?.followUps || [
+          `如果 ${module.concepts[0]} 出现异常，你第一步看什么？`,
+          '如何用最小实验验证你的根因判断？',
+          '如果规模扩大 10 倍，哪个环节先成为瓶颈？',
+        ]),
       ],
       whiteboard_template: module.whiteboardTemplate,
       published: true,
