@@ -435,8 +435,8 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
   }, [challengeId, diagram])
 
   useEffect(() => {
-    setViewMode(activeDiagram ? 'html' : 'diagram')
-  }, [activeDiagram, challengeId])
+    setViewMode('html')
+  }, [challengeId, diagram])
 
   useEffect(() => {
     setStatus(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
@@ -459,24 +459,22 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
           <p className="mt-1 text-xs leading-5 text-gray-500">{labels.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {activeDiagram ? (
-            <div className="mr-1 inline-flex rounded-md border border-gray-700 bg-[#101010] p-1">
-              <button
-                type="button"
-                onClick={() => setViewMode('html')}
-                className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'html' ? 'bg-[#3ce8e2] text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-              >
-                {locale === 'zh' ? 'HTML' : 'HTML'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('diagram')}
-                className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'diagram' ? 'bg-white text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-              >
-                {locale === 'zh' ? 'Markdown' : 'Markdown'}
-              </button>
-            </div>
-          ) : null}
+          <div className="mr-1 inline-flex rounded-md border border-gray-700 bg-[#101010] p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('html')}
+              className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'html' ? 'bg-[#3ce8e2] text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              HTML
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('diagram')}
+              className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'diagram' ? 'bg-white text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              Markdown
+            </button>
+          </div>
           <button onClick={onExplain} disabled={busy} className="rounded-md bg-gradient-to-r from-violet-300 to-fuchsia-500 px-3 py-2 text-xs font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{busy ? '...' : labels.explain}</button>
           {onToggleExpand ? <button onClick={onToggleExpand} className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 hover:border-amber-200">{labels.expand}</button> : null}
           <button onClick={clearBoard} className="rounded-md border border-gray-700 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-300 hover:border-gray-500">{labels.clear}</button>
@@ -485,8 +483,22 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
       <div className="relative min-h-[560px] flex-1 bg-slate-50">
         <AnimatePresence mode="wait">
           {activeDiagram ? (
-            <motion.div key="diagram" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}>
+            <motion.div key={`diagram-${viewMode}`} className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}>
               <DirectDiagramBoard diagram={activeDiagram} locale={locale} viewMode={viewMode} />
+            </motion.div>
+          ) : viewMode === 'html' ? (
+            <motion.div key="html-empty" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}>
+              <HtmlAnimationBoard
+                locale={locale}
+                diagram={{
+                  title: locale === 'zh' ? '本地 HTML 动画白板' : 'Local HTML animation board',
+                  summary: [locale === 'zh' ? 'wtt-web 已加载本地 HTML player，生成白板后会把 Agent 内容传入这里渲染。' : 'wtt-web has loaded the local HTML player. Generated whiteboard content will render here.'],
+                  steps: [
+                    { title: locale === 'zh' ? '等待输入' : 'Waiting for input', markdown: locale === 'zh' ? '点击生成白板后，本地 HTML 文件会加载 diagram/steps 并生成动画。' : 'Click generate board; the local HTML file will load diagram/steps and generate animation.' },
+                    { title: locale === 'zh' ? 'HTML 渲染' : 'HTML rendering', markdown: locale === 'zh' ? 'HTML 模式由 /arena-whiteboard-player.html 提供，不依赖 Agent 一定输出 html 字段。' : 'HTML mode is provided by /arena-whiteboard-player.html and does not require the Agent to output an html field.' },
+                  ],
+                }}
+              />
             </motion.div>
           ) : (
             <motion.div key="empty" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="flex h-full min-h-[560px] items-center justify-center p-8 text-center">
