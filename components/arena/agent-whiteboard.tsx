@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -24,6 +24,8 @@ type Props = {
 }
 
 type BoardViewMode = 'diagram' | 'html'
+type WhiteboardPlayerStep = { index: number; stage: string; title: string; summary: string[]; markdown: string; mermaid: string; html: string }
+type WhiteboardPlayerPayload = { locale: Locale; title: string; summary: string[]; html: string; mermaid: string; steps: WhiteboardPlayerStep[] }
 
 const smoothEase = [0.22, 1, 0.36, 1] as const
 
@@ -291,7 +293,7 @@ function compactMarkdown(markdown: string, max = 420) {
     .slice(0, max)
 }
 
-function playerPayloadForDiagram(diagram: WhiteboardDiagram, locale: Locale) {
+function playerPayloadForDiagram(diagram: WhiteboardDiagram, locale: Locale): WhiteboardPlayerPayload {
   const steps = diagram.steps?.length
     ? diagram.steps
     : [{ title: diagram.title || (locale === 'zh' ? '白板图' : 'Whiteboard diagram'), markdown: diagram.markdown, mermaid: diagram.mermaid || diagram.source, summary: diagram.summary }]
@@ -313,18 +315,134 @@ function playerPayloadForDiagram(diagram: WhiteboardDiagram, locale: Locale) {
   }
 }
 
-function HtmlAnimationBoard({ diagram, locale }: { diagram: WhiteboardDiagram; locale: Locale }) {
-  const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const payload = useMemo(() => playerPayloadForDiagram(diagram, locale), [diagram, locale])
+function escapeHtml(value: unknown) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char] || char))
+}
 
-  useEffect(() => {
-    const post = () => {
-      iframeRef.current?.contentWindow?.postMessage({ type: 'arena-whiteboard-render', payload }, '*')
-    }
-    post()
-    const timer = window.setTimeout(post, 120)
-    return () => window.clearTimeout(timer)
+function sanitizeEmbeddedHtml(html: string) {
+  return String(html || '')
+    .replace(/<!doctype[\s\S]*?>/gi, '')
+    .replace(/<\/?(html|head|body|meta)[^>]*>/gi, '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?>[\s\S]*?<\/embed>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, '')
+}
+
+function formulaHint(step: WhiteboardPlayerStep | undefined, fallback: string) {
+  const source = `${step?.markdown || ''} ${step?.title || ''}`
+  const match = source.match(/\$\$?([^$]{4,160})\$\$?/)
+  return (match?.[1] || source || fallback).replace(/\s+/g, ' ').trim().slice(0, 150) || fallback
+}
+
+function buildGeneratedAnimationHtml(payload: WhiteboardPlayerPayload) {
+  const zh = payload.locale === 'zh'
+  const steps = payload.steps.length ? payload.steps.slice(0, 6) : [
+    { index: 1, stage: '', title: zh ? '定义变量' : 'Define variables', markdown: zh ? '明确已知量、目标和约束。' : 'Clarify known quantities, goals, and constraints.', mermaid: '', html: '', summary: [] },
+    { index: 2, stage: '', title: zh ? '建立关系' : 'Build relation', markdown: zh ? '找到公式、不变量或机制主链路。' : 'Identify the formula, invariant, or main mechanism path.', mermaid: '', html: '', summary: [] },
+    { index: 3, stage: '', title: zh ? '状态变换' : 'Transform state', markdown: zh ? '展示中间状态如何演化。' : 'Show how intermediate state evolves.', mermaid: '', html: '', summary: [] },
+    { index: 4, stage: '', title: zh ? '边界检查' : 'Boundary check', markdown: zh ? '验证输出、指标和失败情况。' : 'Validate output, metric, and failure cases.', mermaid: '', html: '', summary: [] },
+  ]
+  const summary = payload.summary.length ? payload.summary : [zh ? '这份 HTML 由当前题目和白板步骤动态生成。' : 'This HTML was dynamically generated from the current challenge and whiteboard steps.']
+  const first = steps[0]
+  const mid = steps[Math.min(1, steps.length - 1)]
+  const last = steps[steps.length - 1]
+  const colors = ['#06b6d4', '#7c3aed', '#d97706', '#16a34a', '#2563eb', '#db2777']
+  const nodeWidth = 150
+  const svgWidth = 980
+  const svgHeight = 260
+  const gap = svgWidth / Math.max(steps.slice(0, 5).length, 1)
+  const nodes = steps.slice(0, 5).map((step, index) => ({
+    x: 54 + index * gap,
+    y: index % 2 ? 132 : 52,
+    color: colors[index % colors.length],
+    label: escapeHtml(step.title.slice(0, 32)),
+    index,
+  }))
+  const edges = nodes.slice(1).map((node, index) => {
+    const prev = nodes[index]
+    return `<path class="edge" d="M ${prev.x + nodeWidth} ${prev.y + 44} C ${prev.x + 205} ${prev.y + 44}, ${node.x - 55} ${node.y + 44}, ${node.x} ${node.y + 44}" fill="none" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)" style="animation-delay:${0.2 + index * 0.16}s"></path>`
+  }).join('')
+  const boxes = nodes.map((node) => `
+    <g class="node" style="animation-delay:${0.1 + node.index * 0.16}s">
+      <rect x="${node.x}" y="${node.y}" width="${nodeWidth}" height="88" rx="18" fill="#fff" stroke="${node.color}" stroke-width="3"></rect>
+      <circle cx="${node.x + 24}" cy="${node.y + 24}" r="14" fill="${node.color}"></circle>
+      <text x="${node.x + 24}" y="${node.y + 29}" text-anchor="middle" fill="#fff" font-size="13" font-weight="900">${node.index + 1}</text>
+      <foreignObject x="${node.x + 18}" y="${node.y + 42}" width="114" height="40"><div xmlns="http://www.w3.org/1999/xhtml" style="font-size:13px;font-weight:850;line-height:1.25;color:#0f172a;text-align:center">${node.label}</div></foreignObject>
+    </g>
+  `).join('')
+  return `
+    <div class="shell">
+      <section class="hero">
+        <p class="kicker">${zh ? '动态 HTML 动画白板' : 'Dynamic HTML animation board'}</p>
+        <h1>${escapeHtml(payload.title)}</h1>
+        <div class="summary">${summary.slice(0, 3).map((item) => `<p>${escapeHtml(item)}</p>`).join('')}</div>
+      </section>
+      <section class="timeline">
+        ${steps.map((step, index) => `
+          <article class="step">
+            <span class="badge">${index + 1}</span>
+            <p class="stage">${escapeHtml(step.stage || (zh ? '阶段' : 'stage'))}</p>
+            <h2 class="title">${escapeHtml(step.title)}</h2>
+            <p class="text">${escapeHtml(step.markdown || step.summary.join(' ') || (zh ? '等待解释内容。' : 'Waiting for explanation.')).slice(0, 260)}</p>
+          </article>
+        `).join('')}
+      </section>
+      <section class="formula-flow">
+        <div class="formula-box"><p class="formula-label">${zh ? '输入 / 已知量' : 'Input / known'}</p><p class="formula-text">${escapeHtml(formulaHint(first, zh ? 'x, 条件, 约束' : 'x, conditions, constraints'))}</p></div>
+        <div class="arrow"></div>
+        <div class="formula-box"><p class="formula-label">${zh ? '核心关系 / 变换' : 'Core relation / transform'}</p><p class="formula-text">${escapeHtml(formulaHint(mid, zh ? 'y = f(x, θ)' : 'y = f(x, theta)'))}</p></div>
+        <div class="arrow"></div>
+        <div class="formula-box"><p class="formula-label">${zh ? '输出 / 检查' : 'Output / check'}</p><p class="formula-text">${escapeHtml(formulaHint(last, zh ? '结论 + 边界检查' : 'answer + boundary check'))}</p></div>
+      </section>
+      <section class="diagram">
+        <p class="diagram-title">${zh ? '最终总图' : 'Final diagram'}</p>
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" role="img" aria-label="Final animated diagram">
+          <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#64748b"></path></marker></defs>
+          ${edges}
+          ${boxes}
+        </svg>
+      </section>
+    </div>
+  `
+}
+
+function buildWhiteboardHtmlDocument(payload: WhiteboardPlayerPayload) {
+  const body = payload.html ? `<div class="shell custom-html">${sanitizeEmbeddedHtml(payload.html)}</div>` : buildGeneratedAnimationHtml(payload)
+  return `<!doctype html>
+<html lang="${payload.locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; media-src data: blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none';">
+  <title>${escapeHtml(payload.title)}</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#f8fafc;color:#0f172a;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{overflow:auto}.root{min-height:100vh;padding:24px;background:radial-gradient(circle at 18% 12%,rgba(6,182,212,.18),transparent 26%),radial-gradient(circle at 84% 18%,rgba(124,58,237,.16),transparent 30%),linear-gradient(135deg,#f8fafc 0%,#eef6ff 52%,#fff7ed 100%)}.shell{max-width:1180px;margin:0 auto}.hero{display:grid;gap:12px;margin-bottom:18px}.kicker{margin:0;color:#0891b2;font-size:12px;font-weight:900;letter-spacing:.18em;text-transform:uppercase}h1{margin:0;font-size:clamp(26px,4vw,46px);line-height:1.05;letter-spacing:-.045em}.summary{display:grid;gap:8px;margin:0 0 18px;color:#64748b;font-size:15px;line-height:1.65}.timeline{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:22px 0}.timeline:before{content:"";position:absolute;left:7%;right:7%;top:38px;height:4px;border-radius:99px;background:linear-gradient(90deg,#06b6d4,#7c3aed,#16a34a);transform-origin:left;animation:grow 1.2s .15s both cubic-bezier(.22,1,.36,1)}.step{position:relative;z-index:1;min-height:180px;border:1px solid rgba(148,163,184,.45);border-radius:22px;background:rgba(255,255,255,.88);padding:16px;box-shadow:0 20px 55px rgba(15,23,42,.08);opacity:0;transform:translateY(18px) scale(.97);animation:cardIn .62s both cubic-bezier(.22,1,.36,1)}.step:nth-child(2){animation-delay:.18s}.step:nth-child(3){animation-delay:.36s}.step:nth-child(4){animation-delay:.54s}.step:nth-child(5){animation-delay:.72s}.badge{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:16px;background:#0f172a;color:#fff;font-size:17px;font-weight:950;box-shadow:0 10px 28px rgba(15,23,42,.18)}.stage{margin:14px 0 4px;color:#0891b2;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.12em}.title{margin:0;font-size:17px;line-height:1.25;font-weight:950;letter-spacing:-.02em}.text{margin:10px 0 0;color:#475569;font-size:13px;line-height:1.58}.formula-flow{margin-top:20px;display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:center;border-radius:24px;background:#0f172a;color:#e0f2fe;padding:18px;overflow:hidden;box-shadow:inset 0 1px rgba(255,255,255,.08),0 22px 50px rgba(15,23,42,.22)}.formula-box{border:1px solid rgba(125,211,252,.24);border-radius:18px;padding:14px;background:rgba(15,23,42,.74);min-height:112px;opacity:0;animation:glowIn .62s both ease-out}.formula-box:nth-child(3){animation-delay:.28s}.formula-box:nth-child(5){animation-delay:.56s}.formula-label{margin:0 0 8px;color:#67e8f9;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.formula-text{margin:0;color:#f8fafc;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:14px;line-height:1.6}.arrow{width:42px;height:4px;border-radius:99px;background:linear-gradient(90deg,#22d3ee,#a78bfa);transform-origin:left;animation:grow .8s .34s both}.diagram{margin-top:22px;border:1px solid rgba(148,163,184,.48);border-radius:26px;background:rgba(255,255,255,.88);padding:16px;box-shadow:0 22px 60px rgba(15,23,42,.09)}.diagram-title{margin:0 0 10px;color:#64748b;font-size:12px;font-weight:950;letter-spacing:.16em;text-transform:uppercase}svg{display:block;width:100%;height:auto;overflow:visible}.node{opacity:0;transform-box:fill-box;transform-origin:center;animation:nodeIn .58s both cubic-bezier(.22,1,.36,1)}.edge{stroke-dasharray:420;stroke-dashoffset:420;animation:draw 1s .25s both ease-out}.custom-html>*{max-width:100%}@keyframes cardIn{to{opacity:1;transform:none}}@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}@keyframes glowIn{from{opacity:0;transform:translateY(12px);filter:blur(3px)}to{opacity:1;transform:none;filter:blur(0)}}@keyframes nodeIn{from{opacity:0;transform:translateY(14px) scale(.94)}to{opacity:1;transform:none}}@keyframes draw{to{stroke-dashoffset:0}}@media(max-width:820px){.root{padding:14px}.timeline{grid-template-columns:1fr}.timeline:before{display:none}.formula-flow{grid-template-columns:1fr}.arrow{width:4px;height:34px;margin:0 auto;transform-origin:top;animation-name:growY}}@keyframes growY{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+  </style>
+</head>
+<body><main class="root">${body}</main></body>
+</html>`
+}
+
+function HtmlAnimationBoard({ diagram, locale }: { diagram: WhiteboardDiagram; locale: Locale }) {
+  const payload = useMemo(() => playerPayloadForDiagram(diagram, locale), [diagram, locale])
+  const iframeSrc = useMemo(() => {
+    if (typeof window === 'undefined') return ''
+    const html = buildWhiteboardHtmlDocument(payload)
+    return URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
   }, [payload])
+
+  useEffect(() => () => {
+    if (iframeSrc) URL.revokeObjectURL(iframeSrc)
+  }, [iframeSrc])
 
   return (
     <motion.section variants={cardVariants} className="overflow-hidden rounded-xl border border-cyan-200 bg-slate-950 p-3 shadow-sm">
@@ -337,13 +455,11 @@ function HtmlAnimationBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
         </p>
       </div>
       <iframe
-        ref={iframeRef}
         title={locale === 'zh' ? '白板 HTML 动画' : 'Whiteboard HTML animation'}
-        src="/arena-whiteboard-player.html"
-        sandbox="allow-scripts"
+        src={iframeSrc}
+        sandbox=""
         referrerPolicy="no-referrer"
         className="h-[680px] w-full rounded-lg border border-white/10 bg-slate-50"
-        onLoad={() => iframeRef.current?.contentWindow?.postMessage({ type: 'arena-whiteboard-render', payload }, '*')}
       />
     </motion.section>
   )
