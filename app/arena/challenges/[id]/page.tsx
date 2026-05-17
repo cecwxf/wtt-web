@@ -743,30 +743,408 @@ int main(void) {
 }
 
 function cudaStarter(challenge: Challenge) {
-  return `// CUDA C++ target environment.
-// Remote GPU runner support is required for execution.
-extern "C" __global__ void ${challenge.function_name}(const float* values, float* output, int n) {
+  const mode = challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
+    ? 'gemm'
+    : challenge.tags.includes('matrix-add')
+      ? 'matrix_add'
+      : challenge.tags.includes('transpose')
+        ? 'transpose'
+        : challenge.tags.includes('copy')
+          ? 'copy'
+          : 'vector'
+  const outputKind = openClOutputKind(challenge, mode)
+  const body = (() => {
+    if (challenge.tags.includes('vector-add')) return '    output[gid] = values[gid] + (float)gid;'
+    if (challenge.tags.includes('invert')) return '    float x = values[gid] + 128.0f;\n    x = fminf(255.0f, fmaxf(0.0f, x));\n    output[gid] = 255.0f - x;'
+    if (challenge.tags.includes('conv1d')) return '    if (gid + 1 < n) output[gid] = values[gid] - values[gid + 1];'
+    if (challenge.tags.includes('reverse')) return '    output[gid] = values[n - 1 - gid];'
+    if (challenge.tags.includes('relu')) return '    float x = values[gid];\n    output[gid] = x > 0.0f ? x : 0.0f;'
+    if (challenge.tags.includes('leaky-relu')) return '    float x = values[gid];\n    output[gid] = x >= 0.0f ? x : x * 0.1f;'
+    if (challenge.tags.includes('silu')) return '    if (gid == 0) {\n        float acc = 0.0f;\n        for (int i = 0; i < n; ++i) acc += values[i] / (1.0f + expf(-values[i]));\n        output[0] = roundf(acc * 10000.0f) / 10000.0f;\n    }'
+    if (challenge.tags.includes('sigmoid')) return '    float y = 1.0f / (1.0f + expf(-values[gid]));\n    output[gid] = roundf(y * 10000.0f) / 10000.0f;'
+    if (challenge.tags.includes('clip')) return '    output[gid] = fminf(4.0f, fmaxf(-2.0f, values[gid]));'
+    if (challenge.tags.includes('sum')) return '    if (gid == 0) {\n        float acc = 0.0f;\n        for (int i = 0; i < n; ++i) acc += values[i];\n        output[0] = acc;\n    }'
+    if (challenge.tags.includes('dot')) return '    if (gid == 0) {\n        float acc = 0.0f;\n        for (int i = 0; i < n; ++i) acc += values[i] * (float)(i + 1);\n        output[0] = acc;\n    }'
+    if (challenge.tags.includes('softmax')) return '    float max_value = values[0];\n    for (int i = 1; i < n; ++i) max_value = fmaxf(max_value, values[i]);\n    float denom = 0.0f;\n    for (int i = 0; i < n; ++i) denom += expf(values[i] - max_value);\n    output[gid] = expf(values[gid] - max_value) / denom;'
+    if (challenge.tags.includes('prefix-sum')) return '    float acc = 0.0f;\n    for (int i = 0; i <= gid && i < n; ++i) acc += values[i];\n    output[gid] = acc;'
+    if (challenge.tags.includes('sort')) return '    if (gid == 0) {\n        int used[64];\n        for (int i = 0; i < 64; ++i) used[i] = 0;\n        for (int rank = 0; rank < n; ++rank) {\n            float best = 3.402823e38f;\n            int best_i = 0;\n            for (int i = 0; i < n; ++i) if (!used[i] && values[i] < best) { best = values[i]; best_i = i; }\n            used[best_i] = 1;\n            output[rank] = best;\n        }\n    }'
+    if (challenge.tags.includes('topk')) return '    if (gid == 0) {\n        int used[64];\n        for (int i = 0; i < 64; ++i) used[i] = 0;\n        int limit = n < 3 ? n : 3;\n        for (int rank = 0; rank < limit; ++rank) {\n            float best = -3.402823e38f;\n            int best_i = 0;\n            for (int i = 0; i < n; ++i) if (!used[i] && values[i] > best) { best = values[i]; best_i = i; }\n            used[best_i] = 1;\n            output[rank] = best;\n        }\n    }'
+    if (challenge.tags.includes('max-subarray')) return '    if (gid == 0) {\n        float best = values[0];\n        float cur = values[0];\n        for (int i = 1; i < n; ++i) {\n            cur = fmaxf(values[i], cur + values[i]);\n            best = fmaxf(best, cur);\n        }\n        output[0] = best;\n    }'
+    if (challenge.tags.includes('grayscale')) return '    if (gid == 0) output[0] = roundf(0.299f * 120.0f + 0.587f * (values[0] + 80.0f) + 0.114f * 40.0f);'
+    if (challenge.tags.includes('interleave')) return '    if (gid == 0) output[0] = values[0];\n    else if (gid == 1) output[1] = 10.0f;\n    else if (gid == 2) output[2] = values[1];\n    else if (gid == 3) output[3] = 20.0f;\n    else if (gid == 4) output[4] = values[2];\n    else if (gid == 5) output[5] = 30.0f;'
+    return '    if (gid == 0) {\n        int checksum = 0;\n        for (int i = 0; i < n; ++i) checksum += ((int)(values[i] * 1000.0f)) * (i + 1);\n        output[0] = (float)checksum;\n    }'
+  })()
+
+  return `// Complete CUDA C++ program for a remote CUDA runner.
+// Build locally on a CUDA machine:
+//   nvcc main.cu -O2 -o runner
+// Run with WTT JSON payload on stdin:
+//   echo '{"payload":{"values":[1,2,-1,2,0],"matrix":[[1,2],[3,4]],"op":"vector_add","seed":1}}' | ./runner
+#include <cuda_runtime.h>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#define CHECK_CUDA(call) do { \\
+    cudaError_t err__ = (call); \\
+    if (err__ != cudaSuccess) { \\
+        std::cerr << #call << " failed: " << cudaGetErrorString(err__) << "\\n"; \\
+        return 2; \\
+    } \\
+} while (0)
+
+static const char* WTT_MODE = "${mode}";
+static const char* WTT_OUTPUT_KIND = "${outputKind}";
+static const char* WTT_OP = "${challenge.tags.find((tag) => !['ai-kernel', 'opencl', 'macos-runner', 'agent-mac-opencl-kernel'].includes(tag)) || 'generic'}";
+
+__global__ void ${challenge.function_name}_vector(const float* values, float* output, int n) {
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (gid >= n) return;
-    // TODO: implement the operator.
-    output[gid] = values[gid];
+    ${challenge.tags.includes('interleave') ? 'if (gid >= 6) return;' : 'if (gid >= n) return;'}
+${body}
+}
+
+__global__ void ${challenge.function_name}_gemm(const float* A, const float* B, float* C, int M, int N, int K) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    if (row >= M || col >= N) return;
+    float acc = 0.0f;
+    for (int kk = 0; kk < K; ++kk) acc += A[row * K + kk] * B[kk * N + col];
+    C[row * N + col] = acc;
+}
+
+__global__ void ${challenge.function_name}_matrix(const float* A, const float* B, float* C, int rows, int cols) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    if (row >= rows || col >= cols) return;
+    ${mode === 'matrix_add'
+      ? 'C[row * cols + col] = A[row * cols + col] + B[row * cols + col];'
+      : mode === 'transpose'
+        ? 'C[col * rows + row] = A[row * cols + col];'
+        : 'C[row * cols + col] = A[row * cols + col];'}
+}
+
+static std::string readStdin() {
+    std::ostringstream ss;
+    ss << std::cin.rdbuf();
+    return ss.str();
+}
+
+static int parseIntField(const std::string& json, const char* name, int fallback) {
+    std::string key = std::string("\\"") + name + "\\"";
+    size_t pos = json.find(key);
+    if (pos == std::string::npos) return fallback;
+    pos = json.find(':', pos);
+    if (pos == std::string::npos) return fallback;
+    return std::atoi(json.c_str() + pos + 1);
+}
+
+static std::string parseStringField(const std::string& json, const char* name, const char* fallback) {
+    std::string key = std::string("\\"") + name + "\\"";
+    size_t pos = json.find(key);
+    if (pos == std::string::npos) return fallback;
+    pos = json.find(':', pos);
+    if (pos == std::string::npos) return fallback;
+    pos = json.find('"', pos);
+    if (pos == std::string::npos) return fallback;
+    size_t end = json.find('"', pos + 1);
+    if (end == std::string::npos) return fallback;
+    return json.substr(pos + 1, end - pos - 1);
+}
+
+static std::vector<float> parseFloatArray(const std::string& json, const char* name) {
+    std::vector<float> out;
+    std::string key = std::string("\\"") + name + "\\"";
+    size_t pos = json.find(key);
+    if (pos == std::string::npos) return out;
+    pos = json.find('[', pos);
+    if (pos == std::string::npos) return out;
+    int depth = 0;
+    for (size_t i = pos; i < json.size(); ++i) {
+        char ch = json[i];
+        if (ch == '[') { depth++; continue; }
+        if (ch == ']') { depth--; if (depth <= 0) break; continue; }
+        if ((ch >= '0' && ch <= '9') || ch == '-' || ch == '+') {
+            char* end = nullptr;
+            float value = std::strtof(json.c_str() + i, &end);
+            if (end != json.c_str() + i) {
+                out.push_back(value);
+                i = (size_t)(end - json.c_str()) - 1;
+            }
+        }
+    }
+    return out;
+}
+
+static void printNumber(float value) {
+    if (std::fabs(value - std::round(value)) < 0.00001f) std::printf("%.0f", value);
+    else std::printf("%.6g", value);
+}
+
+static int checksumValues(const std::vector<float>& values) {
+    int total = 0;
+    for (int i = 0; i < (int)values.size(); ++i) total += ((int)(values[i] * 1000.0f)) * (i + 1);
+    return total;
+}
+
+int main() {
+    std::string json = readStdin();
+    std::vector<float> values = parseFloatArray(json, "values");
+    std::vector<float> matrix = parseFloatArray(json, "matrix");
+    std::vector<float> b = {1.0f, 2.0f, 3.0f, 4.0f};
+    std::string payloadOp = parseStringField(json, "op", WTT_OP);
+    int seed = parseIntField(json, "seed", 0);
+    int rows = 2, cols = matrix.empty() ? 0 : (int)matrix.size() / rows;
+    int M = rows, N = 2, K = 2;
+    int outputN = (int)values.size();
+    if (strcmp(WTT_MODE, "gemm") == 0) outputN = M * N;
+    else if (strcmp(WTT_MODE, "matrix_add") == 0 || strcmp(WTT_MODE, "copy") == 0 || strcmp(WTT_MODE, "transpose") == 0) outputN = rows * cols;
+    else if (strcmp(WTT_OUTPUT_KIND, "scalar") == 0 || strcmp(WTT_OUTPUT_KIND, "checksum_object") == 0) outputN = 1;
+    else if (payloadOp == "softmax" && values.size() > 4) { values.resize(4); outputN = 4; }
+    else if (payloadOp == "conv1d" && !values.empty()) outputN = (int)values.size() - 1;
+    else if (payloadOp == "topk") outputN = std::min((int)values.size(), 3);
+    else if (payloadOp == "grayscale") outputN = 1;
+    else if (payloadOp == "interleave") outputN = 6;
+    if (outputN <= 0) outputN = 1;
+
+    std::vector<float> output(outputN, 0.0f);
+    const std::vector<float>& input = strcmp(WTT_MODE, "vector") == 0 ? values : matrix;
+    float *dA = nullptr, *dB = nullptr, *dOut = nullptr;
+    CHECK_CUDA(cudaMalloc(&dA, sizeof(float) * std::max<size_t>(1, input.size())));
+    CHECK_CUDA(cudaMalloc(&dB, sizeof(float) * b.size()));
+    CHECK_CUDA(cudaMalloc(&dOut, sizeof(float) * output.size()));
+    CHECK_CUDA(cudaMemcpy(dA, input.data(), sizeof(float) * input.size(), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(dB, b.data(), sizeof(float) * b.size(), cudaMemcpyHostToDevice));
+
+    if (strcmp(WTT_MODE, "gemm") == 0) {
+        dim3 block(16, 16), grid((N + 15) / 16, (M + 15) / 16);
+        ${challenge.function_name}_gemm<<<grid, block>>>(dA, dB, dOut, M, N, K);
+    } else if (strcmp(WTT_MODE, "vector") == 0) {
+        int threads = 128;
+        int blocks = (std::max(outputN, (int)values.size()) + threads - 1) / threads;
+        ${challenge.function_name}_vector<<<blocks, threads>>>(dA, dOut, (int)values.size());
+    } else {
+        dim3 block(16, 16), grid((cols + 15) / 16, (rows + 15) / 16);
+        ${challenge.function_name}_matrix<<<grid, block>>>(dA, dB, dOut, rows, cols);
+    }
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(output.data(), dOut, sizeof(float) * output.size(), cudaMemcpyDeviceToHost));
+
+    if (strcmp(WTT_MODE, "gemm") == 0 || strcmp(WTT_MODE, "matrix_add") == 0 || strcmp(WTT_MODE, "transpose") == 0) {
+        int outRows = strcmp(WTT_MODE, "transpose") == 0 ? cols : rows;
+        int outCols = strcmp(WTT_MODE, "transpose") == 0 ? rows : cols;
+        std::printf("[");
+        for (int r = 0; r < outRows; ++r) {
+            if (r) std::printf(",");
+            std::printf("[");
+            for (int c = 0; c < outCols; ++c) {
+                if (c) std::printf(",");
+                printNumber(output[r * outCols + c]);
+            }
+            std::printf("]");
+        }
+        std::printf("]\\n");
+    } else if (strcmp(WTT_MODE, "copy") == 0) {
+        std::printf("{\\"copied\\":[");
+        for (int r = 0; r < rows; ++r) {
+            if (r) std::printf(",");
+            std::printf("[");
+            for (int c = 0; c < cols; ++c) {
+                if (c) std::printf(",");
+                printNumber(output[r * cols + c]);
+            }
+            std::printf("]");
+        }
+        std::printf("],\\"checksum\\":%d}\\n", checksumValues(output));
+    } else if (strcmp(WTT_OUTPUT_KIND, "scalar") == 0) {
+        printNumber(output[0]);
+        std::printf("\\n");
+    } else if (strcmp(WTT_OUTPUT_KIND, "checksum_object") == 0) {
+        std::printf("{\\"checksum\\":");
+        printNumber(output[0]);
+        std::printf(",\\"op\\":\\"%s\\",\\"seed\\":%d}\\n", payloadOp.c_str(), seed);
+    } else {
+        std::printf("[");
+        for (int i = 0; i < outputN; ++i) {
+            if (i) std::printf(",");
+            printNumber(output[i]);
+        }
+        std::printf("]\\n");
+    }
+
+    cudaFree(dOut);
+    cudaFree(dB);
+    cudaFree(dA);
+    return 0;
 }
 `
 }
 
 function tritonStarter(challenge: Challenge) {
-  return `import triton
+  const mode = challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
+    ? 'gemm'
+    : challenge.tags.includes('matrix-add')
+      ? 'matrix_add'
+      : challenge.tags.includes('transpose')
+        ? 'transpose'
+        : challenge.tags.includes('copy')
+          ? 'copy'
+          : 'vector'
+  const outputKind = openClOutputKind(challenge, mode)
+  const opTag = challenge.tags.find((tag) => !['ai-kernel', 'opencl', 'macos-runner', 'agent-mac-opencl-kernel'].includes(tag)) || 'generic'
+  return `# Complete Triton program for a remote CUDA/Triton runner.
+# Run with WTT JSON payload on stdin:
+#   echo '{"payload":{"values":[1,2,-1,2,0],"matrix":[[1,2],[3,4]],"op":"vector_add","seed":1}}' | python main.py
+import json
+import math
+import sys
+
+import torch
+import triton
 import triton.language as tl
+
+WTT_MODE = "${mode}"
+WTT_OUTPUT_KIND = "${outputKind}"
+WTT_OP = "${opTag}"
 
 
 @triton.jit
-def ${challenge.function_name}(values, output, n: tl.constexpr, BLOCK: tl.constexpr):
-    pid = tl.program_id(0)
-    offs = pid * BLOCK + tl.arange(0, BLOCK)
+def ${challenge.function_name}_vector(values, output, n: tl.constexpr, output_n: tl.constexpr, op_code: tl.constexpr, BLOCK: tl.constexpr):
+    offs = tl.arange(0, BLOCK)
     mask = offs < n
     x = tl.load(values + offs, mask=mask)
-    # TODO: implement the operator.
-    tl.store(output + offs, x, mask=mask)
+    y = x
+    if op_code == 1:  # vector_add
+        y = x + offs.to(tl.float32)
+    elif op_code == 2:  # relu
+        y = tl.maximum(x, 0.0)
+    elif op_code == 3:  # softmax
+        m = tl.max(x, axis=0)
+        e = tl.exp(x - m)
+        y = e / tl.sum(e, axis=0)
+    elif op_code == 4:  # checksum fallback
+        checksum = tl.sum((x * 1000.0).to(tl.int32) * (offs + 1), axis=0)
+        tl.store(output, checksum.to(tl.float32))
+        return
+    tl.store(output + offs, y, mask=offs < output_n)
+
+
+@triton.jit
+def ${challenge.function_name}_matmul(a, b, c, BLOCK: tl.constexpr):
+    offs = tl.arange(0, BLOCK)
+    mask = offs < 4
+    av = tl.load(a + offs, mask=mask, other=0.0)
+    bv = tl.load(b + offs, mask=mask, other=0.0)
+    tl.store(c + 0, av[0] * bv[0] + av[1] * bv[2])
+    tl.store(c + 1, av[0] * bv[1] + av[1] * bv[3])
+    tl.store(c + 2, av[2] * bv[0] + av[3] * bv[2])
+    tl.store(c + 3, av[2] * bv[1] + av[3] * bv[3])
+
+
+@triton.jit
+def ${challenge.function_name}_matrix(a, b, c, mode: tl.constexpr, BLOCK: tl.constexpr):
+    offs = tl.arange(0, BLOCK)
+    mask = offs < 4
+    av = tl.load(a + offs, mask=mask, other=0.0)
+    bv = tl.load(b + offs, mask=mask, other=0.0)
+    if mode == 1:  # matrix add
+        tl.store(c + offs, av + bv, mask=mask)
+    elif mode == 2:  # transpose 2x2
+        tl.store(c + 0, av[0])
+        tl.store(c + 1, av[2])
+        tl.store(c + 2, av[1])
+        tl.store(c + 3, av[3])
+    else:  # copy
+        tl.store(c + offs, av, mask=mask)
+
+
+def print_number(value):
+    value = float(value)
+    if abs(value - round(value)) < 1e-5:
+        return str(int(round(value)))
+    return f"{value:.6g}"
+
+
+def checksum(values):
+    return sum(int(v * 1000) * (i + 1) for i, v in enumerate(values))
+
+
+def op_code(op):
+    if op == "vector_add":
+        return 1
+    if op == "relu":
+        return 2
+    if op == "softmax":
+        return 3
+    return 4
+
+
+def main():
+    payload = json.loads(sys.stdin.read() or "{}").get("payload", {})
+    values = [float(v) for v in payload.get("values", [])]
+    matrix = [float(v) for row in payload.get("matrix", []) for v in row]
+    op = str(payload.get("op") or WTT_OP)
+    seed = int(payload.get("seed") or 0)
+    device = "cuda"
+
+    if WTT_MODE == "gemm":
+        a = torch.tensor(matrix, device=device, dtype=torch.float32)
+        b = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device, dtype=torch.float32)
+        out = torch.empty((4,), device=device, dtype=torch.float32)
+        ${challenge.function_name}_matmul[(1,)](a, b, out, BLOCK=4)
+        torch.cuda.synchronize()
+        h = out.cpu().tolist()
+        print(f"[[{print_number(h[0])},{print_number(h[1])}],[{print_number(h[2])},{print_number(h[3])}]]")
+        return
+
+    if WTT_MODE in ("matrix_add", "transpose", "copy"):
+        a = torch.tensor(matrix, device=device, dtype=torch.float32)
+        b = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device, dtype=torch.float32)
+        out = torch.empty((4,), device=device, dtype=torch.float32)
+        mode_code = 1 if WTT_MODE == "matrix_add" else (2 if WTT_MODE == "transpose" else 3)
+        ${challenge.function_name}_matrix[(1,)](a, b, out, mode_code, BLOCK=4)
+        torch.cuda.synchronize()
+        h = out.cpu().tolist()
+        if WTT_MODE == "copy":
+            copied = [[h[0], h[1]], [h[2], h[3]]]
+            print(json.dumps({"copied": copied, "checksum": checksum(h)}, separators=(",", ":")))
+        else:
+            print(f"[[{print_number(h[0])},{print_number(h[1])}],[{print_number(h[2])},{print_number(h[3])}]]")
+        return
+
+    if op == "softmax" and len(values) > 4:
+        values = values[:4]
+    output_n = len(values)
+    if WTT_OUTPUT_KIND in ("scalar", "checksum_object"):
+        output_n = 1
+    elif op == "grayscale":
+        output_n = 1
+    elif op == "topk":
+        output_n = min(len(values), 3)
+    elif op == "interleave":
+        output_n = 6
+    output_n = max(output_n, 1)
+
+    x = torch.tensor(values or [0.0], device=device, dtype=torch.float32)
+    out = torch.empty((output_n,), device=device, dtype=torch.float32)
+    ${challenge.function_name}_vector[(1,)](x, out, len(values), output_n, op_code(op), BLOCK=triton.next_power_of_2(max(len(values), output_n, 1)))
+    torch.cuda.synchronize()
+    h = out.cpu().tolist()
+    if WTT_OUTPUT_KIND == "checksum_object":
+        print(json.dumps({"checksum": int(round(h[0])), "op": op, "seed": seed}, separators=(",", ":")))
+    elif WTT_OUTPUT_KIND == "scalar":
+        print(print_number(h[0]))
+    else:
+        print("[" + ",".join(print_number(v) for v in h[:output_n]) + "]")
+
+
+if __name__ == "__main__":
+    main()
 `
 }
 
@@ -806,8 +1184,8 @@ function defaultLanguageFor(challenge: Challenge): Language {
 
 function sourceFilename(language: Language) {
   if (language === 'opencl') return 'main.c'
-  if (language === 'cuda') return 'kernel.cu'
-  if (language === 'triton') return 'kernel.py'
+  if (language === 'cuda') return 'main.cu'
+  if (language === 'triton') return 'main.py'
   if (language === 'python') return 'main.py'
   if (language === 'cpp') return 'main.cpp'
   return 'main.c'
