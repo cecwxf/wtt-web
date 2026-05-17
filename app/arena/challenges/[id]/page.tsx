@@ -353,6 +353,34 @@ function openClOutputKind(challenge: Challenge, mode: string) {
   return 'checksum_object'
 }
 
+function kernelMode(challenge: Challenge) {
+  return challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
+    ? 'gemm'
+    : challenge.tags.includes('matrix-add')
+      ? 'matrix_add'
+      : challenge.tags.includes('transpose')
+        ? 'transpose'
+        : challenge.tags.includes('copy')
+          ? 'copy'
+          : 'vector'
+}
+
+function exampleOutputN(challenge: Challenge) {
+  if (challenge.tags.includes('conv1d')) return 4
+  if (challenge.tags.includes('softmax')) return 4
+  if (challenge.tags.includes('topk')) return 3
+  if (challenge.tags.includes('grayscale')) return 1
+  if (challenge.tags.includes('interleave')) return 6
+  if (hasAnyTag(challenge, openClScalarExampleTags)) return 1
+  if (!hasAnyTag(challenge, openClArrayExampleTags)) return 1
+  return 5
+}
+
+function exampleVectorGlobalSize(challenge: Challenge) {
+  if (challenge.tags.includes('softmax')) return 4
+  return Math.max(5, exampleOutputN(challenge))
+}
+
 function openClKernelSource(challenge: Challenge) {
   if (challenge.tags.includes('matmul') || challenge.tags.includes('gemm')) {
     return `// Device kernel: GEMM, row-major, C[M,N] = A[M,K] * B[K,N].
@@ -466,293 +494,189 @@ ${body}
 
 function openClStarter(challenge: Challenge) {
   const kernelSource = openClKernelSource(challenge)
-  const mode = challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
-    ? 'gemm'
-    : challenge.tags.includes('matrix-add')
-      ? 'matrix_add'
-      : challenge.tags.includes('transpose')
-        ? 'transpose'
-        : challenge.tags.includes('copy')
-          ? 'copy'
-          : 'vector'
+  const mode = kernelMode(challenge)
   const outputKind = openClOutputKind(challenge, mode)
+  const outputN = exampleOutputN(challenge)
+  const globalN = exampleVectorGlobalSize(challenge)
   const fixedSoftmax = challenge.tags.includes('softmax')
-  return `// Complete OpenCL C program for macOS Agent/Mac mini runner.
+  const hostBody = mode === 'gemm'
+    ? `  const int M = 2, N = 2, K = 2;
+  float A[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+  float B[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+  float C[4] = {0};
+
+  cl_mem a_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(A), A, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(A)", err);
+  cl_mem b_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(B), B, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(B)", err);
+  cl_mem c_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(C), NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(C)", err);
+  clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buf);
+  clSetKernelArg(kernel, 1, sizeof(cl_mem), &b_buf);
+  clSetKernelArg(kernel, 2, sizeof(cl_mem), &c_buf);
+  clSetKernelArg(kernel, 3, sizeof(int), &M);
+  clSetKernelArg(kernel, 4, sizeof(int), &N);
+  clSetKernelArg(kernel, 5, sizeof(int), &K);
+  size_t global[2] = { (size_t)N, (size_t)M };
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+  if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
+  clFinish(queue);
+  clEnqueueReadBuffer(queue, c_buf, CL_TRUE, 0, sizeof(C), C, 0, NULL, NULL);
+  printf("output = [[");
+  print_number(C[0]); printf(","); print_number(C[1]); printf("],[");
+  print_number(C[2]); printf(","); print_number(C[3]); printf("]]\\n");
+  clReleaseMemObject(c_buf);
+  clReleaseMemObject(b_buf);
+  clReleaseMemObject(a_buf);`
+    : mode === 'matrix_add'
+      ? `  const int rows = 2, cols = 2;
+  float A[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+  float B[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+  float C[4] = {0};
+
+  cl_mem a_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(A), A, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(A)", err);
+  cl_mem b_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(B), B, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(B)", err);
+  cl_mem c_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(C), NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(C)", err);
+  clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buf);
+  clSetKernelArg(kernel, 1, sizeof(cl_mem), &b_buf);
+  clSetKernelArg(kernel, 2, sizeof(cl_mem), &c_buf);
+  clSetKernelArg(kernel, 3, sizeof(int), &rows);
+  clSetKernelArg(kernel, 4, sizeof(int), &cols);
+  size_t global[2] = { (size_t)cols, (size_t)rows };
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+  if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
+  clFinish(queue);
+  clEnqueueReadBuffer(queue, c_buf, CL_TRUE, 0, sizeof(C), C, 0, NULL, NULL);
+  printf("output = [[");
+  print_number(C[0]); printf(","); print_number(C[1]); printf("],[");
+  print_number(C[2]); printf(","); print_number(C[3]); printf("]]\\n");
+  clReleaseMemObject(c_buf);
+  clReleaseMemObject(b_buf);
+  clReleaseMemObject(a_buf);`
+      : mode === 'transpose' || mode === 'copy'
+        ? `  const int rows = 2, cols = 2;
+  float input[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+  float output[4] = {0};
+
+  cl_mem input_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(input), input, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(input)", err);
+  cl_mem output_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(output), NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(output)", err);
+  clSetKernelArg(kernel, 0, sizeof(cl_mem), &input_buf);
+  clSetKernelArg(kernel, 1, sizeof(cl_mem), &output_buf);
+  clSetKernelArg(kernel, 2, sizeof(int), &rows);
+  clSetKernelArg(kernel, 3, sizeof(int), &cols);
+  size_t global[2] = { (size_t)${mode === 'transpose' ? 'rows' : 'cols'}, (size_t)${mode === 'transpose' ? 'cols' : 'rows'} };
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+  if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
+  clFinish(queue);
+  clEnqueueReadBuffer(queue, output_buf, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL);
+  printf("output = [[");
+  print_number(output[0]); printf(","); print_number(output[1]); printf("],[");
+  print_number(output[2]); printf(","); print_number(output[3]); printf("]]\\n");
+  clReleaseMemObject(output_buf);
+  clReleaseMemObject(input_buf);`
+        : `  const int n = ${challenge.tags.includes('softmax') ? 4 : 5};
+  const int output_n = ${outputN};
+  float values[5] = { 1.0f, 2.0f, -1.0f, 2.0f, 0.0f };
+  float output[${outputN}] = {0};
+
+  cl_mem values_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(values), values, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(values)", err);
+  cl_mem output_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(output), NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(output)", err);
+  clSetKernelArg(kernel, 0, sizeof(cl_mem), &values_buf);
+  clSetKernelArg(kernel, 1, sizeof(cl_mem), &output_buf);
+  clSetKernelArg(kernel, 2, sizeof(int), &n);
+  size_t global = ${globalN};
+  err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, NULL, 0, NULL, NULL);
+  if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
+  clFinish(queue);
+  clEnqueueReadBuffer(queue, output_buf, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL);
+  ${outputKind === 'scalar' || outputKind === 'checksum_object'
+    ? 'printf("output = "); print_number(output[0]); printf("\\n");'
+    : 'printf("output = ["); for (int i = 0; i < output_n; ++i) { if (i) printf(","); print_number(output[i]); } printf("]\\n");'}
+  clReleaseMemObject(output_buf);
+  clReleaseMemObject(values_buf);`
+
+  return `// Complete OpenCL C example for this kernel only.
 // Build locally:
 //   clang main.c -framework OpenCL -o runner
-// Run with WTT JSON payload on stdin:
-//   echo '{"payload":{"values":[1,2,-1,2,0],"matrix":[[1,2],[3,4]],"op":"vector_add","seed":1}}' | ./runner
-//
-// WTT judges the JSON printed by main(). Keep the host path complete:
-// platform -> device -> context -> program build -> kernel args -> enqueue -> readback.
+// Run:
+//   ./runner
+// The host below validates only the hard-coded example input.
 #include <OpenCL/opencl.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 static const char* KERNEL_NAME = "${challenge.function_name}";
 static const char* KERNEL_SOURCE = ${JSON.stringify(kernelSource)};
-static const char* WTT_MODE = "${mode}";
-static const char* WTT_OUTPUT_KIND = "${outputKind}";
-static const char* WTT_OP = "${challenge.tags.find((tag) => !['ai-kernel', 'opencl', 'macos-runner', 'agent-mac-opencl-kernel'].includes(tag)) || 'generic'}";
 
 static void fail(const char* label, cl_int err) {
-    fprintf(stderr, "%s failed: %d\\n", label, err);
-    exit(2);
-}
-
-static char* read_stdin(void) {
-    size_t cap = 4096, len = 0;
-    char* buf = (char*)calloc(cap, 1);
-    if (!buf) exit(2);
-    for (;;) {
-        if (len + 1024 + 1 > cap) {
-            cap *= 2;
-            buf = (char*)realloc(buf, cap);
-            if (!buf) exit(2);
-        }
-        size_t n = fread(buf + len, 1, 1024, stdin);
-        len += n;
-        if (n < 1024) break;
-    }
-    buf[len] = '\\0';
-    return buf;
-}
-
-static int parse_int_field(const char* json, const char* name, int fallback) {
-    char pattern[64];
-    snprintf(pattern, sizeof(pattern), "\\"%s\\"", name);
-    const char* key = strstr(json, pattern);
-    if (!key) return fallback;
-    const char* p = strchr(key, ':');
-    if (!p) return fallback;
-    return (int)strtol(p + 1, NULL, 10);
-}
-
-static void parse_string_field(const char* json, const char* name, char* out, int cap) {
-    if (cap <= 0) return;
-    out[0] = '\\0';
-    char pattern[64];
-    snprintf(pattern, sizeof(pattern), "\\"%s\\"", name);
-    const char* key = strstr(json, pattern);
-    if (!key) return;
-    const char* p = strchr(key, ':');
-    if (!p) return;
-    p = strchr(p, '"');
-    if (!p) return;
-    ++p;
-    int n = 0;
-    while (*p && *p != '"' && n < cap - 1) out[n++] = *p++;
-    out[n] = '\\0';
-}
-
-static int parse_values_field(const char* json, const char* name, float* out, int cap) {
-    char pattern[64];
-    snprintf(pattern, sizeof(pattern), "\\"%s\\"", name);
-    const char* key = strstr(json, pattern);
-    if (!key) return 0;
-    const char* p = strchr(key, '[');
-    if (!p) return 0;
-    int depth = 0, n = 0;
-    for (; *p && n < cap; ++p) {
-        if (*p == '[') { depth++; continue; }
-        if (*p == ']') { depth--; if (depth <= 0) break; continue; }
-        if ((*p >= '0' && *p <= '9') || *p == '-' || *p == '+') {
-            char* end = NULL;
-            float value = strtof(p, &end);
-            if (end != p) {
-                out[n++] = value;
-                p = end - 1;
-            }
-        }
-    }
-    return n;
+  fprintf(stderr, "%s failed: %d\\n", label, err);
+  exit(2);
 }
 
 static void print_number(float value) {
-    if (${fixedSoftmax ? '1' : '0'}) {
-        printf("%.6f", value);
-    } else if (fabsf(value - roundf(value)) < 0.00001f) {
-        printf("%.0f", value);
-    } else {
-        printf("%.6g", value);
-    }
-}
-
-static int checksum_values(const float* values, int n) {
-    int total = 0;
-    for (int i = 0; i < n; ++i) total += ((int)(values[i] * 1000.0f)) * (i + 1);
-    return total;
+  if (${fixedSoftmax ? '1' : '0'}) printf("%.6f", value);
+  else if (fabsf(value - roundf(value)) < 0.00001f) printf("%.0f", value);
+  else printf("%.6g", value);
 }
 
 int main(void) {
-    enum { MAX_N = 4096 };
-    char* input_json = read_stdin();
-    float values[MAX_N] = {0};
-    float matrix[MAX_N] = {0};
-    float output[MAX_N] = {0};
-    float b[4] = {1.0f, 2.0f, 3.0f, 4.0f};
-    char payload_op[64];
-    parse_string_field(input_json, "op", payload_op, (int)sizeof(payload_op));
-    if (payload_op[0] == '\\0') snprintf(payload_op, sizeof(payload_op), "%s", WTT_OP);
-    int seed = parse_int_field(input_json, "seed", 0);
-    int value_count = parse_values_field(input_json, "values", values, MAX_N);
-    int matrix_count = parse_values_field(input_json, "matrix", matrix, MAX_N);
-    int rows = 2;
-    int cols = matrix_count > 0 ? matrix_count / rows : 0;
-    int m = rows;
-    int k = 2;
-    int n = 2;
-    int output_n = value_count;
-    if (strcmp(WTT_MODE, "gemm") == 0) output_n = m * n;
-    else if (strcmp(WTT_MODE, "matrix_add") == 0 || strcmp(WTT_MODE, "copy") == 0) output_n = rows * cols;
-    else if (strcmp(WTT_MODE, "transpose") == 0) output_n = rows * cols;
-    else if (strcmp(WTT_OUTPUT_KIND, "scalar") == 0 || strcmp(WTT_OUTPUT_KIND, "checksum_object") == 0) output_n = 1;
-    else if (strcmp(payload_op, "softmax") == 0 && value_count > 4) output_n = value_count = 4;
-    else if (strcmp(payload_op, "conv1d") == 0 && value_count > 0) output_n = value_count - 1;
-    else if (strcmp(payload_op, "topk") == 0) output_n = value_count < 3 ? value_count : 3;
-    else if (strcmp(payload_op, "grayscale") == 0) output_n = 1;
-    else if (strcmp(payload_op, "interleave") == 0) output_n = 6;
-    if (output_n <= 0) output_n = 1;
+  cl_int err = CL_SUCCESS;
+  cl_platform_id platform = NULL;
+  cl_device_id device = NULL;
+  cl_context context = NULL;
+  cl_command_queue queue = NULL;
+  cl_program program = NULL;
+  cl_kernel kernel = NULL;
 
-    cl_int err = CL_SUCCESS;
-    cl_uint platform_count = 0;
-    err = clGetPlatformIDs(0, NULL, &platform_count);
-    if (err != CL_SUCCESS || platform_count == 0) fail("clGetPlatformIDs", err);
-    cl_platform_id platform = NULL;
-    err = clGetPlatformIDs(1, &platform, NULL);
-    if (err != CL_SUCCESS) fail("clGetPlatformIDs[0]", err);
+  err = clGetPlatformIDs(1, &platform, NULL);
+  if (err != CL_SUCCESS) fail("clGetPlatformIDs", err);
+  err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+  if (err != CL_SUCCESS) err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_DEFAULT, 1, &device, NULL);
+  if (err != CL_SUCCESS) fail("clGetDeviceIDs", err);
 
-    cl_device_id device = NULL;
-    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
-    if (err != CL_SUCCESS) {
-        err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_DEFAULT, 1, &device, NULL);
-        if (err != CL_SUCCESS) fail("clGetDeviceIDs", err);
-    }
+  context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateContext", err);
+  queue = clCreateCommandQueue(context, device, 0, &err);
+  if (err != CL_SUCCESS) fail("clCreateCommandQueue", err);
+  program = clCreateProgramWithSource(context, 1, &KERNEL_SOURCE, NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateProgramWithSource", err);
+  err = clBuildProgram(program, 1, &device, "", NULL, NULL);
+  if (err != CL_SUCCESS) {
+    size_t log_size = 0;
+    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+    char* log = (char*)calloc(log_size + 1, 1);
+    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+    fprintf(stderr, "%s", log);
+    free(log);
+    return 1;
+  }
+  kernel = clCreateKernel(program, KERNEL_NAME, &err);
+  if (err != CL_SUCCESS) fail("clCreateKernel", err);
 
-    cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
-    if (err != CL_SUCCESS) fail("clCreateContext", err);
-    cl_command_queue queue = clCreateCommandQueue(context, device, 0, &err);
-    if (err != CL_SUCCESS) fail("clCreateCommandQueue", err);
-    cl_program program = clCreateProgramWithSource(context, 1, &KERNEL_SOURCE, NULL, &err);
-    if (err != CL_SUCCESS) fail("clCreateProgramWithSource", err);
-    err = clBuildProgram(program, 1, &device, "", NULL, NULL);
-    if (err != CL_SUCCESS) {
-        size_t log_size = 0;
-        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
-        char* log = (char*)calloc(log_size + 1, 1);
-        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
-        fprintf(stderr, "%s", log);
-        return 1;
-    }
-    cl_kernel kernel = clCreateKernel(program, KERNEL_NAME, &err);
-    if (err != CL_SUCCESS) fail("clCreateKernel", err);
+${hostBody}
 
-    cl_mem a_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-        sizeof(float) * (strcmp(WTT_MODE, "vector") == 0 ? value_count : matrix_count),
-        strcmp(WTT_MODE, "vector") == 0 ? values : matrix, &err);
-    if (err != CL_SUCCESS) fail("clCreateBuffer(a)", err);
-    cl_mem b_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(b), b, &err);
-    if (err != CL_SUCCESS) fail("clCreateBuffer(b)", err);
-    cl_mem out_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * output_n, NULL, &err);
-    if (err != CL_SUCCESS) fail("clCreateBuffer(output)", err);
-
-    if (strcmp(WTT_MODE, "gemm") == 0 || strcmp(WTT_MODE, "matrix_add") == 0) {
-        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(0)", err);
-        err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &b_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(1)", err);
-        err = clSetKernelArg(kernel, 2, sizeof(cl_mem), &out_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
-        err = clSetKernelArg(kernel, 3, sizeof(int), strcmp(WTT_MODE, "gemm") == 0 ? &m : &rows); if (err != CL_SUCCESS) fail("clSetKernelArg(3)", err);
-        err = clSetKernelArg(kernel, 4, sizeof(int), strcmp(WTT_MODE, "gemm") == 0 ? &n : &cols); if (err != CL_SUCCESS) fail("clSetKernelArg(4)", err);
-        if (strcmp(WTT_MODE, "gemm") == 0) { err = clSetKernelArg(kernel, 5, sizeof(int), &k); if (err != CL_SUCCESS) fail("clSetKernelArg(5)", err); }
-    } else if (strcmp(WTT_MODE, "transpose") == 0 || strcmp(WTT_MODE, "copy") == 0) {
-        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(0)", err);
-        err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(1)", err);
-        err = clSetKernelArg(kernel, 2, sizeof(int), &rows); if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
-        err = clSetKernelArg(kernel, 3, sizeof(int), &cols); if (err != CL_SUCCESS) fail("clSetKernelArg(3)", err);
-    } else {
-        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(0)", err);
-        err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(1)", err);
-        err = clSetKernelArg(kernel, 2, sizeof(int), &value_count); if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
-    }
-
-    size_t global1 = (size_t)(output_n > value_count ? output_n : value_count);
-    size_t global2[2] = { (size_t)(strcmp(WTT_MODE, "gemm") == 0 ? n : (strcmp(WTT_MODE, "transpose") == 0 ? rows : cols)), (size_t)(strcmp(WTT_MODE, "transpose") == 0 ? cols : rows) };
-    err = (strcmp(WTT_MODE, "vector") == 0)
-        ? clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global1, NULL, 0, NULL, NULL)
-        : clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global2, NULL, 0, NULL, NULL);
-    if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
-    err = clFinish(queue);
-    if (err != CL_SUCCESS) fail("clFinish", err);
-    err = clEnqueueReadBuffer(queue, out_buf, CL_TRUE, 0, sizeof(float) * output_n, output, 0, NULL, NULL);
-    if (err != CL_SUCCESS) fail("clEnqueueReadBuffer", err);
-
-    if (strcmp(WTT_MODE, "gemm") == 0 || strcmp(WTT_MODE, "matrix_add") == 0 || strcmp(WTT_MODE, "transpose") == 0) {
-        int out_rows = strcmp(WTT_MODE, "transpose") == 0 ? cols : rows;
-        int out_cols = strcmp(WTT_MODE, "transpose") == 0 ? rows : cols;
-        printf("[");
-        for (int r = 0; r < out_rows; ++r) {
-            if (r) printf(",");
-            printf("[");
-            for (int c = 0; c < out_cols; ++c) {
-                if (c) printf(",");
-                print_number(output[r * out_cols + c]);
-            }
-            printf("]");
-        }
-        printf("]\\n");
-    } else if (strcmp(WTT_MODE, "copy") == 0) {
-        printf("{\\"copied\\":[");
-        for (int r = 0; r < rows; ++r) {
-            if (r) printf(",");
-            printf("[");
-            for (int c = 0; c < cols; ++c) {
-                if (c) printf(",");
-                print_number(output[r * cols + c]);
-            }
-            printf("]");
-        }
-        printf("],\\"checksum\\":%d}\\n", checksum_values(output, output_n));
-    } else if (strcmp(WTT_OUTPUT_KIND, "scalar") == 0) {
-        print_number(output[0]);
-        printf("\\n");
-    } else if (strcmp(WTT_OUTPUT_KIND, "checksum_object") == 0) {
-        printf("{\\"checksum\\":");
-        print_number(output[0]);
-        printf(",\\"op\\":\\"%s\\",\\"seed\\":%d}\\n", payload_op, seed);
-    } else {
-        printf("[");
-        for (int i = 0; i < output_n; ++i) {
-            if (i) printf(",");
-            print_number(output[i]);
-        }
-        printf("]\\n");
-    }
-
-    clReleaseMemObject(out_buf);
-    clReleaseMemObject(b_buf);
-    clReleaseMemObject(a_buf);
-    clReleaseKernel(kernel);
-    clReleaseProgram(program);
-    clReleaseCommandQueue(queue);
-    clReleaseContext(context);
-    free(input_json);
-    return 0;
+  clReleaseKernel(kernel);
+  clReleaseProgram(program);
+  clReleaseCommandQueue(queue);
+  clReleaseContext(context);
+  return 0;
 }
 `
 }
 
 function cudaStarter(challenge: Challenge) {
-  const mode = challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
-    ? 'gemm'
-    : challenge.tags.includes('matrix-add')
-      ? 'matrix_add'
-      : challenge.tags.includes('transpose')
-        ? 'transpose'
-        : challenge.tags.includes('copy')
-          ? 'copy'
-          : 'vector'
+  const mode = kernelMode(challenge)
   const outputKind = openClOutputKind(challenge, mode)
+  const outputN = exampleOutputN(challenge)
+  const globalN = exampleVectorGlobalSize(challenge)
   const body = (() => {
     if (challenge.tags.includes('vector-add')) return '    output[gid] = values[gid] + (float)gid;'
     if (challenge.tags.includes('invert')) return '    float x = values[gid] + 128.0f;\n    x = fminf(255.0f, fmaxf(0.0f, x));\n    output[gid] = 255.0f - x;'
@@ -774,21 +698,85 @@ function cudaStarter(challenge: Challenge) {
     if (challenge.tags.includes('interleave')) return '    if (gid == 0) output[0] = values[0];\n    else if (gid == 1) output[1] = 10.0f;\n    else if (gid == 2) output[2] = values[1];\n    else if (gid == 3) output[3] = 20.0f;\n    else if (gid == 4) output[4] = values[2];\n    else if (gid == 5) output[5] = 30.0f;'
     return '    if (gid == 0) {\n        int checksum = 0;\n        for (int i = 0; i < n; ++i) checksum += ((int)(values[i] * 1000.0f)) * (i + 1);\n        output[0] = (float)checksum;\n    }'
   })()
+  const hostBody = mode === 'gemm'
+    ? `    const int M = 2, N = 2, K = 2;
+    float A[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    float B[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    float C[4] = {0};
+    float *dA = nullptr, *dB = nullptr, *dC = nullptr;
+    CHECK_CUDA(cudaMalloc(&dA, sizeof(A)));
+    CHECK_CUDA(cudaMalloc(&dB, sizeof(B)));
+    CHECK_CUDA(cudaMalloc(&dC, sizeof(C)));
+    CHECK_CUDA(cudaMemcpy(dA, A, sizeof(A), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(dB, B, sizeof(B), cudaMemcpyHostToDevice));
+    dim3 block(16, 16), grid(1, 1);
+    ${challenge.function_name}_gemm<<<grid, block>>>(dA, dB, dC, M, N, K);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(C, dC, sizeof(C), cudaMemcpyDeviceToHost));
+    std::printf("output = [["); printNumber(C[0]); std::printf(","); printNumber(C[1]); std::printf("],["); printNumber(C[2]); std::printf(","); printNumber(C[3]); std::printf("]]\\n");
+    cudaFree(dC); cudaFree(dB); cudaFree(dA);`
+    : mode === 'matrix_add'
+      ? `    const int rows = 2, cols = 2;
+    float A[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    float B[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    float C[4] = {0};
+    float *dA = nullptr, *dB = nullptr, *dC = nullptr;
+    CHECK_CUDA(cudaMalloc(&dA, sizeof(A)));
+    CHECK_CUDA(cudaMalloc(&dB, sizeof(B)));
+    CHECK_CUDA(cudaMalloc(&dC, sizeof(C)));
+    CHECK_CUDA(cudaMemcpy(dA, A, sizeof(A), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(dB, B, sizeof(B), cudaMemcpyHostToDevice));
+    dim3 block(16, 16), grid(1, 1);
+    ${challenge.function_name}_matrix<<<grid, block>>>(dA, dB, dC, rows, cols);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(C, dC, sizeof(C), cudaMemcpyDeviceToHost));
+    std::printf("output = [["); printNumber(C[0]); std::printf(","); printNumber(C[1]); std::printf("],["); printNumber(C[2]); std::printf(","); printNumber(C[3]); std::printf("]]\\n");
+    cudaFree(dC); cudaFree(dB); cudaFree(dA);`
+      : mode === 'transpose' || mode === 'copy'
+        ? `    const int rows = 2, cols = 2;
+    float input[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    float output[4] = {0};
+    float *dInput = nullptr, *dOutput = nullptr;
+    CHECK_CUDA(cudaMalloc(&dInput, sizeof(input)));
+    CHECK_CUDA(cudaMalloc(&dOutput, sizeof(output)));
+    CHECK_CUDA(cudaMemcpy(dInput, input, sizeof(input), cudaMemcpyHostToDevice));
+    dim3 block(16, 16), grid(1, 1);
+    ${challenge.function_name}_matrix<<<grid, block>>>(dInput, nullptr, dOutput, rows, cols);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(output, dOutput, sizeof(output), cudaMemcpyDeviceToHost));
+    std::printf("output = [["); printNumber(output[0]); std::printf(","); printNumber(output[1]); std::printf("],["); printNumber(output[2]); std::printf(","); printNumber(output[3]); std::printf("]]\\n");
+    cudaFree(dOutput); cudaFree(dInput);`
+        : `    const int n = ${challenge.tags.includes('softmax') ? 4 : 5};
+    const int outputN = ${outputN};
+    float values[5] = {1.0f, 2.0f, -1.0f, 2.0f, 0.0f};
+    float output[${outputN}] = {0};
+    float *dValues = nullptr, *dOutput = nullptr;
+    CHECK_CUDA(cudaMalloc(&dValues, sizeof(values)));
+    CHECK_CUDA(cudaMalloc(&dOutput, sizeof(output)));
+    CHECK_CUDA(cudaMemcpy(dValues, values, sizeof(values), cudaMemcpyHostToDevice));
+    int threads = 128;
+    int blocks = (${globalN} + threads - 1) / threads;
+    ${challenge.function_name}_vector<<<blocks, threads>>>(dValues, dOutput, n);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(output, dOutput, sizeof(output), cudaMemcpyDeviceToHost));
+    ${outputKind === 'scalar' || outputKind === 'checksum_object'
+      ? 'std::printf("output = "); printNumber(output[0]); std::printf("\\n");'
+      : 'std::printf("output = ["); for (int i = 0; i < outputN; ++i) { if (i) std::printf(","); printNumber(output[i]); } std::printf("]\\n");'}
+    cudaFree(dOutput); cudaFree(dValues);`
 
-  return `// Complete CUDA C++ program for a remote CUDA runner.
+  return `// Complete CUDA C++ example for this kernel only.
 // Build locally on a CUDA machine:
 //   nvcc main.cu -O2 -o runner
-// Run with WTT JSON payload on stdin:
-//   echo '{"payload":{"values":[1,2,-1,2,0],"matrix":[[1,2],[3,4]],"op":"vector_add","seed":1}}' | ./runner
+// Run:
+//   ./runner
 #include <cuda_runtime.h>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
 
 #define CHECK_CUDA(call) do { \\
     cudaError_t err__ = (call); \\
@@ -797,10 +785,6 @@ function cudaStarter(challenge: Challenge) {
         return 2; \\
     } \\
 } while (0)
-
-static const char* WTT_MODE = "${mode}";
-static const char* WTT_OUTPUT_KIND = "${outputKind}";
-static const char* WTT_OP = "${challenge.tags.find((tag) => !['ai-kernel', 'opencl', 'macos-runner', 'agent-mac-opencl-kernel'].includes(tag)) || 'generic'}";
 
 __global__ void ${challenge.function_name}_vector(const float* values, float* output, int n) {
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -828,214 +812,44 @@ __global__ void ${challenge.function_name}_matrix(const float* A, const float* B
         : 'C[row * cols + col] = A[row * cols + col];'}
 }
 
-static std::string readStdin() {
-    std::ostringstream ss;
-    ss << std::cin.rdbuf();
-    return ss.str();
-}
-
-static int parseIntField(const std::string& json, const char* name, int fallback) {
-    std::string key = std::string("\\"") + name + "\\"";
-    size_t pos = json.find(key);
-    if (pos == std::string::npos) return fallback;
-    pos = json.find(':', pos);
-    if (pos == std::string::npos) return fallback;
-    return std::atoi(json.c_str() + pos + 1);
-}
-
-static std::string parseStringField(const std::string& json, const char* name, const char* fallback) {
-    std::string key = std::string("\\"") + name + "\\"";
-    size_t pos = json.find(key);
-    if (pos == std::string::npos) return fallback;
-    pos = json.find(':', pos);
-    if (pos == std::string::npos) return fallback;
-    pos = json.find('"', pos);
-    if (pos == std::string::npos) return fallback;
-    size_t end = json.find('"', pos + 1);
-    if (end == std::string::npos) return fallback;
-    return json.substr(pos + 1, end - pos - 1);
-}
-
-static std::vector<float> parseFloatArray(const std::string& json, const char* name) {
-    std::vector<float> out;
-    std::string key = std::string("\\"") + name + "\\"";
-    size_t pos = json.find(key);
-    if (pos == std::string::npos) return out;
-    pos = json.find('[', pos);
-    if (pos == std::string::npos) return out;
-    int depth = 0;
-    for (size_t i = pos; i < json.size(); ++i) {
-        char ch = json[i];
-        if (ch == '[') { depth++; continue; }
-        if (ch == ']') { depth--; if (depth <= 0) break; continue; }
-        if ((ch >= '0' && ch <= '9') || ch == '-' || ch == '+') {
-            char* end = nullptr;
-            float value = std::strtof(json.c_str() + i, &end);
-            if (end != json.c_str() + i) {
-                out.push_back(value);
-                i = (size_t)(end - json.c_str()) - 1;
-            }
-        }
-    }
-    return out;
-}
-
 static void printNumber(float value) {
     if (std::fabs(value - std::round(value)) < 0.00001f) std::printf("%.0f", value);
     else std::printf("%.6g", value);
 }
 
-static int checksumValues(const std::vector<float>& values) {
-    int total = 0;
-    for (int i = 0; i < (int)values.size(); ++i) total += ((int)(values[i] * 1000.0f)) * (i + 1);
-    return total;
-}
-
 int main() {
-    std::string json = readStdin();
-    std::vector<float> values = parseFloatArray(json, "values");
-    std::vector<float> matrix = parseFloatArray(json, "matrix");
-    std::vector<float> b = {1.0f, 2.0f, 3.0f, 4.0f};
-    std::string payloadOp = parseStringField(json, "op", WTT_OP);
-    int seed = parseIntField(json, "seed", 0);
-    int rows = 2, cols = matrix.empty() ? 0 : (int)matrix.size() / rows;
-    int M = rows, N = 2, K = 2;
-    int outputN = (int)values.size();
-    if (strcmp(WTT_MODE, "gemm") == 0) outputN = M * N;
-    else if (strcmp(WTT_MODE, "matrix_add") == 0 || strcmp(WTT_MODE, "copy") == 0 || strcmp(WTT_MODE, "transpose") == 0) outputN = rows * cols;
-    else if (strcmp(WTT_OUTPUT_KIND, "scalar") == 0 || strcmp(WTT_OUTPUT_KIND, "checksum_object") == 0) outputN = 1;
-    else if (payloadOp == "softmax" && values.size() > 4) { values.resize(4); outputN = 4; }
-    else if (payloadOp == "conv1d" && !values.empty()) outputN = (int)values.size() - 1;
-    else if (payloadOp == "topk") outputN = std::min((int)values.size(), 3);
-    else if (payloadOp == "grayscale") outputN = 1;
-    else if (payloadOp == "interleave") outputN = 6;
-    if (outputN <= 0) outputN = 1;
-
-    std::vector<float> output(outputN, 0.0f);
-    const std::vector<float>& input = strcmp(WTT_MODE, "vector") == 0 ? values : matrix;
-    float *dA = nullptr, *dB = nullptr, *dOut = nullptr;
-    CHECK_CUDA(cudaMalloc(&dA, sizeof(float) * std::max<size_t>(1, input.size())));
-    CHECK_CUDA(cudaMalloc(&dB, sizeof(float) * b.size()));
-    CHECK_CUDA(cudaMalloc(&dOut, sizeof(float) * output.size()));
-    CHECK_CUDA(cudaMemcpy(dA, input.data(), sizeof(float) * input.size(), cudaMemcpyHostToDevice));
-    CHECK_CUDA(cudaMemcpy(dB, b.data(), sizeof(float) * b.size(), cudaMemcpyHostToDevice));
-
-    if (strcmp(WTT_MODE, "gemm") == 0) {
-        dim3 block(16, 16), grid((N + 15) / 16, (M + 15) / 16);
-        ${challenge.function_name}_gemm<<<grid, block>>>(dA, dB, dOut, M, N, K);
-    } else if (strcmp(WTT_MODE, "vector") == 0) {
-        int threads = 128;
-        int blocks = (std::max(outputN, (int)values.size()) + threads - 1) / threads;
-        ${challenge.function_name}_vector<<<blocks, threads>>>(dA, dOut, (int)values.size());
-    } else {
-        dim3 block(16, 16), grid((cols + 15) / 16, (rows + 15) / 16);
-        ${challenge.function_name}_matrix<<<grid, block>>>(dA, dB, dOut, rows, cols);
-    }
-    CHECK_CUDA(cudaGetLastError());
-    CHECK_CUDA(cudaDeviceSynchronize());
-    CHECK_CUDA(cudaMemcpy(output.data(), dOut, sizeof(float) * output.size(), cudaMemcpyDeviceToHost));
-
-    if (strcmp(WTT_MODE, "gemm") == 0 || strcmp(WTT_MODE, "matrix_add") == 0 || strcmp(WTT_MODE, "transpose") == 0) {
-        int outRows = strcmp(WTT_MODE, "transpose") == 0 ? cols : rows;
-        int outCols = strcmp(WTT_MODE, "transpose") == 0 ? rows : cols;
-        std::printf("[");
-        for (int r = 0; r < outRows; ++r) {
-            if (r) std::printf(",");
-            std::printf("[");
-            for (int c = 0; c < outCols; ++c) {
-                if (c) std::printf(",");
-                printNumber(output[r * outCols + c]);
-            }
-            std::printf("]");
-        }
-        std::printf("]\\n");
-    } else if (strcmp(WTT_MODE, "copy") == 0) {
-        std::printf("{\\"copied\\":[");
-        for (int r = 0; r < rows; ++r) {
-            if (r) std::printf(",");
-            std::printf("[");
-            for (int c = 0; c < cols; ++c) {
-                if (c) std::printf(",");
-                printNumber(output[r * cols + c]);
-            }
-            std::printf("]");
-        }
-        std::printf("],\\"checksum\\":%d}\\n", checksumValues(output));
-    } else if (strcmp(WTT_OUTPUT_KIND, "scalar") == 0) {
-        printNumber(output[0]);
-        std::printf("\\n");
-    } else if (strcmp(WTT_OUTPUT_KIND, "checksum_object") == 0) {
-        std::printf("{\\"checksum\\":");
-        printNumber(output[0]);
-        std::printf(",\\"op\\":\\"%s\\",\\"seed\\":%d}\\n", payloadOp.c_str(), seed);
-    } else {
-        std::printf("[");
-        for (int i = 0; i < outputN; ++i) {
-            if (i) std::printf(",");
-            printNumber(output[i]);
-        }
-        std::printf("]\\n");
-    }
-
-    cudaFree(dOut);
-    cudaFree(dB);
-    cudaFree(dA);
+${hostBody}
     return 0;
 }
 `
 }
 
 function tritonStarter(challenge: Challenge) {
-  const mode = challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
-    ? 'gemm'
-    : challenge.tags.includes('matrix-add')
-      ? 'matrix_add'
-      : challenge.tags.includes('transpose')
-        ? 'transpose'
-        : challenge.tags.includes('copy')
-          ? 'copy'
-          : 'vector'
+  const mode = kernelMode(challenge)
   const outputKind = openClOutputKind(challenge, mode)
-  const opTag = challenge.tags.find((tag) => !['ai-kernel', 'opencl', 'macos-runner', 'agent-mac-opencl-kernel'].includes(tag)) || 'generic'
-  return `# Complete Triton program for a remote CUDA/Triton runner.
-# Run with WTT JSON payload on stdin:
-#   echo '{"payload":{"values":[1,2,-1,2,0],"matrix":[[1,2],[3,4]],"op":"vector_add","seed":1}}' | python main.py
-import json
-import math
-import sys
+  const outputN = exampleOutputN(challenge)
+  const blockN = exampleVectorGlobalSize(challenge)
+  const vectorBody = (() => {
+    if (challenge.tags.includes('vector-add')) return '    y = x + offs.to(tl.float32)\n    tl.store(output + offs, y, mask=offs < output_n)'
+    if (challenge.tags.includes('relu')) return '    y = tl.maximum(x, 0.0)\n    tl.store(output + offs, y, mask=offs < output_n)'
+    if (challenge.tags.includes('softmax')) return '    m = tl.max(x, axis=0)\n    e = tl.exp(x - m)\n    y = e / tl.sum(e, axis=0)\n    tl.store(output + offs, y, mask=offs < output_n)'
+    if (challenge.tags.includes('sum')) return '    tl.store(output, tl.sum(x, axis=0))'
+    if (challenge.tags.includes('dot')) return '    tl.store(output, tl.sum(x * (offs + 1).to(tl.float32), axis=0))'
+    if (challenge.tags.includes('clip')) return '    y = tl.minimum(4.0, tl.maximum(-2.0, x))\n    tl.store(output + offs, y, mask=offs < output_n)'
+    if (challenge.tags.includes('reverse')) return '    rx = tl.load(values + (n - 1 - offs), mask=offs < n, other=0.0)\n    tl.store(output + offs, rx, mask=offs < output_n)'
+    return '    checksum = tl.sum((x * 1000.0).to(tl.int32) * (offs + 1), axis=0)\n    tl.store(output, checksum.to(tl.float32))'
+  })()
 
+  if (mode === 'gemm') {
+    return `# Complete Triton example for this kernel only.
+# Run on a CUDA/Triton machine:
+#   python main.py
 import torch
 import triton
 import triton.language as tl
 
-WTT_MODE = "${mode}"
-WTT_OUTPUT_KIND = "${outputKind}"
-WTT_OP = "${opTag}"
-
-
 @triton.jit
-def ${challenge.function_name}_vector(values, output, n: tl.constexpr, output_n: tl.constexpr, op_code: tl.constexpr, BLOCK: tl.constexpr):
-    offs = tl.arange(0, BLOCK)
-    mask = offs < n
-    x = tl.load(values + offs, mask=mask)
-    y = x
-    if op_code == 1:  # vector_add
-        y = x + offs.to(tl.float32)
-    elif op_code == 2:  # relu
-        y = tl.maximum(x, 0.0)
-    elif op_code == 3:  # softmax
-        m = tl.max(x, axis=0)
-        e = tl.exp(x - m)
-        y = e / tl.sum(e, axis=0)
-    elif op_code == 4:  # checksum fallback
-        checksum = tl.sum((x * 1000.0).to(tl.int32) * (offs + 1), axis=0)
-        tl.store(output, checksum.to(tl.float32))
-        return
-    tl.store(output + offs, y, mask=offs < output_n)
-
-
-@triton.jit
-def ${challenge.function_name}_matmul(a, b, c, BLOCK: tl.constexpr):
+def ${challenge.function_name}(a, b, c, BLOCK: tl.constexpr):
     offs = tl.arange(0, BLOCK)
     mask = offs < 4
     av = tl.load(a + offs, mask=mask, other=0.0)
@@ -1045,24 +859,6 @@ def ${challenge.function_name}_matmul(a, b, c, BLOCK: tl.constexpr):
     tl.store(c + 2, av[2] * bv[0] + av[3] * bv[2])
     tl.store(c + 3, av[2] * bv[1] + av[3] * bv[3])
 
-
-@triton.jit
-def ${challenge.function_name}_matrix(a, b, c, mode: tl.constexpr, BLOCK: tl.constexpr):
-    offs = tl.arange(0, BLOCK)
-    mask = offs < 4
-    av = tl.load(a + offs, mask=mask, other=0.0)
-    bv = tl.load(b + offs, mask=mask, other=0.0)
-    if mode == 1:  # matrix add
-        tl.store(c + offs, av + bv, mask=mask)
-    elif mode == 2:  # transpose 2x2
-        tl.store(c + 0, av[0])
-        tl.store(c + 1, av[2])
-        tl.store(c + 2, av[1])
-        tl.store(c + 3, av[3])
-    else:  # copy
-        tl.store(c + offs, av, mask=mask)
-
-
 def print_number(value):
     value = float(value)
     if abs(value - round(value)) < 1e-5:
@@ -1070,78 +866,98 @@ def print_number(value):
     return f"{value:.6g}"
 
 
-def checksum(values):
-    return sum(int(v * 1000) * (i + 1) for i, v in enumerate(values))
-
-
-def op_code(op):
-    if op == "vector_add":
-        return 1
-    if op == "relu":
-        return 2
-    if op == "softmax":
-        return 3
-    return 4
-
-
 def main():
-    payload = json.loads(sys.stdin.read() or "{}").get("payload", {})
-    values = [float(v) for v in payload.get("values", [])]
-    matrix = [float(v) for row in payload.get("matrix", []) for v in row]
-    op = str(payload.get("op") or WTT_OP)
-    seed = int(payload.get("seed") or 0)
     device = "cuda"
-
-    if WTT_MODE == "gemm":
-        a = torch.tensor(matrix, device=device, dtype=torch.float32)
-        b = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device, dtype=torch.float32)
-        out = torch.empty((4,), device=device, dtype=torch.float32)
-        ${challenge.function_name}_matmul[(1,)](a, b, out, BLOCK=4)
-        torch.cuda.synchronize()
-        h = out.cpu().tolist()
-        print(f"[[{print_number(h[0])},{print_number(h[1])}],[{print_number(h[2])},{print_number(h[3])}]]")
-        return
-
-    if WTT_MODE in ("matrix_add", "transpose", "copy"):
-        a = torch.tensor(matrix, device=device, dtype=torch.float32)
-        b = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device, dtype=torch.float32)
-        out = torch.empty((4,), device=device, dtype=torch.float32)
-        mode_code = 1 if WTT_MODE == "matrix_add" else (2 if WTT_MODE == "transpose" else 3)
-        ${challenge.function_name}_matrix[(1,)](a, b, out, mode_code, BLOCK=4)
-        torch.cuda.synchronize()
-        h = out.cpu().tolist()
-        if WTT_MODE == "copy":
-            copied = [[h[0], h[1]], [h[2], h[3]]]
-            print(json.dumps({"copied": copied, "checksum": checksum(h)}, separators=(",", ":")))
-        else:
-            print(f"[[{print_number(h[0])},{print_number(h[1])}],[{print_number(h[2])},{print_number(h[3])}]]")
-        return
-
-    if op == "softmax" and len(values) > 4:
-        values = values[:4]
-    output_n = len(values)
-    if WTT_OUTPUT_KIND in ("scalar", "checksum_object"):
-        output_n = 1
-    elif op == "grayscale":
-        output_n = 1
-    elif op == "topk":
-        output_n = min(len(values), 3)
-    elif op == "interleave":
-        output_n = 6
-    output_n = max(output_n, 1)
-
-    x = torch.tensor(values or [0.0], device=device, dtype=torch.float32)
-    out = torch.empty((output_n,), device=device, dtype=torch.float32)
-    ${challenge.function_name}_vector[(1,)](x, out, len(values), output_n, op_code(op), BLOCK=triton.next_power_of_2(max(len(values), output_n, 1)))
+    a = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device, dtype=torch.float32)
+    b = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device, dtype=torch.float32)
+    out = torch.empty((4,), device=device, dtype=torch.float32)
+    ${challenge.function_name}[(1,)](a, b, out, BLOCK=4)
     torch.cuda.synchronize()
     h = out.cpu().tolist()
-    if WTT_OUTPUT_KIND == "checksum_object":
-        print(json.dumps({"checksum": int(round(h[0])), "op": op, "seed": seed}, separators=(",", ":")))
-    elif WTT_OUTPUT_KIND == "scalar":
-        print(print_number(h[0]))
-    else:
-        print("[" + ",".join(print_number(v) for v in h[:output_n]) + "]")
+    print(f"output = [[{print_number(h[0])},{print_number(h[1])}],[{print_number(h[2])},{print_number(h[3])}]]")
 
+
+if __name__ == "__main__":
+    main()
+`
+  }
+
+  if (mode !== 'vector') {
+    const modeCode = mode === 'matrix_add' ? 1 : mode === 'transpose' ? 2 : 3
+    return `# Complete Triton example for this kernel only.
+# Run on a CUDA/Triton machine:
+#   python main.py
+import torch
+import triton
+import triton.language as tl
+
+@triton.jit
+def ${challenge.function_name}(a, b, c, mode: tl.constexpr, BLOCK: tl.constexpr):
+    offs = tl.arange(0, BLOCK)
+    mask = offs < 4
+    av = tl.load(a + offs, mask=mask, other=0.0)
+    bv = tl.load(b + offs, mask=mask, other=0.0)
+    if mode == 1:
+        tl.store(c + offs, av + bv, mask=mask)
+    elif mode == 2:
+        tl.store(c + 0, av[0])
+        tl.store(c + 1, av[2])
+        tl.store(c + 2, av[1])
+        tl.store(c + 3, av[3])
+    else:
+        tl.store(c + offs, av, mask=mask)
+
+def print_number(value):
+    value = float(value)
+    if abs(value - round(value)) < 1e-5:
+        return str(int(round(value)))
+    return f"{value:.6g}"
+
+def main():
+    device = "cuda"
+    a = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device, dtype=torch.float32)
+    b = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device, dtype=torch.float32)
+    out = torch.empty((4,), device=device, dtype=torch.float32)
+    ${challenge.function_name}[(1,)](a, b, out, ${modeCode}, BLOCK=4)
+    torch.cuda.synchronize()
+    h = out.cpu().tolist()
+    print(f"output = [[{print_number(h[0])},{print_number(h[1])}],[{print_number(h[2])},{print_number(h[3])}]]")
+
+if __name__ == "__main__":
+    main()
+`
+  }
+
+  return `# Complete Triton example for this kernel only.
+# Run on a CUDA/Triton machine:
+#   python main.py
+import torch
+import triton
+import triton.language as tl
+
+@triton.jit
+def ${challenge.function_name}(values, output, n: tl.constexpr, output_n: tl.constexpr, BLOCK: tl.constexpr):
+    offs = tl.arange(0, BLOCK)
+    mask = offs < n
+    x = tl.load(values + offs, mask=mask, other=0.0)
+${vectorBody}
+
+def print_number(value):
+    value = float(value)
+    if abs(value - round(value)) < 1e-5:
+        return str(int(round(value)))
+    return f"{value:.6g}"
+
+def main():
+    device = "cuda"
+    values = torch.tensor([1.0, 2.0, -1.0, 2.0, 0.0], device=device, dtype=torch.float32)
+    out = torch.empty((${outputN},), device=device, dtype=torch.float32)
+    ${challenge.function_name}[(1,)](values, out, 5, ${outputN}, BLOCK=${blockN})
+    torch.cuda.synchronize()
+    h = out.cpu().tolist()
+    ${outputKind === 'scalar' || outputKind === 'checksum_object'
+      ? 'print("output = " + print_number(h[0]))'
+      : 'print("output = [" + ",".join(print_number(v) for v in h) + "]")'}
 
 if __name__ == "__main__":
     main()
