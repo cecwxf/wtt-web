@@ -550,40 +550,58 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
   }
 
-  const refreshArenaMessages = async (topicId = arenaTopicId) => {
-    if (!topicId || !session?.accessToken || !challenge) return [] as ChatMessage[]
+  async function fetchArenaMessageRows(topicId: string) {
+    if (!topicId || !session?.accessToken) return [] as TopicMessage[]
     let response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/messages?topic_id=${encodeURIComponent(topicId)}&limit=100`, { headers: authHeaders })
     if (!response.ok) {
       response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?limit=100&agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, { headers: authHeaders })
     }
-    if (!response.ok) return [] as ChatMessage[]
+    if (!response.ok) return [] as TopicMessage[]
     const raw = await response.json()
-    const rows: TopicMessage[] = Array.isArray(raw) ? raw : raw.messages || []
-    const mapped = topicMessagesToChat(rows, ARENA_AGENT_ID)
+    return Array.isArray(raw) ? raw : raw.messages || []
+  }
+
+  function topicMessageKey(row: TopicMessage) {
+    return row.id || row.message_id || `${row.timestamp || row.created_at || ''}:${String(row.content || '').length}`
+  }
+
+  function isArenaAgentTopicMessage(row: TopicMessage) {
+    const senderType = String(row.sender_type || '').toUpperCase()
+    const senderId = String(row.sender_id || '')
+    return senderType === 'AGENT' || senderId === ARENA_AGENT_ID
+  }
+
+  function applyLatestWhiteboardFromRows(rows: TopicMessage[]) {
     for (const row of [...rows].reverse()) {
-      const senderType = String(row.sender_type || '').toUpperCase()
-      const senderId = String(row.sender_id || '')
       const semantic = String(row.semantic_type || '').toLowerCase()
-      const isAgent = senderType === 'AGENT' || senderId === ARENA_AGENT_ID
-      const messageId = row.id || row.message_id || `${row.timestamp || row.created_at || ''}:${String(row.content || '').length}`
+      const messageId = topicMessageKey(row)
       if (semantic === 'notification') continue
-      if (!isAgent || appliedWhiteboardMessageIdsRef.current.has(messageId)) continue
+      if (!isArenaAgentTopicMessage(row) || appliedWhiteboardMessageIdsRef.current.has(messageId)) continue
       const content = stripSourceBlock(String(row.content || ''))
       if (content.includes('Agent thinking')) continue
       if (isGaokaoVolunteerChallenge(challenge)) {
         appliedWhiteboardMessageIdsRef.current.add(messageId)
         setWhiteboardDiagram(null)
-        break
+        return false
       }
       const payload = extractWhiteboardPayload(content)
       appliedWhiteboardMessageIdsRef.current.add(messageId)
       if (payload?.diagram) {
         setWhiteboardDiagram(payload.diagram)
+        return true
       } else {
         setWhiteboardDiagram(null)
       }
       break
     }
+    return false
+  }
+
+  const refreshArenaMessages = async (topicId = arenaTopicId) => {
+    if (!topicId || !session?.accessToken || !challenge) return [] as ChatMessage[]
+    const rows = await fetchArenaMessageRows(topicId)
+    const mapped = topicMessagesToChat(rows, ARENA_AGENT_ID)
+    applyLatestWhiteboardFromRows(rows)
     setChatMessages(mapped)
     return mapped
   }
@@ -615,6 +633,34 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       if (hasNewAgentMessage(latest, baselineKeys)) return true
     }
 
+    return false
+  }
+
+  async function waitForArenaWhiteboardPayload(topicId: string, baselineWhiteboardIds: Set<string>, timeoutMs = 240000) {
+    const hasNewWhiteboardPayload = async () => {
+      const rows = await fetchArenaMessageRows(topicId)
+      const found = [...rows].reverse().some((row) => {
+        const semantic = String(row.semantic_type || '').toLowerCase()
+        const messageId = topicMessageKey(row)
+        if (semantic === 'notification') return false
+        if (!isArenaAgentTopicMessage(row) || baselineWhiteboardIds.has(messageId)) return false
+        const content = stripSourceBlock(String(row.content || ''))
+        if (content.includes('Agent thinking')) return false
+        return Boolean(extractWhiteboardPayload(content)?.diagram)
+      })
+      if (found) await refreshArenaMessages(topicId)
+      return found
+    }
+
+    const startedAt = Date.now()
+    if (await hasNewWhiteboardPayload()) return true
+
+    while (Date.now() - startedAt < timeoutMs) {
+      await sleep(1500)
+      if (await hasNewWhiteboardPayload()) return true
+    }
+
+    await refreshArenaMessages(topicId)
     return false
   }
 
@@ -828,8 +874,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     const message = makeWhiteboardFromAnswerPrompt(challenge, locale, answerMessage.content, sourceUserMessage)
     setWhiteboardBusy(true)
     try {
-      const baselineMessages = await refreshArenaMessages(topicId)
-      const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
+      await refreshArenaMessages(topicId)
+      const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -853,7 +899,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
-      await waitForArenaAgentMessage(topicId, baselineKeys, 240000)
+      await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 240000)
       await refreshArenaState().catch(() => undefined)
     } catch {
       autoWhiteboardSourceKeysRef.current.delete(sourceKey)
@@ -927,8 +973,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setChatSending(true)
     try {
       const topicId = await ensureArenaSession()
-      const baselineMessages = await refreshArenaMessages(topicId)
-      const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
+      await refreshArenaMessages(topicId)
+      const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -951,7 +997,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
-      await waitForArenaAgentMessage(topicId, baselineKeys, 240000)
+      await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 240000)
       await refreshArenaState().catch(() => undefined)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
