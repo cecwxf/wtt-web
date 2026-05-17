@@ -214,17 +214,6 @@ function ProcessRail({ steps, locale }: { steps: WhiteboardDiagramStep[]; locale
   )
 }
 
-function LocalDiagramDetails({ chart, locale }: { chart: string; locale: Locale }) {
-  return (
-    <details className="mt-4 rounded-lg border border-slate-200 bg-white/70 px-4 py-3">
-      <summary className="cursor-pointer text-sm font-black text-slate-700">
-        {locale === 'zh' ? '查看局部图' : 'Show local diagram'}
-      </summary>
-      <MermaidPreview chart={chart} label={locale === 'zh' ? '局部图' : 'Local diagram'} compact />
-    </details>
-  )
-}
-
 function mermaidLabel(value: string, fallback: string) {
   const label = (value || fallback)
     .replace(/["`[\]{}<>]/g, '')
@@ -260,36 +249,14 @@ function buildFallbackFinalChart(steps: WhiteboardDiagramStep[], locale: Locale)
 }
 
 function finalChartForDiagram(diagram: WhiteboardDiagram, steps: WhiteboardDiagramStep[], locale: Locale) {
-  return (diagram.mermaid || diagram.source || buildFallbackFinalChart(steps, locale)).trim()
+  const firstLocalChart = steps.find((step) => step.mermaid?.trim())?.mermaid || ''
+  return (diagram.mermaid || diagram.source || firstLocalChart || buildFallbackFinalChart(steps, locale)).trim()
 }
 
-function FinalDiagramPanel({ chart, steps, locale }: { chart: string; steps: WhiteboardDiagramStep[]; locale: Locale }) {
+function FinalDiagramPanel({ chart, locale }: { chart: string; locale: Locale }) {
   return (
-    <motion.section variants={cardVariants} className="rounded-2xl border border-slate-200 bg-white/92 p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-            {locale === 'zh' ? '最终总图' : 'Final diagram'}
-          </p>
-          <h4 className="mt-1 text-xl font-black tracking-tight text-slate-950">
-            {locale === 'zh' ? '先看完整结构，再看步骤解释' : 'Stable overview before step details'}
-          </h4>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {steps.slice(0, 6).map((step, index) => (
-            <motion.span
-              key={`${step.stage || step.title || 'phase'}-${index}`}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08 * index, duration: 0.24, ease: 'easeOut' }}
-            >
-              {index + 1}. {step.stage || step.title || (locale === 'zh' ? '阶段' : 'Step')}
-            </motion.span>
-          ))}
-        </div>
-      </div>
-      <MermaidPreview chart={chart} />
+    <motion.section variants={cardVariants} className="rounded-xl border border-slate-200 bg-white/92 p-3 shadow-sm">
+      <MermaidPreview chart={chart} label={locale === 'zh' ? '图解' : 'Diagram'} compact />
     </motion.section>
   )
 }
@@ -317,11 +284,10 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
             {diagram.summary.map((item, index) => <p key={index}>{item}</p>)}
           </motion.div>
         ) : null}
-        {finalChart ? <FinalDiagramPanel chart={finalChart} steps={steps} locale={locale} /> : null}
+        {finalChart ? <FinalDiagramPanel chart={finalChart} locale={locale} /> : null}
         <ProcessRail steps={steps} locale={locale} />
         {steps.map((step, index) => {
           const style = stepStyles[index % stepStyles.length]
-          const showLocalChart = Boolean(step.mermaid && step.mermaid.trim() && step.mermaid.trim() !== finalChart)
           return (
           <motion.section key={`${step.stage || 'step'}-${index}`} variants={cardVariants} className={`relative overflow-hidden rounded-xl border p-5 shadow-sm ${style.shell}`}>
             <motion.div
@@ -346,7 +312,6 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
               </div>
             </div>
             {step.markdown ? <WhiteboardMarkdown markdown={step.markdown} tone={style.markdown} /> : null}
-            {showLocalChart ? <LocalDiagramDetails chart={step.mermaid || ''} locale={locale} /> : null}
             {step.summary?.length ? (
               <motion.ul variants={cardVariants} className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
                 {step.summary.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}
