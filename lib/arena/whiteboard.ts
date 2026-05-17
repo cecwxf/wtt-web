@@ -69,115 +69,6 @@ function safeHtmlString(value: unknown, max = 24000) {
     .slice(0, max)
 }
 
-function htmlEscape(value: unknown) {
-  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }[char] || char))
-}
-
-function extractAnswerFormulas(answer: string) {
-  const formulas: string[] = []
-  for (const match of Array.from(answer.matchAll(/\$\$([\s\S]{4,260}?)\$\$|\$([^$\n]{4,180}?)\$|\\\[([\s\S]{4,260}?)\\\]|\\\(([^)]{4,180}?)\\\)/g))) {
-    const value = (match[1] || match[2] || match[3] || match[4] || '').replace(/\s+/g, ' ').trim()
-    if (value && !formulas.includes(value)) formulas.push(value)
-  }
-  return formulas.slice(0, 5)
-}
-
-function answerSections(answer: string) {
-  const lines = answer
-    .split(/\r?\n+/)
-    .map((line) => line.replace(/^#{1,6}\s*/, '').replace(/^[-*•\d.)\s]+/, '').trim())
-    .filter((line) => line.length > 10 && !line.startsWith('|') && !line.includes('[WHITEBOARD_'))
-  return lines.slice(0, 8)
-}
-
-function answerTables(answer: string) {
-  const rows = answer
-    .split(/\r?\n/)
-    .filter((line) => /^\s*\|.+\|\s*$/.test(line) && !/^\s*\|?\s*:?-{2,}:?\s*\|/.test(line))
-    .slice(0, 8)
-    .map((line) => line.split('|').map((cell) => cell.trim()).filter(Boolean).slice(0, 4))
-    .filter((cells) => cells.length >= 2)
-  return rows
-}
-
-function deriveWhiteboardHtmlFromAnswer(answer: string, diagram: WhiteboardDiagram) {
-  const cleanAnswer = safeMultilineString(answer, 9000)
-  if (!cleanAnswer) return ''
-  const zh = /[\u4e00-\u9fff]/.test(cleanAnswer)
-  const formulas = extractAnswerFormulas(cleanAnswer)
-  const sections = answerSections(cleanAnswer)
-  const tableRows = answerTables(cleanAnswer)
-  const steps = diagram.steps?.length ? diagram.steps : []
-  const methodItems = [
-    ...steps.map((step) => step.title || step.stage || '').filter(Boolean),
-    ...sections,
-  ].slice(0, 6)
-  const title = htmlEscape(diagram.title || (zh ? '基于回答生成的 HTML 原理白板' : 'HTML board generated from the answer'))
-  const summary = (diagram.summary?.length ? diagram.summary : sections.slice(0, 3)).slice(0, 3)
-  const nodeLabels = methodItems.length ? methodItems : summary
-  const nodeCount = Math.max(1, Math.min(5, nodeLabels.length))
-  const nodes = nodeLabels.slice(0, nodeCount).map((label, index) => {
-    const x = 48 + index * (880 / nodeCount)
-    const y = index % 2 ? 132 : 54
-    return { x, y, label: compactText(label, 34), index }
-  })
-  const edges = nodes.slice(1).map((node, index) => {
-    const prev = nodes[index]
-    return `<path class="edge" d="M ${prev.x + 145} ${prev.y + 42} C ${prev.x + 205} ${prev.y + 42}, ${node.x - 55} ${node.y + 42}, ${node.x} ${node.y + 42}" fill="none" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)" style="animation-delay:${0.2 + index * 0.16}s"></path>`
-  }).join('')
-  const boxes = nodes.map((node) => `
-    <g class="node" style="animation-delay:${0.12 + node.index * 0.16}s">
-      <rect x="${node.x}" y="${node.y}" width="145" height="84" rx="18" fill="#ffffff" stroke="${['#06b6d4', '#7c3aed', '#d97706', '#16a34a', '#2563eb'][node.index % 5]}" stroke-width="3"></rect>
-      <text x="${node.x + 72}" y="${node.y + 38}" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="800">${htmlEscape(node.label)}</text>
-      <text x="${node.x + 72}" y="${node.y + 58}" text-anchor="middle" fill="#64748b" font-size="11">${node.index + 1}</text>
-    </g>
-  `).join('')
-  const tableHtml = tableRows.length ? `
-    <table class="wb-table">
-      <tbody>
-        ${tableRows.map((row, rowIndex) => `<tr>${row.map((cell) => rowIndex === 0 ? `<th>${htmlEscape(cell)}</th>` : `<td>${htmlEscape(cell)}</td>`).join('')}</tr>`).join('')}
-      </tbody>
-    </table>
-  ` : ''
-  return safeHtmlString(`
-    <style>
-      .wb{font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:linear-gradient(135deg,#f8fafc,#eef6ff 55%,#fff7ed);color:#0f172a;padding:24px;border-radius:22px}
-      .wb h2{margin:0 0 10px;font-size:28px;line-height:1.1;letter-spacing:-.04em}
-      .wb-summary{display:grid;gap:8px;margin:12px 0 18px;color:#475569;line-height:1.65}
-      .formula-list{display:grid;gap:10px;margin:16px 0}
-      .formula{border-radius:16px;background:#0f172a;color:#e0f2fe;padding:13px 15px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;line-height:1.55;opacity:0;animation:rise .65s both}
-      .method{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
-      .method-card{border:1px solid #dbe3ef;border-radius:16px;background:#fff;padding:13px;min-height:96px;box-shadow:0 14px 32px rgba(15,23,42,.08);opacity:0;animation:rise .65s both}
-      .method-card b{display:block;color:#0891b2;margin-bottom:6px}
-      .diagram{margin:18px 0;border-radius:20px;background:rgba(255,255,255,.86);border:1px solid #dbe3ef;padding:14px}
-      .edge{stroke-dasharray:420;stroke-dashoffset:420;animation:draw 1.1s .2s both}.node{opacity:0;animation:pop .58s both}
-      .wb-table{width:100%;border-collapse:collapse;margin-top:16px;background:#fff;border-radius:16px;overflow:hidden}.wb-table th,.wb-table td{border:1px solid #e2e8f0;padding:10px;text-align:left;vertical-align:top}.wb-table th{background:#e0f2fe;color:#0f172a}
-      @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes pop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}@keyframes draw{to{stroke-dashoffset:0}}
-      @media(max-width:760px){.method{grid-template-columns:1fr}}
-    </style>
-    <section class="wb">
-      <h2>${title}</h2>
-      <div class="wb-summary">${summary.map((item) => `<p>${htmlEscape(item)}</p>`).join('')}</div>
-      ${formulas.length ? `<div class="formula-list">${formulas.map((formula, index) => `<div class="formula" style="animation-delay:${index * 0.12}s">${htmlEscape(formula)}</div>`).join('')}</div>` : ''}
-      <div class="method">${methodItems.slice(0, 6).map((item, index) => `<div class="method-card" style="animation-delay:${0.1 + index * 0.1}s"><b>${index + 1}</b>${htmlEscape(item)}</div>`).join('')}</div>
-      <div class="diagram">
-        <svg viewBox="0 0 980 250" role="img" aria-label="${zh ? '回答推导流程图' : 'Answer derivation flow'}">
-          <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#64748b"></path></marker></defs>
-          ${edges}
-          ${boxes}
-        </svg>
-      </div>
-      ${tableHtml}
-    </section>
-  `, 30000)
-}
-
 function visualLength(text: string) {
   return Array.from(text).reduce((total, char) => total + (/[\u4e00-\u9fff]/.test(char) ? 2 : 1), 0)
 }
@@ -981,17 +872,17 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ? `题目约束只用于确定场景，不要逐字复制到白板：${challenge.description}`
     : `Problem constraints are only for grounding; do not copy them into the board: ${challenge.description}`
   const phases = zh
-    ? '白板必须按四步组织：1) Socratic 提问/诊断，2) 架构或概念分析，3) 按题目拆解关键要点，4) 完整答案结构。'
-    : 'The board must use four steps: 1) Socratic question/diagnosis, 2) architecture or concept analysis, 3) problem-specific key decomposition, 4) complete answer structure.'
+    ? 'Markdown/Mermaid 白板必须按四步组织：1) Socratic 提问/诊断，2) 架构或概念分析，3) 按题目拆解关键要点，4) 完整答案结构。HTML 白板不要使用这四段结构。'
+    : 'The Markdown/Mermaid board must use four steps: 1) Socratic question/diagnosis, 2) architecture or concept analysis, 3) problem-specific key decomposition, 4) complete answer structure. The HTML board must not use these four sections.'
   const limits = zh
-    ? '必须同时输出两种白板产物：A) markdown/mermaid 图文白板，B) html 动画白板。html 必须基于你本轮自然语言回答和白板步骤重新分析生成，不能使用通用模板、占位文字或“Known/Relation/Transform”套话。HTML 需要把本题涉及的相关公式、原理、方法、流程图、架构图和关键表格仔细绘制出来：用 SVG/div 表达公式推导、变量流、状态流、控制流、数据流、组件依赖、边界条件和指标变化；用 table/card 展示符号定义、步骤含义、复杂度/指标/trade-off；用 CSS animation/keyframes 高亮过程，最后停留为一张清晰可读的总结图。顶层必须有 mermaid 总图，并允许在 steps 中输出必要的局部 mermaid：architecture_concepts 步要给局部架构图，decomposition 或 complete_answer 步要给局部流程图；不要每一步都机械给图，避免页面重复堆图。每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表。所有原理性解释都必须这样处理，不只限于 LLM：数学公式、物理过程、算法机制、操作系统/网络/编译器/数据库、硬件/芯片/电路、AI 模型、工程架构都要给“公式或不变量 + 总图 + 必要局部架构/流程图 + 每步解释”。html 字段必须是一段可独立嵌入的 HTML 片段，使用内联 <style>、CSS keyframes、SVG、div/span/table，不要使用 JavaScript、script、iframe、外链资源、网络图片或表单。顶层 Mermaid 控制在 5-8 个节点、4-7 条边；局部 Mermaid 控制在 3-6 个节点、2-5 条边；HTML 控制在 1800-30000 字符内。'
-    : 'Output two whiteboard artifacts at the same time: A) markdown/mermaid board, B) animated HTML board. The html must be generated from your own natural-language answer and whiteboard steps for this exact problem. Do not use a generic template, placeholder text, or "Known/Relation/Transform" boilerplate. The HTML must carefully draw the relevant formulas, principles, methods, flow diagrams, architecture diagrams, and key tables for this problem: use SVG/div to show derivation, variable flow, state flow, control flow, data flow, component dependencies, boundary conditions, and metric changes; use tables/cards for symbol definitions, step meanings, complexity/metrics/trade-offs; use CSS animation/keyframes to highlight the process and settle into one clear final summary diagram. Include a top-level mermaid overview and allow necessary local mermaid diagrams inside steps: architecture_concepts should include a local architecture diagram, and decomposition or complete_answer should include a local flow diagram. Do not mechanically add a diagram to every step. Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Apply this to every principle explanation, not only LLMs. The html field must be a self-contained embeddable HTML fragment using inline <style>, CSS keyframes, SVG, div/span/table. Do not use JavaScript, script, iframe, external resources, network images, or forms. Keep top-level Mermaid to 5-8 nodes and 4-7 edges; local Mermaid to 3-6 nodes and 2-5 edges; HTML to 1800-30000 characters.'
+    ? '必须同时输出两种白板产物：A) markdown/mermaid 图文白板，B) html 动画白板。Markdown 负责四步讲解；HTML 是另一套面向视觉理解的产物，必须先阅读你本轮 Arena Chat 自然语言回答，抽取其中真正需要可视化的公式、原理、方法、流程、架构、状态变化、变量关系、复杂度/指标和 trade-off，然后重新设计为一张详细的 SVG/HTML 动画讲解页。HTML 禁止使用“Socratic/架构和概念/问题分解/完整答案”四段标题，禁止照搬 markdown steps，禁止通用模板、占位文字或“Known/Relation/Transform”套话。HTML 必须至少包含：1) 一个本题专属 SVG 主图，表达公式推导、变量流、状态流、控制流、数据流或组件依赖；2) 一个符号/组件/指标定义表；3) 一个过程动画，用 CSS keyframes 高亮从输入到中间状态再到结论的路径；4) 一个最后静止可读的总结图或矩阵。顶层必须有 mermaid 总图，并允许在 steps 中输出必要的局部 mermaid：architecture_concepts 步要给局部架构图，decomposition 或 complete_answer 步要给局部流程图；不要每一步都机械给图，避免页面重复堆图。每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表。所有原理性解释都必须这样处理，不只限于 LLM：数学公式、物理过程、算法机制、操作系统/网络/编译器/数据库、硬件/芯片/电路、AI 模型、工程架构都要给“公式或不变量 + 总图 + 必要局部架构/流程图 + 每步解释”。html 字段必须是一段可独立嵌入的 HTML 片段，使用内联 <style>、CSS keyframes、SVG、div/span/table，不要使用 JavaScript、script、iframe、外链资源、网络图片或表单。顶层 Mermaid 控制在 5-8 个节点、4-7 条边；局部 Mermaid 控制在 3-6 个节点、2-5 条边；HTML 控制在 2200-30000 字符内。'
+    : 'Output two whiteboard artifacts at the same time: A) markdown/mermaid board, B) animated HTML board. Markdown owns the four-step explanation. HTML is a separate visual artifact: read your Arena Chat natural-language answer, extract the formulas, principles, methods, flows, architecture, state transitions, variable relations, complexity/metrics, and trade-offs that genuinely need visualization, then redesign them as one detailed SVG/HTML animated explanation page. The HTML must not use "Socratic / architecture and concepts / decomposition / complete answer" sections, must not copy markdown steps, and must not use generic templates, placeholders, or "Known/Relation/Transform" boilerplate. HTML must include at least: 1) one problem-specific SVG main diagram showing derivation, variable flow, state flow, control flow, data flow, or component dependencies; 2) one symbol/component/metric definition table; 3) one CSS keyframes process animation highlighting the path from input to intermediate state to conclusion; 4) one final static readable summary diagram or matrix. Include a top-level mermaid overview and allow necessary local mermaid diagrams inside steps: architecture_concepts should include a local architecture diagram, and decomposition or complete_answer should include a local flow diagram. Do not mechanically add a diagram to every step. Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Apply this to every principle explanation, not only LLMs. The html field must be a self-contained embeddable HTML fragment using inline <style>, CSS keyframes, SVG, div/span/table. Do not use JavaScript, script, iframe, external resources, network images, or forms. Keep top-level Mermaid to 5-8 nodes and 4-7 edges; local Mermaid to 3-6 nodes and 2-5 edges; HTML to 2200-30000 characters.'
   const example = JSON.stringify({
     format: 'steps',
     title: '答案白板',
     summary: ['白板先展示一张最终总图，再按步骤解释公式、指标和取舍。'],
     mermaid: 'flowchart LR\n  Goal["goal / known state"] --> Model["core relation"]\n  Model --> Transform["transform / mechanism"]\n  Transform --> State["intermediate state"]\n  State --> Check{"boundary check"}\n  Check --> Answer["final answer / metric"]\n  classDef input fill:#dbeafe,stroke:#2563eb,color:#0f172a;\n  classDef core fill:#ede9fe,stroke:#7c3aed,color:#2e1065;\n  classDef state fill:#fef3c7,stroke:#d97706,color:#451a03;\n  classDef metric fill:#dcfce7,stroke:#16a34a,color:#052e16;\n  class Goal input;\n  class Model,Transform core;\n  class State,Check state;\n  class Answer metric;',
-    html: '<style>/* 示例只展示字段形式，实际必须替换为本题具体公式、图、表和动画 */.wb{font-family:Inter,system-ui,sans-serif;padding:24px}.formula,.board-table{margin-top:12px}.flow-node{animation:stepIn .7s both}@keyframes stepIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}</style><section class="wb"><h2>必须替换为本题标题</h2><svg viewBox="0 0 900 260"><!-- 这里绘制本题具体流程图/架构图/公式变量流 --></svg><table class="board-table"><tr><th>符号/组件</th><th>本题含义</th></tr><tr><td>必须替换</td><td>必须来自本轮回答</td></tr></table><div class="formula">必须替换为本题公式推导或不变量</div></section>',
+    html: '<style>.wb{font-family:Inter,system-ui,sans-serif;padding:24px}.visual-node{animation:trace .9s both}@keyframes trace{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}</style><section class="wb" data-html-board="answer-specific"><h2>本题专属 HTML 标题</h2><svg viewBox="0 0 900 320" role="img" aria-label="本题专属 SVG 主图"><!-- 必须绘制本轮回答里的具体公式/变量流/流程/架构，不要复制此示例布局 --></svg><table><tr><th>符号/组件/指标</th><th>含义</th><th>在本轮回答中的作用</th></tr></table></section>',
     steps: [
       {
         stage: 'socratic',
@@ -1018,8 +909,8 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ],
   })
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 段落、表格、LaTeX 公式、Mermaid 和自包含 HTML/CSS 动画，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：必须有顶层 mermaid 总图；必须有顶层 html 动画；必须至少有一个 steps[*].mermaid 局部架构图或局部流程图；四个 steps 都要有；每步的 markdown 至少包含解释文字和必要公式/指标定义，不能只有表格；每步 markdown 必须总结本轮回答；html 必须基于你刚刚的回答重新绘制本题相关公式、原理、流程图、架构图和表格，不能照抄示例、不能输出模板占位、不能只画通用步骤；不要画题目原文；不要输出 WHITEBOARD_OPS。`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown paragraphs, tables, LaTeX formulas, Mermaid, and self-contained HTML/CSS animation, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include a top-level mermaid overview; include a top-level html animation; include at least one steps[*].mermaid local architecture or flow diagram; include all four steps; each step markdown must include explanatory prose and required formulas/metric definitions, not just a table; each step markdown must summarize this reply; html must redraw the formulas, principles, flow diagrams, architecture diagrams, and tables from your answer for this exact problem; do not copy the example, output placeholders, or draw only generic stages; do not draw prompt text; do not output WHITEBOARD_OPS.`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 段落、表格、LaTeX 公式、Mermaid 和自包含 HTML/CSS 动画，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下，示例只说明字段，不允许复制示例内容或布局：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：必须有顶层 mermaid 总图；必须有顶层 html 动画；必须至少有一个 steps[*].mermaid 局部架构图或局部流程图；四个 steps 都要有；每步的 markdown 至少包含解释文字和必要公式/指标定义，不能只有表格；每步 markdown 必须总结本轮回答；html 必须从你刚刚的 Arena Chat 回答中抽取公式、原理、方法、流程和架构重新设计为详细 SVG/HTML 动画，不能按四步结构组织，不能照抄示例，不能输出模板占位，不能只画通用步骤；不要画题目原文；不要输出 WHITEBOARD_OPS。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown paragraphs, tables, LaTeX formulas, Mermaid, and self-contained HTML/CSS animation, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format; the example only documents fields and must not be copied as content or layout:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include a top-level mermaid overview; include a top-level html animation; include at least one steps[*].mermaid local architecture or flow diagram; include all four steps; each step markdown must include explanatory prose and required formulas/metric definitions, not just a table; each step markdown must summarize this reply; html must extract formulas, principles, methods, flows, and architecture from your Arena Chat answer and redesign them as detailed SVG/HTML animation; do not organize HTML by the four markdown steps, copy the example, output placeholders, or draw only generic stages; do not draw prompt text; do not output WHITEBOARD_OPS.`
 }
 
 export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardPayload | null {
@@ -1032,10 +923,6 @@ export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardP
     try {
       const parsed = JSON.parse(candidate.trim()) as WhiteboardDiagramPayload
       const diagram = sanitizeDiagramPayload(parsed)
-      if (!diagram.html) {
-        const answerText = stripWhiteboardPayload(source)
-        diagram.html = deriveWhiteboardHtmlFromAnswer(answerText, diagram)
-      }
       const elements = diagramPayloadToElements(parsed)
       if (elements.length || diagram.steps?.length || diagram.mermaid || diagram.markdown || diagram.html) {
         return { elements, note: safeString(parsed.title, 240) || undefined, diagram }
