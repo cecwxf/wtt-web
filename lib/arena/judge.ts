@@ -136,21 +136,20 @@ function cFloatMatrix(values: unknown) {
   }).join(', ')
 }
 
-function buildOpenCLHost(challenge: Challenge, stdin: string) {
-  const input = JSON.parse(stdin || '{}') as { payload?: { op?: string; values?: unknown[]; matrix?: unknown[] } }
+function buildOpenCLHost(challenge: Challenge, stdin: string, expectedOutput: string) {
+  const input = JSON.parse(stdin || '{}') as { payload?: { op?: string; seed?: number; values?: unknown[]; matrix?: unknown[] } }
+  const expected = JSON.parse(expectedOutput) as unknown
   const op = String(input.payload?.op || '')
-  if (op === 'gemm' || challenge.id === 'ai-gemm') {
-    return buildOpenCLGemmHost(challenge, input.payload?.matrix)
+  if (Array.isArray(expected) && expected.every((row) => Array.isArray(row))) {
+    return buildOpenCLGemmHost(challenge, input.payload?.matrix, expected)
   }
-  if (op !== 'vector_add' && op !== 'relu' && op !== 'softmax') {
-    throw new Error(`Local macOS OpenCL runner currently supports ai-vector-add, ai-relu, ai-softmax, and ai-gemm; ${challenge.id} uses op=${op}`)
-  }
-
   const values = op === 'softmax' ? input.payload?.values?.slice(0, 4) : input.payload?.values
   const kernelName = JSON.stringify(challenge.function_name)
   const arrayLiteral = cFloatArray(values)
-  const n = Array.isArray(values) ? values.length : 0
-  if (n <= 0) throw new Error('OpenCL runner requires at least one input value')
+  const inputN = Array.isArray(values) ? values.length : 0
+  if (inputN <= 0) throw new Error('OpenCL runner requires at least one input value')
+  const outputN = Array.isArray(expected) ? expected.length : 1
+  const outputKind = Array.isArray(expected) ? 'array' : typeof expected === 'number' ? 'scalar' : 'checksum_object'
   const fixedOutput = op === 'softmax'
 
   return `#include <OpenCL/opencl.h>
@@ -184,15 +183,26 @@ static char* read_file(const char* path, size_t* size) {
   return buffer;
 }
 
+static void print_number(float value) {
+  if (${fixedOutput ? '1' : '0'}) {
+    printf("%.6f", value);
+  } else if (fabsf(value - roundf(value)) < 0.00001f) {
+    printf("%.0f", value);
+  } else {
+    printf("%.6g", value);
+  }
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: opencl_runner kernel.cl\\n");
     return 2;
   }
 
-  const int n = ${n};
-  float input[${n}] = { ${arrayLiteral} };
-  float output[${n}] = {0};
+  const int n = ${inputN};
+  const int output_n = ${outputN};
+  float input[${inputN}] = { ${arrayLiteral} };
+  float output[${outputN}] = {0};
   const char* kernel_name = ${kernelName};
 
   cl_int err = CL_SUCCESS;
@@ -247,7 +257,7 @@ int main(int argc, char** argv) {
   err = clSetKernelArg(kernel, 2, sizeof(int), &n);
   if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
 
-  size_t global = (size_t)n;
+  size_t global = (size_t)(output_n > n ? output_n : n);
   err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, NULL, 0, NULL, NULL);
   if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
   err = clFinish(queue);
@@ -255,18 +265,21 @@ int main(int argc, char** argv) {
   err = clEnqueueReadBuffer(queue, output_buffer, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL);
   if (err != CL_SUCCESS) fail("clEnqueueReadBuffer", err);
 
-  printf("[");
-  for (int i = 0; i < n; ++i) {
-    if (i) printf(",");
-    if (${fixedOutput ? '1' : '0'}) {
-      printf("%.6f", output[i]);
-    } else if (fabsf(output[i] - roundf(output[i])) < 0.00001f) {
-      printf("%.0f", output[i]);
-    } else {
-      printf("%.6g", output[i]);
+  if (strcmp("${outputKind}", "scalar") == 0) {
+    print_number(output[0]);
+    printf("\\n");
+  } else if (strcmp("${outputKind}", "checksum_object") == 0) {
+    printf("{\\"checksum\\":");
+    print_number(output[0]);
+    printf(",\\"op\\":\\"${op}\\",\\"seed\\":${Number(input.payload?.seed || 0)}}\\n");
+  } else {
+    printf("[");
+    for (int i = 0; i < output_n; ++i) {
+      if (i) printf(",");
+      print_number(output[i]);
     }
+    printf("]\\n");
   }
-  printf("]\\n");
 
   clReleaseMemObject(output_buffer);
   clReleaseMemObject(input_buffer);
@@ -280,9 +293,12 @@ int main(int argc, char** argv) {
 `
 }
 
-function buildOpenCLGemmHost(challenge: Challenge, matrix: unknown) {
+function buildOpenCLGemmHost(challenge: Challenge, matrix: unknown, expected: unknown[]) {
   const kernelName = JSON.stringify(challenge.function_name)
   const matrixLiteral = cFloatMatrix(matrix)
+  const rows = expected.length
+  const cols = Array.isArray(expected[0]) ? expected[0].length : 0
+  if (rows <= 0 || cols <= 0) throw new Error('OpenCL matrix runner requires a non-empty 2D expected output')
   return `#include <OpenCL/opencl.h>
 #include <math.h>
 #include <stdio.h>
@@ -328,12 +344,12 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  const int m = 2;
-  const int n = 2;
+  const int m = ${rows};
+  const int n = ${cols};
   const int k = 2;
   float a[4] = { ${matrixLiteral} };
   float b[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
-  float c[4] = {0};
+  float c[${rows * cols}] = {0};
   const char* kernel_name = ${kernelName};
 
   cl_int err = CL_SUCCESS;
@@ -404,15 +420,17 @@ int main(int argc, char** argv) {
   err = clEnqueueReadBuffer(queue, c_buffer, CL_TRUE, 0, sizeof(c), c, 0, NULL, NULL);
   if (err != CL_SUCCESS) fail("clEnqueueReadBuffer", err);
 
-  printf("[[");
-  print_number(c[0]);
-  printf(",");
-  print_number(c[1]);
-  printf("],[");
-  print_number(c[2]);
-  printf(",");
-  print_number(c[3]);
-  printf("]]\\n");
+  printf("[");
+  for (int row = 0; row < m; ++row) {
+    if (row) printf(",");
+    printf("[");
+    for (int col = 0; col < n; ++col) {
+      if (col) printf(",");
+      print_number(c[row * n + col]);
+    }
+    printf("]");
+  }
+  printf("]\\n");
 
   clReleaseMemObject(c_buffer);
   clReleaseMemObject(b_buffer);
@@ -427,10 +445,27 @@ int main(int argc, char** argv) {
 `
 }
 
-async function runProcess(command: string, args: string[], timeoutMs: number, cwd?: string): Promise<RawRunResult> {
+function parseMaxRssKb(stderr: string) {
+  const match = stderr.match(/^\s*(\d+)\s+maximum resident set size/m)
+  if (!match) return undefined
+  const raw = Number(match[1])
+  if (!Number.isFinite(raw) || raw <= 0) return undefined
+  return raw > 1024 * 1024 ? Math.round(raw / 1024) : raw
+}
+
+function stripTimeResourceLines(stderr: string) {
+  return stderr
+    .split('\n')
+    .filter((line) => !/^\s*\d+(\.\d+)?\s+(real|user|sys|maximum resident set size|average shared memory size|average unshared data size|average unshared stack size|page reclaims|page faults|swaps|block input operations|block output operations|messages sent|messages received|signals received|voluntary context switches|involuntary context switches|instructions retired|cycles elapsed|peak memory footprint)/.test(line))
+    .join('\n')
+    .trim()
+}
+
+async function runProcess(command: string, args: string[], timeoutMs: number, cwd?: string, measureResources = false): Promise<RawRunResult> {
   const started = Date.now()
   return await new Promise<RawRunResult>((resolve) => {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    const timed = measureResources && process.platform === 'darwin'
+    const child = spawn(timed ? '/usr/bin/time' : command, timed ? ['-l', command, ...args] : args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
     let settled = false
     const finish = (result: RawRunResult) => {
       if (settled) return
@@ -451,19 +486,22 @@ async function runProcess(command: string, args: string[], timeoutMs: number, cw
     })
     child.on('close', (code) => {
       clearTimeout(timer)
-      const err = Buffer.concat(stderr).toString('utf8')
+      const rawErr = Buffer.concat(stderr).toString('utf8')
+      const memoryKb = timed ? parseMaxRssKb(rawErr) : undefined
+      const err = timed ? stripTimeResourceLines(rawErr) : rawErr
       finish({
         status: code === 0 ? 'accepted' : 'runtime_error',
         stdout: Buffer.concat(stdout).toString('utf8'),
         stderr: err,
         error_message: code === 0 ? undefined : err.split('\n').slice(-8).join('\n'),
         runtime_ms: Date.now() - started,
+        memory_kb: memoryKb,
       })
     })
   })
 }
 
-async function runLocalOpenCL(code: string, stdin: string, timeoutMs: number, challenge: Challenge): Promise<RawRunResult> {
+async function runLocalOpenCL(code: string, stdin: string, expectedOutput: string, timeoutMs: number, challenge: Challenge): Promise<RawRunResult> {
   if (process.platform !== 'darwin') {
     return { status: 'system_error', stdout: '', stderr: '', error_message: 'Local OpenCL runner is enabled for macOS Mac mini runner only.' }
   }
@@ -474,14 +512,14 @@ async function runLocalOpenCL(code: string, stdin: string, timeoutMs: number, ch
   const binFile = join(dir, 'runner')
   try {
     await writeFile(kernelFile, code, 'utf8')
-    await writeFile(hostFile, buildOpenCLHost(challenge, stdin), 'utf8')
+    await writeFile(hostFile, buildOpenCLHost(challenge, stdin, expectedOutput), 'utf8')
 
     const compile = await runProcess('clang', [hostFile, '-framework', 'OpenCL', '-o', binFile], timeoutMs, dir)
     if (compile.status !== 'accepted') {
       return { ...compile, status: 'compile_error', compile_output: compile.stderr || compile.stdout }
     }
 
-    return await runProcess(binFile, [kernelFile], timeoutMs, dir)
+    return await runProcess(binFile, [kernelFile], timeoutMs, dir, true)
   } catch (error) {
     return { status: 'system_error', stdout: '', stderr: '', error_message: error instanceof Error ? error.message : String(error) }
   } finally {
@@ -582,7 +620,7 @@ export async function judgeSubmission(input: JudgeInput) {
     const raw = provider === 'judge0'
       ? await runJudge0(harness, testCase.input, challenge.time_limit_ms)
       : provider === 'agent-local-opencl-macos'
-        ? await runLocalOpenCL(harness, testCase.input, challenge.time_limit_ms, challenge)
+        ? await runLocalOpenCL(harness, testCase.input, testCase.expected_output, challenge.time_limit_ms, challenge)
       : provider === 'agent-local-python'
         ? await runLocalPython(harness, testCase.input, challenge.time_limit_ms)
         : { status: 'system_error' as const, stdout: '', stderr: '', error_message: 'Configure JUDGE0_URL, choose OpenCL on macOS, or set WTT_ARENA_JUDGE_PROVIDER=agent-local for an isolated Agent-runner smoke environment.' }
