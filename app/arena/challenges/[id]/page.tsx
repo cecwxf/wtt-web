@@ -518,13 +518,15 @@ function openClStarter(challenge: Challenge) {
   clSetKernelArg(kernel, 4, sizeof(int), &N);
   clSetKernelArg(kernel, 5, sizeof(int), &K);
   size_t global[2] = { (size_t)N, (size_t)M };
-  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+  cl_event kernel_event = NULL;
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, &kernel_event);
   if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
   clFinish(queue);
   clEnqueueReadBuffer(queue, c_buf, CL_TRUE, 0, sizeof(C), C, 0, NULL, NULL);
   printf("output = [[");
   print_number(C[0]); printf(","); print_number(C[1]); printf("],[");
   print_number(C[2]); printf(","); print_number(C[3]); printf("]]\\n");
+  print_kernel_time(kernel_event);
   clReleaseMemObject(c_buf);
   clReleaseMemObject(b_buf);
   clReleaseMemObject(a_buf);`
@@ -546,13 +548,15 @@ function openClStarter(challenge: Challenge) {
   clSetKernelArg(kernel, 3, sizeof(int), &rows);
   clSetKernelArg(kernel, 4, sizeof(int), &cols);
   size_t global[2] = { (size_t)cols, (size_t)rows };
-  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+  cl_event kernel_event = NULL;
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, &kernel_event);
   if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
   clFinish(queue);
   clEnqueueReadBuffer(queue, c_buf, CL_TRUE, 0, sizeof(C), C, 0, NULL, NULL);
   printf("output = [[");
   print_number(C[0]); printf(","); print_number(C[1]); printf("],[");
   print_number(C[2]); printf(","); print_number(C[3]); printf("]]\\n");
+  print_kernel_time(kernel_event);
   clReleaseMemObject(c_buf);
   clReleaseMemObject(b_buf);
   clReleaseMemObject(a_buf);`
@@ -570,13 +574,15 @@ function openClStarter(challenge: Challenge) {
   clSetKernelArg(kernel, 2, sizeof(int), &rows);
   clSetKernelArg(kernel, 3, sizeof(int), &cols);
   size_t global[2] = { (size_t)${mode === 'transpose' ? 'rows' : 'cols'}, (size_t)${mode === 'transpose' ? 'cols' : 'rows'} };
-  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+  cl_event kernel_event = NULL;
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, &kernel_event);
   if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
   clFinish(queue);
   clEnqueueReadBuffer(queue, output_buf, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL);
   ${mode === 'copy'
     ? 'printf("output = {\\"copied\\":[[");\n  print_number(output[0]); printf(","); print_number(output[1]); printf("],[");\n  print_number(output[2]); printf(","); print_number(output[3]); printf("]],\\"checksum\\":30000}\\n");'
     : 'printf("output = [[");\n  print_number(output[0]); printf(","); print_number(output[1]); printf("],[");\n  print_number(output[2]); printf(","); print_number(output[3]); printf("]]\\n");'}
+  print_kernel_time(kernel_event);
   clReleaseMemObject(output_buf);
   clReleaseMemObject(input_buf);`
         : `  const int n = ${challenge.tags.includes('softmax') ? 4 : 5};
@@ -592,13 +598,15 @@ function openClStarter(challenge: Challenge) {
   clSetKernelArg(kernel, 1, sizeof(cl_mem), &output_buf);
   clSetKernelArg(kernel, 2, sizeof(int), &n);
   size_t global = ${globalN};
-  err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, NULL, 0, NULL, NULL);
+  cl_event kernel_event = NULL;
+  err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, NULL, 0, NULL, &kernel_event);
   if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
   clFinish(queue);
   clEnqueueReadBuffer(queue, output_buf, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL);
   ${outputKind === 'scalar' || outputKind === 'checksum_object'
     ? 'printf("output = "); print_number(output[0]); printf("\\n");'
     : 'printf("output = ["); for (int i = 0; i < output_n; ++i) { if (i) printf(","); print_number(output[i]); } printf("]\\n");'}
+  print_kernel_time(kernel_event);
   clReleaseMemObject(output_buf);
   clReleaseMemObject(values_buf);`
 
@@ -634,6 +642,18 @@ static void print_number(float value) {
   else printf("%.6g", value);
 }
 
+static void print_kernel_time(cl_event event) {
+  cl_ulong start = 0;
+  cl_ulong end = 0;
+  if (!event) return;
+  if (clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(start), &start, NULL) == CL_SUCCESS &&
+      clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL) == CL_SUCCESS &&
+      end >= start) {
+    printf("kernel_time_ms = %.6f\\n", (double)(end - start) / 1000000.0);
+  }
+  clReleaseEvent(event);
+}
+
 int main(void) {
   cl_int err = CL_SUCCESS;
   cl_platform_id platform = NULL;
@@ -651,7 +671,7 @@ int main(void) {
 
   context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
   if (err != CL_SUCCESS) fail("clCreateContext", err);
-  queue = clCreateCommandQueue(context, device, 0, &err);
+  queue = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
   if (err != CL_SUCCESS) fail("clCreateCommandQueue", err);
   program = clCreateProgramWithSource(context, 1, &KERNEL_SOURCE, NULL, &err);
   if (err != CL_SUCCESS) fail("clCreateProgramWithSource", err);
@@ -1621,7 +1641,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     const optimisticSubmission: Submission = {
       id: `local-judging-${Date.now()}`,
       challenge_id: challenge.id,
-      user_id: 'demo-user',
+      user_id: arenaActor,
       language,
       code,
       status: 'judging',
@@ -1641,7 +1661,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const response = await fetch(`/api/arena/challenges/${challenge.id}/submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, environment: kernelEnvironment, code, user_id: 'demo-user' }),
+        body: JSON.stringify({ language, environment: kernelEnvironment, code, user_id: arenaActor }),
       })
       const data = await response.json().catch(() => null) as { submission?: Submission; detail?: string } | null
       if (!response.ok || !data?.submission) {
@@ -1896,10 +1916,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     sendAgentChat(action.intent, message)
   }
 
-
   if (!payload || !challenge) {
     return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading Arena...</main>
   }
+  const challengeAccepted = submission?.status === 'accepted'
+  const submissionIsOpenCL = isOpenCLProvider(submission?.judge_provider)
+  const runtimeLabel = submissionIsOpenCL ? 'kernel runtime' : 'runtime'
+  const memoryLabel = submissionIsOpenCL ? 'kernel memory' : 'memory'
 
   const arenaLayoutStyle = !isCoding
     ? {
@@ -1956,7 +1979,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             <div className="h-full overflow-y-auto p-5 pb-24">
               {activeTab === 'description' && (
                 <div>
-                  <h1 className="text-3xl font-black tracking-tight text-white">{challenge.title}</h1>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-3xl font-black tracking-tight text-white">{challenge.title}</h1>
+                    {challengeAccepted && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
+                        ✓ {locale === 'zh' ? '已通过' : 'Accepted'}
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {isGaokaoVolunteer ? (
                       <span className="rounded-full border border-blue-400/20 bg-blue-400/10 px-2.5 py-1 text-xs font-semibold text-blue-200">Ask 咨询</span>
@@ -2017,14 +2047,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   {submission && (
                     <div className="space-y-3">
                       <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone(submission.status)}`}>{submission.status} · score {submission.score}</div>
-                      <p className="text-sm text-gray-500">{passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · runtime {submission.runtime_ms || '-'}ms · {isOpenCLProvider(submission.judge_provider) ? 'kernel memory' : 'memory'} {submission.memory_kb || '-'}KB</p>
+                      <p className="text-sm text-gray-500">
+                        user <span className="font-bold text-gray-300">{submission.user_id}</span> · {passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · {runtimeLabel} {submission.runtime_ms || '-'}ms · {memoryLabel} {submission.memory_kb || '-'}KB
+                      </p>
                       {submission.results.map((result, index) => (
                         <div key={result.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
                             <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                           </div>
-                          <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · {isOpenCLProvider(submission.judge_provider) ? 'kernel memory' : 'memory'} {result.memory_kb || '-'}KB</p>
+                          <p className="mt-2 text-xs text-gray-500">{runtimeLabel} {result.runtime_ms || '-'}ms · {memoryLabel} {result.memory_kb || '-'}KB</p>
                           {!result.is_hidden && result.input && <pre className="mt-3 whitespace-pre-wrap text-gray-400">input: {result.input}</pre>}
                           {!result.is_hidden && result.expected_output && <pre className="mt-3 whitespace-pre-wrap text-gray-400">expected: {result.expected_output}</pre>}
                           {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-gray-400">stdout: {result.stdout}</pre>}
@@ -2113,7 +2145,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 {submission ? (
                   <div className="mt-4 grid gap-2 text-sm text-gray-400 sm:grid-cols-2">
                     <p>score: <span className="text-white">{submission.score}</span></p>
-                    <p>runtime: <span className="text-white">{submission.runtime_ms || '-'}ms</span></p>
+                    <p>{runtimeLabel}: <span className="text-white">{submission.runtime_ms || '-'}ms</span></p>
                     <p>language: <span className="text-white">{submission.language}</span></p>
                     <p>provider: <span className="text-white">{submission.judge_provider}</span></p>
                     <p className="sm:col-span-2 text-gray-500">{t.hidden}</p>

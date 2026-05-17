@@ -55,7 +55,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const judgedCaseCount = judged.results.length || getChallengeTestCases(challenge.id).length
     const metricSummary = [
       `${acceptedCount}/${judgedCaseCount} tests accepted`,
-      `runtime ${judged.runtime_ms}ms`,
+      `${isOpenCLJudgeProvider(judged.provider) ? 'kernel runtime' : 'runtime'} ${judged.runtime_ms}ms`,
       judged.memory_kb ? `${isOpenCLJudgeProvider(judged.provider) ? 'kernel memory' : 'memory'} ${judged.memory_kb}KB` : undefined,
       judged.provider === OPENCL_MAC_SKILL ? `skill ${OPENCL_MAC_SKILL}` : undefined,
     ].filter(Boolean).join(' · ')

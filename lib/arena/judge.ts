@@ -88,6 +88,13 @@ function normalizeProgramStdout(stdout: string) {
   return output || trimmed
 }
 
+function extractKernelRuntimeMs(stdout: string) {
+  const match = stdout.match(/(?:^|\n)\s*kernel_time_ms\s*=\s*([0-9]+(?:\.[0-9]+)?)/)
+  if (!match) return undefined
+  const runtime = Number(match[1])
+  return Number.isFinite(runtime) ? Number(runtime.toFixed(6)) : undefined
+}
+
 function attachPublicCaseData(results: SubmissionResult[], testCases: ChallengeTestCase[]) {
   const casesById = new Map(testCases.map((testCase) => [testCase.id, testCase]))
   return results.map((result) => {
@@ -718,6 +725,18 @@ static void print_number(float value) {
   }
 }
 
+static void print_kernel_time(cl_event event) {
+  cl_ulong start = 0;
+  cl_ulong end = 0;
+  if (!event) return;
+  if (clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(start), &start, NULL) == CL_SUCCESS &&
+      clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL) == CL_SUCCESS &&
+      end >= start) {
+    printf("kernel_time_ms = %.6f\\n", (double)(end - start) / 1000000.0);
+  }
+  clReleaseEvent(event);
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: opencl_runner kernel.cl\\n");
@@ -749,7 +768,7 @@ int main(int argc, char** argv) {
   cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
   if (err != CL_SUCCESS) fail("clCreateContext", err);
 
-  cl_command_queue queue = clCreateCommandQueue(context, device, 0, &err);
+  cl_command_queue queue = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
   if (err != CL_SUCCESS) fail("clCreateCommandQueue", err);
 
   size_t source_size = 0;
@@ -783,7 +802,8 @@ int main(int argc, char** argv) {
   if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
 
   size_t global = (size_t)(output_n > n ? output_n : n);
-  err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, NULL, 0, NULL, NULL);
+  cl_event kernel_event = NULL;
+  err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, NULL, 0, NULL, &kernel_event);
   if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
   err = clFinish(queue);
   if (err != CL_SUCCESS) fail("clFinish", err);
@@ -805,6 +825,7 @@ int main(int argc, char** argv) {
     }
     printf("]\\n");
   }
+  print_kernel_time(kernel_event);
 
   clReleaseMemObject(output_buffer);
   clReleaseMemObject(input_buffer);
@@ -863,6 +884,18 @@ static void print_number(float value) {
   }
 }
 
+static void print_kernel_time(cl_event event) {
+  cl_ulong start = 0;
+  cl_ulong end = 0;
+  if (!event) return;
+  if (clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(start), &start, NULL) == CL_SUCCESS &&
+      clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL) == CL_SUCCESS &&
+      end >= start) {
+    printf("kernel_time_ms = %.6f\\n", (double)(end - start) / 1000000.0);
+  }
+  clReleaseEvent(event);
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: opencl_runner kernel.cl\\n");
@@ -896,7 +929,7 @@ int main(int argc, char** argv) {
   cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
   if (err != CL_SUCCESS) fail("clCreateContext", err);
 
-  cl_command_queue queue = clCreateCommandQueue(context, device, 0, &err);
+  cl_command_queue queue = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
   if (err != CL_SUCCESS) fail("clCreateCommandQueue", err);
 
   size_t source_size = 0;
@@ -938,7 +971,8 @@ int main(int argc, char** argv) {
   if (err != CL_SUCCESS) fail("clSetKernelArg(5)", err);
 
   size_t global[2] = { (size_t)n, (size_t)m };
-  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+  cl_event kernel_event = NULL;
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, &kernel_event);
   if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
   err = clFinish(queue);
   if (err != CL_SUCCESS) fail("clFinish", err);
@@ -956,6 +990,7 @@ int main(int argc, char** argv) {
     printf("]");
   }
   printf("]\\n");
+  print_kernel_time(kernel_event);
 
   clReleaseMemObject(c_buffer);
   clReleaseMemObject(b_buffer);
@@ -1057,7 +1092,7 @@ async function runLocalOpenCL(code: string, stdin: string, expectedOutput: strin
         return { ...compile, status: 'compile_error', compile_output: compile.stderr || compile.stdout }
       }
       const run = await runProcess(binFile, [], timeoutMs, dir, stdin)
-      return { ...run, memory_kb: openCLDeviceMemoryKb(stdin, expectedOutput) }
+      return { ...run, runtime_ms: extractKernelRuntimeMs(run.stdout) || run.runtime_ms, memory_kb: openCLDeviceMemoryKb(stdin, expectedOutput) }
     }
 
     await writeFile(kernelFile, code, 'utf8')
@@ -1068,7 +1103,7 @@ async function runLocalOpenCL(code: string, stdin: string, expectedOutput: strin
     }
 
     const run = await runProcess(binFile, [kernelFile], timeoutMs, dir)
-    return { ...run, memory_kb: openCLDeviceMemoryKb(stdin, expectedOutput) }
+    return { ...run, runtime_ms: extractKernelRuntimeMs(run.stdout) || run.runtime_ms, memory_kb: openCLDeviceMemoryKb(stdin, expectedOutput) }
   } catch (error) {
     return { status: 'system_error', stdout: '', stderr: '', error_message: error instanceof Error ? error.message : String(error) }
   } finally {
