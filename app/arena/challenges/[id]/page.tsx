@@ -436,7 +436,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 280, Math.max(300, available)))
           return
         }
-        setChatPanelWidth(clampNumber(bounds.right - moveEvent.clientX, 340, Math.min(720, bounds.width - 420)))
+        const chatLeft = whiteboardExpanded ? bounds.left : bounds.left + leftPanelWidth + 12
+        const available = bounds.width - (whiteboardExpanded ? 420 : leftPanelWidth + 420 + 12)
+        setChatPanelWidth(clampNumber(moveEvent.clientX - chatLeft, 340, Math.min(720, Math.max(340, available))))
       }
       const stop = () => {
         window.removeEventListener('pointermove', handleMove)
@@ -742,8 +744,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftPanelWidth}px minmax(560px, 1fr)`
         : whiteboardExpanded
-        ? `minmax(420px, 1fr) 6px ${chatPanelWidth}px`
-        : `${leftPanelWidth}px 6px minmax(420px, 1fr) 6px ${chatPanelWidth}px`,
+        ? `${chatPanelWidth}px 6px minmax(420px, 1fr)`
+        : `${leftPanelWidth}px 6px ${chatPanelWidth}px 6px minmax(420px, 1fr)`,
     }
     : undefined
 
@@ -945,41 +947,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     <p>provider: <span className="text-white">{submission.judge_provider}</span></p>
                     <p className="sm:col-span-2 text-gray-500">{t.hidden}</p>
                   </div>
-                ) : <p className="mt-4 text-sm text-gray-500">{locale === 'zh' ? '点击 Run & Submit 后查看 Agent 执行结果。' : 'Click Run & Submit to see Agent execution results.'}</p>}
+              ) : <p className="mt-4 text-sm text-gray-500">{locale === 'zh' ? '点击 Run & Submit 后查看 Agent 执行结果。' : 'Click Run & Submit to see Agent execution results.'}</p>}
               </section>
             </section>
-          ) : isGaokaoVolunteer ? null : (
-            <div className="grid min-h-0 gap-2 lg:grid-rows-[auto_1fr]">
-              {!whiteboardExpanded && (
-              <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-[#1e1e1e] px-3 py-2">
-                <div className="flex min-w-0 items-center gap-3">
-                  <p className="shrink-0 text-[11px] font-black uppercase tracking-[0.18em] text-violet-300">{t.interviewMode}</p>
-                  <p className="min-w-0 truncate text-xs text-gray-400">{t.interviewHint}</p>
-                </div>
-              </section>
-              )}
-              <AgentWhiteboard
-                challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
-                locale={locale}
-                diagram={whiteboardDiagram}
-                expanded={whiteboardExpanded}
-                busy={whiteboardBusy || chatSending || arenaSyncing}
-                onExplain={() => requestWhiteboardExplain(false)}
-                onToggleExpand={() => setWhiteboardExpanded((value) => !value)}
-              />
-            </div>
-          )}
+          ) : null}
 
-          {!isCoding && !isGaokaoVolunteer && (
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              onPointerDown={startPanelResize('chat')}
-              className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-[#3ce8e2]/50"
-            />
-          )}
-
-          <aside className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 ${isGaokaoVolunteer ? '' : 'lg:col-span-2 xl:col-span-1'}`}>
+          <aside className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 ${isCoding ? 'lg:col-span-2 xl:col-span-1' : ''}`}>
             <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
               <div className="border-b border-gray-800 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1053,6 +1026,37 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               </form>
             </div>
           </aside>
+
+          {!isCoding && !isGaokaoVolunteer && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onPointerDown={startPanelResize('chat')}
+              className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-[#3ce8e2]/50"
+            />
+          )}
+
+          {!isCoding && !isGaokaoVolunteer && (
+            <div className="grid min-h-0 gap-2 lg:grid-rows-[auto_1fr]">
+              {!whiteboardExpanded && (
+              <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-[#1e1e1e] px-3 py-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <p className="shrink-0 text-[11px] font-black uppercase tracking-[0.18em] text-violet-300">{t.interviewMode}</p>
+                  <p className="min-w-0 truncate text-xs text-gray-400">{t.interviewHint}</p>
+                </div>
+              </section>
+              )}
+              <AgentWhiteboard
+                challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
+                locale={locale}
+                diagram={whiteboardDiagram}
+                expanded={whiteboardExpanded}
+                busy={whiteboardBusy || chatSending || arenaSyncing}
+                onExplain={() => requestWhiteboardExplain(false)}
+                onToggleExpand={() => setWhiteboardExpanded((value) => !value)}
+              />
+            </div>
+          )}
         </div>
       </div>
     </main>
