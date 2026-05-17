@@ -338,123 +338,21 @@ function sanitizeEmbeddedHtml(html: string) {
     .replace(/javascript:/gi, '')
 }
 
-function extractFormulas(markdown: string) {
-  const formulas: string[] = []
-  for (const match of Array.from(markdown.matchAll(/\$\$([\s\S]{4,260}?)\$\$|\$([^$\n]{4,180}?)\$/g))) {
-    const value = (match[1] || match[2] || '').replace(/\s+/g, ' ').trim()
-    if (value && !formulas.includes(value)) formulas.push(value)
-  }
-  return formulas.slice(0, 4)
-}
-
-function extractMermaidLabels(source: string) {
-  const labels: string[] = []
-  for (const match of Array.from(source.matchAll(/\[[("']?([^"'()[\]{}]{2,80})["')]?\]|\{["']?([^"'{}]{2,80})["']?\}|\((["']?[^"'()]{2,80}["']?)\)/g))) {
-    const raw = match[1] || match[2] || match[3] || ''
-    const label = raw.replace(/^["']|["']$/g, '').replace(/\s+/g, ' ').trim()
-    if (label && !labels.includes(label) && !/classDef|class |flowchart|graph /.test(label)) labels.push(label)
-  }
-  return labels.slice(0, 6)
-}
-
-function formulaHint(step: WhiteboardPlayerStep | undefined, fallback: string) {
-  const formulas = extractFormulas(step?.rawMarkdown || '')
-  const source = formulas[0] || `${step?.markdown || ''} ${step?.title || ''}`
-  return (source || fallback).replace(/\s+/g, ' ').trim().slice(0, 150) || fallback
-}
-
-function buildGeneratedAnimationHtml(payload: WhiteboardPlayerPayload) {
+function missingHtmlBody(payload: WhiteboardPlayerPayload) {
   const zh = payload.locale === 'zh'
-  const steps = payload.steps.length ? payload.steps.slice(0, 6) : [
-    { index: 1, stage: '', title: payload.title, markdown: payload.summary.join(' '), rawMarkdown: payload.summary.join('\n'), mermaid: payload.mermaid, html: '', summary: payload.summary },
-  ]
-  const summary = payload.summary.length ? payload.summary : [zh ? '这份 HTML 由当前题目和白板步骤动态生成。' : 'This HTML was dynamically generated from the current challenge and whiteboard steps.']
-  const allRawMarkdown = steps.map((step) => step.rawMarkdown || step.markdown).join('\n')
-  const formulas = extractFormulas(allRawMarkdown)
-  const mermaidLabels = extractMermaidLabels([payload.mermaid, ...steps.map((step) => step.mermaid)].join('\n'))
-  const methodItems = steps
-    .flatMap((step) => [step.title, ...step.summary, step.markdown])
-    .map((item) => item.replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-    .slice(0, 8)
-  const first = steps[0]
-  const mid = steps[Math.min(1, steps.length - 1)]
-  const last = steps[steps.length - 1]
-  const colors = ['#06b6d4', '#7c3aed', '#d97706', '#16a34a', '#2563eb', '#db2777']
-  const nodeWidth = 150
-  const svgWidth = 980
-  const svgHeight = 260
-  const nodeSources = (mermaidLabels.length ? mermaidLabels : steps.map((step) => step.title)).slice(0, 5)
-  const gap = svgWidth / Math.max(nodeSources.length, 1)
-  const nodes = nodeSources.map((label, index) => ({
-    x: 54 + index * gap,
-    y: index % 2 ? 132 : 52,
-    color: colors[index % colors.length],
-    label: escapeHtml(label.slice(0, 32)),
-    index,
-  }))
-  const edges = nodes.slice(1).map((node, index) => {
-    const prev = nodes[index]
-    return `<path class="edge" d="M ${prev.x + nodeWidth} ${prev.y + 44} C ${prev.x + 205} ${prev.y + 44}, ${node.x - 55} ${node.y + 44}, ${node.x} ${node.y + 44}" fill="none" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)" style="animation-delay:${0.2 + index * 0.16}s"></path>`
-  }).join('')
-  const boxes = nodes.map((node) => `
-    <g class="node" style="animation-delay:${0.1 + node.index * 0.16}s">
-      <rect x="${node.x}" y="${node.y}" width="${nodeWidth}" height="88" rx="18" fill="#fff" stroke="${node.color}" stroke-width="3"></rect>
-      <circle cx="${node.x + 24}" cy="${node.y + 24}" r="14" fill="${node.color}"></circle>
-      <text x="${node.x + 24}" y="${node.y + 29}" text-anchor="middle" fill="#fff" font-size="13" font-weight="900">${node.index + 1}</text>
-      <foreignObject x="${node.x + 18}" y="${node.y + 42}" width="114" height="40"><div xmlns="http://www.w3.org/1999/xhtml" style="font-size:13px;font-weight:850;line-height:1.25;color:#0f172a;text-align:center">${node.label}</div></foreignObject>
-    </g>
-  `).join('')
   return `
-    <div class="shell">
-      <section class="hero">
-        <p class="kicker">${zh ? '动态 HTML 动画白板' : 'Dynamic HTML animation board'}</p>
-        <h1>${escapeHtml(payload.title)}</h1>
-        <div class="summary">${summary.slice(0, 3).map((item) => `<p>${escapeHtml(item)}</p>`).join('')}</div>
-      </section>
-      ${formulas.length ? `
-        <section class="formula-strip">
-          <p class="diagram-title">${zh ? '本题公式 / 不变量' : 'Problem formulas / invariants'}</p>
-          ${formulas.map((formula, index) => `<div class="formula-chip" style="animation-delay:${index * 0.16}s">${escapeHtml(formula)}</div>`).join('')}
-        </section>
-      ` : ''}
-      <section class="timeline">
-        ${steps.map((step, index) => `
-          <article class="step">
-            <span class="badge">${index + 1}</span>
-            <p class="stage">${escapeHtml(step.stage || (zh ? '阶段' : 'stage'))}</p>
-            <h2 class="title">${escapeHtml(step.title)}</h2>
-            <p class="text">${escapeHtml(step.markdown || step.summary.join(' ') || (zh ? '等待解释内容。' : 'Waiting for explanation.')).slice(0, 260)}</p>
-          </article>
-        `).join('')}
-      </section>
-      ${methodItems.length ? `
-        <section class="method-grid">
-          <p class="diagram-title">${zh ? '本题方法链路' : 'Problem-specific method path'}</p>
-          ${methodItems.slice(0, 6).map((item, index) => `<div class="method-card" style="animation-delay:${0.12 + index * 0.12}s"><span>${index + 1}</span><p>${escapeHtml(item).slice(0, 180)}</p></div>`).join('')}
-        </section>
-      ` : ''}
-      <section class="formula-flow">
-        <div class="formula-box"><p class="formula-label">${zh ? '输入 / 已知量' : 'Input / known'}</p><p class="formula-text">${escapeHtml(formulaHint(first, zh ? 'x, 条件, 约束' : 'x, conditions, constraints'))}</p></div>
-        <div class="arrow"></div>
-        <div class="formula-box"><p class="formula-label">${zh ? '核心关系 / 变换' : 'Core relation / transform'}</p><p class="formula-text">${escapeHtml(formulaHint(mid, zh ? 'y = f(x, θ)' : 'y = f(x, theta)'))}</p></div>
-        <div class="arrow"></div>
-        <div class="formula-box"><p class="formula-label">${zh ? '输出 / 检查' : 'Output / check'}</p><p class="formula-text">${escapeHtml(formulaHint(last, zh ? '结论 + 边界检查' : 'answer + boundary check'))}</p></div>
-      </section>
-      <section class="diagram">
-        <p class="diagram-title">${zh ? '最终总图' : 'Final diagram'}</p>
-        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" role="img" aria-label="Final animated diagram">
-          <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#64748b"></path></marker></defs>
-          ${edges}
-          ${boxes}
-        </svg>
-      </section>
+    <div class="shell missing-html">
+      <p class="kicker">${zh ? 'HTML 动画未生成' : 'HTML animation missing'}</p>
+      <h1>${escapeHtml(payload.title)}</h1>
+      <p>${zh
+        ? '本轮 Agent 没有返回 html 字段。HTML 视图不会用前端模板代替，因为这里应该展示 Agent 基于回答仔细分析后绘制的公式、原理、流程图、架构图和表格。请重新点击“生成白板”，或继续追问要求 Agent 输出 WHITEBOARD_DIAGRAM.html。'
+        : 'The Agent did not return an html field for this response. The HTML view does not replace it with a frontend template, because this view should show formulas, principles, flow diagrams, architecture diagrams, and tables produced by the Agent from its answer. Regenerate the board or ask the Agent to output WHITEBOARD_DIAGRAM.html.'}</p>
     </div>
   `
 }
 
 function buildWhiteboardHtmlDocument(payload: WhiteboardPlayerPayload) {
-  const body = payload.html ? `<div class="shell custom-html">${sanitizeEmbeddedHtml(payload.html)}</div>` : buildGeneratedAnimationHtml(payload)
+  const body = payload.html ? `<div class="shell custom-html">${sanitizeEmbeddedHtml(payload.html)}</div>` : missingHtmlBody(payload)
   return `<!doctype html>
 <html lang="${payload.locale}">
 <head>
@@ -463,7 +361,7 @@ function buildWhiteboardHtmlDocument(payload: WhiteboardPlayerPayload) {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; media-src data: blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none';">
   <title>${escapeHtml(payload.title)}</title>
   <style>
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#f8fafc;color:#0f172a;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{overflow:auto}.root{min-height:100vh;padding:24px;background:radial-gradient(circle at 18% 12%,rgba(6,182,212,.18),transparent 26%),radial-gradient(circle at 84% 18%,rgba(124,58,237,.16),transparent 30%),linear-gradient(135deg,#f8fafc 0%,#eef6ff 52%,#fff7ed 100%)}.shell{max-width:1180px;margin:0 auto}.hero{display:grid;gap:12px;margin-bottom:18px}.kicker{margin:0;color:#0891b2;font-size:12px;font-weight:900;letter-spacing:.18em;text-transform:uppercase}h1{margin:0;font-size:clamp(26px,4vw,46px);line-height:1.05;letter-spacing:-.045em}.summary{display:grid;gap:8px;margin:0 0 18px;color:#64748b;font-size:15px;line-height:1.65}.formula-strip,.method-grid{margin:18px 0;border:1px solid rgba(148,163,184,.45);border-radius:24px;background:rgba(255,255,255,.86);padding:16px;box-shadow:0 16px 44px rgba(15,23,42,.07)}.formula-chip{margin-top:10px;border-radius:16px;background:#0f172a;color:#e0f2fe;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:14px;line-height:1.55;opacity:0;animation:glowIn .58s both ease-out}.method-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.method-grid .diagram-title{grid-column:1/-1}.method-card{display:flex;gap:10px;align-items:flex-start;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;opacity:0;transform:translateY(12px);animation:cardIn .58s both}.method-card span{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 auto;border-radius:9px;background:#06b6d4;color:#001014;font-weight:950}.method-card p{margin:0;color:#334155;font-size:13px;line-height:1.5}.timeline{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:22px 0}.timeline:before{content:"";position:absolute;left:7%;right:7%;top:38px;height:4px;border-radius:99px;background:linear-gradient(90deg,#06b6d4,#7c3aed,#16a34a);transform-origin:left;animation:grow 1.2s .15s both cubic-bezier(.22,1,.36,1)}.step{position:relative;z-index:1;min-height:180px;border:1px solid rgba(148,163,184,.45);border-radius:22px;background:rgba(255,255,255,.88);padding:16px;box-shadow:0 20px 55px rgba(15,23,42,.08);opacity:0;transform:translateY(18px) scale(.97);animation:cardIn .62s both cubic-bezier(.22,1,.36,1)}.step:nth-child(2){animation-delay:.18s}.step:nth-child(3){animation-delay:.36s}.step:nth-child(4){animation-delay:.54s}.step:nth-child(5){animation-delay:.72s}.badge{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:16px;background:#0f172a;color:#fff;font-size:17px;font-weight:950;box-shadow:0 10px 28px rgba(15,23,42,.18)}.stage{margin:14px 0 4px;color:#0891b2;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.12em}.title{margin:0;font-size:17px;line-height:1.25;font-weight:950;letter-spacing:-.02em}.text{margin:10px 0 0;color:#475569;font-size:13px;line-height:1.58}.formula-flow{margin-top:20px;display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:center;border-radius:24px;background:#0f172a;color:#e0f2fe;padding:18px;overflow:hidden;box-shadow:inset 0 1px rgba(255,255,255,.08),0 22px 50px rgba(15,23,42,.22)}.formula-box{border:1px solid rgba(125,211,252,.24);border-radius:18px;padding:14px;background:rgba(15,23,42,.74);min-height:112px;opacity:0;animation:glowIn .62s both ease-out}.formula-box:nth-child(3){animation-delay:.28s}.formula-box:nth-child(5){animation-delay:.56s}.formula-label{margin:0 0 8px;color:#67e8f9;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.formula-text{margin:0;color:#f8fafc;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:14px;line-height:1.6}.arrow{width:42px;height:4px;border-radius:99px;background:linear-gradient(90deg,#22d3ee,#a78bfa);transform-origin:left;animation:grow .8s .34s both}.diagram{margin-top:22px;border:1px solid rgba(148,163,184,.48);border-radius:26px;background:rgba(255,255,255,.88);padding:16px;box-shadow:0 22px 60px rgba(15,23,42,.09)}.diagram-title{margin:0 0 10px;color:#64748b;font-size:12px;font-weight:950;letter-spacing:.16em;text-transform:uppercase}svg{display:block;width:100%;height:auto;overflow:visible}.node{opacity:0;transform-box:fill-box;transform-origin:center;animation:nodeIn .58s both cubic-bezier(.22,1,.36,1)}.edge{stroke-dasharray:420;stroke-dashoffset:420;animation:draw 1s .25s both ease-out}.custom-html>*{max-width:100%}@keyframes cardIn{to{opacity:1;transform:none}}@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}@keyframes glowIn{from{opacity:0;transform:translateY(12px);filter:blur(3px)}to{opacity:1;transform:none;filter:blur(0)}}@keyframes nodeIn{from{opacity:0;transform:translateY(14px) scale(.94)}to{opacity:1;transform:none}}@keyframes draw{to{stroke-dashoffset:0}}@media(max-width:820px){.root{padding:14px}.timeline,.method-grid{grid-template-columns:1fr}.timeline:before{display:none}.formula-flow{grid-template-columns:1fr}.arrow{width:4px;height:34px;margin:0 auto;transform-origin:top;animation-name:growY}}@keyframes growY{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#f8fafc;color:#0f172a;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{overflow:auto}.root{min-height:100vh;padding:24px;background:radial-gradient(circle at 18% 12%,rgba(6,182,212,.18),transparent 26%),radial-gradient(circle at 84% 18%,rgba(124,58,237,.16),transparent 30%),linear-gradient(135deg,#f8fafc 0%,#eef6ff 52%,#fff7ed 100%)}.shell{max-width:1180px;margin:0 auto}.custom-html>*{max-width:100%}.missing-html{margin-top:16px;border:1px solid #fed7aa;border-radius:24px;background:#fff7ed;padding:24px;box-shadow:0 20px 60px rgba(124,45,18,.12)}.kicker{margin:0 0 12px;color:#c2410c;font-size:12px;font-weight:900;letter-spacing:.18em;text-transform:uppercase}h1{margin:0 0 12px;font-size:clamp(24px,4vw,40px);line-height:1.08;letter-spacing:-.04em}.missing-html p{color:#7c2d12;font-size:15px;line-height:1.8}
   </style>
 </head>
 <body><main class="root">${body}</main></body>

@@ -363,8 +363,8 @@ function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge |
     return locale === 'zh' ? gaokaoVolunteerSkillZh : gaokaoVolunteerSkillEn
   }
   const whiteboardProtocol = locale === 'zh'
-    ? 'WHITEBOARD_DIAGRAM 必须同时包含：markdown/mermaid 图文白板，以及 html 字段的自包含 HTML/CSS/SVG 动画。html 不要使用 script、JavaScript、iframe、外链资源、网络图片或表单；动画要展示公式/原理的阶段变化、变量流、状态流或结构高亮，并在最后停留为一张清晰总图。'
-    : 'WHITEBOARD_DIAGRAM must include both a markdown/mermaid diagram board and a top-level html field with self-contained HTML/CSS/SVG animation. Do not use script, JavaScript, iframe, external resources, network images, or forms. The animation should show formula/principle stages, variable flow, state flow, or structural highlighting, then settle into one clear final diagram.'
+    ? 'WHITEBOARD_DIAGRAM 必须同时包含 markdown/mermaid 图文白板和 html 字段。html 必须根据你本轮回答仔细分析并绘制相关公式、原理、方法、流程图、架构图和关键表格；用 SVG/div/table/CSS animation 展示公式推导、变量流、状态流、控制流、数据流、组件依赖、边界条件和指标变化。不要使用通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。'
+    : 'WHITEBOARD_DIAGRAM must include both markdown/mermaid and an html field. The html must be generated from your answer in this turn and carefully draw the relevant formulas, principles, methods, flow diagrams, architecture diagrams, and key tables; use SVG/div/table/CSS animation to show derivation, variable flow, state flow, control flow, data flow, component dependencies, boundary conditions, and metric changes. Do not use generic templates, placeholders, script, JavaScript, iframe, external resources, network images, or forms.'
   if (mode === 'interview_answer') {
     return locale === 'zh'
       ? `chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示评分维度、缺口、补充答案结构。${whiteboardProtocol}`
