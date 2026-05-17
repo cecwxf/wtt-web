@@ -227,11 +227,36 @@ function editorLanguage(language: Language) {
 }
 
 function openClStarter(challenge: Challenge) {
-  const op = challenge.tags.includes('relu') ? 'relu' : challenge.tags.includes('vector-add') ? 'vector_add' : 'generic'
+  if (challenge.tags.includes('gemm')) {
+    return `// OpenCL C GEMM kernel for macOS Agent/Runner.
+// Supported local GEMM signature:
+//   kernel_name(A, B, C, M, N, K), row-major, C[M,N] = A[M,K] * B[K,N]
+__kernel void ${challenge.function_name}(__global const float* A,
+                                         __global const float* B,
+                                         __global float* C,
+                                         const int M,
+                                         const int N,
+                                         const int K) {
+    const int col = get_global_id(0);
+    const int row = get_global_id(1);
+    if (row >= M || col >= N) return;
+
+    float acc = 0.0f;
+    for (int kk = 0; kk < K; ++kk) {
+        acc += A[row * K + kk] * B[kk * N + col];
+    }
+    C[row * N + col] = acc;
+}
+`
+  }
+
+  const op = challenge.tags.includes('softmax') ? 'softmax' : challenge.tags.includes('relu') ? 'relu' : challenge.tags.includes('vector-add') ? 'vector_add' : 'generic'
   const body = op === 'vector_add'
     ? '    output[gid] = values[gid] + (float)gid;'
     : op === 'relu'
     ? '    float x = values[gid];\n    output[gid] = x > 0.0f ? x : 0.0f;'
+    : op === 'softmax'
+    ? '    float max_value = values[0];\n    for (int i = 1; i < n; ++i) max_value = fmax(max_value, values[i]);\n    float denom = 0.0f;\n    for (int i = 0; i < n; ++i) denom += exp(values[i] - max_value);\n    output[gid] = exp(values[gid] - max_value) / denom;'
     : '    // TODO: write this AI operator in OpenCL C.\n    output[gid] = values[gid];'
 
   return `// OpenCL C kernel for macOS Agent/Runner.

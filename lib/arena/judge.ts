@@ -124,18 +124,34 @@ function cFloatArray(values: unknown) {
   }).join(', ')
 }
 
+function cFloatMatrix(values: unknown) {
+  if (!Array.isArray(values)) throw new Error('OpenCL runner expects payload.matrix to be an array')
+  return values.flatMap((row) => {
+    if (!Array.isArray(row)) throw new Error('OpenCL runner expects payload.matrix rows to be arrays')
+    return row.map((value) => {
+      const numeric = Number(value)
+      if (!Number.isFinite(numeric)) throw new Error('OpenCL runner only supports finite numeric payload.matrix values')
+      return `${numeric.toString().includes('.') ? numeric : `${numeric}.0`}f`
+    })
+  }).join(', ')
+}
+
 function buildOpenCLHost(challenge: Challenge, stdin: string) {
-  const input = JSON.parse(stdin || '{}') as { payload?: { op?: string; values?: unknown[] } }
+  const input = JSON.parse(stdin || '{}') as { payload?: { op?: string; values?: unknown[]; matrix?: unknown[] } }
   const op = String(input.payload?.op || '')
-  if (op !== 'vector_add' && op !== 'relu') {
-    throw new Error(`Local macOS OpenCL runner currently supports ai-vector-add and ai-relu only; ${challenge.id} uses op=${op}`)
+  if (op === 'gemm' || challenge.id === 'ai-gemm') {
+    return buildOpenCLGemmHost(challenge, input.payload?.matrix)
+  }
+  if (op !== 'vector_add' && op !== 'relu' && op !== 'softmax') {
+    throw new Error(`Local macOS OpenCL runner currently supports ai-vector-add, ai-relu, ai-softmax, and ai-gemm; ${challenge.id} uses op=${op}`)
   }
 
-  const values = input.payload?.values
+  const values = op === 'softmax' ? input.payload?.values?.slice(0, 4) : input.payload?.values
   const kernelName = JSON.stringify(challenge.function_name)
   const arrayLiteral = cFloatArray(values)
   const n = Array.isArray(values) ? values.length : 0
   if (n <= 0) throw new Error('OpenCL runner requires at least one input value')
+  const fixedOutput = op === 'softmax'
 
   return `#include <OpenCL/opencl.h>
 #include <math.h>
@@ -242,7 +258,9 @@ int main(int argc, char** argv) {
   printf("[");
   for (int i = 0; i < n; ++i) {
     if (i) printf(",");
-    if (fabsf(output[i] - roundf(output[i])) < 0.00001f) {
+    if (${fixedOutput ? '1' : '0'}) {
+      printf("%.6f", output[i]);
+    } else if (fabsf(output[i] - roundf(output[i])) < 0.00001f) {
       printf("%.0f", output[i]);
     } else {
       printf("%.6g", output[i]);
@@ -252,6 +270,153 @@ int main(int argc, char** argv) {
 
   clReleaseMemObject(output_buffer);
   clReleaseMemObject(input_buffer);
+  clReleaseKernel(kernel);
+  clReleaseProgram(program);
+  clReleaseCommandQueue(queue);
+  clReleaseContext(context);
+  free(source);
+  return 0;
+}
+`
+}
+
+function buildOpenCLGemmHost(challenge: Challenge, matrix: unknown) {
+  const kernelName = JSON.stringify(challenge.function_name)
+  const matrixLiteral = cFloatMatrix(matrix)
+  return `#include <OpenCL/opencl.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void fail(const char* label, cl_int err) {
+  fprintf(stderr, "%s failed: %d\\n", label, err);
+  exit(2);
+}
+
+static char* read_file(const char* path, size_t* size) {
+  FILE* file = fopen(path, "rb");
+  if (!file) {
+    perror("fopen kernel.cl");
+    exit(2);
+  }
+  fseek(file, 0, SEEK_END);
+  long length = ftell(file);
+  rewind(file);
+  char* buffer = (char*)calloc((size_t)length + 1, 1);
+  if (!buffer) exit(2);
+  if (fread(buffer, 1, (size_t)length, file) != (size_t)length) {
+    perror("fread kernel.cl");
+    exit(2);
+  }
+  fclose(file);
+  *size = (size_t)length;
+  return buffer;
+}
+
+static void print_number(float value) {
+  if (fabsf(value - roundf(value)) < 0.00001f) {
+    printf("%.0f", value);
+  } else {
+    printf("%.6g", value);
+  }
+}
+
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    fprintf(stderr, "usage: opencl_runner kernel.cl\\n");
+    return 2;
+  }
+
+  const int m = 2;
+  const int n = 2;
+  const int k = 2;
+  float a[4] = { ${matrixLiteral} };
+  float b[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+  float c[4] = {0};
+  const char* kernel_name = ${kernelName};
+
+  cl_int err = CL_SUCCESS;
+  cl_uint platform_count = 0;
+  err = clGetPlatformIDs(0, NULL, &platform_count);
+  if (err != CL_SUCCESS || platform_count == 0) fail("clGetPlatformIDs", err);
+
+  cl_platform_id platform = NULL;
+  err = clGetPlatformIDs(1, &platform, NULL);
+  if (err != CL_SUCCESS) fail("clGetPlatformIDs[0]", err);
+
+  cl_device_id device = NULL;
+  err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+  if (err != CL_SUCCESS) {
+    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_DEFAULT, 1, &device, NULL);
+    if (err != CL_SUCCESS) fail("clGetDeviceIDs", err);
+  }
+
+  cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateContext", err);
+
+  cl_command_queue queue = clCreateCommandQueue(context, device, 0, &err);
+  if (err != CL_SUCCESS) fail("clCreateCommandQueue", err);
+
+  size_t source_size = 0;
+  char* source = read_file(argv[1], &source_size);
+  cl_program program = clCreateProgramWithSource(context, 1, (const char**)&source, &source_size, &err);
+  if (err != CL_SUCCESS) fail("clCreateProgramWithSource", err);
+
+  err = clBuildProgram(program, 1, &device, "", NULL, NULL);
+  if (err != CL_SUCCESS) {
+    size_t log_size = 0;
+    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+    char* log = (char*)calloc(log_size + 1, 1);
+    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+    fprintf(stderr, "%s", log);
+    return 1;
+  }
+
+  cl_kernel kernel = clCreateKernel(program, kernel_name, &err);
+  if (err != CL_SUCCESS) fail("clCreateKernel", err);
+
+  cl_mem a_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(a), a, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(a)", err);
+  cl_mem b_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(b), b, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(b)", err);
+  cl_mem c_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(c), NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(c)", err);
+
+  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buffer);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(0)", err);
+  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &b_buffer);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(1)", err);
+  err = clSetKernelArg(kernel, 2, sizeof(cl_mem), &c_buffer);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
+  err = clSetKernelArg(kernel, 3, sizeof(int), &m);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(3)", err);
+  err = clSetKernelArg(kernel, 4, sizeof(int), &n);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(4)", err);
+  err = clSetKernelArg(kernel, 5, sizeof(int), &k);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(5)", err);
+
+  size_t global[2] = { (size_t)n, (size_t)m };
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+  if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
+  err = clFinish(queue);
+  if (err != CL_SUCCESS) fail("clFinish", err);
+  err = clEnqueueReadBuffer(queue, c_buffer, CL_TRUE, 0, sizeof(c), c, 0, NULL, NULL);
+  if (err != CL_SUCCESS) fail("clEnqueueReadBuffer", err);
+
+  printf("[[");
+  print_number(c[0]);
+  printf(",");
+  print_number(c[1]);
+  printf("],[");
+  print_number(c[2]);
+  printf(",");
+  print_number(c[3]);
+  printf("]]\\n");
+
+  clReleaseMemObject(c_buffer);
+  clReleaseMemObject(b_buffer);
+  clReleaseMemObject(a_buffer);
   clReleaseKernel(kernel);
   clReleaseProgram(program);
   clReleaseCommandQueue(queue);
