@@ -1221,6 +1221,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
+  const [chatPanelWidth, setChatPanelWidth] = useState(560)
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
@@ -1236,6 +1237,30 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const handleMove = (moveEvent: PointerEvent) => {
         const available = bounds.width - 760
         setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 280, Math.max(300, available)))
+      }
+      const stop = () => {
+        window.removeEventListener('pointermove', handleMove)
+        window.removeEventListener('pointerup', stop)
+      }
+      window.addEventListener('pointermove', handleMove)
+      window.addEventListener('pointerup', stop)
+    }
+  }
+
+  function startChatWhiteboardResize() {
+    return (event: React.PointerEvent<HTMLDivElement>) => {
+      if (isCoding || isGaokaoVolunteer) return
+      event.preventDefault()
+      const chatPanel = event.currentTarget.previousElementSibling as HTMLElement | null
+      const whiteboardPanel = event.currentTarget.nextElementSibling as HTMLElement | null
+      const chatBounds = chatPanel?.getBoundingClientRect()
+      const whiteboardBounds = whiteboardPanel?.getBoundingClientRect()
+      if (!chatBounds || !whiteboardBounds) return
+      const left = chatBounds.left
+      const right = whiteboardBounds.right
+      const handleMove = (moveEvent: PointerEvent) => {
+        const maxChatWidth = Math.max(360, right - left - 360)
+        setChatPanelWidth(clampNumber(moveEvent.clientX - left, 360, maxChatWidth))
       }
       const stop = () => {
         window.removeEventListener('pointermove', handleMove)
@@ -1881,8 +1906,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftPanelWidth}px minmax(560px, 1fr)`
         : whiteboardExpanded
-        ? 'minmax(0, 1fr) minmax(0, 1fr)'
-        : `${leftPanelWidth}px 6px minmax(0, 1fr) minmax(0, 1fr)`,
+        ? `minmax(360px, ${chatPanelWidth}px) 6px minmax(360px, 1fr)`
+        : `${leftPanelWidth}px 6px minmax(360px, ${chatPanelWidth}px) 6px minmax(360px, 1fr)`,
     }
     : undefined
 
@@ -2098,7 +2123,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </section>
           ) : null}
 
-          <aside className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 ${isCoding ? 'lg:col-span-2 xl:col-span-1' : ''}`}>
+          <aside className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 ${isCoding ? 'lg:col-span-2 xl:col-span-1' : ''}`}>
             <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
               <div className="border-b border-gray-800 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2194,7 +2219,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           </aside>
 
           {!isCoding && !isGaokaoVolunteer && (
-            <div className="grid min-h-0 gap-2 lg:grid-rows-[auto_1fr]">
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onPointerDown={startChatWhiteboardResize()}
+              className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-violet-300/60"
+            />
+          )}
+
+          {!isCoding && !isGaokaoVolunteer && (
+            <div className="grid min-h-0 min-w-0 gap-2 lg:grid-rows-[auto_1fr]">
               {!whiteboardExpanded && (
               <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-[#1e1e1e] px-3 py-2">
                 <div className="flex min-w-0 items-center gap-3">
