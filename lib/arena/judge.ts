@@ -175,8 +175,21 @@ function renameOpenCLKernel(code: string, functionName: string, nextName: string
 }
 
 function extractOpenCLKernelSource(code: string) {
-  const macroMatch = code.match(/\bKERNEL_SOURCE\s*=\s*OPENCL_KERNEL_SOURCE\s*\(\s*([\s\S]*?)\s*\);\s*(?:\n|$)/)
-  if (macroMatch?.[1]) return macroMatch[1].trim()
+  const macroStart = code.search(/\bKERNEL_SOURCE\s*=\s*OPENCL_KERNEL_SOURCE\s*\(/)
+  if (macroStart >= 0) {
+    const openIndex = code.indexOf('(', macroStart)
+    if (openIndex >= 0) {
+      let depth = 1
+      for (let i = openIndex + 1; i < code.length; ++i) {
+        const char = code[i]
+        if (char === '(') depth += 1
+        else if (char === ')') {
+          depth -= 1
+          if (depth === 0) return code.slice(openIndex + 1, i).trim()
+        }
+      }
+    }
+  }
 
   const stringMatch = code.match(/\bKERNEL_SOURCE\s*=\s*("(?:\\.|[^"\\])*")\s*;/)
   if (!stringMatch?.[1]) return null
