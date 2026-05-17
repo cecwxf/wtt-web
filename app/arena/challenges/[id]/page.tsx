@@ -1221,7 +1221,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
-  const [chatPanelWidth, setChatPanelWidth] = useState(560)
+  const [chatPanelWidth, setChatPanelWidth] = useState<number | null>(null)
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
@@ -1906,8 +1906,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftPanelWidth}px minmax(560px, 1fr)`
         : whiteboardExpanded
-        ? `minmax(360px, ${chatPanelWidth}px) 6px minmax(360px, 1fr)`
-        : `${leftPanelWidth}px 6px minmax(360px, ${chatPanelWidth}px) 6px minmax(360px, 1fr)`,
+        ? `${chatPanelWidth ? `minmax(360px, ${chatPanelWidth}px)` : 'minmax(360px, 1fr)'} 6px minmax(360px, 1fr)`
+        : `${leftPanelWidth}px 6px ${chatPanelWidth ? `minmax(360px, ${chatPanelWidth}px)` : 'minmax(360px, 1fr)'} 6px minmax(360px, 1fr)`,
     }
     : undefined
 
