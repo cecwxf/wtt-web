@@ -97,6 +97,54 @@ function normalizeMermaidChart(chart: string) {
     .trim()
 }
 
+function mermaidSafeLabel(value: string) {
+  return String(value || '')
+    .replace(/^\s*["'`]+|["'`]+\s*$/g, '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/[{}[\]()]/g, ' ')
+    .replace(/["\\]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'step'
+}
+
+function mermaidTokenLabel(token: string) {
+  const trimmed = String(token || '').trim().replace(/;$/, '')
+  const match = trimmed.match(/^[A-Za-z0-9_-]+\s*(?:\[\[([\s\S]+?)\]\]|\[([\s\S]+?)\]|\(([\s\S]+?)\)|\{([\s\S]+?)\})$/)
+  return mermaidSafeLabel(match?.[1] || match?.[2] || match?.[3] || match?.[4] || trimmed)
+}
+
+function repairMermaidFlowchart(chart: string) {
+  const normalized = normalizeMermaidChart(chart)
+  const direction = normalized.match(/^\s*(?:flowchart|graph)\s+(TD|TB|BT|LR|RL)\b/im)?.[1] || 'TD'
+  const nodeIds = new Map<string, string>()
+  const edges: string[] = []
+  const nodeFor = (token: string) => {
+    const label = mermaidTokenLabel(token)
+    const key = label.toLowerCase()
+    const existing = nodeIds.get(key)
+    if (existing) return existing
+    const id = `N${nodeIds.size + 1}`
+    nodeIds.set(key, id)
+    return id
+  }
+
+  normalized.split('\n').forEach((line) => {
+    const trimmed = line.trim()
+    if (!trimmed || /^(flowchart|graph|classDef|class|style|linkStyle|subgraph|end)\b/i.test(trimmed)) return
+    const edge = trimmed.match(/(.+?)\s*(-->|---|==>|-.->)\s*(?:\|[^|]*\|\s*)?(.+)/)
+    if (!edge) return
+    edges.push(`${nodeFor(edge[1])} --> ${nodeFor(edge[3])}`)
+  })
+
+  if (!edges.length) return ''
+  const declarations = Array.from(nodeIds.entries()).map(([, id]) => {
+    const label = Array.from(nodeIds.entries()).find(([, value]) => value === id)?.[0] || id
+    return `  ${id}["${mermaidSafeLabel(label)}"]`
+  })
+  return [`flowchart ${direction}`, ...declarations, ...edges.map((edge) => `  ${edge}`)].join('\n')
+}
+
 function splitMarkdownMermaid(markdown: string) {
   const charts: string[] = []
   const cleaned = String(markdown || '').replace(/```mermaid\s*([\s\S]*?)```/gi, (_match, chart: string) => {
@@ -135,7 +183,16 @@ function MermaidPreview({ chart, label, compact = false }: { chart: string; labe
           fontSize: '18px',
         },
       })
-      return mermaid.render(id, normalizedChart)
+      const repairedChart = repairMermaidFlowchart(normalizedChart)
+      const attempts = Array.from(new Set([normalizedChart, repairedChart].filter(Boolean)))
+      return attempts.reduce<Promise<{ svg: string }>>(async (previous, candidate, index) => {
+        try {
+          await previous
+          return previous
+        } catch {
+          return mermaid.render(`${id}-${index}`, candidate)
+        }
+      }, Promise.reject(new Error('initial mermaid render attempt')))
     }).then(({ svg: nextSvg }) => {
       if (!cancelled) setSvg(nextSvg)
     }).catch((errorValue) => {

@@ -41,7 +41,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     results: [],
   }
   saveSubmission(base)
-  await backendSaveSubmission(base)
+  void backendSaveSubmission(base)
 
   try {
     const judged = await judgeSubmission({
@@ -71,8 +71,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       results: judged.results,
     }
     saveSubmission(submission)
-    const persisted = await backendSaveSubmission(submission)
-    return Response.json({ submission: persisted || submission })
+    void backendSaveSubmission(submission)
+    return Response.json({ submission })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const submission: Submission = {
@@ -83,7 +83,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       updated_at: new Date().toISOString(),
     }
     saveSubmission(submission)
-    const persisted = await backendSaveSubmission(submission)
-    return Response.json({ submission: persisted || submission }, { status: 200 })
+    void backendSaveSubmission(submission)
+    return Response.json({ submission }, { status: 200 })
   }
 }

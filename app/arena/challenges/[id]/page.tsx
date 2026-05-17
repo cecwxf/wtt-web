@@ -956,6 +956,25 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function submitCode() {
     if (!challenge || submitting) return
+    const now = new Date().toISOString()
+    const optimisticSubmission: Submission = {
+      id: `local-judging-${Date.now()}`,
+      challenge_id: challenge.id,
+      user_id: 'demo-user',
+      language,
+      code,
+      status: 'judging',
+      score: 0,
+      judge_provider: 'pending',
+      judge_output_summary: locale === 'zh' ? '提交已发送，等待 Agent Runner 返回结果。' : 'Submission sent. Waiting for Agent Runner result.',
+      agent_help_used: false,
+      hint_count: 0,
+      created_at: now,
+      updated_at: now,
+      results: [],
+    }
+    setSubmission(optimisticSubmission)
+    setActiveTab('submissions')
     setSubmitting(true)
     try {
       const response = await fetch(`/api/arena/challenges/${challenge.id}/submissions`, {
@@ -963,11 +982,23 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ language, environment: kernelEnvironment, code, user_id: 'demo-user' }),
       })
-      const data = await response.json()
+      const data = await response.json().catch(() => null) as { submission?: Submission; detail?: string } | null
+      if (!response.ok || !data?.submission) {
+        throw new Error(data?.detail || `Arena submission failed: HTTP ${response.status}`)
+      }
       setSubmission(data.submission)
-      setActiveTab('submissions')
       const board = await fetch(`/api/arena/challenges/${challenge.id}/leaderboard`, { cache: 'no-store' }).then((res) => res.json())
       setLeaderboard(board.leaderboard || [])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setSubmission({
+        ...optimisticSubmission,
+        status: 'system_error',
+        judge_provider: 'wtt-arena',
+        judge_output_summary: message,
+        updated_at: new Date().toISOString(),
+        results: [],
+      })
     } finally {
       setSubmitting(false)
     }
