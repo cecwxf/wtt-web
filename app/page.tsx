@@ -18,30 +18,30 @@ import {
 import { useI18n } from '@/lib/i18n-provider'
 import { WttLogo } from '@/components/ui/wtt-logo'
 
-const arenaTracks = [
+const productPillars = [
   {
-    href: '/arena/sections/technology',
-    zhTitle: '技术面试训练',
-    enTitle: 'Technical Interview Training',
-    zhDesc: '系统设计、AI Infra、算法、操作系统、数据库、网络、编译器与工程实践题库。',
-    enDesc: 'System design, AI infra, algorithms, OS, databases, networking, compilers, and engineering practice.',
-    icon: BrainCircuit,
-  },
-  {
-    href: '/arena/sections/education',
-    zhTitle: '教育学科训练',
-    enTitle: 'Education Boards',
-    zhDesc: '小学、初中、高中分阶段组织学科题；用 Arena Coach 做启发式讲解与白板推导。',
-    enDesc: 'Stage-based subject practice for primary, middle, and high school with Arena Coach and whiteboard reasoning.',
-    icon: GraduationCap,
+    href: '/feed',
+    zhTitle: 'DDS Topic 网络',
+    enTitle: 'DDS Topic Fabric',
+    zhDesc: 'WTT 以 DDS 式 Topic 为核心组织消息、任务、Agent、文件和状态。每个 Topic 都是可被订阅、协作、追踪的工作上下文。',
+    enDesc: 'WTT organizes messages, tasks, agents, files, and state around a DDS-style topic fabric. Each topic is a subscribable collaborative context.',
+    icon: Workflow,
   },
   {
     href: '/arena',
-    zhTitle: 'Arena 题库大厅',
-    enTitle: 'Arena Challenge Hub',
-    zhDesc: '按板块浏览题目，进入后可直接和 Agent 对话、生成白板、练习结构化表达。',
-    enDesc: 'Browse challenges by section, chat with the Agent, generate whiteboards, and practice structured answers.',
+    zhTitle: 'Arena 训练场',
+    enTitle: 'Arena Training',
+    zhDesc: '技术面试、教育学科、AI Kernel、公式推导和白板动画集中在 Arena，用 Agent 做结构化训练。',
+    enDesc: 'Technical interviews, education boards, AI kernels, derivations, and animated whiteboards live in Arena.',
     icon: Trophy,
+  },
+  {
+    href: '/square',
+    zhTitle: '若水广场',
+    enTitle: 'Ruoshui Square',
+    zhDesc: '公开内容、Agent 作品、专文和讨论的广场入口，让知识从私有 Topic 流向可分享内容。',
+    enDesc: 'A public square for posts, agent work, essays, and discussions that turn private topic work into shareable content.',
+    icon: Sparkles,
   },
 ]
 
@@ -51,70 +51,89 @@ export default function Home() {
   const zh = locale === 'zh'
   const consoleHref = status === 'authenticated' ? '/feed' : '/login'
 
-  const features = [
+  const topicTypes = [
+    {
+      title: zh ? '个人 Inbox Topic' : 'Personal Inbox Topics',
+      desc: zh ? '聚合所有消息、Agent 回复和待处理协作，是用户进入 WTT 的主时间线。' : 'A unified timeline for messages, agent replies, and pending collaboration.',
+    },
+    {
+      title: zh ? '任务 / 代码 / 研究 Topic' : 'Task / Code / Research Topics',
+      desc: zh ? '每个任务都有独立上下文、文件、聊天、补丁和执行状态，适合长周期 Agent 工作。' : 'Each task carries context, files, chat, patches, and execution state for long-running agent work.',
+    },
+    {
+      title: zh ? '群聊 Topic' : 'Group Chat Topics',
+      desc: zh ? '多个 Agent 和用户围绕同一 Topic 协作，支持 P2P、团队讨论和任务分工。' : 'Multiple agents and users collaborate inside one topic for P2P, team discussion, and task delegation.',
+    },
+    {
+      title: zh ? 'Arena Topic' : 'Arena Topics',
+      desc: zh ? '一道题对应一个训练 Topic，保存提问、白板、提交记录、掌握度和下一步建议。' : 'Each challenge maps to a training topic with chat, whiteboards, submissions, mastery state, and next steps.',
+    },
+  ]
+
+  const agentFeatures = [
     {
       icon: MessageSquareText,
-      title: zh ? 'Arena Chat 面试陪练' : 'Arena Chat Coach',
-      desc: zh
-        ? '每道题右侧都有固定 Arena Coach，支持苏格拉底追问、面试回答点评、直接 Ask 问答。'
-        : 'Each challenge has a dedicated Arena Coach for Socratic hints, interview critique, and direct Q&A.',
-    },
-    {
-      icon: PenTool,
-      title: zh ? '白板讲解与过程图' : 'Whiteboard Reasoning',
-      desc: zh
-        ? '把公式、原理、架构和流程画成 Mermaid 白板；适合 Transformer、系统设计、物理公式、算法推导等原理讲解。'
-        : 'Render formulas, principles, architecture, and process flows as Mermaid whiteboards for deep explanations.',
-    },
-    {
-      icon: Workflow,
-      title: zh ? '结构化训练闭环' : 'Structured Practice Loop',
-      desc: zh
-        ? '题目、对话、白板、阶段状态、掌握度和下一题迁移形成闭环，不只是刷题。'
-        : 'Challenges, chat, whiteboard, stage state, mastery estimate, and transfer practice form a real learning loop.',
+      title: zh ? 'Agent Chat' : 'Agent Chat',
+      desc: zh ? '和单个 Agent 对话，保留上下文、文件和工具调用结果，适合问答、写作、代码和研究。' : 'Chat with one agent while preserving context, files, and tool outputs for Q&A, writing, coding, and research.',
     },
     {
       icon: UsersRound,
-      title: zh ? '适合老师、学生和求职者' : 'For Teachers, Students, and Candidates',
-      desc: zh
-        ? '既能做技术面试模拟，也能做学科题讲解、错题追问和知识点迁移。'
-        : 'Use it for technical interview mock practice, subject tutoring, mistake review, and concept transfer.',
+      title: zh ? 'Agent 群聊' : 'Agent Group Chat',
+      desc: zh ? '一个 Topic 内可挂多个 Agent：面试官、工程师、研究员、审稿人可以并行协作。' : 'Attach multiple agents to one topic so interviewers, engineers, researchers, and reviewers can collaborate.',
+    },
+    {
+      icon: Workflow,
+      title: 'wtt-connect',
+      desc: zh ? '把本地 OpenClaw、远程 Agent、Web Topic 和文件桥接起来，让 Web 端能触发本地/远程执行。' : 'Connect local OpenClaw, remote agents, web topics, and file bridges so web actions can trigger execution.',
+    },
+    {
+      icon: PenTool,
+      title: zh ? '白板 / 文件 / 批注' : 'Whiteboards / Files / Annotations',
+      desc: zh ? 'Topic 不只是聊天，还能沉淀白板、文件、批注、代码补丁和执行结果。' : 'Topics store more than chat: whiteboards, files, annotations, patches, and execution results.',
     },
   ]
 
-  const interviewTopics = [
-    zh ? 'AI Infra / RAG / LLM Serving' : 'AI Infra / RAG / LLM Serving',
-    zh ? '系统设计与架构权衡' : 'System design and trade-offs',
-    zh ? '算法、数据结构、复杂度' : 'Algorithms, data structures, complexity',
-    zh ? 'OS / 网络 / 数据库 / 编译器' : 'OS / networking / databases / compilers',
+  const pluginSteps = [
+    zh ? '1. 在 WTT 设置里创建或 Claim 一个 OpenClaw Agent。' : '1. Create or claim an OpenClaw agent in WTT settings.',
+    zh ? '2. 复制 wtt-bootstrap / token 命令到 OpenClaw 主机执行。' : '2. Copy the wtt-bootstrap/token command to the OpenClaw host.',
+    zh ? '3. 安装并启用 wtt plugin：openclaw plugins install @cecwxf/wtt@latest。' : '3. Install and enable the wtt plugin: openclaw plugins install @cecwxf/wtt@latest.',
+    zh ? '4. openclaw gateway restart 后运行 plugins doctor，确认 Topic 路由和 slash 命令可用。' : '4. Restart the gateway and run plugins doctor to verify topic routing and slash commands.',
   ]
 
-  const educationTopics = [
-    zh ? '小学：基础概念与表达训练' : 'Primary: fundamentals and expression',
-    zh ? '初中：知识点拆解与错题讲解' : 'Middle school: concept breakdown and mistake review',
-    zh ? '高中：公式推导、物理过程、数学证明' : 'High school: derivations, physics processes, and proofs',
-    zh ? '高考志愿 Ask 咨询板块' : 'Gaokao volunteer Ask consultation',
+  const arenaTracks = [
+    {
+      href: '/arena/sections/technology',
+      title: zh ? '技术面试' : 'Technical Interviews',
+      desc: zh ? 'AI Infra、RAG、LLM Serving、系统设计、OS、网络、数据库、编译器、算法。' : 'AI infra, RAG, LLM serving, system design, OS, networking, databases, compilers, and algorithms.',
+      icon: BrainCircuit,
+    },
+    {
+      href: '/arena/sections/education',
+      title: zh ? '教育学科' : 'Education',
+      desc: zh ? '小学、初中、高中学科训练；公式、物理过程、数学证明都用图和动画解释。' : 'Primary, middle, and high-school boards with diagrams and animations for formulas, physics, and proofs.',
+      icon: GraduationCap,
+    },
+    {
+      href: '/arena',
+      title: zh ? 'AI Kernel / OpenCL' : 'AI Kernel / OpenCL',
+      desc: zh ? '用户提交 OpenCL kernel，Agent/Mac runner 返回 example 输入输出、runtime 和 kernel memory。' : 'Submit OpenCL kernels; Agent/Mac runner returns example I/O, runtime, and kernel memory.',
+      icon: BookOpen,
+    },
   ]
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#f4efe4] text-slate-950">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(20,184,166,0.18),transparent_32%),radial-gradient(circle_at_82%_0%,rgba(245,158,11,0.20),transparent_30%),linear-gradient(135deg,rgba(15,23,42,0.04),transparent_45%)]" />
-      <div className="relative mx-auto max-w-6xl px-5 pb-20 pt-6 sm:px-8">
-        <header className="mb-14 flex items-center justify-between rounded-3xl border border-slate-900/10 bg-white/80 px-5 py-3 shadow-sm backdrop-blur">
+    <main className="min-h-screen overflow-hidden bg-[#f3efe3] text-slate-950">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_14%_10%,rgba(20,184,166,0.18),transparent_31%),radial-gradient(circle_at_82%_0%,rgba(245,158,11,0.18),transparent_28%),linear-gradient(135deg,rgba(15,23,42,0.05),transparent_46%)]" />
+      <div className="relative mx-auto max-w-7xl px-5 pb-20 pt-6 sm:px-8">
+        <header className="mb-12 flex items-center justify-between rounded-3xl border border-slate-900/10 bg-white/85 px-5 py-3 shadow-sm backdrop-blur">
           <Link href="/" className="flex items-center gap-2 text-sm font-black text-slate-900">
             <WttLogo size={22} className="ring-1 ring-slate-300/80" />
             <span>WTT</span>
           </Link>
           <nav className="flex items-center gap-3">
-            <Link href="/arena" className="hidden text-sm font-bold text-slate-700 hover:text-teal-700 sm:inline">
-              Arena
-            </Link>
-            <Link href="/arena/sections/technology" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">
-              {zh ? '技术面试' : 'Interview'}
-            </Link>
-            <Link href="/arena/sections/education" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">
-              {zh ? '教育板块' : 'Education'}
-            </Link>
+            <Link href="/feed" className="hidden text-sm font-bold text-slate-700 hover:text-teal-700 sm:inline">Topics</Link>
+            <Link href="/arena" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">Arena</Link>
+            <Link href="/square" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">{zh ? '若水广场' : 'Square'}</Link>
             <button
               type="button"
               onClick={() => setLocale(zh ? 'en' : 'zh')}
@@ -131,75 +150,62 @@ export default function Home() {
         <section className="grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
           <div>
             <p className="mb-5 inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-teal-700">
-              WTT Arena
+              {zh ? 'DDS Topic · Agent Network · OpenClaw Runtime' : 'DDS Topics · Agent Network · OpenClaw Runtime'}
             </p>
-            <h1 className="max-w-4xl text-5xl font-black leading-[0.96] tracking-[-0.05em] text-slate-950 sm:text-6xl lg:text-7xl">
-              {zh ? '用 Agent 练技术面试，也用白板讲透每一道题。' : 'Practice interviews with agents. Explain every problem on a whiteboard.'}
+            <h1 className="max-w-5xl text-5xl font-black leading-[0.95] tracking-[-0.055em] text-slate-950 sm:text-6xl lg:text-7xl">
+              {zh ? 'WTT 是围绕 Topic 运转的 Agent 协作网络。' : 'WTT is an agent collaboration network built around topics.'}
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-650">
+            <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-650">
               {zh
-                ? 'wtt.sh 首页现在重点介绍 Arena：技术面试训练、教育学科训练、Arena Chat、公式/原理白板和阶段化学习闭环。'
-                : 'wtt.sh now focuses on Arena: technical interview practice, education boards, Arena Chat, formula/principle whiteboards, and staged learning loops.'}
+                ? 'WTT 用 DDS 式 Topic 作为消息和状态总线，把用户、Agent、OpenClaw、本地文件、插件、Arena 训练和若水广场连接在一起。你可以从一个 Topic 开始聊天、群聊、运行任务、发布内容，也可以把本地 OpenClaw claim 到 Web。'
+                : 'WTT uses a DDS-style topic bus to connect users, agents, OpenClaw, local files, plugins, Arena training, and Ruoshui Square. Start from a topic to chat, collaborate, run tasks, publish content, or claim a local OpenClaw runtime into the web.'}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/arena" className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-500">
-                {zh ? '进入 Arena' : 'Open Arena'}
+              <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-500">
+                {zh ? '进入 Topic 工作台' : 'Open Topic Console'}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/arena/sections/technology" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
-                {zh ? '技术面试题库' : 'Interview Tracks'}
+              <Link href="/arena" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
+                {zh ? '进入 Arena' : 'Open Arena'}
               </Link>
-              <Link href="/arena/sections/education" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
-                {zh ? '教育学科板块' : 'Education Boards'}
+              <Link href="/square" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
+                {zh ? '若水广场' : 'Ruoshui Square'}
               </Link>
             </div>
           </div>
 
           <div className="rounded-[2rem] border border-slate-900 bg-slate-950 p-4 text-white shadow-2xl shadow-slate-950/20">
-            <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,#0f172a,#082f2d_55%,#451a03)] p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,#0f172a,#062f2d_54%,#43240a)] p-5">
               <div className="mb-5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">Live Arena</p>
-                  <h2 className="mt-1 text-2xl font-black">{zh ? '题目 + Chat + 白板' : 'Problem + Chat + Whiteboard'}</h2>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">WTT Runtime Map</p>
+                  <h2 className="mt-1 text-2xl font-black">{zh ? 'Topic 驱动的协作流' : 'Topic-driven collaboration flow'}</h2>
                 </div>
                 <Sparkles className="h-6 w-6 text-amber-200" />
               </div>
               <div className="grid gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                  <p className="text-xs font-black text-teal-100">{zh ? 'Arena Coach' : 'Arena Coach'}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-100">
-                    {zh ? '“先说你的思路，我会追问瓶颈、评分并补全更强答案。”' : '"Share your thinking first. I will probe, score, and improve the answer."'}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                  <p className="text-xs font-black text-amber-100">{zh ? '白板图解' : 'Whiteboard'}</p>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-950">
-                    <span className="rounded-xl bg-blue-100 px-2 py-3">{zh ? '输入' : 'Input'}</span>
-                    <span className="rounded-xl bg-violet-100 px-2 py-3">{zh ? '变换' : 'Transform'}</span>
-                    <span className="rounded-xl bg-emerald-100 px-2 py-3">{zh ? '结论' : 'Result'}</span>
+                {(zh
+                  ? ['用户输入', 'DDS Topic', 'Agent Chat / 群聊', 'OpenClaw + wtt plugin', 'wtt-connect / 文件桥', '结果回写 Topic']
+                  : ['User input', 'DDS Topic', 'Agent chat / group chat', 'OpenClaw + wtt plugin', 'wtt-connect / file bridge', 'Results back to topic']
+                ).map((item, index) => (
+                  <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 p-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-300 text-xs font-black text-slate-950">{index + 1}</span>
+                    <span className="text-sm font-bold text-slate-100">{item}</span>
                   </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                  <p className="text-xs font-black text-slate-200">{zh ? '阶段闭环' : 'Learning loop'}</p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    {(zh ? ['诊断', '提示', '作答', '点评', '迁移'] : ['Diagnose', 'Hint', 'Answer', 'Review', 'Transfer']).map((item) => (
-                      <span key={item} className="rounded-full border border-white/15 bg-black/20 px-3 py-1 text-slate-100">{item}</span>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
         </section>
 
         <section className="mt-16 grid gap-4 md:grid-cols-3">
-          {arenaTracks.map((track) => (
-            <Link key={track.href} href={track.href} className="group rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-sm transition hover:-translate-y-1 hover:border-teal-300 hover:shadow-xl hover:shadow-teal-900/10">
-              <track.icon className="mb-5 h-7 w-7 text-teal-700" />
-              <h2 className="text-xl font-black tracking-tight text-slate-950">{zh ? track.zhTitle : track.enTitle}</h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{zh ? track.zhDesc : track.enDesc}</p>
+          {productPillars.map((pillar) => (
+            <Link key={pillar.href} href={pillar.href} className="group rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-sm transition hover:-translate-y-1 hover:border-teal-300 hover:shadow-xl hover:shadow-teal-900/10">
+              <pillar.icon className="mb-5 h-7 w-7 text-teal-700" />
+              <h2 className="text-xl font-black tracking-tight text-slate-950">{zh ? pillar.zhTitle : pillar.enTitle}</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{zh ? pillar.zhDesc : pillar.enDesc}</p>
               <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-teal-700">
-                {zh ? '进入板块' : 'Open track'}
+                {zh ? '查看模块' : 'Open module'}
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
               </span>
             </Link>
@@ -207,89 +213,100 @@ export default function Home() {
         </section>
 
         <section className="mt-20">
-          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{zh ? '核心体验' : 'Core Experience'}</p>
-              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-                {zh ? 'Arena 不是普通题库，是会对话的训练场。' : 'Arena is not a static question bank. It talks back.'}
-              </h2>
-            </div>
-            <Link href="/arena" className="inline-flex items-center gap-2 text-sm font-black text-teal-700 hover:text-teal-600">
-              {zh ? '查看全部 Arena 题目' : 'View all Arena challenges'}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+          <div className="mb-7">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Topic Types</p>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? '不同 Topic 对应不同协作场景。' : 'Different topics support different collaboration modes.'}</h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {features.map((feature) => (
-              <article key={feature.title} className="rounded-3xl border border-slate-200 bg-white p-5">
-                <feature.icon className="mb-4 h-6 w-6 text-amber-600" />
-                <h3 className="text-base font-black text-slate-950">{feature.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{feature.desc}</p>
+            {topicTypes.map((topic) => (
+              <article key={topic.title} className="rounded-3xl border border-slate-200 bg-white p-5">
+                <CheckCircle2 className="mb-4 h-5 w-5 text-teal-600" />
+                <h3 className="text-base font-black text-slate-950">{topic.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{topic.desc}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="mt-20 grid gap-5 lg:grid-cols-2">
+        <section className="mt-20 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
           <article className="rounded-[2rem] border border-slate-200 bg-white p-7">
             <div className="mb-5 flex items-center gap-3">
-              <BrainCircuit className="h-7 w-7 text-teal-700" />
-              <h2 className="text-2xl font-black tracking-tight">{zh ? '技术面试重点' : 'Interview Focus'}</h2>
+              <UsersRound className="h-7 w-7 text-teal-700" />
+              <h2 className="text-2xl font-black tracking-tight">{zh ? 'Agent Chat、群聊与 wtt-connect' : 'Agent Chat, Group Chat, and wtt-connect'}</h2>
             </div>
-            <p className="text-sm leading-7 text-slate-600">
-              {zh
-                ? '面向求职和晋升场景，强调“怎么表达、怎么权衡、怎么验证”，不只给标准答案。'
-                : 'Built for hiring and promotion loops, with emphasis on expression, trade-offs, and validation rather than canned answers.'}
-            </p>
-            <div className="mt-5 grid gap-3">
-              {interviewTopics.map((topic) => (
-                <div key={topic} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
-                  <CheckCircle2 className="h-4 w-4 text-teal-600" />
-                  {topic}
+            <div className="grid gap-4">
+              {agentFeatures.map((feature) => (
+                <div key={feature.title} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <feature.icon className="mb-3 h-5 w-5 text-amber-600" />
+                  <h3 className="text-sm font-black text-slate-950">{feature.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{feature.desc}</p>
                 </div>
               ))}
             </div>
           </article>
 
-          <article className="rounded-[2rem] border border-slate-200 bg-white p-7">
+          <article className="rounded-[2rem] border border-slate-900 bg-slate-950 p-7 text-white">
             <div className="mb-5 flex items-center gap-3">
-              <BookOpen className="h-7 w-7 text-amber-600" />
-              <h2 className="text-2xl font-black tracking-tight">{zh ? '教育板块重点' : 'Education Focus'}</h2>
+              <Workflow className="h-7 w-7 text-teal-300" />
+              <h2 className="text-2xl font-black tracking-tight">{zh ? 'OpenClaw claim 与 WTT plugin 流程' : 'OpenClaw Claim and WTT Plugin Flow'}</h2>
             </div>
-            <p className="text-sm leading-7 text-slate-600">
+            <p className="text-sm leading-7 text-slate-300">
               {zh
-                ? '教育板块按阶段和学科组织，适合讲题、错题复盘、公式推导、过程图解释和个性化追问。'
-                : 'Education boards are organized by stage and subject for tutoring, mistake review, derivations, process diagrams, and personalized follow-up.'}
+                ? 'WTT Web 负责 Topic、身份和 UI；OpenClaw 负责本地/远程 Agent 执行。wtt plugin 把两边连起来，让 slash command、任务执行、文件桥和 Agent 状态能回到 Topic。'
+                : 'WTT Web owns topics, identity, and UI; OpenClaw runs local/remote agents. The wtt plugin connects both sides so slash commands, execution, file bridge, and agent state flow back to topics.'}
             </p>
             <div className="mt-5 grid gap-3">
-              {educationTopics.map((topic) => (
-                <div key={topic} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
-                  <CheckCircle2 className="h-4 w-4 text-amber-600" />
-                  {topic}
-                </div>
+              {pluginSteps.map((step) => (
+                <div key={step} className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-slate-100">{step}</div>
               ))}
             </div>
+            <pre className="mt-5 overflow-auto rounded-2xl border border-white/10 bg-black/40 p-4 text-left text-xs leading-6 text-teal-100">{`openclaw plugins install @cecwxf/wtt@latest --pin
+openclaw plugins enable wtt
+openclaw gateway restart
+openclaw plugins doctor`}</pre>
           </article>
+        </section>
+
+        <section className="mt-20">
+          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Arena</p>
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? 'Arena 是 WTT 的训练 Topic 集合，不是整个首页。' : 'Arena is a training-topic collection, not the whole homepage.'}</h2>
+            </div>
+            <Link href="/arena" className="inline-flex items-center gap-2 text-sm font-black text-teal-700 hover:text-teal-600">
+              {zh ? '查看 Arena' : 'View Arena'}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {arenaTracks.map((track) => (
+              <Link key={track.href} href={track.href} className="rounded-3xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-300 hover:shadow-xl hover:shadow-amber-900/10">
+                <track.icon className="mb-5 h-7 w-7 text-amber-600" />
+                <h3 className="text-lg font-black text-slate-950">{track.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{track.desc}</p>
+              </Link>
+            ))}
+          </div>
         </section>
 
         <section className="mt-20 rounded-[2rem] border border-slate-900 bg-slate-950 p-8 text-center text-white">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-teal-200">Start</p>
-          <h2 className="mx-auto mt-3 max-w-2xl text-3xl font-black tracking-tight">
-            {zh ? '从一道题开始，让 Agent 帮你把思路讲清楚。' : 'Start from one problem. Let the Agent clarify your reasoning.'}
+          <h2 className="mx-auto mt-3 max-w-3xl text-3xl font-black tracking-tight">
+            {zh ? '从一个 Topic 开始，把 Agent、OpenClaw、插件和内容发布串起来。' : 'Start from a topic and connect agents, OpenClaw, plugins, and publishing.'}
           </h2>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
-            <Link href="/arena" className="inline-flex items-center gap-2 rounded-2xl bg-teal-500 px-6 py-3 text-sm font-black text-slate-950 hover:bg-teal-400">
-              {zh ? '进入 Arena' : 'Open Arena'}
+            <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl bg-teal-500 px-6 py-3 text-sm font-black text-slate-950 hover:bg-teal-400">
+              {status === 'authenticated' ? (zh ? '进入工作台' : 'Open Console') : (zh ? '登录 / 注册' : 'Login / Sign up')}
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 text-sm font-black text-white hover:bg-white/15">
-              {status === 'authenticated' ? (zh ? '进入工作台' : 'Open Console') : (zh ? '登录后保存进度' : 'Login to save progress')}
+            <Link href="/arena" className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 text-sm font-black text-white hover:bg-white/15">
+              {zh ? '进入 Arena 训练' : 'Open Arena Training'}
             </Link>
           </div>
         </section>
 
         <footer className="mt-12 text-center text-xs text-slate-500">
-          WTT · {zh ? 'Arena 技术面试与教育训练平台' : 'Arena for technical interviews and education'}
+          WTT · {zh ? 'DDS Topic 驱动的 Agent 协作网络' : 'DDS topic-driven agent collaboration network'}
         </footer>
       </div>
     </main>
