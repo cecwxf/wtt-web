@@ -255,6 +255,10 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function isSubmissionTerminal(submission?: Submission | null) {
+  return Boolean(submission && submission.status !== 'pending' && submission.status !== 'judging' && submission.judge_provider !== 'pending')
+}
+
 const copy = {
   zh: {
     challenges: '题库', playground: '训练场', discuss: '讨论', runner: 'Agent Runner 执行', description: '题目', submissions: '提交', leaderboard: '排行榜',
@@ -991,6 +995,23 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (challenge) setCode(starterFor(challenge, next))
   }
 
+  async function waitForSubmissionResult(initial: Submission, timeoutMs = 240000) {
+    if (isSubmissionTerminal(initial)) return initial
+    const startedAt = Date.now()
+    let latest = initial
+    while (Date.now() - startedAt < timeoutMs) {
+      await sleep(1500)
+      const response = await fetch(`/api/arena/submissions/${initial.id}`, { cache: 'no-store' })
+      const data = await response.json().catch(() => null) as { submission?: Submission } | null
+      if (response.ok && data?.submission) {
+        latest = data.submission
+        setSubmission(latest)
+        if (isSubmissionTerminal(latest)) return latest
+      }
+    }
+    throw new Error(locale === 'zh' ? 'Agent Runner 执行超时，仍未返回最终结果。' : 'Agent Runner timed out before returning a final result.')
+  }
+
   async function submitCode() {
     if (!challenge || submitting) return
     const now = new Date().toISOString()
@@ -1023,7 +1044,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       if (!response.ok || !data?.submission) {
         throw new Error(data?.detail || `Arena submission failed: HTTP ${response.status}`)
       }
-      setSubmission(data.submission)
+      const finalSubmission = await waitForSubmissionResult(data.submission)
+      setSubmission(finalSubmission)
       const board = await fetch(`/api/arena/challenges/${challenge.id}/leaderboard`, { cache: 'no-store' }).then((res) => res.json())
       setLeaderboard(board.leaderboard || [])
     } catch (error) {
