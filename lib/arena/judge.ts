@@ -32,6 +32,7 @@ interface JudgeOutput {
 }
 
 const PYTHON_LANGUAGES = new Set(['python', 'python3', 'py'])
+const OPENCL_LANGUAGES = new Set(['opencl', 'opencl-c', 'cl'])
 
 function buildPythonHarness(userCode: string, challenge: Challenge) {
   const functionName = JSON.stringify(challenge.function_name)
@@ -114,6 +115,215 @@ async function runLocalPython(code: string, stdin: string, timeoutMs: number): P
   }
 }
 
+function cFloatArray(values: unknown) {
+  if (!Array.isArray(values)) throw new Error('OpenCL runner expects payload.values to be an array')
+  return values.map((value) => {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) throw new Error('OpenCL runner only supports finite numeric payload.values')
+    return `${numeric.toString().includes('.') ? numeric : `${numeric}.0`}f`
+  }).join(', ')
+}
+
+function buildOpenCLHost(challenge: Challenge, stdin: string) {
+  const input = JSON.parse(stdin || '{}') as { payload?: { op?: string; values?: unknown[] } }
+  const op = String(input.payload?.op || '')
+  if (op !== 'vector_add' && op !== 'relu') {
+    throw new Error(`Local macOS OpenCL runner currently supports ai-vector-add and ai-relu only; ${challenge.id} uses op=${op}`)
+  }
+
+  const values = input.payload?.values
+  const kernelName = JSON.stringify(challenge.function_name)
+  const arrayLiteral = cFloatArray(values)
+  const n = Array.isArray(values) ? values.length : 0
+  if (n <= 0) throw new Error('OpenCL runner requires at least one input value')
+
+  return `#include <OpenCL/opencl.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void fail(const char* label, cl_int err) {
+  fprintf(stderr, "%s failed: %d\\n", label, err);
+  exit(2);
+}
+
+static char* read_file(const char* path, size_t* size) {
+  FILE* file = fopen(path, "rb");
+  if (!file) {
+    perror("fopen kernel.cl");
+    exit(2);
+  }
+  fseek(file, 0, SEEK_END);
+  long length = ftell(file);
+  rewind(file);
+  char* buffer = (char*)calloc((size_t)length + 1, 1);
+  if (!buffer) exit(2);
+  if (fread(buffer, 1, (size_t)length, file) != (size_t)length) {
+    perror("fread kernel.cl");
+    exit(2);
+  }
+  fclose(file);
+  *size = (size_t)length;
+  return buffer;
+}
+
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    fprintf(stderr, "usage: opencl_runner kernel.cl\\n");
+    return 2;
+  }
+
+  const int n = ${n};
+  float input[${n}] = { ${arrayLiteral} };
+  float output[${n}] = {0};
+  const char* kernel_name = ${kernelName};
+
+  cl_int err = CL_SUCCESS;
+  cl_uint platform_count = 0;
+  err = clGetPlatformIDs(0, NULL, &platform_count);
+  if (err != CL_SUCCESS || platform_count == 0) fail("clGetPlatformIDs", err);
+
+  cl_platform_id platform = NULL;
+  err = clGetPlatformIDs(1, &platform, NULL);
+  if (err != CL_SUCCESS) fail("clGetPlatformIDs[0]", err);
+
+  cl_device_id device = NULL;
+  err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+  if (err != CL_SUCCESS) {
+    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_DEFAULT, 1, &device, NULL);
+    if (err != CL_SUCCESS) fail("clGetDeviceIDs", err);
+  }
+
+  cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateContext", err);
+
+  cl_command_queue queue = clCreateCommandQueue(context, device, 0, &err);
+  if (err != CL_SUCCESS) fail("clCreateCommandQueue", err);
+
+  size_t source_size = 0;
+  char* source = read_file(argv[1], &source_size);
+  cl_program program = clCreateProgramWithSource(context, 1, (const char**)&source, &source_size, &err);
+  if (err != CL_SUCCESS) fail("clCreateProgramWithSource", err);
+
+  err = clBuildProgram(program, 1, &device, "", NULL, NULL);
+  if (err != CL_SUCCESS) {
+    size_t log_size = 0;
+    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+    char* log = (char*)calloc(log_size + 1, 1);
+    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+    fprintf(stderr, "%s", log);
+    return 1;
+  }
+
+  cl_kernel kernel = clCreateKernel(program, kernel_name, &err);
+  if (err != CL_SUCCESS) fail("clCreateKernel", err);
+
+  cl_mem input_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(input), input, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(input)", err);
+  cl_mem output_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(output), NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(output)", err);
+
+  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &input_buffer);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(0)", err);
+  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &output_buffer);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(1)", err);
+  err = clSetKernelArg(kernel, 2, sizeof(int), &n);
+  if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
+
+  size_t global = (size_t)n;
+  err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, NULL, 0, NULL, NULL);
+  if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
+  err = clFinish(queue);
+  if (err != CL_SUCCESS) fail("clFinish", err);
+  err = clEnqueueReadBuffer(queue, output_buffer, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL);
+  if (err != CL_SUCCESS) fail("clEnqueueReadBuffer", err);
+
+  printf("[");
+  for (int i = 0; i < n; ++i) {
+    if (i) printf(",");
+    if (fabsf(output[i] - roundf(output[i])) < 0.00001f) {
+      printf("%.0f", output[i]);
+    } else {
+      printf("%.6g", output[i]);
+    }
+  }
+  printf("]\\n");
+
+  clReleaseMemObject(output_buffer);
+  clReleaseMemObject(input_buffer);
+  clReleaseKernel(kernel);
+  clReleaseProgram(program);
+  clReleaseCommandQueue(queue);
+  clReleaseContext(context);
+  free(source);
+  return 0;
+}
+`
+}
+
+async function runProcess(command: string, args: string[], timeoutMs: number, cwd?: string): Promise<RawRunResult> {
+  const started = Date.now()
+  return await new Promise<RawRunResult>((resolve) => {
+    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    let settled = false
+    const finish = (result: RawRunResult) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      finish({ status: 'time_limit_exceeded', stdout: '', stderr: '', runtime_ms: Date.now() - started })
+    }, timeoutMs)
+    const stdout: Buffer[] = []
+    const stderr: Buffer[] = []
+    child.stdout.on('data', (chunk) => stdout.push(Buffer.from(chunk)))
+    child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      finish({ status: 'system_error', stdout: '', stderr: '', error_message: error.message, runtime_ms: Date.now() - started })
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      const err = Buffer.concat(stderr).toString('utf8')
+      finish({
+        status: code === 0 ? 'accepted' : 'runtime_error',
+        stdout: Buffer.concat(stdout).toString('utf8'),
+        stderr: err,
+        error_message: code === 0 ? undefined : err.split('\n').slice(-8).join('\n'),
+        runtime_ms: Date.now() - started,
+      })
+    })
+  })
+}
+
+async function runLocalOpenCL(code: string, stdin: string, timeoutMs: number, challenge: Challenge): Promise<RawRunResult> {
+  if (process.platform !== 'darwin') {
+    return { status: 'system_error', stdout: '', stderr: '', error_message: 'Local OpenCL runner is enabled for macOS Mac mini runner only.' }
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), 'wtt-opencl-'))
+  const kernelFile = join(dir, 'kernel.cl')
+  const hostFile = join(dir, 'runner.c')
+  const binFile = join(dir, 'runner')
+  try {
+    await writeFile(kernelFile, code, 'utf8')
+    await writeFile(hostFile, buildOpenCLHost(challenge, stdin), 'utf8')
+
+    const compile = await runProcess('clang', [hostFile, '-framework', 'OpenCL', '-o', binFile], timeoutMs, dir)
+    if (compile.status !== 'accepted') {
+      return { ...compile, status: 'compile_error', compile_output: compile.stderr || compile.stdout }
+    }
+
+    return await runProcess(binFile, [kernelFile], timeoutMs, dir)
+  } catch (error) {
+    return { status: 'system_error', stdout: '', stderr: '', error_message: error instanceof Error ? error.message : String(error) }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
 async function runRemoteJudge(input: JudgeInput, remoteUrl: string): Promise<JudgeOutput> {
   const response = await fetch(remoteUrl, {
     method: 'POST',
@@ -181,18 +391,21 @@ export async function judgeSubmission(input: JudgeInput) {
   const remoteJudgeUrl = process.env.WTT_ARENA_REMOTE_JUDGE_URL
   if (remoteJudgeUrl) return runRemoteJudge(input, remoteJudgeUrl)
 
-  if (!PYTHON_LANGUAGES.has(language.toLowerCase())) {
+  const normalizedLanguage = language.toLowerCase()
+  if (!PYTHON_LANGUAGES.has(normalizedLanguage) && !OPENCL_LANGUAGES.has(normalizedLanguage)) {
     throw new Error(`Unsupported language without remote runner: ${language}`)
   }
 
   const configuredProvider = (process.env.WTT_ARENA_JUDGE_PROVIDER || '').toLowerCase()
   const allowAgentLocal = configuredProvider === 'agent-local' || configuredProvider === 'local-python' || process.env.WTT_ARENA_ENABLE_LOCAL_PYTHON_JUDGE === '1'
-  const provider = process.env.JUDGE0_URL && configuredProvider !== 'agent-local' && configuredProvider !== 'local-python'
-    ? 'judge0'
+  const provider = OPENCL_LANGUAGES.has(normalizedLanguage)
+    ? 'agent-local-opencl-macos'
+    : process.env.JUDGE0_URL && configuredProvider !== 'agent-local' && configuredProvider !== 'local-python'
+      ? 'judge0'
     : allowAgentLocal
       ? 'agent-local-python'
       : 'not-configured'
-  const harness = buildPythonHarness(code, challenge)
+  const harness = PYTHON_LANGUAGES.has(normalizedLanguage) ? buildPythonHarness(code, challenge) : code
   const results: SubmissionResult[] = []
   let passedWeight = 0
   const totalWeight = testCases.reduce((sum, testCase) => sum + testCase.weight, 0)
@@ -203,9 +416,11 @@ export async function judgeSubmission(input: JudgeInput) {
     const started = Date.now()
     const raw = provider === 'judge0'
       ? await runJudge0(harness, testCase.input, challenge.time_limit_ms)
+      : provider === 'agent-local-opencl-macos'
+        ? await runLocalOpenCL(harness, testCase.input, challenge.time_limit_ms, challenge)
       : provider === 'agent-local-python'
         ? await runLocalPython(harness, testCase.input, challenge.time_limit_ms)
-        : { status: 'system_error' as const, stdout: '', stderr: '', error_message: 'Configure JUDGE0_URL or set WTT_ARENA_JUDGE_PROVIDER=agent-local for an isolated Agent-runner smoke environment.' }
+        : { status: 'system_error' as const, stdout: '', stderr: '', error_message: 'Configure JUDGE0_URL, choose OpenCL on macOS, or set WTT_ARENA_JUDGE_PROVIDER=agent-local for an isolated Agent-runner smoke environment.' }
     let status = raw.status
     if (raw.status === 'accepted' && !compareOutput(raw.stdout, testCase.expected_output, testCase.checker)) {
       status = 'wrong_answer'

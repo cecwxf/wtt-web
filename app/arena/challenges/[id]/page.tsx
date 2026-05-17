@@ -20,7 +20,8 @@ import { normalizeMarkdownMath } from '@/lib/markdown-math'
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
 type Locale = 'zh' | 'en'
-type Language = 'python' | 'cpp' | 'c'
+type Language = 'opencl' | 'cuda' | 'triton' | 'cpp' | 'python' | 'c'
+type KernelEnvironment = 'macos-opencl'
 type ChatMode = 'socratic' | 'interview_answer' | 'ask'
 type ChatMessage = { id?: string; role: 'user' | 'agent'; content: string; createdAt: string }
 
@@ -178,7 +179,7 @@ const copy = {
     chatWorking: 'Agent 正在思考 / 输出中', whiteboardWorking: 'Agent 正在生成白板',
     mode: '模式',
     coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
-    aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
+    aiDesc: 'AI Kernel 题默认使用 OpenCL C。Mac 环境会通过 Agent/Runner 编译 host 程序并真实运行 OpenCL kernel；CUDA C++ / Triton 作为目标语言保留给远程硬件 runner。',
     interviewMode: 'AI 面试练习模式', interviewHint: '开放式面试题，直接在右侧和 Arena Coach 练习结构化回答。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
     consultation: '咨询说明', gaokaoIntro: '高考志愿 Ask 咨询。不是刷题 Problem；请直接输入省份、科类/选科、分数、位次、专业兴趣和城市偏好。',
   },
@@ -193,7 +194,7 @@ const copy = {
     chatWorking: 'Agent is thinking / writing', whiteboardWorking: 'Agent is generating the whiteboard',
     mode: 'Mode',
     coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
-    aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
+    aiDesc: 'AI Kernel challenge. OpenCL C is the default. On macOS, the Agent/Runner compiles a host program and executes the OpenCL kernel for real; CUDA C++ / Triton are target languages for remote hardware runners.',
     interviewMode: 'AI interview practice mode', interviewHint: 'Open-ended interview prompt. Practice a structured answer with Arena Coach on the right.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
     consultation: 'Consultation', gaokaoIntro: 'Gaokao volunteer Ask consultation. This is not a problem; describe province, subject track, score, rank, interests, and city preferences.',
   },
@@ -217,12 +218,67 @@ function formatDifficulty(difficulty: string) {
 }
 
 function editorLanguage(language: Language) {
+  if (language === 'opencl') return 'c'
+  if (language === 'cuda') return 'cpp'
+  if (language === 'triton') return 'python'
   if (language === 'cpp') return 'cpp'
   if (language === 'c') return 'c'
   return 'python'
 }
 
+function openClStarter(challenge: Challenge) {
+  const op = challenge.tags.includes('relu') ? 'relu' : challenge.tags.includes('vector-add') ? 'vector_add' : 'generic'
+  const body = op === 'vector_add'
+    ? '    output[gid] = values[gid] + (float)gid;'
+    : op === 'relu'
+    ? '    float x = values[gid];\n    output[gid] = x > 0.0f ? x : 0.0f;'
+    : '    // TODO: write this AI operator in OpenCL C.\n    output[gid] = values[gid];'
+
+  return `// OpenCL C kernel for macOS Agent/Runner.
+// Supported local signature:
+//   kernel_name(__global const float* values, __global float* output, int n)
+__kernel void ${challenge.function_name}(__global const float* values,
+                                         __global float* output,
+                                         const int n) {
+    const int gid = get_global_id(0);
+    if (gid >= n) return;
+${body}
+}
+`
+}
+
+function cudaStarter(challenge: Challenge) {
+  return `// CUDA C++ target environment.
+// Remote GPU runner support is required for execution.
+extern "C" __global__ void ${challenge.function_name}(const float* values, float* output, int n) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= n) return;
+    // TODO: implement the operator.
+    output[gid] = values[gid];
+}
+`
+}
+
+function tritonStarter(challenge: Challenge) {
+  return `import triton
+import triton.language as tl
+
+
+@triton.jit
+def ${challenge.function_name}(values, output, n: tl.constexpr, BLOCK: tl.constexpr):
+    pid = tl.program_id(0)
+    offs = pid * BLOCK + tl.arange(0, BLOCK)
+    mask = offs < n
+    x = tl.load(values + offs, mask=mask)
+    # TODO: implement the operator.
+    tl.store(output + offs, x, mask=mask)
+`
+}
+
 function starterFor(challenge: Challenge, language: Language) {
+  if (language === 'opencl') return openClStarter(challenge)
+  if (language === 'cuda') return cudaStarter(challenge)
+  if (language === 'triton') return tritonStarter(challenge)
   if (language === 'python') return challenge.starter_code
   if (language === 'cpp') {
     return `#include <bits/stdc++.h>
@@ -247,6 +303,19 @@ const char* ${challenge.function_name}(const char* payload_json) {
     return "null";
 }
 `
+}
+
+function defaultLanguageFor(challenge: Challenge): Language {
+  return challenge.category === 'ai-kernel' ? 'opencl' : 'python'
+}
+
+function sourceFilename(language: Language) {
+  if (language === 'opencl') return 'kernel.cl'
+  if (language === 'cuda') return 'kernel.cu'
+  if (language === 'triton') return 'kernel.py'
+  if (language === 'python') return 'main.py'
+  if (language === 'cpp') return 'main.cpp'
+  return 'main.c'
 }
 
 function localizedDescription(challenge: Challenge, locale: Locale) {
@@ -422,7 +491,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [payload, setPayload] = useState<ChallengePayload | null>(null)
   const [locale, setLocale] = useState<Locale>('zh')
-  const [language, setLanguage] = useState<Language>('python')
+  const [language, setLanguage] = useState<Language>('opencl')
+  const [kernelEnvironment, setKernelEnvironment] = useState<KernelEnvironment>('macos-opencl')
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submission, setSubmission] = useState<Submission | null>(null)
@@ -480,7 +550,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       .then((data: ChallengePayload) => {
         if (!alive) return
         setPayload(data)
-        setCode(starterFor(data.challenge, language))
+        const defaultLanguage = defaultLanguageFor(data.challenge)
+        setLanguage(defaultLanguage)
+        setCode(starterFor(data.challenge, defaultLanguage))
       })
       .catch(() => undefined)
     fetch(`/api/arena/challenges/${params.id}/leaderboard`, { cache: 'no-store' })
@@ -488,7 +560,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       .then((data: { leaderboard: LeaderboardEntry[] }) => alive && setLeaderboard(data.leaderboard || []))
       .catch(() => undefined)
     return () => { alive = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id])
 
   const challenge = payload?.challenge
@@ -801,7 +872,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const response = await fetch(`/api/arena/challenges/${challenge.id}/submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, code, user_id: 'demo-user' }),
+        body: JSON.stringify({ language, environment: kernelEnvironment, code, user_id: 'demo-user' }),
       })
       const data = await response.json()
       setSubmission(data.submission)
@@ -1046,7 +1117,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             <button onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} className="rounded-md border border-gray-800 bg-[#202020] px-3 py-1 font-bold text-gray-300 hover:border-[#3ce8e2] hover:text-[#3ce8e2]">
               {locale === 'zh' ? 'English' : '中文'}
             </button>
-            <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2]">CPU-sim MVP</span>
+            <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2]">OpenCL · Mac runner</span>
             <span>{t.runner}</span>
           </div>
         </header>
@@ -1195,14 +1266,25 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               <div className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
                 <div className="flex items-center justify-between gap-3 border-b border-gray-800 bg-[#191919] px-4 py-3">
                   <div>
-                    <p className="text-sm font-bold text-white">main.{language === 'python' ? 'py' : language === 'cpp' ? 'cpp' : 'c'}</p>
+                    <p className="text-sm font-bold text-white">{sourceFilename(language)}</p>
                     <p className="text-xs text-gray-500">Implement {challenge.function_name} · {t.runner}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {challenge.category === 'ai-kernel' && (
+                      <>
+                        <label className="text-xs text-gray-500">{locale === 'zh' ? '环境' : 'Env'}</label>
+                        <select value={kernelEnvironment} onChange={(event) => setKernelEnvironment(event.target.value as KernelEnvironment)} className="rounded-md border border-gray-800 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]">
+                          <option value="macos-opencl">Mac mini · OpenCL</option>
+                        </select>
+                      </>
+                    )}
                     <label className="text-xs text-gray-500">{t.language}</label>
                     <select value={language} onChange={(event) => changeLanguage(event.target.value as Language)} className="rounded-md border border-gray-800 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]">
-                      <option value="python">Python</option>
+                      {challenge.category === 'ai-kernel' && <option value="opencl">OpenCL C</option>}
+                      {challenge.category === 'ai-kernel' && <option value="cuda">CUDA C++</option>}
+                      {challenge.category === 'ai-kernel' && <option value="triton">Triton</option>}
                       <option value="cpp">C++</option>
+                      <option value="python">Python</option>
                       <option value="c">C</option>
                     </select>
                     <button onClick={submitCode} disabled={submitting} className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
