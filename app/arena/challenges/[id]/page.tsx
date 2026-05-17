@@ -537,28 +537,20 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
-  const [chatPanelWidth, setChatPanelWidth] = useState(540)
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
   const autoWhiteboardSourceKeysRef = useRef(new Set<string>())
 
-  function startPanelResize(panel: 'left' | 'chat') {
+  function startPanelResize() {
     return (event: React.PointerEvent<HTMLDivElement>) => {
       if (isCoding) return
       event.preventDefault()
       const bounds = layoutRef.current?.getBoundingClientRect()
       if (!bounds) return
       const handleMove = (moveEvent: PointerEvent) => {
-        if (panel === 'left') {
-          const available = bounds.width - chatPanelWidth - 120
-          setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 280, Math.max(300, available)))
-          return
-        }
-        const chatLeft = whiteboardExpanded ? bounds.left : bounds.left + leftPanelWidth + 12
-        const minWhiteboardWidth = whiteboardExpanded ? 520 : 360
-        const available = bounds.width - (whiteboardExpanded ? minWhiteboardWidth : leftPanelWidth + minWhiteboardWidth + 12)
-        setChatPanelWidth(clampNumber(moveEvent.clientX - chatLeft, 420, Math.min(860, Math.max(420, available))))
+        const available = bounds.width - 760
+        setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 280, Math.max(300, available)))
       }
       const stop = () => {
         window.removeEventListener('pointermove', handleMove)
@@ -867,7 +859,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const availableChatModes = isGaokaoVolunteer ? chatModes.filter((mode) => mode.id === 'ask') : chatModes
   const currentChatMode = availableChatModes.find((mode) => mode.id === chatMode) || availableChatModes[0]
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
-  const effectiveChatPanelWidth = whiteboardExpanded ? Math.max(chatPanelWidth, 560) : chatPanelWidth
   const arenaTypingActive = !!arenaTyping && arenaTyping.topicId === arenaTopicId
   const agentBusy = arenaTypingActive || chatSending || arenaSyncing || whiteboardBusy
   const agentBusyLabel = arenaSyncing
@@ -1122,8 +1113,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftPanelWidth}px minmax(560px, 1fr)`
         : whiteboardExpanded
-        ? `${effectiveChatPanelWidth}px 6px minmax(520px, 1fr)`
-        : `${leftPanelWidth}px 6px ${effectiveChatPanelWidth}px 6px minmax(360px, 1fr)`,
+        ? 'minmax(0, 1fr) minmax(0, 1fr)'
+        : `${leftPanelWidth}px 6px minmax(0, 1fr) minmax(0, 1fr)`,
     }
     : undefined
 
@@ -1283,7 +1274,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             <div
               role="separator"
               aria-orientation="vertical"
-              onPointerDown={startPanelResize('left')}
+              onPointerDown={startPanelResize()}
               className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-[#3ce8e2]/50"
             />
           )}
@@ -1436,15 +1427,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               </form>
             </div>
           </aside>
-
-          {!isCoding && !isGaokaoVolunteer && (
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              onPointerDown={startPanelResize('chat')}
-              className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-[#3ce8e2]/50"
-            />
-          )}
 
           {!isCoding && !isGaokaoVolunteer && (
             <div className="grid min-h-0 gap-2 lg:grid-rows-[auto_1fr]">
