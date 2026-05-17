@@ -69,6 +69,40 @@ function safeHtmlString(value: unknown, max = 24000) {
     .slice(0, max)
 }
 
+function htmlValueFromRecord(record: Record<string, unknown>) {
+  return record.html
+    || record.animation_html
+    || record.html_animation
+    || record.animated_html
+    || record.html_board
+    || record.svg_html
+}
+
+function stripJsonFence(value: string) {
+  return value
+    .trim()
+    .replace(/^```(?:json|JSON)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
+}
+
+function extractFirstJsonObject(value: string) {
+  const text = stripJsonFence(value)
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start < 0 || end <= start) return text
+  return text.slice(start, end + 1)
+}
+
+function parseDiagramJsonCandidate(candidate: string) {
+  const stripped = stripJsonFence(candidate)
+  try {
+    return JSON.parse(stripped) as WhiteboardDiagramPayload
+  } catch {
+    return JSON.parse(extractFirstJsonObject(stripped)) as WhiteboardDiagramPayload
+  }
+}
+
 function visualLength(text: string) {
   return Array.from(text).reduce((total, char) => total + (/[\u4e00-\u9fff]/.test(char) ? 2 : 1), 0)
 }
@@ -531,10 +565,11 @@ function sanitizeDiagramPayload(payload: WhiteboardDiagramPayload): WhiteboardDi
       title: safeString(step.title, 160) || `Step ${index + 1}`,
       markdown: safeMultilineString(step.markdown, 6500),
       mermaid: safeMultilineString(step.mermaid || step.source, 5000),
-      html: safeHtmlString(step.html, 14000),
+      html: safeHtmlString(htmlValueFromRecord(step as Record<string, unknown>), 14000),
       summary: Array.isArray(step.summary) ? step.summary.map((item) => safeString(item, 180)).filter(Boolean).slice(0, 4) : undefined,
     })).filter((step) => step.markdown || step.mermaid || step.html).slice(0, 6)
     : undefined
+  const payloadRecord = payload as Record<string, unknown>
   return {
     format: safeString(payload.format, 40) || 'mermaid',
     title: safeString(payload.title, 160),
@@ -542,7 +577,7 @@ function sanitizeDiagramPayload(payload: WhiteboardDiagramPayload): WhiteboardDi
     source: safeMultilineString(payload.source || payload.mermaid, 5000),
     mermaid: safeMultilineString(payload.mermaid || payload.source, 5000),
     markdown: safeMultilineString(payload.markdown, 6500),
-    html: safeHtmlString(payload.html || (payload as Record<string, unknown>).animation_html || (payload as Record<string, unknown>).html_animation, 26000),
+    html: safeHtmlString(htmlValueFromRecord(payloadRecord), 26000),
     steps,
   }
 }
@@ -872,14 +907,14 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ? `题目约束只用于确定场景，不要逐字复制到白板：${challenge.description}`
     : `Problem constraints are only for grounding; do not copy them into the board: ${challenge.description}`
   const phases = zh
-    ? 'Markdown/Mermaid 白板必须按四步组织：1) Socratic 提问/诊断，2) 架构或概念分析，3) 按题目拆解关键要点，4) 完整答案结构。HTML 白板不要使用这四段结构。'
-    : 'The Markdown/Mermaid board must use four steps: 1) Socratic question/diagnosis, 2) architecture or concept analysis, 3) problem-specific key decomposition, 4) complete answer structure. The HTML board must not use these four sections.'
+    ? 'Markdown/Mermaid 白板必须按四步组织：1) Socratic 提问/诊断，2) 架构或概念分析，3) 按题目拆解关键要点，4) 完整答案结构。第一步也必须包含一个紧凑的局部诊断/流程 Mermaid 图。HTML 白板不要使用这四段结构。'
+    : 'The Markdown/Mermaid board must use four steps: 1) Socratic question/diagnosis, 2) architecture or concept analysis, 3) problem-specific key decomposition, 4) complete answer structure. The first step must also include a compact local diagnosis/flow Mermaid diagram. The HTML board must not use these four sections.'
   const visualHtmlRequirements = zh
     ? 'HTML 视觉质量硬性要求：主 SVG 必须是大图，不是缩略图；viewBox 建议至少 1200x560，svg 宽度 100%，图内节点字号 18-28px，公式字号 20-30px，主图高度不少于 420px。必须包含清晰标题、核心图解、公式说明、简单示例、动画说明、结论/检查清单六类内容，但不要使用 Markdown 的四段标题。图必须配文字说明：每个关键节点或公式旁边要有 1-2 句解释，说明“它代表什么、为什么这样变、边界条件是什么”。公式必须逐项解释符号、单位/含义、适用条件，并给一个最小数字或业务例子代入。动画必须真实存在：使用 @keyframes、animation-delay、stroke-dasharray/stroke-dashoffset 或 transform/opacity，让路径、节点或公式按步骤出现；同时提供“如何读这个动画”的文字说明。整体不能只有图，文字解释不少于 6 个说明块。'
     : 'HTML visual quality requirements: the main SVG must be large, not a thumbnail; use a viewBox of at least about 1200x560, svg width 100%, node font size 18-28px, formula font size 20-30px, and main diagram height at least 420px. Include six content types: clear title, core diagram, formula explanation, simple example, animation explanation, and conclusion/checklist, but do not use the four Markdown step headings. Every key node or formula needs 1-2 adjacent explanatory sentences explaining what it means, why the transformation is valid, and its boundary conditions. Explain every formula symbol, unit/meaning, applicability, and include one minimal numeric or business example. Animation must be real: use @keyframes, animation-delay, stroke-dasharray/stroke-dashoffset, or transform/opacity so paths, nodes, or formulas appear step by step; also include text explaining how to read the animation. The page cannot be diagram-only; include at least 6 explanatory text blocks.'
   const limits = zh
-    ? `必须同时输出两种白板产物：A) markdown/mermaid 图文白板，B) html 动画白板。Markdown 负责四步讲解；HTML 是另一套面向视觉理解的产物，必须先阅读你本轮 Arena Chat 自然语言回答，抽取其中真正需要可视化的公式、原理、方法、流程、架构、状态变化、变量关系、复杂度/指标和 trade-off，然后重新设计为一张详细的 SVG/HTML 动画讲解页。HTML 禁止使用“Socratic/架构和概念/问题分解/完整答案”四段标题，禁止照搬 markdown steps，禁止通用模板、占位文字或“Known/Relation/Transform”套话。HTML 必须至少包含：1) 一个本题专属 SVG 主图，表达公式推导、变量流、状态流、控制流、数据流或组件依赖；2) 一个符号/组件/指标定义表；3) 一个过程动画，用 CSS keyframes 高亮从输入到中间状态再到结论的路径；4) 一个最后静止可读的总结图或矩阵。${visualHtmlRequirements} 顶层必须有 mermaid 总图，并允许在 steps 中输出必要的局部 mermaid：architecture_concepts 步要给局部架构图，decomposition 或 complete_answer 步要给局部流程图；不要每一步都机械给图，避免页面重复堆图。每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表。所有原理性解释都必须这样处理，不只限于 LLM：数学公式、物理过程、算法机制、操作系统/网络/编译器/数据库、硬件/芯片/电路、AI 模型、工程架构都要给“公式或不变量 + 总图 + 必要局部架构/流程图 + 每步解释”。html 字段必须是一段可独立嵌入的 HTML 片段，使用内联 <style>、CSS keyframes、SVG、div/span/table，不要使用 JavaScript、script、iframe、外链资源、网络图片或表单。顶层 Mermaid 控制在 5-8 个节点、4-7 条边；局部 Mermaid 控制在 3-6 个节点、2-5 条边；HTML 控制在 4500-30000 字符内。`
-    : `Output two whiteboard artifacts at the same time: A) markdown/mermaid board, B) animated HTML board. Markdown owns the four-step explanation. HTML is a separate visual artifact: read your Arena Chat natural-language answer, extract the formulas, principles, methods, flows, architecture, state transitions, variable relations, complexity/metrics, and trade-offs that genuinely need visualization, then redesign them as one detailed SVG/HTML animated explanation page. The HTML must not use "Socratic / architecture and concepts / decomposition / complete answer" sections, must not copy markdown steps, and must not use generic templates, placeholders, or "Known/Relation/Transform" boilerplate. HTML must include at least: 1) one problem-specific SVG main diagram showing derivation, variable flow, state flow, control flow, data flow, or component dependencies; 2) one symbol/component/metric definition table; 3) one CSS keyframes process animation highlighting the path from input to intermediate state to conclusion; 4) one final static readable summary diagram or matrix. ${visualHtmlRequirements} Include a top-level mermaid overview and allow necessary local mermaid diagrams inside steps: architecture_concepts should include a local architecture diagram, and decomposition or complete_answer should include a local flow diagram. Do not mechanically add a diagram to every step. Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Apply this to every principle explanation, not only LLMs. The html field must be a self-contained embeddable HTML fragment using inline <style>, CSS keyframes, SVG, div/span/table. Do not use JavaScript, script, iframe, external resources, network images, or forms. Keep top-level Mermaid to 5-8 nodes and 4-7 edges; local Mermaid to 3-6 nodes and 2-5 edges; HTML to 4500-30000 characters.`
+    ? `必须同时输出两种白板产物：A) markdown/mermaid 图文白板，B) html 动画白板。Markdown 负责四步讲解；HTML 是另一套面向视觉理解的产物，必须先阅读你本轮 Arena Chat 自然语言回答，抽取其中真正需要可视化的公式、原理、方法、流程、架构、状态变化、变量关系、复杂度/指标和 trade-off，然后重新设计为一张详细的 SVG/HTML 动画讲解页。HTML 禁止使用“Socratic/架构和概念/问题分解/完整答案”四段标题，禁止照搬 markdown steps，禁止通用模板、占位文字或“Known/Relation/Transform”套话。HTML 必须至少包含：1) 一个本题专属 SVG 主图，表达公式推导、变量流、状态流、控制流、数据流或组件依赖；2) 一个符号/组件/指标定义表；3) 一个过程动画，用 CSS keyframes 高亮从输入到中间状态再到结论的路径；4) 一个最后静止可读的总结图或矩阵。${visualHtmlRequirements} 顶层必须有 mermaid 总图，顶层必须有 html 字段；steps[0] 必须有局部诊断/流程 mermaid，architecture_concepts 步要给局部架构图，decomposition 或 complete_answer 步要给局部流程图。每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表。所有原理性解释都必须这样处理，不只限于 LLM：数学公式、物理过程、算法机制、操作系统/网络/编译器/数据库、硬件/芯片/电路、AI 模型、工程架构都要给“公式或不变量 + 总图 + 必要局部架构/流程图 + 每步解释”。html 字段必须是一段可独立嵌入的 HTML 片段，使用内联 <style>、CSS keyframes、SVG、div/span/table，不要使用 JavaScript、script、iframe、外链资源、网络图片或表单。顶层 Mermaid 控制在 5-8 个节点、4-7 条边；局部 Mermaid 控制在 3-6 个节点、2-5 条边；HTML 控制在 4500-30000 字符内。`
+    : `Output two whiteboard artifacts at the same time: A) markdown/mermaid board, B) animated HTML board. Markdown owns the four-step explanation. HTML is a separate visual artifact: read your Arena Chat natural-language answer, extract the formulas, principles, methods, flows, architecture, state transitions, variable relations, complexity/metrics, and trade-offs that genuinely need visualization, then redesign them as one detailed SVG/HTML animated explanation page. The HTML must not use "Socratic / architecture and concepts / decomposition / complete answer" sections, must not copy markdown steps, and must not use generic templates, placeholders, or "Known/Relation/Transform" boilerplate. HTML must include at least: 1) one problem-specific SVG main diagram showing derivation, variable flow, state flow, control flow, data flow, or component dependencies; 2) one symbol/component/metric definition table; 3) one CSS keyframes process animation highlighting the path from input to intermediate state to conclusion; 4) one final static readable summary diagram or matrix. ${visualHtmlRequirements} Include a top-level mermaid overview and a top-level html field; steps[0] must include a local diagnosis/flow Mermaid diagram, architecture_concepts should include a local architecture diagram, and decomposition or complete_answer should include a local flow diagram. Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Apply this to every principle explanation, not only LLMs. The html field must be a self-contained embeddable HTML fragment using inline <style>, CSS keyframes, SVG, div/span/table. Do not use JavaScript, script, iframe, external resources, network images, or forms. Keep top-level Mermaid to 5-8 nodes and 4-7 edges; local Mermaid to 3-6 nodes and 2-5 edges; HTML to 4500-30000 characters.`
   const example = JSON.stringify({
     format: 'steps',
     title: '答案白板',
@@ -891,6 +926,7 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
         stage: 'socratic',
         title: '1. Socratic 提问',
         markdown: '先确认候选人的判断入口：这题的核心风险不是“能不能拼出链路”，而是能不能定位质量瓶颈并说明如何验证。\n\n| Focus | Question |\n| --- | --- |\n| Quality bottleneck | Which stage most limits answer correctness? |\n| Evidence | What signal would prove it? |',
+        mermaid: 'flowchart TD\n  Question["诊断问题"] --> Signal["关键证据"]\n  Signal --> Next["下一步验证"]',
       },
       {
         stage: 'architecture_concepts',
@@ -912,8 +948,8 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ],
   })
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 段落、表格、LaTeX 公式、Mermaid 和自包含 HTML/CSS 动画，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下，示例只说明字段，不允许复制示例内容或布局：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：必须有顶层 mermaid 总图；必须有顶层 html 动画；必须至少有一个 steps[*].mermaid 局部架构图或局部流程图；四个 steps 都要有；每步的 markdown 至少包含解释文字和必要公式/指标定义，不能只有表格；每步 markdown 必须总结本轮回答；html 必须从你刚刚的 Arena Chat 回答中抽取公式、原理、方法、流程和架构重新设计为详细 SVG/HTML 动画，不能按四步结构组织，不能照抄示例，不能输出模板占位，不能只画通用步骤；不要画题目原文；不要输出 WHITEBOARD_OPS。`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown paragraphs, tables, LaTeX formulas, Mermaid, and self-contained HTML/CSS animation, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format; the example only documents fields and must not be copied as content or layout:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include a top-level mermaid overview; include a top-level html animation; include at least one steps[*].mermaid local architecture or flow diagram; include all four steps; each step markdown must include explanatory prose and required formulas/metric definitions, not just a table; each step markdown must summarize this reply; html must extract formulas, principles, methods, flows, and architecture from your Arena Chat answer and redesign them as detailed SVG/HTML animation; do not organize HTML by the four markdown steps, copy the example, output placeholders, or draw only generic stages; do not draw prompt text; do not output WHITEBOARD_OPS.`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 段落、表格、LaTeX 公式、Mermaid 和自包含 HTML/CSS 动画，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下，示例只说明字段，不允许复制示例内容或布局：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：必须有顶层 mermaid 总图；必须有顶层 html 动画；steps[0].mermaid 必须是局部诊断/流程图；architecture_concepts 步必须有局部架构图；decomposition 或 complete_answer 步必须有局部流程图；四个 steps 都要有；每步的 markdown 至少包含解释文字和必要公式/指标定义，不能只有表格；每步 markdown 必须总结本轮回答；html 必须从你刚刚的 Arena Chat 回答中抽取公式、原理、方法、流程和架构重新设计为详细 SVG/HTML 动画，不能按四步结构组织，不能照抄示例，不能输出模板占位，不能只画通用步骤；不要画题目原文；不要输出 WHITEBOARD_OPS。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown paragraphs, tables, LaTeX formulas, Mermaid, and self-contained HTML/CSS animation, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format; the example only documents fields and must not be copied as content or layout:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include a top-level mermaid overview; include a top-level html animation; steps[0].mermaid must be a local diagnosis/flow diagram; architecture_concepts must include a local architecture diagram; decomposition or complete_answer must include a local flow diagram; include all four steps; each step markdown must include explanatory prose and required formulas/metric definitions, not just a table; each step markdown must summarize this reply; html must extract formulas, principles, methods, flows, and architecture from your Arena Chat answer and redesign them as detailed SVG/HTML animation; do not organize HTML by the four markdown steps, copy the example, output placeholders, or draw only generic stages; do not draw prompt text; do not output WHITEBOARD_OPS.`
 }
 
 export function makeWhiteboardFromAnswerPrompt(challenge: Challenge, locale: WhiteboardLocale, answer: string, userMessage = '') {
@@ -934,7 +970,7 @@ export function makeWhiteboardFromAnswerPrompt(challenge: Challenge, locale: Whi
     mermaid: 'flowchart LR\n  Input["answer focus"] --> Mechanism["core mechanism"]\n  Mechanism --> Flow["state / data flow"]\n  Flow --> Check{"boundary / metric"}\n  Check --> Result["conclusion"]',
     html: '<style>.wb{font-family:Inter,system-ui,sans-serif;padding:28px}.hero-svg{width:100%;min-height:430px}.node{animation:pop .7s both}.edge{stroke-dasharray:900;stroke-dashoffset:900;animation:draw 1.3s both}@keyframes pop{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}@keyframes draw{to{stroke-dashoffset:0}}</style><section class="wb" data-html-board="answer-specific"><h2>本题专属 HTML 标题</h2><p class="explain">说明这张动画图如何读。</p><svg class="hero-svg" viewBox="0 0 1200 560" role="img" aria-label="本题专属大尺寸 SVG 主图"></svg><section><h3>公式说明</h3><p>解释符号、含义、适用条件和边界。</p></section><section><h3>简单示例</h3><p>给出最小数字或业务例子代入。</p></section><section><h3>动画说明</h3><p>说明动画依次高亮什么。</p></section><table><tr><th>符号/组件/指标</th><th>含义</th><th>作用</th></tr></table></section>',
     steps: [
-      { stage: 'socratic', title: '1. Socratic 提问/诊断', markdown: '...' },
+      { stage: 'socratic', title: '1. Socratic 提问/诊断', markdown: '...', mermaid: 'flowchart TD\n  Question --> Signal\n  Signal --> Next' },
       { stage: 'architecture_concepts', title: '2. 架构或概念分析', markdown: '...', mermaid: 'flowchart LR\n  A --> B' },
       { stage: 'decomposition', title: '3. 关键要点拆解', markdown: '...', mermaid: 'flowchart TD\n  A --> B' },
       { stage: 'complete_answer', title: '4. 完整答案结构', markdown: '...' },
@@ -942,19 +978,28 @@ export function makeWhiteboardFromAnswerPrompt(challenge: Challenge, locale: Whi
   })
 
   return zh
-    ? `[whiteboard_render_request:auto]\nchat_mode: whiteboard_auto\n不要回答用户新问题，不要寒暄，不要输出普通解释文字。你的任务是对上一条 Arena Chat 回答做二次推理，并且只输出一个 WHITEBOARD_DIAGRAM 协议块。\n\n题目：${challenge.title}\n模板：${template}\n知识点：${concepts}\n白板方向：${blueprint}\n题目背景只用于理解，不要照抄：${cleanDescription}\n${cleanUserMessage ? `用户原始问题/输入：\n${cleanUserMessage}\n\n` : ''}Arena Chat 回答如下，HTML 必须以它为唯一主要来源：\n${cleanAnswer}\n\n生成要求：\n1. Markdown/Mermaid 仍按四步组织：Socratic 提问/诊断、架构或概念分析、关键要点拆解、完整答案结构。\n2. HTML 与 Markdown 是两套不同产物。HTML 不要使用这四个标题，不要照搬 steps，不要复述文字。\n3. HTML 必须对回答中的公式、原理、方法、流程、架构、变量流、状态流、控制流、数据流、组件依赖、边界条件、指标变化和 trade-off 重新分析，并绘制成详细 SVG/HTML 讲解页。\n4. ${visualRequirements}\n5. HTML 至少包含：本题专属 SVG 主图、符号/组件/指标定义表、CSS keyframes 过程动画、公式说明、简单示例、动画说明、最终静止可读的总结图或矩阵。\n6. 不允许通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。\n7. 顶层必须有 mermaid，总 HTML 4500-30000 字符。输出格式只能是：\n${DIAGRAM_OPEN}\n${schema}\n${DIAGRAM_CLOSE}`
-    : `[whiteboard_render_request:auto]\nchat_mode: whiteboard_auto\nDo not answer a new user question, do not add pleasantries, and do not output normal explanatory prose. Your job is a second-pass reasoning step over the previous Arena Chat answer. Output only one WHITEBOARD_DIAGRAM protocol block.\n\nChallenge: ${challenge.title}\nTemplate: ${template}\nConcepts: ${concepts}\nBoard direction: ${blueprint}\nProblem background is only grounding; do not copy it: ${cleanDescription}\n${cleanUserMessage ? `Original user message:\n${cleanUserMessage}\n\n` : ''}Arena Chat answer, which must be the primary source for the HTML:\n${cleanAnswer}\n\nRequirements:\n1. Markdown/Mermaid still uses four steps: Socratic diagnosis, architecture/concepts, key decomposition, complete answer structure.\n2. HTML is a separate artifact. Do not use those four headings, do not copy steps, and do not restate text.\n3. HTML must re-analyze formulas, principles, methods, flows, architecture, variable flow, state flow, control flow, data flow, component dependencies, boundary conditions, metric changes, and trade-offs from the answer, then draw them as a detailed SVG/HTML explanation page.\n4. ${visualRequirements}\n5. HTML must include: a problem-specific SVG main diagram, a symbol/component/metric definition table, CSS keyframes process animation, formula explanation, simple example, animation explanation, and one final static readable summary diagram or matrix.\n6. No generic templates, placeholders, script, JavaScript, iframe, external resources, network images, or forms.\n7. Include a top-level mermaid diagram and keep total HTML to 4500-30000 characters. Output only this format:\n${DIAGRAM_OPEN}\n${schema}\n${DIAGRAM_CLOSE}`
+    ? `[whiteboard_render_request:auto]\nchat_mode: whiteboard_auto\n不要回答用户新问题，不要寒暄，不要输出普通解释文字。你的任务是对上一条 Arena Chat 回答做二次推理，并且只输出一个 WHITEBOARD_DIAGRAM 协议块。\n\n题目：${challenge.title}\n模板：${template}\n知识点：${concepts}\n白板方向：${blueprint}\n题目背景只用于理解，不要照抄：${cleanDescription}\n${cleanUserMessage ? `用户原始问题/输入：\n${cleanUserMessage}\n\n` : ''}Arena Chat 回答如下，HTML 必须以它为唯一主要来源：\n${cleanAnswer}\n\n生成要求：\n1. Markdown/Mermaid 仍按四步组织：Socratic 提问/诊断、架构或概念分析、关键要点拆解、完整答案结构；第一步必须有 steps[0].mermaid 局部诊断/流程图。\n2. HTML 与 Markdown 是两套不同产物。HTML 不要使用这四个标题，不要照搬 steps，不要复述文字。\n3. HTML 必须对回答中的公式、原理、方法、流程、架构、变量流、状态流、控制流、数据流、组件依赖、边界条件、指标变化和 trade-off 重新分析，并绘制成详细 SVG/HTML 讲解页。\n4. ${visualRequirements}\n5. HTML 至少包含：本题专属 SVG 主图、符号/组件/指标定义表、CSS keyframes 过程动画、公式说明、简单示例、动画说明、最终静止可读的总结图或矩阵。\n6. 不允许通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。\n7. 顶层必须有 mermaid，顶层必须有 html，总 HTML 4500-30000 字符。输出格式只能是：\n${DIAGRAM_OPEN}\n${schema}\n${DIAGRAM_CLOSE}`
+    : `[whiteboard_render_request:auto]\nchat_mode: whiteboard_auto\nDo not answer a new user question, do not add pleasantries, and do not output normal explanatory prose. Your job is a second-pass reasoning step over the previous Arena Chat answer. Output only one WHITEBOARD_DIAGRAM protocol block.\n\nChallenge: ${challenge.title}\nTemplate: ${template}\nConcepts: ${concepts}\nBoard direction: ${blueprint}\nProblem background is only grounding; do not copy it: ${cleanDescription}\n${cleanUserMessage ? `Original user message:\n${cleanUserMessage}\n\n` : ''}Arena Chat answer, which must be the primary source for the HTML:\n${cleanAnswer}\n\nRequirements:\n1. Markdown/Mermaid still uses four steps: Socratic diagnosis, architecture/concepts, key decomposition, complete answer structure; the first step must include steps[0].mermaid as a local diagnosis/flow diagram.\n2. HTML is a separate artifact. Do not use those four headings, do not copy steps, and do not restate text.\n3. HTML must re-analyze formulas, principles, methods, flows, architecture, variable flow, state flow, control flow, data flow, component dependencies, boundary conditions, metric changes, and trade-offs from the answer, then draw them as a detailed SVG/HTML explanation page.\n4. ${visualRequirements}\n5. HTML must include: a problem-specific SVG main diagram, a symbol/component/metric definition table, CSS keyframes process animation, formula explanation, simple example, animation explanation, and one final static readable summary diagram or matrix.\n6. No generic templates, placeholders, script, JavaScript, iframe, external resources, network images, or forms.\n7. Include a top-level mermaid diagram, include a top-level html field, and keep total HTML to 4500-30000 characters. Output only this format:\n${DIAGRAM_OPEN}\n${schema}\n${DIAGRAM_CLOSE}`
 }
 
 export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardPayload | null {
   const source = content || ''
   const diagramTagged = source.match(/\[WHITEBOARD_DIAGRAM\]([\s\S]*?)\[\/WHITEBOARD_DIAGRAM\]/i)
   const diagramCandidates = diagramTagged ? [diagramTagged[1]] : []
+  const fencedJsonMatches = Array.from(source.matchAll(/```(?:json|JSON)\s*([\s\S]*?)```/g))
+  fencedJsonMatches.forEach((match) => {
+    const body = match[1] || ''
+    if (/"(?:format|steps|mermaid|source|html|html_animation|animation_html)"\s*:/.test(body)) diagramCandidates.push(body)
+  })
   const fencedMermaid = source.match(/```mermaid\s*([\s\S]*?)```/i)
   if (fencedMermaid) diagramCandidates.push(JSON.stringify({ format: 'mermaid', source: fencedMermaid[1] }))
+  const fencedHtml = source.match(/```html\s*([\s\S]*?)```/i)
   for (const candidate of diagramCandidates) {
     try {
-      const parsed = JSON.parse(candidate.trim()) as WhiteboardDiagramPayload
+      const parsed = parseDiagramJsonCandidate(candidate)
+      if (fencedHtml && isRecord(parsed) && !htmlValueFromRecord(parsed)) {
+        ;(parsed as Record<string, unknown>).html = fencedHtml[1]
+      }
       const diagram = sanitizeDiagramPayload(parsed)
       const elements = diagramPayloadToElements(parsed)
       if (elements.length || diagram.steps?.length || diagram.mermaid || diagram.markdown || diagram.html) {

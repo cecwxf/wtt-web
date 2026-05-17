@@ -89,15 +89,35 @@ function WhiteboardMarkdown({ markdown, tone }: { markdown: string; tone: string
   )
 }
 
+function normalizeMermaidChart(chart: string) {
+  return String(chart || '')
+    .replace(/^```mermaid\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
+}
+
+function splitMarkdownMermaid(markdown: string) {
+  const charts: string[] = []
+  const cleaned = String(markdown || '').replace(/```mermaid\s*([\s\S]*?)```/gi, (_match, chart: string) => {
+    const normalized = normalizeMermaidChart(chart)
+    if (normalized) charts.push(normalized)
+    return '\n\n'
+  }).trim()
+  return { markdown: cleaned, charts }
+}
+
 function MermaidPreview({ chart, label, compact = false }: { chart: string; label?: string; compact?: boolean }) {
   const [svg, setSvg] = useState('')
   const [error, setError] = useState('')
+  const normalizedChart = useMemo(() => normalizeMermaidChart(chart), [chart])
 
   useEffect(() => {
     let cancelled = false
     const id = `arena-mermaid-${Math.random().toString(36).slice(2, 10)}`
     setSvg('')
     setError('')
+    if (!normalizedChart) return () => { cancelled = true }
     import('mermaid').then(({ default: mermaid }) => {
       mermaid.initialize({
         startOnLoad: false,
@@ -115,16 +135,21 @@ function MermaidPreview({ chart, label, compact = false }: { chart: string; labe
           fontSize: '18px',
         },
       })
-      return mermaid.render(id, chart.trim())
+      return mermaid.render(id, normalizedChart)
     }).then(({ svg: nextSvg }) => {
       if (!cancelled) setSvg(nextSvg)
     }).catch((errorValue) => {
       if (!cancelled) setError(String(errorValue))
     })
     return () => { cancelled = true }
-  }, [chart])
+  }, [normalizedChart])
 
-  if (error) return <pre className="max-h-[360px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">{chart}</pre>
+  if (error) return (
+    <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3">
+      <p className="mb-2 text-xs font-black text-red-700">Mermaid render failed: {error.slice(0, 220)}</p>
+      <pre className="max-h-[360px] overflow-auto text-xs text-red-700">{normalizedChart}</pre>
+    </div>
+  )
   if (!svg) return <div className="flex min-h-[240px] items-center justify-center text-base font-semibold text-slate-400">Rendering diagram...</div>
   return (
     <motion.div
@@ -437,8 +462,8 @@ function DirectDiagramBoard({ diagram, locale, viewMode }: { diagram: Whiteboard
             <ProcessRail steps={steps} locale={locale} />
             {steps.map((step, index) => {
               const style = stepStyles[index % stepStyles.length]
-              const localChart = step.mermaid?.trim() || ''
-              const showLocalChart = Boolean(localChart && localChart !== finalChart)
+              const embedded = splitMarkdownMermaid(step.markdown || '')
+              const localCharts = Array.from(new Set([step.mermaid, ...embedded.charts].map((chart) => normalizeMermaidChart(chart || '')).filter(Boolean)))
               return (
               <motion.section key={`${step.stage || 'step'}-${index}`} variants={cardVariants} className={`relative overflow-hidden rounded-xl border p-5 shadow-sm ${style.shell}`}>
                 <motion.div
@@ -462,8 +487,15 @@ function DirectDiagramBoard({ diagram, locale, viewMode }: { diagram: Whiteboard
                     {step.stage ? <p className={`text-sm font-semibold uppercase tracking-wide ${style.stage}`}>{step.stage}</p> : null}
                   </div>
                 </div>
-                {step.markdown ? <WhiteboardMarkdown markdown={step.markdown} tone={style.markdown} /> : null}
-                {showLocalChart ? <MermaidPreview chart={localChart} label={localDiagramLabel(step, locale)} compact /> : null}
+                {embedded.markdown ? <WhiteboardMarkdown markdown={embedded.markdown} tone={style.markdown} /> : null}
+                {localCharts.map((localChart, chartIndex) => (
+                  <MermaidPreview
+                    key={`${index}-${chartIndex}-${localChart.slice(0, 32)}`}
+                    chart={localChart}
+                    label={chartIndex === 0 ? localDiagramLabel(step, locale) : (locale === 'zh' ? '局部补充图' : 'Local supporting diagram')}
+                    compact
+                  />
+                ))}
                 {step.summary?.length ? (
                   <motion.ul variants={cardVariants} className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
                     {step.summary.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}
