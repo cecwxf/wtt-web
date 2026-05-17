@@ -253,6 +253,13 @@ function finalChartForDiagram(diagram: WhiteboardDiagram, steps: WhiteboardDiagr
   return (diagram.mermaid || diagram.source || firstLocalChart || buildFallbackFinalChart(steps, locale)).trim()
 }
 
+function localDiagramLabel(step: WhiteboardDiagramStep, locale: Locale) {
+  const text = `${step.stage || ''} ${step.title || ''}`.toLowerCase()
+  if (/(arch|concept|架构|概念)/.test(text)) return locale === 'zh' ? '局部架构图' : 'Local architecture'
+  if (/(flow|pipeline|process|decomposition|拆解|流程|过程)/.test(text)) return locale === 'zh' ? '局部流程图' : 'Local flow'
+  return locale === 'zh' ? '局部图' : 'Local diagram'
+}
+
 function FinalDiagramPanel({ chart, locale }: { chart: string; locale: Locale }) {
   return (
     <motion.section variants={cardVariants} className="rounded-xl border border-slate-200 bg-white/92 p-3 shadow-sm">
@@ -288,6 +295,8 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
         <ProcessRail steps={steps} locale={locale} />
         {steps.map((step, index) => {
           const style = stepStyles[index % stepStyles.length]
+          const localChart = step.mermaid?.trim() || ''
+          const showLocalChart = Boolean(localChart && localChart !== finalChart)
           return (
           <motion.section key={`${step.stage || 'step'}-${index}`} variants={cardVariants} className={`relative overflow-hidden rounded-xl border p-5 shadow-sm ${style.shell}`}>
             <motion.div
@@ -312,6 +321,7 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
               </div>
             </div>
             {step.markdown ? <WhiteboardMarkdown markdown={step.markdown} tone={style.markdown} /> : null}
+            {showLocalChart ? <MermaidPreview chart={localChart} label={localDiagramLabel(step, locale)} compact /> : null}
             {step.summary?.length ? (
               <motion.ul variants={cardVariants} className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
                 {step.summary.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}
