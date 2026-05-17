@@ -69,6 +69,115 @@ function safeHtmlString(value: unknown, max = 24000) {
     .slice(0, max)
 }
 
+function htmlEscape(value: unknown) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char] || char))
+}
+
+function extractAnswerFormulas(answer: string) {
+  const formulas: string[] = []
+  for (const match of Array.from(answer.matchAll(/\$\$([\s\S]{4,260}?)\$\$|\$([^$\n]{4,180}?)\$|\\\[([\s\S]{4,260}?)\\\]|\\\(([^)]{4,180}?)\\\)/g))) {
+    const value = (match[1] || match[2] || match[3] || match[4] || '').replace(/\s+/g, ' ').trim()
+    if (value && !formulas.includes(value)) formulas.push(value)
+  }
+  return formulas.slice(0, 5)
+}
+
+function answerSections(answer: string) {
+  const lines = answer
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^#{1,6}\s*/, '').replace(/^[-*•\d.)\s]+/, '').trim())
+    .filter((line) => line.length > 10 && !line.startsWith('|') && !line.includes('[WHITEBOARD_'))
+  return lines.slice(0, 8)
+}
+
+function answerTables(answer: string) {
+  const rows = answer
+    .split(/\r?\n/)
+    .filter((line) => /^\s*\|.+\|\s*$/.test(line) && !/^\s*\|?\s*:?-{2,}:?\s*\|/.test(line))
+    .slice(0, 8)
+    .map((line) => line.split('|').map((cell) => cell.trim()).filter(Boolean).slice(0, 4))
+    .filter((cells) => cells.length >= 2)
+  return rows
+}
+
+function deriveWhiteboardHtmlFromAnswer(answer: string, diagram: WhiteboardDiagram) {
+  const cleanAnswer = safeMultilineString(answer, 9000)
+  if (!cleanAnswer) return ''
+  const zh = /[\u4e00-\u9fff]/.test(cleanAnswer)
+  const formulas = extractAnswerFormulas(cleanAnswer)
+  const sections = answerSections(cleanAnswer)
+  const tableRows = answerTables(cleanAnswer)
+  const steps = diagram.steps?.length ? diagram.steps : []
+  const methodItems = [
+    ...steps.map((step) => step.title || step.stage || '').filter(Boolean),
+    ...sections,
+  ].slice(0, 6)
+  const title = htmlEscape(diagram.title || (zh ? '基于回答生成的 HTML 原理白板' : 'HTML board generated from the answer'))
+  const summary = (diagram.summary?.length ? diagram.summary : sections.slice(0, 3)).slice(0, 3)
+  const nodeLabels = methodItems.length ? methodItems : summary
+  const nodeCount = Math.max(1, Math.min(5, nodeLabels.length))
+  const nodes = nodeLabels.slice(0, nodeCount).map((label, index) => {
+    const x = 48 + index * (880 / nodeCount)
+    const y = index % 2 ? 132 : 54
+    return { x, y, label: compactText(label, 34), index }
+  })
+  const edges = nodes.slice(1).map((node, index) => {
+    const prev = nodes[index]
+    return `<path class="edge" d="M ${prev.x + 145} ${prev.y + 42} C ${prev.x + 205} ${prev.y + 42}, ${node.x - 55} ${node.y + 42}, ${node.x} ${node.y + 42}" fill="none" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)" style="animation-delay:${0.2 + index * 0.16}s"></path>`
+  }).join('')
+  const boxes = nodes.map((node) => `
+    <g class="node" style="animation-delay:${0.12 + node.index * 0.16}s">
+      <rect x="${node.x}" y="${node.y}" width="145" height="84" rx="18" fill="#ffffff" stroke="${['#06b6d4', '#7c3aed', '#d97706', '#16a34a', '#2563eb'][node.index % 5]}" stroke-width="3"></rect>
+      <text x="${node.x + 72}" y="${node.y + 38}" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="800">${htmlEscape(node.label)}</text>
+      <text x="${node.x + 72}" y="${node.y + 58}" text-anchor="middle" fill="#64748b" font-size="11">${node.index + 1}</text>
+    </g>
+  `).join('')
+  const tableHtml = tableRows.length ? `
+    <table class="wb-table">
+      <tbody>
+        ${tableRows.map((row, rowIndex) => `<tr>${row.map((cell) => rowIndex === 0 ? `<th>${htmlEscape(cell)}</th>` : `<td>${htmlEscape(cell)}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>
+  ` : ''
+  return safeHtmlString(`
+    <style>
+      .wb{font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:linear-gradient(135deg,#f8fafc,#eef6ff 55%,#fff7ed);color:#0f172a;padding:24px;border-radius:22px}
+      .wb h2{margin:0 0 10px;font-size:28px;line-height:1.1;letter-spacing:-.04em}
+      .wb-summary{display:grid;gap:8px;margin:12px 0 18px;color:#475569;line-height:1.65}
+      .formula-list{display:grid;gap:10px;margin:16px 0}
+      .formula{border-radius:16px;background:#0f172a;color:#e0f2fe;padding:13px 15px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;line-height:1.55;opacity:0;animation:rise .65s both}
+      .method{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+      .method-card{border:1px solid #dbe3ef;border-radius:16px;background:#fff;padding:13px;min-height:96px;box-shadow:0 14px 32px rgba(15,23,42,.08);opacity:0;animation:rise .65s both}
+      .method-card b{display:block;color:#0891b2;margin-bottom:6px}
+      .diagram{margin:18px 0;border-radius:20px;background:rgba(255,255,255,.86);border:1px solid #dbe3ef;padding:14px}
+      .edge{stroke-dasharray:420;stroke-dashoffset:420;animation:draw 1.1s .2s both}.node{opacity:0;animation:pop .58s both}
+      .wb-table{width:100%;border-collapse:collapse;margin-top:16px;background:#fff;border-radius:16px;overflow:hidden}.wb-table th,.wb-table td{border:1px solid #e2e8f0;padding:10px;text-align:left;vertical-align:top}.wb-table th{background:#e0f2fe;color:#0f172a}
+      @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes pop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}@keyframes draw{to{stroke-dashoffset:0}}
+      @media(max-width:760px){.method{grid-template-columns:1fr}}
+    </style>
+    <section class="wb">
+      <h2>${title}</h2>
+      <div class="wb-summary">${summary.map((item) => `<p>${htmlEscape(item)}</p>`).join('')}</div>
+      ${formulas.length ? `<div class="formula-list">${formulas.map((formula, index) => `<div class="formula" style="animation-delay:${index * 0.12}s">${htmlEscape(formula)}</div>`).join('')}</div>` : ''}
+      <div class="method">${methodItems.slice(0, 6).map((item, index) => `<div class="method-card" style="animation-delay:${0.1 + index * 0.1}s"><b>${index + 1}</b>${htmlEscape(item)}</div>`).join('')}</div>
+      <div class="diagram">
+        <svg viewBox="0 0 980 250" role="img" aria-label="${zh ? '回答推导流程图' : 'Answer derivation flow'}">
+          <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#64748b"></path></marker></defs>
+          ${edges}
+          ${boxes}
+        </svg>
+      </div>
+      ${tableHtml}
+    </section>
+  `, 30000)
+}
+
 function visualLength(text: string) {
   return Array.from(text).reduce((total, char) => total + (/[\u4e00-\u9fff]/.test(char) ? 2 : 1), 0)
 }
@@ -923,6 +1032,10 @@ export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardP
     try {
       const parsed = JSON.parse(candidate.trim()) as WhiteboardDiagramPayload
       const diagram = sanitizeDiagramPayload(parsed)
+      if (!diagram.html) {
+        const answerText = stripWhiteboardPayload(source)
+        diagram.html = deriveWhiteboardHtmlFromAnswer(answerText, diagram)
+      }
       const elements = diagramPayloadToElements(parsed)
       if (elements.length || diagram.steps?.length || diagram.mermaid || diagram.markdown || diagram.html) {
         return { elements, note: safeString(parsed.title, 240) || undefined, diagram }
