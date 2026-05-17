@@ -10,6 +10,10 @@ function statusTone(status: string) {
   return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
 }
 
+function isOpenCLProvider(provider?: string) {
+  return provider === 'agent-mac-opencl-kernel' || Boolean(provider?.startsWith('remote-opencl-'))
+}
+
 export default function ArenaSubmissionPage({ params }: { params: { id: string } }) {
   const [submission, setSubmission] = useState<Submission | null>(null)
   useEffect(() => {
@@ -20,8 +24,8 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
   }, [params.id])
 
   if (!submission) return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading submission...</main>
-  const memoryLabel = submission.judge_provider === 'agent-mac-opencl-kernel' ? 'Kernel Memory' : 'Memory'
-  const inlineMemoryLabel = submission.judge_provider === 'agent-mac-opencl-kernel' ? 'kernel memory' : 'memory'
+  const memoryLabel = isOpenCLProvider(submission.judge_provider) ? 'Kernel Memory' : 'Memory'
+  const inlineMemoryLabel = isOpenCLProvider(submission.judge_provider) ? 'kernel memory' : 'memory'
 
   return (
     <main className="min-h-screen bg-[#151515] text-gray-100">

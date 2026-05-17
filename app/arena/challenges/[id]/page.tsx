@@ -259,6 +259,10 @@ function isSubmissionTerminal(submission?: Submission | null) {
   return Boolean(submission && submission.status !== 'pending' && submission.status !== 'judging' && submission.judge_provider !== 'pending')
 }
 
+function isOpenCLProvider(provider?: string) {
+  return provider === 'agent-mac-opencl-kernel' || Boolean(provider?.startsWith('remote-opencl-'))
+}
+
 const copy = {
   zh: {
     challenges: '题库', playground: '训练场', discuss: '讨论', runner: 'Agent Runner 执行', description: '题目', submissions: '提交', leaderboard: '排行榜',
@@ -319,7 +323,7 @@ function editorLanguage(language: Language) {
 }
 
 function openClStarter(challenge: Challenge) {
-  if (challenge.tags.includes('gemm')) {
+  if (challenge.tags.includes('matmul') || challenge.tags.includes('gemm')) {
     return `// OpenCL C GEMM kernel for macOS Agent/Runner.
 // Supported local GEMM signature:
 //   kernel_name(A, B, C, M, N, K), row-major, C[M,N] = A[M,K] * B[K,N]
@@ -338,6 +342,57 @@ __kernel void ${challenge.function_name}(__global const float* A,
         acc += A[row * K + kk] * B[kk * N + col];
     }
     C[row * N + col] = acc;
+}
+`
+  }
+
+  if (challenge.tags.includes('matrix-add')) {
+    return `// OpenCL C matrix-add kernel for Agent/Runner.
+// Supported signature:
+//   kernel_name(A, B, C, rows, cols), row-major, C = A + B
+__kernel void ${challenge.function_name}(__global const float* A,
+                                         __global const float* B,
+                                         __global float* C,
+                                         const int rows,
+                                         const int cols) {
+    const int col = get_global_id(0);
+    const int row = get_global_id(1);
+    if (row >= rows || col >= cols) return;
+    const int idx = row * cols + col;
+    C[idx] = A[idx] + B[idx];
+}
+`
+  }
+
+  if (challenge.tags.includes('transpose')) {
+    return `// OpenCL C transpose kernel for Agent/Runner.
+// Supported signature:
+//   kernel_name(input, output, rows, cols), row-major, output[cols,rows] = transpose(input[rows,cols])
+__kernel void ${challenge.function_name}(__global const float* input,
+                                         __global float* output,
+                                         const int rows,
+                                         const int cols) {
+    const int out_col = get_global_id(0);
+    const int out_row = get_global_id(1);
+    if (out_row >= cols || out_col >= rows) return;
+    output[out_row * rows + out_col] = input[out_col * cols + out_row];
+}
+`
+  }
+
+  if (challenge.tags.includes('copy')) {
+    return `// OpenCL C matrix-copy kernel for Agent/Runner.
+// Supported signature:
+//   kernel_name(input, output, rows, cols), row-major
+__kernel void ${challenge.function_name}(__global const float* input,
+                                         __global float* output,
+                                         const int rows,
+                                         const int cols) {
+    const int col = get_global_id(0);
+    const int row = get_global_id(1);
+    if (row >= rows || col >= cols) return;
+    const int idx = row * cols + col;
+    output[idx] = input[idx];
 }
 `
   }
@@ -1414,14 +1469,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   {submission && (
                     <div className="space-y-3">
                       <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone(submission.status)}`}>{submission.status} · score {submission.score}</div>
-                      <p className="text-sm text-gray-500">{passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · runtime {submission.runtime_ms || '-'}ms · {submission.judge_provider === 'agent-mac-opencl-kernel' ? 'kernel memory' : 'memory'} {submission.memory_kb || '-'}KB</p>
+                      <p className="text-sm text-gray-500">{passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · runtime {submission.runtime_ms || '-'}ms · {isOpenCLProvider(submission.judge_provider) ? 'kernel memory' : 'memory'} {submission.memory_kb || '-'}KB</p>
                       {submission.results.map((result, index) => (
                         <div key={result.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
                             <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                           </div>
-                          <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · {submission.judge_provider === 'agent-mac-opencl-kernel' ? 'kernel memory' : 'memory'} {result.memory_kb || '-'}KB</p>
+                          <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · {isOpenCLProvider(submission.judge_provider) ? 'kernel memory' : 'memory'} {result.memory_kb || '-'}KB</p>
                           {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-gray-400">stdout: {result.stdout}</pre>}
                           {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-rose-300">stderr: {result.stderr}</pre>}
                           {result.error_message && <p className="mt-3 text-yellow-300">{result.error_message}</p>}

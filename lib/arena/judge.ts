@@ -34,6 +34,9 @@ interface JudgeOutput {
 const PYTHON_LANGUAGES = new Set(['python', 'python3', 'py'])
 const OPENCL_LANGUAGES = new Set(['opencl', 'opencl-c', 'cl'])
 export const OPENCL_MAC_SKILL = 'agent-mac-opencl-kernel'
+export function isOpenCLJudgeProvider(provider: string) {
+  return provider === OPENCL_MAC_SKILL || provider.startsWith('remote-opencl-')
+}
 
 function buildPythonHarness(userCode: string, challenge: Challenge) {
   const functionName = JSON.stringify(challenge.function_name)
@@ -149,8 +152,7 @@ function buildRemoteOpenCLVectorAdapter(code: string, challenge: Challenge) {
   const functionName = challenge.function_name
   const kernelName = `__wtt_kernel_${functionName}`
   const rewrittenKernel = renameOpenCLKernel(code, functionName, kernelName)
-  return `#include <math.h>
-#include <stddef.h>
+  return `#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -168,6 +170,28 @@ static int get_global_id(int dim) { return dim == 0 ? __wtt_gid0 : 0; }
 static int get_local_id(int dim) { (void)dim; return 0; }
 static int get_group_id(int dim) { (void)dim; return 0; }
 static int get_global_size(int dim) { (void)dim; return __wtt_global_size; }
+static float __wtt_fmax(float a, float b) { return a > b ? a : b; }
+static float __wtt_fmin(float a, float b) { return a < b ? a : b; }
+static float __wtt_fabs(float x) { return x < 0.0f ? -x : x; }
+static float __wtt_exp(float x) {
+  if (x < -20.0f) return 0.0f;
+  if (x > 20.0f) x = 20.0f;
+  float term = 1.0f;
+  float sum = 1.0f;
+  for (int i = 1; i <= 24; ++i) {
+    term *= x / (float)i;
+    sum += term;
+  }
+  return sum > 0.0f ? sum : 0.0f;
+}
+#define fmax(a,b) __wtt_fmax((float)(a), (float)(b))
+#define fmaxf(a,b) __wtt_fmax((float)(a), (float)(b))
+#define fmin(a,b) __wtt_fmin((float)(a), (float)(b))
+#define fminf(a,b) __wtt_fmin((float)(a), (float)(b))
+#define fabs(a) __wtt_fabs((float)(a))
+#define fabsf(a) __wtt_fabs((float)(a))
+#define exp(a) __wtt_exp((float)(a))
+#define expf(a) __wtt_exp((float)(a))
 
 ${rewrittenKernel}
 
@@ -191,6 +215,33 @@ static int parse_values(const char* json, float* values, int cap) {
   return n;
 }
 
+static int parse_int_value(const char* json, const char* name, int fallback) {
+  char pattern[64];
+  snprintf(pattern, sizeof(pattern), "\\"%s\\"", name);
+  const char* key = strstr(json, pattern);
+  if (!key) return fallback;
+  const char* p = strchr(key, ':');
+  if (!p) return fallback;
+  return (int)strtol(p + 1, NULL, 10);
+}
+
+static void parse_string_value(const char* json, const char* name, char* out, int cap) {
+  if (cap <= 0) return;
+  out[0] = '\\0';
+  char pattern[64];
+  snprintf(pattern, sizeof(pattern), "\\"%s\\"", name);
+  const char* key = strstr(json, pattern);
+  if (!key) return;
+  const char* p = strchr(key, ':');
+  if (!p) return;
+  p = strchr(p, '"');
+  if (!p) return;
+  ++p;
+  int n = 0;
+  while (*p && *p != '"' && n < cap - 1) out[n++] = *p++;
+  out[n] = '\\0';
+}
+
 static char* append_number(char* out, float value) {
   int integer_value = (int)value;
   float delta = value - (float)integer_value;
@@ -203,25 +254,64 @@ static char* append_number(char* out, float value) {
   return out;
 }
 
+static int is_array_op(const char* op) {
+  return strcmp(op, "vector_add") == 0 || strcmp(op, "invert") == 0 ||
+    strcmp(op, "conv1d") == 0 || strcmp(op, "reverse") == 0 ||
+    strcmp(op, "relu") == 0 || strcmp(op, "leaky_relu") == 0 ||
+    strcmp(op, "sigmoid") == 0 || strcmp(op, "clip") == 0 ||
+    strcmp(op, "prefix_sum") == 0 || strcmp(op, "sort") == 0 ||
+    strcmp(op, "softmax") == 0 || strcmp(op, "topk") == 0 ||
+    strcmp(op, "grayscale") == 0 || strcmp(op, "interleave") == 0;
+}
+
+static int is_scalar_op(const char* op) {
+  return strcmp(op, "sum") == 0 || strcmp(op, "dot") == 0 ||
+    strcmp(op, "silu") == 0 || strcmp(op, "max_subarray") == 0;
+}
+
 const char* ${functionName}(const char* payload_json) {
   enum { MAX_N = 4096 };
   static char result[65536];
   float values[MAX_N];
   float output[MAX_N];
-  int n = parse_values(payload_json, values, MAX_N);
-  if (n <= 0) {
+  char op[64];
+  parse_string_value(payload_json, "op", op, (int)sizeof(op));
+  int seed = parse_int_value(payload_json, "seed", 0);
+  int input_n = parse_values(payload_json, values, MAX_N);
+  int kernel_n = input_n;
+  int output_n = input_n;
+  int output_kind = is_scalar_op(op) ? 1 : (is_array_op(op) ? 0 : 2);
+  if (strcmp(op, "softmax") == 0 && input_n > 4) kernel_n = output_n = 4;
+  else if (strcmp(op, "conv1d") == 0 && input_n > 0) output_n = input_n - 1;
+  else if (strcmp(op, "topk") == 0) output_n = input_n < 3 ? input_n : 3;
+  else if (strcmp(op, "interleave") == 0) output_n = 6;
+  else if (output_kind != 0) output_n = 1;
+  if (input_n <= 0) {
     strcpy(result, "[]");
     return result;
   }
   memset(output, 0, sizeof(output));
-  __wtt_global_size = n;
-  for (int gid = 0; gid < n; ++gid) {
+  __wtt_global_size = output_n > kernel_n ? output_n : kernel_n;
+  for (int gid = 0; gid < __wtt_global_size; ++gid) {
     __wtt_gid0 = gid;
-    ${kernelName}(values, output, n);
+    ${kernelName}(values, output, kernel_n);
+  }
+  if (output_kind == 1) {
+    char* out = result;
+    out = append_number(out, output[0]);
+    *out = '\\0';
+    return result;
+  }
+  if (output_kind == 2) {
+    char* out = result;
+    out += sprintf(out, "{\\"checksum\\":");
+    out = append_number(out, output[0]);
+    out += sprintf(out, ",\\"op\\":\\"%s\\",\\"seed\\":%d}", op, seed);
+    return result;
   }
   char* out = result;
   *out++ = '[';
-  for (int i = 0; i < n; ++i) {
+  for (int i = 0; i < output_n; ++i) {
     if (i) *out++ = ',';
     out = append_number(out, output[i]);
   }
@@ -342,17 +432,161 @@ const char* ${functionName}(const char* payload_json) {
 `
 }
 
+function buildRemoteOpenCLMatrixElementAdapter(code: string, challenge: Challenge) {
+  const functionName = challenge.function_name
+  const kernelName = `__wtt_kernel_${functionName}`
+  const rewrittenKernel = renameOpenCLKernel(code, functionName, kernelName)
+  const mode = challenge.tags.includes('matrix-add')
+    ? 'matrix_add'
+    : challenge.tags.includes('transpose')
+      ? 'transpose'
+      : 'copy'
+  return `#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define __kernel
+#define __global
+#define __constant const
+#define __local
+#define barrier(flags) ((void)0)
+#define CLK_LOCAL_MEM_FENCE 0
+
+static int __wtt_gid0 = 0;
+static int __wtt_gid1 = 0;
+static int __wtt_global_size0 = 0;
+static int __wtt_global_size1 = 0;
+static int get_global_id(int dim) { return dim == 0 ? __wtt_gid0 : (dim == 1 ? __wtt_gid1 : 0); }
+static int get_local_id(int dim) { (void)dim; return 0; }
+static int get_group_id(int dim) { (void)dim; return 0; }
+static int get_global_size(int dim) { return dim == 0 ? __wtt_global_size0 : (dim == 1 ? __wtt_global_size1 : 1); }
+
+${rewrittenKernel}
+
+static int parse_matrix(const char* json, float* values, int cap) {
+  const char* key = strstr(json, "\\"matrix\\"");
+  if (!key) return 0;
+  const char* p = strchr(key, '[');
+  if (!p) return 0;
+  int depth = 0;
+  int n = 0;
+  for (; *p && n < cap; ++p) {
+    if (*p == '[') {
+      ++depth;
+      continue;
+    }
+    if (*p == ']') {
+      --depth;
+      if (depth <= 0) break;
+      continue;
+    }
+    if (depth >= 2 || (depth == 1 && ((*p >= '0' && *p <= '9') || *p == '-' || *p == '+'))) {
+      char* end = NULL;
+      float value = strtof(p, &end);
+      if (end != p) {
+        values[n++] = value;
+        p = end - 1;
+      }
+    }
+  }
+  return n;
+}
+
+static char* append_number(char* out, float value) {
+  int integer_value = (int)value;
+  float delta = value - (float)integer_value;
+  if (delta < 0.0f) delta = -delta;
+  if (delta < 0.00001f) {
+    out += sprintf(out, "%d", integer_value);
+  } else {
+    out += sprintf(out, "%.6g", value);
+  }
+  return out;
+}
+
+static int checksum_values(const float* values, int n) {
+  int total = 0;
+  for (int i = 0; i < n; ++i) total += ((int)(values[i] * 1000.0f)) * (i + 1);
+  return total;
+}
+
+const char* ${functionName}(const char* payload_json) {
+  enum { MAX_N = 4096 };
+  static char result[65536];
+  float matrix[MAX_N];
+  float other[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+  float output[MAX_N];
+  int count = parse_matrix(payload_json, matrix, MAX_N);
+  const int rows = 2;
+  const int cols = count > 0 ? count / rows : 0;
+  if (rows <= 0 || cols <= 0) {
+    strcpy(result, "[]");
+    return result;
+  }
+  memset(output, 0, sizeof(output));
+  __wtt_global_size0 = ${mode === 'transpose' ? 'rows' : 'cols'};
+  __wtt_global_size1 = ${mode === 'transpose' ? 'cols' : 'rows'};
+  for (int y = 0; y < __wtt_global_size1; ++y) {
+    for (int x = 0; x < __wtt_global_size0; ++x) {
+      __wtt_gid0 = x;
+      __wtt_gid1 = y;
+      ${mode === 'matrix_add'
+        ? `${kernelName}(matrix, other, output, rows, cols);`
+        : `${kernelName}(matrix, output, rows, cols);`}
+    }
+  }
+  char* out = result;
+  ${mode === 'copy'
+    ? `out += sprintf(out, "{\\"copied\\":");`
+    : ''}
+  *out++ = '[';
+  const int out_rows = ${mode === 'transpose' ? 'cols' : 'rows'};
+  const int out_cols = ${mode === 'transpose' ? 'rows' : 'cols'};
+  for (int row = 0; row < out_rows; ++row) {
+    if (row) *out++ = ',';
+    *out++ = '[';
+    for (int col = 0; col < out_cols; ++col) {
+      if (col) *out++ = ',';
+      out = append_number(out, output[row * out_cols + col]);
+    }
+    *out++ = ']';
+  }
+  *out++ = ']';
+  ${mode === 'copy'
+    ? `out += sprintf(out, ",\\"checksum\\":%d}", checksum_values(output, rows * cols));`
+    : ''}
+  *out = '\\0';
+  return result;
+}
+`
+}
+
 function expectedIsMatrix(expectedOutput: string) {
   const expected = JSON.parse(expectedOutput) as unknown
   return Array.isArray(expected) && expected.length > 0 && expected.every((row) => Array.isArray(row))
 }
 
 function canUseRemoteOpenCLVectorAdapter(challenge: Challenge, testCases: ChallengeTestCase[]) {
-  if (challenge.tags.includes('matmul') || challenge.tags.includes('gemm')) return false
+  if (challenge.tags.includes('matmul') || challenge.tags.includes('gemm') || challenge.tags.includes('matrix-add') || challenge.tags.includes('transpose') || challenge.tags.includes('copy')) return false
   return testCases.length > 0 && testCases.every((testCase) => {
     try {
       const input = JSON.parse(testCase.input || '{}') as { payload?: { values?: unknown[] } }
       return Array.isArray(input.payload?.values) && !expectedIsMatrix(testCase.expected_output)
+    } catch {
+      return false
+    }
+  })
+}
+
+function canUseRemoteOpenCLMatrixElementAdapter(challenge: Challenge, testCases: ChallengeTestCase[]) {
+  const supported = challenge.tags.includes('matrix-add') || challenge.tags.includes('transpose') || challenge.tags.includes('copy')
+  if (!supported) return false
+  return testCases.length > 0 && testCases.every((testCase) => {
+    try {
+      const input = JSON.parse(testCase.input || '{}') as { payload?: { matrix?: unknown[] } }
+      const expected = JSON.parse(testCase.expected_output) as unknown
+      return Array.isArray(input.payload?.matrix) && (expectedIsMatrix(testCase.expected_output) || (expected && typeof expected === 'object' && !Array.isArray(expected)))
     } catch {
       return false
     }
@@ -827,6 +1061,28 @@ async function runRemoteOpenCLMatrixAdapter(input: JudgeInput, remoteUrl: string
   }
 }
 
+async function runRemoteOpenCLMatrixElementAdapter(input: JudgeInput, remoteUrl: string): Promise<JudgeOutput> {
+  const adapted = await runRemoteJudge({
+    ...input,
+    code: buildRemoteOpenCLMatrixElementAdapter(input.code, input.challenge),
+    language: 'c',
+  }, remoteUrl)
+  const memoryByCase = new Map(input.testCases.map((testCase) => [
+    testCase.id,
+    openCLDeviceMemoryKb(testCase.input, testCase.expected_output),
+  ]))
+  const results = adapted.results.map((result) => ({
+    ...result,
+    memory_kb: result.memory_kb || memoryByCase.get(result.test_case_id),
+  }))
+  return {
+    ...adapted,
+    provider: 'remote-opencl-matrix-element-adapter',
+    memory_kb: results.reduce((max, result) => Math.max(max, result.memory_kb || 0), 0) || adapted.memory_kb,
+    results,
+  }
+}
+
 async function runJudge0(code: string, stdin: string, timeoutMs: number): Promise<RawRunResult> {
   const base = process.env.JUDGE0_URL?.replace(/\/+$/, '')
   if (!base) return { status: 'system_error', stdout: '', stderr: '', error_message: 'JUDGE0_URL is not configured' }
@@ -876,6 +1132,7 @@ export async function judgeSubmission(input: JudgeInput) {
   if (remoteJudgeUrl) {
     if (OPENCL_LANGUAGES.has(normalizedLanguage)) {
       if (canUseRemoteOpenCLMatrixAdapter(challenge, testCases)) return runRemoteOpenCLMatrixAdapter(input, remoteJudgeUrl)
+      if (canUseRemoteOpenCLMatrixElementAdapter(challenge, testCases)) return runRemoteOpenCLMatrixElementAdapter(input, remoteJudgeUrl)
       if (canUseRemoteOpenCLVectorAdapter(challenge, testCases)) return runRemoteOpenCLVectorAdapter(input, remoteJudgeUrl)
     }
     return runRemoteJudge(input, remoteJudgeUrl)
