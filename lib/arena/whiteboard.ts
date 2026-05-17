@@ -2,8 +2,8 @@ import type { Challenge } from './types'
 
 export type WhiteboardLocale = 'zh' | 'en'
 export type ExcalidrawWhiteboardElement = Record<string, unknown>
-export type WhiteboardDiagramStep = { stage?: string; title?: string; markdown?: string; mermaid?: string; source?: string; summary?: string[] }
-export type WhiteboardDiagram = { format?: string; title?: string; summary?: string[]; source?: string; mermaid?: string; markdown?: string; steps?: WhiteboardDiagramStep[] }
+export type WhiteboardDiagramStep = { stage?: string; title?: string; markdown?: string; mermaid?: string; source?: string; html?: string; summary?: string[] }
+export type WhiteboardDiagram = { format?: string; title?: string; summary?: string[]; source?: string; mermaid?: string; markdown?: string; html?: string; steps?: WhiteboardDiagramStep[] }
 export type ExcalidrawWhiteboardPayload = { elements: ExcalidrawWhiteboardElement[]; note?: string; diagram?: WhiteboardDiagram }
 type WhiteboardDiagramPayload = WhiteboardDiagram
 
@@ -53,6 +53,19 @@ function safeMultilineString(value: unknown, max = 1200) {
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean)
     .join('\n')
+    .slice(0, max)
+}
+
+function safeHtmlString(value: unknown, max = 24000) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?>[\s\S]*?<\/embed>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, '')
+    .trim()
     .slice(0, max)
 }
 
@@ -518,8 +531,9 @@ function sanitizeDiagramPayload(payload: WhiteboardDiagramPayload): WhiteboardDi
       title: safeString(step.title, 160) || `Step ${index + 1}`,
       markdown: safeMultilineString(step.markdown, 6500),
       mermaid: safeMultilineString(step.mermaid || step.source, 5000),
+      html: safeHtmlString(step.html, 14000),
       summary: Array.isArray(step.summary) ? step.summary.map((item) => safeString(item, 180)).filter(Boolean).slice(0, 4) : undefined,
-    })).filter((step) => step.markdown || step.mermaid).slice(0, 6)
+    })).filter((step) => step.markdown || step.mermaid || step.html).slice(0, 6)
     : undefined
   return {
     format: safeString(payload.format, 40) || 'mermaid',
@@ -528,6 +542,7 @@ function sanitizeDiagramPayload(payload: WhiteboardDiagramPayload): WhiteboardDi
     source: safeMultilineString(payload.source || payload.mermaid, 5000),
     mermaid: safeMultilineString(payload.mermaid || payload.source, 5000),
     markdown: safeMultilineString(payload.markdown, 6500),
+    html: safeHtmlString(payload.html || (payload as Record<string, unknown>).animation_html || (payload as Record<string, unknown>).html_animation, 26000),
     steps,
   }
 }
@@ -860,13 +875,14 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ? '白板必须按四步组织：1) Socratic 提问/诊断，2) 架构或概念分析，3) 按题目拆解关键要点，4) 完整答案结构。'
     : 'The board must use four steps: 1) Socratic question/diagnosis, 2) architecture or concept analysis, 3) problem-specific key decomposition, 4) complete answer structure.'
   const limits = zh
-    ? '必须输出顶层 mermaid 总图，并允许在 steps 中输出必要的局部 mermaid：architecture_concepts 步要给局部架构图，decomposition 或 complete_answer 步要给局部流程图；不要每一步都机械给图，避免页面重复堆图。每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表。所有原理性解释都必须这样处理，不只限于 LLM：数学公式、物理过程、算法机制、操作系统/网络/编译器/数据库、硬件/芯片/电路、AI 模型、工程架构都要给“公式或不变量 + 总图 + 必要局部架构/流程图 + 每步解释”。原理性架构图必须清晰：按数据流、状态流、控制流、能量/力/信号流或推导依赖从左到右或从上到下画，区分输入/已知量、核心变换、状态/缓存/中间量、输出/结论、误差/边界条件。凡是有公式推导，要把符号定义、关键变形、适用条件、边界情况写在 markdown；凡是有机制过程，要把过程拆成可解释阶段，例如：定义变量→建立关系→代入变换→得到中间量→检查边界→输出结论。顶层 Mermaid 控制在 5-8 个节点、4-7 条边；局部 Mermaid 控制在 3-6 个节点、2-5 条边；节点名必须来自本轮回答的具体概念，并用 classDef/class 区分输入/数据、核心/变换、状态/中间量、风险/边界、指标/结论。'
-    : 'Output a top-level mermaid overview and allow necessary local mermaid diagrams inside steps: architecture_concepts should include a local architecture diagram, and decomposition or complete_answer should include a local flow diagram. Do not mechanically add a diagram to every step, because the page should not stack repeated diagrams. Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Apply this to every principle explanation, not only LLMs: math formulas, physics processes, algorithms, OS/network/compiler/database mechanisms, hardware/chip/circuit design, AI models, and engineering architecture must include "formula or invariant + overview diagram + necessary local architecture/flow diagrams + step explanation". Principle architecture diagrams must be clear: draw data flow, state flow, control flow, energy/force/signal flow, or derivation dependencies left-to-right or top-to-bottom, distinguishing input/known quantities, core transformation, state/cache/intermediate value, output/conclusion, and error/boundary condition. For formula derivations, define symbols, key transformations, assumptions, and boundary cases in markdown. For mechanisms, break the process into explainable phases, such as: define variables -> establish relation -> substitute/transform -> compute intermediate -> check boundary -> output conclusion. Keep the top-level Mermaid diagram to 5-8 nodes and 4-7 edges; keep local Mermaid diagrams to 3-6 nodes and 2-5 edges; node names must come from this answer and use classDef/class to distinguish input/data, core/transform, state/intermediate, risk/boundary, and metric/conclusion.'
+    ? '必须同时输出两种白板产物：A) markdown/mermaid 图文白板，B) html 动画白板。顶层必须有 mermaid 总图，并允许在 steps 中输出必要的局部 mermaid：architecture_concepts 步要给局部架构图，decomposition 或 complete_answer 步要给局部流程图；不要每一步都机械给图，避免页面重复堆图。每一步的 markdown 必须包含 2-4 句解释文字、必要公式/指标定义、一个紧凑表格或要点列表。所有原理性解释都必须这样处理，不只限于 LLM：数学公式、物理过程、算法机制、操作系统/网络/编译器/数据库、硬件/芯片/电路、AI 模型、工程架构都要给“公式或不变量 + 总图 + 必要局部架构/流程图 + 每步解释”。原理性架构图必须清晰：按数据流、状态流、控制流、能量/力/信号流或推导依赖从左到右或从上到下画，区分输入/已知量、核心变换、状态/缓存/中间量、输出/结论、误差/边界条件。凡是有公式推导，要把符号定义、关键变形、适用条件、边界情况写在 markdown；凡是有机制过程，要把过程拆成可解释阶段，例如：定义变量→建立关系→代入变换→得到中间量→检查边界→输出结论。html 字段必须是一段可独立嵌入的 HTML 片段，使用内联 <style>、CSS keyframes、SVG、div/span，不要使用 JavaScript、script、iframe、外链资源、网络图片或表单。HTML 动画要有清晰的阶段高亮、公式变形/变量流动/状态变化动画，并在最后停留为一张可读总图。顶层 Mermaid 控制在 5-8 个节点、4-7 条边；局部 Mermaid 控制在 3-6 个节点、2-5 条边；HTML 控制在 900-24000 字符内。'
+    : 'Output two whiteboard artifacts at the same time: A) markdown/mermaid board, B) animated HTML board. Include a top-level mermaid overview and allow necessary local mermaid diagrams inside steps: architecture_concepts should include a local architecture diagram, and decomposition or complete_answer should include a local flow diagram. Do not mechanically add a diagram to every step, because the page should not stack repeated diagrams. Each step markdown must include 2-4 explanatory sentences, required formulas/metric definitions, and one compact table or bullet list. Apply this to every principle explanation, not only LLMs: math formulas, physics processes, algorithms, OS/network/compiler/database mechanisms, hardware/chip/circuit design, AI models, and engineering architecture must include "formula or invariant + overview diagram + necessary local architecture/flow diagrams + step explanation". Principle architecture diagrams must be clear: draw data flow, state flow, control flow, energy/force/signal flow, or derivation dependencies left-to-right or top-to-bottom, distinguishing input/known quantities, core transformation, state/cache/intermediate value, output/conclusion, and error/boundary condition. For formula derivations, define symbols, key transformations, assumptions, and boundary cases in markdown. For mechanisms, break the process into explainable phases, such as: define variables -> establish relation -> substitute/transform -> compute intermediate -> check boundary -> output conclusion. The html field must be a self-contained embeddable HTML fragment using inline <style>, CSS keyframes, SVG, div/span. Do not use JavaScript, script, iframe, external resources, network images, or forms. The HTML animation must clearly highlight stages, formula transformations, variable flow, or state transitions, then settle into one readable final diagram. Keep top-level Mermaid to 5-8 nodes and 4-7 edges; local Mermaid to 3-6 nodes and 2-5 edges; HTML to 900-24000 characters.'
   const example = JSON.stringify({
     format: 'steps',
     title: '答案白板',
     summary: ['白板先展示一张最终总图，再按步骤解释公式、指标和取舍。'],
     mermaid: 'flowchart LR\n  Goal["goal / known state"] --> Model["core relation"]\n  Model --> Transform["transform / mechanism"]\n  Transform --> State["intermediate state"]\n  State --> Check{"boundary check"}\n  Check --> Answer["final answer / metric"]\n  classDef input fill:#dbeafe,stroke:#2563eb,color:#0f172a;\n  classDef core fill:#ede9fe,stroke:#7c3aed,color:#2e1065;\n  classDef state fill:#fef3c7,stroke:#d97706,color:#451a03;\n  classDef metric fill:#dcfce7,stroke:#16a34a,color:#052e16;\n  class Goal input;\n  class Model,Transform core;\n  class State,Check state;\n  class Answer metric;',
+    html: '<style>.wb{font-family:Inter,system-ui,sans-serif;background:#f8fafc;color:#0f172a;padding:24px;border-radius:18px}.wb h2{margin:0 0 16px;font-size:24px}.lane{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:stretch}.card{border:2px solid #cbd5e1;background:white;border-radius:14px;padding:14px;min-height:110px;animation:pop .7s both}.card:nth-child(2){animation-delay:.25s}.card:nth-child(3){animation-delay:.5s}.card:nth-child(4){animation-delay:.75s}.formula{margin:18px 0;padding:14px;border-radius:12px;background:#0f172a;color:#e0f2fe;font-family:ui-monospace,monospace;overflow:auto}.token{display:inline-block;animation:pulse 2.4s infinite}.arrow{height:4px;background:linear-gradient(90deg,#06b6d4,#7c3aed);transform-origin:left;animation:grow 1.2s .2s both;border-radius:99px;margin:16px 8%}@keyframes pop{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}@keyframes pulse{0%,100%{color:#bae6fd}50%{color:#fef08a}}</style><section class="wb"><h2>Animated principle board</h2><div class="lane"><div class="card"><b>1. Known</b><p>Define variables and assumptions.</p></div><div class="card"><b>2. Relation</b><p>Build the core formula or mechanism.</p></div><div class="card"><b>3. Transform</b><p>Move through intermediate state.</p></div><div class="card"><b>4. Check</b><p>Validate boundary and metric.</p></div></div><div class="arrow"></div><div class="formula"><span class="token">y</span> = f(<span class="token">x</span>, θ) → Δy ≈ ∂f/∂x · Δx</div></section>',
     steps: [
       {
         stage: 'socratic',
@@ -893,8 +909,8 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     ],
   })
   return zh
-    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 段落、表格、LaTeX 公式和 Mermaid，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：必须有顶层 mermaid 总图；必须至少有一个 steps[*].mermaid 局部架构图或局部流程图；四个 steps 都要有；每步的 markdown 至少包含解释文字和必要公式/指标定义，不能只有表格；每步 markdown 必须总结本轮回答；不要画题目原文；不要输出固定模板；不要输出 WHITEBOARD_OPS。`
-    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown paragraphs, tables, LaTeX formulas, and Mermaid, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include a top-level mermaid overview; include at least one steps[*].mermaid local architecture or flow diagram; include all four steps; each step markdown must include explanatory prose and required formulas/metric definitions, not just a table; each step markdown must summarize this reply; do not draw prompt text; do not reuse a fixed template; do not output WHITEBOARD_OPS.`
+    ? `请作为 AI 面试官和白板讲解老师，围绕「${challenge.title}」进行${stepMode ? '逐步' : '完整'}答案白板推导。\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\n请先用自然语言讲解本轮回答，然后必须输出一个白板图协议块。白板协议支持 Markdown 段落、表格、LaTeX 公式、Mermaid 和自包含 HTML/CSS 动画，前端会直接渲染，不需要转成 Excalidraw 线框。格式如下：\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\n硬性要求：必须有顶层 mermaid 总图；必须有顶层 html 动画；必须至少有一个 steps[*].mermaid 局部架构图或局部流程图；四个 steps 都要有；每步的 markdown 至少包含解释文字和必要公式/指标定义，不能只有表格；每步 markdown 必须总结本轮回答；html 动画要解释公式/原理过程并最终形成清晰总图；不要画题目原文；不要输出固定模板；不要输出 WHITEBOARD_OPS。`
+    : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown paragraphs, tables, LaTeX formulas, Mermaid, and self-contained HTML/CSS animation, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include a top-level mermaid overview; include a top-level html animation; include at least one steps[*].mermaid local architecture or flow diagram; include all four steps; each step markdown must include explanatory prose and required formulas/metric definitions, not just a table; each step markdown must summarize this reply; the html animation must explain formula/principle process and settle into one clear final diagram; do not draw prompt text; do not reuse a fixed template; do not output WHITEBOARD_OPS.`
 }
 
 export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardPayload | null {
@@ -908,7 +924,7 @@ export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardP
       const parsed = JSON.parse(candidate.trim()) as WhiteboardDiagramPayload
       const diagram = sanitizeDiagramPayload(parsed)
       const elements = diagramPayloadToElements(parsed)
-      if (elements.length || diagram.steps?.length || diagram.mermaid || diagram.markdown) {
+      if (elements.length || diagram.steps?.length || diagram.mermaid || diagram.markdown || diagram.html) {
         return { elements, note: safeString(parsed.title, 240) || undefined, diagram }
       }
     } catch {

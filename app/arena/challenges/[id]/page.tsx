@@ -362,19 +362,22 @@ function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge |
   if (isGaokaoVolunteerChallenge(challenge)) {
     return locale === 'zh' ? gaokaoVolunteerSkillZh : gaokaoVolunteerSkillEn
   }
+  const whiteboardProtocol = locale === 'zh'
+    ? 'WHITEBOARD_DIAGRAM 必须同时包含：markdown/mermaid 图文白板，以及 html 字段的自包含 HTML/CSS/SVG 动画。html 不要使用 script、JavaScript、iframe、外链资源、网络图片或表单；动画要展示公式/原理的阶段变化、变量流、状态流或结构高亮，并在最后停留为一张清晰总图。'
+    : 'WHITEBOARD_DIAGRAM must include both a markdown/mermaid diagram board and a top-level html field with self-contained HTML/CSS/SVG animation. Do not use script, JavaScript, iframe, external resources, network images, or forms. The animation should show formula/principle stages, variable flow, state flow, or structural highlighting, then settle into one clear final diagram.'
   if (mode === 'interview_answer') {
     return locale === 'zh'
-      ? 'chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示评分维度、缺口、补充答案结构。'
-      : 'chat_mode: interview_answer\nTreat the user input as a candidate interview answer. Give a 0-10 score, then identify strengths, gaps, misconceptions, provide a stronger answer skeleton, and ask one next follow-up. Still end with WHITEBOARD_DIAGRAM showing scoring dimensions, gaps, and improved answer structure.'
+      ? `chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示评分维度、缺口、补充答案结构。${whiteboardProtocol}`
+      : `chat_mode: interview_answer\nTreat the user input as a candidate interview answer. Give a 0-10 score, then identify strengths, gaps, misconceptions, provide a stronger answer skeleton, and ask one next follow-up. Still end with WHITEBOARD_DIAGRAM showing scoring dimensions, gaps, and improved answer structure. ${whiteboardProtocol}`
   }
   if (mode === 'ask') {
     return locale === 'zh'
-      ? 'chat_mode: ask\n请直接回答用户问题，结构清晰、可操作，必要时给公式、示例、trade-off。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，把答案要点同步展示到白板。'
-      : 'chat_mode: ask\nAnswer the user question directly with a clear, actionable structure. Include formulas, examples, and trade-offs when needed. Still end with WHITEBOARD_DIAGRAM so the answer appears on the board.'
+      ? `chat_mode: ask\n请直接回答用户问题，结构清晰、可操作，必要时给公式、示例、trade-off。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，把答案要点同步展示到白板。${whiteboardProtocol}`
+      : `chat_mode: ask\nAnswer the user question directly with a clear, actionable structure. Include formulas, examples, and trade-offs when needed. Still end with WHITEBOARD_DIAGRAM so the answer appears on the board. ${whiteboardProtocol}`
   }
   return locale === 'zh'
-    ? 'chat_mode: socratic\n请使用苏格拉底式交互：根据用户输入判断当前卡点，优先提出 1-2 个高质量问题和少量提示，推动用户自己推理；不要直接倾倒完整答案，除非用户明确要求。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示当前推理路径和下一步问题。'
-    : 'chat_mode: socratic\nUse Socratic coaching. Diagnose the user’s current blocker, ask 1-2 high-quality questions with light hints, and help the user reason instead of dumping the full answer unless explicitly asked. Still end with WHITEBOARD_DIAGRAM showing the reasoning path and next question.'
+    ? `chat_mode: socratic\n请使用苏格拉底式交互：根据用户输入判断当前卡点，优先提出 1-2 个高质量问题和少量提示，推动用户自己推理；不要直接倾倒完整答案，除非用户明确要求。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示当前推理路径和下一步问题。${whiteboardProtocol}`
+    : `chat_mode: socratic\nUse Socratic coaching. Diagnose the user’s current blocker, ask 1-2 high-quality questions with light hints, and help the user reason instead of dumping the full answer unless explicitly asked. Still end with WHITEBOARD_DIAGRAM showing the reasoning path and next question. ${whiteboardProtocol}`
 }
 
 function intentForChatMode(mode: ChatMode): ArenaTeachingIntent {

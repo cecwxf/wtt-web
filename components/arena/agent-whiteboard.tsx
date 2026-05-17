@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -22,6 +22,8 @@ type Props = {
   onExplain?: () => void
   onToggleExpand?: () => void
 }
+
+type BoardViewMode = 'diagram' | 'html'
 
 const smoothEase = [0.22, 1, 0.36, 1] as const
 
@@ -268,11 +270,83 @@ function FinalDiagramPanel({ chart, locale }: { chart: string; locale: Locale })
   )
 }
 
+function stripOuterHtmlDocument(html: string) {
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+  if (bodyMatch?.[1]) return bodyMatch[1]
+  return html
+    .replace(/<!doctype[\s\S]*?>/gi, '')
+    .replace(/<\/?html[^>]*>/gi, '')
+    .replace(/<\/?head[^>]*>/gi, '')
+    .replace(/<\/?body[^>]*>/gi, '')
+    .replace(/<meta[\s\S]*?>/gi, '')
+    .trim()
+}
+
+function buildAnimationSrcDoc(html: string) {
+  const body = stripOuterHtmlDocument(html)
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; script-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';" />
+  <style>
+    html,body{margin:0;min-height:100%;background:#f8fafc;color:#0f172a;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{box-sizing:border-box;padding:0;overflow:auto}
+    *{box-sizing:border-box}
+    svg{max-width:100%;height:auto}
+    code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+  </style>
+</head>
+<body>${body}</body>
+</html>`
+}
+
+function htmlForDiagram(diagram: WhiteboardDiagram) {
+  if (diagram.html?.trim()) return diagram.html.trim()
+  const stepHtml = (diagram.steps || [])
+    .map((step, index) => step.html?.trim()
+      ? `<section class="whiteboard-html-step" data-step="${index + 1}">${step.html.trim()}</section>`
+      : '')
+    .filter(Boolean)
+  return stepHtml.join('\n')
+}
+
+function HtmlAnimationBoard({ html, locale }: { html: string; locale: Locale }) {
+  const srcDoc = useMemo(() => buildAnimationSrcDoc(html), [html])
+  return (
+    <motion.section variants={cardVariants} className="overflow-hidden rounded-xl border border-cyan-200 bg-slate-950 p-3 shadow-sm">
+      <div className="mb-3 flex items-center justify-between px-1">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">
+          {locale === 'zh' ? 'HTML 动画白板' : 'HTML animation board'}
+        </p>
+        <p className="text-xs font-semibold text-cyan-200/70">
+          {locale === 'zh' ? 'Sandbox 渲染 · CSS/SVG 动画' : 'Sandboxed render · CSS/SVG animation'}
+        </p>
+      </div>
+      <iframe
+        title={locale === 'zh' ? '白板 HTML 动画' : 'Whiteboard HTML animation'}
+        sandbox=""
+        referrerPolicy="no-referrer"
+        className="h-[680px] w-full rounded-lg border border-white/10 bg-slate-50"
+        srcDoc={srcDoc}
+      />
+    </motion.section>
+  )
+}
+
 function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; locale: Locale }) {
   const steps = diagram.steps?.length
     ? diagram.steps
     : [{ title: diagram.title || (locale === 'zh' ? '白板图' : 'Whiteboard diagram'), markdown: diagram.markdown, mermaid: diagram.mermaid || diagram.source, summary: diagram.summary }]
   const finalChart = finalChartForDiagram(diagram, steps, locale)
+  const animationHtml = htmlForDiagram(diagram)
+  const [viewMode, setViewMode] = useState<BoardViewMode>(animationHtml ? 'html' : 'diagram')
+
+  useEffect(() => {
+    setViewMode(animationHtml ? 'html' : 'diagram')
+  }, [animationHtml])
+
   return (
     <div className="h-full min-h-[640px] overflow-auto bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6 text-slate-900">
       <motion.div
@@ -291,45 +365,69 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
             {diagram.summary.map((item, index) => <p key={index}>{item}</p>)}
           </motion.div>
         ) : null}
-        {finalChart ? <FinalDiagramPanel chart={finalChart} locale={locale} /> : null}
-        <ProcessRail steps={steps} locale={locale} />
-        {steps.map((step, index) => {
-          const style = stepStyles[index % stepStyles.length]
-          const localChart = step.mermaid?.trim() || ''
-          const showLocalChart = Boolean(localChart && localChart !== finalChart)
-          return (
-          <motion.section key={`${step.stage || 'step'}-${index}`} variants={cardVariants} className={`relative overflow-hidden rounded-xl border p-5 shadow-sm ${style.shell}`}>
-            <motion.div
-              className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${style.accent}`}
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ delay: index * 0.16 + 0.18, duration: 0.72, ease: smoothEase }}
-              style={{ transformOrigin: 'left' }}
-            />
-            <div className="mb-4 flex items-center gap-3">
-              <motion.span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black text-white shadow-sm ${style.badge}`}
-                initial={{ scale: 0.65, rotate: -8 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: index * 0.12 + 0.12, duration: 0.32, ease: 'easeOut' }}
-              >
-                {index + 1}
-              </motion.span>
-              <div>
-                <p className={`text-lg font-black ${style.title}`}>{step.title || step.stage || `Step ${index + 1}`}</p>
-                {step.stage ? <p className={`text-sm font-semibold uppercase tracking-wide ${style.stage}`}>{step.stage}</p> : null}
-              </div>
-            </div>
-            {step.markdown ? <WhiteboardMarkdown markdown={step.markdown} tone={style.markdown} /> : null}
-            {showLocalChart ? <MermaidPreview chart={localChart} label={localDiagramLabel(step, locale)} compact /> : null}
-            {step.summary?.length ? (
-              <motion.ul variants={cardVariants} className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
-                {step.summary.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}
-              </motion.ul>
-            ) : null}
-          </motion.section>
-          )
-        })}
+        {animationHtml ? (
+          <motion.div variants={cardVariants} className="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setViewMode('html')}
+              className={`rounded-full px-4 py-2 text-xs font-black transition-colors ${viewMode === 'html' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}
+            >
+              {locale === 'zh' ? 'HTML 动画' : 'HTML animation'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('diagram')}
+              className={`rounded-full px-4 py-2 text-xs font-black transition-colors ${viewMode === 'diagram' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}
+            >
+              {locale === 'zh' ? '图文白板' : 'Diagram board'}
+            </button>
+          </motion.div>
+        ) : null}
+        {viewMode === 'html' && animationHtml ? (
+          <HtmlAnimationBoard html={animationHtml} locale={locale} />
+        ) : (
+          <>
+            {finalChart ? <FinalDiagramPanel chart={finalChart} locale={locale} /> : null}
+            <ProcessRail steps={steps} locale={locale} />
+            {steps.map((step, index) => {
+              const style = stepStyles[index % stepStyles.length]
+              const localChart = step.mermaid?.trim() || ''
+              const showLocalChart = Boolean(localChart && localChart !== finalChart)
+              return (
+              <motion.section key={`${step.stage || 'step'}-${index}`} variants={cardVariants} className={`relative overflow-hidden rounded-xl border p-5 shadow-sm ${style.shell}`}>
+                <motion.div
+                  className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${style.accent}`}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ delay: index * 0.16 + 0.18, duration: 0.72, ease: smoothEase }}
+                  style={{ transformOrigin: 'left' }}
+                />
+                <div className="mb-4 flex items-center gap-3">
+                  <motion.span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black text-white shadow-sm ${style.badge}`}
+                    initial={{ scale: 0.65, rotate: -8 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ delay: index * 0.12 + 0.12, duration: 0.32, ease: 'easeOut' }}
+                  >
+                    {index + 1}
+                  </motion.span>
+                  <div>
+                    <p className={`text-lg font-black ${style.title}`}>{step.title || step.stage || `Step ${index + 1}`}</p>
+                    {step.stage ? <p className={`text-sm font-semibold uppercase tracking-wide ${style.stage}`}>{step.stage}</p> : null}
+                  </div>
+                </div>
+                {step.markdown ? <WhiteboardMarkdown markdown={step.markdown} tone={style.markdown} /> : null}
+                {showLocalChart ? <MermaidPreview chart={localChart} label={localDiagramLabel(step, locale)} compact /> : null}
+                {step.summary?.length ? (
+                  <motion.ul variants={cardVariants} className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+                    {step.summary.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}
+                  </motion.ul>
+                ) : null}
+              </motion.section>
+              )
+            })}
+          </>
+        )}
       </motion.div>
     </div>
   )
@@ -354,8 +452,8 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
   }
 
   const labels = locale === 'zh'
-    ? { title: 'Agent 白板讲解', subtitle: 'Markdown / 公式 / Mermaid 图表', explain: '生成白板', clear: '清空', expand: expanded ? '还原' : '展开' }
-    : { title: 'Agent whiteboard', subtitle: 'Markdown / formulas / Mermaid diagrams', explain: 'Generate board', clear: 'Clear', expand: expanded ? 'Restore' : 'Expand' }
+    ? { title: 'Agent 白板讲解', subtitle: 'Markdown / 公式 / Mermaid / HTML 动画', explain: '生成白板', clear: '清空', expand: expanded ? '还原' : '展开' }
+    : { title: 'Agent whiteboard', subtitle: 'Markdown / formulas / Mermaid / HTML animation', explain: 'Generate board', clear: 'Clear', expand: expanded ? 'Restore' : 'Expand' }
 
   return (
     <section className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] ${expanded ? 'h-full' : ''}`}>
@@ -382,8 +480,8 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
                 <p className="text-base font-black text-slate-800">{locale === 'zh' ? '等待 Agent 生成白板' : 'Waiting for Agent whiteboard'}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
                   {locale === 'zh'
-                    ? '白板现在以分步动画渲染 Markdown、公式和 Mermaid 图表，不再回退到旧的方框画板。'
-                    : 'The board now renders Markdown, formulas, and Mermaid diagrams with staged animation, without the old box fallback.'}
+                    ? '白板现在同时支持图文白板和 sandbox HTML 动画，用于展示公式推导、变量流和原理过程。'
+                    : 'The board now supports both diagram boards and sandboxed HTML animation for formula derivations, variable flow, and principle processes.'}
                 </p>
               </div>
             </motion.div>
