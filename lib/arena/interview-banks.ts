@@ -43,6 +43,20 @@ type ConcreteModuleContext = {
   lab: string
 }
 
+type ConcreteBankProfile = {
+  environment: string
+  workload: string
+  entry: string
+  exit: string
+  symptom: string
+  failureMode: string
+  impact: string
+  evidence: string
+  scale: string
+  boundary: string
+  lab: string
+}
+
 const longPatterns: QuestionPattern[] = [
   { key: 'core-path', difficulty: 'easy', title: '核心职责、关键数据结构和调用路径分别是什么？', focus: '解释核心职责、关键对象、入口函数、状态流转和常见误区。' },
   { key: 'lifecycle', difficulty: 'medium', title: '从初始化到释放的完整生命周期如何设计？', focus: '覆盖初始化、注册、引用计数、并发访问、错误回滚和资源释放。' },
@@ -516,6 +530,126 @@ const aiCompilerRuntimeModules: InterviewModule[] = [
   { key: 'debug-profiler', title: 'Compiler/Runtime Debug', focus: 'IR dump、graph break 定位、kernel bisect、Nsight/torch profiler、perf counter、numerical diff 和回归门禁', tags: ['debug', 'profiler'], concepts: ['IR dump', 'graph break', 'Nsight', 'torch profiler', 'numerical diff'], whiteboardTemplate: 'evaluation_loop' },
 ]
 
+const concreteBankProfiles: Record<string, ConcreteBankProfile> = {
+  android: {
+    environment: '一款千万级 DAU 的 Android App 和定制系统组件正在灰度 OTA，覆盖低端机、折叠屏、车机和海外弱网用户',
+    workload: '冷启动、前后台切换、Binder 调用、相机/音视频链路、低电量和权限弹窗交织的真实用户场景',
+    entry: '用户点击、系统广播、Binder 调用或 HAL callback',
+    exit: '首帧渲染、系统服务返回、媒体帧输出或用户可见状态变化',
+    symptom: '灰度后部分机型出现 ANR、掉帧、黑屏、权限失败、耗电异常或 crash-free 指标下降',
+    failureMode: '超时、状态错乱、资源泄漏、线程池耗尽或跨进程契约不一致',
+    impact: '启动成功率、P95/P99 交互延迟、crash-free、功耗和用户留存',
+    evidence: 'Perfetto/Systrace、logcat、ANR trace、tombstone、dumpsys、statsd、bugreport',
+    scale: '机型从 3 款扩到 80 款，Android 版本从 10 到 15，灰度用户从 1% 放到 50%',
+    boundary: '后台限制、权限撤销、低内存、Doze、弱网、横竖屏切换、厂商 ROM 差异',
+    lab: '用一台低端机和一台旗舰机构造可复现脚本，对比 trace、日志和 dumpsys，证明问题属于 App、Framework、HAL 还是驱动层',
+  },
+  'ai-compiler-runtime': {
+    environment: '你负责把 PyTorch/ONNX 模型编译到 GPU/NPU Runtime，模型覆盖 LLM、推荐和视觉任务，并要求支持线上 A/B 灰度',
+    workload: '动态图导出、shape 变化、算子融合、量化、异步 stream、分布式通信和 fallback 同时存在的推理/训练链路',
+    entry: '模型 graph、FX/MLIR/LLVM IR、kernel launch 或 runtime API',
+    exit: '设备侧 kernel 执行结果、数值校验、profile trace 或线上延迟指标',
+    symptom: '新编译链路上线后出现 graph break 增多、数值 diff、kernel 变慢、显存上升或 fallback 比例异常',
+    failureMode: 'lowering 错误、layout 不匹配、shape guard 失效、同步点隐藏、autotune 选错或 memory planner 复用错误',
+    impact: '吞吐、P99 latency、显存峰值、数值一致性、编译耗时和线上回滚成本',
+    evidence: 'IR dump、graph break 日志、Nsight/torch profiler、kernel counter、numerical diff、fallback 统计、显存 timeline',
+    scale: 'batch、sequence length、模型层数和设备数量同时扩大，单机优化要迁移到多机多卡',
+    boundary: '动态 shape、mixed precision、非连续 layout、异步错误、跨设备通信、算子缺失',
+    lab: '固定一个最小模型和输入张量，分别打开 eager、编译、fallback 和单 kernel profile，定位数值或性能差异从哪一层开始出现',
+  },
+  'ic-chip': {
+    environment: '一颗 SoC 子系统从架构冻结进入 RTL/验证收敛阶段，目标是 tape-out 前清掉 P0/P1 bug 和时序风险',
+    workload: '规格变更、RTL 实现、CDC/RDC、UVM 验证、DFT、低功耗、STA 和 bring-up 反馈同时推进',
+    entry: '规格寄存器描述、接口 transaction、clock/reset 约束或 testbench stimulus',
+    exit: '波形、coverage、timing report、formal 结果、DFT 报告或 FPGA/硅后观测',
+    symptom: '回归中出现随机 fail、coverage 卡住、跨时钟偶发丢包、低功耗唤醒失败或 STA 负 slack',
+    failureMode: '握手协议遗漏、复位顺序错误、CDC 同步不完整、约束过松/过紧或验证激励没有覆盖真实 corner',
+    impact: 'tape-out 风险、验证收敛周期、PPA、良率和硅后 debug 成本',
+    evidence: '仿真波形、UVM scoreboard、coverage report、CDC/RDC report、STA report、lint、formal counterexample',
+    scale: '模块从单 IP 扩到多子系统集成，时钟域、复位域和功耗域明显增加',
+    boundary: '异步复位、backpressure、低功耗 retention、X-propagation、DFT scan mode、寄存器兼容',
+    lab: '构造一个最小 transaction 序列和一个 corner reset/clock 场景，用波形、断言和 coverage 证明 bug 根因',
+  },
+  hardware: {
+    environment: '一块 AI 加速卡或边缘主板进入 EVT/DVT 阶段，板上包含高速 SerDes、电源树、DDR、PCIe、USB/以太网和调试接口',
+    workload: '原理图评审、PCB layout、SI/PI 仿真、EMI、量产测试、BOM 替代和现场返修同时发生',
+    entry: '电源上电、时钟复位、外设枚举、高速链路训练或产测夹具输入',
+    exit: '链路稳定工作、眼图/误码率、电源纹波、热分布、产测结果或现场故障复现',
+    symptom: '小批量样机出现上电不稳、PCIe 降速、DDR 训练失败、EMI 超标、温升过高或某批 BOM 失效率上升',
+    failureMode: '电源时序错误、阻抗/回流路径不连续、去耦不足、串扰、连接器公差或测试覆盖缺口',
+    impact: '良率、返修率、认证周期、BOM 成本、性能降级和量产风险',
+    evidence: '示波器、逻辑分析仪、TDR、VNA、眼图、热像仪、产测日志、BOM 批次和失效分析报告',
+    scale: '样机从 5 块扩到 5000 块量产，供应商替代和环境温度范围都扩大',
+    boundary: '冷启动、热插拔、长线缆、低温/高温、负载瞬变、ESD/EFT、器件容差',
+    lab: '定义一组可重复的上电/链路/热/EMI 实验，逐步排除电源、layout、器件和固件配置问题',
+  },
+  virtualization: {
+    environment: '多租户云平台同时运行 KVM 虚机、容器和轻量 microVM，要求在线迁移、强隔离和低启动延迟',
+    workload: 'vCPU 调度、EPT/stage-2、virtio/vhost、SR-IOV、Kata/gVisor、pKVM 和 live migration 交织',
+    entry: 'guest trap、hypercall、virtqueue kick、I/O MMIO 或 scheduler placement',
+    exit: 'guest 可见 I/O 完成、vCPU 继续执行、迁移完成或隔离策略生效',
+    symptom: '租户报告虚机 P99 抖动、virtio 吞吐下降、迁移时间过长、设备直通失败或隔离审计不通过',
+    failureMode: 'trap 过多、TLB flush 放大、virtqueue 堵塞、dirty page 速率过高、IOMMU/权限配置错误',
+    impact: '租户 SLA、隔离强度、资源利用率、迁移窗口和云平台成本',
+    evidence: 'KVM tracepoint、perf kvm、QEMU log、virtio/vhost counters、dirty bitmap、IOMMU fault、guest dmesg',
+    scale: '单宿主机扩到数千节点，虚机/容器混部且存在 noisy neighbor',
+    boundary: 'nested virtualization、NUMA、hugepage、SR-IOV、rootless container、host kernel 升级',
+    lab: '用一个固定 guest workload 对比裸机、虚机和容器路径，测出 trap、I/O、调度和内存映射各自开销',
+  },
+  programming: {
+    environment: '一个 C++/Python 混合线上服务承载交易、消息处理或模型推理请求，刚经历一次依赖升级和流量放大',
+    workload: '网络 I/O、内存分配、对象生命周期、并发队列、序列化、缓存和异常路径同时出现在热路径',
+    entry: '请求包、任务队列、函数调用、线程唤醒或测试用例输入',
+    exit: '响应、状态写入、日志、metric、异常或 core dump',
+    symptom: '上线后出现偶发崩溃、内存上涨、P99 延迟变差、结果不一致、死锁或测试只在 CI 中失败',
+    failureMode: '生命周期管理错误、迭代器失效、数据竞争、GIL/线程池误用、复杂度退化或边界条件漏测',
+    impact: '可用性、延迟、资源成本、数据正确性和回滚风险',
+    evidence: 'core dump、ASan/TSan/UBSan、gdb/lldb、perf/flamegraph、pytest log、heap profile、CI diff',
+    scale: 'QPS 增加 10 倍，输入规模从千级到百万级，请求从单线程变成多线程/多进程',
+    boundary: '空输入、大对象、超时、取消、异常抛出、资源释放、跨语言调用',
+    lab: '写一个最小复现和一个回归测试，固定随机种子和输入规模，用 sanitizer/profile 证明根因',
+  },
+  'arm-riscv': {
+    environment: '一颗 ARM/RISC-V SoC 正在 bring-up，Linux/RTOS/hypervisor 都需要跑在同一套板级平台上',
+    workload: '异常级切换、中断控制器、MMU/TLB、cache coherency、原子操作、secure world 和虚拟化同时影响稳定性',
+    entry: 'reset vector、exception entry、MMU enable、interrupt assert 或 device DMA',
+    exit: '内核继续调度、异常返回、设备中断完成、TLB/cache 状态更新或安全边界生效',
+    symptom: '板子偶发启动卡死、中断延迟异常、DMA 数据不一致、TLB shootdown 后崩溃或 guest trap 风暴',
+    failureMode: 'barrier 缺失、页表属性错误、cache/shareability 配错、中断优先级错误或 privilege 切换状态保存不完整',
+    impact: '系统稳定性、实时延迟、安全隔离、虚拟化性能和硅后定位成本',
+    evidence: 'JTAG/CoreSight/trace buffer、串口 early log、PMU counter、页表 dump、GIC/PLIC 状态、exception syndrome',
+    scale: '从单核 bring-up 扩到多核 SMP、多 cluster、虚拟化和安全世界共存',
+    boundary: 'EL/M/S/U 切换、ASID/VMID、cache maintenance、non-coherent DMA、nested interrupt、secure monitor',
+    lab: '设计一个最小汇编/C 混合实验，固定异常入口和页表属性，验证 barrier、TLB 和中断路径是否正确',
+  },
+  firmware: {
+    environment: '新 SoC/board 从 BootROM 到 U-Boot/UEFI 再到 Linux handoff，要求支持 secure boot、OTA 和现场恢复',
+    workload: 'DDR training、PMIC/clock/reset、device tree/ACPI、FIT/capsule、A/B slot、watchdog 和 early debug 交织',
+    entry: '上电复位、BootROM handoff、SPL/PEI 阶段、bootcmd 或 capsule update',
+    exit: '内核启动、ACPI/DT 正确传递、升级成功、回滚完成或 recovery shell 可用',
+    symptom: '某批板子冷启动失败、DDR training 偶发不过、Secure Boot 拒绝镜像、OTA 断电后无法恢复或启动慢 8 秒',
+    failureMode: '电源/时钟顺序错误、内存映射不一致、签名链断裂、环境变量污染、handoff 参数缺失或回滚标记错误',
+    impact: '量产良率、现场可恢复性、安全合规、启动时间和售后成本',
+    evidence: '串口 early log、JTAG、reset reason、bootstage、UEFI debug log、FIT/capsule 签名状态、A/B slot metadata',
+    scale: '从开发板扩到多 SKU、多 DDR 料号、多启动介质和多区域 OTA',
+    boundary: '断电、低温、量产 fuse、回滚保护、debug 口关闭、SPL size 限制、legacy boot 兼容',
+    lab: '构造一次断电 OTA 和一次冷启动训练失败，记录每个 boot stage 的日志和状态位，证明恢复策略可靠',
+  },
+  rtos: {
+    environment: '一个电池供电的 IoT/车控设备运行 FreeRTOS 或 Zephyr，要求毫秒级实时响应、低功耗和 OTA 安全升级',
+    workload: '高优先级控制环、BLE/MQTT、flash 文件系统、ISR、DMA、低功耗 sleep 和 watchdog 同时运行',
+    entry: 'ISR、task wakeup、message queue、timer tick、设备回调或网络包到达',
+    exit: '控制输出、消息发送、flash 写入、功耗状态切换或 watchdog 喂狗',
+    symptom: '现场出现控制延迟抖动、BLE 断连、flash 数据损坏、功耗超标、watchdog reset 或 OTA 后无法启动',
+    failureMode: '优先级反转、ISR 中调用阻塞 API、栈溢出、heap 碎片、tickless 唤醒源遗漏或 flash wear leveling 配置错误',
+    impact: '实时性、续航、功能安全、数据完整性和现场返修率',
+    evidence: 'SEGGER SystemView、Zephyr shell、RTOS trace、stack watermark、watchdog reset reason、功耗曲线、HIL 日志',
+    scale: '任务数量、传感器频率、网络连接数和 OTA 包大小同时增加',
+    boundary: 'ISR safe API、临界区长度、tickless idle、低电量、掉电写 flash、MPU/TrustZone-M',
+    lab: '用 HIL 脚本注入中断风暴、弱网和低电量，记录调度 trace、栈水位和功耗，证明实时路径仍满足 deadline',
+  },
+}
+
 const banks: InterviewBank[] = [
   { prefix: 'linux-kernel', category: 'linux-kernel-interview', title: 'Linux Kernel 面试', tags: ['linux-kernel', 'kernel'], count: 200, modules: linuxModules, patterns: longPatterns },
   { prefix: 'android', category: 'android-interview', title: 'Android 面试', tags: ['android', 'framework'], count: 200, modules: androidModules, patterns: longPatterns },
@@ -565,12 +699,33 @@ function descriptionFor(bank: InterviewBank, module: InterviewModule, pattern: Q
 追问方向：如果线上出问题先看什么证据？如何证明你的判断？规模或约束变化后方案如何调整？`
 }
 
+function generatedConcreteContext(bank: InterviewBank, module: InterviewModule): ConcreteModuleContext | undefined {
+  const profile = concreteBankProfiles[bank.prefix]
+  if (!profile) return undefined
+
+  const concepts = module.concepts.slice(0, 5)
+  const [primary = '关键对象', secondary = '状态机', tertiary = '边界条件'] = concepts
+  const conceptText = concepts.join('、')
+
+  return {
+    scenario: `${profile.environment}。你负责 ${module.title} 模块，范围包括 ${module.focus}。现在要把它放进 ${profile.workload}，并支持灰度、回滚和线上定位。线上触发症状是：${profile.symptom}。`,
+    artifact: `${conceptText}、关键配置、状态机、错误码、日志/trace/metric、回归用例`,
+    corePath: `从 ${profile.entry} 进入 ${module.title}，经过 ${primary}、${secondary}、${tertiary} 的关键状态迁移，到 ${profile.exit}`,
+    failure: `${module.title}在 ${primary}/${secondary} 边界出现${profile.failureMode}，影响${profile.impact}`,
+    evidence: `${profile.evidence}、${primary} 状态 dump、${secondary} 计数器、关键日志、版本/配置差异、最小复现输入`,
+    scale: `${profile.scale}，并且 ${module.title} 从单场景扩到多版本、多硬件或多租户组合`,
+    boundary: `${profile.boundary}、${primary} 为空/异常、${secondary} 状态迁移中断、老版本兼容、灰度回滚、权限边界`,
+    compare: `${concepts.slice(0, 3).join('/')} 的不同实现、同步路径与异步路径、强一致与最终一致、性能优先与可维护性优先`,
+    lab: `${profile.lab}；同时固定输入、打开最小观测点，分别验证正常路径、${primary} 异常、${secondary} 退化和回滚路径`,
+  }
+}
+
 function concreteQuestionFor(bank: InterviewBank, module: InterviewModule, pattern: QuestionPattern) {
   const context = bank.prefix === 'linux-kernel'
     ? linuxConcreteContexts[module.key]
     : bank.prefix === 'ai-infra'
     ? aiInfraConcreteContexts[module.key]
-    : undefined
+    : generatedConcreteContext(bank, module)
   if (!context) return null
 
   const variants: Record<string, { title: string; focus: string; followUps: string[] }> = {
