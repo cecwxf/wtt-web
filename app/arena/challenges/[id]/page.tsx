@@ -35,6 +35,22 @@ type ChallengePayload = {
 type TopicMessage = { id?: string; message_id?: string; sender_type?: string; sender_id?: string; semantic_type?: string; content?: string; timestamp?: string; created_at?: string }
 type ArenaTypingState = { topicId: string; agentId: string; agentName?: string; startedAt: number; expiresAt: number }
 
+function diagramHasHtml(diagram?: WhiteboardDiagram | null) {
+  return Boolean(diagram?.html?.trim() || diagram?.steps?.some((step) => step.html?.trim()))
+}
+
+function mergeWhiteboardDiagram(previous: WhiteboardDiagram | null, next: WhiteboardDiagram) {
+  if (!previous || diagramHasHtml(next) || !diagramHasHtml(previous)) return next
+  return {
+    ...next,
+    html: next.html || previous.html,
+    steps: next.steps?.map((step, index) => ({
+      ...step,
+      html: step.html || previous.steps?.[index]?.html,
+    })) || previous.steps,
+  }
+}
+
 const ARENA_AGENT_ID = 'agent-16a45cf0dd8b'
 
 type ArenaSession = { accessToken?: string; userId?: string; user?: { name?: string | null; email?: string | null } | null }
@@ -547,6 +563,20 @@ function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge |
     : `chat_mode: socratic\nUse Socratic coaching. Diagnose the user’s current blocker, ask 1-2 high-quality questions with light hints, and help the user reason instead of dumping the full answer unless explicitly asked. ${whiteboardProtocol}`
 }
 
+function arenaAgentPromptContext(challenge: Challenge, locale: Locale, language: Language, code: string, mode: ChatMode, intent?: ArenaTeachingIntent) {
+  const sameTurnWhiteboard = isGaokaoVolunteerChallenge(challenge)
+    ? ''
+    : locale === 'zh'
+      ? 'whiteboard_delivery: same_response\n首轮回答必须是“正文 + WHITEBOARD_DIAGRAM”同一次输出，不要等第二次白板请求才生成 html。WHITEBOARD_DIAGRAM.html 和 Markdown/Mermaid 必须基于同一轮正文同时返回。'
+      : 'whiteboard_delivery: same_response\nThe first reply must be one same-turn output: normal answer plus WHITEBOARD_DIAGRAM. Do not wait for a second whiteboard request to generate html. Return WHITEBOARD_DIAGRAM.html and Markdown/Mermaid from the same answer.'
+  return [
+    arenaChallengeContext(challenge, locale, language, code),
+    modeInstruction(mode, locale, challenge),
+    intent ? `teaching_intent: ${intent}` : '',
+    sameTurnWhiteboard,
+  ].filter(Boolean).join('\n\n')
+}
+
 function intentForChatMode(mode: ChatMode): ArenaTeachingIntent {
   if (mode === 'interview_answer') return 'interview_answer'
   if (mode === 'ask') return 'ask'
@@ -612,6 +642,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
+  const appliedWhiteboardHtmlMessageIdsRef = useRef(new Set<string>())
   const autoWhiteboardSourceKeysRef = useRef(new Set<string>())
 
   function startPanelResize() {
@@ -748,7 +779,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const payload = extractWhiteboardPayload(content)
       if (payload?.diagram) {
         appliedWhiteboardMessageIdsRef.current.add(messageId)
-        setWhiteboardDiagram(payload.diagram)
+        if (diagramHasHtml(payload.diagram)) appliedWhiteboardHtmlMessageIdsRef.current.add(messageId)
+        setWhiteboardDiagram((previous) => mergeWhiteboardDiagram(previous, payload.diagram!))
         return true
       }
     }
@@ -757,6 +789,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   function hasNewAppliedWhiteboard(baselineWhiteboardIds: Set<string>) {
     return Array.from(appliedWhiteboardMessageIdsRef.current).some((id) => !baselineWhiteboardIds.has(id))
+  }
+
+  function hasNewAppliedWhiteboardHtml(baselineWhiteboardHtmlIds: Set<string>) {
+    return Array.from(appliedWhiteboardHtmlMessageIdsRef.current).some((id) => !baselineWhiteboardHtmlIds.has(id))
   }
 
   const refreshArenaMessages = async (topicId = arenaTopicId) => {
@@ -798,7 +834,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return false
   }
 
-  async function waitForArenaWhiteboardPayload(topicId: string, baselineWhiteboardIds: Set<string>, timeoutMs = 240000) {
+  async function waitForArenaWhiteboardPayload(topicId: string, baselineWhiteboardIds: Set<string>, timeoutMs = 240000, requireHtml = false) {
     const hasNewWhiteboardPayload = async () => {
       const rows = await fetchArenaMessageRows(topicId)
       const found = [...rows].reverse().some((row) => {
@@ -808,7 +844,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         if (!isArenaAgentTopicMessage(row) || baselineWhiteboardIds.has(messageId)) return false
         const content = stripSourceBlock(String(row.content || ''))
         if (content.includes('Agent thinking')) return false
-        return Boolean(extractWhiteboardPayload(content)?.diagram)
+        const diagram = extractWhiteboardPayload(content)?.diagram
+        return Boolean(diagram && (!requireHtml || diagramHasHtml(diagram)))
       })
       if (found) await refreshArenaMessages(topicId)
       return found
@@ -1030,7 +1067,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function publishArenaFallback(topicId: string, userMessage: string, intent?: ArenaTeachingIntent, mode: ChatMode = chatMode) {
     if (!challenge) throw new Error('missing challenge')
-    const content = `${arenaChallengeContext(challenge, locale, language, code)}\n\n${modeInstruction(mode, locale, challenge)}\n${intent ? `teaching_intent: ${intent}\n` : ''}${userMessage}`
+    const content = `${arenaAgentPromptContext(challenge, locale, language, code, mode, intent)}\n\n${userMessage}`
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
@@ -1068,6 +1105,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     try {
       await refreshArenaMessages(topicId)
       const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
+      const promptContext = arenaAgentPromptContext(challenge, locale, language, code, 'ask', 'whiteboard')
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -1075,6 +1113,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           topic_id: topicId,
           challenge_id: challenge.id,
           message,
+          prompt_context: promptContext,
+          arena_context: promptContext,
+          system_instruction: promptContext,
+          whiteboard_delivery: 'same_response',
+          whiteboard_required: true,
+          whiteboard_require_html: true,
           locale,
           language,
           code,
@@ -1091,7 +1135,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
-      await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 240000)
+      await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 240000, true)
       await refreshArenaState().catch(() => undefined)
     } catch {
       autoWhiteboardSourceKeysRef.current.delete(sourceKey)
@@ -1116,6 +1160,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const baselineMessages = await refreshArenaMessages(topicId)
       const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
       const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
+      const baselineWhiteboardHtmlIds = new Set(appliedWhiteboardHtmlMessageIdsRef.current)
+      const promptContext = arenaAgentPromptContext(challenge, locale, language, code, mode, effectiveIntent)
+      const requiresWhiteboard = !isCoding && !isGaokaoVolunteerChallenge(challenge)
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -1123,6 +1170,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           topic_id: topicId,
           challenge_id: challenge.id,
           message,
+          prompt_context: promptContext,
+          arena_context: promptContext,
+          system_instruction: promptContext,
+          whiteboard_delivery: requiresWhiteboard ? 'same_response' : 'disabled',
+          whiteboard_required: requiresWhiteboard,
+          whiteboard_require_html: requiresWhiteboard,
           locale,
           language,
           code,
@@ -1138,9 +1191,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
       await waitForArenaAgentMessage(topicId, baselineKeys)
+      if (requiresWhiteboard) {
+        await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 45000, true)
+      }
       const latestMessages = await refreshArenaMessages(topicId)
       const newAgentAnswer = latestNewAgentMessage(latestMessages, baselineKeys)
-      if (newAgentAnswer?.content.trim() && !hasNewAppliedWhiteboard(baselineWhiteboardIds)) {
+      const whiteboardApplied = hasNewAppliedWhiteboard(baselineWhiteboardIds)
+      const whiteboardHtmlApplied = hasNewAppliedWhiteboardHtml(baselineWhiteboardHtmlIds)
+      if (newAgentAnswer?.content.trim() && requiresWhiteboard && (!whiteboardApplied || !whiteboardHtmlApplied)) {
         void requestAutoWhiteboardFromAnswer(topicId, newAgentAnswer, message)
       }
       await refreshArenaState().catch(() => undefined)
@@ -1168,6 +1226,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const topicId = await ensureArenaSession()
       await refreshArenaMessages(topicId)
       const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
+      const promptContext = arenaAgentPromptContext(challenge, locale, language, code, 'ask', 'whiteboard')
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -1175,6 +1234,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           topic_id: topicId,
           challenge_id: challenge.id,
           message,
+          prompt_context: promptContext,
+          arena_context: promptContext,
+          system_instruction: promptContext,
+          whiteboard_delivery: 'same_response',
+          whiteboard_required: true,
+          whiteboard_require_html: true,
           locale,
           language,
           code,
@@ -1190,7 +1255,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
-      await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 240000)
+      await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 240000, true)
       await refreshArenaState().catch(() => undefined)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])

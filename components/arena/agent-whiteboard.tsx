@@ -427,8 +427,8 @@ function missingHtmlBody(payload: WhiteboardPlayerPayload) {
       <p class="kicker">${zh ? 'HTML 动画未生成' : 'HTML animation missing'}</p>
       <h1>${escapeHtml(payload.title)}</h1>
       <p>${zh
-        ? '本轮 Agent 二次推理没有返回 html 字段。HTML 视图不会用前端模板代替，因为这里应该展示 Agent 基于回答仔细分析后绘制的公式、原理、流程图、架构图和表格。可以点击“重新生成”，或继续追问要求 Agent 输出 WHITEBOARD_DIAGRAM.html。'
-        : 'The Agent second pass did not return an html field for this response. The HTML view does not replace it with a frontend template, because this view should show formulas, principles, flow diagrams, architecture diagrams, and tables produced by the Agent from its answer. Regenerate the board or ask the Agent to output WHITEBOARD_DIAGRAM.html.'}</p>
+        ? '当前 WHITEBOARD_DIAGRAM 没有返回 html 字段。HTML 视图不会用前端模板代替，因为这里应该展示 Agent 基于同一轮回答绘制的公式、原理、流程图、架构图和表格。可以点击“重新生成”，或继续追问要求 Agent 输出 WHITEBOARD_DIAGRAM.html。'
+        : 'The current WHITEBOARD_DIAGRAM did not include an html field. The HTML view does not replace it with a frontend template, because this view should show formulas, principles, flow diagrams, architecture diagrams, and tables produced by the Agent from the same answer. Regenerate the board or ask the Agent to output WHITEBOARD_DIAGRAM.html.'}</p>
     </div>
   `
 }
