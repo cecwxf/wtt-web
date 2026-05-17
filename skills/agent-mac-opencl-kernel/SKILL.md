@@ -20,25 +20,27 @@ Use this skill for Arena AI Kernel submissions when:
 The caller provides:
 
 - Challenge id, function name, time limit, and memory limit.
-- User kernel source.
+- User OpenCL C source. Preferred submissions are complete host programs containing platform/device selection, program build, kernel launch, readback, and JSON stdout. Legacy kernel-only submissions are still accepted and wrapped by the runner.
 - JSON test cases containing example and hidden inputs plus expected outputs.
 
 ## Workflow
 
-1. Preserve the user kernel source as `kernel.cl`.
-2. Generate a temporary macOS C host runner that loads `kernel.cl`.
+1. If the submission is a complete OpenCL host program, preserve it as `runner.c`; otherwise preserve the legacy kernel-only source as `kernel.cl`.
+2. For kernel-only submissions, generate a temporary macOS C host runner that loads `kernel.cl`.
 3. Compile with `clang runner.c -framework OpenCL -o runner`.
-4. Select the first available GPU device and fall back to the default OpenCL device.
-5. Run every test case and measure elapsed runtime.
-6. Compare parsed JSON output against the expected output and stop on first failure.
-7. Redact hidden stdout, stderr, compile logs, and detailed error messages.
-8. Report kernel memory as the total OpenCL device buffer footprint, not host process RSS.
+4. For complete host submissions, pass each WTT JSON test payload on stdin and require the program to print the result JSON on stdout.
+5. Select the first available GPU device and fall back to the default OpenCL device.
+6. Run every test case and measure elapsed runtime.
+7. Compare parsed JSON output against the expected output and stop on first failure.
+8. Redact hidden stdout, stderr, compile logs, and detailed error messages.
+9. Report kernel memory as the total OpenCL device buffer footprint, not host process RSS.
 
 ## Kernel ABI
 
-- Vector/scalar cases call `kernel(__global const float* values, __global float* output, int n)`.
-- Matrix/GEMM-style cases call `kernel(__global const float* A, __global const float* B, __global float* C, int M, int N, int K)`.
-- Checksum object cases call the vector ABI; the kernel writes checksum to `output[0]`, and the host wraps the JSON object.
+- Complete host programs own the full OpenCL lifecycle and must read the WTT JSON payload from stdin and print JSON to stdout.
+- Legacy vector/scalar kernel-only cases call `kernel(__global const float* values, __global float* output, int n)`.
+- Legacy matrix/GEMM kernel-only cases call `kernel(__global const float* A, __global const float* B, __global float* C, int M, int N, int K)`.
+- Legacy checksum object cases call the vector ABI; the kernel writes checksum to `output[0]`, and the generated host wraps the JSON object.
 
 ## Output
 

@@ -947,10 +947,10 @@ function openCLDeviceMemoryKb(stdin: string, expectedOutput: string) {
   return bytes > 0 ? Math.ceil(bytes / 1024) : undefined
 }
 
-async function runProcess(command: string, args: string[], timeoutMs: number, cwd?: string): Promise<RawRunResult> {
+async function runProcess(command: string, args: string[], timeoutMs: number, cwd?: string, stdin?: string): Promise<RawRunResult> {
   const started = Date.now()
   return await new Promise<RawRunResult>((resolve) => {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(command, args, { cwd, stdio: [stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
     let settled = false
     const finish = (result: RawRunResult) => {
       if (settled) return
@@ -963,8 +963,8 @@ async function runProcess(command: string, args: string[], timeoutMs: number, cw
     }, timeoutMs)
     const stdout: Buffer[] = []
     const stderr: Buffer[] = []
-    child.stdout.on('data', (chunk) => stdout.push(Buffer.from(chunk)))
-    child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
+    child.stdout?.on('data', (chunk) => stdout.push(Buffer.from(chunk)))
+    child.stderr?.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
     child.on('error', (error) => {
       clearTimeout(timer)
       finish({ status: 'system_error', stdout: '', stderr: '', error_message: error.message, runtime_ms: Date.now() - started })
@@ -980,7 +980,16 @@ async function runProcess(command: string, args: string[], timeoutMs: number, cw
         runtime_ms: Date.now() - started,
       })
     })
+    if (stdin !== undefined) child.stdin?.end(stdin)
   })
+}
+
+function isCompleteOpenCLProgram(code: string) {
+  return /#\s*include\s*[<"](?:OpenCL\/opencl\.h|OpenCL\/OpenCL\.h|CL\/cl\.h)[>"]/.test(code)
+    && /\bint\s+main\s*\(/.test(code)
+    && /\bclGetPlatformIDs\s*\(/.test(code)
+    && /\bclBuildProgram\s*\(/.test(code)
+    && /\bclEnqueueNDRangeKernel\s*\(/.test(code)
 }
 
 async function runLocalOpenCL(code: string, stdin: string, expectedOutput: string, timeoutMs: number, challenge: Challenge): Promise<RawRunResult> {
@@ -993,9 +1002,18 @@ async function runLocalOpenCL(code: string, stdin: string, expectedOutput: strin
   const hostFile = join(dir, 'runner.c')
   const binFile = join(dir, 'runner')
   try {
+    if (isCompleteOpenCLProgram(code)) {
+      await writeFile(hostFile, code, 'utf8')
+      const compile = await runProcess('clang', [hostFile, '-framework', 'OpenCL', '-o', binFile], timeoutMs, dir)
+      if (compile.status !== 'accepted') {
+        return { ...compile, status: 'compile_error', compile_output: compile.stderr || compile.stdout }
+      }
+      const run = await runProcess(binFile, [], timeoutMs, dir, stdin)
+      return { ...run, memory_kb: openCLDeviceMemoryKb(stdin, expectedOutput) }
+    }
+
     await writeFile(kernelFile, code, 'utf8')
     await writeFile(hostFile, buildOpenCLHost(challenge, stdin, expectedOutput), 'utf8')
-
     const compile = await runProcess('clang', [hostFile, '-framework', 'OpenCL', '-o', binFile], timeoutMs, dir)
     if (compile.status !== 'accepted') {
       return { ...compile, status: 'compile_error', compile_output: compile.stderr || compile.stdout }
@@ -1152,6 +1170,7 @@ export async function judgeSubmission(input: JudgeInput) {
   if (!shouldUseLocalOpenCL && isOpenCL && macOpenCLJudgeUrl) return runRemoteJudge(input, macOpenCLJudgeUrl)
   if (!shouldUseLocalOpenCL && remoteJudgeUrl) {
     if (isOpenCL) {
+      if (isCompleteOpenCLProgram(input.code)) return runRemoteJudge(input, remoteJudgeUrl)
       if (canUseRemoteOpenCLMatrixAdapter(challenge, testCases)) return runRemoteOpenCLMatrixAdapter(input, remoteJudgeUrl)
       if (canUseRemoteOpenCLMatrixElementAdapter(challenge, testCases)) return runRemoteOpenCLMatrixElementAdapter(input, remoteJudgeUrl)
       if (canUseRemoteOpenCLVectorAdapter(challenge, testCases)) return runRemoteOpenCLVectorAdapter(input, remoteJudgeUrl)

@@ -275,7 +275,7 @@ const copy = {
     chatWorking: 'Agent 正在思考 / 输出中', whiteboardWorking: 'Agent 正在生成白板',
     mode: '模式',
     coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
-    aiDesc: 'AI Kernel 题默认使用 OpenCL C。提交后触发 agent-mac-opencl-kernel skill：生成 Mac mini 可运行的 OpenCL host，真实运行 example/hidden case，并返回时间和内存指标；CUDA C++ / Triton 作为目标语言保留给远程硬件 runner。',
+    aiDesc: 'AI Kernel 题默认使用完整 OpenCL C 程序：包含 platform/device 选择、program build、kernel arg、enqueue、readback 和 JSON 输出。提交后由 agent-mac-opencl-kernel 在 Mac mini 上编译运行 example/hidden case，并返回时间和 kernel memory；CUDA C++ / Triton 作为目标语言保留给远程硬件 runner。',
     interviewMode: 'AI 面试练习模式', interviewHint: '开放式面试题，直接在右侧和 Arena Coach 练习结构化回答。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
     consultation: '咨询说明', gaokaoIntro: '高考志愿 Ask 咨询。不是刷题 Problem；请直接输入省份、科类/选科、分数、位次、专业兴趣和城市偏好。',
   },
@@ -290,7 +290,7 @@ const copy = {
     chatWorking: 'Agent is thinking / writing', whiteboardWorking: 'Agent is generating the whiteboard',
     mode: 'Mode',
     coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
-    aiDesc: 'AI Kernel challenge. OpenCL C is the default. Submissions trigger the agent-mac-opencl-kernel skill: generate a Mac mini runnable OpenCL host, execute example/hidden cases, and report runtime and memory metrics; CUDA C++ / Triton remain target languages for remote hardware runners.',
+    aiDesc: 'AI Kernel challenge. Complete OpenCL C programs are the default: platform/device selection, program build, kernel args, enqueue, readback, and JSON output. The agent-mac-opencl-kernel skill compiles and runs example/hidden cases on the Mac mini and reports runtime plus kernel memory; CUDA C++ / Triton remain target languages for remote hardware runners.',
     interviewMode: 'AI interview practice mode', interviewHint: 'Open-ended interview prompt. Practice a structured answer with Arena Coach on the right.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
     consultation: 'Consultation', gaokaoIntro: 'Gaokao volunteer Ask consultation. This is not a problem; describe province, subject track, score, rank, interests, and city preferences.',
   },
@@ -322,9 +322,9 @@ function editorLanguage(language: Language) {
   return 'python'
 }
 
-function openClStarter(challenge: Challenge) {
+function openClKernelSource(challenge: Challenge) {
   if (challenge.tags.includes('matmul') || challenge.tags.includes('gemm')) {
-    return `// OpenCL C GEMM kernel for macOS Agent/Runner.
+    return `// Device kernel: GEMM, row-major, C[M,N] = A[M,K] * B[K,N].
 // Supported local GEMM signature:
 //   kernel_name(A, B, C, M, N, K), row-major, C[M,N] = A[M,K] * B[K,N]
 __kernel void ${challenge.function_name}(__global const float* A,
@@ -347,7 +347,7 @@ __kernel void ${challenge.function_name}(__global const float* A,
   }
 
   if (challenge.tags.includes('matrix-add')) {
-    return `// OpenCL C matrix-add kernel for Agent/Runner.
+    return `// Device kernel: matrix add, row-major, C = A + B.
 // Supported signature:
 //   kernel_name(A, B, C, rows, cols), row-major, C = A + B
 __kernel void ${challenge.function_name}(__global const float* A,
@@ -365,7 +365,7 @@ __kernel void ${challenge.function_name}(__global const float* A,
   }
 
   if (challenge.tags.includes('transpose')) {
-    return `// OpenCL C transpose kernel for Agent/Runner.
+    return `// Device kernel: matrix transpose.
 // Supported signature:
 //   kernel_name(input, output, rows, cols), row-major, output[cols,rows] = transpose(input[rows,cols])
 __kernel void ${challenge.function_name}(__global const float* input,
@@ -381,7 +381,7 @@ __kernel void ${challenge.function_name}(__global const float* input,
   }
 
   if (challenge.tags.includes('copy')) {
-    return `// OpenCL C matrix-copy kernel for Agent/Runner.
+    return `// Device kernel: matrix copy.
 // Supported signature:
 //   kernel_name(input, output, rows, cols), row-major
 __kernel void ${challenge.function_name}(__global const float* input,
@@ -406,7 +406,7 @@ __kernel void ${challenge.function_name}(__global const float* input,
     ? '    float max_value = values[0];\n    for (int i = 1; i < n; ++i) max_value = fmax(max_value, values[i]);\n    float denom = 0.0f;\n    for (int i = 0; i < n; ++i) denom += exp(values[i] - max_value);\n    output[gid] = exp(values[gid] - max_value) / denom;'
     : '    // TODO: write this AI operator in OpenCL C.\n    output[gid] = values[gid];'
 
-  return `// OpenCL C kernel for macOS Agent/Runner.
+  return `// Device kernel: vector/scalar AI operator.
 // Supported local signature:
 //   kernel_name(__global const float* values, __global float* output, int n)
 // For scalar/object-style tasks, write the scalar or checksum into output[0].
@@ -416,6 +416,287 @@ __kernel void ${challenge.function_name}(__global const float* values,
     const int gid = get_global_id(0);
     if (gid >= n) return;
 ${body}
+}
+`
+}
+
+function openClStarter(challenge: Challenge) {
+  const kernelSource = openClKernelSource(challenge)
+  const mode = challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
+    ? 'gemm'
+    : challenge.tags.includes('matrix-add')
+      ? 'matrix_add'
+      : challenge.tags.includes('transpose')
+        ? 'transpose'
+        : challenge.tags.includes('copy')
+          ? 'copy'
+          : 'vector'
+  const outputKind = challenge.tags.includes('sum') || challenge.tags.includes('dot') || challenge.tags.includes('silu') || challenge.tags.includes('max-subarray')
+    ? 'scalar'
+    : challenge.tags.includes('attention') || challenge.tags.includes('conv2d') || challenge.tags.includes('conv3d') || challenge.tags.includes('histogram') || challenge.tags.includes('spmv') || challenge.tags.includes('cross-entropy') || challenge.tags.includes('mse') || challenge.tags.includes('gaussian-blur') || challenge.tags.includes('int8-matmul') || challenge.tags.includes('ols') || challenge.tags.includes('logistic') || challenge.tags.includes('monte-carlo') || challenge.tags.includes('matrix-power') || challenge.tags.includes('nearest') || challenge.tags.includes('batch-norm') || challenge.tags.includes('max-pool2d') || challenge.tags.includes('count') || challenge.tags.includes('subarray') || challenge.tags.includes('rms-norm') || challenge.tags.includes('alibi-attention') || challenge.tags.includes('batched-matmul') || challenge.tags.includes('top-p') || challenge.tags.includes('rope') || challenge.tags.includes('dequant') || challenge.tags.includes('moe-topk') || challenge.tags.includes('jacobi') || challenge.tags.includes('merge') || challenge.tags.includes('compact') || challenge.tags.includes('adder-transformer') || challenge.tags.includes('fft') || challenge.tags.includes('gqa') || challenge.tags.includes('int4-matmul') || challenge.tags.includes('linear-recurrence') || challenge.tags.includes('swiglu-mlp') || challenge.tags.includes('lora') || challenge.tags.includes('spec-decode') || challenge.tags.includes('causal-conv1d') || challenge.tags.includes('decay-attention') || challenge.tags.includes('ssm-scan') || challenge.tags.includes('kv-attention') || challenge.tags.includes('mha') || challenge.tags.includes('multi-agent') || challenge.tags.includes('bfs') || challenge.tags.includes('causal-attention') || challenge.tags.includes('linear-attention') || challenge.tags.includes('window-attention') || challenge.tags.includes('apsp') || challenge.tags.includes('gpt-block') || challenge.tags.includes('llama-block')
+      ? 'checksum_object'
+      : 'array'
+  const fixedSoftmax = challenge.tags.includes('softmax')
+  return `// Complete OpenCL C program for macOS Agent/Mac mini runner.
+// Build locally:
+//   clang main.c -framework OpenCL -o runner
+// Run with WTT JSON payload on stdin:
+//   echo '{"payload":{"values":[1,2,-1,2,0],"matrix":[[1,2],[3,4]],"op":"vector_add","seed":1}}' | ./runner
+//
+// WTT judges the JSON printed by main(). Keep the host path complete:
+// platform -> device -> context -> program build -> kernel args -> enqueue -> readback.
+#include <OpenCL/opencl.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static const char* KERNEL_NAME = "${challenge.function_name}";
+static const char* KERNEL_SOURCE = ${JSON.stringify(kernelSource)};
+static const char* WTT_MODE = "${mode}";
+static const char* WTT_OUTPUT_KIND = "${outputKind}";
+static const char* WTT_OP = "${challenge.tags.find((tag) => !['ai-kernel', 'opencl', 'macos-runner', 'agent-mac-opencl-kernel'].includes(tag)) || 'generic'}";
+
+static void fail(const char* label, cl_int err) {
+    fprintf(stderr, "%s failed: %d\\n", label, err);
+    exit(2);
+}
+
+static char* read_stdin(void) {
+    size_t cap = 4096, len = 0;
+    char* buf = (char*)calloc(cap, 1);
+    if (!buf) exit(2);
+    for (;;) {
+        if (len + 1024 + 1 > cap) {
+            cap *= 2;
+            buf = (char*)realloc(buf, cap);
+            if (!buf) exit(2);
+        }
+        size_t n = fread(buf + len, 1, 1024, stdin);
+        len += n;
+        if (n < 1024) break;
+    }
+    buf[len] = '\\0';
+    return buf;
+}
+
+static int parse_int_field(const char* json, const char* name, int fallback) {
+    char pattern[64];
+    snprintf(pattern, sizeof(pattern), "\\"%s\\"", name);
+    const char* key = strstr(json, pattern);
+    if (!key) return fallback;
+    const char* p = strchr(key, ':');
+    if (!p) return fallback;
+    return (int)strtol(p + 1, NULL, 10);
+}
+
+static void parse_string_field(const char* json, const char* name, char* out, int cap) {
+    if (cap <= 0) return;
+    out[0] = '\\0';
+    char pattern[64];
+    snprintf(pattern, sizeof(pattern), "\\"%s\\"", name);
+    const char* key = strstr(json, pattern);
+    if (!key) return;
+    const char* p = strchr(key, ':');
+    if (!p) return;
+    p = strchr(p, '"');
+    if (!p) return;
+    ++p;
+    int n = 0;
+    while (*p && *p != '"' && n < cap - 1) out[n++] = *p++;
+    out[n] = '\\0';
+}
+
+static int parse_values_field(const char* json, const char* name, float* out, int cap) {
+    char pattern[64];
+    snprintf(pattern, sizeof(pattern), "\\"%s\\"", name);
+    const char* key = strstr(json, pattern);
+    if (!key) return 0;
+    const char* p = strchr(key, '[');
+    if (!p) return 0;
+    int depth = 0, n = 0;
+    for (; *p && n < cap; ++p) {
+        if (*p == '[') { depth++; continue; }
+        if (*p == ']') { depth--; if (depth <= 0) break; continue; }
+        if ((*p >= '0' && *p <= '9') || *p == '-' || *p == '+') {
+            char* end = NULL;
+            float value = strtof(p, &end);
+            if (end != p) {
+                out[n++] = value;
+                p = end - 1;
+            }
+        }
+    }
+    return n;
+}
+
+static void print_number(float value) {
+    if (${fixedSoftmax ? '1' : '0'}) {
+        printf("%.6f", value);
+    } else if (fabsf(value - roundf(value)) < 0.00001f) {
+        printf("%.0f", value);
+    } else {
+        printf("%.6g", value);
+    }
+}
+
+static int checksum_values(const float* values, int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) total += ((int)(values[i] * 1000.0f)) * (i + 1);
+    return total;
+}
+
+int main(void) {
+    enum { MAX_N = 4096 };
+    char* input_json = read_stdin();
+    float values[MAX_N] = {0};
+    float matrix[MAX_N] = {0};
+    float output[MAX_N] = {0};
+    float b[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    char payload_op[64];
+    parse_string_field(input_json, "op", payload_op, (int)sizeof(payload_op));
+    if (payload_op[0] == '\\0') snprintf(payload_op, sizeof(payload_op), "%s", WTT_OP);
+    int seed = parse_int_field(input_json, "seed", 0);
+    int value_count = parse_values_field(input_json, "values", values, MAX_N);
+    int matrix_count = parse_values_field(input_json, "matrix", matrix, MAX_N);
+    int rows = 2;
+    int cols = matrix_count > 0 ? matrix_count / rows : 0;
+    int m = rows;
+    int k = 2;
+    int n = 2;
+    int output_n = value_count;
+    if (strcmp(WTT_MODE, "gemm") == 0) output_n = m * n;
+    else if (strcmp(WTT_MODE, "matrix_add") == 0 || strcmp(WTT_MODE, "copy") == 0) output_n = rows * cols;
+    else if (strcmp(WTT_MODE, "transpose") == 0) output_n = rows * cols;
+    else if (strcmp(WTT_OUTPUT_KIND, "scalar") == 0 || strcmp(WTT_OUTPUT_KIND, "checksum_object") == 0) output_n = 1;
+    else if (strcmp(payload_op, "softmax") == 0 && value_count > 4) output_n = value_count = 4;
+    else if (strcmp(payload_op, "conv1d") == 0 && value_count > 0) output_n = value_count - 1;
+    else if (strcmp(payload_op, "topk") == 0) output_n = value_count < 3 ? value_count : 3;
+    else if (strcmp(payload_op, "interleave") == 0) output_n = 6;
+    if (output_n <= 0) output_n = 1;
+
+    cl_int err = CL_SUCCESS;
+    cl_uint platform_count = 0;
+    err = clGetPlatformIDs(0, NULL, &platform_count);
+    if (err != CL_SUCCESS || platform_count == 0) fail("clGetPlatformIDs", err);
+    cl_platform_id platform = NULL;
+    err = clGetPlatformIDs(1, &platform, NULL);
+    if (err != CL_SUCCESS) fail("clGetPlatformIDs[0]", err);
+
+    cl_device_id device = NULL;
+    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+    if (err != CL_SUCCESS) {
+        err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_DEFAULT, 1, &device, NULL);
+        if (err != CL_SUCCESS) fail("clGetDeviceIDs", err);
+    }
+
+    cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+    if (err != CL_SUCCESS) fail("clCreateContext", err);
+    cl_command_queue queue = clCreateCommandQueue(context, device, 0, &err);
+    if (err != CL_SUCCESS) fail("clCreateCommandQueue", err);
+    cl_program program = clCreateProgramWithSource(context, 1, &KERNEL_SOURCE, NULL, &err);
+    if (err != CL_SUCCESS) fail("clCreateProgramWithSource", err);
+    err = clBuildProgram(program, 1, &device, "", NULL, NULL);
+    if (err != CL_SUCCESS) {
+        size_t log_size = 0;
+        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+        char* log = (char*)calloc(log_size + 1, 1);
+        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+        fprintf(stderr, "%s", log);
+        return 1;
+    }
+    cl_kernel kernel = clCreateKernel(program, KERNEL_NAME, &err);
+    if (err != CL_SUCCESS) fail("clCreateKernel", err);
+
+    cl_mem a_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+        sizeof(float) * (strcmp(WTT_MODE, "vector") == 0 ? value_count : matrix_count),
+        strcmp(WTT_MODE, "vector") == 0 ? values : matrix, &err);
+    if (err != CL_SUCCESS) fail("clCreateBuffer(a)", err);
+    cl_mem b_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(b), b, &err);
+    if (err != CL_SUCCESS) fail("clCreateBuffer(b)", err);
+    cl_mem out_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * output_n, NULL, &err);
+    if (err != CL_SUCCESS) fail("clCreateBuffer(output)", err);
+
+    if (strcmp(WTT_MODE, "gemm") == 0 || strcmp(WTT_MODE, "matrix_add") == 0) {
+        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(0)", err);
+        err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &b_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(1)", err);
+        err = clSetKernelArg(kernel, 2, sizeof(cl_mem), &out_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
+        err = clSetKernelArg(kernel, 3, sizeof(int), strcmp(WTT_MODE, "gemm") == 0 ? &m : &rows); if (err != CL_SUCCESS) fail("clSetKernelArg(3)", err);
+        err = clSetKernelArg(kernel, 4, sizeof(int), strcmp(WTT_MODE, "gemm") == 0 ? &n : &cols); if (err != CL_SUCCESS) fail("clSetKernelArg(4)", err);
+        if (strcmp(WTT_MODE, "gemm") == 0) { err = clSetKernelArg(kernel, 5, sizeof(int), &k); if (err != CL_SUCCESS) fail("clSetKernelArg(5)", err); }
+    } else if (strcmp(WTT_MODE, "transpose") == 0 || strcmp(WTT_MODE, "copy") == 0) {
+        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(0)", err);
+        err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(1)", err);
+        err = clSetKernelArg(kernel, 2, sizeof(int), &rows); if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
+        err = clSetKernelArg(kernel, 3, sizeof(int), &cols); if (err != CL_SUCCESS) fail("clSetKernelArg(3)", err);
+    } else {
+        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(0)", err);
+        err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_buf); if (err != CL_SUCCESS) fail("clSetKernelArg(1)", err);
+        err = clSetKernelArg(kernel, 2, sizeof(int), &value_count); if (err != CL_SUCCESS) fail("clSetKernelArg(2)", err);
+    }
+
+    size_t global1 = (size_t)(output_n > value_count ? output_n : value_count);
+    size_t global2[2] = { (size_t)(strcmp(WTT_MODE, "gemm") == 0 ? n : (strcmp(WTT_MODE, "transpose") == 0 ? rows : cols)), (size_t)(strcmp(WTT_MODE, "transpose") == 0 ? cols : rows) };
+    err = (strcmp(WTT_MODE, "vector") == 0)
+        ? clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global1, NULL, 0, NULL, NULL)
+        : clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global2, NULL, 0, NULL, NULL);
+    if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
+    err = clFinish(queue);
+    if (err != CL_SUCCESS) fail("clFinish", err);
+    err = clEnqueueReadBuffer(queue, out_buf, CL_TRUE, 0, sizeof(float) * output_n, output, 0, NULL, NULL);
+    if (err != CL_SUCCESS) fail("clEnqueueReadBuffer", err);
+
+    if (strcmp(WTT_MODE, "gemm") == 0 || strcmp(WTT_MODE, "matrix_add") == 0 || strcmp(WTT_MODE, "transpose") == 0) {
+        int out_rows = strcmp(WTT_MODE, "transpose") == 0 ? cols : rows;
+        int out_cols = strcmp(WTT_MODE, "transpose") == 0 ? rows : cols;
+        printf("[");
+        for (int r = 0; r < out_rows; ++r) {
+            if (r) printf(",");
+            printf("[");
+            for (int c = 0; c < out_cols; ++c) {
+                if (c) printf(",");
+                print_number(output[r * out_cols + c]);
+            }
+            printf("]");
+        }
+        printf("]\\n");
+    } else if (strcmp(WTT_MODE, "copy") == 0) {
+        printf("{\\"copied\\":[");
+        for (int r = 0; r < rows; ++r) {
+            if (r) printf(",");
+            printf("[");
+            for (int c = 0; c < cols; ++c) {
+                if (c) printf(",");
+                print_number(output[r * cols + c]);
+            }
+            printf("]");
+        }
+        printf("],\\"checksum\\":%d}\\n", checksum_values(output, output_n));
+    } else if (strcmp(WTT_OUTPUT_KIND, "scalar") == 0) {
+        print_number(output[0]);
+        printf("\\n");
+    } else if (strcmp(WTT_OUTPUT_KIND, "checksum_object") == 0) {
+        printf("{\\"checksum\\":");
+        print_number(output[0]);
+        printf(",\\"op\\":\\"%s\\",\\"seed\\":%d}\\n", payload_op, seed);
+    } else {
+        printf("[");
+        for (int i = 0; i < output_n; ++i) {
+            if (i) printf(",");
+            print_number(output[i]);
+        }
+        printf("]\\n");
+    }
+
+    clReleaseMemObject(out_buf);
+    clReleaseMemObject(b_buf);
+    clReleaseMemObject(a_buf);
+    clReleaseKernel(kernel);
+    clReleaseProgram(program);
+    clReleaseCommandQueue(queue);
+    clReleaseContext(context);
+    free(input_json);
+    return 0;
 }
 `
 }
@@ -483,7 +764,7 @@ function defaultLanguageFor(challenge: Challenge): Language {
 }
 
 function sourceFilename(language: Language) {
-  if (language === 'opencl') return 'kernel.cl'
+  if (language === 'opencl') return 'main.c'
   if (language === 'cuda') return 'kernel.cu'
   if (language === 'triton') return 'kernel.py'
   if (language === 'python') return 'main.py'
@@ -1523,7 +1804,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 <div className="flex items-center justify-between gap-3 border-b border-gray-800 bg-[#191919] px-4 py-3">
                   <div>
                     <p className="text-sm font-bold text-white">{sourceFilename(language)}</p>
-                    <p className="text-xs text-gray-500">Implement {challenge.function_name} · {t.runner}</p>
+                    <p className="text-xs text-gray-500">
+                      {challenge.category === 'ai-kernel' && language === 'opencl'
+                        ? `Complete OpenCL host + ${challenge.function_name} · ${t.runner}`
+                        : `Implement ${challenge.function_name} · ${t.runner}`}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {challenge.category === 'ai-kernel' && (
