@@ -174,6 +174,19 @@ function renameOpenCLKernel(code: string, functionName: string, nextName: string
   return code.replace(plainPattern, `$1${nextName}$2`)
 }
 
+function extractOpenCLKernelSource(code: string) {
+  const macroMatch = code.match(/\bKERNEL_SOURCE\s*=\s*OPENCL_KERNEL_SOURCE\s*\(\s*([\s\S]*?)\s*\);\s*(?:\n|$)/)
+  if (macroMatch?.[1]) return macroMatch[1].trim()
+
+  const stringMatch = code.match(/\bKERNEL_SOURCE\s*=\s*("(?:\\.|[^"\\])*")\s*;/)
+  if (!stringMatch?.[1]) return null
+  try {
+    return JSON.parse(stringMatch[1]) as string
+  } catch {
+    return null
+  }
+}
+
 function buildRemoteOpenCLVectorAdapter(code: string, challenge: Challenge) {
   const functionName = challenge.function_name
   const kernelName = `__wtt_kernel_${functionName}`
@@ -1005,6 +1018,11 @@ function isCompleteOpenCLProgram(code: string) {
     && /\bclEnqueueNDRangeKernel\s*\(/.test(code)
 }
 
+function openCLExampleSmokeCases(testCases: ChallengeTestCase[]) {
+  const publicCases = testCases.filter((testCase) => !testCase.is_hidden)
+  return (publicCases.length ? publicCases : testCases).slice(0, 1)
+}
+
 async function runLocalOpenCL(code: string, stdin: string, expectedOutput: string, timeoutMs: number, challenge: Challenge): Promise<RawRunResult> {
   if (process.platform !== 'darwin') {
     return { status: 'system_error', stdout: '', stderr: '', error_message: 'Local OpenCL runner is enabled for macOS Mac mini runner only.' }
@@ -1177,18 +1195,25 @@ export async function judgeSubmission(input: JudgeInput) {
   const { challenge, testCases, code, language, submissionId } = input
   const normalizedLanguage = language.toLowerCase()
   const isOpenCL = OPENCL_LANGUAGES.has(normalizedLanguage)
+  const standaloneOpenCLExample = isOpenCL && isCompleteOpenCLProgram(code)
+  const effectiveTestCases = standaloneOpenCLExample ? openCLExampleSmokeCases(testCases) : testCases
+  const effectiveInput = { ...input, testCases: effectiveTestCases }
+  const standaloneOpenCLKernel = standaloneOpenCLExample ? extractOpenCLKernelSource(code) : null
   const shouldUseLocalOpenCL = isOpenCL && process.platform === 'darwin' && process.env.WTT_ARENA_DISABLE_LOCAL_OPENCL !== '1' && process.env.WTT_ARENA_FORCE_REMOTE_JUDGE !== '1'
   const macOpenCLJudgeUrl = process.env.WTT_ARENA_MAC_OPENCL_JUDGE_URL
   const remoteJudgeUrl = process.env.WTT_ARENA_REMOTE_JUDGE_URL
-  if (!shouldUseLocalOpenCL && isOpenCL && macOpenCLJudgeUrl) return runRemoteJudge(input, macOpenCLJudgeUrl)
+  if (!shouldUseLocalOpenCL && isOpenCL && macOpenCLJudgeUrl) return runRemoteJudge(effectiveInput, macOpenCLJudgeUrl)
   if (!shouldUseLocalOpenCL && remoteJudgeUrl) {
     if (isOpenCL) {
-      if (isCompleteOpenCLProgram(input.code)) return runRemoteJudge(input, remoteJudgeUrl)
-      if (canUseRemoteOpenCLMatrixAdapter(challenge, testCases)) return runRemoteOpenCLMatrixAdapter(input, remoteJudgeUrl)
-      if (canUseRemoteOpenCLMatrixElementAdapter(challenge, testCases)) return runRemoteOpenCLMatrixElementAdapter(input, remoteJudgeUrl)
-      if (canUseRemoteOpenCLVectorAdapter(challenge, testCases)) return runRemoteOpenCLVectorAdapter(input, remoteJudgeUrl)
+      const adapterInput = standaloneOpenCLKernel
+        ? { ...effectiveInput, code: standaloneOpenCLKernel }
+        : effectiveInput
+      if (canUseRemoteOpenCLMatrixAdapter(challenge, effectiveTestCases)) return runRemoteOpenCLMatrixAdapter(adapterInput, remoteJudgeUrl)
+      if (canUseRemoteOpenCLMatrixElementAdapter(challenge, effectiveTestCases)) return runRemoteOpenCLMatrixElementAdapter(adapterInput, remoteJudgeUrl)
+      if (canUseRemoteOpenCLVectorAdapter(challenge, effectiveTestCases)) return runRemoteOpenCLVectorAdapter(adapterInput, remoteJudgeUrl)
+      if (isCompleteOpenCLProgram(input.code)) return runRemoteJudge(effectiveInput, remoteJudgeUrl)
     }
-    return runRemoteJudge(input, remoteJudgeUrl)
+    return runRemoteJudge(effectiveInput, remoteJudgeUrl)
   }
 
   if (!PYTHON_LANGUAGES.has(normalizedLanguage) && !isOpenCL) {
@@ -1207,11 +1232,11 @@ export async function judgeSubmission(input: JudgeInput) {
   const harness = PYTHON_LANGUAGES.has(normalizedLanguage) ? buildPythonHarness(code, challenge) : code
   const results: SubmissionResult[] = []
   let passedWeight = 0
-  const totalWeight = testCases.reduce((sum, testCase) => sum + testCase.weight, 0)
+  const totalWeight = effectiveTestCases.reduce((sum, testCase) => sum + testCase.weight, 0)
   let aggregateRuntime = 0
   let maxMemory = 0
 
-  for (const testCase of testCases) {
+  for (const testCase of effectiveTestCases) {
     const started = Date.now()
     const raw = provider === 'judge0'
       ? await runJudge0(harness, testCase.input, challenge.time_limit_ms)

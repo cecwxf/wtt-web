@@ -197,8 +197,8 @@ export const aiKernelChallenges: Challenge[] = aiKernelSpecs.map((spec) => ({
   updated_at: aiKernelCreatedAt,
 }))
 
-export const aiKernelTestCases: ChallengeTestCase[] = aiKernelSpecs.flatMap((spec, index) => [1, 2, 7].map((seed, caseIndex) => {
-  const actualSeed = seed + (index % 5)
+export const aiKernelTestCases: ChallengeTestCase[] = aiKernelSpecs.flatMap((spec) => [1, 2, 7].map((seed, caseIndex) => {
+  const actualSeed = seed
   return {
     id: `${spec.id}-${caseIndex === 0 ? 'public' : 'hidden'}-${caseIndex + 1}`,
     challenge_id: spec.id,

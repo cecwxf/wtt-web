@@ -574,9 +574,9 @@ function openClStarter(challenge: Challenge) {
   if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
   clFinish(queue);
   clEnqueueReadBuffer(queue, output_buf, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL);
-  printf("output = [[");
-  print_number(output[0]); printf(","); print_number(output[1]); printf("],[");
-  print_number(output[2]); printf(","); print_number(output[3]); printf("]]\\n");
+  ${mode === 'copy'
+    ? 'printf("output = {\\"copied\\":[[");\n  print_number(output[0]); printf(","); print_number(output[1]); printf("],[");\n  print_number(output[2]); printf(","); print_number(output[3]); printf("]],\\"checksum\\":30000}\\n");'
+    : 'printf("output = [[");\n  print_number(output[0]); printf(","); print_number(output[1]); printf("],[");\n  print_number(output[2]); printf(","); print_number(output[3]); printf("]]\\n");'}
   clReleaseMemObject(output_buf);
   clReleaseMemObject(input_buf);`
         : `  const int n = ${challenge.tags.includes('softmax') ? 4 : 5};
