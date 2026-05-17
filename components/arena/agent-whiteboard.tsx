@@ -85,7 +85,7 @@ function WhiteboardMarkdown({ markdown, tone }: { markdown: string; tone: string
   )
 }
 
-function MermaidPreview({ chart }: { chart: string }) {
+function MermaidPreview({ chart, label, compact = false }: { chart: string; label?: string; compact?: boolean }) {
   const [svg, setSvg] = useState('')
   const [error, setError] = useState('')
 
@@ -123,48 +123,18 @@ function MermaidPreview({ chart }: { chart: string }) {
   if (error) return <pre className="max-h-[360px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">{chart}</pre>
   if (!svg) return <div className="flex min-h-[240px] items-center justify-center text-base font-semibold text-slate-400">Rendering diagram...</div>
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.36, ease: 'easeOut' }}
-        className="arena-mermaid-draw mt-4 flex justify-center overflow-auto rounded-lg border border-slate-200 bg-white p-5 shadow-sm [&_svg]:max-h-[560px] [&_svg]:max-w-full [&_svg_text]:font-semibold"
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: 'easeOut' }}
+      className={`mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${compact ? 'p-3' : 'p-5'}`}
+    >
+      {label ? <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">{label}</p> : null}
+      <div
+        className={`flex justify-center overflow-auto [&_svg]:max-w-full [&_svg_text]:font-semibold ${compact ? '[&_svg]:max-h-[360px]' : '[&_svg]:max-h-[620px]'}`}
         dangerouslySetInnerHTML={{ __html: svg }}
       />
-      <style jsx global>{`
-        .arena-mermaid-draw svg .node,
-        .arena-mermaid-draw svg .edgeLabel,
-        .arena-mermaid-draw svg .cluster {
-          opacity: 0;
-          animation: arena-node-reveal 460ms ease-out forwards;
-        }
-        .arena-mermaid-draw svg .node:nth-of-type(1) { animation-delay: 80ms; }
-        .arena-mermaid-draw svg .node:nth-of-type(2) { animation-delay: 160ms; }
-        .arena-mermaid-draw svg .node:nth-of-type(3) { animation-delay: 240ms; }
-        .arena-mermaid-draw svg .node:nth-of-type(4) { animation-delay: 320ms; }
-        .arena-mermaid-draw svg .node:nth-of-type(5) { animation-delay: 400ms; }
-        .arena-mermaid-draw svg .node:nth-of-type(6) { animation-delay: 480ms; }
-        .arena-mermaid-draw svg .edgePaths path,
-        .arena-mermaid-draw svg path.flowchart-link {
-          stroke-dasharray: 720;
-          stroke-dashoffset: 720;
-          animation: arena-line-draw 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-        .arena-mermaid-draw svg .edgePaths path:nth-of-type(1) { animation-delay: 140ms; }
-        .arena-mermaid-draw svg .edgePaths path:nth-of-type(2) { animation-delay: 240ms; }
-        .arena-mermaid-draw svg .edgePaths path:nth-of-type(3) { animation-delay: 340ms; }
-        .arena-mermaid-draw svg .edgePaths path:nth-of-type(4) { animation-delay: 440ms; }
-        .arena-mermaid-draw svg .edgePaths path:nth-of-type(5) { animation-delay: 540ms; }
-        .arena-mermaid-draw svg .edgePaths path:nth-of-type(6) { animation-delay: 640ms; }
-        @keyframes arena-line-draw {
-          to { stroke-dashoffset: 0; }
-        }
-        @keyframes arena-node-reveal {
-          from { opacity: 0; transform: translateY(8px) scale(0.98); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}</style>
-    </>
+    </motion.div>
   )
 }
 
@@ -210,10 +180,10 @@ function ProcessRail({ steps, locale }: { steps: WhiteboardDiagramStep[]; locale
     <motion.div variants={cardVariants} className="overflow-hidden rounded-xl border border-slate-200 bg-white/88 p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-          {locale === 'zh' ? '过程动画' : 'Process animation'}
+          {locale === 'zh' ? '阶段顺序' : 'Stage order'}
         </p>
         <p className="text-xs font-semibold text-slate-400">
-          {locale === 'zh' ? '按阶段展开公式、架构图和解释' : 'Formulas, architecture, and explanation unfold by stage'}
+          {locale === 'zh' ? '总图保持稳定，下面按阶段解释' : 'The overview stays stable; details follow by stage'}
         </p>
       </div>
       <div className="relative grid gap-2" style={{ gridTemplateColumns: `repeat(${visibleSteps.length}, minmax(0, 1fr))` }}>
@@ -244,10 +214,91 @@ function ProcessRail({ steps, locale }: { steps: WhiteboardDiagramStep[]; locale
   )
 }
 
+function LocalDiagramDetails({ chart, locale }: { chart: string; locale: Locale }) {
+  return (
+    <details className="mt-4 rounded-lg border border-slate-200 bg-white/70 px-4 py-3">
+      <summary className="cursor-pointer text-sm font-black text-slate-700">
+        {locale === 'zh' ? '查看局部图' : 'Show local diagram'}
+      </summary>
+      <MermaidPreview chart={chart} label={locale === 'zh' ? '局部图' : 'Local diagram'} compact />
+    </details>
+  )
+}
+
+function mermaidLabel(value: string, fallback: string) {
+  const label = (value || fallback)
+    .replace(/["`[\]{}<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 42)
+  return label || fallback
+}
+
+function buildFallbackFinalChart(steps: WhiteboardDiagramStep[], locale: Locale) {
+  const visibleSteps = steps.slice(0, 6)
+  if (!visibleSteps.length) return ''
+  const nodes = visibleSteps.map((step, index) => {
+    const label = mermaidLabel(step.stage || step.title || '', `${locale === 'zh' ? '阶段' : 'Step'} ${index + 1}`)
+    return `  S${index + 1}["${index + 1}. ${label}"]`
+  })
+  const edges = visibleSteps.slice(1).map((_, index) => `  S${index + 1} --> S${index + 2}`)
+  const middleNodes = visibleSteps.slice(1, -1).map((_, index) => `S${index + 2}`)
+  const classLines = [
+    '  class S1 input;',
+    middleNodes.length ? `  class ${middleNodes.join(',')} core;` : '',
+    visibleSteps.length > 1 ? `  class S${visibleSteps.length} metric;` : '',
+  ]
+  return [
+    'flowchart LR',
+    ...nodes,
+    ...edges,
+    '  classDef input fill:#dbeafe,stroke:#2563eb,color:#0f172a;',
+    '  classDef core fill:#ede9fe,stroke:#7c3aed,color:#2e1065;',
+    '  classDef metric fill:#dcfce7,stroke:#16a34a,color:#052e16;',
+    ...classLines,
+  ].filter(Boolean).join('\n')
+}
+
+function finalChartForDiagram(diagram: WhiteboardDiagram, steps: WhiteboardDiagramStep[], locale: Locale) {
+  return (diagram.mermaid || diagram.source || buildFallbackFinalChart(steps, locale)).trim()
+}
+
+function FinalDiagramPanel({ chart, steps, locale }: { chart: string; steps: WhiteboardDiagramStep[]; locale: Locale }) {
+  return (
+    <motion.section variants={cardVariants} className="rounded-2xl border border-slate-200 bg-white/92 p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+            {locale === 'zh' ? '最终总图' : 'Final diagram'}
+          </p>
+          <h4 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+            {locale === 'zh' ? '先看完整结构，再看步骤解释' : 'Stable overview before step details'}
+          </h4>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {steps.slice(0, 6).map((step, index) => (
+            <motion.span
+              key={`${step.stage || step.title || 'phase'}-${index}`}
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 * index, duration: 0.24, ease: 'easeOut' }}
+            >
+              {index + 1}. {step.stage || step.title || (locale === 'zh' ? '阶段' : 'Step')}
+            </motion.span>
+          ))}
+        </div>
+      </div>
+      <MermaidPreview chart={chart} />
+    </motion.section>
+  )
+}
+
 function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; locale: Locale }) {
   const steps = diagram.steps?.length
     ? diagram.steps
     : [{ title: diagram.title || (locale === 'zh' ? '白板图' : 'Whiteboard diagram'), markdown: diagram.markdown, mermaid: diagram.mermaid || diagram.source, summary: diagram.summary }]
+  const finalChart = finalChartForDiagram(diagram, steps, locale)
   return (
     <div className="h-full min-h-[640px] overflow-auto bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6 text-slate-900">
       <motion.div
@@ -266,9 +317,11 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
             {diagram.summary.map((item, index) => <p key={index}>{item}</p>)}
           </motion.div>
         ) : null}
+        {finalChart ? <FinalDiagramPanel chart={finalChart} steps={steps} locale={locale} /> : null}
         <ProcessRail steps={steps} locale={locale} />
         {steps.map((step, index) => {
           const style = stepStyles[index % stepStyles.length]
+          const showLocalChart = Boolean(step.mermaid && step.mermaid.trim() && step.mermaid.trim() !== finalChart)
           return (
           <motion.section key={`${step.stage || 'step'}-${index}`} variants={cardVariants} className={`relative overflow-hidden rounded-xl border p-5 shadow-sm ${style.shell}`}>
             <motion.div
@@ -293,7 +346,7 @@ function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; l
               </div>
             </div>
             {step.markdown ? <WhiteboardMarkdown markdown={step.markdown} tone={style.markdown} /> : null}
-            {step.mermaid ? <MermaidPreview chart={step.mermaid} /> : null}
+            {showLocalChart ? <LocalDiagramDetails chart={step.mermaid || ''} locale={locale} /> : null}
             {step.summary?.length ? (
               <motion.ul variants={cardVariants} className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
                 {step.summary.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}
