@@ -446,27 +446,30 @@ int main(int argc, char** argv) {
 `
 }
 
-function parseMaxRssKb(stderr: string) {
-  const match = stderr.match(/^\s*(\d+)\s+maximum resident set size/m)
-  if (!match) return undefined
-  const raw = Number(match[1])
-  if (!Number.isFinite(raw) || raw <= 0) return undefined
-  return raw > 1024 * 1024 ? Math.round(raw / 1024) : raw
+function openCLDeviceMemoryKb(stdin: string, expectedOutput: string) {
+  const input = JSON.parse(stdin || '{}') as { payload?: { op?: string; values?: unknown[]; matrix?: unknown[] } }
+  const expected = JSON.parse(expectedOutput) as unknown
+  const floatBytes = 4
+  let bytes = 0
+  if (Array.isArray(expected) && expected.every((row) => Array.isArray(row))) {
+    const matrixValues = Array.isArray(input.payload?.matrix)
+      ? input.payload.matrix.flatMap((row) => Array.isArray(row) ? row : [])
+      : []
+    const outputValues = expected.flatMap((row) => Array.isArray(row) ? row : [])
+    bytes = (matrixValues.length + 4 + outputValues.length) * floatBytes
+  } else {
+    const values = input.payload?.op === 'softmax' ? input.payload?.values?.slice(0, 4) : input.payload?.values
+    const inputN = Array.isArray(values) ? values.length : 0
+    const outputN = Array.isArray(expected) ? expected.length : 1
+    bytes = (inputN + outputN) * floatBytes
+  }
+  return bytes > 0 ? Math.ceil(bytes / 1024) : undefined
 }
 
-function stripTimeResourceLines(stderr: string) {
-  return stderr
-    .split('\n')
-    .filter((line) => !/^\s*\d+(\.\d+)?\s+(real|user|sys|maximum resident set size|average shared memory size|average unshared data size|average unshared stack size|page reclaims|page faults|swaps|block input operations|block output operations|messages sent|messages received|signals received|voluntary context switches|involuntary context switches|instructions retired|cycles elapsed|peak memory footprint)/.test(line))
-    .join('\n')
-    .trim()
-}
-
-async function runProcess(command: string, args: string[], timeoutMs: number, cwd?: string, measureResources = false): Promise<RawRunResult> {
+async function runProcess(command: string, args: string[], timeoutMs: number, cwd?: string): Promise<RawRunResult> {
   const started = Date.now()
   return await new Promise<RawRunResult>((resolve) => {
-    const timed = measureResources && process.platform === 'darwin'
-    const child = spawn(timed ? '/usr/bin/time' : command, timed ? ['-l', command, ...args] : args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
     let settled = false
     const finish = (result: RawRunResult) => {
       if (settled) return
@@ -487,16 +490,13 @@ async function runProcess(command: string, args: string[], timeoutMs: number, cw
     })
     child.on('close', (code) => {
       clearTimeout(timer)
-      const rawErr = Buffer.concat(stderr).toString('utf8')
-      const memoryKb = timed ? parseMaxRssKb(rawErr) : undefined
-      const err = timed ? stripTimeResourceLines(rawErr) : rawErr
+      const err = Buffer.concat(stderr).toString('utf8')
       finish({
         status: code === 0 ? 'accepted' : 'runtime_error',
         stdout: Buffer.concat(stdout).toString('utf8'),
         stderr: err,
         error_message: code === 0 ? undefined : err.split('\n').slice(-8).join('\n'),
         runtime_ms: Date.now() - started,
-        memory_kb: memoryKb,
       })
     })
   })
@@ -520,7 +520,8 @@ async function runLocalOpenCL(code: string, stdin: string, expectedOutput: strin
       return { ...compile, status: 'compile_error', compile_output: compile.stderr || compile.stdout }
     }
 
-    return await runProcess(binFile, [kernelFile], timeoutMs, dir, true)
+    const run = await runProcess(binFile, [kernelFile], timeoutMs, dir)
+    return { ...run, memory_kb: openCLDeviceMemoryKb(stdin, expectedOutput) }
   } catch (error) {
     return { status: 'system_error', stdout: '', stderr: '', error_message: error instanceof Error ? error.message : String(error) }
   } finally {

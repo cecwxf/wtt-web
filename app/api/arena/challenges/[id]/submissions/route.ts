@@ -56,7 +56,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const metricSummary = [
       `${acceptedCount}/${testCases.length} tests accepted`,
       `runtime ${judged.runtime_ms}ms`,
-      judged.memory_kb ? `memory ${judged.memory_kb}KB` : undefined,
+      judged.memory_kb ? `${judged.provider === OPENCL_MAC_SKILL ? 'kernel memory' : 'memory'} ${judged.memory_kb}KB` : undefined,
       judged.provider === OPENCL_MAC_SKILL ? `skill ${OPENCL_MAC_SKILL}` : undefined,
     ].filter(Boolean).join(' · ')
     const submission: Submission = {

@@ -29,9 +29,10 @@ The caller provides:
 2. Generate a temporary macOS C host runner that loads `kernel.cl`.
 3. Compile with `clang runner.c -framework OpenCL -o runner`.
 4. Select the first available GPU device and fall back to the default OpenCL device.
-5. Run every test case with `/usr/bin/time -l` so max resident set size can be parsed.
+5. Run every test case and measure elapsed runtime.
 6. Compare parsed JSON output against the expected output and stop on first failure.
 7. Redact hidden stdout, stderr, compile logs, and detailed error messages.
+8. Report kernel memory as the total OpenCL device buffer footprint, not host process RSS.
 
 ## Kernel ABI
 
@@ -44,12 +45,12 @@ The caller provides:
 Return:
 
 - Provider: `agent-mac-opencl-kernel`.
-- Final status, score, aggregate runtime in milliseconds, and max memory in KB.
+- Final status, score, aggregate runtime in milliseconds, and max kernel memory in KB.
 - Per-case status, runtime, memory, and public-case stdout/stderr/compile output.
 - Compile errors as `compile_error`; OpenCL API/runtime failures as `runtime_error` or `system_error`.
 
 ## Failure Policy
 
 - If local execution is not macOS/OpenCL capable, return `system_error` and require a remote runner.
-- Do not fake performance metrics; if `/usr/bin/time -l` is unavailable, return runtime only.
+- Do not report whole-system or host process memory as kernel memory.
 - Never expose hidden-case output or hidden build logs.

@@ -1242,14 +1242,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   {submission && (
                     <div className="space-y-3">
                       <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone(submission.status)}`}>{submission.status} · score {submission.score}</div>
-                      <p className="text-sm text-gray-500">{passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · runtime {submission.runtime_ms || '-'}ms · memory {submission.memory_kb || '-'}KB</p>
+                      <p className="text-sm text-gray-500">{passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · runtime {submission.runtime_ms || '-'}ms · {submission.judge_provider === 'agent-mac-opencl-kernel' ? 'kernel memory' : 'memory'} {submission.memory_kb || '-'}KB</p>
                       {submission.results.map((result, index) => (
                         <div key={result.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
                             <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                           </div>
-                          <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · memory {result.memory_kb || '-'}KB</p>
+                          <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · {submission.judge_provider === 'agent-mac-opencl-kernel' ? 'kernel memory' : 'memory'} {result.memory_kb || '-'}KB</p>
                           {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-gray-400">stdout: {result.stdout}</pre>}
                           {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-rose-300">stderr: {result.stderr}</pre>}
                           {result.error_message && <p className="mt-3 text-yellow-300">{result.error_message}</p>}

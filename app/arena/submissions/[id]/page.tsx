@@ -20,6 +20,8 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
   }, [params.id])
 
   if (!submission) return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading submission...</main>
+  const memoryLabel = submission.judge_provider === 'agent-mac-opencl-kernel' ? 'Kernel Memory' : 'Memory'
+  const inlineMemoryLabel = submission.judge_provider === 'agent-mac-opencl-kernel' ? 'kernel memory' : 'memory'
 
   return (
     <main className="min-h-screen bg-[#151515] text-gray-100">
@@ -48,7 +50,7 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Score</p><p className="mt-1 text-2xl font-black text-[#3ce8e2]">{submission.score}</p></div>
                 <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Runtime</p><p className="mt-1 text-2xl font-black text-white">{submission.runtime_ms || '-'}ms</p></div>
-                <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Memory</p><p className="mt-1 text-2xl font-black text-white">{submission.memory_kb || '-'}KB</p></div>
+                <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">{memoryLabel}</p><p className="mt-1 text-2xl font-black text-white">{submission.memory_kb || '-'}KB</p></div>
                 <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Provider</p><p className="mt-1 text-sm font-bold text-white">{submission.judge_provider}</p></div>
               </div>
               <div className="mt-5 rounded-md border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 text-sm leading-6 text-[#bffffd]">
@@ -65,7 +67,7 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
                       <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
                       <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                     </div>
-                    <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · memory {result.memory_kb || '-'}KB</p>
+                    <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · {inlineMemoryLabel} {result.memory_kb || '-'}KB</p>
                     {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">stdout: {result.stdout}</pre>}
                     {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-sm text-rose-300">stderr: {result.stderr}</pre>}
                     {result.error_message && <p className="mt-3 text-sm text-yellow-300">{result.error_message}</p>}
