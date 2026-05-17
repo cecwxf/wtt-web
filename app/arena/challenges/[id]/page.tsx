@@ -419,8 +419,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardDiagram, setWhiteboardDiagram] = useState<WhiteboardDiagram | null>(null)
   const [whiteboardExpanded, setWhiteboardExpanded] = useState(false)
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
-  const [leftPanelWidth, setLeftPanelWidth] = useState(420)
-  const [chatPanelWidth, setChatPanelWidth] = useState(460)
+  const [leftPanelWidth, setLeftPanelWidth] = useState(360)
+  const [chatPanelWidth, setChatPanelWidth] = useState(540)
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
 
@@ -437,8 +437,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           return
         }
         const chatLeft = whiteboardExpanded ? bounds.left : bounds.left + leftPanelWidth + 12
-        const available = bounds.width - (whiteboardExpanded ? 420 : leftPanelWidth + 420 + 12)
-        setChatPanelWidth(clampNumber(moveEvent.clientX - chatLeft, 340, Math.min(720, Math.max(340, available))))
+        const minWhiteboardWidth = whiteboardExpanded ? 520 : 360
+        const available = bounds.width - (whiteboardExpanded ? minWhiteboardWidth : leftPanelWidth + minWhiteboardWidth + 12)
+        setChatPanelWidth(clampNumber(moveEvent.clientX - chatLeft, 420, Math.min(860, Math.max(420, available))))
       }
       const stop = () => {
         window.removeEventListener('pointermove', handleMove)
@@ -572,6 +573,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const availableChatModes = isGaokaoVolunteer ? chatModes.filter((mode) => mode.id === 'ask') : chatModes
   const currentChatMode = availableChatModes.find((mode) => mode.id === chatMode) || availableChatModes[0]
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
+  const effectiveChatPanelWidth = whiteboardExpanded ? Math.max(chatPanelWidth, 560) : chatPanelWidth
 
   useEffect(() => {
     if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
@@ -744,8 +746,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftPanelWidth}px minmax(560px, 1fr)`
         : whiteboardExpanded
-        ? `${chatPanelWidth}px 6px minmax(420px, 1fr)`
-        : `${leftPanelWidth}px 6px ${chatPanelWidth}px 6px minmax(420px, 1fr)`,
+        ? `${effectiveChatPanelWidth}px 6px minmax(520px, 1fr)`
+        : `${leftPanelWidth}px 6px ${effectiveChatPanelWidth}px 6px minmax(360px, 1fr)`,
     }
     : undefined
 
