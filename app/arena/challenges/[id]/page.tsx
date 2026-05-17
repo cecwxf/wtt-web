@@ -13,7 +13,7 @@ import { useAgentId } from '@/lib/hooks/use-agent-id'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
-import { extractWhiteboardPayload, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
+import { extractWhiteboardPayload, makeWhiteboardFromAnswerPrompt, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
 import { gaokaoKnowledgeContextMarkdown } from '@/lib/arena/gaokao-knowledge'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
 
@@ -363,21 +363,21 @@ function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge |
     return locale === 'zh' ? gaokaoVolunteerSkillZh : gaokaoVolunteerSkillEn
   }
   const whiteboardProtocol = locale === 'zh'
-    ? 'WHITEBOARD_DIAGRAM 必须同时包含 markdown/mermaid 图文白板和 html 字段。markdown/mermaid 可以按 Socratic、架构和概念、问题分解、完整答案四步组织；html 不允许按这四步组织，也不要复述 markdown。html 必须根据你本轮 Arena Chat 回答重新分析公式、原理、方法、流程、架构、变量流、状态流、控制流、数据流、组件依赖、边界条件、指标变化和 trade-off，并绘制为本题专属 SVG 主图、定义表、过程动画和最终总结图。不要使用通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。'
-    : 'WHITEBOARD_DIAGRAM must include both markdown/mermaid and an html field. Markdown/mermaid may use the Socratic, architecture/concepts, decomposition, and complete-answer steps; html must not use those four sections and must not restate markdown. The html must re-analyze your Arena Chat answer and visualize the formulas, principles, methods, flows, architecture, variable flow, state flow, control flow, data flow, component dependencies, boundary conditions, metric changes, and trade-offs as a problem-specific SVG main diagram, definition table, process animation, and final summary diagram. Do not use generic templates, placeholders, script, JavaScript, iframe, external resources, network images, or forms.'
+    ? '本轮只输出正常 Arena Chat 回答，不要输出 WHITEBOARD_DIAGRAM。前端会在收到你的回答后自动发起 whiteboard_auto 二次推理请求，把本轮回答转换成 Markdown 白板和 HTML/SVG 动画白板。'
+    : 'For this turn, output only the normal Arena Chat answer and do not output WHITEBOARD_DIAGRAM. After your answer arrives, the frontend will automatically send a whiteboard_auto second-pass request to convert this answer into a Markdown board and HTML/SVG animated board.'
   if (mode === 'interview_answer') {
     return locale === 'zh'
-      ? `chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示评分维度、缺口、补充答案结构。${whiteboardProtocol}`
-      : `chat_mode: interview_answer\nTreat the user input as a candidate interview answer. Give a 0-10 score, then identify strengths, gaps, misconceptions, provide a stronger answer skeleton, and ask one next follow-up. Still end with WHITEBOARD_DIAGRAM showing scoring dimensions, gaps, and improved answer structure. ${whiteboardProtocol}`
+      ? `chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。${whiteboardProtocol}`
+      : `chat_mode: interview_answer\nTreat the user input as a candidate interview answer. Give a 0-10 score, then identify strengths, gaps, misconceptions, provide a stronger answer skeleton, and ask one next follow-up. ${whiteboardProtocol}`
   }
   if (mode === 'ask') {
     return locale === 'zh'
-      ? `chat_mode: ask\n请直接回答用户问题，结构清晰、可操作，必要时给公式、示例、trade-off。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，把答案要点同步展示到白板。${whiteboardProtocol}`
-      : `chat_mode: ask\nAnswer the user question directly with a clear, actionable structure. Include formulas, examples, and trade-offs when needed. Still end with WHITEBOARD_DIAGRAM so the answer appears on the board. ${whiteboardProtocol}`
+      ? `chat_mode: ask\n请直接回答用户问题，结构清晰、可操作，必要时给公式、示例、trade-off。${whiteboardProtocol}`
+      : `chat_mode: ask\nAnswer the user question directly with a clear, actionable structure. Include formulas, examples, and trade-offs when needed. ${whiteboardProtocol}`
   }
   return locale === 'zh'
-    ? `chat_mode: socratic\n请使用苏格拉底式交互：根据用户输入判断当前卡点，优先提出 1-2 个高质量问题和少量提示，推动用户自己推理；不要直接倾倒完整答案，除非用户明确要求。回复末尾仍必须输出 WHITEBOARD_DIAGRAM，白板展示当前推理路径和下一步问题。${whiteboardProtocol}`
-    : `chat_mode: socratic\nUse Socratic coaching. Diagnose the user’s current blocker, ask 1-2 high-quality questions with light hints, and help the user reason instead of dumping the full answer unless explicitly asked. Still end with WHITEBOARD_DIAGRAM showing the reasoning path and next question. ${whiteboardProtocol}`
+    ? `chat_mode: socratic\n请使用苏格拉底式交互：根据用户输入判断当前卡点，优先提出 1-2 个高质量问题和少量提示，推动用户自己推理；不要直接倾倒完整答案，除非用户明确要求。${whiteboardProtocol}`
+    : `chat_mode: socratic\nUse Socratic coaching. Diagnose the user’s current blocker, ask 1-2 high-quality questions with light hints, and help the user reason instead of dumping the full answer unless explicitly asked. ${whiteboardProtocol}`
 }
 
 function intentForChatMode(mode: ChatMode): ArenaTeachingIntent {
@@ -401,6 +401,7 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMes
       if (semantic === 'notification') return false
       if (content.includes('[system:p2p_init]')) return false
       if (content.includes('Agent thinking')) return false
+      if (content.includes('[whiteboard_render_request:auto]')) return false
       return !!stripWhiteboardPayload(stripSourceBlock(content))
     })
     .map((message) => {
@@ -444,6 +445,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
+  const autoWhiteboardSourceKeysRef = useRef(new Set<string>())
 
   function startPanelResize(panel: 'left' | 'chat') {
     return (event: React.PointerEvent<HTMLDivElement>) => {
@@ -594,6 +596,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return messages.some((message) => message.role === 'agent' && !baselineKeys.has(chatMessageKey(message)))
   }
 
+  function latestNewAgentMessage(messages: ChatMessage[], baselineKeys: Set<string>) {
+    return [...messages].reverse().find((message) => message.role === 'agent' && !baselineKeys.has(chatMessageKey(message)))
+  }
+
   function sleep(ms: number) {
     return new Promise((resolve) => window.setTimeout(resolve, ms))
   }
@@ -691,6 +697,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setWhiteboardDiagram(null)
     setWhiteboardExpanded(false)
     appliedWhiteboardMessageIdsRef.current.clear()
+    autoWhiteboardSourceKeysRef.current.clear()
   }, [arenaSessionKey])
 
   useEffect(() => {
@@ -718,7 +725,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
   const effectiveChatPanelWidth = whiteboardExpanded ? Math.max(chatPanelWidth, 560) : chatPanelWidth
   const arenaTypingActive = !!arenaTyping && arenaTyping.topicId === arenaTopicId
-  const agentBusy = arenaTypingActive || chatSending || arenaSyncing
+  const agentBusy = arenaTypingActive || chatSending || arenaSyncing || whiteboardBusy
   const agentBusyLabel = arenaSyncing
     ? t.chatSyncing
     : whiteboardBusy
@@ -799,6 +806,62 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena fallback message'))
   }
 
+  async function publishArenaRaw(topicId: string, content: string) {
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        content,
+        content_type: 'text',
+        semantic_type: 'post',
+        sender_type: 'HUMAN',
+      }),
+    })
+    if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena message'))
+  }
+
+  async function requestAutoWhiteboardFromAnswer(topicId: string, answerMessage: ChatMessage, sourceUserMessage: string) {
+    if (!challenge || whiteboardBusy || isCoding || isGaokaoVolunteerChallenge(challenge)) return
+    const sourceKey = chatMessageKey(answerMessage)
+    if (autoWhiteboardSourceKeysRef.current.has(sourceKey)) return
+    autoWhiteboardSourceKeysRef.current.add(sourceKey)
+    const message = makeWhiteboardFromAnswerPrompt(challenge, locale, answerMessage.content, sourceUserMessage)
+    setWhiteboardBusy(true)
+    try {
+      const baselineMessages = await refreshArenaMessages(topicId)
+      const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          topic_id: topicId,
+          challenge_id: challenge.id,
+          message,
+          locale,
+          language,
+          code,
+          submission_id: submission?.id,
+          intent: 'whiteboard',
+          mode: 'whiteboard_auto',
+          whiteboard_step_mode: false,
+          source_message_id: answerMessage.id,
+        }),
+      })
+      if (!response.ok) {
+        if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena whiteboard request'))
+        await publishArenaRaw(topicId, message)
+      }
+      const data = await response.json().catch(() => ({}))
+      if (data.session) setArenaSessionState(data.session)
+      await waitForArenaAgentMessage(topicId, baselineKeys, 240000)
+      await refreshArenaState().catch(() => undefined)
+    } catch {
+      autoWhiteboardSourceKeysRef.current.delete(sourceKey)
+    } finally {
+      setWhiteboardBusy(false)
+    }
+  }
+
   async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string) {
     const message = (explicitMessage ?? chatInput).trim()
     const mode = isGaokaoVolunteerChallenge(challenge) ? 'ask' : explicitMessage ? modeForExplicitIntent(intent) : chatMode
@@ -836,6 +899,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
       await waitForArenaAgentMessage(topicId, baselineKeys)
+      const latestMessages = await refreshArenaMessages(topicId)
+      const newAgentAnswer = latestNewAgentMessage(latestMessages, baselineKeys)
+      if (newAgentAnswer?.content.trim()) {
+        void requestAutoWhiteboardFromAnswer(topicId, newAgentAnswer, message)
+      }
       await refreshArenaState().catch(() => undefined)
     } catch (error) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
@@ -847,7 +915,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   async function requestWhiteboardExplain(stepMode = false) {
     if (!challenge || whiteboardBusy) return
     setWhiteboardDiagram(null)
-    const message = makeWhiteboardPrompt(challenge, locale, stepMode)
+    const latestAgentAnswer = [...chatMessages].reverse().find((message) => message.role === 'agent' && message.content.trim())
+    const message = latestAgentAnswer
+      ? makeWhiteboardFromAnswerPrompt(challenge, locale, latestAgentAnswer.content)
+      : makeWhiteboardPrompt(challenge, locale, stepMode)
     if (!session?.accessToken) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
       return

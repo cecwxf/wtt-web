@@ -345,8 +345,8 @@ function missingHtmlBody(payload: WhiteboardPlayerPayload) {
       <p class="kicker">${zh ? 'HTML 动画未生成' : 'HTML animation missing'}</p>
       <h1>${escapeHtml(payload.title)}</h1>
       <p>${zh
-        ? '本轮 Agent 没有返回 html 字段。HTML 视图不会用前端模板代替，因为这里应该展示 Agent 基于回答仔细分析后绘制的公式、原理、流程图、架构图和表格。请重新点击“生成白板”，或继续追问要求 Agent 输出 WHITEBOARD_DIAGRAM.html。'
-        : 'The Agent did not return an html field for this response. The HTML view does not replace it with a frontend template, because this view should show formulas, principles, flow diagrams, architecture diagrams, and tables produced by the Agent from its answer. Regenerate the board or ask the Agent to output WHITEBOARD_DIAGRAM.html.'}</p>
+        ? '本轮 Agent 二次推理没有返回 html 字段。HTML 视图不会用前端模板代替，因为这里应该展示 Agent 基于回答仔细分析后绘制的公式、原理、流程图、架构图和表格。可以点击“重新生成”，或继续追问要求 Agent 输出 WHITEBOARD_DIAGRAM.html。'
+        : 'The Agent second pass did not return an html field for this response. The HTML view does not replace it with a frontend template, because this view should show formulas, principles, flow diagrams, architecture diagrams, and tables produced by the Agent from its answer. Regenerate the board or ask the Agent to output WHITEBOARD_DIAGRAM.html.'}</p>
     </div>
   `
 }
@@ -500,8 +500,8 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
   }
 
   const labels = locale === 'zh'
-    ? { title: 'Agent 白板讲解', subtitle: 'Markdown / 公式 / Mermaid / HTML 动画', explain: '生成白板', clear: '清空', expand: expanded ? '还原' : '展开' }
-    : { title: 'Agent whiteboard', subtitle: 'Markdown / formulas / Mermaid / HTML animation', explain: 'Generate board', clear: 'Clear', expand: expanded ? 'Restore' : 'Expand' }
+    ? { title: 'Agent 白板讲解', subtitle: '回答后自动生成 Markdown / HTML 动画白板', explain: '重新生成', clear: '清空', expand: expanded ? '还原' : '展开' }
+    : { title: 'Agent whiteboard', subtitle: 'Auto-generates Markdown / HTML animation after each answer', explain: 'Regenerate', clear: 'Clear', expand: expanded ? 'Restore' : 'Expand' }
 
   return (
     <section className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] ${expanded ? 'h-full' : ''}`}>
@@ -544,10 +544,10 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
                 locale={locale}
                 diagram={{
                   title: locale === 'zh' ? '本地 HTML 动画白板' : 'Local HTML animation board',
-                  summary: [locale === 'zh' ? 'wtt-web 已加载本地 HTML player，生成白板后会把 Agent 内容传入这里渲染。' : 'wtt-web has loaded the local HTML player. Generated whiteboard content will render here.'],
+                  summary: [locale === 'zh' ? 'wtt-web 已加载本地 HTML player。Agent 回答后会自动进行二次推理，并把 HTML/SVG 白板传入这里渲染。' : 'wtt-web has loaded the local HTML player. After each Agent answer, a second-pass HTML/SVG board will render here.'],
                   steps: [
-                    { title: locale === 'zh' ? '等待输入' : 'Waiting for input', markdown: locale === 'zh' ? '点击生成白板后，本地 HTML 文件会加载 diagram/steps 并生成动画。' : 'Click generate board; the local HTML file will load diagram/steps and generate animation.' },
-                    { title: locale === 'zh' ? 'HTML 渲染' : 'HTML rendering', markdown: locale === 'zh' ? 'HTML 模式由 /arena-whiteboard-player.html 提供，不依赖 Agent 一定输出 html 字段。' : 'HTML mode is provided by /arena-whiteboard-player.html and does not require the Agent to output an html field.' },
+                    { title: locale === 'zh' ? '等待回答' : 'Waiting for answer', markdown: locale === 'zh' ? '发送 Arena Chat 后，Agent 会先输出文本回答，然后自动生成白板协议。' : 'After Arena Chat, the Agent first returns text, then automatically generates the board protocol.' },
+                    { title: locale === 'zh' ? 'HTML 渲染' : 'HTML rendering', markdown: locale === 'zh' ? 'HTML 模式只渲染 Agent 二次推理生成的 html 字段，不使用前端模板代替。' : 'HTML mode only renders the html field produced by the Agent second pass; it does not replace it with a frontend template.' },
                   ],
                 }}
               />
@@ -558,8 +558,8 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
                 <p className="text-base font-black text-slate-800">{locale === 'zh' ? '等待 Agent 生成白板' : 'Waiting for Agent whiteboard'}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
                   {locale === 'zh'
-                    ? '白板现在同时支持图文白板和 sandbox HTML 动画，用于展示公式推导、变量流和原理过程。'
-                    : 'The board now supports both diagram boards and sandboxed HTML animation for formula derivations, variable flow, and principle processes.'}
+                    ? '发送 Arena Chat 后，Agent 会先输出回答，再自动二次推理生成图文白板和 sandbox HTML 动画。'
+                    : 'After Arena Chat, the Agent answers first, then automatically runs a second pass to generate diagram and sandboxed HTML boards.'}
                 </p>
               </div>
             </motion.div>

@@ -913,6 +913,33 @@ export function makeWhiteboardPrompt(challenge: Challenge, locale: WhiteboardLoc
     : `Act as an AI interviewer and whiteboard instructor for "${challenge.title}". Produce a ${stepMode ? 'step-by-step' : 'complete'} answer whiteboard derivation.\n\n${focus}\n${phases}\n${limits}\n${constraints}\n\nFirst explain this reply in natural language, then include one whiteboard diagram protocol block. The protocol supports Markdown paragraphs, tables, LaTeX formulas, Mermaid, and self-contained HTML/CSS animation, and the frontend renders them directly instead of converting them into Excalidraw wire boxes. Use this exact format; the example only documents fields and must not be copied as content or layout:\n${DIAGRAM_OPEN}\n${example}\n${DIAGRAM_CLOSE}\n\nHard requirements: include a top-level mermaid overview; include a top-level html animation; include at least one steps[*].mermaid local architecture or flow diagram; include all four steps; each step markdown must include explanatory prose and required formulas/metric definitions, not just a table; each step markdown must summarize this reply; html must extract formulas, principles, methods, flows, and architecture from your Arena Chat answer and redesign them as detailed SVG/HTML animation; do not organize HTML by the four markdown steps, copy the example, output placeholders, or draw only generic stages; do not draw prompt text; do not output WHITEBOARD_OPS.`
 }
 
+export function makeWhiteboardFromAnswerPrompt(challenge: Challenge, locale: WhiteboardLocale, answer: string, userMessage = '') {
+  const zh = locale === 'zh'
+  const template = challenge.whiteboard_template || 'solution_flow'
+  const concepts = conceptSummary(challenge)
+  const blueprint = whiteboardBlueprint(template, zh)
+  const cleanAnswer = safeMultilineString(answer, 12000)
+  const cleanUserMessage = safeMultilineString(userMessage, 2400)
+  const cleanDescription = safeMultilineString(challenge.description.replace(/<[^>]+>/g, ' '), 3000)
+  const schema = JSON.stringify({
+    format: 'steps',
+    title: zh ? '基于回答的原理白板' : 'Principle board from answer',
+    summary: [zh ? '从 Arena Chat 回答抽取核心公式、流程、架构和方法。' : 'Extract formulas, flows, architecture, and methods from the Arena Chat answer.'],
+    mermaid: 'flowchart LR\n  Input["answer focus"] --> Mechanism["core mechanism"]\n  Mechanism --> Flow["state / data flow"]\n  Flow --> Check{"boundary / metric"}\n  Check --> Result["conclusion"]',
+    html: '<style>.wb{font-family:Inter,system-ui,sans-serif;padding:24px}.trace{animation:trace .9s both}@keyframes trace{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}</style><section class="wb" data-html-board="answer-specific"><h2>本题专属 HTML 标题</h2><svg viewBox="0 0 960 360" role="img" aria-label="本题专属 SVG 主图"></svg><table><tr><th>符号/组件/指标</th><th>含义</th><th>作用</th></tr></table></section>',
+    steps: [
+      { stage: 'socratic', title: '1. Socratic 提问/诊断', markdown: '...' },
+      { stage: 'architecture_concepts', title: '2. 架构或概念分析', markdown: '...', mermaid: 'flowchart LR\n  A --> B' },
+      { stage: 'decomposition', title: '3. 关键要点拆解', markdown: '...', mermaid: 'flowchart TD\n  A --> B' },
+      { stage: 'complete_answer', title: '4. 完整答案结构', markdown: '...' },
+    ],
+  })
+
+  return zh
+    ? `[whiteboard_render_request:auto]\nchat_mode: whiteboard_auto\n不要回答用户新问题，不要寒暄，不要输出普通解释文字。你的任务是对上一条 Arena Chat 回答做二次推理，并且只输出一个 WHITEBOARD_DIAGRAM 协议块。\n\n题目：${challenge.title}\n模板：${template}\n知识点：${concepts}\n白板方向：${blueprint}\n题目背景只用于理解，不要照抄：${cleanDescription}\n${cleanUserMessage ? `用户原始问题/输入：\n${cleanUserMessage}\n\n` : ''}Arena Chat 回答如下，HTML 必须以它为唯一主要来源：\n${cleanAnswer}\n\n生成要求：\n1. Markdown/Mermaid 仍按四步组织：Socratic 提问/诊断、架构或概念分析、关键要点拆解、完整答案结构。\n2. HTML 与 Markdown 是两套不同产物。HTML 不要使用这四个标题，不要照搬 steps，不要复述文字。\n3. HTML 必须对回答中的公式、原理、方法、流程、架构、变量流、状态流、控制流、数据流、组件依赖、边界条件、指标变化和 trade-off 重新分析，并绘制成详细 SVG/HTML 讲解页。\n4. HTML 至少包含：本题专属 SVG 主图、符号/组件/指标定义表、CSS keyframes 过程动画、最终静止可读的总结图或矩阵。\n5. 不允许通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。\n6. 顶层必须有 mermaid，总 HTML 2200-30000 字符。输出格式只能是：\n${DIAGRAM_OPEN}\n${schema}\n${DIAGRAM_CLOSE}`
+    : `[whiteboard_render_request:auto]\nchat_mode: whiteboard_auto\nDo not answer a new user question, do not add pleasantries, and do not output normal explanatory prose. Your job is a second-pass reasoning step over the previous Arena Chat answer. Output only one WHITEBOARD_DIAGRAM protocol block.\n\nChallenge: ${challenge.title}\nTemplate: ${template}\nConcepts: ${concepts}\nBoard direction: ${blueprint}\nProblem background is only grounding; do not copy it: ${cleanDescription}\n${cleanUserMessage ? `Original user message:\n${cleanUserMessage}\n\n` : ''}Arena Chat answer, which must be the primary source for the HTML:\n${cleanAnswer}\n\nRequirements:\n1. Markdown/Mermaid still uses four steps: Socratic diagnosis, architecture/concepts, key decomposition, complete answer structure.\n2. HTML is a separate artifact. Do not use those four headings, do not copy steps, and do not restate text.\n3. HTML must re-analyze formulas, principles, methods, flows, architecture, variable flow, state flow, control flow, data flow, component dependencies, boundary conditions, metric changes, and trade-offs from the answer, then draw them as a detailed SVG/HTML explanation page.\n4. HTML must include: a problem-specific SVG main diagram, a symbol/component/metric definition table, CSS keyframes process animation, and one final static readable summary diagram or matrix.\n5. No generic templates, placeholders, script, JavaScript, iframe, external resources, network images, or forms.\n6. Include a top-level mermaid diagram and keep total HTML to 2200-30000 characters. Output only this format:\n${DIAGRAM_OPEN}\n${schema}\n${DIAGRAM_CLOSE}`
+}
+
 export function extractWhiteboardPayload(content: string): ExcalidrawWhiteboardPayload | null {
   const source = content || ''
   const diagramTagged = source.match(/\[WHITEBOARD_DIAGRAM\]([\s\S]*?)\[\/WHITEBOARD_DIAGRAM\]/i)
