@@ -172,6 +172,7 @@ const copy = {
     agentTitle: 'Agent 对话', agentRole: '固定使用 Codex Arena Coach：agent-16a45cf0dd8b。所有登录用户都可使用，不需要 claim 该 Agent。',
     agentWaiting: '直接在下面和 Agent 对话。', openFull: '打开完整提交 →',
     chatTitle: 'Arena Coach', chatIntro: '真实 WTT Agent 会话；Agent 会读取 Arena 题库长期记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录后可对话。', chatSyncing: '正在连接固定 Arena Agent...',
+    chatWorking: 'Agent 正在思考 / 输出中', whiteboardWorking: 'Agent 正在生成白板',
     mode: '模式',
     coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
     aiDesc: 'AI Kernel / CPU-sim 题。请实现指定函数，返回样例要求的 JSON 值。当前由远程 Agent/Runner 在 CPU 上模拟 CUDA/OpenCL 风格算子；后续同一题目契约可切换到真实硬件 runner。',
@@ -186,6 +187,7 @@ const copy = {
     agentTitle: 'Agent Chat', agentRole: 'Fixed Codex Arena Coach: agent-16a45cf0dd8b. Every signed-in user can use it without claiming this Agent.',
     agentWaiting: 'Chat with the Agent below.', openFull: 'Open full submission →',
     chatTitle: 'Arena Coach', chatIntro: 'Real WTT Agent session. The Agent reads persistent Arena question-bank memory plus the current challenge context.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.', chatLogin: 'Sign in to chat.', chatSyncing: 'Connecting fixed Arena Agent...',
+    chatWorking: 'Agent is thinking / writing', whiteboardWorking: 'Agent is generating the whiteboard',
     mode: 'Mode',
     coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
     aiDesc: 'AI Kernel / CPU-sim challenge. Implement the target function and return the exact JSON value requested by the examples. The remote Agent/Runner currently simulates CUDA/OpenCL-style kernels on CPU; the same contract can later route to real hardware.',
@@ -300,6 +302,16 @@ function stageLabel(stage: string | undefined, locale: Locale) {
   }
   const row = labels[stage || 'diagnose'] || labels.diagnose
   return locale === 'zh' ? row.zh : row.en
+}
+
+function TypingDots() {
+  return (
+    <span className="inline-flex items-center gap-1" aria-hidden="true">
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#3ce8e2] [animation-delay:-0.2s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#3ce8e2] [animation-delay:-0.1s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#3ce8e2]" />
+    </span>
+  )
 }
 
 function arenaChallengeContext(challenge: Challenge, locale: Locale, language: Language, code: string) {
@@ -422,6 +434,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
   const [chatPanelWidth, setChatPanelWidth] = useState(540)
   const layoutRef = useRef<HTMLDivElement | null>(null)
+  const chatEndRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
 
   function startPanelResize(panel: 'left' | 'chat') {
@@ -574,10 +587,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const currentChatMode = availableChatModes.find((mode) => mode.id === chatMode) || availableChatModes[0]
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
   const effectiveChatPanelWidth = whiteboardExpanded ? Math.max(chatPanelWidth, 560) : chatPanelWidth
+  const agentBusyLabel = arenaSyncing ? t.chatSyncing : whiteboardBusy ? t.whiteboardWorking : t.chatWorking
 
   useEffect(() => {
     if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
   }, [chatMode, isGaokaoVolunteer])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [chatMessages.length, chatSending, arenaSyncing, whiteboardBusy])
 
   function changeLanguage(next: Language) {
     setLanguage(next)
@@ -966,7 +984,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                       {` · ${t.mastery} ${Math.round((arenaSessionState?.mastery_estimate || 0) * 100)}%`}
                     </p>
                   </div>
-                  <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2.5 py-1 text-[11px] font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(chatSending || arenaSyncing) && (
+                      <span className="inline-flex items-center gap-2 rounded-full border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-2.5 py-1 text-[11px] font-black text-[#bffffd]">
+                        <TypingDots />
+                        {agentBusyLabel}
+                      </span>
+                    )}
+                    <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2.5 py-1 text-[11px] font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>
+                  </div>
                 </div>
                 {!isGaokaoVolunteer && <div className="mt-2 grid grid-cols-3 gap-1.5">
                   {coachActions.map((action) => (
@@ -993,8 +1019,20 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     </div>
                   </div>
                 ))}
-                {arenaSyncing && <p className="text-xs text-[#3ce8e2]">{t.chatSyncing}</p>}
-                {chatSending && <p className="text-xs text-gray-500">{t.chatThinking}</p>}
+                {(arenaSyncing || chatSending) && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[88%] rounded-2xl border border-[#3ce8e2]/25 bg-[#102727] px-3 py-2 text-sm leading-6 text-[#dffffe] shadow-[0_0_24px_rgba(60,232,226,0.08)]">
+                      <div className="flex items-center gap-2 font-black">
+                        <TypingDots />
+                        <span>{agentBusyLabel}</span>
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-[#8bcfcc]">
+                        {locale === 'zh' ? '请求已发送，等待 Agent 返回并同步到对话。' : 'Request sent. Waiting for the Agent response to sync into chat.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
               </div>
               <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="shrink-0 border-t border-gray-800 bg-[#151515] p-3">
                 <textarea
