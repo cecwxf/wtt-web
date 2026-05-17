@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import rehypeRaw from 'rehype-raw'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useAgentId } from '@/lib/hooks/use-agent-id'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
@@ -159,6 +160,77 @@ function ArenaChatMarkdown({ content }: { content: string }) {
   return (
     <div className="max-w-none text-sm leading-6 text-gray-300 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_a]:text-[#3ce8e2] [&_a]:underline [&_code]:rounded [&_code]:bg-black/30 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-gray-100 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-black [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-black [&_h3]:mb-1.5 [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_ol>li]:list-decimal [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-gray-700 [&_td]:p-2 [&_th]:border [&_th]:border-gray-700 [&_th]:bg-gray-800 [&_th]:p-2 [&_th]:text-left">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMarkdownMath(content)}</ReactMarkdown>
+    </div>
+  )
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) => String.fromCharCode(parseInt(code, 16)))
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&le;/g, '<=')
+    .replace(/&ge;/g, '>=')
+    .replace(/&times;/g, 'x')
+}
+
+function stripHtmlTags(value: string) {
+  return decodeHtmlEntities(value.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')).trim()
+}
+
+function htmlDescriptionToMarkdown(html: string) {
+  const rawBlocks: string[] = []
+  const stashRawBlock = (block: string) => {
+    const token = `@@ARENA_RAW_BLOCK_${rawBlocks.length}@@`
+    rawBlocks.push(block)
+    return `\n\n${token}\n\n`
+  }
+
+  let markdown = String(html || '')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, (block) => stashRawBlock(block))
+    .replace(/<table[\s\S]*?<\/table>/gi, (block) => stashRawBlock(block))
+    .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (_match, body: string) => {
+      const code = stripHtmlTags(body.replace(/<\/?code[^>]*>/gi, ''))
+      return `\n\n\`\`\`\n${code}\n\`\`\`\n\n`
+    })
+    .replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (_match, level: string, body: string) => `\n\n${'#'.repeat(Number(level))} ${stripHtmlTags(body)}\n\n`)
+    .replace(/<li[^>]*>/gi, '\n- ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/?(ul|ol)[^>]*>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<p[^>]*>/gi, '\n\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, (_match, body: string) => `**${stripHtmlTags(body)}**`)
+    .replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, (_match, body: string) => `**${stripHtmlTags(body)}**`)
+    .replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, (_match, body: string) => `_${stripHtmlTags(body)}_`)
+    .replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (_match, body: string) => `\`${stripHtmlTags(body)}\``)
+    .replace(/<[^>]+>/g, '')
+
+  markdown = decodeHtmlEntities(markdown)
+  rawBlocks.forEach((block, index) => {
+    markdown = markdown.replace(`@@ARENA_RAW_BLOCK_${index}@@`, block)
+  })
+  return markdown.replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function descriptionMarkdown(challenge: Challenge, locale: Locale) {
+  const description = localizedDescription(challenge, locale)
+  return challenge.description_format === 'html' ? htmlDescriptionToMarkdown(description) : description
+}
+
+function ArenaDescriptionMarkdown({ content }: { content: string }) {
+  return (
+    <div className="mt-6 rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">
+      <div className="max-w-none space-y-4 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_a]:text-[#3ce8e2] [&_a]:underline [&_code]:rounded [&_code]:bg-black/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_h1]:mt-2 [&_h1]:text-2xl [&_h1]:font-black [&_h1]:text-white [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-white [&_h3]:mt-5 [&_h3]:font-bold [&_h3]:text-white [&_li]:ml-5 [&_li]:list-disc [&_ol>li]:list-decimal [&_p]:leading-7 [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-gray-800 [&_pre]:bg-black/30 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-gray-200 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_svg]:mx-auto [&_svg]:my-5 [&_svg]:max-w-full [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-800 [&_td]:p-2 [&_th]:border [&_th]:border-gray-800 [&_th]:bg-gray-900 [&_th]:p-2 [&_th]:text-left">
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]}>
+          {normalizeMarkdownMath(content)}
+        </ReactMarkdown>
+      </div>
     </div>
   )
 }
@@ -1186,21 +1258,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     </div>
                   )}
 
-                  {challenge.description_format === 'html' ? (
-                    <div className="mt-6 rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">
-                      <div
-                        className="space-y-4 [&_code]:rounded [&_code]:bg-black/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-white [&_li]:ml-5 [&_li]:list-disc [&_p]:leading-7 [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-gray-800 [&_pre]:bg-black/30 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-gray-200 [&_table]:w-full [&_td]:border [&_td]:border-gray-800 [&_td]:p-2 [&_th]:border [&_th]:border-gray-800 [&_th]:p-2"
-                        dangerouslySetInnerHTML={{ __html: challenge.description }}
-                      />
-                      {challenge.source_url && (
-                        <p className="mt-6 border-t border-gray-800 pt-4 text-xs leading-5 text-gray-500">
-                          Source: <a href={challenge.source_url} target="_blank" rel="noreferrer" className="text-[#3ce8e2] hover:underline">{challenge.source_name || 'LeetGPU'}</a>
-                          {challenge.source_license ? ` · ${challenge.source_license}` : ''}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <pre className="mt-6 whitespace-pre-wrap rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">{localizedDescription(challenge, locale)}</pre>
+                  <ArenaDescriptionMarkdown content={descriptionMarkdown(challenge, locale)} />
+                  {challenge.source_url && (
+                    <p className="mt-3 rounded-lg border border-gray-800 bg-[#151515] px-5 py-3 text-xs leading-5 text-gray-500">
+                      Source: <a href={challenge.source_url} target="_blank" rel="noreferrer" className="text-[#3ce8e2] hover:underline">{challenge.source_name || 'LeetGPU'}</a>
+                      {challenge.source_license ? ` · ${challenge.source_license}` : ''}
+                    </p>
                   )}
 
                   {!isGaokaoVolunteer && <div className="mt-6 grid gap-3 sm:grid-cols-3">
