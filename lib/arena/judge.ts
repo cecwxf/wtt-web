@@ -137,6 +137,114 @@ function cFloatMatrix(values: unknown) {
   }).join(', ')
 }
 
+function renameOpenCLKernel(code: string, functionName: string, nextName: string) {
+  const escaped = functionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const kernelPattern = new RegExp(`(\\b__kernel\\s+void\\s+)${escaped}(\\s*\\()`)
+  if (kernelPattern.test(code)) return code.replace(kernelPattern, `$1${nextName}$2`)
+  const plainPattern = new RegExp(`(\\bvoid\\s+)${escaped}(\\s*\\()`)
+  return code.replace(plainPattern, `$1${nextName}$2`)
+}
+
+function buildRemoteOpenCLVectorAdapter(code: string, challenge: Challenge) {
+  const functionName = challenge.function_name
+  const kernelName = `__wtt_kernel_${functionName}`
+  const rewrittenKernel = renameOpenCLKernel(code, functionName, kernelName)
+  return `#include <math.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define __kernel
+#define __global
+#define __constant const
+#define __local
+#define barrier(flags) ((void)0)
+#define CLK_LOCAL_MEM_FENCE 0
+
+static int __wtt_gid0 = 0;
+static int __wtt_global_size = 0;
+static int get_global_id(int dim) { return dim == 0 ? __wtt_gid0 : 0; }
+static int get_local_id(int dim) { (void)dim; return 0; }
+static int get_group_id(int dim) { (void)dim; return 0; }
+static int get_global_size(int dim) { (void)dim; return __wtt_global_size; }
+
+${rewrittenKernel}
+
+static int parse_values(const char* json, float* values, int cap) {
+  const char* key = strstr(json, "\\"values\\"");
+  if (!key) return 0;
+  const char* p = strchr(key, '[');
+  if (!p) return 0;
+  ++p;
+  int n = 0;
+  while (*p && *p != ']' && n < cap) {
+    char* end = NULL;
+    float value = strtof(p, &end);
+    if (end != p) {
+      values[n++] = value;
+      p = end;
+    } else {
+      ++p;
+    }
+  }
+  return n;
+}
+
+static char* append_number(char* out, float value) {
+  int integer_value = (int)value;
+  float delta = value - (float)integer_value;
+  if (delta < 0.0f) delta = -delta;
+  if (delta < 0.00001f) {
+    out += sprintf(out, "%d", integer_value);
+  } else {
+    out += sprintf(out, "%.6g", value);
+  }
+  return out;
+}
+
+const char* ${functionName}(const char* payload_json) {
+  enum { MAX_N = 4096 };
+  static char result[65536];
+  float values[MAX_N];
+  float output[MAX_N];
+  int n = parse_values(payload_json, values, MAX_N);
+  if (n <= 0) {
+    strcpy(result, "[]");
+    return result;
+  }
+  memset(output, 0, sizeof(output));
+  __wtt_global_size = n;
+  for (int gid = 0; gid < n; ++gid) {
+    __wtt_gid0 = gid;
+    ${kernelName}(values, output, n);
+  }
+  char* out = result;
+  *out++ = '[';
+  for (int i = 0; i < n; ++i) {
+    if (i) *out++ = ',';
+    out = append_number(out, output[i]);
+  }
+  *out++ = ']';
+  *out = '\\0';
+  return result;
+}
+`
+}
+
+function canUseRemoteOpenCLVectorAdapter(testCases: ChallengeTestCase[]) {
+  return testCases.length > 0 && testCases.every((testCase) => {
+    try {
+      const input = JSON.parse(testCase.input || '{}') as { payload?: { values?: unknown[] } }
+      const expected = JSON.parse(testCase.expected_output) as unknown
+      const isMatrixOutput = Array.isArray(expected) && expected.some((row) => Array.isArray(row))
+      return Array.isArray(input.payload?.values) && !isMatrixOutput
+    } catch {
+      return false
+    }
+  })
+}
+
 function buildOpenCLHost(challenge: Challenge, stdin: string, expectedOutput: string) {
   const input = JSON.parse(stdin || '{}') as { payload?: { op?: string; seed?: number; values?: unknown[]; matrix?: unknown[] } }
   const expected = JSON.parse(expectedOutput) as unknown
@@ -549,6 +657,28 @@ async function runRemoteJudge(input: JudgeInput, remoteUrl: string): Promise<Jud
   return (await response.json()) as JudgeOutput
 }
 
+async function runRemoteOpenCLVectorAdapter(input: JudgeInput, remoteUrl: string): Promise<JudgeOutput> {
+  const adapted = await runRemoteJudge({
+    ...input,
+    code: buildRemoteOpenCLVectorAdapter(input.code, input.challenge),
+    language: 'c',
+  }, remoteUrl)
+  const memoryByCase = new Map(input.testCases.map((testCase) => [
+    testCase.id,
+    openCLDeviceMemoryKb(testCase.input, testCase.expected_output),
+  ]))
+  const results = adapted.results.map((result) => ({
+    ...result,
+    memory_kb: result.memory_kb || memoryByCase.get(result.test_case_id),
+  }))
+  return {
+    ...adapted,
+    provider: 'remote-opencl-vector-adapter',
+    memory_kb: results.reduce((max, result) => Math.max(max, result.memory_kb || 0), 0) || adapted.memory_kb,
+    results,
+  }
+}
+
 async function runJudge0(code: string, stdin: string, timeoutMs: number): Promise<RawRunResult> {
   const base = process.env.JUDGE0_URL?.replace(/\/+$/, '')
   if (!base) return { status: 'system_error', stdout: '', stderr: '', error_message: 'JUDGE0_URL is not configured' }
@@ -593,10 +723,14 @@ async function runJudge0(code: string, stdin: string, timeoutMs: number): Promis
 
 export async function judgeSubmission(input: JudgeInput) {
   const { challenge, testCases, code, language, submissionId } = input
-  const remoteJudgeUrl = process.env.WTT_ARENA_REMOTE_JUDGE_URL
-  if (remoteJudgeUrl) return runRemoteJudge(input, remoteJudgeUrl)
-
   const normalizedLanguage = language.toLowerCase()
+  const remoteJudgeUrl = process.env.WTT_ARENA_REMOTE_JUDGE_URL
+  if (remoteJudgeUrl) {
+    return OPENCL_LANGUAGES.has(normalizedLanguage) && canUseRemoteOpenCLVectorAdapter(input.testCases)
+      ? runRemoteOpenCLVectorAdapter(input, remoteJudgeUrl)
+      : runRemoteJudge(input, remoteJudgeUrl)
+  }
+
   if (!PYTHON_LANGUAGES.has(normalizedLanguage) && !OPENCL_LANGUAGES.has(normalizedLanguage)) {
     throw new Error(`Unsupported language without remote runner: ${language}`)
   }
