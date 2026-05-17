@@ -335,58 +335,36 @@ function HtmlAnimationBoard({ html, locale }: { html: string; locale: Locale }) 
   )
 }
 
-function DirectDiagramBoard({ diagram, locale }: { diagram: WhiteboardDiagram; locale: Locale }) {
+function DirectDiagramBoard({ diagram, locale, viewMode }: { diagram: WhiteboardDiagram; locale: Locale; viewMode: BoardViewMode }) {
   const steps = diagram.steps?.length
     ? diagram.steps
     : [{ title: diagram.title || (locale === 'zh' ? '白板图' : 'Whiteboard diagram'), markdown: diagram.markdown, mermaid: diagram.mermaid || diagram.source, summary: diagram.summary }]
   const finalChart = finalChartForDiagram(diagram, steps, locale)
   const animationHtml = htmlForDiagram(diagram)
-  const [viewMode, setViewMode] = useState<BoardViewMode>(animationHtml ? 'html' : 'diagram')
-
-  useEffect(() => {
-    setViewMode(animationHtml ? 'html' : 'diagram')
-  }, [animationHtml])
+  const resolvedMode = viewMode === 'html' && animationHtml ? 'html' : 'diagram'
 
   return (
-    <div className="h-full min-h-[640px] overflow-auto bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6 text-slate-900">
+    <div className={`h-full min-h-[640px] overflow-auto text-slate-900 ${resolvedMode === 'html' ? 'bg-slate-950 p-3' : 'bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6'}`}>
       <motion.div
-        className="mx-auto max-w-7xl space-y-5"
+        className={resolvedMode === 'html' ? 'h-full' : 'mx-auto max-w-7xl space-y-5'}
         variants={boardVariants}
         initial="hidden"
         animate="show"
       >
-        {diagram.title ? (
-          <motion.h3 variants={cardVariants} className="text-3xl font-black tracking-tight text-slate-950">
-            {diagram.title}
-          </motion.h3>
-        ) : null}
-        {diagram.summary?.length ? (
-          <motion.div variants={cardVariants} className="rounded-lg border border-slate-200 bg-white/90 p-4 text-base leading-7 text-slate-600 shadow-sm">
-            {diagram.summary.map((item, index) => <p key={index}>{item}</p>)}
-          </motion.div>
-        ) : null}
-        {animationHtml ? (
-          <motion.div variants={cardVariants} className="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setViewMode('html')}
-              className={`rounded-full px-4 py-2 text-xs font-black transition-colors ${viewMode === 'html' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}
-            >
-              {locale === 'zh' ? 'HTML 动画' : 'HTML animation'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('diagram')}
-              className={`rounded-full px-4 py-2 text-xs font-black transition-colors ${viewMode === 'diagram' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}
-            >
-              {locale === 'zh' ? '图文白板' : 'Diagram board'}
-            </button>
-          </motion.div>
-        ) : null}
-        {viewMode === 'html' && animationHtml ? (
+        {resolvedMode === 'html' && animationHtml ? (
           <HtmlAnimationBoard html={animationHtml} locale={locale} />
         ) : (
           <>
+            {diagram.title ? (
+              <motion.h3 variants={cardVariants} className="text-3xl font-black tracking-tight text-slate-950">
+                {diagram.title}
+              </motion.h3>
+            ) : null}
+            {diagram.summary?.length ? (
+              <motion.div variants={cardVariants} className="rounded-lg border border-slate-200 bg-white/90 p-4 text-base leading-7 text-slate-600 shadow-sm">
+                {diagram.summary.map((item, index) => <p key={index}>{item}</p>)}
+              </motion.div>
+            ) : null}
             {finalChart ? <FinalDiagramPanel chart={finalChart} locale={locale} /> : null}
             <ProcessRail steps={steps} locale={locale} />
             {steps.map((step, index) => {
@@ -437,10 +415,16 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
   const [status, setStatus] = useState(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
   const [boardCleared, setBoardCleared] = useState(false)
   const activeDiagram = boardCleared ? null : diagram
+  const activeHtml = activeDiagram ? htmlForDiagram(activeDiagram) : ''
+  const [viewMode, setViewMode] = useState<BoardViewMode>('html')
 
   useEffect(() => {
     setBoardCleared(false)
   }, [challengeId, diagram])
+
+  useEffect(() => {
+    setViewMode(activeHtml ? 'html' : 'diagram')
+  }, [activeHtml, challengeId])
 
   useEffect(() => {
     setStatus(locale === 'zh' ? '白板已就绪' : 'Whiteboard ready')
@@ -463,6 +447,25 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
           <p className="mt-1 text-xs leading-5 text-gray-500">{labels.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {activeDiagram ? (
+            <div className="mr-1 inline-flex rounded-md border border-gray-700 bg-[#101010] p-1">
+              <button
+                type="button"
+                onClick={() => activeHtml && setViewMode('html')}
+                disabled={!activeHtml}
+                className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${viewMode === 'html' && activeHtml ? 'bg-[#3ce8e2] text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+              >
+                {locale === 'zh' ? 'HTML' : 'HTML'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('diagram')}
+                className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'diagram' || !activeHtml ? 'bg-white text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+              >
+                {locale === 'zh' ? 'Markdown' : 'Markdown'}
+              </button>
+            </div>
+          ) : null}
           <button onClick={onExplain} disabled={busy} className="rounded-md bg-gradient-to-r from-violet-300 to-fuchsia-500 px-3 py-2 text-xs font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{busy ? '...' : labels.explain}</button>
           {onToggleExpand ? <button onClick={onToggleExpand} className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 hover:border-amber-200">{labels.expand}</button> : null}
           <button onClick={clearBoard} className="rounded-md border border-gray-700 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-300 hover:border-gray-500">{labels.clear}</button>
@@ -472,7 +475,7 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
         <AnimatePresence mode="wait">
           {activeDiagram ? (
             <motion.div key="diagram" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}>
-              <DirectDiagramBoard diagram={activeDiagram} locale={locale} />
+              <DirectDiagramBoard diagram={activeDiagram} locale={locale} viewMode={activeHtml ? viewMode : 'diagram'} />
             </motion.div>
           ) : (
             <motion.div key="empty" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="flex h-full min-h-[560px] items-center justify-center p-8 text-center">
