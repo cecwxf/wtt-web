@@ -8,7 +8,9 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
+import { useAgentId } from '@/lib/hooks/use-agent-id'
+import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
@@ -29,6 +31,7 @@ type ChallengePayload = {
 }
 
 type TopicMessage = { id?: string; message_id?: string; sender_type?: string; sender_id?: string; semantic_type?: string; content?: string; timestamp?: string; created_at?: string }
+type ArenaTypingState = { topicId: string; agentId: string; agentName?: string; startedAt: number; expiresAt: number }
 
 const ARENA_AGENT_ID = 'agent-16a45cf0dd8b'
 
@@ -412,6 +415,7 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMes
 
 export default function ArenaChallengePage({ params }: { params: { id: string } }) {
   const { data: session } = useSession()
+  const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [payload, setPayload] = useState<ChallengePayload | null>(null)
   const [locale, setLocale] = useState<Locale>('zh')
   const [language, setLanguage] = useState<Language>('python')
@@ -431,6 +435,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardDiagram, setWhiteboardDiagram] = useState<WhiteboardDiagram | null>(null)
   const [whiteboardExpanded, setWhiteboardExpanded] = useState(false)
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
+  const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
   const [chatPanelWidth, setChatPanelWidth] = useState(540)
   const layoutRef = useRef<HTMLDivElement | null>(null)
@@ -490,6 +495,31 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     'Content-Type': 'application/json',
     ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
   }), [session?.accessToken])
+
+  useEffect(() => {
+    if (!session?.accessToken || selectedAgentId) return
+    let alive = true
+    fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (!alive || !data) return
+        const agents = Array.isArray(data)
+          ? data
+          : Array.isArray(data.agents)
+          ? data.agents
+          : Array.isArray(data.items)
+          ? data.items
+          : []
+        const firstAgentId = agents
+          .map((agent: Record<string, unknown>) => String(agent.agent_id || agent.id || ''))
+          .find(Boolean)
+        if (firstAgentId) setSelectedAgentId(firstAgentId)
+      })
+      .catch(() => undefined)
+    return () => { alive = false }
+  }, [selectedAgentId, session?.accessToken, setSelectedAgentId])
 
   function rememberArenaTopic(topicId: string) {
     if (!arenaSessionKey || !topicId) return
@@ -579,6 +609,77 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return false
   }
 
+  function handleArenaWsMessage(msg: WsMessage) {
+    const rawEvent = msg as unknown as Record<string, unknown>
+
+    if (rawEvent.type === 'typing') {
+      const topicId = String(rawEvent.topic_id || '')
+      if (!topicId || topicId !== arenaTopicId) return
+
+      const state = String(rawEvent.state || 'start').toLowerCase()
+      if (state === 'stop') {
+        setArenaTyping((prev) => {
+          if (!prev || prev.topicId !== topicId) return prev
+          return {
+            ...prev,
+            expiresAt: Math.max(prev.expiresAt, Date.now() + 900),
+          }
+        })
+        return
+      }
+
+      const ttlMsRaw = Number(rawEvent.ttl_ms)
+      const ttlMs = Number.isFinite(ttlMsRaw) ? Math.max(1500, Math.min(30000, ttlMsRaw)) : 6000
+      const now = Date.now()
+      setArenaTyping({
+        topicId,
+        agentId: String(rawEvent.agent_id || ARENA_AGENT_ID),
+        agentName: String(rawEvent.agent_display_name || '') || undefined,
+        startedAt: now,
+        expiresAt: now + ttlMs,
+      })
+      return
+    }
+
+    if (msg.type !== 'new_message' || !msg.message) return
+    const incomingTopicId = msg.message.topic_id
+    if (!incomingTopicId || incomingTopicId !== arenaTopicId) return
+
+    const senderType = String(msg.message.sender_type || '').toUpperCase()
+    const senderId = String(msg.message.sender_id || '')
+    if (senderType === 'AGENT' || senderId === ARENA_AGENT_ID) {
+      setArenaTyping((prev) => {
+        if (!prev || prev.topicId !== incomingTopicId) return prev
+        return {
+          ...prev,
+          expiresAt: Math.max(prev.expiresAt, Date.now() + 350),
+        }
+      })
+    }
+
+    void refreshArenaMessages(incomingTopicId)
+    void refreshArenaState()
+  }
+
+  useWebSocket({
+    url: selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : '',
+    enabled: !!selectedAgentId && !!session?.accessToken,
+    token: session?.accessToken || undefined,
+    onMessage: handleArenaWsMessage,
+  })
+
+  useEffect(() => {
+    setArenaTyping((prev) => (prev && prev.topicId === arenaTopicId ? prev : null))
+  }, [arenaTopicId])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      setArenaTyping((prev) => (prev && prev.expiresAt <= now ? null : prev))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
 
   useEffect(() => {
     setChatMessages([])
@@ -613,7 +714,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const currentChatMode = availableChatModes.find((mode) => mode.id === chatMode) || availableChatModes[0]
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
   const effectiveChatPanelWidth = whiteboardExpanded ? Math.max(chatPanelWidth, 560) : chatPanelWidth
-  const agentBusyLabel = arenaSyncing ? t.chatSyncing : whiteboardBusy ? t.whiteboardWorking : t.chatWorking
+  const arenaTypingActive = !!arenaTyping && arenaTyping.topicId === arenaTopicId
+  const agentBusy = arenaTypingActive || chatSending || arenaSyncing
+  const agentBusyLabel = arenaSyncing
+    ? t.chatSyncing
+    : whiteboardBusy
+    ? t.whiteboardWorking
+    : arenaTypingActive
+    ? `${arenaTyping.agentName || 'Agent'} ${locale === 'zh' ? '正在输入...' : 'is typing...'}`
+    : t.chatWorking
 
   useEffect(() => {
     if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
@@ -621,7 +730,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [chatMessages.length, chatSending, arenaSyncing, whiteboardBusy])
+  }, [chatMessages.length, agentBusy, whiteboardBusy])
 
   function changeLanguage(next: Language) {
     setLanguage(next)
@@ -1015,7 +1124,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {(chatSending || arenaSyncing) && (
+                    {agentBusy && (
                       <span className="inline-flex items-center gap-2 rounded-full border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-2.5 py-1 text-[11px] font-black text-[#bffffd]">
                         <TypingDots />
                         {agentBusyLabel}
@@ -1049,7 +1158,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     </div>
                   </div>
                 ))}
-                {(arenaSyncing || chatSending) && (
+                {agentBusy && (
                   <div className="flex justify-start">
                     <div className="max-w-[88%] rounded-2xl border border-[#3ce8e2]/25 bg-[#102727] px-3 py-2 text-sm leading-6 text-[#dffffe] shadow-[0_0_24px_rgba(60,232,226,0.08)]">
                       <div className="flex items-center gap-2 font-black">
@@ -1121,7 +1230,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 locale={locale}
                 diagram={whiteboardDiagram}
                 expanded={whiteboardExpanded}
-                busy={whiteboardBusy || chatSending || arenaSyncing}
+                busy={whiteboardBusy || agentBusy}
                 onExplain={() => requestWhiteboardExplain(false)}
                 onToggleExpand={() => setWhiteboardExpanded((value) => !value)}
               />
