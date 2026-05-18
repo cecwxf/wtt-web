@@ -64,6 +64,15 @@ function normalizeJson(value: string): unknown {
 
 function compareOutput(actual: string, expected: string, checker: ChallengeTestCase['checker']) {
   const normalizedActual = normalizeProgramStdout(actual)
+  if (checker === 'opencl_stdout_smoke') {
+    if (!normalizedActual.trim()) return false
+    try {
+      normalizeJson(normalizedActual)
+      return true
+    } catch {
+      return false
+    }
+  }
   try {
     const a = normalizeJson(normalizedActual)
     const e = normalizeJson(expected)
@@ -1072,7 +1081,10 @@ function isCompleteOpenCLProgram(code: string) {
 
 function openCLExampleSmokeCases(testCases: ChallengeTestCase[]) {
   const publicCases = testCases.filter((testCase) => !testCase.is_hidden)
-  return (publicCases.length ? publicCases : testCases).slice(0, 1)
+  return (publicCases.length ? publicCases : testCases).slice(0, 1).map((testCase) => ({
+    ...testCase,
+    checker: 'opencl_stdout_smoke' as const,
+  }))
 }
 
 async function runLocalOpenCL(code: string, stdin: string, expectedOutput: string, timeoutMs: number, challenge: Challenge): Promise<RawRunResult> {

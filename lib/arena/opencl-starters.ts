@@ -33,12 +33,22 @@ function outputSize(challenge: Challenge) {
   if (kind === 'graph') return 16
   if (kind === 'block') return 8
   if (hasAnyTag(challenge, ['sum', 'dot', 'silu', 'cross-entropy', 'mse', 'max-subarray', 'count', 'count2d', 'count3d', 'monte-carlo', 'subarray', 'subarray2d', 'subarray3d', 'top-p', 'moe-topk'])) return 1
-  if (hasTag(challenge, 'conv1d')) return 6
+  if (hasAnyTag(challenge, ['vector-add', 'invert', 'reverse', 'relu', 'leaky-relu', 'sigmoid', 'clip', 'prefix-sum', 'sort'])) return 5
+  if (hasTag(challenge, 'conv1d')) return 4
   if (hasTag(challenge, 'topk')) return 3
-  if (hasTag(challenge, 'grayscale')) return 2
-  if (hasTag(challenge, 'interleave')) return 8
+  if (hasTag(challenge, 'softmax')) return 4
+  if (hasTag(challenge, 'grayscale')) return 1
+  if (hasTag(challenge, 'interleave')) return 6
   if (hasTag(challenge, 'compact')) return 4
   return 8
+}
+
+function inputSize(challenge: Challenge) {
+  if (hasAnyTag(challenge, ['softmax', 'top-p'])) return 4
+  if (hasAnyTag(challenge, ['conv1d', 'sum', 'dot', 'silu', 'max-subarray', 'subarray', 'subarray2d', 'subarray3d', 'vector-add', 'invert', 'reverse', 'relu', 'leaky-relu', 'sigmoid', 'clip', 'prefix-sum', 'sort', 'topk'])) return 5
+  if (hasAnyTag(challenge, ['interleave'])) return 6
+  if (hasAnyTag(challenge, ['monte-carlo', 'compact', 'histogram'])) return 8
+  return outputSize(challenge)
 }
 
 function printMode(challenge: Challenge) {
@@ -109,8 +119,8 @@ function kernelSource(challenge: Challenge) {
         : ''
     const linear = hasTag(challenge, 'linear-attention')
     return `__kernel void ${name}(__global const float* input, __global const float* aux, __global float* output, int n, int rows, int cols, int depth, float param) {
-  int row = get_global_id(0);
-  int col = get_global_id(1);
+  int col = get_global_id(0);
+  int row = get_global_id(1);
   if (row >= rows || col >= cols) return;
   float scale = 1.0f / sqrt((float)cols);
   ${linear ? 'float normalizer = 0.0f; float acc = 0.0f;' : 'float max_score = -3.402823e38f;'}
@@ -258,7 +268,7 @@ function hostConstants(challenge: Challenge) {
   if (kind === 'conv3d') return { n: 1, rows: 1, cols: 1, depth: 2, param: 1.0, global: 'global1' }
   if (kind === 'fft') return { n: hasTag(challenge, 'fft2d') ? 4 : 8, rows: 2, cols: 2, depth: 2, param: 1.0, global: 'fft' }
   if (kind === 'block') return { n: 8, rows: 2, cols: 4, depth: 2, param: 0.25, global: 'global1' }
-  return { n: outputSize(challenge), rows: 2, cols: 4, depth: 2, param: hasTag(challenge, 'top-p') ? 0.8 : hasAnyTag(challenge, ['count', 'count2d', 'count3d']) ? 2.0 : 0.5, global: 'global1' }
+  return { n: inputSize(challenge), rows: 2, cols: 4, depth: 2, param: hasTag(challenge, 'top-p') ? 0.8 : hasAnyTag(challenge, ['count', 'count2d', 'count3d']) ? 2.0 : 0.5, global: 'global1' }
 }
 
 function inputArray(challenge: Challenge) {

@@ -74,7 +74,7 @@ export interface ChallengeTestCase {
   is_hidden: boolean
   weight: number
   explanation?: string
-  checker: 'json_exact' | 'json_unordered_array'
+  checker: 'json_exact' | 'json_unordered_array' | 'opencl_stdout_smoke'
 }
 
 export interface SubmissionResult {
