@@ -1081,14 +1081,6 @@ function isCompleteOpenCLProgram(code: string) {
     && /\bclEnqueueNDRangeKernel\s*\(/.test(code)
 }
 
-function openCLExampleSmokeCases(testCases: ChallengeTestCase[]) {
-  const publicCases = testCases.filter((testCase) => !testCase.is_hidden)
-  return (publicCases.length ? publicCases : testCases).slice(0, 1).map((testCase) => ({
-    ...testCase,
-    checker: 'opencl_stdout_smoke' as const,
-  }))
-}
-
 async function runLocalOpenCL(code: string, stdin: string, expectedOutput: string, timeoutMs: number, challenge: Challenge): Promise<RawRunResult> {
   if (process.platform !== 'darwin') {
     return { status: 'system_error', stdout: '', stderr: '', error_message: 'Local OpenCL runner is enabled for macOS Mac mini runner only.' }
@@ -1466,7 +1458,7 @@ export async function judgeSubmission(input: JudgeInput) {
   const normalizedLanguage = language.toLowerCase()
   const isOpenCL = OPENCL_LANGUAGES.has(normalizedLanguage)
   const standaloneOpenCLExample = isOpenCL && isCompleteOpenCLProgram(code)
-  const effectiveTestCases = standaloneOpenCLExample ? openCLExampleSmokeCases(testCases) : testCases
+  const effectiveTestCases = testCases
   const effectiveInput = { ...input, testCases: effectiveTestCases }
   const standaloneOpenCLKernel = standaloneOpenCLExample ? extractOpenCLKernelSource(code) : null
   const shouldUseLocalOpenCL = isOpenCL && process.platform === 'darwin' && process.env.WTT_ARENA_DISABLE_LOCAL_OPENCL !== '1' && process.env.WTT_ARENA_FORCE_REMOTE_JUDGE !== '1'

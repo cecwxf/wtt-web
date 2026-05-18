@@ -63,8 +63,14 @@ function printMode(challenge: Challenge) {
 function vectorBody(challenge: Challenge) {
   if (hasTag(challenge, 'vector-add')) return 'output[gid] = input[gid] + aux[gid];'
   if (hasTag(challenge, 'invert')) return 'output[gid] = (gid % 4 == 3) ? input[gid] : 255.0f - input[gid];'
-  if (hasTag(challenge, 'conv1d')) return 'if (gid < n - 2) output[gid] = input[gid] * aux[0] + input[gid + 1] * aux[1] + input[gid + 2] * aux[2];'
-  if (hasTag(challenge, 'causal-conv1d')) return 'output[gid] = input[gid] * aux[0] + (gid > 0 ? input[gid - 1] * aux[1] : 0.0f) + (gid > 1 ? input[gid - 2] * aux[2] : 0.0f);'
+  if (hasTag(challenge, 'conv1d')) return `if (gid < n - 2) {
+    output[gid] = input[gid] * aux[0]
+      + input[gid + 1] * aux[1]
+      + input[gid + 2] * aux[2];
+  }`
+  if (hasTag(challenge, 'causal-conv1d')) return `output[gid] = input[gid] * aux[0]
+    + (gid > 0 ? input[gid - 1] * aux[1] : 0.0f)
+    + (gid > 1 ? input[gid - 2] * aux[2] : 0.0f);`
   if (hasTag(challenge, 'reverse')) return 'output[gid] = input[n - 1 - gid];'
   if (hasTag(challenge, 'relu')) return 'output[gid] = fmax(input[gid], 0.0f);'
   if (hasTag(challenge, 'leaky-relu')) return 'output[gid] = input[gid] > 0.0f ? input[gid] : 0.01f * input[gid];'
@@ -73,33 +79,171 @@ function vectorBody(challenge: Challenge) {
   if (hasTag(challenge, 'swiglu')) return 'output[gid] = (input[gid] / (1.0f + exp(-input[gid]))) * aux[gid];'
   if (hasTag(challenge, 'geglu')) return 'output[gid] = 0.5f * input[gid] * (1.0f + tanh(0.7978845608f * (input[gid] + 0.044715f * input[gid] * input[gid] * input[gid]))) * aux[gid];'
   if (hasTag(challenge, 'clip')) return 'output[gid] = fmin(4.0f, fmax(-2.0f, input[gid]));'
-  if (hasTag(challenge, 'softmax')) return 'float mx = input[0]; for (int i = 1; i < n; ++i) mx = fmax(mx, input[i]); float den = 0.0f; for (int i = 0; i < n; ++i) den += exp(input[i] - mx); output[gid] = exp(input[gid] - mx) / den;'
-  if (hasTag(challenge, 'prefix-sum')) return 'float acc = 0.0f; for (int i = 0; i <= gid; ++i) { if (aux[i] > 0.5f && i != 0) acc = 0.0f; acc += input[i]; } output[gid] = acc;'
-  if (hasTag(challenge, 'sort')) return 'float v = input[gid]; int rank = 0; for (int i = 0; i < n; ++i) rank += (input[i] < v || (input[i] == v && i < gid)) ? 1 : 0; output[rank] = v;'
-  if (hasTag(challenge, 'topk')) return 'if (gid < 3) { float best = -3.402823e38f; int best_i = -1; for (int round = 0; round <= gid; ++round) { best = -3.402823e38f; best_i = -1; for (int i = 0; i < n; ++i) { int used = 0; for (int j = 0; j < round; ++j) used |= (input[i] == output[j]); if (!used && input[i] > best) { best = input[i]; best_i = i; } } if (round == gid) output[gid] = best; } }'
+  if (hasTag(challenge, 'softmax')) return `float mx = input[0];
+  for (int i = 1; i < n; ++i) {
+    mx = fmax(mx, input[i]);
+  }
+
+  float den = 0.0f;
+  for (int i = 0; i < n; ++i) {
+    den += exp(input[i] - mx);
+  }
+
+  output[gid] = exp(input[gid] - mx) / den;`
+  if (hasTag(challenge, 'prefix-sum')) return `float acc = 0.0f;
+  for (int i = 0; i <= gid; ++i) {
+    if (aux[i] > 0.5f && i != 0) acc = 0.0f;
+    acc += input[i];
+  }
+  output[gid] = acc;`
+  if (hasTag(challenge, 'sort')) return `float v = input[gid];
+  int rank = 0;
+  for (int i = 0; i < n; ++i) {
+    if (input[i] < v || (input[i] == v && i < gid)) {
+      rank += 1;
+    }
+  }
+  output[rank] = v;`
+  if (hasTag(challenge, 'topk')) return `if (gid < 3) {
+    for (int round = 0; round <= gid; ++round) {
+      float best = -3.402823e38f;
+      for (int i = 0; i < n; ++i) {
+        int used = 0;
+        for (int j = 0; j < round; ++j) {
+          used |= (input[i] == output[j]);
+        }
+        if (!used && input[i] > best) {
+          best = input[i];
+        }
+      }
+      if (round == gid) output[gid] = best;
+    }
+  }`
   if (hasTag(challenge, 'rainbow')) return 'output[gid] = fmod((input[gid] * 1103515245.0f + 12345.0f), 997.0f);'
   if (hasTag(challenge, 'simple-inference')) return 'output[gid] = fmax(input[gid] * aux[gid] + param, 0.0f);'
-  if (hasTag(challenge, 'grayscale')) return 'int base = gid * 3; output[gid] = 0.299f * input[base] + 0.587f * input[base + 1] + 0.114f * input[base + 2];'
+  if (hasTag(challenge, 'grayscale')) return `int base = gid * 3;
+  output[gid] = 0.299f * input[base]
+    + 0.587f * input[base + 1]
+    + 0.114f * input[base + 2];`
   if (hasTag(challenge, 'interleave')) return 'output[gid] = (gid % 2 == 0) ? input[gid / 2] : aux[gid / 2];'
   if (hasTag(challenge, 'dequant')) return 'output[gid] = input[gid] * param;'
-  if (hasTag(challenge, 'rope')) return 'int pair = gid ^ 1; float angle = aux[gid / 2]; output[gid] = (gid % 2 == 0) ? input[gid] * cos(angle) - input[pair] * sin(angle) : input[pair] * sin(angle) + input[gid] * cos(angle);'
-  if (hasTag(challenge, 'linear-recurrence')) return 'float state = 0.0f; for (int i = 0; i <= gid; ++i) state = param * state + input[i]; output[gid] = state;'
-  if (hasTag(challenge, 'ssm-scan')) return 'float state = 0.0f; for (int i = 0; i <= gid; ++i) state = aux[i] * state + input[i]; output[gid] = state;'
+  if (hasTag(challenge, 'rope')) return `int pair = gid ^ 1;
+  float angle = aux[gid / 2];
+  if (gid % 2 == 0) {
+    output[gid] = input[gid] * cos(angle) - input[pair] * sin(angle);
+  } else {
+    output[gid] = input[pair] * sin(angle) + input[gid] * cos(angle);
+  }`
+  if (hasTag(challenge, 'linear-recurrence')) return `float state = 0.0f;
+  for (int i = 0; i <= gid; ++i) {
+    state = param * state + input[i];
+  }
+  output[gid] = state;`
+  if (hasTag(challenge, 'ssm-scan')) return `float state = 0.0f;
+  for (int i = 0; i <= gid; ++i) {
+    state = aux[i] * state + input[i];
+  }
+  output[gid] = state;`
   if (hasTag(challenge, 'spec-decode')) return 'output[gid] = input[gid] == aux[gid] ? 1.0f : 0.0f;'
-  if (hasTag(challenge, 'compact')) return 'if (aux[gid] > 0.0f) { int pos = 0; for (int i = 0; i < gid; ++i) pos += aux[i] > 0.0f ? 1 : 0; output[pos] = input[gid]; }'
-  if (hasTag(challenge, 'merge')) return 'int ia = 0, ib = 0; for (int out = 0; out <= gid; ++out) { if (ib >= n || (ia < n && input[ia] <= aux[ib])) { output[out] = input[ia++]; } else { output[out] = aux[ib++]; } }'
+  if (hasTag(challenge, 'compact')) return `if (aux[gid] > 0.0f) {
+    int pos = 0;
+    for (int i = 0; i < gid; ++i) {
+      pos += aux[i] > 0.0f ? 1 : 0;
+    }
+    output[pos] = input[gid];
+  }`
+  if (hasTag(challenge, 'merge')) return `int ia = 0;
+  int ib = 0;
+  for (int out = 0; out <= gid; ++out) {
+    if (ib >= n || (ia < n && input[ia] <= aux[ib])) {
+      output[out] = input[ia++];
+    } else {
+      output[out] = aux[ib++];
+    }
+  }`
   if (hasTag(challenge, 'weight-dequantization')) return 'output[gid] = input[gid] * aux[gid / 4];'
-  if (hasTag(challenge, 'sum')) return 'if (gid == 0) { float acc = 0.0f; for (int i = 0; i < n; ++i) acc += input[i]; output[0] = acc; }'
-  if (hasTag(challenge, 'dot')) return 'if (gid == 0) { float acc = 0.0f; for (int i = 0; i < n; ++i) acc += input[i] * aux[i]; output[0] = acc; }'
-  if (hasTag(challenge, 'cross-entropy')) return 'if (gid == 0) { float loss = 0.0f; for (int i = 0; i < n; ++i) if (aux[i] > 0.0f) loss -= log(fmax(input[i], 1e-6f)); output[0] = loss; }'
-  if (hasTag(challenge, 'mse')) return 'if (gid == 0) { float loss = 0.0f; for (int i = 0; i < n; ++i) { float d = input[i] - aux[i]; loss += d * d; } output[0] = loss / (float)n; }'
-  if (hasAnyTag(challenge, ['count', 'count2d', 'count3d'])) return 'if (gid == 0) { float c = 0.0f; for (int i = 0; i < n; ++i) c += input[i] == param ? 1.0f : 0.0f; output[0] = c; }'
-  if (hasAnyTag(challenge, ['subarray', 'subarray2d', 'subarray3d'])) return 'if (gid == 0) { float best = input[0], cur = input[0]; for (int i = 1; i < n; ++i) { cur = fmax(input[i], cur + input[i]); best = fmax(best, cur); } output[0] = best; }'
-  if (hasTag(challenge, 'max-subarray')) return 'if (gid == 0) { float best = input[0], cur = input[0]; for (int i = 1; i < n; ++i) { cur = fmax(input[i], cur + input[i]); best = fmax(best, cur); } output[0] = best; }'
-  if (hasTag(challenge, 'monte-carlo')) return 'if (gid == 0) { float inside = 0.0f; for (int i = 0; i < n; i += 2) inside += (input[i] * input[i] + input[i + 1] * input[i + 1] <= 1.0f) ? 1.0f : 0.0f; output[0] = 4.0f * inside / (float)(n / 2); }'
-  if (hasTag(challenge, 'top-p')) return 'if (gid == 0) { float cum = 0.0f; int count = 0; for (int i = 0; i < n; ++i) { cum += input[i]; count++; if (cum >= param) break; } output[0] = (float)count; }'
-  if (hasTag(challenge, 'moe-topk')) return 'if (gid == 0) { int best = 0; for (int i = 1; i < n; ++i) if (input[i] > input[best]) best = i; output[0] = (float)best; }'
-  if (hasTag(challenge, 'histogram')) return 'if (gid < 4) { float c = 0.0f; for (int i = 0; i < n; ++i) c += ((int)input[i] == gid) ? 1.0f : 0.0f; output[gid] = c; }'
+  if (hasTag(challenge, 'sum')) return `if (gid == 0) {
+    float acc = 0.0f;
+    for (int i = 0; i < n; ++i) {
+      acc += input[i];
+    }
+    output[0] = acc;
+  }`
+  if (hasTag(challenge, 'dot')) return `if (gid == 0) {
+    float acc = 0.0f;
+    for (int i = 0; i < n; ++i) {
+      acc += input[i] * aux[i];
+    }
+    output[0] = acc;
+  }`
+  if (hasTag(challenge, 'cross-entropy')) return `if (gid == 0) {
+    float loss = 0.0f;
+    for (int i = 0; i < n; ++i) {
+      if (aux[i] > 0.0f) {
+        loss -= log(fmax(input[i], 1e-6f));
+      }
+    }
+    output[0] = loss;
+  }`
+  if (hasTag(challenge, 'mse')) return `if (gid == 0) {
+    float loss = 0.0f;
+    for (int i = 0; i < n; ++i) {
+      float d = input[i] - aux[i];
+      loss += d * d;
+    }
+    output[0] = loss / (float)n;
+  }`
+  if (hasAnyTag(challenge, ['count', 'count2d', 'count3d'])) return `if (gid == 0) {
+    float c = 0.0f;
+    for (int i = 0; i < n; ++i) {
+      c += input[i] == param ? 1.0f : 0.0f;
+    }
+    output[0] = c;
+  }`
+  if (hasAnyTag(challenge, ['subarray', 'subarray2d', 'subarray3d']) || hasTag(challenge, 'max-subarray')) return `if (gid == 0) {
+    float best = input[0];
+    float cur = input[0];
+    for (int i = 1; i < n; ++i) {
+      cur = fmax(input[i], cur + input[i]);
+      best = fmax(best, cur);
+    }
+    output[0] = best;
+  }`
+  if (hasTag(challenge, 'monte-carlo')) return `if (gid == 0) {
+    float inside = 0.0f;
+    for (int i = 0; i + 1 < n; i += 2) {
+      float x = input[i];
+      float y = input[i + 1];
+      if (x * x + y * y <= 1.0f) {
+        inside += 1.0f;
+      }
+    }
+    output[0] = 4.0f * inside / fmax((float)(n / 2), 1.0f);
+  }`
+  if (hasTag(challenge, 'top-p')) return `if (gid == 0) {
+    float cum = 0.0f;
+    int count = 0;
+    for (int i = 0; i < n; ++i) {
+      cum += input[i];
+      count++;
+      if (cum >= param) break;
+    }
+    output[0] = (float)count;
+  }`
+  if (hasTag(challenge, 'moe-topk')) return `if (gid == 0) {
+    int best = 0;
+    for (int i = 1; i < n; ++i) {
+      if (input[i] > input[best]) best = i;
+    }
+    output[0] = (float)best;
+  }`
+  if (hasTag(challenge, 'histogram')) return `if (gid < 4) {
+    float c = 0.0f;
+    for (int i = 0; i < n; ++i) {
+      c += ((int)input[i] == gid) ? 1.0f : 0.0f;
+    }
+    output[gid] = c;
+  }`
   return 'output[gid] = input[gid];'
 }
 
@@ -179,9 +323,21 @@ function kernelSource(challenge: Challenge) {
 
   if (kind === 'conv2d' || kind === 'max_pool2d' || kind === 'matrix_vector') {
     const body = kind === 'conv2d'
-      ? 'float acc = 0.0f; for (int kr = 0; kr < 2; ++kr) for (int kc = 0; kc < 2; ++kc) acc += input[(row + kr) * 3 + (col + kc)] * aux[kr * 2 + kc]; output[row * cols + col] = acc;'
+      ? `float acc = 0.0f;
+  for (int kr = 0; kr < 2; ++kr) {
+    for (int kc = 0; kc < 2; ++kc) {
+      acc += input[(row + kr) * 3 + (col + kc)] * aux[kr * 2 + kc];
+    }
+  }
+  output[row * cols + col] = acc;`
       : kind === 'max_pool2d'
-        ? 'float best = -3.402823e38f; for (int kr = 0; kr < 2; ++kr) for (int kc = 0; kc < 2; ++kc) best = fmax(best, input[(row * 2 + kr) * 4 + (col * 2 + kc)]); output[row * cols + col] = best;'
+        ? `float best = -3.402823e38f;
+  for (int kr = 0; kr < 2; ++kr) {
+    for (int kc = 0; kc < 2; ++kc) {
+      best = fmax(best, input[(row * 2 + kr) * 4 + (col * 2 + kc)]);
+    }
+  }
+  output[row * cols + col] = best;`
         : matrixVectorBody(challenge)
     return `__kernel void ${name}(__global const float* input, __global const float* aux, __global float* output, int n, int rows, int cols, int depth, float param) {
   int col = get_global_id(0);
@@ -248,13 +404,34 @@ function kernelSource(challenge: Challenge) {
 }
 
 function matrixVectorBody(challenge: Challenge) {
-  if (hasTag(challenge, 'spmv')) return 'float acc = 0.0f; for (int k = 0; k < depth; ++k) acc += input[row * depth + k] * aux[k * cols + col]; output[row * cols + col] = acc;'
-  if (hasTag(challenge, 'batch-norm')) return 'float mean = aux[col]; float inv_std = aux[cols + col]; output[row * cols + col] = (input[row * cols + col] - mean) * inv_std;'
-  if (hasTag(challenge, 'rms-norm')) return 'float ss = 0.0f; for (int k = 0; k < cols; ++k) ss += input[row * cols + k] * input[row * cols + k]; output[row * cols + col] = input[row * cols + col] / sqrt(ss / (float)cols + 1e-5f) * aux[col];'
-  if (hasTag(challenge, 'jacobi')) return 'int idx = row * cols + col; output[idx] = (input[idx - (row > 0 ? cols : 0)] + input[idx + (row + 1 < rows ? cols : 0)] + input[row * cols + (col > 0 ? col - 1 : col)] + input[row * cols + (col + 1 < cols ? col + 1 : col)]) * 0.25f;'
-  if (hasTag(challenge, 'nearest') || hasTag(challenge, 'kmeans')) return 'float dx = input[row * 2] - aux[col * 2]; float dy = input[row * 2 + 1] - aux[col * 2 + 1]; output[row * cols + col] = dx * dx + dy * dy;'
-  if (hasTag(challenge, 'ols')) return 'output[row * cols + col] = input[row * cols + col] * aux[col];'
-  if (hasTag(challenge, 'logistic')) return 'float z = input[row * cols + col] * aux[col]; output[row * cols + col] = 1.0f / (1.0f + exp(-z));'
+  if (hasTag(challenge, 'spmv')) return `float acc = 0.0f;
+  for (int k = 0; k < depth; ++k) {
+    acc += input[row * depth + k] * aux[k * cols + col];
+  }
+  output[row * cols + col] = acc;`
+  if (hasTag(challenge, 'batch-norm')) return `float mean = aux[col];
+  float inv_std = aux[cols + col];
+  output[row * cols + col] = (input[row * cols + col] - mean) * inv_std;`
+  if (hasTag(challenge, 'rms-norm')) return `float ss = 0.0f;
+  for (int k = 0; k < cols; ++k) {
+    float value = input[row * cols + k];
+    ss += value * value;
+  }
+  output[row * cols + col] = input[row * cols + col]
+    / sqrt(ss / (float)cols + 1e-5f)
+    * aux[col];`
+  if (hasTag(challenge, 'jacobi')) return `int idx = row * cols + col;
+  float north = input[idx - (row > 0 ? cols : 0)];
+  float south = input[idx + (row + 1 < rows ? cols : 0)];
+  float west = input[row * cols + (col > 0 ? col - 1 : col)];
+  float east = input[row * cols + (col + 1 < cols ? col + 1 : col)];
+  output[idx] = 0.25f * (north + south + west + east);`
+  if (hasTag(challenge, 'nearest') || hasTag(challenge, 'kmeans')) return `float dx = input[row * 2] - aux[col * 2];
+  float dy = input[row * 2 + 1] - aux[col * 2 + 1];
+  output[row * cols + col] = dx * dx + dy * dy;`
+  if (hasTag(challenge, 'ols')) return `output[row * cols + col] = input[row * cols + col] * aux[col];`
+  if (hasTag(challenge, 'logistic')) return `float z = input[row * cols + col] * aux[col];
+  output[row * cols + col] = 1.0f / (1.0f + exp(-z));`
   return 'output[row * cols + col] = input[row * cols + col];'
 }
 
