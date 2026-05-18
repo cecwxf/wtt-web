@@ -54,6 +54,27 @@ function renderBareLatexFormula(value: string) {
     return null
   }
 }
+
+function formatRuntimeMs(value?: number) {
+  if (value === undefined || value === null) return '-'
+  if (value === 0) return '0ms'
+  if (Math.abs(value) < 1) return `${value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}ms`
+  if (Number.isInteger(value)) return `${value}ms`
+  return `${value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}ms`
+}
+
+function displayStdout(stdout?: string) {
+  const text = (stdout || '').trim()
+  const pattern = /(?:^|\n)\s*output\s*=\s*([^\n]+)\s*/g
+  let output = ''
+  let match: RegExpExecArray | null = pattern.exec(text)
+  while (match) {
+    output = match[1]
+    match = pattern.exec(text)
+  }
+  return (output || text).trim()
+}
+
 type ArenaTypingState = { topicId: string; agentId: string; agentName?: string; startedAt: number; expiresAt: number }
 
 function diagramHasHtml(diagram?: WhiteboardDiagram | null) {
@@ -2182,7 +2203,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     <div className="space-y-3">
                       <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone(submission.status)}`}>{submission.status} · score {submission.score}</div>
                       <p className="text-sm text-gray-500">
-                        user <span className="font-bold text-gray-300">{submission.user_id}</span> · {passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · {runtimeLabel} {submission.runtime_ms || '-'}ms · {memoryLabel} {submission.memory_kb || '-'}KB
+                        user <span className="font-bold text-gray-300">{submission.user_id}</span> · {passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · {runtimeLabel} {formatRuntimeMs(submission.runtime_ms)} · {memoryLabel} {submission.memory_kb || '-'}KB
                       </p>
                       {submission.results.map((result, index) => (
                         <div key={result.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
@@ -2190,10 +2211,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                             <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
                             <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                           </div>
-                          <p className="mt-2 text-xs text-gray-500">{runtimeLabel} {result.runtime_ms || '-'}ms · {memoryLabel} {result.memory_kb || '-'}KB</p>
+                          <p className="mt-2 text-xs text-gray-500">{runtimeLabel} {formatRuntimeMs(result.runtime_ms)} · {memoryLabel} {result.memory_kb || '-'}KB</p>
                           {!result.is_hidden && result.input && <pre className="mt-3 whitespace-pre-wrap text-gray-400">input: {result.input}</pre>}
                           {!result.is_hidden && result.expected_output && <pre className="mt-3 whitespace-pre-wrap text-gray-400">expected: {result.expected_output}</pre>}
-                          {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-gray-400">stdout: {result.stdout}</pre>}
+                          {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-gray-400">stdout: {displayStdout(result.stdout)}</pre>}
+                          {!result.is_hidden && result.raw_stdout && <pre className="mt-3 whitespace-pre-wrap text-xs text-gray-500">raw stdout: {result.raw_stdout}</pre>}
                           {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-rose-300">stderr: {result.stderr}</pre>}
                           {result.error_message && <p className="mt-3 text-yellow-300">{result.error_message}</p>}
                         </div>
@@ -2213,7 +2235,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#252525] text-sm font-black text-[#3ce8e2]">#{index + 1}</span>
                         <div><p className="font-bold text-white">{entry.user_id}</p><p className="text-xs text-gray-500">submits {entry.submission_count} · hint {entry.hint_count}</p></div>
                       </div>
-                      <div className="text-right text-sm"><p className="font-bold text-emerald-300">AC</p><p className="text-xs text-gray-500">{entry.best_runtime_ms || '-'}ms</p></div>
+                      <div className="text-right text-sm"><p className="font-bold text-emerald-300">AC</p><p className="text-xs text-gray-500">{formatRuntimeMs(entry.best_runtime_ms)}</p></div>
                     </div>
                   ))}
                 </div>
@@ -2279,7 +2301,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 {submission ? (
                   <div className="mt-4 grid gap-2 text-sm text-gray-400 sm:grid-cols-2">
                     <p>score: <span className="text-white">{submission.score}</span></p>
-                    <p>{runtimeLabel}: <span className="text-white">{submission.runtime_ms || '-'}ms</span></p>
+                    <p>{runtimeLabel}: <span className="text-white">{formatRuntimeMs(submission.runtime_ms)}</span></p>
                     <p>language: <span className="text-white">{submission.language}</span></p>
                     <p>provider: <span className="text-white">{submission.judge_provider}</span></p>
                     <p className="sm:col-span-2 text-gray-500">{t.hidden}</p>

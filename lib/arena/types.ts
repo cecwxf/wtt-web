@@ -87,6 +87,8 @@ export interface SubmissionResult {
   input?: string
   expected_output?: string
   stdout?: string
+  raw_stdout?: string
+  kernel_time_ms?: number
   stderr?: string
   compile_output?: string
   error_message?: string

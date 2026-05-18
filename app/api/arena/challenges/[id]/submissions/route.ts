@@ -6,6 +6,14 @@ import type { Submission } from '@/lib/arena/types'
 
 export const dynamic = 'force-dynamic'
 
+function formatRuntimeMs(value?: number) {
+  if (value === undefined || value === null) return '-'
+  if (value === 0) return '0'
+  if (Math.abs(value) < 1) return value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
+  if (Number.isInteger(value)) return String(value)
+  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+}
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const challenge = getChallenge(params.id)
   if (!challenge) return Response.json({ detail: 'Challenge not found' }, { status: 404 })
@@ -57,7 +65,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const judgedCaseCount = judged.results.length || getChallengeTestCases(challenge.id).length
     const metricSummary = [
       `${acceptedCount}/${judgedCaseCount} tests accepted`,
-      `${isOpenCLJudgeProvider(judged.provider) ? 'kernel runtime' : 'runtime'} ${judged.runtime_ms}ms`,
+      `${isOpenCLJudgeProvider(judged.provider) ? 'kernel runtime' : 'runtime'} ${formatRuntimeMs(judged.runtime_ms)}ms`,
       judged.memory_kb ? `${isOpenCLJudgeProvider(judged.provider) ? 'kernel memory' : 'memory'} ${judged.memory_kb}KB` : undefined,
       judged.provider === OPENCL_MAC_SKILL ? `skill ${OPENCL_MAC_SKILL}` : undefined,
     ].filter(Boolean).join(' · ')

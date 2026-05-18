@@ -14,6 +14,26 @@ function isOpenCLProvider(provider?: string) {
   return provider === 'agent-mac-opencl-kernel' || Boolean(provider?.startsWith('remote-opencl-'))
 }
 
+function formatRuntimeMs(value?: number) {
+  if (value === undefined || value === null) return '-'
+  if (value === 0) return '0ms'
+  if (Math.abs(value) < 1) return `${value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}ms`
+  if (Number.isInteger(value)) return `${value}ms`
+  return `${value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}ms`
+}
+
+function displayStdout(stdout?: string) {
+  const text = (stdout || '').trim()
+  const pattern = /(?:^|\n)\s*output\s*=\s*([^\n]+)\s*/g
+  let output = ''
+  let match: RegExpExecArray | null = pattern.exec(text)
+  while (match) {
+    output = match[1]
+    match = pattern.exec(text)
+  }
+  return (output || text).trim()
+}
+
 export default function ArenaSubmissionPage({ params }: { params: { id: string } }) {
   const [submission, setSubmission] = useState<Submission | null>(null)
   useEffect(() => {
@@ -53,7 +73,7 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
             <aside className="border-b border-gray-800 p-6 lg:border-b-0 lg:border-r">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Score</p><p className="mt-1 text-2xl font-black text-[#3ce8e2]">{submission.score}</p></div>
-                <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Runtime</p><p className="mt-1 text-2xl font-black text-white">{submission.runtime_ms || '-'}ms</p></div>
+                <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Runtime</p><p className="mt-1 text-2xl font-black text-white">{formatRuntimeMs(submission.runtime_ms)}</p></div>
                 <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">{memoryLabel}</p><p className="mt-1 text-2xl font-black text-white">{submission.memory_kb || '-'}KB</p></div>
                 <div className="rounded-md border border-gray-800 bg-[#151515] p-4"><p className="text-xs text-gray-500">Provider</p><p className="mt-1 text-sm font-bold text-white">{submission.judge_provider}</p></div>
               </div>
@@ -71,10 +91,11 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
                       <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
                       <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                     </div>
-                    <p className="mt-2 text-xs text-gray-500">runtime {result.runtime_ms || '-'}ms · {inlineMemoryLabel} {result.memory_kb || '-'}KB</p>
+                    <p className="mt-2 text-xs text-gray-500">runtime {formatRuntimeMs(result.runtime_ms)} · {inlineMemoryLabel} {result.memory_kb || '-'}KB</p>
                     {!result.is_hidden && result.input && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">input: {result.input}</pre>}
                     {!result.is_hidden && result.expected_output && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">expected: {result.expected_output}</pre>}
-                    {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">stdout: {result.stdout}</pre>}
+                    {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-400">stdout: {displayStdout(result.stdout)}</pre>}
+                    {!result.is_hidden && result.raw_stdout && <pre className="mt-3 whitespace-pre-wrap text-xs text-gray-500">raw stdout: {result.raw_stdout}</pre>}
                     {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-sm text-rose-300">stderr: {result.stderr}</pre>}
                     {result.error_message && <p className="mt-3 text-sm text-yellow-300">{result.error_message}</p>}
                   </div>
