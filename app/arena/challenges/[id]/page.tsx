@@ -18,6 +18,7 @@ import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challeng
 import { extractWhiteboardPayload, makeWhiteboardFromAnswerPrompt, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
 import { gaokaoKnowledgeContextMarkdown } from '@/lib/arena/gaokao-knowledge'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
+import { buildOpenClStarter } from '@/lib/arena/opencl-starters'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -552,7 +553,7 @@ __kernel void ${challenge.function_name}(__global const float* input,
     if (challenge.tags.includes('max-subarray')) return '    if (gid == 0) {\n        float best = values[0];\n        float cur = values[0];\n        for (int i = 1; i < n; ++i) {\n            cur = fmax(values[i], cur + values[i]);\n            best = fmax(best, cur);\n        }\n        output[0] = best;\n    }'
     if (challenge.tags.includes('grayscale')) return '    if (gid == 0) output[0] = round(0.299f * 120.0f + 0.587f * (values[0] + 80.0f) + 0.114f * 40.0f);'
     if (challenge.tags.includes('interleave')) return '    if (gid == 0) output[0] = values[0];\n    else if (gid == 1) output[1] = 10.0f;\n    else if (gid == 2) output[2] = values[1];\n    else if (gid == 3) output[3] = 20.0f;\n    else if (gid == 4) output[4] = values[2];\n    else if (gid == 5) output[5] = 30.0f;'
-    return '    // TODO: implement this specific AI kernel from the problem statement.\n    // The old checksum placeholder was intentionally removed because it did\n    // not satisfy the kernel requirements.\n    if (gid == 0) output[0] = 0.0f;'
+    return '    output[gid] = values[gid];'
   })()
 
   return `// Device kernel: vector/scalar AI operator.
@@ -1122,7 +1123,10 @@ if __name__ == "__main__":
 }
 
 function starterFor(challenge: Challenge, language: Language) {
-  if (language === 'opencl') return openClStarter(challenge)
+  if (language === 'opencl') {
+    const starter = buildOpenClStarter(challenge)
+    return starter || openClStarter(challenge)
+  }
   if (language === 'cuda') return cudaStarter(challenge)
   if (language === 'triton') return tritonStarter(challenge)
   if (language === 'python') return challenge.starter_code
