@@ -32,8 +32,8 @@ function outputSize(challenge: Challenge) {
   if (kind === 'fft') return hasTag(challenge, 'fft2d') ? 8 : 16
   if (kind === 'graph') return 16
   if (kind === 'block') return 8
-  if (hasAnyTag(challenge, ['sum', 'dot', 'silu', 'cross-entropy', 'mse', 'max-subarray', 'count', 'count2d', 'count3d', 'monte-carlo', 'subarray', 'subarray2d', 'subarray3d', 'top-p', 'moe-topk'])) return 1
-  if (hasAnyTag(challenge, ['vector-add', 'invert', 'reverse', 'relu', 'leaky-relu', 'sigmoid', 'clip', 'prefix-sum', 'sort'])) return 5
+  if (hasAnyTag(challenge, ['sum', 'dot', 'cross-entropy', 'mse', 'max-subarray', 'count', 'count2d', 'count3d', 'monte-carlo', 'subarray', 'subarray2d', 'subarray3d', 'top-p', 'moe-topk'])) return 1
+  if (hasAnyTag(challenge, ['vector-add', 'invert', 'reverse', 'relu', 'leaky-relu', 'sigmoid', 'silu', 'clip', 'prefix-sum', 'sort'])) return 5
   if (hasTag(challenge, 'conv1d')) return 4
   if (hasTag(challenge, 'topk')) return 3
   if (hasTag(challenge, 'softmax')) return 4
@@ -60,20 +60,37 @@ function printMode(challenge: Challenge) {
   return null
 }
 
+function isScalarOutput(challenge: Challenge) {
+  return hasAnyTag(challenge, [
+    'sum',
+    'dot',
+    'cross-entropy',
+    'mse',
+    'max-subarray',
+    'count',
+    'count2d',
+    'count3d',
+    'monte-carlo',
+    'subarray',
+    'subarray2d',
+    'subarray3d',
+    'top-p',
+    'moe-topk',
+  ])
+}
+
 function vectorBody(challenge: Challenge) {
   if (hasTag(challenge, 'vector-add')) return 'output[gid] = input[gid] + aux[gid];'
   if (hasTag(challenge, 'invert')) return 'output[gid] = (gid % 4 == 3) ? input[gid] : 255.0f - input[gid];'
-  if (hasTag(challenge, 'conv1d')) return `if (gid < n - 2) {
-    output[gid] = input[gid] * aux[0]
-      + input[gid + 1] * aux[1]
-      + input[gid + 2] * aux[2];
+  if (hasTag(challenge, 'conv1d')) return `if (gid < n - 1) {
+    output[gid] = input[gid] - input[gid + 1];
   }`
   if (hasTag(challenge, 'causal-conv1d')) return `output[gid] = input[gid] * aux[0]
     + (gid > 0 ? input[gid - 1] * aux[1] : 0.0f)
     + (gid > 1 ? input[gid - 2] * aux[2] : 0.0f);`
   if (hasTag(challenge, 'reverse')) return 'output[gid] = input[n - 1 - gid];'
   if (hasTag(challenge, 'relu')) return 'output[gid] = fmax(input[gid], 0.0f);'
-  if (hasTag(challenge, 'leaky-relu')) return 'output[gid] = input[gid] > 0.0f ? input[gid] : 0.01f * input[gid];'
+  if (hasTag(challenge, 'leaky-relu')) return 'output[gid] = input[gid] >= 0.0f ? input[gid] : 0.1f * input[gid];'
   if (hasTag(challenge, 'sigmoid')) return 'output[gid] = 1.0f / (1.0f + exp(-input[gid]));'
   if (hasTag(challenge, 'silu')) return 'output[gid] = input[gid] / (1.0f + exp(-input[gid]));'
   if (hasTag(challenge, 'swiglu')) return 'output[gid] = (input[gid] / (1.0f + exp(-input[gid]))) * aux[gid];'
@@ -448,34 +465,109 @@ function hostConstants(challenge: Challenge) {
   return { n: inputSize(challenge), rows: 2, cols: 4, depth: 2, param: hasTag(challenge, 'top-p') ? 0.8 : hasAnyTag(challenge, ['count', 'count2d', 'count3d']) ? 2.0 : 0.5, global: 'global1' }
 }
 
-function inputArray(challenge: Challenge) {
-  if (hasAnyTag(challenge, ['invert'])) return '255,0,128,255,10,20,30,255'
-  if (hasAnyTag(challenge, ['softmax', 'top-p'])) return '0.40f,0.30f,0.20f,0.10f,0,0,0,0'
-  if (hasAnyTag(challenge, ['sort', 'topk', 'compact'])) return '3,1,4,1,5,9,2,6'
-  if (hasTag(challenge, 'histogram')) return '0,1,1,2,3,3,3,0'
-  if (hasAnyTag(challenge, ['cross-entropy'])) return '0.70f,0.20f,0.10f,0.01f,0,0,0,0'
-  if (hasAnyTag(challenge, ['conv2d', 'max-pool2d', 'jacobi'])) return '1,2,3,4,5,6,7,8,9'
-  if (hasTag(challenge, 'conv3d')) return '1,2,3,4,5,6,7,8'
-  if (hasTag(challenge, 'graph') || hasAnyTag(challenge, ['bfs', 'apsp'])) return '0,1,9,9,1,0,1,9,9,1,0,1,9,9,1,0'
-  if (exampleKind(challenge) === 'attention') return '1,0,0,0,0,1,0,0'
-  if (exampleKind(challenge) === 'matmul') return '1,2,3,4'
-  return '1,2,-1,2,0,3,-2,4'
-}
-
-function auxArray(challenge: Challenge) {
-  if (exampleKind(challenge) === 'attention') return '1,0,0,0,0,1,0,0,0,0,1,0,1,2,3,4,5,6,7,8,9,10,11,12'
-  if (exampleKind(challenge) === 'matmul') return '5,6,7,8'
-  if (hasTag(challenge, 'conv1d') || hasTag(challenge, 'causal-conv1d')) return '1,0,-1,0,0,0,0,0'
-  if (hasTag(challenge, 'conv2d') || hasTag(challenge, 'conv3d')) return '1,0,0,-1,1,0,0,-1'
-  if (hasAnyTag(challenge, ['compact'])) return '1,0,1,0,1,0,1,0'
-  if (hasAnyTag(challenge, ['cross-entropy'])) return '1,0,0,0,0,0,0,0'
-  if (hasAnyTag(challenge, ['batch-norm'])) return '2.5,3.5,1,1,0,0,0,0'
-  if (hasAnyTag(challenge, ['nearest', 'kmeans'])) return '0,0,2,2,0,0,0,0'
-  return '4,3,2,1,0.5f,0.25f,0.125f,0.0625f'
-}
-
 function cFloatLiteral(value: number) {
   return Number.isInteger(value) ? `${value}.0f` : `${value}f`
+}
+
+function inputInitializer(challenge: Challenge) {
+  if (exampleKind(challenge) === 'attention') {
+    return `input[0] = 1.0f;
+  input[5] = 1.0f;
+  aux[0] = 1.0f;
+  aux[5] = 1.0f;
+  aux[10] = 1.0f;
+  for (int i = 0; i < 12; ++i) {
+    aux[12 + i] = (float)(i + 1);
+  }`
+  }
+
+  if (exampleKind(challenge) === 'matmul') {
+    return `input[0] = values[0];
+  input[1] = values[1];
+  input[2] = values[1] + 1.0f;
+  input[3] = values[1] + 2.0f;
+  aux[0] = 1.0f;
+  aux[1] = 2.0f;
+  aux[2] = 3.0f;
+  aux[3] = 4.0f;`
+  }
+
+  if (hasTag(challenge, 'matrix-add')) {
+    return `input[0] = values[0];
+  input[1] = values[1];
+  input[2] = values[1] + 1.0f;
+  input[3] = values[1] + 2.0f;
+  aux[0] = 1.0f;
+  aux[1] = 2.0f;
+  aux[2] = 3.0f;
+  aux[3] = 4.0f;`
+  }
+
+  if (hasTag(challenge, 'transpose') || hasTag(challenge, 'copy')) {
+    return `input[0] = values[0];
+  input[1] = values[1];
+  input[2] = values[1] + 1.0f;
+  input[3] = values[1] + 2.0f;`
+  }
+
+  if (hasTag(challenge, 'vector-add')) {
+    return `for (int i = 0; i < 5; ++i) {
+    input[i] = values[i];
+    aux[i] = (float)i;
+  }`
+  }
+
+  if (hasTag(challenge, 'dot')) {
+    return `for (int i = 0; i < 5; ++i) {
+    input[i] = values[i];
+    aux[i] = (float)(i + 1);
+  }`
+  }
+
+  if (hasTag(challenge, 'invert')) {
+    return `for (int i = 0; i < 5; ++i) {
+    float shifted = values[i] + 128.0f;
+    input[i] = fmin(255.0f, fmax(0.0f, shifted));
+  }`
+  }
+
+  if (hasTag(challenge, 'interleave')) {
+    return `for (int i = 0; i < 3; ++i) {
+    input[i] = values[i];
+    aux[i] = (float)((i + 1) * 10);
+  }`
+  }
+
+  if (hasTag(challenge, 'grayscale')) {
+    return `input[0] = 120.0f;
+  input[1] = values[1] + 79.0f;
+  input[2] = 40.0f;`
+  }
+
+  if (hasTag(challenge, 'softmax') || hasTag(challenge, 'top-p')) {
+    return `for (int i = 0; i < 4; ++i) {
+    input[i] = values[i];
+  }`
+  }
+
+  if (hasTag(challenge, 'cross-entropy')) {
+    return `input[0] = 0.7f;
+  input[1] = 0.2f;
+  input[2] = 0.1f;
+  input[3] = 0.01f;
+  aux[0] = 1.0f;`
+  }
+
+  if (hasTag(challenge, 'conv1d') || hasTag(challenge, 'causal-conv1d')) {
+    return `for (int i = 0; i < 5; ++i) {
+    input[i] = values[i];
+  }`
+  }
+
+  return `for (int i = 0; i < 5; ++i) {
+    input[i] = values[i];
+    aux[i] = (float)(i + 1);
+  }`
 }
 
 export function buildOpenClStarter(challenge: Challenge) {
@@ -489,7 +581,11 @@ export function buildOpenClStarter(challenge: Challenge) {
       : `size_t global = (size_t)${Math.max(constants.n, outN)};`
   const enqueueDim = constants.global === 'global2' ? '2, NULL, global' : '1, NULL, &global'
   const paramLiteral = cFloatLiteral(constants.param)
-  const printOutput = shape
+  const printOutput = isScalarOutput(challenge)
+    ? `printf("output = ");
+  print_number(output[0]);
+  printf("\\n");`
+    : shape
     ? `printf("output = [");
   for (int r = 0; r < ${shape.rows}; ++r) {
     if (r) printf(",");
@@ -512,13 +608,14 @@ export function buildOpenClStarter(challenge: Challenge) {
 // Build locally on macOS:
 //   clang main.c -framework OpenCL -O2 -o runner
 // Run:
-//   ./runner
-// The host validates a small hard-coded example; scale dimensions and buffers
-// to solve the full Arena case.
+//   echo '{"payload":{"seed":1}}' | ./runner
+// The host reads the Arena testcase seed from stdin and builds a deterministic
+// small example; scale dimensions and buffers to solve the full Arena case.
 #include <OpenCL/opencl.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static const char* KERNEL_NAME = "${challenge.function_name}";
 
@@ -548,6 +645,18 @@ static void print_kernel_time(cl_event event) {
     printf("kernel_time_ms = %.6f\\n", (double)(end - start) / 1000000.0);
   }
   clReleaseEvent(event);
+}
+
+static int read_seed(void) {
+  char buffer[4096];
+  size_t len = fread(buffer, 1, sizeof(buffer) - 1, stdin);
+  buffer[len] = '\\0';
+  char* seed_key = strstr(buffer, "\\"seed\\"");
+  if (!seed_key) return 1;
+  char* colon = strchr(seed_key, ':');
+  if (!colon) return 1;
+  int seed = atoi(colon + 1);
+  return seed == 0 ? 1 : seed;
 }
 
 int main(void) {
@@ -584,14 +693,23 @@ int main(void) {
   kernel = clCreateKernel(program, KERNEL_NAME, &err);
   if (err != CL_SUCCESS) fail("clCreateKernel", err);
 
+  const int seed = read_seed();
   const int n = ${constants.n};
   const int rows = ${constants.rows};
   const int cols = ${constants.cols};
   const int depth = ${constants.depth};
   const float param = ${paramLiteral};
-  float input[64] = { ${inputArray(challenge)} };
-  float aux[64] = { ${auxArray(challenge)} };
+  float values[5] = {
+    (float)seed,
+    (float)(seed + 1),
+    (float)(-seed),
+    (float)(2 * seed),
+    (float)(seed % 3 - 1)
+  };
+  float input[64] = {0};
+  float aux[64] = {0};
   float output[64] = {0};
+  ${inputInitializer(challenge)}
 
   cl_mem input_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(input), input, &err);
   if (err != CL_SUCCESS) fail("clCreateBuffer(input)", err);

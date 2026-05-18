@@ -139,11 +139,12 @@ function expectedFor(op: string, seed: number): unknown {
     case 'reverse': return [...values].reverse()
     case 'relu': return values.map((v) => Math.max(0, v))
     case 'leaky_relu': return values.map((v) => v >= 0 ? v : Number((v * 0.1).toFixed(4)))
-    case 'silu': return Number((values.reduce((a, v) => a + v / (1 + Math.exp(-v)), 0)).toFixed(4))
+    case 'silu': return values.map((v) => Number((v / (1 + Math.exp(-v))).toFixed(6)))
     case 'sigmoid': return values.map((v) => Number((1 / (1 + Math.exp(-v))).toFixed(4)))
     case 'clip': return values.map((v) => Math.max(-2, Math.min(4, v)))
     case 'sum': return values.reduce((a, v) => a + v, 0)
     case 'dot': return values.reduce((a, v, i) => a + v * (i + 1), 0)
+    case 'cross_entropy': return Number((-Math.log(0.7)).toFixed(6))
     case 'softmax': {
       const exps = values.slice(0, 4).map((v) => Math.exp(v - Math.max(...values.slice(0, 4))))
       const total = exps.reduce((a, v) => a + v, 0)
@@ -158,9 +159,21 @@ function expectedFor(op: string, seed: number): unknown {
       for (const v of values.slice(1)) { cur = Math.max(v, cur + v); best = Math.max(best, cur) }
       return best
     }
-    case 'grayscale': return [Math.round(0.299 * 120 + 0.587 * (seed + 80) + 0.114 * 40)]
+    case 'grayscale': return [Number((0.299 * 120 + 0.587 * (seed + 81) + 0.114 * 40).toFixed(6))]
     case 'interleave': return [values[0], 10, values[1], 20, values[2], 30]
-    case 'copy': return { copied: matrix, checksum: checksum(matrix.flat()) }
+    case 'copy': return matrix
+    case 'monte_carlo': return 2
+    case 'top_p': {
+      let sum = 0
+      let count = 0
+      for (const value of values.slice(0, 4)) {
+        sum += value
+        count += 1
+        if (sum >= 0.8) break
+      }
+      return count
+    }
+    case 'moe_topk': return values.reduce((best, value, index) => value > values[best] ? index : best, 0)
     default: return { checksum: checksum(values), op, seed }
   }
 }
