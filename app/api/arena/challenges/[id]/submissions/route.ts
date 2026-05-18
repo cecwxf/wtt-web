@@ -10,7 +10,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const challenge = getChallenge(params.id)
   if (!challenge) return Response.json({ detail: 'Challenge not found' }, { status: 404 })
 
-  let body: { code?: string; language?: string; user_id?: string }
+  let body: { code?: string; language?: string; user_id?: string; environment?: string }
   try {
     body = await request.json()
   } catch {
@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const code = String(body.code || '').trimEnd()
   const language = String(body.language || 'python')
   const userId = String(body.user_id || 'demo-user')
+  const environment = String(body.environment || '')
   if (!code.trim()) return Response.json({ detail: 'Code is required' }, { status: 400 })
   if (code.length > 40_000) return Response.json({ detail: 'Code is too large' }, { status: 413 })
 
@@ -50,6 +51,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       code,
       language,
       submissionId,
+      environment,
     })
     const acceptedCount = judged.results.filter((result) => result.status === 'accepted').length
     const judgedCaseCount = judged.results.length || getChallengeTestCases(challenge.id).length
