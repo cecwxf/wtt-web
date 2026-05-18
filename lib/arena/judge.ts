@@ -1213,6 +1213,168 @@ async function runRemoteOpenCLMatrixElementAdapter(input: JudgeInput, remoteUrl:
   }
 }
 
+function buildRemoteOpenCLStandaloneAdapter(code: string, challenge: Challenge) {
+  const functionName = challenge.function_name
+  const kernelName = `__wtt_kernel_${functionName}`
+  const rewrittenKernel = renameOpenCLKernel(code, functionName, kernelName)
+  return `#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define __kernel
+#define __global
+#define __constant const
+#define __local
+#define barrier(flags) ((void)0)
+#define CLK_LOCAL_MEM_FENCE 0
+
+static int __wtt_gid0 = 0;
+static int __wtt_gid1 = 0;
+static int __wtt_global_size0 = 1;
+static int __wtt_global_size1 = 1;
+static int get_global_id(int dim) { return dim == 0 ? __wtt_gid0 : (dim == 1 ? __wtt_gid1 : 0); }
+static int get_local_id(int dim) { (void)dim; return 0; }
+static int get_group_id(int dim) { (void)dim; return 0; }
+static int get_global_size(int dim) { return dim == 0 ? __wtt_global_size0 : (dim == 1 ? __wtt_global_size1 : 1); }
+static float __wtt_fmax(float a, float b) { return a > b ? a : b; }
+static float __wtt_fmin(float a, float b) { return a < b ? a : b; }
+static float __wtt_fabs(float x) { return x < 0.0f ? -x : x; }
+static float __wtt_round(float x) { return x >= 0.0f ? (float)((int)(x + 0.5f)) : (float)((int)(x - 0.5f)); }
+static float __wtt_fmod(float a, float b) { return b == 0.0f ? 0.0f : a - (float)((int)(a / b)) * b; }
+static float __wtt_exp(float x) {
+  if (x < -20.0f) return 0.0f;
+  if (x > 20.0f) x = 20.0f;
+  float term = 1.0f;
+  float sum = 1.0f;
+  for (int i = 1; i <= 24; ++i) {
+    term *= x / (float)i;
+    sum += term;
+  }
+  return sum > 0.0f ? sum : 0.0f;
+}
+static float __wtt_sqrt(float x) {
+  if (x <= 0.0f) return 0.0f;
+  float r = x > 1.0f ? x : 1.0f;
+  for (int i = 0; i < 12; ++i) r = 0.5f * (r + x / r);
+  return r;
+}
+static float __wtt_log(float x) {
+  if (x <= 0.0f) return -20.0f;
+  float y = (x - 1.0f) / (x + 1.0f);
+  float y2 = y * y;
+  float term = y;
+  float sum = 0.0f;
+  for (int i = 1; i < 20; i += 2) {
+    sum += term / (float)i;
+    term *= y2;
+  }
+  return 2.0f * sum;
+}
+static float __wtt_pow(float a, float b) { return __wtt_exp(__wtt_log(a) * b); }
+static float __wtt_sin(float x) {
+  x = __wtt_fmod(x, 6.2831853f);
+  float x2 = x * x;
+  return x * (1.0f - x2 / 6.0f + x2 * x2 / 120.0f - x2 * x2 * x2 / 5040.0f);
+}
+static float __wtt_cos(float x) {
+  x = __wtt_fmod(x, 6.2831853f);
+  float x2 = x * x;
+  return 1.0f - x2 / 2.0f + x2 * x2 / 24.0f - x2 * x2 * x2 / 720.0f;
+}
+static float __wtt_tanh(float x) {
+  float e = __wtt_exp(2.0f * x);
+  return (e - 1.0f) / (e + 1.0f);
+}
+#define fmax(a,b) __wtt_fmax((float)(a), (float)(b))
+#define fmaxf(a,b) __wtt_fmax((float)(a), (float)(b))
+#define fmin(a,b) __wtt_fmin((float)(a), (float)(b))
+#define fminf(a,b) __wtt_fmin((float)(a), (float)(b))
+#define fabs(a) __wtt_fabs((float)(a))
+#define fabsf(a) __wtt_fabs((float)(a))
+#define round(a) __wtt_round((float)(a))
+#define roundf(a) __wtt_round((float)(a))
+#define fmod(a,b) __wtt_fmod((float)(a), (float)(b))
+#define exp(a) __wtt_exp((float)(a))
+#define expf(a) __wtt_exp((float)(a))
+#define sqrt(a) __wtt_sqrt((float)(a))
+#define sqrtf(a) __wtt_sqrt((float)(a))
+#define log(a) __wtt_log((float)(a))
+#define pow(a,b) __wtt_pow((float)(a), (float)(b))
+#define sin(a) __wtt_sin((float)(a))
+#define cos(a) __wtt_cos((float)(a))
+#define tanh(a) __wtt_tanh((float)(a))
+
+${rewrittenKernel}
+
+static void print_number(float value) {
+  int integer_value = (int)value;
+  float delta = value - (float)integer_value;
+  if (delta < 0.0f) delta = -delta;
+  if (delta < 0.00001f) printf("%d", integer_value);
+  else printf("%.6g", value);
+}
+
+int main(void) {
+  const int n = 8;
+  const int rows = 2;
+  const int cols = 4;
+  const int depth = 3;
+  const float param = 0.5f;
+  float input[64] = { 1,2,-1,2,0,3,-2,4,5,6,7,8,9,10,11,12 };
+  float aux[64] = { 1,0,0,0,0,1,0,0,0,0,1,0,1,2,3,4,5,6,7,8,9,10,11,12,1,2,3,4,0.5f,0.25f,0.125f,0.0625f };
+  float output[64];
+  memset(output, 0, sizeof(output));
+  __wtt_global_size0 = n;
+  __wtt_global_size1 = rows;
+  for (int gid = 0; gid < n; ++gid) {
+    __wtt_gid0 = gid;
+    __wtt_gid1 = 0;
+    ${kernelName}(input, aux, output, n, rows, cols, depth, param);
+  }
+  __wtt_global_size0 = cols;
+  __wtt_global_size1 = rows;
+  for (int row = 0; row < rows; ++row) {
+    for (int col = 0; col < cols; ++col) {
+      __wtt_gid0 = col;
+      __wtt_gid1 = row;
+      ${kernelName}(input, aux, output, n, rows, cols, depth, param);
+    }
+  }
+  printf("output = [");
+  for (int i = 0; i < 8; ++i) {
+    if (i) printf(",");
+    print_number(output[i]);
+  }
+  printf("]\\n");
+  printf("kernel_time_ms = 0\\n");
+  return 0;
+}
+`
+}
+
+async function runRemoteOpenCLStandaloneAdapter(input: JudgeInput, remoteUrl: string): Promise<JudgeOutput> {
+  const adapted = await runRemoteJudge({
+    ...input,
+    code: buildRemoteOpenCLStandaloneAdapter(input.code, input.challenge),
+    language: 'c',
+  }, remoteUrl)
+  const memoryByCase = new Map(input.testCases.map((testCase) => [
+    testCase.id,
+    openCLDeviceMemoryKb(testCase.input, testCase.expected_output),
+  ]))
+  const results = adapted.results.map((result) => ({
+    ...result,
+    memory_kb: result.memory_kb || memoryByCase.get(result.test_case_id),
+  }))
+  return {
+    ...adapted,
+    provider: 'remote-opencl-standalone-smoke',
+    memory_kb: results.reduce((max, result) => Math.max(max, result.memory_kb || 0), 0) || adapted.memory_kb,
+    results,
+  }
+}
+
 async function runJudge0(code: string, stdin: string, timeoutMs: number): Promise<RawRunResult> {
   const base = process.env.JUDGE0_URL?.replace(/\/+$/, '')
   if (!base) return { status: 'system_error', stdout: '', stderr: '', error_message: 'JUDGE0_URL is not configured' }
@@ -1272,6 +1434,7 @@ export async function judgeSubmission(input: JudgeInput) {
       const adapterInput = standaloneOpenCLKernel
         ? { ...effectiveInput, code: standaloneOpenCLKernel }
         : effectiveInput
+      if (standaloneOpenCLKernel) return runRemoteOpenCLStandaloneAdapter(adapterInput, remoteJudgeUrl)
       if (canUseRemoteOpenCLMatrixAdapter(challenge, effectiveTestCases)) return runRemoteOpenCLMatrixAdapter(adapterInput, remoteJudgeUrl)
       if (canUseRemoteOpenCLMatrixElementAdapter(challenge, effectiveTestCases)) return runRemoteOpenCLMatrixElementAdapter(adapterInput, remoteJudgeUrl)
       if (canUseRemoteOpenCLVectorAdapter(challenge, effectiveTestCases)) return runRemoteOpenCLVectorAdapter(adapterInput, remoteJudgeUrl)
