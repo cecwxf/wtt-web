@@ -378,6 +378,7 @@ const openClArrayExampleTags = [
 const openClScalarExampleTags = ['sum', 'dot', 'silu', 'max-subarray']
 
 function openClOutputKind(challenge: Challenge, mode: string) {
+  if (mode === 'attention') return 'matrix'
   if (mode === 'copy') return 'copy_object'
   if (mode !== 'vector') return 'matrix'
   if (hasAnyTag(challenge, openClScalarExampleTags)) return 'scalar'
@@ -386,7 +387,9 @@ function openClOutputKind(challenge: Challenge, mode: string) {
 }
 
 function kernelMode(challenge: Challenge) {
-  return challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
+  return challenge.tags.includes('attention')
+    ? 'attention'
+    : challenge.tags.includes('matmul') || challenge.tags.includes('gemm')
     ? 'gemm'
     : challenge.tags.includes('matrix-add')
       ? 'matrix_add'
@@ -414,6 +417,48 @@ function exampleVectorGlobalSize(challenge: Challenge) {
 }
 
 function openClKernelSource(challenge: Challenge) {
+  if (challenge.tags.includes('attention')) {
+    return `// Device kernel: scaled dot-product softmax attention.
+// Supported local signature:
+//   kernel_name(Q, K, V, output, M, N, D)
+// Q is [M,D], K and V are [N,D], output is [M,D], all row-major.
+__kernel void ${challenge.function_name}(__global const float* Q,
+                                         __global const float* K,
+                                         __global const float* V,
+                                         __global float* output,
+                                         const int M,
+                                         const int N,
+                                         const int D) {
+    const int row = get_global_id(0);
+    const int col = get_global_id(1);
+    if (row >= M || col >= D) return;
+
+    const float scale = 1.0f / sqrt((float)D);
+    float max_score = -3.402823e38f;
+    for (int j = 0; j < N; ++j) {
+        float dot = 0.0f;
+        for (int k = 0; k < D; ++k) {
+            dot += Q[row * D + k] * K[j * D + k];
+        }
+        max_score = fmax(max_score, dot * scale);
+    }
+
+    float denom = 0.0f;
+    float acc = 0.0f;
+    for (int j = 0; j < N; ++j) {
+        float dot = 0.0f;
+        for (int k = 0; k < D; ++k) {
+            dot += Q[row * D + k] * K[j * D + k];
+        }
+        const float weight = exp(dot * scale - max_score);
+        denom += weight;
+        acc += weight * V[j * D + col];
+    }
+    output[row * D + col] = acc / denom;
+}
+`
+  }
+
   if (challenge.tags.includes('matmul') || challenge.tags.includes('gemm')) {
     return `// Device kernel: GEMM, row-major, C[M,N] = A[M,K] * B[K,N].
 // Supported local GEMM signature:
@@ -507,7 +552,7 @@ __kernel void ${challenge.function_name}(__global const float* input,
     if (challenge.tags.includes('max-subarray')) return '    if (gid == 0) {\n        float best = values[0];\n        float cur = values[0];\n        for (int i = 1; i < n; ++i) {\n            cur = fmax(values[i], cur + values[i]);\n            best = fmax(best, cur);\n        }\n        output[0] = best;\n    }'
     if (challenge.tags.includes('grayscale')) return '    if (gid == 0) output[0] = round(0.299f * 120.0f + 0.587f * (values[0] + 80.0f) + 0.114f * 40.0f);'
     if (challenge.tags.includes('interleave')) return '    if (gid == 0) output[0] = values[0];\n    else if (gid == 1) output[1] = 10.0f;\n    else if (gid == 2) output[2] = values[1];\n    else if (gid == 3) output[3] = 20.0f;\n    else if (gid == 4) output[4] = values[2];\n    else if (gid == 5) output[5] = 30.0f;'
-    return '    // Generic deterministic checksum example for larger AI-kernel tasks.\n    if (gid == 0) {\n        int checksum = 0;\n        for (int i = 0; i < n; ++i) checksum += ((int)(values[i] * 1000.0f)) * (i + 1);\n        output[0] = (float)checksum;\n    }'
+    return '    // TODO: implement this specific AI kernel from the problem statement.\n    // The old checksum placeholder was intentionally removed because it did\n    // not satisfy the kernel requirements.\n    if (gid == 0) output[0] = 0.0f;'
   })()
 
   return `// Device kernel: vector/scalar AI operator.
@@ -530,8 +575,61 @@ function openClStarter(challenge: Challenge) {
   const outputKind = openClOutputKind(challenge, mode)
   const outputN = exampleOutputN(challenge)
   const globalN = exampleVectorGlobalSize(challenge)
-  const fixedSoftmax = challenge.tags.includes('softmax')
-  const hostBody = mode === 'gemm'
+  const fixedSoftmax = challenge.tags.includes('softmax') || challenge.tags.includes('attention')
+  const hostBody = mode === 'attention'
+    ? `  const int M = 2, N = 3, D = 4;
+  float Q[8] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+  };
+  float Kmat[12] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+  };
+  float V[12] = {
+    1.0f, 2.0f, 3.0f, 4.0f,
+    5.0f, 6.0f, 7.0f, 8.0f,
+    9.0f, 10.0f, 11.0f, 12.0f,
+  };
+  float output[8] = {0};
+
+  cl_mem q_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(Q), Q, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(Q)", err);
+  cl_mem k_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(Kmat), Kmat, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(K)", err);
+  cl_mem v_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(V), V, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(V)", err);
+  cl_mem output_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(output), NULL, &err);
+  if (err != CL_SUCCESS) fail("clCreateBuffer(output)", err);
+  clSetKernelArg(kernel, 0, sizeof(cl_mem), &q_buf);
+  clSetKernelArg(kernel, 1, sizeof(cl_mem), &k_buf);
+  clSetKernelArg(kernel, 2, sizeof(cl_mem), &v_buf);
+  clSetKernelArg(kernel, 3, sizeof(cl_mem), &output_buf);
+  clSetKernelArg(kernel, 4, sizeof(int), &M);
+  clSetKernelArg(kernel, 5, sizeof(int), &N);
+  clSetKernelArg(kernel, 6, sizeof(int), &D);
+  size_t global[2] = { (size_t)M, (size_t)D };
+  cl_event kernel_event = NULL;
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, NULL, 0, NULL, &kernel_event);
+  if (err != CL_SUCCESS) fail("clEnqueueNDRangeKernel", err);
+  clFinish(queue);
+  clEnqueueReadBuffer(queue, output_buf, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL);
+  printf("output = [[");
+  for (int i = 0; i < M; ++i) {
+    if (i) printf("],[");
+    for (int j = 0; j < D; ++j) {
+      if (j) printf(",");
+      print_number(output[i * D + j]);
+    }
+  }
+  printf("]]\\n");
+  print_kernel_time(kernel_event);
+  clReleaseMemObject(output_buf);
+  clReleaseMemObject(v_buf);
+  clReleaseMemObject(k_buf);
+  clReleaseMemObject(q_buf);`
+    : mode === 'gemm'
     ? `  const int M = 2, N = 2, K = 2;
   float A[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
   float B[4] = { 1.0f, 2.0f, 3.0f, 4.0f };

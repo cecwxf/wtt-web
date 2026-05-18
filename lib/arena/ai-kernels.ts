@@ -149,6 +149,7 @@ function expectedFor(op: string, seed: number): unknown {
       const total = exps.reduce((a, v) => a + v, 0)
       return exps.map((v) => Number((v / total).toFixed(6)))
     }
+    case 'attention': return [[4.288824, 5.288824, 6.288824, 7.288824], [5, 6, 7, 8]]
     case 'prefix_sum': { let acc = 0; return values.map((v) => (acc += v)) }
     case 'sort': return [...values].sort((a, b) => a - b)
     case 'topk': return [...values].sort((a, b) => b - a).slice(0, 3)
@@ -165,6 +166,15 @@ function expectedFor(op: string, seed: number): unknown {
 }
 
 function payloadFor(spec: AiKernelSpec, seed: number) {
+  if (spec.op === 'attention') {
+    return {
+      op: spec.op,
+      seed,
+      q: [[1, 0, 0, 0], [0, 1, 0, 0]],
+      k: [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]],
+      v: [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]],
+    }
+  }
   return {
     op: spec.op,
     seed,
