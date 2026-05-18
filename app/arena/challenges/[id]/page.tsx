@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import ReactMarkdown from 'react-markdown'
+import katex from 'katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -33,6 +34,25 @@ type ChallengePayload = {
 }
 
 type TopicMessage = { id?: string; message_id?: string; sender_type?: string; sender_id?: string; semantic_type?: string; content?: string; timestamp?: string; created_at?: string }
+
+function reactText(children: unknown): string {
+  if (typeof children === 'string' || typeof children === 'number') return String(children)
+  if (Array.isArray(children)) return children.map(reactText).join('')
+  if (children && typeof children === 'object' && 'props' in children) {
+    return reactText((children as { props?: { children?: unknown } }).props?.children)
+  }
+  return ''
+}
+
+function renderBareLatexFormula(value: string) {
+  const formula = value.trim()
+  if (!/^\\[A-Za-z]+/.test(formula) || !/(?:=|<|>|\\leq?|\\geq?|\\neq|\\approx|\\sim|\\to)/.test(formula)) return null
+  try {
+    return katex.renderToString(formula, { displayMode: true, throwOnError: false, strict: false, trust: false })
+  } catch {
+    return null
+  }
+}
 type ArenaTypingState = { topicId: string; agentId: string; agentName?: string; startedAt: number; expiresAt: number }
 
 function diagramHasHtml(diagram?: WhiteboardDiagram | null) {
@@ -175,7 +195,19 @@ const chatModes: Array<{ id: ChatMode; zh: string; en: string; hintZh: string; h
 function ArenaChatMarkdown({ content }: { content: string }) {
   return (
     <div className="max-w-none text-sm leading-6 text-gray-300 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_a]:text-[#3ce8e2] [&_a]:underline [&_code]:rounded [&_code]:bg-black/30 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-gray-100 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-black [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-black [&_h3]:mb-1.5 [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_ol>li]:list-decimal [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-gray-700 [&_td]:p-2 [&_th]:border [&_th]:border-gray-700 [&_th]:bg-gray-800 [&_th]:p-2 [&_th]:text-left">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMarkdownMath(content)}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          p({ children }) {
+            const html = renderBareLatexFormula(reactText(children))
+            if (html) return <div className="katex-display overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />
+            return <p>{children}</p>
+          },
+        }}
+      >
+        {normalizeMarkdownMath(content)}
+      </ReactMarkdown>
     </div>
   )
 }
