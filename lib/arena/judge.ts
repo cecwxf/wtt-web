@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
+import { DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 import type { Challenge, ChallengeTestCase, SubmissionResult, SubmissionStatus } from './types'
 
 interface JudgeInput {
@@ -1378,7 +1379,7 @@ async function runRemoteOpenCLStandaloneAdapter(input: JudgeInput, remoteUrl: st
 
 function openCLMacRunnerNotConfigured(input: JudgeInput, testCases: ChallengeTestCase[]): JudgeOutput {
   const testCase = testCases[0]
-  const message = 'Mac mini OpenCL runner is required for this submission. Configure WTT_ARENA_MAC_OPENCL_JUDGE_URL or run wtt-web on macOS with local OpenCL enabled.'
+  const message = 'Mac mini OpenCL runner is required for this submission. Configure WTT_API_URL / NEXT_PUBLIC_WTT_API_URL so wtt-web can forward OpenCL judging to the WTT server, or run wtt-web on macOS with local OpenCL enabled.'
   const memory = testCase ? openCLDeviceMemoryKb(testCase.input, testCase.expected_output) : undefined
   return {
     provider: OPENCL_MAC_SKILL,
@@ -1403,6 +1404,19 @@ function openCLMacRunnerNotConfigured(input: JudgeInput, testCases: ChallengeTes
         }]
       : [],
   }
+}
+
+function arenaRemoteJudgeUrl() {
+  const explicit =
+    process.env.WTT_ARENA_MAC_OPENCL_JUDGE_URL ||
+    process.env.WTT_ARENA_REMOTE_JUDGE_URL
+  if (explicit) return explicit
+  const base =
+    process.env.WTT_ARENA_BACKEND_URL ||
+    process.env.WTT_API_URL ||
+    process.env.NEXT_PUBLIC_WTT_API_URL ||
+    DEFAULT_WTT_API_ORIGIN
+  return `${base.replace(/\/+$/, '')}/arena/judge`
 }
 
 async function runJudge0(code: string, stdin: string, timeoutMs: number): Promise<RawRunResult> {
@@ -1456,14 +1470,14 @@ export async function judgeSubmission(input: JudgeInput) {
   const effectiveInput = { ...input, testCases: effectiveTestCases }
   const standaloneOpenCLKernel = standaloneOpenCLExample ? extractOpenCLKernelSource(code) : null
   const shouldUseLocalOpenCL = isOpenCL && process.platform === 'darwin' && process.env.WTT_ARENA_DISABLE_LOCAL_OPENCL !== '1' && process.env.WTT_ARENA_FORCE_REMOTE_JUDGE !== '1'
-  const macOpenCLJudgeUrl = process.env.WTT_ARENA_MAC_OPENCL_JUDGE_URL
+  const openCLRemoteJudgeUrl = arenaRemoteJudgeUrl()
   const remoteJudgeUrl = process.env.WTT_ARENA_REMOTE_JUDGE_URL
   const requiresMacOpenCL = isOpenCL && (
     input.environment === 'macos-opencl' ||
     challenge.tags.includes('macos-runner') ||
     challenge.tags.includes(OPENCL_MAC_SKILL)
   )
-  if (!shouldUseLocalOpenCL && isOpenCL && macOpenCLJudgeUrl) return runRemoteJudge(effectiveInput, macOpenCLJudgeUrl)
+  if (!shouldUseLocalOpenCL && isOpenCL) return runRemoteJudge(effectiveInput, openCLRemoteJudgeUrl)
   if (!shouldUseLocalOpenCL && requiresMacOpenCL) return openCLMacRunnerNotConfigured(effectiveInput, effectiveTestCases)
   if (!shouldUseLocalOpenCL && remoteJudgeUrl) {
     if (isOpenCL) {
