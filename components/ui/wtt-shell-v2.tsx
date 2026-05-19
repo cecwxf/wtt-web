@@ -8,7 +8,6 @@ import { TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
-import { LocalLibrary } from './local-library'
 import { useI18n } from '@/lib/i18n-provider'
 
 interface P2PRequest {
@@ -243,7 +242,6 @@ export function WttShellV2(props: WttShellV2Props) {
               onUnclaimAgent={onUnclaimAgent}
               onCreateGeneralTask={onCreateGeneralTask}
               onToggleSidebar={() => setSidebarCollapsed(true)}
-              localLibrarySlot={<LocalLibrary />}
             />
           )}
 
