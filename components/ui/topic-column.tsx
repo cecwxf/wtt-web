@@ -82,30 +82,30 @@ function getGroupChrome(group: TopicGroupKey) {
     case 'p2p':
       return {
         Icon: Lock,
-        header: 'border-indigo-200/70 bg-gradient-to-r from-indigo-50 to-white text-indigo-700 shadow-indigo-100/60 dark:border-indigo-800/60 dark:from-indigo-950/30 dark:to-zinc-900 dark:text-indigo-300 dark:shadow-none',
-        icon: 'bg-indigo-500 text-white shadow-sm shadow-indigo-200 dark:shadow-none',
-        count: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-200',
+        header: 'border-transparent bg-transparent text-[#7a766e] dark:text-zinc-400',
+        icon: 'bg-[#ece8df] text-[#6c675d] dark:bg-zinc-800 dark:text-zinc-300',
+        count: 'bg-[#ece8df] text-[#7a766e] dark:bg-zinc-800 dark:text-zinc-300',
       }
     case 'task':
       return {
         Icon: ClipboardList,
-        header: 'border-emerald-200/70 bg-gradient-to-r from-emerald-50 to-white text-emerald-700 shadow-emerald-100/60 dark:border-emerald-800/60 dark:from-emerald-950/30 dark:to-zinc-900 dark:text-emerald-300 dark:shadow-none',
-        icon: 'bg-emerald-500 text-white shadow-sm shadow-emerald-200 dark:shadow-none',
-        count: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200',
+        header: 'border-transparent bg-transparent text-[#7a766e] dark:text-zinc-400',
+        icon: 'bg-[#ece8df] text-[#6c675d] dark:bg-zinc-800 dark:text-zinc-300',
+        count: 'bg-[#ece8df] text-[#7a766e] dark:bg-zinc-800 dark:text-zinc-300',
       }
     case 'discuss':
       return {
         Icon: MessageCircle,
-        header: 'border-violet-200/70 bg-gradient-to-r from-violet-50 to-white text-violet-700 shadow-violet-100/60 dark:border-violet-800/60 dark:from-violet-950/30 dark:to-zinc-900 dark:text-violet-300 dark:shadow-none',
-        icon: 'bg-violet-500 text-white shadow-sm shadow-violet-200 dark:shadow-none',
-        count: 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200',
+        header: 'border-transparent bg-transparent text-[#7a766e] dark:text-zinc-400',
+        icon: 'bg-[#ece8df] text-[#6c675d] dark:bg-zinc-800 dark:text-zinc-300',
+        count: 'bg-[#ece8df] text-[#7a766e] dark:bg-zinc-800 dark:text-zinc-300',
       }
     case 'subscriber':
       return {
         Icon: Radio,
-        header: 'border-amber-200/70 bg-gradient-to-r from-amber-50 to-white text-amber-700 shadow-amber-100/60 dark:border-amber-800/60 dark:from-amber-950/30 dark:to-zinc-900 dark:text-amber-300 dark:shadow-none',
-        icon: 'bg-amber-500 text-white shadow-sm shadow-amber-200 dark:shadow-none',
-        count: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200',
+        header: 'border-transparent bg-transparent text-[#7a766e] dark:text-zinc-400',
+        icon: 'bg-[#ece8df] text-[#6c675d] dark:bg-zinc-800 dark:text-zinc-300',
+        count: 'bg-[#ece8df] text-[#7a766e] dark:bg-zinc-800 dark:text-zinc-300',
       }
   }
 }
@@ -357,7 +357,7 @@ export function TopicColumn({
     return (
       <div
         key={topic.topic_id}
-        className={`relative mt-1 rounded-lg ${isPinned ? 'border-l-[3px] border-l-amber-300 dark:border-l-amber-500' : ''} ${isSelected ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
+        className={`relative mt-0.5 rounded-md ${isPinned ? 'border-l-[3px] border-l-[#f87500]' : ''} ${isSelected ? 'bg-[#ebe7df]' : 'hover:bg-[#efebe4] dark:hover:bg-zinc-800/80'}`}
         onContextMenu={(e) => {
           e.preventDefault()
           setMenuFor(topic.topic_id)
@@ -365,10 +365,10 @@ export function TopicColumn({
       >
         <button
           onClick={() => onSelectTopic(topic.topic_id)}
-          className={`flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left transition ${
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition ${
             isSelected
-              ? 'text-indigo-600 dark:text-indigo-400'
-              : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+              ? 'text-[#1f2328] dark:text-zinc-100'
+              : 'text-[#615d55] hover:text-[#1f2328] dark:text-zinc-400 dark:hover:text-zinc-100'
           }`}
         >
           {taskGroup ? (
@@ -491,17 +491,17 @@ export function TopicColumn({
   }
 
   return (
-    <div className="flex h-full w-[250px] flex-col border-r border-slate-200/80 dark:border-zinc-700 bg-[#f7f5f2] dark:bg-zinc-900">
+    <div className="flex h-full w-[250px] flex-col border-r border-[#e5e0d8] bg-[#f6f3ed] dark:border-zinc-800 dark:bg-zinc-950">
       {localLibrarySlot}
-      <div className="border-b border-slate-200 dark:border-zinc-700 px-3 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <div className="border-b border-[#e5e0d8] px-3 py-3 dark:border-zinc-800">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9b9488] dark:text-zinc-500">
           {agentName ? t('topic.agentsTopics', { name: agentName }) : t('topic.topics')}
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {agentOptions && agentOptions.length > 0 && onSelectAgent && selectedAgentId ? (
-          <div className="mb-2 rounded-lg border border-slate-200/80 dark:border-zinc-700 bg-white/70 dark:bg-zinc-800/40 px-2 py-2">
+          <div className="mb-2 rounded-lg border border-[#e5e0d8] bg-white/55 px-2 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
             <div className="mb-1 flex items-center justify-between">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">{t('agent.agents')}</p>
               <span
@@ -587,7 +587,7 @@ export function TopicColumn({
         {onCreateGeneralTask && (
           <button
             onClick={onCreateGeneralTask}
-            className="mb-2 flex w-full items-center gap-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/80 dark:bg-emerald-950/20 px-2 py-2 text-left text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/30 transition"
+            className="mb-2 flex w-full items-center gap-2 rounded-lg border border-[#ead7bf] bg-[#fff8ed] px-2 py-2 text-left text-[#9a4b00] transition hover:bg-[#fff1d9] dark:border-zinc-800 dark:bg-zinc-900 dark:text-amber-300 dark:hover:bg-zinc-800"
           >
             <Plus className="h-4 w-4 shrink-0" />
             <span className="truncate text-sm font-medium">{t('topic.newTask')}</span>
@@ -599,8 +599,8 @@ export function TopicColumn({
             onClick={() => onSelectTopic(null)}
             className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2.5 text-left transition ${
               selectedTopicId === null
-                ? 'bg-slate-50 text-indigo-600'
-                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                ? 'bg-[#ebe7df] text-[#1f2328]'
+                : 'text-[#615d55] hover:bg-[#efebe4] hover:text-[#1f2328]'
             }`}
           >
             <Hash className="h-4 w-4 shrink-0" />
@@ -627,7 +627,7 @@ export function TopicColumn({
           const GroupIcon = chrome.Icon
           return (
           <div key={group} className="mb-2.5">
-            <div className={`mx-1 mb-1.5 flex items-center justify-between rounded-xl border px-2.5 py-2 shadow-sm ${chrome.header}`}>
+            <div className={`mx-1 mb-1 flex items-center justify-between rounded-md border px-1.5 py-1 ${chrome.header}`}>
               <button
                 onClick={() => toggleGroup(group)}
                 className="inline-flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left text-[13px] font-bold leading-none transition hover:opacity-80"

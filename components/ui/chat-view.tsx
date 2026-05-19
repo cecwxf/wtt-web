@@ -1619,11 +1619,11 @@ export function ChatView({
           </div>
         </div>
       )}
-      <div className={`border-b border-slate-200 dark:border-zinc-700 ${compactUi ? 'px-2 py-0.5' : 'px-3 py-1.5'}`}>
+      <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 py-0.5' : 'px-4 py-2'}`}>
         <div className={`flex items-center justify-between ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
           <div className="min-w-0">
             <div className={`flex items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
-              <h2 className={`truncate font-semibold dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}>{topicName}</h2>
+              <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}># {topicName}</h2>
               {!compactUi && (
                 <span className="shrink-0 text-[10px] text-slate-400">
                   {t('chat.messagesLoaded', { count: messages.length })}
@@ -1665,7 +1665,7 @@ export function ChatView({
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] dark:bg-zinc-900 px-3 py-3 sm:px-4"
+        className="min-h-0 flex-1 overflow-y-auto bg-[#fbfaf7] px-4 py-3 dark:bg-zinc-950 sm:px-6"
       >
         <div className="mb-3 flex justify-center">
           <button
@@ -1690,12 +1690,12 @@ export function ChatView({
         {groupedMessages.map((group) => (
           <div key={group.label} className="mb-4">
             <div className="mb-3 flex items-center gap-3">
-              <div className="h-px flex-1 bg-white/10" />
-              <span className="rounded-full border border-slate-200/80 bg-white/80 dark:border-zinc-700 dark:bg-zinc-800/90 px-3 py-1 text-[11px] text-slate-500 dark:text-zinc-400 shadow-sm">{group.label}</span>
-              <div className="h-px flex-1 bg-white/10" />
+              <div className="h-px flex-1 bg-[#eee9df] dark:bg-zinc-900" />
+              <span className="rounded-full border border-[#e7e1d8] bg-[#fbfaf7] px-3 py-1 text-[11px] text-[#8a8378] shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-500">{group.label}</span>
+              <div className="h-px flex-1 bg-[#eee9df] dark:bg-zinc-900" />
             </div>
 
-            <div className="space-y-2">
+            <div className="overflow-hidden rounded-xl border border-[#eee9df] bg-white/55 dark:border-zinc-900 dark:bg-zinc-950">
               {group.messages.map((message) => {
                 const isMine = message.sender_type === 'human'
                 const label = senderLabelText(message.sender_display_name, message.sender_id)
@@ -1744,14 +1744,14 @@ export function ChatView({
                 }
 
                 return (
-                  <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`flex max-w-[96%] items-start gap-1.5 ${isMine ? 'flex-row-reverse' : ''}`}>
+                  <div key={message.message_id} className="group flex justify-start border-b border-[#eee9df] last:border-b-0 transition-colors hover:bg-[#f4f1eb]/70 dark:border-zinc-900 dark:hover:bg-zinc-900/60">
+                    <div className="flex w-full max-w-none items-start gap-2.5 px-2 py-2.5">
                       {message.sender_type === 'agent' ? (
                         <button
                           type="button"
                           onClick={() => openAgentCard(message.sender_id, message.sender_display_name, message.sender_avatar_url)}
                           title={`View ${message.sender_display_name || message.sender_id} profile`}
-                          className="mt-0.5 h-8 w-8 shrink-0 overflow-hidden rounded-full border text-[11px] font-semibold shadow-sm transition hover:scale-[1.02]"
+                          className="mt-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-md border border-[#e2ddd4] text-[10px] font-semibold shadow-sm transition hover:scale-[1.02] dark:border-zinc-800"
                           style={message.sender_avatar_url ? undefined : avatarTone(message.sender_id || message.sender_display_name || 'agent', 'agent')}
                         >
                           {message.sender_avatar_url ? (
@@ -1765,7 +1765,7 @@ export function ChatView({
                           type="button"
                           onClick={() => openHumanCard(message.sender_id, message.sender_display_name, message.sender_avatar_url)}
                           title={`View ${message.sender_display_name || message.sender_id} profile`}
-                          className="mt-0.5 h-8 w-8 shrink-0 overflow-hidden rounded-full border text-[11px] font-semibold shadow-sm transition hover:scale-[1.02]"
+                          className="mt-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-md border border-[#e2ddd4] text-[10px] font-semibold shadow-sm transition hover:scale-[1.02] dark:border-zinc-800"
                           style={message.sender_avatar_url ? undefined : avatarTone(message.sender_id || message.sender_display_name || 'human', 'human')}
                         >
                           {message.sender_avatar_url ? (
@@ -1776,19 +1776,22 @@ export function ChatView({
                         </button>
                       )}
 
-                      <div className="min-w-0 max-w-[76%]">
+                      <div className="min-w-0 flex-1">
                         {!!label && (
-                          <p className={`mb-1 px-1 truncate text-[11px] font-medium ${isMine ? 'text-emerald-700 dark:text-emerald-400' : 'text-sky-700 dark:text-sky-400'}`}>
-                            {label}
+                          <p className="mb-0.5 flex items-center gap-1.5 truncate px-1 text-[12px] font-semibold text-[#2b2f33] dark:text-zinc-100">
+                            <span className="truncate">{label}</span>
+                            <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${isMine ? 'bg-[#f1eee7] text-[#766f64] dark:bg-zinc-800 dark:text-zinc-400' : 'bg-[#eee8dd] text-[#9a4b00] dark:bg-zinc-800 dark:text-amber-300'}`}>
+                              {isMine ? 'You' : 'AI'}
+                            </span>
                           </p>
                         )}
 
                         <div
-                          className={`rounded-2xl px-3.5 py-2.5 text-[14px] leading-[1.42] ${
+                          className={`w-full rounded-md px-2 py-1.5 text-[14px] leading-7 ${
                             isMine
-                              ? 'bg-[#DCF8C6] dark:bg-emerald-900/45 text-slate-800 dark:text-zinc-100'
-                              : 'bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-200'
-                          } ${isMine ? 'rounded-br-md' : 'rounded-bl-md'} shadow-[0_1px_0_rgba(0,0,0,0.08)]`}
+                              ? 'bg-[#f4f1eb] text-[#283038] dark:bg-zinc-900 dark:text-zinc-100'
+                              : 'bg-transparent text-[#283038] dark:text-zinc-200'
+                          }`}
                         >
                           {/* Reply-to quote preview */}
                           {message.reply_to && (() => {
@@ -2071,7 +2074,7 @@ export function ChatView({
                           </div>
                         )
                       })()}
-                      <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] leading-none ${isMine ? 'text-emerald-600/70 dark:text-emerald-300/70' : 'text-slate-500 dark:text-zinc-400'}`}>
+                      <div className="mt-1 flex items-center gap-2 px-1 text-[10px] leading-none text-[#9b9488] opacity-70 transition group-hover:opacity-100 dark:text-zinc-500">
                         <span>{formatTime(message.timestamp)}</span>
                         <button
                           type="button"
@@ -2109,12 +2112,12 @@ export function ChatView({
       </div>
 
       {typingIndicatorText && (
-        <div className="mx-3 mb-2 flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400">
+        <div className="mx-5 mb-2 flex items-center gap-2 text-xs text-[#8a8378] dark:text-zinc-400">
           <span className="max-w-[220px] truncate">{typingIndicatorText}</span>
-          <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 dark:bg-zinc-800">
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:0ms]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:120ms]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:240ms]" />
+          <div className="inline-flex items-center gap-1 rounded-full bg-[#eee8dd] px-2.5 py-1 dark:bg-zinc-800">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8a8378] [animation-delay:0ms] dark:bg-zinc-500" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8a8378] [animation-delay:120ms] dark:bg-zinc-500" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8a8378] [animation-delay:240ms] dark:bg-zinc-500" />
           </div>
         </div>
       )}
@@ -2259,7 +2262,7 @@ export function ChatView({
         </div>
       )}
 
-      <div className="border-t border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-2">
+      <div className="border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
         {/* Slash command result display */}
         {slashResult && (
           <div className="mb-2 max-h-20 overflow-auto rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 px-2 py-1 text-[11px] text-slate-700 dark:text-zinc-300 whitespace-pre-wrap font-mono">
@@ -2278,7 +2281,7 @@ export function ChatView({
           <div className="relative shrink-0" ref={modelMenuRef}>
               <button
                 onClick={() => setModelMenuOpen(!modelMenuOpen)}
-                className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2 py-1 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition"
+                className="flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 title="Select model"
               >
                 <span>🤖</span>
@@ -2314,7 +2317,7 @@ export function ChatView({
           <div className="relative shrink-0" ref={thinkMenuRef}>
             <button
               onClick={() => setThinkMenuOpen((v) => !v)}
-              className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2 py-1 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition"
+              className="flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               title="Select think mode"
             >
               <span>🧠</span>
@@ -2351,7 +2354,7 @@ export function ChatView({
               key={action.cmd}
               type="button"
               onClick={() => void sendPassthroughSlash(action.cmd, { silent: true })}
-              className="shrink-0 rounded-md border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-2 py-1 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition"
+              className="shrink-0 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               title={action.cmd}
             >
               {action.label}
@@ -2453,12 +2456,12 @@ export function ChatView({
               aria-label="关闭放大编辑框"
             />
           )}
-          <div className={`flex items-center rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 ${compactUi ? 'gap-1.5 px-1.5 py-1' : 'gap-2 px-2 py-2'} ${composerExpanded ? 'fixed inset-x-2 bottom-2 z-[120] rounded-2xl border-2 bg-white dark:bg-zinc-900 shadow-2xl' : ''}`}>
+          <div className={`flex items-center rounded-xl border border-[#ded8ce] bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900 ${compactUi ? 'gap-1.5 px-1.5 py-1' : 'gap-2 px-2 py-2'} ${composerExpanded ? 'fixed inset-x-2 bottom-2 z-[120] rounded-2xl border-2 bg-white dark:bg-zinc-900 shadow-2xl' : ''}`}>
           <div className="relative" ref={attachMenuRef}>
             <button
               type="button"
               onClick={() => setAttachMenuOpen((v) => !v)}
-              className={`rounded-lg ${compactUi ? 'p-1.5' : 'p-2'} text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100`}
+              className={`rounded-lg ${compactUi ? 'p-1.5' : 'p-2'} text-[#8a8378] hover:bg-[#f4f1eb] hover:text-[#1f2328] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100`}
               title={t('chat.attach')}
             >
               <Paperclip className="h-4 w-4" />
@@ -2484,7 +2487,7 @@ export function ChatView({
           <button
             type="button"
             onClick={() => setComposerExpanded((v) => !v)}
-            className={`rounded-lg ${compactUi ? 'p-1.5' : 'p-2'} text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-zinc-100`}
+            className={`rounded-lg ${compactUi ? 'p-1.5' : 'p-2'} text-[#8a8378] hover:bg-[#f4f1eb] hover:text-[#1f2328] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100`}
             title={composerExpanded ? '退出放大' : '放大编辑框'}
           >
             {composerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -2497,12 +2500,12 @@ export function ChatView({
             onKeyDown={handleKeyDown}
             placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
             rows={1}
-            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none ${compactUi ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1.5 text-sm'} ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : compactUi ? 'max-h-20 min-h-[30px]' : 'max-h-24 min-h-8'}`}
+            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent text-[#1f2328] outline-none placeholder:text-[#aaa298] dark:text-zinc-200 ${compactUi ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1.5 text-sm'} ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : compactUi ? 'max-h-20 min-h-[30px]' : 'max-h-24 min-h-8'}`}
           />
           <button
             onClick={handleSend}
             disabled={sending || uploading || !draft.trim() || !currentAgentId}
-            className={`flex items-center justify-center rounded-full bg-indigo-500 text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60 ${compactUi ? 'h-9 w-9' : 'h-10 w-10'}`}
+            className={`flex items-center justify-center rounded-full bg-[#f87500] text-white transition hover:bg-[#dc6900] disabled:cursor-not-allowed disabled:opacity-60 ${compactUi ? 'h-9 w-9' : 'h-10 w-10'}`}
             aria-label={t('chat.send')}
           >
             {sending ? '...' : <Send className={compactUi ? 'h-3.5 w-3.5' : 'h-4 w-4'} />}

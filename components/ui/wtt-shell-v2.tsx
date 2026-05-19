@@ -148,7 +148,7 @@ export function WttShellV2(props: WttShellV2Props) {
   const isSelectedAgentOnline = onlineAgentIds?.has(selectedAgentId) ?? false
 
   return (
-    <div className="h-screen bg-[#ece5dd] dark:bg-zinc-950 text-slate-800 dark:text-zinc-200">
+    <div className="h-screen bg-[#f6f3ed] text-slate-800 dark:bg-zinc-950 dark:text-zinc-200">
       <div className="flex h-full flex-col">
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}
@@ -244,7 +244,7 @@ export function WttShellV2(props: WttShellV2Props) {
           )}
 
           {!hideTopics && sidebarCollapsed && (
-            <aside className="w-10 border-r border-slate-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-900/60 flex items-start justify-center pt-2">
+            <aside className="flex w-10 items-start justify-center border-r border-[#e5e0d8] bg-[#f7f5f0] pt-2 dark:border-zinc-800 dark:bg-zinc-950">
               <button
                 onClick={() => setSidebarCollapsed(false)}
                 className="rounded-lg border border-slate-200 dark:border-zinc-700 px-2 py-1.5 text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition"
@@ -255,7 +255,7 @@ export function WttShellV2(props: WttShellV2Props) {
             </aside>
           )}
 
-          <main className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] dark:bg-zinc-900">
+          <main className="min-h-0 flex-1 overflow-y-auto bg-[#fbfaf7] dark:bg-zinc-950">
             {children}
           </main>
         </div>
