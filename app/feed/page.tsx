@@ -11,7 +11,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { ChatView, ChatMessage, ChatModelConfig } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
-import { TopicItem } from '@/components/ui/topic-column'
+import { AgentRuntimeInfo, TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 import type { ContentFormat } from '@/components/ui/content-editor'
 import type { EditorTopic } from '@/components/ui/markdown-editor'
@@ -1069,6 +1069,7 @@ function FeedPageInner() {
   )
   const maxSubAgents = (agentStatsRaw as Record<string, unknown>)?.max_sub_agents as number | undefined ?? 20
   const agentStats = (agentStatsRaw as Record<string, unknown>)?.agents as Record<string, { total: number; active: number; done: number; todo: number }> | undefined
+  const agentRuntimeMap = ((agentStatsRaw as Record<string, unknown>)?.runtimes || {}) as Record<string, AgentRuntimeInfo>
   const onlineAgentIds = useMemo(() => {
     const arr = (agentStatsRaw as Record<string, unknown>)?.online_agents as string[] | undefined
     return new Set(arr ?? [])
@@ -1731,6 +1732,7 @@ function FeedPageInner() {
         agentStats={agentStats ?? undefined}
         onlineAgentIds={onlineAgentIds}
         agentRoleMap={agentRoleMap}
+        agentRuntimeMap={agentRuntimeMap}
         onAssignAgentRole={handleAssignAgentRole}
         userToken={session?.accessToken as string | undefined}
         forceOpenSettingsPage={forceOpenSettingsPage}

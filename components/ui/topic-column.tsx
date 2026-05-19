@@ -31,6 +31,22 @@ interface AgentOption {
   display_name: string
 }
 
+export interface AgentRuntimeInfo {
+  kind?: string
+  adapter?: string
+  workdir?: string
+  workdir_name?: string
+  hostname?: string
+  platform?: string
+  git?: {
+    repo?: string
+    branch?: string
+    commit?: string
+    dirty?: boolean
+  } | null
+  last_heartbeat_secs_ago?: number
+}
+
 interface TopicColumnProps {
   topics: TopicItem[]
   selectedTopicId: string | null
@@ -46,6 +62,7 @@ interface TopicColumnProps {
   isSelectedAgentOnline?: boolean
   onlineAgentIds?: Set<string>
   agentRoleMap?: Record<string, string>
+  agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
@@ -94,6 +111,14 @@ function getTopicDisplayName(topic: TopicItem) {
   return topic.task_id ? stripTaskPrefix(topic.name) : topic.name
 }
 
+function formatRuntime(runtime?: AgentRuntimeInfo) {
+  if (!runtime) return ''
+  const repo = runtime.git?.repo || runtime.workdir_name || ''
+  const branch = runtime.git?.branch || ''
+  const adapter = runtime.adapter || runtime.kind || ''
+  return [repo, branch, adapter].filter(Boolean).join(' · ')
+}
+
 export function TopicColumn(props: TopicColumnProps) {
   const {
     topics,
@@ -107,6 +132,7 @@ export function TopicColumn(props: TopicColumnProps) {
     isSelectedAgentOnline = false,
     onlineAgentIds,
     agentRoleMap,
+    agentRuntimeMap,
     onAssignAgentRole,
     onRenameAgent,
     onUnclaimAgent,
@@ -146,6 +172,7 @@ export function TopicColumn(props: TopicColumnProps) {
             const selected = agent.agent_id === selectedAgentId
             const online = isAgentOnline(agent.agent_id)
             const role = getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
+            const runtimeText = selected ? formatRuntime(agentRuntimeMap?.[agent.agent_id]) : ''
             const menuOpen = agentMenuFor === agent.agent_id
 
             return (
@@ -181,6 +208,14 @@ export function TopicColumn(props: TopicColumnProps) {
                         {role.shortLabel}
                       </span>
                     </span>
+                    {runtimeText && (
+                      <span
+                        className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400 dark:text-zinc-500"
+                        title={agentRuntimeMap?.[agent.agent_id]?.workdir || runtimeText}
+                      >
+                        {runtimeText}
+                      </span>
+                    )}
                   </span>
 
                   <span

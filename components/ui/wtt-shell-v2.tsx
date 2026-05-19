@@ -4,7 +4,7 @@ import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
-import { TopicColumn, TopicItem } from './topic-column'
+import { AgentRuntimeInfo, TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
@@ -56,6 +56,7 @@ interface WttShellV2Props {
   agentStats?: AgentStatsMap
   onlineAgentIds?: Set<string>
   agentRoleMap?: Record<string, string>
+  agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: string) => void
   userToken?: string
   forceOpenSettingsPage?: SettingsPage | null
@@ -98,6 +99,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onForceOpenHandled,
     onlineAgentIds,
     agentRoleMap,
+    agentRuntimeMap,
     onAssignAgentRole,
     children,
   } = props
@@ -237,6 +239,7 @@ export function WttShellV2(props: WttShellV2Props) {
               isSelectedAgentOnline={isSelectedAgentOnline}
               onlineAgentIds={onlineAgentIds}
               agentRoleMap={agentRoleMap}
+              agentRuntimeMap={agentRuntimeMap}
               onAssignAgentRole={onAssignAgentRole}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
