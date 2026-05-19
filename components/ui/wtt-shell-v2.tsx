@@ -245,6 +245,7 @@ export function WttShellV2(props: WttShellV2Props) {
               onUnclaimAgent={onUnclaimAgent}
               onCreateGeneralTask={onCreateGeneralTask}
               onToggleSidebar={() => setSidebarCollapsed(true)}
+              userToken={userToken}
             />
           )}
 
