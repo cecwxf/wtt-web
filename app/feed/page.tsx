@@ -19,6 +19,7 @@ import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { useI18n } from '@/lib/i18n-provider'
 import { cacheKeyFromBase64, clearCachedKey, decryptReceived, encryptForSend, getCachedKey } from '@/lib/e2e-crypto'
+import { getAgentRoleTemplate } from '@/lib/agent-role-templates'
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 
@@ -212,6 +213,7 @@ function FeedPageInner() {
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
+  const [agentRoleMap, setAgentRoleMap] = useState<Record<string, string>>({})
   const [selectedTopicId, _setSelectedTopicId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('wtt_selected_topic_id') || null
@@ -236,6 +238,29 @@ function FeedPageInner() {
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('wtt:feed-agent-role-map')
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') setAgentRoleMap(parsed as Record<string, string>)
+    } catch {
+      // ignore local role-map errors
+    }
+  }, [])
+
+  const handleAssignAgentRole = useCallback((agentId: string, roleId: string) => {
+    setAgentRoleMap((prev) => {
+      const next = { ...prev, [agentId]: roleId }
+      try {
+        localStorage.setItem('wtt:feed-agent-role-map', JSON.stringify(next))
+      } catch {
+        // ignore local storage failures
+      }
+      return next
+    })
+  }, [])
 
   const [kbLoading, setKbLoading] = useState(false)
   const handleOpenKnowledgeRoot = useCallback(async () => {
@@ -838,12 +863,19 @@ function FeedPageInner() {
     const humanSender = getHumanSender(session)
 
     const mapped = subscribedTopicsRaw
-      .filter((topic: { name: string; origin_type?: string; originType?: string }) => {
+      .filter((topic: { name: string; description?: string; origin_type?: string; originType?: string; creator_agent_id?: string }) => {
         const name = String(topic.name || '').trim()
-        // Hide Ruoshui square topics/posts from feed conversations.
+        const description = String(topic.description || '').trim()
+        const creatorAgentId = String(topic.creator_agent_id || '').trim()
+
+        // Hide Arena and Ruoshui square system topics/posts from feed conversations.
+        if (name === 'Arena Coach' || name.startsWith('Arena Coach:')) return false
+        if (description.includes('Private Arena Coach chat')) return false
+        if (creatorAgentId === 'agent-16a45cf0dd8b') return false
         if (name.startsWith('__SQUARE__/')) return false
         if (name.startsWith('若水广场｜') || name.startsWith('若水专文｜')) return false
         if (name.startsWith('知乎精选：')) return false
+        if (description.startsWith('[若水广场:')) return false
 
         const anyTopic = topic as Record<string, unknown>
         const isSquareFlag = Boolean(
@@ -859,7 +891,7 @@ function FeedPageInner() {
 
         return true
       })
-      .map((topic: { id: string; name: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; task_mode?: string; exec_mode?: string; last_activity_at?: string }) => {
+      .map((topic: { id: string; name: string; description?: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; task_mode?: string; exec_mode?: string; last_activity_at?: string; creator_agent_id?: string }) => {
         const topicType = ((topic.type || 'discussion').toLowerCase()) as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
         const isDefaultP2P =
           topicType === 'p2p' &&
@@ -880,6 +912,8 @@ function FeedPageInner() {
           runner_agent_id: topic.runner_agent_id,
           is_default_p2p: isDefaultP2P,
           last_activity_at: topic.last_activity_at || '',
+          description: topic.description,
+          creator_agent_id: topic.creator_agent_id,
         }
       })
 
@@ -1141,6 +1175,15 @@ function FeedPageInner() {
       }
     }
 
+    const selectedRole = getAgentRoleTemplate(agentRoleMap[selectedAgentId])
+    if (selectedRole.id !== 'general') {
+      metadata.agent_role_template = {
+        id: selectedRole.id,
+        label: selectedRole.label,
+        skills: selectedRole.skills,
+      }
+    }
+
     if (isSlashCommand && isNonTaskDiscuss) {
       metadata.command_scope = 'single_agent'
       metadata.command_target_agent_id = selectedAgentId
@@ -1149,7 +1192,17 @@ function FeedPageInner() {
     // Check if this is a first-time worker session — inject persona.md as system context
     // Also re-inject if persona.md has changed since last injection
     const ws = activeWorkerSessionRef.current
-    let augmentedContent = content
+    let augmentedContent = selectedRole.id === 'general'
+      ? content
+      : [
+          '[Agent Role Template]',
+          `role: ${selectedRole.label}`,
+          `skills: ${selectedRole.skills.join(', ')}`,
+          selectedRole.systemPrompt,
+          '[/Agent Role Template]',
+          '',
+          content,
+        ].join('\n')
     if (ws && ws.topicId === selectedTopicId && (ws.isFirstSession || ws.personaChanged) && ws.personaMd) {
       const isReinject = ws.personaChanged && !ws.isFirstSession
       const personaPrompt = isReinject
@@ -1664,6 +1717,8 @@ function FeedPageInner() {
         maxSubAgents={maxSubAgents}
         agentStats={agentStats ?? undefined}
         onlineAgentIds={onlineAgentIds}
+        agentRoleMap={agentRoleMap}
+        onAssignAgentRole={handleAssignAgentRole}
         userToken={session?.accessToken as string | undefined}
         forceOpenSettingsPage={forceOpenSettingsPage}
         onForceOpenHandled={() => setForceOpenSettingsPage(null)}

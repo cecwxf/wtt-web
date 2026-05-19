@@ -2,8 +2,8 @@
 
 import { Bot, ClipboardList, Hash, Lock, MessageCircle, MoreVertical, Pin, Plus, Radio, Users, ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
+import { AGENT_ROLE_TEMPLATES, getAgentRoleTemplate } from '@/lib/agent-role-templates'
 
 export interface TopicItem {
   topic_id: string
@@ -18,6 +18,8 @@ export interface TopicItem {
   runner_agent_id?: string
   is_default_p2p?: boolean
   last_activity_at?: string
+  description?: string
+  creator_agent_id?: string
 }
 
 interface TopicColumnProps {
@@ -29,12 +31,14 @@ interface TopicColumnProps {
   onCreateP2P?: (targetAgentId: string) => Promise<void>
   onRequestDiscuss?: (targetAgentId: string, topicName: string) => Promise<void>
   onRequestMember?: (targetAgentId: string, topicId: string) => Promise<void>
-  agentName?: string
   pinScopeKey?: string
   agentOptions?: Array<{ agent_id: string; display_name: string }>
   selectedAgentId?: string
   onSelectAgent?: (agentId: string) => void
   isSelectedAgentOnline?: boolean
+  onlineAgentIds?: Set<string>
+  agentRoleMap?: Record<string, string>
+  onAssignAgentRole?: (agentId: string, roleId: string) => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   onCreateGeneralTask?: () => void
@@ -161,12 +165,14 @@ export function TopicColumn({
   onLeaveTopic,
   onDeleteTopic,
   onRequestDiscuss,
-  agentName,
   pinScopeKey,
   agentOptions,
   selectedAgentId,
   onSelectAgent,
   isSelectedAgentOnline,
+  onlineAgentIds,
+  agentRoleMap,
+  onAssignAgentRole,
   onRenameAgent,
   onUnclaimAgent,
   onCreateGeneralTask,
@@ -183,8 +189,7 @@ export function TopicColumn({
   const [discussAgentId, setDiscussAgentId] = useState('')
   const [discussTopicName, setDiscussTopicName] = useState('')
   const [creatingDiscuss, setCreatingDiscuss] = useState(false)
-  const [creatingAgentWorker, setCreatingAgentWorker] = useState(false)
-  const [agentActionMenuOpen, setAgentActionMenuOpen] = useState(false)
+  const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
     p2p: false,
     task: false,
@@ -264,34 +269,6 @@ export function TopicColumn({
       // error handled by caller
     } finally {
       setCreatingDiscuss(false)
-    }
-  }
-
-  const handleAddWorker = async () => {
-    if (!selectedAgentId || creatingAgentWorker) return
-    const suggested = agentOptions?.find((a) => a.agent_id === selectedAgentId)?.display_name || selectedAgentId
-    const workerName = window.prompt('Worker name:', `${suggested}-worker`)
-    if (!workerName || !workerName.trim()) return
-
-    setCreatingAgentWorker(true)
-    try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/workers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          agent_id: selectedAgentId,
-          name: workerName.trim(),
-          skills_config: [],
-          personality: '',
-          model_config: {},
-        }),
-      })
-      if (!response.ok) throw new Error(await response.text())
-    } catch {
-      alert('Add Worker failed')
-    } finally {
-      setCreatingAgentWorker(false)
     }
   }
 
@@ -491,95 +468,116 @@ export function TopicColumn({
   }
 
   return (
-    <div className="flex h-full w-[250px] flex-col border-r border-[#e5e0d8] bg-[#f6f3ed] dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="flex h-full w-[292px] flex-col border-r border-[#e5e0d8] bg-[#f6f3ed] dark:border-zinc-800 dark:bg-zinc-950">
       {localLibrarySlot}
       <div className="border-b border-[#e5e0d8] px-3 py-3 dark:border-zinc-800">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9b9488] dark:text-zinc-500">
-          {agentName ? t('topic.agentsTopics', { name: agentName }) : t('topic.topics')}
+          {t('agent.agents')} · Workspace
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {agentOptions && agentOptions.length > 0 && onSelectAgent && selectedAgentId ? (
-          <div className="mb-2 rounded-lg border border-[#e5e0d8] bg-white/55 px-2 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
-            <div className="mb-1 flex items-center justify-between">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">{t('agent.agents')}</p>
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  isSelectedAgentOnline
-                    ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.5)]'
-                    : 'bg-slate-300 dark:bg-zinc-600'
-                }`}
-                title={isSelectedAgentOnline ? t('agent.online') : t('agent.offline')}
-                aria-label={isSelectedAgentOnline ? t('agent.online') : t('agent.offline')}
-              />
+          <div className="mb-3 rounded-xl border border-[#e5e0d8] bg-white/60 p-1.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <div className="mb-1 flex items-center justify-between px-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9b9488] dark:text-zinc-500">Claimed Agents</p>
+              <span className="text-[10px] text-[#aaa298]">{agentOptions.length}</span>
             </div>
-            <div className="mt-1 flex items-center gap-1.5">
-              <label className="sr-only">Select Agent</label>
-              <select
-                value={selectedAgentId}
-                onChange={(e) => {
-                  onSelectAgent(e.target.value)
-                  setAgentActionMenuOpen(false)
-                }}
-                className="flex-1 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-zinc-300"
-              >
-                {agentOptions.map((agent) => (
-                  <option key={agent.agent_id} value={agent.agent_id}>
-                    {agent.display_name || agent.agent_id}
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-1">
+              {agentOptions.map((agent) => {
+                const isSelected = agent.agent_id === selectedAgentId
+                const role = getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
+                const online = onlineAgentIds?.has(agent.agent_id) ?? (isSelected ? !!isSelectedAgentOnline : false)
+                return (
+                  <div
+                    key={agent.agent_id}
+                    className="relative"
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setAgentMenuFor(agent.agent_id)
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectAgent(agent.agent_id)
+                        setAgentMenuFor(null)
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition ${
+                        isSelected
+                          ? 'bg-[#ebe7df] text-[#1f2328]'
+                          : 'text-[#615d55] hover:bg-[#efebe4] hover:text-[#1f2328] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
+                      }`}
+                    >
+                      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#e2ddd4] bg-[#f7f5f0] text-xs font-bold dark:border-zinc-800 dark:bg-zinc-950">
+                        {(agent.display_name || agent.agent_id).slice(0, 1).toUpperCase()}
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-white dark:border-zinc-950 ${
+                            online ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-600'
+                          }`}
+                          title={online ? t('agent.online') : t('agent.offline')}
+                        />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">{agent.display_name || agent.agent_id}</span>
+                        <span className="mt-0.5 flex items-center gap-1">
+                          <span className="rounded bg-[#f4f1eb] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a8378] dark:bg-zinc-800 dark:text-zinc-400">
+                            {role.shortLabel}
+                          </span>
+                          <span className="truncate text-[10px] text-[#aaa298]">{role.skills.slice(0, 2).join(' / ')}</span>
+                        </span>
+                      </span>
+                      <MoreVertical className="h-3.5 w-3.5 shrink-0 text-[#aaa298]" />
+                    </button>
 
-              <div className="relative">
-                <button
-                  className="inline-flex items-center justify-center rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-1.5 text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700"
-                  onClick={() => setAgentActionMenuOpen((v) => !v)}
-                  aria-label="Agent actions"
-                  title="Agent actions"
-                >
-                  <MoreVertical className="h-3.5 w-3.5" />
-                </button>
-
-                {agentActionMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-20" onClick={() => setAgentActionMenuOpen(false)} />
-                    <div className="absolute right-0 top-8 z-30 w-36 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1 shadow-lg">
-                      <button
-                        className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-50"
-                        onClick={() => {
-                          setAgentActionMenuOpen(false)
-                          const currentName = agentOptions.find((a) => a.agent_id === selectedAgentId)?.display_name || selectedAgentId
-                          onRenameAgent?.(selectedAgentId, currentName)
-                        }}
-                        disabled={!onRenameAgent}
-                      >
-                        {t('agent.rename')}
-                      </button>
-                      <button
-                        className="w-full rounded px-2 py-1.5 text-left text-xs text-red-500 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-50"
-                        onClick={() => {
-                          setAgentActionMenuOpen(false)
-                          onUnclaimAgent?.(selectedAgentId)
-                        }}
-                        disabled={!onUnclaimAgent}
-                      >
-                        {t('agent.unclaim')}
-                      </button>
-                      <button
-                        className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-50"
-                        onClick={async () => {
-                          setAgentActionMenuOpen(false)
-                          await handleAddWorker()
-                        }}
-                        disabled={creatingAgentWorker}
-                      >
-                        {creatingAgentWorker ? '...' : t('agent.addWorker')}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+                    {agentMenuFor === agent.agent_id && (
+                      <>
+                        <div className="fixed inset-0 z-20" onClick={() => setAgentMenuFor(null)} />
+                        <div className="absolute right-1 top-10 z-30 w-56 rounded-xl border border-[#e5e0d8] bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#9b9488]">角色模板</p>
+                          {AGENT_ROLE_TEMPLATES.map((template) => (
+                            <button
+                              key={template.id}
+                              className={`w-full rounded-lg px-2 py-1.5 text-left text-xs transition hover:bg-[#f4f1eb] dark:hover:bg-zinc-800 ${
+                                role.id === template.id ? 'text-[#9a4b00]' : 'text-[#615d55] dark:text-zinc-300'
+                              }`}
+                              onClick={() => {
+                                onAssignAgentRole?.(agent.agent_id, template.id)
+                                setAgentMenuFor(null)
+                              }}
+                              title={template.description}
+                            >
+                              <span className="block font-semibold">{template.label}</span>
+                              <span className="block truncate text-[10px] text-[#aaa298]">{template.skills.join(' / ')}</span>
+                            </button>
+                          ))}
+                          <div className="my-1 h-px bg-[#eee9df] dark:bg-zinc-800" />
+                          <button
+                            className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-[#615d55] hover:bg-[#f4f1eb] dark:text-zinc-300 dark:hover:bg-zinc-800 disabled:opacity-50"
+                            onClick={() => {
+                              setAgentMenuFor(null)
+                              onRenameAgent?.(agent.agent_id, agent.display_name || agent.agent_id)
+                            }}
+                            disabled={!onRenameAgent}
+                          >
+                            {t('agent.rename')}
+                          </button>
+                          <button
+                            className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-red-500 hover:bg-[#f4f1eb] dark:hover:bg-zinc-800 disabled:opacity-50"
+                            onClick={() => {
+                              setAgentMenuFor(null)
+                              onUnclaimAgent?.(agent.agent_id)
+                            }}
+                            disabled={!onUnclaimAgent}
+                          >
+                            {t('agent.unclaim')}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         ) : null}

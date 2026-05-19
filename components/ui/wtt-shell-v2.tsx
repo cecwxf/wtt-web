@@ -56,6 +56,8 @@ interface WttShellV2Props {
   maxSubAgents?: number
   agentStats?: AgentStatsMap
   onlineAgentIds?: Set<string>
+  agentRoleMap?: Record<string, string>
+  onAssignAgentRole?: (agentId: string, roleId: string) => void
   userToken?: string
   forceOpenSettingsPage?: SettingsPage | null
   onForceOpenHandled?: () => void
@@ -96,6 +98,8 @@ export function WttShellV2(props: WttShellV2Props) {
     forceOpenSettingsPage,
     onForceOpenHandled,
     onlineAgentIds,
+    agentRoleMap,
+    onAssignAgentRole,
     children,
   } = props
   const [menuOpen, setMenuOpen] = useState(false)
@@ -104,8 +108,6 @@ export function WttShellV2(props: WttShellV2Props) {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('profile')
   const [createTopicOpen, setCreateTopicOpen] = useState(false)
   const { t } = useI18n()
-
-  const selectedAgent = agents.find((a) => a.agent_id === selectedAgentId)
 
   const openSettings = (page: SettingsPage) => {
     setSettingsPage(page)
@@ -229,12 +231,14 @@ export function WttShellV2(props: WttShellV2Props) {
               onDeleteTopic={onDeleteTopic}
               onCreateP2P={onCreateP2P}
               onRequestDiscuss={onRequestDiscuss}
-              agentName={selectedAgent?.display_name}
               pinScopeKey={selectedAgentId}
               agentOptions={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
               selectedAgentId={selectedAgentId}
               onSelectAgent={onAgentChange}
               isSelectedAgentOnline={isSelectedAgentOnline}
+              onlineAgentIds={onlineAgentIds}
+              agentRoleMap={agentRoleMap}
+              onAssignAgentRole={onAssignAgentRole}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
               onCreateGeneralTask={onCreateGeneralTask}
