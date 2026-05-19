@@ -323,6 +323,19 @@ export function TopicColumn({
     return { total: topics.length, ...counts }
   }, [topics])
 
+  const selectedWorkspace = useMemo(() => {
+    const agent = agentOptions?.find((item) => item.agent_id === selectedAgentId)
+    const role = getAgentRoleTemplate(selectedAgentId ? agentRoleMap?.[selectedAgentId] : undefined)
+    const online = selectedAgentId ? (onlineAgentIds?.has(selectedAgentId) ?? !!isSelectedAgentOnline) : false
+    const activeTopics = topics.filter((topic) => Number(topic.unread_count || 0) > 0).length
+    return {
+      agent,
+      role,
+      online,
+      activeTopics,
+    }
+  }, [agentOptions, selectedAgentId, agentRoleMap, onlineAgentIds, isSelectedAgentOnline, topics])
+
   const renderTopicRow = (topic: TopicItem) => {
     const isSelected = topic.topic_id === selectedTopicId
     const Icon = getTopicIcon(topic.topic_type, !!topic.task_id)
@@ -581,6 +594,59 @@ export function TopicColumn({
             </div>
           </div>
         ) : null}
+
+        {selectedWorkspace.agent && (
+          <div className="mb-3 rounded-xl border border-[#e5e0d8] bg-[#fbfaf7] p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9b9488]">Current Workspace</p>
+                <p className="mt-1 truncate text-sm font-extrabold text-[#1f2328] dark:text-zinc-100">
+                  {selectedWorkspace.agent.display_name || selectedWorkspace.agent.agent_id}
+                </p>
+              </div>
+              <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                selectedWorkspace.online
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                  : 'bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400'
+              }`}>
+                {selectedWorkspace.online ? t('agent.online') : t('agent.offline')}
+              </span>
+            </div>
+
+            <div className="rounded-lg bg-[#f4f1eb] px-2.5 py-2 dark:bg-zinc-800">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-[#615d55] dark:text-zinc-200">{selectedWorkspace.role.label}</span>
+                <span className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-[#8a8378] dark:bg-zinc-900 dark:text-zinc-400">
+                  role template
+                </span>
+              </div>
+              <p className="line-clamp-2 text-[11px] leading-4 text-[#7a766e] dark:text-zinc-400">{selectedWorkspace.role.description}</p>
+            </div>
+
+            <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+              <div className="rounded-lg border border-[#eee9df] bg-white/70 px-1.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-950">
+                <p className="text-sm font-extrabold text-[#1f2328] dark:text-zinc-100">{summary.discuss}</p>
+                <p className="text-[9px] font-semibold uppercase text-[#aaa298]">topics</p>
+              </div>
+              <div className="rounded-lg border border-[#eee9df] bg-white/70 px-1.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-950">
+                <p className="text-sm font-extrabold text-[#1f2328] dark:text-zinc-100">{summary.task}</p>
+                <p className="text-[9px] font-semibold uppercase text-[#aaa298]">tasks</p>
+              </div>
+              <div className="rounded-lg border border-[#eee9df] bg-white/70 px-1.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-950">
+                <p className="text-sm font-extrabold text-[#1f2328] dark:text-zinc-100">{selectedWorkspace.activeTopics}</p>
+                <p className="text-[9px] font-semibold uppercase text-[#aaa298]">unread</p>
+              </div>
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-1">
+              {selectedWorkspace.role.skills.slice(0, 4).map((skill) => (
+                <span key={skill} className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[#8a8378] ring-1 ring-[#eee9df] dark:bg-zinc-950 dark:text-zinc-400 dark:ring-zinc-800">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {onCreateGeneralTask && (
           <button
