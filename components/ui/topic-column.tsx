@@ -125,8 +125,8 @@ export function TopicColumn(props: TopicColumnProps) {
 
   return (
     <>
-      <aside className="flex w-[268px] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#f6f3ed] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-        <div className="border-b border-[#e7e1d7] px-4 py-3 dark:border-zinc-800">
+      <aside className="flex w-[208px] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#f6f3ed] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+        <div className="border-b border-[#e7e1d7] px-3 py-3 dark:border-zinc-800">
           <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-400 dark:text-zinc-500">
             {zh ? 'Agents' : 'Agents'}
           </div>
@@ -135,7 +135,7 @@ export function TopicColumn(props: TopicColumnProps) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2.5">
           {agentOptions.length === 0 && (
             <div className="rounded-2xl border border-dashed border-[#ded6c8] bg-white/55 p-4 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
               {t('agent.noAgents')}
@@ -157,13 +157,13 @@ export function TopicColumn(props: TopicColumnProps) {
                     event.preventDefault()
                     setAgentMenuFor(agent.agent_id)
                   }}
-                  className={`group flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition ${
+                  className={`group flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
                     selected
                       ? 'border-[#d7cbb9] bg-[#ebe5db] shadow-sm dark:border-emerald-500/35 dark:bg-emerald-500/10'
                       : 'border-transparent bg-white/55 hover:border-[#ded6c8] hover:bg-white/80 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
                   }`}
                 >
-                  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#28241f] text-sm font-black text-[#f5ead8] shadow-sm dark:bg-zinc-800">
+                  <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#28241f] text-xs font-black text-[#f5ead8] shadow-sm dark:bg-zinc-800">
                     {agentInitial(agent.display_name)}
                     <span
                       className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#f6f3ed] dark:border-zinc-950 ${
@@ -180,19 +180,6 @@ export function TopicColumn(props: TopicColumnProps) {
                       <span className="shrink-0 rounded-full bg-[#dfe8d8] px-2 py-0.5 text-[10px] font-black text-[#46624b] dark:bg-emerald-500/15 dark:text-emerald-200">
                         {role.shortLabel}
                       </span>
-                    </span>
-                    <span className="mt-1 block truncate text-[11px] text-slate-500 dark:text-zinc-400">
-                      {role.description}
-                    </span>
-                    <span className="mt-2 flex flex-wrap gap-1">
-                      {role.skills.slice(0, 2).map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-full border border-[#ded6c8] bg-[#faf8f2] px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400"
-                        >
-                          {skill}
-                        </span>
-                      ))}
                     </span>
                   </span>
 
@@ -282,8 +269,8 @@ export function TopicColumn(props: TopicColumnProps) {
         </div>
       </aside>
 
-      <aside className="flex w-[316px] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#fbfaf7] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-        <div className="flex items-center justify-between border-b border-[#e7e1d7] px-4 py-3 dark:border-zinc-800">
+      <aside className="flex w-[264px] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#fbfaf7] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+        <div className="flex items-center justify-between border-b border-[#e7e1d7] px-3 py-3 dark:border-zinc-800">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-400 dark:text-zinc-500">
               Topics
@@ -316,7 +303,7 @@ export function TopicColumn(props: TopicColumnProps) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
           {!selectedAgentId && (
             <div className="rounded-2xl border border-dashed border-[#ded6c8] bg-white/60 p-4 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
               {zh ? '先选择一个 Agent。' : 'Select an agent first.'}
@@ -349,16 +336,16 @@ export function TopicColumn(props: TopicColumnProps) {
                   <button
                     type="button"
                     onClick={() => onSelectTopic(topic.topic_id)}
-                    className={`group flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
+                    className={`group flex w-full items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
                       selected
                         ? 'border-[#d7cbb9] bg-[#efe8dc] shadow-sm dark:border-emerald-500/35 dark:bg-emerald-500/10'
                         : 'border-transparent bg-transparent hover:border-[#e4dccf] hover:bg-white/75 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
                     }`}
                   >
-                    <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                    <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
                       selected ? 'bg-[#28241f] text-[#f5ead8]' : 'bg-[#eee8dc] text-slate-500 dark:bg-zinc-800 dark:text-zinc-300'
                     }`}>
-                      <Icon className="h-4 w-4" />
+                      <Icon className="h-3.5 w-3.5" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
@@ -373,7 +360,6 @@ export function TopicColumn(props: TopicColumnProps) {
                       </span>
                       <span className="mt-1 flex items-center gap-2 text-[11px] text-slate-400 dark:text-zinc-500">
                         <span>{getTopicKindLabel(topic, zh)}</span>
-                        {topic.description && <span className="truncate">{topic.description}</span>}
                       </span>
                     </span>
                     {unread > 0 && (
