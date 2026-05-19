@@ -89,6 +89,44 @@ function shouldDisplayMessage(semanticTypeRaw: unknown, contentRaw: unknown): bo
   return true
 }
 
+function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
+  const name = String(topic.name || '').trim()
+  const description = String(topic.description || '').trim()
+  const creatorAgentId = String(topic.creator_agent_id || topic.creatorAgentId || '').trim()
+  const originType = String(topic.origin_type || topic.originType || '').toLowerCase()
+  const searchable = `${name}\n${description}\n${originType}\n${creatorAgentId}`.toLowerCase()
+
+  // Arena and Square topics have gone through a few naming/metadata revisions.
+  // Keep the filter intentionally redundant so older subscribed rows disappear too.
+  if (creatorAgentId === 'agent-16a45cf0dd8b') return true
+  if (name === 'Arena Coach' || name.startsWith('Arena Coach:')) return true
+  if (description.includes('Private Arena Coach chat')) return true
+  if (searchable.includes('arena coach') || searchable.includes('arena_challenge') || searchable.includes('arena-session')) return true
+
+  if (name.startsWith('__SQUARE__/')) return true
+  if (name.startsWith('若水广场｜') || name.startsWith('若水专文｜')) return true
+  if (name.startsWith('知乎精选：')) return true
+  if (description.startsWith('[若水广场:')) return true
+  if (searchable.includes('若水广场') || searchable.includes('__square__')) return true
+  if (originType === 'column' || originType === 'human_post' || originType.includes('square')) return true
+
+  const squareFlags = [
+    'square',
+    'is_square',
+    'square_post',
+    'square_topic',
+    'squarePost',
+    'squareTopic',
+  ]
+  if (squareFlags.some((key) => Boolean(topic[key]))) return true
+
+  const meta = topic.metadata || topic.msg_metadata || topic.meta
+  if (typeof meta === 'string' && meta.toLowerCase().includes('"square"')) return true
+  if (meta && typeof meta === 'object' && Boolean((meta as Record<string, unknown>).square)) return true
+
+  return false
+}
+
 function toChatTaskType(taskTypeRaw?: string, taskModeRaw?: string, execModeRaw?: string): 'code' | 'research' | 'general' | null {
   const raw = `${String(taskTypeRaw || '').toLowerCase()} ${String(taskModeRaw || '').toLowerCase()} ${String(execModeRaw || '').toLowerCase()}`
   if (raw.includes('research')) return 'research'
@@ -864,32 +902,7 @@ function FeedPageInner() {
 
     const mapped = subscribedTopicsRaw
       .filter((topic: { name: string; description?: string; origin_type?: string; originType?: string; creator_agent_id?: string }) => {
-        const name = String(topic.name || '').trim()
-        const description = String(topic.description || '').trim()
-        const creatorAgentId = String(topic.creator_agent_id || '').trim()
-
-        // Hide Arena and Ruoshui square system topics/posts from feed conversations.
-        if (name === 'Arena Coach' || name.startsWith('Arena Coach:')) return false
-        if (description.includes('Private Arena Coach chat')) return false
-        if (creatorAgentId === 'agent-16a45cf0dd8b') return false
-        if (name.startsWith('__SQUARE__/')) return false
-        if (name.startsWith('若水广场｜') || name.startsWith('若水专文｜')) return false
-        if (name.startsWith('知乎精选：')) return false
-        if (description.startsWith('[若水广场:')) return false
-
-        const anyTopic = topic as Record<string, unknown>
-        const isSquareFlag = Boolean(
-          anyTopic.square
-          || anyTopic.is_square
-          || anyTopic.square_post
-          || anyTopic.square_topic
-        )
-        if (isSquareFlag) return false
-
-        const originType = String(topic.origin_type || topic.originType || '').toLowerCase()
-        if (originType === 'column' || originType === 'human_post' || originType.includes('square')) return false
-
-        return true
+        return !shouldHideFeedTopic(topic as Record<string, unknown>)
       })
       .map((topic: { id: string; name: string; description?: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; task_mode?: string; exec_mode?: string; last_activity_at?: string; creator_agent_id?: string }) => {
         const topicType = ((topic.type || 'discussion').toLowerCase()) as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
