@@ -1113,7 +1113,7 @@ function FeedPageInner() {
     for (const agent of agents) {
       const aid = agent.agent_id
       if (p2pInitRef.current.has(aid)) continue
-      const hasP2p = topics.some(t => t.topic_type === 'p2p' && (t.name.includes(aid) || t.name.includes(humanSender)))
+      const hasP2p = topics.some(t => t.topic_type === 'p2p' && t.name.includes(aid) && t.name.includes(humanSender))
       if (hasP2p) { p2pInitRef.current.add(aid); continue }
       p2pInitRef.current.add(aid)
       // Silently create P2P topic — no visible system message

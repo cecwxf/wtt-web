@@ -87,6 +87,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onSubscribeTopic,
     onCreateP2P,
     onRequestDiscuss,
+    onSelectWorkerTopic,
     subscribedTopicIds,
     notificationCount = 0,
     p2pRequests = [],
@@ -232,6 +233,7 @@ export function WttShellV2(props: WttShellV2Props) {
               onDeleteTopic={onDeleteTopic}
               onCreateP2P={onCreateP2P}
               onRequestDiscuss={onRequestDiscuss}
+              onSelectWorkerTopic={onSelectWorkerTopic}
               pinScopeKey={selectedAgentId}
               agentOptions={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
               selectedAgentId={selectedAgentId}

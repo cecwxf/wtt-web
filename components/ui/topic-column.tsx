@@ -1,13 +1,14 @@
 'use client'
 
 import { ChevronDown, ChevronRight, ClipboardList, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
   getAgentRoleTemplate,
   type AgentRoleTemplateId,
 } from '@/lib/agent-role-templates'
 import { AgentTerminalModal } from '@/components/ui/agent-terminal-modal'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
 
 export interface TopicItem {
@@ -30,6 +31,16 @@ export interface TopicItem {
 interface AgentOption {
   agent_id: string
   display_name: string
+}
+
+interface WorkerItem {
+  id: string
+  agent_id: string
+  name: string
+  description?: string
+  skills_config?: string[]
+  status?: string
+  topic_id?: string
 }
 
 export interface AgentRuntimeInfo {
@@ -56,6 +67,7 @@ interface TopicColumnProps {
   onDeleteTopic?: (topicId: string) => void
   onCreateP2P?: (targetAgentId: string) => void | Promise<void>
   onRequestDiscuss?: (targetAgentId: string, topicName: string) => void | Promise<void>
+  onSelectWorkerTopic?: (topicId: string, workerSession?: { workerId: string; personaMd: string; workerMd: string; isFirstSession: boolean; personaChanged?: boolean }) => void
   pinScopeKey?: string
   agentOptions?: AgentOption[]
   selectedAgentId?: string
@@ -179,6 +191,7 @@ export function TopicColumn(props: TopicColumnProps) {
     agentOptions = [],
     selectedAgentId = '',
     onSelectAgent,
+    onSelectWorkerTopic,
     isSelectedAgentOnline = false,
     onlineAgentIds,
     agentRoleMap,
@@ -193,6 +206,8 @@ export function TopicColumn(props: TopicColumnProps) {
   const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
   const [topicMenuFor, setTopicMenuFor] = useState<string | null>(null)
   const [shellAgent, setShellAgent] = useState<AgentOption | null>(null)
+  const [workersByAgent, setWorkersByAgent] = useState<Record<string, WorkerItem[]>>({})
+  const [openingWorkerId, setOpeningWorkerId] = useState<string | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
     p2p: false,
     task: false,
@@ -205,6 +220,63 @@ export function TopicColumn(props: TopicColumnProps) {
   const isAgentOnline = (agentId: string) => {
     if (onlineAgentIds) return onlineAgentIds.has(agentId)
     return agentId === selectedAgentId ? isSelectedAgentOnline : false
+  }
+
+  const fetchWorkers = useCallback(async (agentId: string) => {
+    if (!agentId) return
+    try {
+      const headers: Record<string, string> = {}
+      if (userToken) headers.Authorization = `Bearer ${userToken}`
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/workers?agent_id=${encodeURIComponent(agentId)}`, {
+        credentials: 'include',
+        headers,
+      })
+      if (!response.ok) return
+      const data = await response.json()
+      if (Array.isArray(data)) {
+        setWorkersByAgent((prev) => ({ ...prev, [agentId]: data }))
+      }
+    } catch {
+      // Worker shortcuts are best-effort; the topic list still works without them.
+    }
+  }, [userToken])
+
+  useEffect(() => {
+    if (!selectedAgentId) return
+    void fetchWorkers(selectedAgentId)
+  }, [selectedAgentId, fetchWorkers])
+
+  const openWorkerTopic = async (agentId: string, worker: WorkerItem) => {
+    if (!onSelectWorkerTopic || openingWorkerId) return
+    setOpeningWorkerId(worker.id)
+    try {
+      const headers: Record<string, string> = {}
+      if (userToken) headers.Authorization = `Bearer ${userToken}`
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/workers/${encodeURIComponent(worker.id)}/session`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+      })
+      if (!response.ok) throw new Error(await response.text())
+      const data = await response.json()
+      const topicId = String(data.topic_id || worker.topic_id || '')
+      if (!topicId) return
+      setWorkersByAgent((prev) => {
+        const rows = prev[agentId] || []
+        return { ...prev, [agentId]: rows.map((row) => row.id === worker.id ? { ...row, topic_id: topicId } : row) }
+      })
+      onSelectWorkerTopic(topicId, {
+        workerId: worker.id,
+        personaMd: String(data.persona_md || ''),
+        workerMd: String(data.worker_md || ''),
+        isFirstSession: Boolean(data.is_first_session ?? false),
+        personaChanged: Boolean(data.persona_changed ?? false),
+      })
+    } catch {
+      // Keep the UI quiet; failures still surface through the topic/chat path.
+    } finally {
+      setOpeningWorkerId(null)
+    }
   }
 
   const groupedTopics = useMemo(() => {
@@ -363,12 +435,16 @@ export function TopicColumn(props: TopicColumnProps) {
             const role = getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
             const runtimeText = selected ? formatRuntime(agentRuntimeMap?.[agent.agent_id]) : ''
             const menuOpen = agentMenuFor === agent.agent_id
+            const workers = workersByAgent[agent.agent_id] || []
 
             return (
               <div key={agent.agent_id} className="relative">
                 <button
                   type="button"
-                  onClick={() => onSelectAgent?.(agent.agent_id)}
+                  onClick={() => {
+                    onSelectAgent?.(agent.agent_id)
+                    void fetchWorkers(agent.agent_id)
+                  }}
                   onContextMenu={(event) => {
                     event.preventDefault()
                     setAgentMenuFor(agent.agent_id)
@@ -427,6 +503,27 @@ export function TopicColumn(props: TopicColumnProps) {
                     <MoreVertical className="h-4 w-4" />
                   </span>
                 </button>
+
+                {selected && workers.length > 0 && (
+                  <div className="ml-10 mt-1 space-y-1 pb-1 pr-1">
+                    <div className="px-1 text-[9px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
+                      P2P Workers
+                    </div>
+                    {workers.map((worker) => (
+                      <button
+                        key={worker.id}
+                        type="button"
+                        onClick={() => openWorkerTopic(agent.agent_id, worker)}
+                        className="flex w-full items-center gap-1.5 rounded-lg border border-transparent px-2 py-1.5 text-left text-[11px] font-semibold text-slate-500 transition hover:border-[#ded6c8] hover:bg-white/80 hover:text-slate-800 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+                        title={worker.description || worker.name}
+                      >
+                        <Lock className="h-3 w-3 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">Worker: {worker.name}</span>
+                        {openingWorkerId === worker.id && <span className="text-[10px] text-teal-600">...</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {menuOpen && (
                   <>
