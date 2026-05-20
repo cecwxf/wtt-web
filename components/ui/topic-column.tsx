@@ -468,14 +468,16 @@ export function TopicColumn(props: TopicColumnProps) {
                 </button>
 
                 {menuOpen && (
-                  <div className="absolute right-2 top-12 z-30 w-64 rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-                    <div className="px-2 pb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">
-                      {zh ? '角色模板' : 'Role Templates'}
-                    </div>
-                    <div className="max-h-72 overflow-y-auto">
-                      {AGENT_ROLE_TEMPLATES.map((template) => {
-                        const active = template.id === role.id
-                        return (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setAgentMenuFor(null)} />
+                    <div className="fixed left-[212px] top-20 z-50 max-h-[calc(100vh-6rem)] w-[min(280px,calc(100vw-224px))] overflow-y-auto rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-2 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+                      <div className="px-2 pb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">
+                        {zh ? '角色模板' : 'Role Templates'}
+                      </div>
+                      <div className="max-h-[50vh] overflow-y-auto">
+                        {AGENT_ROLE_TEMPLATES.map((template) => {
+                          const active = template.id === role.id
+                          return (
                           <button
                             key={template.id}
                             type="button"
@@ -489,56 +491,57 @@ export function TopicColumn(props: TopicColumnProps) {
                                 : 'text-slate-600 hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800'
                             }`}
                           >
-                            <span className="block text-sm font-black">{template.label}</span>
-                            <span className="mt-0.5 block text-xs opacity-75">{template.description}</span>
+                            <span className="block truncate text-sm font-black" title={template.label}>{template.label}</span>
+                            <span className="mt-0.5 block line-clamp-2 text-xs opacity-75" title={template.description}>{template.description}</span>
                           </button>
-                        )
-                      })}
-                    </div>
-
-                    {((userToken && isAgentOnline(agent.agent_id)) || onRenameAgent || onUnclaimAgent) && (
-                      <div className="mt-2 border-t border-[#eee6da] pt-2 dark:border-zinc-800">
-                        {userToken && isAgentOnline(agent.agent_id) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShellAgent(agent)
-                              setShellResult(null)
-                              setShellError('')
-                              setAgentMenuFor(null)
-                            }}
-                            className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
-                          >
-                            {zh ? '打开 Shell' : 'Open Shell'}
-                          </button>
-                        )}
-                        {onRenameAgent && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onRenameAgent(agent.agent_id, agent.display_name)
-                              setAgentMenuFor(null)
-                            }}
-                            className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
-                          >
-                            {zh ? '重命名 Agent' : 'Rename Agent'}
-                          </button>
-                        )}
-                        {onUnclaimAgent && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onUnclaimAgent(agent.agent_id)
-                              setAgentMenuFor(null)
-                            }}
-                            className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-500 transition hover:bg-red-50 dark:hover:bg-red-500/10"
-                          >
-                            {t('agent.unclaim')}
-                          </button>
-                        )}
+                          )
+                        })}
                       </div>
-                    )}
-                  </div>
+
+                      {((userToken && isAgentOnline(agent.agent_id)) || onRenameAgent || onUnclaimAgent) && (
+                        <div className="mt-2 border-t border-[#eee6da] pt-2 dark:border-zinc-800">
+                          {userToken && isAgentOnline(agent.agent_id) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShellAgent(agent)
+                                setShellResult(null)
+                                setShellError('')
+                                setAgentMenuFor(null)
+                              }}
+                              className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
+                            >
+                              {zh ? '打开 Shell' : 'Open Shell'}
+                            </button>
+                          )}
+                          {onRenameAgent && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onRenameAgent(agent.agent_id, agent.display_name)
+                                setAgentMenuFor(null)
+                              }}
+                              className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
+                            >
+                              {zh ? '重命名 Agent' : 'Rename Agent'}
+                            </button>
+                          )}
+                          {onUnclaimAgent && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onUnclaimAgent(agent.agent_id)
+                                setAgentMenuFor(null)
+                              }}
+                              className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-500 transition hover:bg-red-50 dark:hover:bg-red-500/10"
+                            >
+                              {t('agent.unclaim')}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             )
