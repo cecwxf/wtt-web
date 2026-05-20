@@ -22,6 +22,14 @@ import { cacheKeyFromBase64, clearCachedKey, decryptReceived, encryptForSend, ge
 import { getAgentRoleTemplate } from '@/lib/agent-role-templates'
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
+const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
+
+type TopicTypingState = {
+  agentId: string
+  agentName?: string
+  startedAt: number
+  expiresAt: number
+}
 
 const ContentEditor = dynamic(
   () => import('@/components/ui/content-editor').then((m) => m.ContentEditor),
@@ -87,6 +95,26 @@ function shouldDisplayMessage(semanticTypeRaw: unknown, contentRaw: unknown): bo
   if (content.includes('[System] P2P channel established')) return false
 
   return true
+}
+
+function clearTypingAfterAgentReply(
+  prev: Record<string, TopicTypingState>,
+  topicId: string,
+  agentId?: string,
+  messageTimestamp?: string,
+): Record<string, TopicTypingState> {
+  const existing = prev[topicId]
+  if (!existing) return prev
+  if (agentId && existing.agentId && existing.agentId !== agentId) return prev
+
+  if (messageTimestamp) {
+    const messageTime = new Date(messageTimestamp).getTime()
+    if (Number.isFinite(messageTime) && messageTime + 2000 < existing.startedAt) return prev
+  }
+
+  const next = { ...prev }
+  delete next[topicId]
+  return next
 }
 
 function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
@@ -285,7 +313,7 @@ function FeedPageInner() {
   const [composerFocusNonce, setComposerFocusNonce] = useState(0)
   const [pendingComposerFocusTopicId, setPendingComposerFocusTopicId] = useState<string | null>(null)
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
-  const [typingByTopic, setTypingByTopic] = useState<Record<string, { agentId: string; agentName?: string; startedAt: number; expiresAt: number }>>({})
+  const [typingByTopic, setTypingByTopic] = useState<Record<string, TopicTypingState>>({})
   // Cache successful decrypt results by message_id + ciphertext to avoid repeated CPU work.
   const decryptCacheRef = useRef<Map<string, string>>(new Map())
   // Keep feed polling fallback enabled only when realtime WS is not healthy.
@@ -498,23 +526,11 @@ function FeedPageInner() {
 
         const state = String(rawEvent.state || 'start').toLowerCase()
         if (state === 'stop') {
-          // Keep indicator briefly visible to avoid start/stop arriving in the same paint frame.
-          setTypingByTopic((prev) => {
-            const existing = prev[topicId]
-            if (!existing) return prev
-            return {
-              ...prev,
-              [topicId]: {
-                ...existing,
-                expiresAt: Math.max(existing.expiresAt, Date.now() + 900),
-              },
-            }
-          })
+          // Agent-side stop events can arrive before the actual reply is persisted
+          // and pushed to Web. Keep the indicator until a real agent message arrives.
           return
         }
 
-        const ttlMsRaw = Number(rawEvent.ttl_ms)
-        const ttlMs = Number.isFinite(ttlMsRaw) ? Math.max(1500, Math.min(30000, ttlMsRaw)) : 6000
         const agentId = String(rawEvent.agent_id || '')
         const agentName = String(rawEvent.agent_display_name || '') || agentNameMap[agentId] || undefined
 
@@ -525,7 +541,8 @@ function FeedPageInner() {
             agentId,
             agentName,
             startedAt: now,
-            expiresAt: now + ttlMs,
+            // Safety fallback only. Normal lifecycle is cleared by the agent reply.
+            expiresAt: now + AGENT_TYPING_STALE_MS,
           },
         }))
         return
@@ -628,17 +645,7 @@ function FeedPageInner() {
       }
 
       if (incomingBase.sender_type === 'agent') {
-        setTypingByTopic((prev) => {
-          const existing = prev[incomingTopicId]
-          if (!existing) return prev
-          return {
-            ...prev,
-            [incomingTopicId]: {
-              ...existing,
-              expiresAt: Math.max(existing.expiresAt, Date.now() + 350),
-            },
-          }
-        })
+        setTypingByTopic((prev) => clearTypingAfterAgentReply(prev, incomingTopicId, senderId, incomingBase.timestamp))
       }
 
       void (async () => {
@@ -766,7 +773,7 @@ function FeedPageInner() {
       const now = Date.now()
       setTypingByTopic((prev) => {
         let changed = false
-        const next: Record<string, { agentId: string; agentName?: string; startedAt: number; expiresAt: number }> = {}
+        const next: Record<string, TopicTypingState> = {}
         for (const [topicId, v] of Object.entries(prev)) {
           if (v.expiresAt > now) next[topicId] = v
           else changed = true
@@ -808,6 +815,18 @@ function FeedPageInner() {
         })
       }
       setHasOlder(normalized.length >= 100)
+      if (selectedTopicId) {
+        setTypingByTopic((prev) => {
+          const existing = prev[selectedTopicId]
+          if (!existing) return prev
+          const reply = normalized.find((m) => (
+            m.sender_type === 'agent' &&
+            (!existing.agentId || m.sender_id === existing.agentId) &&
+            new Date(m.timestamp).getTime() + 2000 >= existing.startedAt
+          ))
+          return reply ? clearTypingAfterAgentReply(prev, selectedTopicId, reply.sender_id, reply.timestamp) : prev
+        })
+      }
     })()
 
     return () => {
@@ -1320,6 +1339,19 @@ function FeedPageInner() {
         false
       )
     }
+
+    setTypingByTopic((prev) => {
+      const now = Date.now()
+      return {
+        ...prev,
+        [selectedTopicId]: {
+          agentId: selectedAgentId,
+          agentName: agentNameMap[selectedAgentId] || undefined,
+          startedAt: now,
+          expiresAt: now + AGENT_TYPING_STALE_MS,
+        },
+      }
+    })
 
     mutate()
   }
