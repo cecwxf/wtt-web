@@ -271,7 +271,6 @@ export function TopicColumn(props: TopicColumnProps) {
 
     return order
       .map((group) => ({ group, items: byGroup.get(group) || [] }))
-      .filter(({ items }) => items.length > 0)
   }, [topics])
 
   const renderTopicRow = (topic: TopicItem) => {
@@ -627,7 +626,13 @@ export function TopicColumn(props: TopicColumnProps) {
 
                   {!collapsed && (
                     <div className="space-y-1.5">
-                      {items.map((topic) => renderTopicRow(topic))}
+                      {items.length > 0 ? (
+                        items.map((topic) => renderTopicRow(topic))
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-[#ded6c8] bg-white/45 px-3 py-2 text-xs font-semibold text-slate-400 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500">
+                          {zh ? '暂无该类型 topic' : 'No topics in this group'}
+                        </div>
+                      )}
                     </div>
                   )}
                 </section>
