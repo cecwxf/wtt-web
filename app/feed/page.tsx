@@ -1306,12 +1306,30 @@ function FeedPageInner() {
       }
     }
 
+    const assignedRoleEntries = Object.entries(agentRoleMap)
+      .map(([agentId, roleId]) => [agentId, getAgentRoleTemplate(roleId)] as const)
+      .filter(([, role]) => role.id !== 'general')
+    if (assignedRoleEntries.length > 0) {
+      metadata.agent_role_templates_by_agent = Object.fromEntries(
+        assignedRoleEntries.map(([agentId, role]) => [
+          agentId,
+          {
+            id: role.id,
+            label: role.label,
+            skills: role.skills,
+            system_prompt: role.systemPrompt,
+          },
+        ]),
+      )
+    }
+
     const selectedRole = getAgentRoleTemplate(agentRoleMap[selectedAgentId])
     if (selectedRole.id !== 'general') {
       metadata.agent_role_template = {
         id: selectedRole.id,
         label: selectedRole.label,
         skills: selectedRole.skills,
+        system_prompt: selectedRole.systemPrompt,
       }
       metadata.agent_soul = {
         role: selectedRole.label,
