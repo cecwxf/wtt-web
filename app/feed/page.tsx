@@ -314,6 +314,7 @@ function FeedPageInner() {
   const [pendingComposerFocusTopicId, setPendingComposerFocusTopicId] = useState<string | null>(null)
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [typingByTopic, setTypingByTopic] = useState<Record<string, TopicTypingState>>({})
+  const typingBaselineAgentMessageIdsRef = useRef<Record<string, Set<string>>>({})
   // Cache successful decrypt results by message_id + ciphertext to avoid repeated CPU work.
   const decryptCacheRef = useRef<Map<string, string>>(new Map())
   // Keep feed polling fallback enabled only when realtime WS is not healthy.
@@ -645,6 +646,7 @@ function FeedPageInner() {
       }
 
       if (incomingBase.sender_type === 'agent') {
+        delete typingBaselineAgentMessageIdsRef.current[incomingTopicId]
         setTypingByTopic((prev) => clearTypingAfterAgentReply(prev, incomingTopicId, senderId, incomingBase.timestamp))
       }
 
@@ -819,12 +821,16 @@ function FeedPageInner() {
         setTypingByTopic((prev) => {
           const existing = prev[selectedTopicId]
           if (!existing) return prev
+          const baselineIds = typingBaselineAgentMessageIdsRef.current[selectedTopicId]
           const reply = normalized.find((m) => (
             m.sender_type === 'agent' &&
             (!existing.agentId || m.sender_id === existing.agentId) &&
+            (!baselineIds || !baselineIds.has(m.message_id)) &&
             new Date(m.timestamp).getTime() + 2000 >= existing.startedAt
           ))
-          return reply ? clearTypingAfterAgentReply(prev, selectedTopicId, reply.sender_id, reply.timestamp) : prev
+          if (!reply) return prev
+          delete typingBaselineAgentMessageIdsRef.current[selectedTopicId]
+          return clearTypingAfterAgentReply(prev, selectedTopicId, reply.sender_id, reply.timestamp)
         })
       }
     })()
@@ -1221,6 +1227,27 @@ function FeedPageInner() {
   const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig, replyTo?: string) => {
     if (!selectedTopicId || !selectedAgentId) return
 
+    const topicIdForSend = selectedTopicId
+    const agentIdForSend = selectedAgentId
+    const baselineAgentMessageIds = new Set(
+      allMessages
+        .filter((m) => m.sender_type === 'agent' && (!agentIdForSend || m.sender_id === agentIdForSend))
+        .map((m) => m.message_id),
+    )
+    typingBaselineAgentMessageIdsRef.current[topicIdForSend] = baselineAgentMessageIds
+    setTypingByTopic((prev) => {
+      const now = Date.now()
+      return {
+        ...prev,
+        [topicIdForSend]: {
+          agentId: agentIdForSend,
+          agentName: agentNameMap[agentIdForSend] || undefined,
+          startedAt: now,
+          expiresAt: now + AGENT_TYPING_STALE_MS,
+        },
+      }
+    })
+
     const isTask = !!selectedTopicTaskId
     const isSlashCommand = content.trim().startsWith('/')
     const isNonTaskDiscuss = selectedTopic?.topic_type === 'discussion' && !isTask
@@ -1339,19 +1366,6 @@ function FeedPageInner() {
         false
       )
     }
-
-    setTypingByTopic((prev) => {
-      const now = Date.now()
-      return {
-        ...prev,
-        [selectedTopicId]: {
-          agentId: selectedAgentId,
-          agentName: agentNameMap[selectedAgentId] || undefined,
-          startedAt: now,
-          expiresAt: now + AGENT_TYPING_STALE_MS,
-        },
-      }
-    })
 
     mutate()
   }
