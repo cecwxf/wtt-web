@@ -46,6 +46,8 @@ interface Agent {
   api_key?: string
   invite_code?: string
   invite_status?: 'active' | 'none'
+  role_template_id?: string
+  role_template?: Record<string, unknown>
 }
 
 function getHumanSender(session: unknown): string {
@@ -357,8 +359,10 @@ function FeedPageInner() {
   }, [])
 
   const handleAssignAgentRole = useCallback((agentId: string, roleId: string) => {
+    const role = getAgentRoleTemplate(roleId)
     setAgentRoleMap((prev) => {
       const next = { ...prev, [agentId]: roleId }
+      if (role.id === 'general') delete next[agentId]
       try {
         localStorage.setItem('wtt:feed-agent-role-map', JSON.stringify(next))
       } catch {
@@ -366,7 +370,41 @@ function FeedPageInner() {
       }
       return next
     })
-  }, [])
+    if (session?.accessToken) {
+      fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({
+          role_template_id: role.id === 'general' ? '' : role.id,
+          role_template: role.id === 'general' ? {} : {
+            id: role.id,
+            label: role.label,
+            skills: role.skills,
+            system_prompt: role.systemPrompt,
+          },
+        }),
+      })
+        .then((res) => {
+          if (res.ok) {
+            setAgents((prev) => prev.map((agent) => (
+              agent.agent_id === agentId
+                ? {
+                    ...agent,
+                    role_template_id: role.id === 'general' ? '' : role.id,
+                    role_template: role.id === 'general' ? {} : {
+                      id: role.id,
+                      label: role.label,
+                      skills: role.skills,
+                      system_prompt: role.systemPrompt,
+                    },
+                  }
+                : agent
+            )))
+          }
+        })
+        .catch(() => {})
+    }
+  }, [session?.accessToken])
 
   const [kbLoading, setKbLoading] = useState(false)
   const handleOpenKnowledgeRoot = useCallback(async () => {
@@ -433,6 +471,60 @@ function FeedPageInner() {
       const data = await response.json()
       const list = normalizeAndFilterAgents(data)
       setAgents(list)
+
+      const storedRoleMap: Record<string, string> = {}
+      try {
+        const rawRoleMap = localStorage.getItem('wtt:feed-agent-role-map')
+        const parsedRoleMap = rawRoleMap ? JSON.parse(rawRoleMap) : null
+        if (parsedRoleMap && typeof parsedRoleMap === 'object') {
+          for (const [agentId, roleId] of Object.entries(parsedRoleMap)) {
+            if (typeof roleId === 'string') storedRoleMap[agentId] = roleId
+          }
+        }
+      } catch {
+        // ignore local role-map errors
+      }
+
+      const nextRoleMap = { ...storedRoleMap }
+      const roleMigrations: Array<{ agentId: string; role: ReturnType<typeof getAgentRoleTemplate> }> = []
+      for (const agent of list) {
+        if (agent.role_template_id) {
+          nextRoleMap[agent.agent_id] = agent.role_template_id
+          continue
+        }
+
+        const localRoleId = nextRoleMap[agent.agent_id]
+        const localRole = localRoleId ? getAgentRoleTemplate(localRoleId) : null
+        if (localRole && localRole.id !== 'general') {
+          roleMigrations.push({ agentId: agent.agent_id, role: localRole })
+          continue
+        }
+
+        delete nextRoleMap[agent.agent_id]
+      }
+      setAgentRoleMap(nextRoleMap)
+      try {
+        localStorage.setItem('wtt:feed-agent-role-map', JSON.stringify(nextRoleMap))
+      } catch {
+        // ignore local storage failures
+      }
+      if (session?.accessToken && roleMigrations.length > 0) {
+        for (const item of roleMigrations) {
+          fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(item.agentId)}/profile`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+            body: JSON.stringify({
+              role_template_id: item.role.id,
+              role_template: {
+                id: item.role.id,
+                label: item.role.label,
+                skills: item.role.skills,
+                system_prompt: item.role.systemPrompt,
+              },
+            }),
+          }).catch(() => {})
+        }
+      }
 
       if (list.length === 0 && typeof window !== 'undefined') {
         const identity = String(sessionUserId || sessionUserEmail || 'anonymous')
@@ -1303,38 +1395,6 @@ function FeedPageInner() {
       metadata.model_config = {
         model: modelConfig.model,
         reasoning_effort: modelConfig.reasoningEffort,
-      }
-    }
-
-    const assignedRoleEntries = Object.entries(agentRoleMap)
-      .map(([agentId, roleId]) => [agentId, getAgentRoleTemplate(roleId)] as const)
-      .filter(([, role]) => role.id !== 'general')
-    if (assignedRoleEntries.length > 0) {
-      metadata.agent_role_templates_by_agent = Object.fromEntries(
-        assignedRoleEntries.map(([agentId, role]) => [
-          agentId,
-          {
-            id: role.id,
-            label: role.label,
-            skills: role.skills,
-            system_prompt: role.systemPrompt,
-          },
-        ]),
-      )
-    }
-
-    const selectedRole = getAgentRoleTemplate(agentRoleMap[selectedAgentId])
-    if (selectedRole.id !== 'general') {
-      metadata.agent_role_template = {
-        id: selectedRole.id,
-        label: selectedRole.label,
-        skills: selectedRole.skills,
-        system_prompt: selectedRole.systemPrompt,
-      }
-      metadata.agent_soul = {
-        role: selectedRole.label,
-        skills: selectedRole.skills,
-        instructions: selectedRole.systemPrompt,
       }
     }
 

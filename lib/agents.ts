@@ -6,6 +6,8 @@ export interface RawAgentLike {
   api_key?: string
   invite_code?: string
   invite_status?: string
+  role_template_id?: string
+  role_template?: Record<string, unknown>
 }
 
 export interface NormalizedAgent {
@@ -16,6 +18,8 @@ export interface NormalizedAgent {
   api_key?: string
   invite_code?: string
   invite_status?: 'active' | 'none'
+  role_template_id?: string
+  role_template?: Record<string, unknown>
 }
 
 export function shouldHideDefaultAgent(agent: { agent_id: string; display_name: string; is_primary: boolean }) {
@@ -47,6 +51,10 @@ export function normalizeAndFilterAgents(raw: unknown): NormalizedAgent[] {
       api_key: typeof data.api_key === 'string' ? data.api_key : undefined,
       invite_code: typeof data.invite_code === 'string' ? data.invite_code : undefined,
       invite_status: data.invite_status === 'active' ? 'active' : 'none',
+      role_template_id: typeof data.role_template_id === 'string' ? data.role_template_id : undefined,
+      role_template: data.role_template && typeof data.role_template === 'object'
+        ? data.role_template as Record<string, unknown>
+        : undefined,
     }
     return agent
   })
