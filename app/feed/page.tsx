@@ -27,6 +27,8 @@ const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
 type TopicTypingState = {
   agentId: string
   agentName?: string
+  statusText?: string
+  statusKind?: string
   startedAt: number
   expiresAt: number
 }
@@ -115,6 +117,26 @@ function clearTypingAfterAgentReply(
   const next = { ...prev }
   delete next[topicId]
   return next
+}
+
+function parseAgentStatusContent(contentRaw: unknown): { text: string; kind?: string } | null {
+  const content = String(contentRaw ?? '').trim()
+  if (!content.startsWith('[TASK_STATUS]')) return null
+  const status = content.match(/\bstatus=([^\s]+)/)?.[1] || ''
+  const action = content.match(/\baction=([^:\s]+):([\s\S]*)$/)
+  const kind = action?.[1] || 'running'
+  const detail = (action?.[2] || '').trim()
+  if (status === 'completed') return { text: `Agent 已完成 ${kindLabel(kind)}`, kind }
+  if (status === 'failed') return { text: `Agent 执行失败：${detail || kindLabel(kind)}`, kind }
+  if (kind === 'command') return { text: `Agent 正在执行命令：${detail || 'command'}`, kind }
+  if (kind === 'tool') return { text: `Agent 正在调用工具：${detail || 'tool'}`, kind }
+  if (kind === 'web_search') return { text: `Agent 正在搜索：${detail || 'web search'}`, kind }
+  if (kind === 'response') return { text: 'Agent 正在组织回复', kind }
+  return { text: `Agent 正在执行：${detail || kindLabel(kind)}`, kind }
+}
+
+function kindLabel(kind: string): string {
+  return String(kind || 'step').replace(/_/g, ' ')
 }
 
 function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
@@ -534,6 +556,8 @@ function FeedPageInner() {
 
         const agentId = String(rawEvent.agent_id || '')
         const agentName = String(rawEvent.agent_display_name || '') || agentNameMap[agentId] || undefined
+        const statusText = String(rawEvent.status_text || '').trim() || undefined
+        const statusKind = String(rawEvent.status_kind || '').trim() || undefined
 
         const now = Date.now()
         setTypingByTopic((prev) => ({
@@ -541,6 +565,8 @@ function FeedPageInner() {
           [topicId]: {
             agentId,
             agentName,
+            statusText,
+            statusKind,
             startedAt: now,
             // Safety fallback only. Normal lifecycle is cleared by the agent reply.
             expiresAt: now + AGENT_TYPING_STALE_MS,
@@ -597,6 +623,25 @@ function FeedPageInner() {
       const semanticType = String((msg.message as Record<string, unknown>).semantic_type ?? '')
       const rawContent = String((msg.message as Record<string, unknown>).content ?? '')
       const cleanedContent = stripSourceMarker(rawContent)
+      const agentStatus = parseAgentStatusContent(cleanedContent)
+      if (agentStatus && incomingTopicId) {
+        const senderId = String(msg.message.sender_id || '')
+        const now = Date.now()
+        setTypingByTopic((prev) => ({
+          ...prev,
+          [incomingTopicId]: {
+            agentId: senderId,
+            agentName: (msg.message as Record<string, unknown>).sender_display_name
+              ? String((msg.message as Record<string, unknown>).sender_display_name)
+              : agentNameMap[senderId] || undefined,
+            statusText: agentStatus.text,
+            statusKind: agentStatus.kind,
+            startedAt: now,
+            expiresAt: now + 30000,
+          },
+        }))
+        return
+      }
       const displayable = shouldDisplayMessage(semanticType, cleanedContent)
 
       // Bump activity and unread counters for the topic that received the message.
@@ -1002,7 +1047,7 @@ function FeedPageInner() {
     const typing = typingByTopic[selectedTopicId]
     if (!typing) return null
     const name = typing.agentName || agentNameMap[typing.agentId] || typing.agentId || 'Agent'
-    return `${name} ${t('feed.typing')}`
+    return typing.statusText || `${name} ${t('feed.typing')}`
   }, [selectedTopicId, typingByTopic, agentNameMap, t])
 
   // Clear stale persisted topic if it no longer exists in the topics list

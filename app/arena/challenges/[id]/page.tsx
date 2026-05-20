@@ -75,7 +75,23 @@ function displayStdout(stdout?: string) {
   return (output || text).trim()
 }
 
-type ArenaTypingState = { topicId: string; agentId: string; agentName?: string; startedAt: number; expiresAt: number }
+type ArenaTypingState = { topicId: string; agentId: string; agentName?: string; statusText?: string; statusKind?: string; startedAt: number; expiresAt: number }
+
+function parseAgentStatusContent(contentRaw: unknown): { text: string; kind?: string } | null {
+  const content = String(contentRaw ?? '').trim()
+  if (!content.startsWith('[TASK_STATUS]')) return null
+  const status = content.match(/\bstatus=([^\s]+)/)?.[1] || ''
+  const action = content.match(/\baction=([^:\s]+):([\s\S]*)$/)
+  const kind = action?.[1] || 'running'
+  const detail = (action?.[2] || '').trim()
+  if (status === 'completed') return { text: `Agent 已完成 ${kind.replace(/_/g, ' ')}`, kind }
+  if (status === 'failed') return { text: `Agent 执行失败：${detail || kind}`, kind }
+  if (kind === 'command') return { text: `Agent 正在执行命令：${detail || 'command'}`, kind }
+  if (kind === 'tool') return { text: `Agent 正在调用工具：${detail || 'tool'}`, kind }
+  if (kind === 'web_search') return { text: `Agent 正在搜索：${detail || 'web search'}`, kind }
+  if (kind === 'response') return { text: 'Agent 正在组织回复', kind }
+  return { text: `Agent 正在执行：${detail || kind.replace(/_/g, ' ')}`, kind }
+}
 
 function diagramHasHtml(diagram?: WhiteboardDiagram | null) {
   return Boolean(diagram?.html?.trim() || diagram?.steps?.some((step) => step.html?.trim()))
@@ -1355,6 +1371,7 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMes
       if (semantic === 'notification') return false
       if (content.includes('[system:p2p_init]')) return false
       if (content.includes('Agent thinking')) return false
+      if (content.trim().startsWith('[TASK_STATUS]')) return false
       if (content.includes('[whiteboard_render_request:auto]')) return false
       return !!stripWhiteboardPayload(stripSourceBlock(content))
     })
@@ -1671,6 +1688,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         topicId,
         agentId: String(rawEvent.agent_id || ARENA_AGENT_ID),
         agentName: String(rawEvent.agent_display_name || '') || undefined,
+        statusText: String(rawEvent.status_text || '').trim() || undefined,
+        statusKind: String(rawEvent.status_kind || '').trim() || undefined,
         startedAt: now,
         expiresAt: now + ttlMs,
       })
@@ -1683,6 +1702,20 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
     const senderType = String(msg.message.sender_type || '').toUpperCase()
     const senderId = String(msg.message.sender_id || '')
+    const agentStatus = parseAgentStatusContent(String(msg.message.content || ''))
+    if (agentStatus && (senderType === 'AGENT' || senderId === ARENA_AGENT_ID)) {
+      const now = Date.now()
+      setArenaTyping({
+        topicId: incomingTopicId,
+        agentId: senderId || ARENA_AGENT_ID,
+        agentName: String((msg.message as Record<string, unknown>).sender_display_name || '') || undefined,
+        statusText: agentStatus.text,
+        statusKind: agentStatus.kind,
+        startedAt: now,
+        expiresAt: now + 30000,
+      })
+      return
+    }
     if (senderType === 'AGENT' || senderId === ARENA_AGENT_ID) {
       setArenaTyping((prev) => {
         if (!prev || prev.topicId !== incomingTopicId) return prev
@@ -1757,7 +1790,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     : whiteboardBusy
     ? t.whiteboardWorking
     : arenaTypingActive
-    ? `${arenaTyping.agentName || 'Agent'} ${locale === 'zh' ? '正在输入...' : 'is typing...'}`
+    ? arenaTyping.statusText || `${arenaTyping.agentName || 'Agent'} ${locale === 'zh' ? '正在输入...' : 'is typing...'}`
     : t.chatWorking
 
   useEffect(() => {
