@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, FileEdit, KanbanSquare, Plus, Sun, Moon, Languages, Compass } from 'lucide-react'
+import { Bell, FileEdit, KanbanSquare, Plus, Sun, Moon, Languages, Compass, Trophy } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
@@ -67,6 +67,15 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         >
           <KanbanSquare className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{t('top.tasks')}</span>
+        </Link>
+
+        <Link
+          href={buildAgentUrl('/arena', agentId)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-800 dark:hover:text-amber-200"
+          title="Arena"
+        >
+          <Trophy className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Arena</span>
         </Link>
 
         <Link
