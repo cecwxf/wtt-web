@@ -26,8 +26,9 @@ const HTTPS_AGENT = new HttpsAgent({
 function buildUpstreamUrl(path: string[], request: NextRequest): string {
   const base = UPSTREAM_BASE.replace(/\/+$/, '')
   const suffix = path.join('/')
+  const trailingSlash = request.nextUrl.pathname.endsWith('/') ? '/' : ''
   const query = request.nextUrl.search
-  return `${base}/${suffix}${query}`
+  return `${base}/${suffix}${trailingSlash}${query}`
 }
 
 function filterResponseHeaders(headers: Headers): Headers {
