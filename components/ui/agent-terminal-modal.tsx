@@ -54,7 +54,8 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
     term.loadAddon(fit)
     term.open(root)
     fit.fit()
-    term.writeln('\x1b[36mConnecting to WTT agent terminal...\x1b[0m')
+    term.focus()
+    term.writeln('\x1b[36mConnecting to agent shell...\x1b[0m')
     termRef.current = term
     fitRef.current = fit
 
@@ -117,6 +118,7 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
         if (!sid) throw new Error('terminal session id missing')
         sessionRef.current = sid
         setStatus('connected')
+        term.focus()
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'terminal open failed'
         setError(msg)
@@ -191,12 +193,14 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
   }, [agentId, token, wsUrl])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3">
-      <div className="flex h-[78vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#2b3a35] bg-[#0b0f14] shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-2">
+      <div className="flex h-[94vh] w-[96vw] max-w-none flex-col overflow-hidden rounded-2xl border border-[#2b3a35] bg-[#0b0f14] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 bg-[#101820] px-4 py-3">
           <div className="min-w-0">
-            <div className="truncate text-sm font-black text-slate-100">Agent Terminal · {agentName}</div>
-            <div className="mt-1 truncate text-xs text-slate-400" title={workdir || ''}>{workdir || 'wtt-connect workdir'}</div>
+            <div className="truncate text-sm font-black text-slate-100">Terminal · {agentName}</div>
+            <div className="mt-1 truncate text-xs text-slate-400" title={workdir || ''}>
+              {workdir || 'agent shell'} · runs on the agent host
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${
