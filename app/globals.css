@@ -1,4 +1,6 @@
 /* Tailwind CSS layers: reset(base) / component presets / utility classes */
+@import "@xterm/xterm/css/xterm.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

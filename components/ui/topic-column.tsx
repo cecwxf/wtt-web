@@ -7,7 +7,7 @@ import {
   getAgentRoleTemplate,
   type AgentRoleTemplateId,
 } from '@/lib/agent-role-templates'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { AgentTerminalModal } from '@/components/ui/agent-terminal-modal'
 import { useI18n } from '@/lib/i18n-provider'
 
 export interface TopicItem {
@@ -71,16 +71,6 @@ interface TopicColumnProps {
   onToggleSidebar?: () => void
   localLibrarySlot?: ReactNode
   userToken?: string
-}
-
-interface ShellRunResult {
-  command?: string
-  cwd?: string
-  exit_code?: number
-  stdout?: string
-  stderr?: string
-  duration_ms?: number
-  timed_out?: boolean
 }
 
 function agentInitial(name: string) {
@@ -203,10 +193,6 @@ export function TopicColumn(props: TopicColumnProps) {
   const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
   const [topicMenuFor, setTopicMenuFor] = useState<string | null>(null)
   const [shellAgent, setShellAgent] = useState<AgentOption | null>(null)
-  const [shellCommand, setShellCommand] = useState('pwd && git status --short')
-  const [shellRunning, setShellRunning] = useState(false)
-  const [shellResult, setShellResult] = useState<ShellRunResult | null>(null)
-  const [shellError, setShellError] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
     p2p: false,
     task: false,
@@ -219,30 +205,6 @@ export function TopicColumn(props: TopicColumnProps) {
   const isAgentOnline = (agentId: string) => {
     if (onlineAgentIds) return onlineAgentIds.has(agentId)
     return agentId === selectedAgentId ? isSelectedAgentOnline : false
-  }
-
-  const runAgentShell = async () => {
-    if (!shellAgent || !userToken || !shellCommand.trim()) return
-    setShellRunning(true)
-    setShellError('')
-    setShellResult(null)
-    try {
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(shellAgent.agent_id)}/shell/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
-        body: JSON.stringify({ command: shellCommand.trim(), timeout_seconds: 30 }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(String(data.detail || data.error || `HTTP ${res.status}`))
-      setShellResult((data.result || {}) as ShellRunResult)
-    } catch (err) {
-      setShellError(err instanceof Error ? err.message : 'shell failed')
-    } finally {
-      setShellRunning(false)
-    }
   }
 
   const groupedTopics = useMemo(() => {
@@ -504,8 +466,6 @@ export function TopicColumn(props: TopicColumnProps) {
                               type="button"
                               onClick={() => {
                                 setShellAgent(agent)
-                                setShellResult(null)
-                                setShellError('')
                                 setAgentMenuFor(null)
                               }}
                               className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -643,75 +603,13 @@ export function TopicColumn(props: TopicColumnProps) {
       </aside>
 
       {shellAgent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-[#ded6c8] bg-[#fffdf8] shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
-            <div className="flex items-start justify-between border-b border-[#eee6da] px-4 py-3 dark:border-zinc-800">
-              <div className="min-w-0">
-                <div className="text-sm font-black text-slate-800 dark:text-zinc-100">
-                  {zh ? 'Agent Shell' : 'Agent Shell'} · {shellAgent.display_name}
-                </div>
-                <div className="mt-1 truncate text-xs text-slate-500 dark:text-zinc-400" title={agentRuntimeMap?.[shellAgent.agent_id]?.workdir || ''}>
-                  {agentRuntimeMap?.[shellAgent.agent_id]?.workdir || (zh ? '等待 wtt-connect 上报工作目录' : 'Waiting for wtt-connect workdir')}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShellAgent(null)}
-                className="rounded-lg px-2 py-1 text-sm font-black text-slate-400 transition hover:bg-[#f3eee5] hover:text-slate-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-3 p-4">
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-                {zh
-                  ? '命令在 agent 端 wtt-connect 的 workdir 内执行；当前默认 readonly 策略，危险命令和写操作会被拒绝。'
-                  : 'Commands run on the agent host inside wtt-connect workdir; readonly policy blocks dangerous/write operations by default.'}
-              </div>
-              <textarea
-                value={shellCommand}
-                onChange={(event) => setShellCommand(event.target.value)}
-                rows={3}
-                className="w-full resize-none rounded-xl border border-[#ded6c8] bg-white px-3 py-2 font-mono text-sm text-slate-800 outline-none focus:border-emerald-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                placeholder="pwd && git status --short"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShellAgent(null)}
-                  className="rounded-xl border border-[#ded6c8] px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-[#f3eee5] dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  {zh ? '取消' : 'Cancel'}
-                </button>
-                <button
-                  type="button"
-                  onClick={runAgentShell}
-                  disabled={shellRunning || !shellCommand.trim()}
-                  className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {shellRunning ? (zh ? '运行中...' : 'Running...') : (zh ? '运行' : 'Run')}
-                </button>
-              </div>
-
-              {(shellResult || shellError) && (
-                <div className="rounded-xl border border-[#ded6c8] bg-slate-950 p-3 font-mono text-xs text-slate-100 dark:border-zinc-700">
-                  {shellError ? (
-                    <pre className="whitespace-pre-wrap text-red-300">{shellError}</pre>
-                  ) : (
-                    <>
-                      <div className="mb-2 text-slate-400">
-                        exit={shellResult?.exit_code ?? '-'} · {shellResult?.duration_ms ?? 0}ms · {shellResult?.cwd || ''}
-                      </div>
-                      {shellResult?.stdout && <pre className="whitespace-pre-wrap">{shellResult.stdout}</pre>}
-                      {shellResult?.stderr && <pre className="mt-2 whitespace-pre-wrap text-amber-300">{shellResult.stderr}</pre>}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <AgentTerminalModal
+          agentId={shellAgent.agent_id}
+          agentName={shellAgent.display_name || shellAgent.agent_id}
+          workdir={agentRuntimeMap?.[shellAgent.agent_id]?.workdir}
+          token={userToken}
+          onClose={() => setShellAgent(null)}
+        />
       )}
     </>
   )
