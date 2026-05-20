@@ -412,6 +412,12 @@ export function stripMetaBlocks(content: string): { meta: MetaBlock[]; body: str
   )
   // Strip inline [Model: ... | Effort: ...] and [Switched → Model: ...] tags
   cleaned = cleaned.replace(/\[(Switched\s*→\s*)?Model:\s*[^\]]*\]\s*/g, '')
+  // Strip legacy/internal agent role blocks. These are inference context, not
+  // user-visible chat content.
+  cleaned = cleaned.replace(/\[Agent Role Template\][\s\S]*?\[\/Agent Role Template\]\s*/gi, '')
+  cleaned = cleaned.replace(/\[WTT Agent Soul\][\s\S]*?\[\/WTT Agent Soul\]\s*/gi, '')
+  cleaned = cleaned.replace(/\[WTT Worker Persona\][\s\S]*?\[\/WTT Worker Persona\]\s*/gi, '')
+  cleaned = cleaned.replace(/\[WTT Worker Context\][\s\S]*?\[\/WTT Worker Context\]\s*/gi, '')
   // Strip hidden [FILE_CONTENT ...]...[/FILE_CONTENT] blocks (raw extracted text
   // from uploaded PDF/DOCX/etc — meant for the inference agent, not the UI).
   cleaned = cleaned.replace(/\[FILE_CONTENT\b[^\]]*\][\s\S]*?\[\/FILE_CONTENT\]\s*/g, '')
