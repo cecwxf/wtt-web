@@ -5,6 +5,7 @@ import { MessageCircle, Share2, Bookmark, User, ImageIcon } from 'lucide-react'
 import { formatTimeAgo } from '@/lib/time'
 import { WttLogo } from './wtt-logo'
 import { parseRichBlocks, toThumbnailUrl } from '@/lib/rich-content'
+import type { ArtifactPreview } from './artifact-preview-panel'
 
 export interface MessageCardData {
   message_id: string
@@ -23,6 +24,7 @@ interface MessageCardProps {
   onReply?: (messageId: string) => void
   onShare?: (messageId: string) => void
   onBookmark?: (messageId: string) => void
+  onArtifactOpen?: (artifact: ArtifactPreview) => void
 }
 
 // Rich content parsing imported from @/lib/rich-content
@@ -71,8 +73,25 @@ function CardImage({ url }: { url: string }) {
 /*  MessageCard                                                        */
 /* ------------------------------------------------------------------ */
 
-export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCardProps) {
+function extractOpenDesignArtifact(content: string): ArtifactPreview | null {
+  const markdown = String(content || '').match(/\[(?:opendesign|open design|OpenDesign)(?::\s*([^\]]+))?\]\(([^)]+)\)/i)
+  if (markdown?.[2]) {
+    return { title: markdown[1] || 'OpenDesign artifact', previewUrl: markdown[2].trim(), type: 'opendesign' }
+  }
+  const block = String(content || '').match(/\[OPENDESIGN_ARTIFACT\]([\s\S]*?)\[\/OPENDESIGN_ARTIFACT\]/i)
+  if (block?.[1]) {
+    try {
+      const obj = JSON.parse(block[1].trim()) as Record<string, unknown>
+      const previewUrl = String(obj.preview_url || obj.previewUrl || '').trim()
+      if (previewUrl) return { title: String(obj.title || 'OpenDesign artifact'), previewUrl, type: 'opendesign' }
+    } catch {}
+  }
+  return null
+}
+
+export function MessageCard({ message, onReply, onShare, onBookmark, onArtifactOpen }: MessageCardProps) {
   const blocks = parseRichBlocks(message.content)
+  const openDesignArtifact = extractOpenDesignArtifact(message.content)
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
@@ -145,6 +164,17 @@ export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCa
           }
         })}
       </div>
+
+      {openDesignArtifact && onArtifactOpen ? (
+        <button
+          type="button"
+          onClick={() => onArtifactOpen(openDesignArtifact)}
+          className="mb-3 flex w-full items-center justify-between rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-left text-xs font-black text-cyan-900 transition hover:border-cyan-300 hover:bg-cyan-100"
+        >
+          <span className="truncate">OpenDesign 预览：{openDesignArtifact.title}</span>
+          <span className="shrink-0 text-cyan-600">打开 →</span>
+        </button>
+      ) : null}
 
       <div className="flex items-center gap-4 text-slate-400">
         <button

@@ -3,7 +3,8 @@ import type { Challenge } from './types'
 export type WhiteboardLocale = 'zh' | 'en'
 export type ExcalidrawWhiteboardElement = Record<string, unknown>
 export type WhiteboardDiagramStep = { stage?: string; title?: string; markdown?: string; mermaid?: string; source?: string; html?: string; summary?: string[] }
-export type WhiteboardDiagram = { format?: string; title?: string; summary?: string[]; source?: string; mermaid?: string; markdown?: string; html?: string; steps?: WhiteboardDiagramStep[] }
+export type OpenDesignArtifactRef = { artifact_id?: string; title?: string; preview_url?: string; entry_file?: string; status?: string }
+export type WhiteboardDiagram = { format?: string; title?: string; summary?: string[]; source?: string; mermaid?: string; markdown?: string; html?: string; steps?: WhiteboardDiagramStep[]; opendesign?: OpenDesignArtifactRef }
 export type ExcalidrawWhiteboardPayload = { elements: ExcalidrawWhiteboardElement[]; note?: string; diagram?: WhiteboardDiagram }
 type WhiteboardDiagramPayload = WhiteboardDiagram
 
@@ -67,6 +68,34 @@ function safeHtmlString(value: unknown, max = 24000) {
     .replace(/javascript:/gi, '')
     .trim()
     .slice(0, max)
+}
+
+function safeUrlString(value: unknown, max = 600) {
+  const text = String(value ?? '').trim().slice(0, max)
+  if (!text) return ''
+  if (text.startsWith('/artifacts/') || text.startsWith('/api/wtt/artifacts/')) return text
+  try {
+    const url = new URL(text)
+    if (url.protocol === 'http:' || url.protocol === 'https:') return text
+  } catch {}
+  return ''
+}
+
+function opendesignValueFromRecord(record: Record<string, unknown>): OpenDesignArtifactRef | undefined {
+  const raw = record.opendesign || record.open_design || record.design_artifact || record.artifact
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const obj = raw as Record<string, unknown>
+  const artifactId = safeString(obj.artifact_id || obj.id, 120)
+  const previewUrl = safeUrlString(obj.preview_url || obj.previewUrl || obj.url)
+  const status = safeString(obj.status, 40)
+  if (!artifactId && !previewUrl && !status) return undefined
+  return {
+    artifact_id: artifactId,
+    title: safeString(obj.title, 160),
+    preview_url: previewUrl,
+    entry_file: safeString(obj.entry_file || obj.entryFile, 180),
+    status,
+  }
 }
 
 function htmlValueFromRecord(record: Record<string, unknown>) {
@@ -579,6 +608,7 @@ function sanitizeDiagramPayload(payload: WhiteboardDiagramPayload): WhiteboardDi
     markdown: safeMultilineString(payload.markdown, 6500),
     html: safeHtmlString(htmlValueFromRecord(payloadRecord), 26000),
     steps,
+    opendesign: opendesignValueFromRecord(payloadRecord),
   }
 }
 

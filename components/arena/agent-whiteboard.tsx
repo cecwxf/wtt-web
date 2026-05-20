@@ -10,6 +10,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import type { WhiteboardDiagram, WhiteboardDiagramStep } from '@/lib/arena/whiteboard'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
+import { ArtifactPreviewPanel } from '@/components/ui/artifact-preview-panel'
 
 type Locale = 'zh' | 'en'
 
@@ -23,7 +24,7 @@ type Props = {
   onToggleExpand?: () => void
 }
 
-type BoardViewMode = 'diagram' | 'html'
+type BoardViewMode = 'diagram' | 'html' | 'opendesign'
 type WhiteboardPlayerStep = { index: number; stage: string; title: string; summary: string[]; markdown: string; rawMarkdown: string; mermaid: string; html: string }
 type WhiteboardPlayerPayload = { locale: Locale; title: string; summary: string[]; html: string; mermaid: string; steps: WhiteboardPlayerStep[] }
 
@@ -494,14 +495,37 @@ function DirectDiagramBoard({ diagram, locale, viewMode }: { diagram: Whiteboard
   const resolvedMode = viewMode
 
   return (
-    <div className={`h-full min-h-[640px] overflow-auto text-slate-900 ${resolvedMode === 'html' ? 'bg-slate-950 p-3' : 'bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6'}`}>
+    <div className={`h-full min-h-[640px] overflow-auto text-slate-900 ${resolvedMode === 'html' || resolvedMode === 'opendesign' ? 'bg-slate-950 p-3' : 'bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6'}`}>
       <motion.div
         className={resolvedMode === 'html' ? 'h-full' : 'mx-auto max-w-7xl space-y-5'}
         variants={boardVariants}
         initial="hidden"
         animate="show"
       >
-        {resolvedMode === 'html' ? (
+        {resolvedMode === 'opendesign' ? (
+          diagram.opendesign?.preview_url ? (
+            <ArtifactPreviewPanel
+              locale={locale}
+              artifact={{
+                title: diagram.opendesign.title || diagram.title || (locale === 'zh' ? 'OpenDesign 白板' : 'OpenDesign board'),
+                previewUrl: diagram.opendesign.preview_url,
+                type: 'opendesign',
+              }}
+              className="h-full min-h-[680px]"
+            />
+          ) : (
+            <motion.section variants={cardVariants} className="flex min-h-[680px] items-center justify-center rounded-xl border border-cyan-200/20 bg-[#0b1120] p-8 text-center">
+              <div className="max-w-md">
+                <p className="text-base font-black text-cyan-100">{locale === 'zh' ? 'OpenDesign artifact 未生成' : 'OpenDesign artifact missing'}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  {locale === 'zh'
+                    ? '当前 WHITEBOARD_DIAGRAM 还没有 opendesign.preview_url。wtt-connect 上传 OpenDesign 输出目录后，这里会切换为完整 sandbox 预览。'
+                    : 'The current WHITEBOARD_DIAGRAM does not include opendesign.preview_url yet. After wtt-connect uploads the OpenDesign output directory, this tab renders the full sandbox preview.'}
+                </p>
+              </div>
+            </motion.section>
+          )
+        ) : resolvedMode === 'html' ? (
           <HtmlAnimationBoard diagram={diagram} locale={locale} />
         ) : (
           <>
@@ -592,8 +616,8 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
   }
 
   const labels = locale === 'zh'
-    ? { title: 'Agent 白板讲解', subtitle: '回答后自动生成 Markdown / HTML 动画白板', explain: '重新生成', clear: '清空', expand: expanded ? '还原' : '展开' }
-    : { title: 'Agent whiteboard', subtitle: 'Auto-generates Markdown / HTML animation after each answer', explain: 'Regenerate', clear: 'Clear', expand: expanded ? 'Restore' : 'Expand' }
+    ? { title: 'Agent 白板讲解', subtitle: '回答后自动生成 Markdown / HTML / OpenDesign 白板', explain: '重新生成', clear: '清空', expand: expanded ? '还原' : '展开' }
+    : { title: 'Agent whiteboard', subtitle: 'Auto-generates Markdown / HTML / OpenDesign boards after each answer', explain: 'Regenerate', clear: 'Clear', expand: expanded ? 'Restore' : 'Expand' }
 
   return (
     <section className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] ${expanded ? 'h-full' : ''}`}>
@@ -604,6 +628,13 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="mr-1 inline-flex rounded-md border border-gray-700 bg-[#101010] p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('opendesign')}
+              className={`rounded px-2.5 py-1.5 text-xs font-black transition-colors ${viewMode === 'opendesign' ? 'bg-cyan-300 text-black' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              OpenDesign
+            </button>
             <button
               type="button"
               onClick={() => setViewMode('html')}

@@ -98,14 +98,47 @@ function diagramHasHtml(diagram?: WhiteboardDiagram | null) {
 }
 
 function mergeWhiteboardDiagram(previous: WhiteboardDiagram | null, next: WhiteboardDiagram) {
-  if (!previous || diagramHasHtml(next) || !diagramHasHtml(previous)) return next
+  if (!previous || diagramHasHtml(next) || !diagramHasHtml(previous)) {
+    return {
+      ...next,
+      opendesign: next.opendesign || previous?.opendesign,
+    }
+  }
   return {
     ...next,
     html: next.html || previous.html,
+    opendesign: next.opendesign || previous.opendesign,
     steps: next.steps?.map((step, index) => ({
       ...step,
       html: step.html || previous.steps?.[index]?.html,
     })) || previous.steps,
+  }
+}
+
+function extractOpenDesignArtifactRef(content: string) {
+  const markdown = String(content || '').match(/\[(?:opendesign|open design|OpenDesign)(?::\s*([^\]]+))?\]\(([^)]+)\)/i)
+  if (markdown?.[2]) {
+    return {
+      title: markdown[1] || 'OpenDesign artifact',
+      preview_url: markdown[2].trim(),
+      status: 'ready',
+    }
+  }
+  const block = String(content || '').match(/\[OPENDESIGN_ARTIFACT\]([\s\S]*?)\[\/OPENDESIGN_ARTIFACT\]/i)
+  if (!block?.[1]) return null
+  try {
+    const obj = JSON.parse(block[1].trim()) as Record<string, unknown>
+    const previewUrl = String(obj.preview_url || obj.previewUrl || '').trim()
+    if (!previewUrl) return null
+    return {
+      artifact_id: String(obj.artifact_id || obj.id || ''),
+      title: String(obj.title || 'OpenDesign artifact'),
+      preview_url: previewUrl,
+      entry_file: String(obj.entry_file || obj.entryFile || 'index.html'),
+      status: 'ready',
+    }
+  } catch {
+    return null
   }
 }
 
@@ -1580,6 +1613,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         appliedWhiteboardMessageIdsRef.current.add(messageId)
         if (diagramHasHtml(payload.diagram)) appliedWhiteboardHtmlMessageIdsRef.current.add(messageId)
         setWhiteboardDiagram((previous) => mergeWhiteboardDiagram(previous, payload.diagram!))
+        return true
+      }
+      const opendesign = extractOpenDesignArtifactRef(content)
+      if (opendesign) {
+        appliedWhiteboardMessageIdsRef.current.add(messageId)
+        setWhiteboardDiagram((previous) => mergeWhiteboardDiagram(previous || {
+          format: 'opendesign',
+          title: locale === 'zh' ? 'OpenDesign 白板' : 'OpenDesign whiteboard',
+          summary: [locale === 'zh' ? 'Agent 已生成 OpenDesign artifact，可在 OpenDesign tab 中查看。' : 'The agent generated an OpenDesign artifact. Open the OpenDesign tab to view it.'],
+        }, { opendesign }))
         return true
       }
     }
