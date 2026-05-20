@@ -1,7 +1,7 @@
 'use client'
 
-import { ClipboardList, Hash, Lock, MoreVertical, Plus, Radio, Users } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight, ClipboardList, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
   getAgentRoleTemplate,
@@ -123,6 +123,54 @@ function getTopicDisplayName(topic: TopicItem) {
   return topic.task_id ? stripTaskPrefix(topic.name) : topic.name
 }
 
+type TopicGroupKey = 'p2p' | 'task' | 'discuss' | 'subscriber'
+
+function getTopicGroup(topic: TopicItem): TopicGroupKey {
+  if (topic.topic_type === 'p2p') return 'p2p'
+  if (topic.task_id) return 'task'
+  if (topic.topic_type === 'broadcast') return 'subscriber'
+  return 'discuss'
+}
+
+function getGroupLabel(group: TopicGroupKey, zh: boolean) {
+  switch (group) {
+    case 'p2p':
+      return zh ? 'P2P 私聊' : 'P2P'
+    case 'task':
+      return zh ? '任务' : 'Tasks'
+    case 'discuss':
+      return zh ? '讨论' : 'Discuss'
+    case 'subscriber':
+      return zh ? '订阅' : 'Subscriptions'
+  }
+}
+
+function getGroupIcon(group: TopicGroupKey) {
+  switch (group) {
+    case 'p2p':
+      return Lock
+    case 'task':
+      return ClipboardList
+    case 'discuss':
+      return MessageCircle
+    case 'subscriber':
+      return Radio
+  }
+}
+
+function getGroupTone(group: TopicGroupKey) {
+  switch (group) {
+    case 'p2p':
+      return 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-200'
+    case 'task':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200'
+    case 'discuss':
+      return 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200'
+    case 'subscriber':
+      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200'
+  }
+}
+
 function formatRuntime(runtime?: AgentRuntimeInfo) {
   if (!runtime) return ''
   const repo = runtime.git?.repo || runtime.workdir_name || ''
@@ -159,6 +207,12 @@ export function TopicColumn(props: TopicColumnProps) {
   const [shellRunning, setShellRunning] = useState(false)
   const [shellResult, setShellResult] = useState<ShellRunResult | null>(null)
   const [shellError, setShellError] = useState('')
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
+    p2p: false,
+    task: false,
+    discuss: false,
+    subscriber: false,
+  })
   const { locale, t } = useI18n()
   const zh = locale === 'zh'
 
@@ -189,6 +243,138 @@ export function TopicColumn(props: TopicColumnProps) {
     } finally {
       setShellRunning(false)
     }
+  }
+
+  const groupedTopics = useMemo(() => {
+    const order: TopicGroupKey[] = ['p2p', 'task', 'discuss', 'subscriber']
+    const byGroup = new Map<TopicGroupKey, TopicItem[]>()
+    for (const group of order) byGroup.set(group, [])
+
+    topics.forEach((topic) => {
+      byGroup.get(getTopicGroup(topic))?.push(topic)
+    })
+
+    for (const group of order) {
+      const rows = byGroup.get(group) || []
+      rows.sort((a, b) => {
+        if (a.is_default_p2p && !b.is_default_p2p) return -1
+        if (!a.is_default_p2p && b.is_default_p2p) return 1
+
+        const unreadDiff = Number(b.unread_count || 0) - Number(a.unread_count || 0)
+        if (unreadDiff !== 0) return unreadDiff
+
+        const at = a.last_activity_at ? new Date(a.last_activity_at).getTime() : 0
+        const bt = b.last_activity_at ? new Date(b.last_activity_at).getTime() : 0
+        return bt - at
+      })
+    }
+
+    return order
+      .map((group) => ({ group, items: byGroup.get(group) || [] }))
+      .filter(({ items }) => items.length > 0)
+  }, [topics])
+
+  const renderTopicRow = (topic: TopicItem) => {
+    const selected = topic.topic_id === selectedTopicId
+    const Icon = getTopicIcon(topic)
+    const unread = Number(topic.unread_count || 0)
+    const menuOpen = topicMenuFor === topic.topic_id
+    const displayName = getTopicDisplayName(topic)
+
+    return (
+      <div
+        key={topic.topic_id}
+        className="relative"
+        onContextMenu={(event) => {
+          event.preventDefault()
+          setTopicMenuFor(topic.topic_id)
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => onSelectTopic(topic.topic_id)}
+          className={`group flex w-full items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
+            selected
+              ? 'border-[#d7cbb9] bg-[#efe8dc] shadow-sm dark:border-emerald-500/35 dark:bg-emerald-500/10'
+              : 'border-transparent bg-transparent hover:border-[#e4dccf] hover:bg-white/75 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
+          }`}
+        >
+          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+            selected ? 'bg-[#28241f] text-[#f5ead8]' : 'bg-[#eee8dc] text-slate-500 dark:bg-zinc-800 dark:text-zinc-300'
+          }`}>
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-sm font-bold text-slate-800 dark:text-zinc-100">
+                {displayName}
+              </span>
+              {topic.is_default_p2p && (
+                <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">
+                  default
+                </span>
+              )}
+            </span>
+            <span className="mt-1 flex items-center gap-2 text-[11px] text-slate-400 dark:text-zinc-500">
+              <span>{getTopicKindLabel(topic, zh)}</span>
+            </span>
+          </span>
+          {unread > 0 && (
+            <span className="mt-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
+              {unread > 99 ? '99+' : unread}
+            </span>
+          )}
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation()
+              setTopicMenuFor(menuOpen ? null : topic.topic_id)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                event.stopPropagation()
+                setTopicMenuFor(menuOpen ? null : topic.topic_id)
+              }
+            }}
+            className="mt-0.5 rounded-lg p-1 text-slate-400 opacity-60 transition hover:bg-[#f6f0e5] hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            title={zh ? 'Topic 设置' : 'Topic settings'}
+          >
+            <MoreVertical className="h-4 w-4" />
+          </span>
+        </button>
+
+        {menuOpen && (
+          <div className="absolute right-2 top-10 z-30 w-40 rounded-xl border border-[#ded6c8] bg-[#fffdf8] p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            {onLeaveTopic && (
+              <button
+                type="button"
+                onClick={() => {
+                  onLeaveTopic(topic.topic_id)
+                  setTopicMenuFor(null)
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                {zh ? '离开 Topic' : 'Leave Topic'}
+              </button>
+            )}
+            {onDeleteTopic && topic.can_delete && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteTopic(topic.topic_id)
+                  setTopicMenuFor(null)
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-500 transition hover:bg-red-50 dark:hover:bg-red-500/10"
+              >
+                {zh ? '删除 Topic' : 'Delete Topic'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -407,107 +593,41 @@ export function TopicColumn(props: TopicColumnProps) {
             </div>
           )}
 
-          <div className="space-y-1.5">
-            {topics.map((topic) => {
-              const selected = topic.topic_id === selectedTopicId
-              const Icon = getTopicIcon(topic)
-              const unread = Number(topic.unread_count || 0)
-              const menuOpen = topicMenuFor === topic.topic_id
-              const displayName = getTopicDisplayName(topic)
-
+          <div className="space-y-3">
+            {groupedTopics.map(({ group, items }) => {
+              const collapsed = collapsedGroups[group]
+              const GroupIcon = getGroupIcon(group)
+              const unreadTopics = items.filter((topic) => Number(topic.unread_count || 0) > 0).length
               return (
-                <div
-                  key={topic.topic_id}
-                  className="relative"
-                  onContextMenu={(event) => {
-                    event.preventDefault()
-                    setTopicMenuFor(topic.topic_id)
-                  }}
-                >
+                <section key={group} className="space-y-1.5">
                   <button
                     type="button"
-                    onClick={() => onSelectTopic(topic.topic_id)}
-                    className={`group flex w-full items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
-                      selected
-                        ? 'border-[#d7cbb9] bg-[#efe8dc] shadow-sm dark:border-emerald-500/35 dark:bg-emerald-500/10'
-                        : 'border-transparent bg-transparent hover:border-[#e4dccf] hover:bg-white/75 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
-                    }`}
+                    onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }))}
+                    className={`flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left shadow-sm transition hover:brightness-[0.98] ${getGroupTone(group)}`}
                   >
-                    <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-                      selected ? 'bg-[#28241f] text-[#f5ead8]' : 'bg-[#eee8dc] text-slate-500 dark:bg-zinc-800 dark:text-zinc-300'
-                    }`}>
-                      <Icon className="h-3.5 w-3.5" />
+                    {collapsed ? <ChevronRight className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/70 dark:bg-zinc-950/40">
+                      <GroupIcon className="h-3.5 w-3.5" />
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate text-sm font-bold text-slate-800 dark:text-zinc-100">
-                          {displayName}
-                        </span>
-                        {topic.is_default_p2p && (
-                          <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">
-                            default
-                          </span>
-                        )}
-                      </span>
-                      <span className="mt-1 flex items-center gap-2 text-[11px] text-slate-400 dark:text-zinc-500">
-                        <span>{getTopicKindLabel(topic, zh)}</span>
-                      </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-black">
+                      {getGroupLabel(group, zh)}
                     </span>
-                    {unread > 0 && (
-                      <span className="mt-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
-                        {unread > 99 ? '99+' : unread}
+                    <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-black dark:bg-zinc-950/40">
+                      {items.length}
+                    </span>
+                    {unreadTopics > 0 && (
+                      <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
+                        {unreadTopics > 99 ? '99+' : unreadTopics}
                       </span>
                     )}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setTopicMenuFor(menuOpen ? null : topic.topic_id)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          setTopicMenuFor(menuOpen ? null : topic.topic_id)
-                        }
-                      }}
-                      className="mt-0.5 rounded-lg p-1 text-slate-400 opacity-60 transition hover:bg-[#f6f0e5] hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                      title={zh ? 'Topic 设置' : 'Topic settings'}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </span>
                   </button>
 
-                  {menuOpen && (
-                    <div className="absolute right-2 top-10 z-30 w-40 rounded-xl border border-[#ded6c8] bg-[#fffdf8] p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-                      {onLeaveTopic && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onLeaveTopic(topic.topic_id)
-                            setTopicMenuFor(null)
-                          }}
-                          className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
-                        >
-                          {zh ? '离开 Topic' : 'Leave Topic'}
-                        </button>
-                      )}
-                      {onDeleteTopic && topic.can_delete && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onDeleteTopic(topic.topic_id)
-                            setTopicMenuFor(null)
-                          }}
-                          className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-500 transition hover:bg-red-50 dark:hover:bg-red-500/10"
-                        >
-                          {zh ? '删除 Topic' : 'Delete Topic'}
-                        </button>
-                      )}
+                  {!collapsed && (
+                    <div className="space-y-1.5">
+                      {items.map((topic) => renderTopicRow(topic))}
                     </div>
                   )}
-                </div>
+                </section>
               )
             })}
           </div>

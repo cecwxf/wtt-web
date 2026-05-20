@@ -94,14 +94,19 @@ function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
   const description = String(topic.description || '').trim()
   const creatorAgentId = String(topic.creator_agent_id || topic.creatorAgentId || '').trim()
   const originType = String(topic.origin_type || topic.originType || '').toLowerCase()
-  const searchable = `${name}\n${description}\n${originType}\n${creatorAgentId}`.toLowerCase()
+  const searchable = `${name}\n${description}\n${originType}\n${creatorAgentId}\n${collectTopicSearchText(topic)}`.toLowerCase()
 
   // Arena and Square topics have gone through a few naming/metadata revisions.
   // Keep the filter intentionally redundant so older subscribed rows disappear too.
   if (creatorAgentId === 'agent-16a45cf0dd8b') return true
   if (name === 'Arena Coach' || name.startsWith('Arena Coach:')) return true
   if (description.includes('Private Arena Coach chat')) return true
-  if (searchable.includes('arena coach') || searchable.includes('arena_challenge') || searchable.includes('arena-session')) return true
+  if (
+    searchable.includes('arena') ||
+    searchable.includes('challenge_id') ||
+    searchable.includes('challenge_slug') ||
+    searchable.includes('/arena/')
+  ) return true
 
   if (name.startsWith('__SQUARE__/')) return true
   if (name.startsWith('若水广场｜') || name.startsWith('若水专文｜')) return true
@@ -125,6 +130,18 @@ function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
   if (meta && typeof meta === 'object' && Boolean((meta as Record<string, unknown>).square)) return true
 
   return false
+}
+
+function collectTopicSearchText(value: unknown, depth = 0): string {
+  if (value == null || depth > 3) return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.map((item) => collectTopicSearchText(item, depth + 1)).join('\n')
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => `${key}:${collectTopicSearchText(item, depth + 1)}`)
+      .join('\n')
+  }
+  return ''
 }
 
 function toChatTaskType(taskTypeRaw?: string, taskModeRaw?: string, execModeRaw?: string): 'code' | 'research' | 'general' | null {
@@ -965,10 +982,10 @@ function FeedPageInner() {
 
   // Clear stale persisted topic if it no longer exists in the topics list
   useEffect(() => {
-    if (selectedTopicId && topics.length > 0 && !topics.some(t => t.topic_id === selectedTopicId)) {
+    if (selectedTopicId && Array.isArray(subscribedTopicsRaw) && !topics.some(t => t.topic_id === selectedTopicId)) {
       setSelectedTopicId(null)
     }
-  }, [topics, selectedTopicId, setSelectedTopicId])
+  }, [topics, selectedTopicId, setSelectedTopicId, subscribedTopicsRaw])
 
   const selectedTopicTaskHint = useMemo(() => {
     const direct = selectedTopic?.task_id
