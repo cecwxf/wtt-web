@@ -1082,15 +1082,24 @@ function FeedPageInner() {
       if (!r.ok) return null
       return r.json()
     },
-    { refreshInterval: wsState === 'connected' ? 120000 : 30000 }
+    { refreshInterval: 5000, revalidateOnFocus: true }
   )
   const maxSubAgents = (agentStatsRaw as Record<string, unknown>)?.max_sub_agents as number | undefined ?? 20
   const agentStats = (agentStatsRaw as Record<string, unknown>)?.agents as Record<string, { total: number; active: number; done: number; todo: number }> | undefined
-  const agentRuntimeMap = ((agentStatsRaw as Record<string, unknown>)?.runtimes || {}) as Record<string, AgentRuntimeInfo>
+  const agentRuntimeMap = useMemo(
+    () => (((agentStatsRaw as Record<string, unknown>)?.runtimes || {}) as Record<string, AgentRuntimeInfo>),
+    [agentStatsRaw]
+  )
   const onlineAgentIds = useMemo(() => {
     const arr = (agentStatsRaw as Record<string, unknown>)?.online_agents as string[] | undefined
-    return new Set(arr ?? [])
-  }, [agentStatsRaw])
+    const ids = new Set(arr ?? [])
+    for (const [agentId, runtime] of Object.entries(agentRuntimeMap)) {
+      if (typeof runtime.last_heartbeat_secs_ago === 'number' && runtime.last_heartbeat_secs_ago <= 90) {
+        ids.add(agentId)
+      }
+    }
+    return ids
+  }, [agentStatsRaw, agentRuntimeMap])
 
   useEffect(() => {
     setMembersOpen(false)
