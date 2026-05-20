@@ -1222,6 +1222,11 @@ function FeedPageInner() {
         label: selectedRole.label,
         skills: selectedRole.skills,
       }
+      metadata.agent_soul = {
+        role: selectedRole.label,
+        skills: selectedRole.skills,
+        instructions: selectedRole.systemPrompt,
+      }
     }
 
     if (isSlashCommand && isNonTaskDiscuss) {
@@ -1229,40 +1234,16 @@ function FeedPageInner() {
       metadata.command_target_agent_id = selectedAgentId
     }
 
-    // Check if this is a first-time worker session — inject persona.md as system context
-    // Also re-inject if persona.md has changed since last injection
+    // Keep user-visible messages clean. Role/persona context is carried as
+    // metadata so the agent runner can use it as hidden "soul" context.
     const ws = activeWorkerSessionRef.current
-    let augmentedContent = selectedRole.id === 'general'
-      ? content
-      : [
-          '[Agent Role Template]',
-          `role: ${selectedRole.label}`,
-          `skills: ${selectedRole.skills.join(', ')}`,
-          selectedRole.systemPrompt,
-          '[/Agent Role Template]',
-          '',
-          content,
-        ].join('\n')
+    const augmentedContent = content
     if (ws && ws.topicId === selectedTopicId && (ws.isFirstSession || ws.personaChanged) && ws.personaMd) {
-      const isReinject = ws.personaChanged && !ws.isFirstSession
-      const personaPrompt = isReinject
-        ? [
-            `[Worker Persona Updated — please re-read and update your identity]`,
-            ws.personaMd,
-            `---`,
-            `Your persona has been updated. Please acknowledge the changes and adjust accordingly. The user's message follows:`,
-            ``,
-            content,
-          ].join('\n')
-        : [
-            `[Worker Persona — please read and internalize this as your identity]`,
-            ws.personaMd,
-            `---`,
-            `Based on the persona above, please introduce yourself briefly and confirm your skills and role. The user's message follows:`,
-            ``,
-            content,
-          ].join('\n')
-      augmentedContent = personaPrompt
+      metadata.worker_persona = {
+        worker_id: ws.workerId,
+        persona_md: ws.personaMd,
+        changed: Boolean(ws.personaChanged && !ws.isFirstSession),
+      }
       // Mark as no longer first session / persona change handled
       activeWorkerSessionRef.current = { ...ws, isFirstSession: false, personaChanged: false }
       // Persist worker.md with persona content so future sessions have context
@@ -1273,14 +1254,12 @@ function FeedPageInner() {
         body: JSON.stringify({ worker_md: ws.personaMd }),
       }).catch(() => {})
     } else if (ws && ws.topicId === selectedTopicId && ws.workerMd) {
-      // Subsequent session — add worker.md as context if messages are empty (session start)
+      // Subsequent session — send worker.md as hidden context if messages are empty.
       if (allMessages.length === 0) {
-        augmentedContent = [
-          `[Worker Context — your persistent memory and skills]`,
-          ws.workerMd,
-          `---`,
-          content,
-        ].join('\n')
+        metadata.worker_context = {
+          worker_id: ws.workerId,
+          worker_md: ws.workerMd,
+        }
       }
     }
 
