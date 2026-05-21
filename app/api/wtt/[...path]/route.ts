@@ -148,13 +148,20 @@ function isPublicAuthPath(path: string[]): boolean {
   )
 }
 
+function isSignedArtifactPreviewPath(path: string[], request: NextRequest): boolean {
+  if (path.length < 4) return false
+  return path[0] === 'artifacts' &&
+    path[2] === 'preview' &&
+    Boolean(request.nextUrl.searchParams.get('token'))
+}
+
 async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   // Auth check: require Authorization header or NextAuth session cookie,
   // except for public auth endpoints used before login.
   const hasAuthHeader = !!request.headers.get('authorization')
   const hasSessionCookie = request.cookies.has('next-auth.session-token') ||
     request.cookies.has('__Secure-next-auth.session-token')
-  const isPublic = isPublicAuthPath(path)
+  const isPublic = isPublicAuthPath(path) || isSignedArtifactPreviewPath(path, request)
   if (!isPublic && !hasAuthHeader && !hasSessionCookie) {
     return Response.json({ detail: 'Unauthorized' }, { status: 401 })
   }
