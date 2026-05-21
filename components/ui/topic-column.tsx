@@ -175,10 +175,10 @@ function getGroupTone(group: TopicGroupKey) {
 
 function formatRuntime(runtime?: AgentRuntimeInfo) {
   if (!runtime) return ''
-  const repo = runtime.git?.repo || runtime.workdir_name || ''
+  const workdir = runtime.workdir || runtime.git?.repo || runtime.workdir_name || ''
   const branch = runtime.git?.branch || ''
   const adapter = runtime.adapter || runtime.kind || ''
-  return [repo, branch, adapter].filter(Boolean).join(' · ')
+  return [workdir, branch, adapter].filter(Boolean).join(' · ')
 }
 
 export function TopicColumn(props: TopicColumnProps) {

@@ -185,7 +185,7 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
           token,
           cols: term.cols,
           rows: term.rows,
-          cwd: '',
+          cwd: workdir || '',
         }) as { session_id?: string } | null
         const sid = opened?.session_id || ''
         if (!sid) throw new Error('terminal session id missing')
@@ -263,7 +263,7 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
       fitRef.current = null
       sessionRef.current = ''
     }
-  }, [agentId, token, wsUrl])
+  }, [agentId, token, workdir, wsUrl])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-2">
