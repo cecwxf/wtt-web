@@ -1662,6 +1662,19 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return new Promise((resolve) => window.setTimeout(resolve, ms))
   }
 
+  function markArenaAgentBusy(topicId: string, statusText: string, statusKind = 'running', ttlMs = 180000) {
+    const now = Date.now()
+    setArenaTyping({
+      topicId,
+      agentId: ARENA_AGENT_ID,
+      agentName: 'Arena Coach',
+      statusText,
+      statusKind,
+      startedAt: now,
+      expiresAt: now + ttlMs,
+    })
+  }
+
   async function waitForArenaAgentMessage(topicId: string, baselineKeys: Set<string>, timeoutMs = 180000) {
     const startedAt = Date.now()
     let latest = await refreshArenaMessages(topicId)
@@ -1725,7 +1738,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
 
       const ttlMsRaw = Number(rawEvent.ttl_ms)
-      const ttlMs = Number.isFinite(ttlMsRaw) ? Math.max(1500, Math.min(30000, ttlMsRaw)) : 6000
+      const ttlMs = Number.isFinite(ttlMsRaw) ? Math.max(1500, Math.min(120000, ttlMsRaw)) : 30000
       const now = Date.now()
       setArenaTyping({
         topicId,
@@ -1774,8 +1787,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }
 
   useWebSocket({
-    url: selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : '',
-    enabled: !!selectedAgentId && !!session?.accessToken,
+    url: session?.accessToken ? `${WS_BASE_URL}/ws/${ARENA_AGENT_ID}` : '',
+    enabled: !!arenaTopicId && !!session?.accessToken,
     token: session?.accessToken || undefined,
     onMessage: handleArenaWsMessage,
   })
@@ -1830,10 +1843,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const agentBusy = arenaTypingActive || chatSending || arenaSyncing || whiteboardBusy
   const agentBusyLabel = arenaSyncing
     ? t.chatSyncing
-    : whiteboardBusy
-    ? t.whiteboardWorking
     : arenaTypingActive
     ? arenaTyping.statusText || `${arenaTyping.agentName || 'Agent'} ${locale === 'zh' ? '正在输入...' : 'is typing...'}`
+    : whiteboardBusy
+    ? t.whiteboardWorking
     : t.chatWorking
 
   useEffect(() => {
@@ -1978,6 +1991,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     autoWhiteboardSourceKeysRef.current.add(sourceKey)
     const message = makeWhiteboardFromAnswerPrompt(challenge, locale, answerMessage.content, sourceUserMessage)
     setWhiteboardBusy(true)
+    markArenaAgentBusy(topicId, locale === 'zh' ? 'Agent 正在生成白板 / OpenDesign 可视化' : 'Agent is generating whiteboard / OpenDesign visualization', 'whiteboard', 240000)
     try {
       await refreshArenaMessages(topicId)
       const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
@@ -2033,6 +2047,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setChatSending(true)
     try {
       const topicId = await ensureArenaSession()
+      markArenaAgentBusy(topicId, locale === 'zh' ? 'Agent 已接收消息，正在思考 / 输出' : 'Agent received the message and is thinking / writing', 'chat', 180000)
       const baselineMessages = await refreshArenaMessages(topicId)
       const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
       const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
@@ -2100,6 +2115,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setChatSending(true)
     try {
       const topicId = await ensureArenaSession()
+      markArenaAgentBusy(topicId, locale === 'zh' ? 'Agent 正在生成白板 / OpenDesign 可视化' : 'Agent is generating whiteboard / OpenDesign visualization', 'whiteboard', 240000)
       await refreshArenaMessages(topicId)
       const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
       const promptContext = arenaAgentPromptContext(challenge, locale, language, code, 'ask', 'whiteboard')
