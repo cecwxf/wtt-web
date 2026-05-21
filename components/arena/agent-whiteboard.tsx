@@ -495,7 +495,7 @@ function DirectDiagramBoard({ diagram, locale, viewMode }: { diagram: Whiteboard
   const resolvedMode = viewMode
 
   return (
-    <div className={`h-full min-h-[640px] overflow-auto text-slate-900 ${resolvedMode === 'html' || resolvedMode === 'opendesign' ? 'bg-slate-950 p-3' : 'bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6'}`}>
+    <div className={`h-full min-h-[640px] overflow-auto text-slate-900 ${resolvedMode === 'html' ? 'bg-slate-950 p-3' : resolvedMode === 'opendesign' ? 'bg-[#f7efe0] p-3' : 'bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_48%,#f8fafc_100%)] p-6'}`}>
       <motion.div
         className={resolvedMode === 'html' ? 'h-full' : 'mx-auto max-w-7xl space-y-5'}
         variants={boardVariants}
