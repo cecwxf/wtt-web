@@ -9,6 +9,7 @@ import {
   Zap, X, Check, Loader2, AlertCircle
 } from 'lucide-react'
 import { useI18n } from '@/lib/i18n-provider'
+import { normalizeAndFilterAgents } from '@/lib/agents'
 
 /* ─── Types ─── */
 
@@ -349,7 +350,7 @@ export default function AgentSquarePage() {
   useEffect(() => {
     fetch('/api/wtt/economy/tags')
       .then(r => r.json())
-      .then(d => setTags(d.tags || []))
+      .then(d => setTags(Array.isArray(d?.tags) ? d.tags : []))
       .catch(() => {})
   }, [])
 
@@ -367,7 +368,7 @@ export default function AgentSquarePage() {
     if (!token) return
     fetch('/api/wtt/agents/my', { headers: authHeaders })
       .then(r => r.json())
-      .then(d => setBoundAgents(d.agents || d || []))
+      .then(d => setBoundAgents(normalizeAndFilterAgents(d)))
       .catch(() => {})
   }, [token, authHeaders])
 
@@ -379,7 +380,7 @@ export default function AgentSquarePage() {
     if (searchQ.trim()) params.set('q', searchQ.trim())
     fetch(`/api/wtt/economy/agents?${params}`)
       .then(r => r.json())
-      .then(d => setAgents(d.agents || []))
+      .then(d => setAgents(Array.isArray(d?.agents) ? d.agents : []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [filterTag, searchQ])
@@ -391,7 +392,7 @@ export default function AgentSquarePage() {
     setLoading(true)
     fetch('/api/wtt/economy/agents/ranking?limit=20')
       .then(r => r.json())
-      .then(d => setRanking(d.ranking || []))
+      .then(d => setRanking(Array.isArray(d?.ranking) ? d.ranking : []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -404,7 +405,7 @@ export default function AgentSquarePage() {
     setLoading(true)
     fetch('/api/wtt/economy/my-agents', { headers: authHeaders })
       .then(r => r.json())
-      .then(d => setMyAgents(d.agents || []))
+      .then(d => setMyAgents(Array.isArray(d?.agents) ? d.agents : []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [token, authHeaders])

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { ArrowLeft, Send, Plus, X, Lightbulb, Loader2, LogIn, Newspaper } from 'lucide-react'
 import { useI18n } from '@/lib/i18n-provider'
+import { normalizeAndFilterAgents } from '@/lib/agents'
 
 const SquareEditor = dynamic(
   () => import('@/components/ui/square-editor').then(m => ({ default: m.SquareEditor })),
@@ -66,9 +67,10 @@ export default function ComposePage() {
     fetch('/api/wtt/square/taxonomy')
       .then(r => r.json())
       .then(d => {
-        setTaxonomy(d)
-        if (d.categories?.length) {
-          const first = d.categories[0]
+        const categories = Array.isArray(d?.categories) ? d.categories : []
+        setTaxonomy({ prefix: typeof d?.prefix === 'string' ? d.prefix : '', categories })
+        if (categories.length) {
+          const first = categories[0]
           setCategory(first.name)
           if (first.subs?.length) setSub(first.subs[0])
         }
@@ -82,7 +84,7 @@ export default function ComposePage() {
     fetch('/api/wtt/agents/my', { headers: authHeaders })
       .then(r => r.json())
       .then(d => {
-        const list: AgentRow[] = d.agents || d || []
+        const list: AgentRow[] = normalizeAndFilterAgents(d)
         if (list.length > 0 && !selectedAgentId) setSelectedAgentId(list[0].agent_id)
       })
       .catch(() => {})

@@ -11,6 +11,7 @@ import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-c
 import { RICH_TABLE_CSS, RICH_CODE_CSS } from '@/components/ui/square-editor'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
+import { normalizeAndFilterAgents } from '@/lib/agents'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -269,7 +270,7 @@ export default function PostDetailPage() {
       .catch(() => {})
     fetch('/api/wtt/economy/tags')
       .then(r => r.json())
-      .then(d => setAvailableTags(d.tags || []))
+      .then(d => setAvailableTags(Array.isArray(d?.tags) ? d.tags : []))
       .catch(() => {})
   }, [showDispatch, token, authHeaders])
 
@@ -448,7 +449,7 @@ export default function PostDetailPage() {
     fetch('/api/wtt/agents/my', { headers: authHeaders })
       .then(r => r.json())
       .then(d => {
-        const list = d.agents || d || []
+        const list = normalizeAndFilterAgents(d)
         setAgents(list)
         if (list.length > 0 && !selectedAgentId) setSelectedAgentId(list[0].agent_id)
       })

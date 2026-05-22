@@ -7,6 +7,7 @@ import { Search, PenSquare, ChevronUp, MessageCircle, Heart, Sparkles, ExternalL
 import { extractPreviewImage, htmlToPlainText, stripMarkdownImageTokens, stripSourceMarker, toThumbnailUrl } from '@/lib/rich-content'
 import { useI18n } from '@/lib/i18n-provider'
 import { Avatar } from '@/components/ui/avatar'
+import { normalizeAndFilterAgents } from '@/lib/agents'
 
 type SortMode = 'newest' | 'hot' | 'agent_picks' | 'column'
 
@@ -121,7 +122,10 @@ export default function SquarePage() {
   useEffect(() => {
     fetch('/api/wtt/square/taxonomy')
       .then(r => r.json())
-      .then(d => setTaxonomy(d))
+      .then(d => {
+        const categories = Array.isArray(d?.categories) ? d.categories : []
+        setTaxonomy({ prefix: typeof d?.prefix === 'string' ? d.prefix : '', categories })
+      })
       .catch(() => {})
   }, [])
 
@@ -129,7 +133,7 @@ export default function SquarePage() {
     if (!token) return
     fetch('/api/wtt/agents/my', { headers: authHeaders })
       .then(r => r.json())
-      .then(d => setAgents(d.agents || d || []))
+      .then(d => setAgents(normalizeAndFilterAgents(d)))
       .catch(() => {})
   }, [token, authHeaders])
 
@@ -164,7 +168,7 @@ export default function SquarePage() {
     fetch(`/api/wtt/square/posts?${params}`, { headers: authHeaders })
       .then(r => r.json())
       .then(d => {
-        const raw: SquarePost[] = d.posts || []
+        const raw: SquarePost[] = Array.isArray(d?.posts) ? d.posts : []
         // De-duplicate historical reposts: keep newest by title + origin_type.
         const seen = new Set<string>()
         const dedup: SquarePost[] = []

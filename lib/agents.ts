@@ -22,17 +22,6 @@ export interface NormalizedAgent {
   role_template?: Record<string, unknown>
 }
 
-export function shouldHideDefaultAgent(agent: { agent_id: string; display_name: string; is_primary: boolean }) {
-  if (!agent.is_primary) return false
-  const name = agent.display_name.toLowerCase()
-  return (
-    name.includes('default') ||
-    name.includes('我本人') ||
-    name.includes('myself') ||
-    agent.agent_id.startsWith('user_')
-  )
-}
-
 export function normalizeAndFilterAgents(raw: unknown): NormalizedAgent[] {
   const rows = Array.isArray(raw)
     ? raw
@@ -59,6 +48,5 @@ export function normalizeAndFilterAgents(raw: unknown): NormalizedAgent[] {
     return agent
   })
 
-  const filtered = normalized.filter((agent) => !shouldHideDefaultAgent(agent))
-  return filtered.length > 0 ? filtered : normalized
+  return normalized.filter((agent) => agent.agent_id.trim().length > 0)
 }
