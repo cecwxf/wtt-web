@@ -216,6 +216,17 @@ export type ParsedRichBlock =
   | { kind: 'markdown'; text: string }
   | { kind: 'preview'; title?: string; desc?: string; url?: string; image?: string }
 
+function classifyUrl(rawUrl: string): ParsedRichBlock {
+  const raw = trimUrlTail(rawUrl)
+  const url = proxyMediaUrl(raw)
+  const u = raw.toLowerCase()
+  if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url }
+  if (/\.(mp3|wav|ogg|m4a)(\?|$)/.test(u)) return { kind: 'audio', url }
+  if (/\.(pdf|docx?|pptx?|xlsx?|csv|zip|md|txt|html?)(\?|$)/.test(u)) return { kind: 'file', url, filename: undefined }
+  if (/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/.test(u) || /^\/?media\//i.test(u)) return { kind: 'image', url }
+  return { kind: 'link', url }
+}
+
 function classifyLine(line: string): ParsedRichBlock {
   const c = line.trim()
   if (!c) return { kind: 'plain', text: '' }
@@ -233,13 +244,7 @@ function classifyLine(line: string): ParsedRichBlock {
 
   const plainUrl = c.match(/^(https?:\/\/\S+|\/?media\/\S+)$/i)
   if (plainUrl) {
-    const raw = trimUrlTail(plainUrl[1])
-    const u = raw.toLowerCase()
-    if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url: proxyMediaUrl(raw) }
-    if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u) || /^\/?media\//i.test(u)) return { kind: 'image', url: proxyMediaUrl(raw) }
-    if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) return { kind: 'audio', url: proxyMediaUrl(raw) }
-    if (/\.(pdf|docx|xlsx|csv|zip)(\?|$)/.test(u)) return { kind: 'file', url: proxyMediaUrl(raw), filename: undefined }
-    return { kind: 'link', url: proxyMediaUrl(raw) }
+    return classifyUrl(plainUrl[1])
   }
 
   return { kind: 'plain', text: line }
@@ -346,16 +351,7 @@ export function parseRichBlocks(content: string): ParsedRichBlock[] {
         if (!normalized || seen.has(normalized)) continue
         seen.add(normalized)
 
-        const u = normalized.toLowerCase()
-        if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(u) || /^\/?media\//i.test(u)) {
-          blocks.push({ kind: 'image', url: proxyMediaUrl(normalized) })
-        } else if (/\.(mp4|webm|mov)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'video', url: proxyMediaUrl(normalized) })
-        } else if (/\.(mp3|wav|ogg)(\?|$)/.test(u)) {
-          blocks.push({ kind: 'audio', url: proxyMediaUrl(normalized) })
-        } else {
-          blocks.push({ kind: 'link', url: proxyMediaUrl(normalized) })
-        }
+        blocks.push(classifyUrl(normalized))
       }
     }
   }

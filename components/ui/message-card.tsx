@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MessageCircle, Share2, Bookmark, User, ImageIcon } from 'lucide-react'
+import { MessageCircle, Share2, Bookmark, User, ImageIcon, Download, ExternalLink } from 'lucide-react'
 import { formatTimeAgo } from '@/lib/time'
 import { WttLogo } from './wtt-logo'
 import { parseRichBlocks, toThumbnailUrl } from '@/lib/rich-content'
@@ -69,6 +69,53 @@ function CardImage({ url }: { url: string }) {
   )
 }
 
+function fileMeta(nameOrUrl: string) {
+  const clean = decodeURIComponent(String(nameOrUrl || 'file').split('?')[0].split('#')[0])
+  const ext = (clean.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+  const label = ext ? ext.toUpperCase() : 'FILE'
+  const icon = ext === 'pdf' ? 'PDF'
+    : ['doc', 'docx'].includes(ext) ? 'DOC'
+    : ['ppt', 'pptx'].includes(ext) ? 'PPT'
+    : ['xls', 'xlsx', 'csv'].includes(ext) ? 'XLS'
+    : ['zip', 'tar', 'gz'].includes(ext) ? 'ZIP'
+    : ext === 'md' ? 'MD'
+    : ext === 'html' || ext === 'htm' ? 'HTML'
+    : label
+  const tone = ext === 'pdf' ? 'bg-red-500/15 text-red-600'
+    : ['doc', 'docx'].includes(ext) ? 'bg-blue-500/15 text-blue-600'
+    : ['ppt', 'pptx'].includes(ext) ? 'bg-orange-500/15 text-orange-600'
+    : ['xls', 'xlsx', 'csv'].includes(ext) ? 'bg-emerald-500/15 text-emerald-600'
+    : ['zip', 'tar', 'gz'].includes(ext) ? 'bg-violet-500/15 text-violet-600'
+    : 'bg-slate-500/15 text-slate-600'
+  return { label, icon, tone }
+}
+
+function FileCard({ url, filename }: { url: string; filename?: string }) {
+  const fname = filename || url.split('/').pop() || 'file'
+  const meta = fileMeta(fname || url)
+  return (
+    <div className="flex max-w-xl items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${meta.tone}`}>
+        {meta.icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-semibold">{fname}</span>
+        <span className="block text-xs text-slate-400">{meta.label} · 可打开 / 下载</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-600">
+          <ExternalLink className="h-3.5 w-3.5" />
+          打开
+        </a>
+        <a href={url} download={fname} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-500">
+          <Download className="h-3.5 w-3.5" />
+          下载
+        </a>
+      </span>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /*  MessageCard                                                        */
 /* ------------------------------------------------------------------ */
@@ -128,11 +175,7 @@ export function MessageCard({ message, onReply, onShare, onBookmark, onArtifactO
             case 'audio':
               return <audio key={i} controls src={block.url} className="w-full" />
             case 'file':
-              return (
-                <a key={i} href={block.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-indigo-500 hover:underline">
-                  📎 {block.filename || '文件'}
-                </a>
-              )
+              return <FileCard key={i} url={block.url} filename={block.filename} />
             case 'link':
               return (
                 <a key={i} href={block.url} target="_blank" rel="noreferrer" className="block text-xs text-indigo-500 hover:underline truncate">

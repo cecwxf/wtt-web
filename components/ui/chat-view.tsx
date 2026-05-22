@@ -501,6 +501,52 @@ function ThumbnailVideo({ url, isMine }: { url: string; isMine: boolean }) {
   )
 }
 
+function fileMeta(nameOrUrl: string) {
+  const clean = decodeURIComponent(String(nameOrUrl || 'file').split('?')[0].split('#')[0])
+  const ext = (clean.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+  const label = ext ? ext.toUpperCase() : 'FILE'
+  const icon = ext === 'pdf' ? 'PDF'
+    : ['doc', 'docx'].includes(ext) ? 'DOC'
+    : ['ppt', 'pptx'].includes(ext) ? 'PPT'
+    : ['xls', 'xlsx', 'csv'].includes(ext) ? 'XLS'
+    : ['zip', 'tar', 'gz'].includes(ext) ? 'ZIP'
+    : ext === 'md' ? 'MD'
+    : ext === 'html' || ext === 'htm' ? 'HTML'
+    : label
+  const tone = ext === 'pdf' ? 'bg-red-500/15 text-red-600'
+    : ['doc', 'docx'].includes(ext) ? 'bg-blue-500/15 text-blue-600'
+    : ['ppt', 'pptx'].includes(ext) ? 'bg-orange-500/15 text-orange-600'
+    : ['xls', 'xlsx', 'csv'].includes(ext) ? 'bg-emerald-500/15 text-emerald-600'
+    : ['zip', 'tar', 'gz'].includes(ext) ? 'bg-violet-500/15 text-violet-600'
+    : 'bg-slate-500/15 text-slate-600'
+  return { ext, label, icon, tone }
+}
+
+function FileAttachmentCard({ url, filename, isMine }: { url: string; filename?: string; isMine: boolean }) {
+  const fallback = url.split('/').pop() || 'file'
+  const fname = filename || fallback
+  const meta = fileMeta(fname || url)
+  return (
+    <div className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20 text-slate-700 dark:text-zinc-300' : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'}`}>
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${meta.tone}`}>
+        {meta.icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{fname}</span>
+        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>{meta.label} · 可打开 / 下载</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <a href={url} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          打开
+        </a>
+        <a href={url} download={fname} className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-500">
+          下载
+        </a>
+      </span>
+    </div>
+  )
+}
+
 function avatarInitial(name?: string, fallback = '?'): string {
   const n = String(name || '').trim()
   if (!n) return fallback
@@ -1955,44 +2001,15 @@ export function ChatView({
                                 const url = block.url
                                 const fname = block.filename || url.split('/').pop() || 'file'
                                 const isPdf = /\.pdf(\?|$)/i.test(url)
-                                const isMd = /\.md(\?|$)/i.test(fname) || /\.md(\?|$)/i.test(url)
                                 if (isPdf) {
                                   return (
                                     <div key={bi} className="space-y-1">
                                       <iframe src={url} title={fname} className="h-80 w-full rounded-lg border border-slate-200" />
-                                      <a href={url} target="_blank" rel="noreferrer" className="inline-block text-xs text-indigo-500 underline">{t('chat.openPdf')}</a>
+                                      <FileAttachmentCard url={url} filename={fname} isMine={isMine} />
                                     </div>
                                   )
                                 }
-                                if (isMd) {
-                                  return (
-                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-100/80 dark:hover:bg-indigo-950/30 text-slate-700 dark:text-zinc-300' : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300'}`}>
-                                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-500 text-xs font-bold">.md</span>
-                                      <span className="min-w-0 flex-1">
-                                        <span className="block truncate font-medium">{fname}</span>
-                                        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>{t('chat.markdownDownload')}</span>
-                                      </span>
-                                    </a>
-                                  )
-                                }
-                                const isHtml = /\.html?(\?|$)/i.test(fname) || /\.html?(\?|$)/i.test(url)
-                                if (isHtml) {
-                                  return (
-                                    <a key={bi} href={url} download={fname} className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-100/80 dark:hover:bg-indigo-950/30 text-slate-700 dark:text-zinc-300' : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300'}`}>
-                                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-orange-500 text-xs font-bold">.html</span>
-                                      <span className="min-w-0 flex-1">
-                                        <span className="block truncate font-medium">{fname}</span>
-                                        <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>{t('chat.htmlDownload')}</span>
-                                      </span>
-                                    </a>
-                                  )
-                                }
-                                return (
-                                  <a key={bi} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-indigo-500 hover:bg-slate-100">
-                                    <Paperclip className="h-4 w-4 shrink-0" />
-                                    <span className="truncate">{fname}</span>
-                                  </a>
-                                )
+                                return <FileAttachmentCard key={bi} url={url} filename={fname} isMine={isMine} />
                               }
                               if (block.kind === 'markdown') {
                                 return (
