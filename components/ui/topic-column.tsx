@@ -4,7 +4,9 @@ import { ChevronDown, ChevronRight, ClipboardList, Hash, Lock, MessageCircle, Mo
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
+  buildRoleSystemPrompt,
   getAgentRoleTemplate,
+  type AgentRoleTemplate,
   type AgentRoleTemplateId,
 } from '@/lib/agent-role-templates'
 import { AgentTerminalModal } from '@/components/ui/agent-terminal-modal'
@@ -75,8 +77,10 @@ interface TopicColumnProps {
   isSelectedAgentOnline?: boolean
   onlineAgentIds?: Set<string>
   agentRoleMap?: Record<string, string>
+  agentRoleTemplateMap?: Record<string, AgentRoleTemplate>
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
+  onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   onCreateGeneralTask?: () => void
@@ -195,8 +199,10 @@ export function TopicColumn(props: TopicColumnProps) {
     isSelectedAgentOnline = false,
     onlineAgentIds,
     agentRoleMap,
+    agentRoleTemplateMap,
     agentRuntimeMap,
     onAssignAgentRole,
+    onSaveAgentRole,
     onRenameAgent,
     onUnclaimAgent,
     onCreateGeneralTask,
@@ -206,6 +212,13 @@ export function TopicColumn(props: TopicColumnProps) {
   const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
   const [topicMenuFor, setTopicMenuFor] = useState<string | null>(null)
   const [shellAgent, setShellAgent] = useState<AgentOption | null>(null)
+  const [roleEditor, setRoleEditor] = useState<{
+    agentId: string
+    sourceRole?: AgentRoleTemplate
+    label: string
+    description: string
+    custom: boolean
+  } | null>(null)
   const [workersByAgent, setWorkersByAgent] = useState<Record<string, WorkerItem[]>>({})
   const [openingWorkerId, setOpeningWorkerId] = useState<string | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
@@ -216,6 +229,27 @@ export function TopicColumn(props: TopicColumnProps) {
   })
   const { locale, t } = useI18n()
   const zh = locale === 'zh'
+
+  const saveRoleEditor = () => {
+    if (!roleEditor || !onSaveAgentRole) return
+    const label = roleEditor.label.trim()
+    const description = roleEditor.description.trim()
+    if (!label || !description) return
+    const base = roleEditor.sourceRole
+    const id = roleEditor.custom
+      ? `custom-${Date.now().toString(36)}`
+      : (base?.id || `custom-${Date.now().toString(36)}`)
+    onSaveAgentRole(roleEditor.agentId, {
+      id,
+      label,
+      shortLabel: label.slice(0, 8),
+      description,
+      skills: base?.skills?.length ? base.skills : ['custom_role'],
+      systemPrompt: buildRoleSystemPrompt(label, description),
+    })
+    setRoleEditor(null)
+    setAgentMenuFor(null)
+  }
 
   const isAgentOnline = (agentId: string) => {
     if (onlineAgentIds) return onlineAgentIds.has(agentId)
@@ -432,7 +466,7 @@ export function TopicColumn(props: TopicColumnProps) {
           {agentOptions.map((agent) => {
             const selected = agent.agent_id === selectedAgentId
             const online = isAgentOnline(agent.agent_id)
-            const role = getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
+            const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
             const runtimeText = selected ? formatRuntime(agentRuntimeMap?.[agent.agent_id]) : ''
             const menuOpen = agentMenuFor === agent.agent_id
             const workers = workersByAgent[agent.agent_id] || []
@@ -535,10 +569,21 @@ export function TopicColumn(props: TopicColumnProps) {
                       <div className="max-h-[50vh] overflow-y-auto">
                         {AGENT_ROLE_TEMPLATES.map((template) => {
                           const active = template.id === role.id
+                          const displayDescription = active ? role.description : template.description
                           return (
                           <button
                             key={template.id}
                             type="button"
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              setRoleEditor({
+                                agentId: agent.agent_id,
+                                sourceRole: template,
+                                label: template.label,
+                                description: (active ? role.description : template.description) || template.description,
+                                custom: false,
+                              })
+                            }}
                             onClick={() => {
                               onAssignAgentRole?.(agent.agent_id, template.id)
                               setAgentMenuFor(null)
@@ -550,11 +595,62 @@ export function TopicColumn(props: TopicColumnProps) {
                             }`}
                           >
                             <span className="block truncate text-sm font-black" title={template.label}>{template.label}</span>
-                            <span className="mt-0.5 block line-clamp-2 text-xs opacity-75" title={template.description}>{template.description}</span>
+                            <span className="mt-0.5 block line-clamp-2 text-xs opacity-75" title={displayDescription}>{displayDescription}</span>
                           </button>
                           )
                         })}
+                        {role.id.startsWith('custom-') && (
+                          <button
+                            type="button"
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              setRoleEditor({
+                                agentId: agent.agent_id,
+                                sourceRole: role,
+                                label: role.label,
+                                description: role.description,
+                                custom: false,
+                              })
+                            }}
+                            onClick={() => {
+                              setRoleEditor({
+                                agentId: agent.agent_id,
+                                sourceRole: role,
+                                label: role.label,
+                                description: role.description,
+                                custom: false,
+                              })
+                            }}
+                            className="w-full rounded-xl bg-[#e6f1df] px-3 py-2 text-left text-[#385b3d] transition dark:bg-emerald-500/15 dark:text-emerald-200"
+                          >
+                            <span className="block truncate text-sm font-black" title={role.label}>{role.label}</span>
+                            <span className="mt-0.5 block line-clamp-2 text-xs opacity-75" title={role.description}>{role.description}</span>
+                          </button>
+                        )}
                       </div>
+
+                      {onSaveAgentRole && (
+                        <div className="mt-2 border-t border-[#eee6da] pt-2 dark:border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRoleEditor({
+                                agentId: agent.agent_id,
+                                label: '',
+                                description: '',
+                                custom: true,
+                              })
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-500/10"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            {zh ? '新增自定义角色' : 'Add custom role'}
+                          </button>
+                          <p className="px-3 pt-1 text-[10px] text-slate-400 dark:text-zinc-500">
+                            {zh ? '右键已有角色可编辑当前 Agent 的角色描述。' : 'Right-click a role to edit this agent role description.'}
+                          </p>
+                        </div>
+                      )}
 
                       {((userToken && isAgentOnline(agent.agent_id)) || onRenameAgent || onUnclaimAgent) && (
                         <div className="mt-2 border-t border-[#eee6da] pt-2 dark:border-zinc-800">
@@ -698,6 +794,58 @@ export function TopicColumn(props: TopicColumnProps) {
           </div>
         </div>
       </aside>
+
+      {roleEditor && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mb-3">
+              <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">
+                {roleEditor.custom ? (zh ? '新增自定义角色' : 'Add Custom Role') : (zh ? '编辑角色描述' : 'Edit Role Description')}
+              </h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+                {zh ? '保存后会同步到后端，并在该 Agent 下一次执行时作为隐式角色提示。' : 'Saved changes sync to the backend and are injected on the next agent action.'}
+              </p>
+            </div>
+            <label className="mb-3 block">
+              <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '角色名称' : 'Role name'}</span>
+              <input
+                value={roleEditor.label}
+                disabled={!roleEditor.custom}
+                onChange={(event) => setRoleEditor((prev) => prev ? { ...prev, label: event.target.value } : prev)}
+                placeholder={zh ? '例如：Linux 内核专家' : 'e.g. Linux Kernel Expert'}
+                className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 disabled:bg-slate-100 disabled:text-slate-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-800"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '角色描述' : 'Role description'}</span>
+              <textarea
+                value={roleEditor.description}
+                onChange={(event) => setRoleEditor((prev) => prev ? { ...prev, description: event.target.value } : prev)}
+                rows={5}
+                placeholder={zh ? '描述这个 Agent 应该关注的领域、判断标准、输出风格和边界。' : 'Describe focus areas, decision criteria, output style, and boundaries.'}
+                className="w-full resize-none rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition focus:border-sky-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </label>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRoleEditor(null)}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                {zh ? '取消' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={saveRoleEditor}
+                disabled={!roleEditor.label.trim() || !roleEditor.description.trim()}
+                className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {zh ? '保存并同步' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {shellAgent && (
         <AgentTerminalModal

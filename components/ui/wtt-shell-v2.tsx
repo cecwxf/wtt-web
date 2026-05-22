@@ -9,6 +9,7 @@ import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
 import { useI18n } from '@/lib/i18n-provider'
+import type { AgentRoleTemplate } from '@/lib/agent-role-templates'
 
 interface P2PRequest {
   id: string
@@ -56,8 +57,10 @@ interface WttShellV2Props {
   agentStats?: AgentStatsMap
   onlineAgentIds?: Set<string>
   agentRoleMap?: Record<string, string>
+  agentRoleTemplateMap?: Record<string, AgentRoleTemplate>
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: string) => void
+  onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
   userToken?: string
   forceOpenSettingsPage?: SettingsPage | null
   onForceOpenHandled?: () => void
@@ -100,8 +103,10 @@ export function WttShellV2(props: WttShellV2Props) {
     onForceOpenHandled,
     onlineAgentIds,
     agentRoleMap,
+    agentRoleTemplateMap,
     agentRuntimeMap,
     onAssignAgentRole,
+    onSaveAgentRole,
     children,
   } = props
   const [menuOpen, setMenuOpen] = useState(false)
@@ -241,8 +246,10 @@ export function WttShellV2(props: WttShellV2Props) {
               isSelectedAgentOnline={isSelectedAgentOnline}
               onlineAgentIds={onlineAgentIds}
               agentRoleMap={agentRoleMap}
+              agentRoleTemplateMap={agentRoleTemplateMap}
               agentRuntimeMap={agentRuntimeMap}
               onAssignAgentRole={onAssignAgentRole}
+              onSaveAgentRole={onSaveAgentRole}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
               onCreateGeneralTask={onCreateGeneralTask}

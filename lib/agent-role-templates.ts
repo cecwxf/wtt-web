@@ -1,12 +1,4 @@
-export type AgentRoleTemplateId =
-  | 'general'
-  | 'chairman'
-  | 'ceo'
-  | 'finance'
-  | 'qa'
-  | 'engineering'
-  | 'product'
-  | 'research'
+export type AgentRoleTemplateId = string
 
 export interface AgentRoleTemplate {
   id: AgentRoleTemplateId
@@ -86,4 +78,43 @@ export const AGENT_ROLE_TEMPLATES: AgentRoleTemplate[] = [
 
 export function getAgentRoleTemplate(roleId?: string): AgentRoleTemplate {
   return AGENT_ROLE_TEMPLATES.find((template) => template.id === roleId) || AGENT_ROLE_TEMPLATES[0]
+}
+
+export function roleTemplateFromPayload(roleId: string | undefined, raw: Record<string, unknown> | undefined): AgentRoleTemplate {
+  const fallback = getAgentRoleTemplate(roleId)
+  if (!raw || typeof raw !== 'object') return fallback
+  const id = String(raw.id || roleId || fallback.id || 'general').trim() || 'general'
+  const label = String(raw.label || fallback.label || id).trim() || id
+  const description = String(raw.description || fallback.description || '').trim()
+  const skillsRaw = Array.isArray(raw.skills) ? raw.skills : fallback.skills
+  const skills = skillsRaw.map((item) => String(item).trim()).filter(Boolean)
+  const systemPrompt = String(raw.system_prompt || raw.systemPrompt || fallback.systemPrompt || '').trim()
+    || buildRoleSystemPrompt(label, description)
+  return {
+    id,
+    label,
+    shortLabel: String(raw.shortLabel || raw.short_label || label).trim() || label,
+    description,
+    skills,
+    systemPrompt,
+  }
+}
+
+export function buildRoleSystemPrompt(label: string, description: string): string {
+  const roleName = label.trim() || '自定义'
+  const roleDescription = description.trim()
+  return roleDescription
+    ? `你是${roleName}角色 Agent。回答时严格围绕这个角色定位行动：${roleDescription}`
+    : `你是${roleName}角色 Agent。回答时严格围绕这个角色定位行动。`
+}
+
+export function serializeAgentRoleTemplate(role: AgentRoleTemplate): Record<string, unknown> {
+  return {
+    id: role.id,
+    label: role.label,
+    shortLabel: role.shortLabel,
+    description: role.description,
+    skills: role.skills,
+    system_prompt: role.systemPrompt,
+  }
 }

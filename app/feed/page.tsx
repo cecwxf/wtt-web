@@ -19,7 +19,12 @@ import { normalizeAndFilterAgents } from '@/lib/agents'
 import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { useI18n } from '@/lib/i18n-provider'
 import { cacheKeyFromBase64, clearCachedKey, decryptReceived, encryptForSend, getCachedKey } from '@/lib/e2e-crypto'
-import { getAgentRoleTemplate } from '@/lib/agent-role-templates'
+import {
+  getAgentRoleTemplate,
+  roleTemplateFromPayload,
+  serializeAgentRoleTemplate,
+  type AgentRoleTemplate,
+} from '@/lib/agent-role-templates'
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
@@ -321,6 +326,7 @@ function FeedPageInner() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [agentRoleMap, setAgentRoleMap] = useState<Record<string, string>>({})
+  const [agentRoleTemplateMap, setAgentRoleTemplateMap] = useState<Record<string, AgentRoleTemplate>>({})
   const [selectedTopicId, _setSelectedTopicId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('wtt_selected_topic_id') || null
@@ -358,10 +364,9 @@ function FeedPageInner() {
     }
   }, [])
 
-  const handleAssignAgentRole = useCallback((agentId: string, roleId: string) => {
-    const role = getAgentRoleTemplate(roleId)
+  const persistAgentRole = useCallback((agentId: string, role: AgentRoleTemplate) => {
     setAgentRoleMap((prev) => {
-      const next = { ...prev, [agentId]: roleId }
+      const next = { ...prev, [agentId]: role.id }
       if (role.id === 'general') delete next[agentId]
       try {
         localStorage.setItem('wtt:feed-agent-role-map', JSON.stringify(next))
@@ -370,18 +375,19 @@ function FeedPageInner() {
       }
       return next
     })
+    setAgentRoleTemplateMap((prev) => {
+      const next = { ...prev }
+      if (role.id === 'general') delete next[agentId]
+      else next[agentId] = role
+      return next
+    })
     if (session?.accessToken) {
       fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
         body: JSON.stringify({
           role_template_id: role.id === 'general' ? '' : role.id,
-          role_template: role.id === 'general' ? {} : {
-            id: role.id,
-            label: role.label,
-            skills: role.skills,
-            system_prompt: role.systemPrompt,
-          },
+          role_template: role.id === 'general' ? {} : serializeAgentRoleTemplate(role),
         }),
       })
         .then((res) => {
@@ -391,12 +397,7 @@ function FeedPageInner() {
                 ? {
                     ...agent,
                     role_template_id: role.id === 'general' ? '' : role.id,
-                    role_template: role.id === 'general' ? {} : {
-                      id: role.id,
-                      label: role.label,
-                      skills: role.skills,
-                      system_prompt: role.systemPrompt,
-                    },
+                    role_template: role.id === 'general' ? {} : serializeAgentRoleTemplate(role),
                   }
                 : agent
             )))
@@ -405,6 +406,14 @@ function FeedPageInner() {
         .catch(() => {})
     }
   }, [session?.accessToken])
+
+  const handleAssignAgentRole = useCallback((agentId: string, roleId: string) => {
+    persistAgentRole(agentId, getAgentRoleTemplate(roleId))
+  }, [persistAgentRole])
+
+  const handleSaveAgentRole = useCallback((agentId: string, role: AgentRoleTemplate) => {
+    persistAgentRole(agentId, role)
+  }, [persistAgentRole])
 
   const [kbLoading, setKbLoading] = useState(false)
   const handleOpenKnowledgeRoot = useCallback(async () => {
@@ -486,10 +495,12 @@ function FeedPageInner() {
       }
 
       const nextRoleMap = { ...storedRoleMap }
+      const nextRoleTemplateMap: Record<string, AgentRoleTemplate> = {}
       const roleMigrations: Array<{ agentId: string; role: ReturnType<typeof getAgentRoleTemplate> }> = []
       for (const agent of list) {
         if (agent.role_template_id) {
           nextRoleMap[agent.agent_id] = agent.role_template_id
+          nextRoleTemplateMap[agent.agent_id] = roleTemplateFromPayload(agent.role_template_id, agent.role_template)
           continue
         }
 
@@ -503,6 +514,7 @@ function FeedPageInner() {
         delete nextRoleMap[agent.agent_id]
       }
       setAgentRoleMap(nextRoleMap)
+      setAgentRoleTemplateMap(nextRoleTemplateMap)
       try {
         localStorage.setItem('wtt:feed-agent-role-map', JSON.stringify(nextRoleMap))
       } catch {
@@ -515,12 +527,7 @@ function FeedPageInner() {
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
             body: JSON.stringify({
               role_template_id: item.role.id,
-              role_template: {
-                id: item.role.id,
-                label: item.role.label,
-                skills: item.role.skills,
-                system_prompt: item.role.systemPrompt,
-              },
+              role_template: serializeAgentRoleTemplate(item.role),
             }),
           }).catch(() => {})
         }
@@ -1906,8 +1913,10 @@ function FeedPageInner() {
         agentStats={agentStats ?? undefined}
         onlineAgentIds={onlineAgentIds}
         agentRoleMap={agentRoleMap}
+        agentRoleTemplateMap={agentRoleTemplateMap}
         agentRuntimeMap={agentRuntimeMap}
         onAssignAgentRole={handleAssignAgentRole}
+        onSaveAgentRole={handleSaveAgentRole}
         userToken={session?.accessToken as string | undefined}
         forceOpenSettingsPage={forceOpenSettingsPage}
         onForceOpenHandled={() => setForceOpenSettingsPage(null)}
