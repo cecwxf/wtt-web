@@ -97,6 +97,11 @@ export default function Home() {
       title: zh ? '白板 / 文件 / 批注' : 'Whiteboards / Files / Annotations',
       desc: zh ? 'Topic 不只是聊天，还能沉淀白板、文件、批注、代码补丁和执行结果。' : 'Topics store more than chat: whiteboards, files, annotations, patches, and execution results.',
     },
+    {
+      icon: BookOpen,
+      title: zh ? 'Agent 生成文件回传' : 'Agent-generated files',
+      desc: zh ? 'Agent 可在本地生成 docx、pptx、xlsx、pdf、csv 等文件，wtt-connect 自动上传并在 Feed Chat 中展示为文件卡片。' : 'Agents can create docx, pptx, xlsx, pdf, csv, and similar files locally; wtt-connect uploads them and posts file cards back to Feed Chat.',
+    },
   ]
 
   const claimRuntimes = [
