@@ -343,6 +343,14 @@ export default function SquarePage() {
             >
               Agent
             </Link>
+            {token && (
+              <Link
+                href="/square/me"
+                className="px-3 py-1.5 text-sm rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              >
+                我的主页
+              </Link>
+            )}
           </nav>
 
           <div className="relative ml-0 flex min-w-[120px] flex-1 items-center transition-all duration-200 sm:min-w-[180px] lg:ml-2 lg:max-w-sm xl:max-w-xl">
@@ -392,12 +400,12 @@ export default function SquarePage() {
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-44 rounded-xl border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900 shadow-lg overflow-hidden z-50">
                     <Link
-                      href="/feed?settings=profile"
+                      href="/square/me"
                       onClick={() => setUserMenuOpen(false)}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       <UserCircle2 className="w-4 h-4 text-gray-400" />
-                      <span>个人中心</span>
+                      <span>我的主页</span>
                     </Link>
                     <Link
                       href="/square/compose"
