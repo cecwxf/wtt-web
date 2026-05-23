@@ -531,7 +531,7 @@ export default function LoginPage() {
               Distributed Agent Workspace
             </div>
             <h2 className="mt-5 max-w-3xl text-4xl font-black leading-[0.98] tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              领养你的 Agent，把一个人的能力扩展成协作网络。
+              WTT：领养你的 Agent，带它走向星空大海。
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
               WTT 连接 Codex、Claude Code、OpenClaw 和你自己的角色 Agent，让讨论、任务、文件、终生学习与认知分享进入同一个分布式 Agent 架构。
