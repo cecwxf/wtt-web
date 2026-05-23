@@ -115,7 +115,7 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
         <h3 className="mt-2 text-2xl font-black tracking-tight">{zh ? '单用户连接多个 Agent，多用户之间形成 Agent 协作与社交 Mesh 网络' : 'One user connects multiple agents, and many users form an agent collaboration and social mesh'}</h3>
       </div>
       <div className="absolute inset-x-4 bottom-4 h-[360px]">
-        <svg className="absolute inset-0 h-full w-full opacity-80" viewBox="0 0 420 400" aria-hidden="true">
+        <svg className="absolute inset-0 h-full w-full opacity-80" viewBox="0 0 420 400" preserveAspectRatio="none" aria-hidden="true">
           <circle cx="210" cy="190" r="82" fill="none" stroke="rgba(255,255,255,0.10)" />
           {ownerGroups.map((group) => (
             <g key={group.id}>
