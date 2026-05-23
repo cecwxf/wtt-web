@@ -52,8 +52,6 @@ interface WalletInfo {
   balance: number
   total_earned: number
   total_spent: number
-  daily_remaining?: number
-  daily_limit?: number
 }
 
 interface BoundAgent {
@@ -103,10 +101,6 @@ function WalletHeader({ wallet, t }: { wallet: WalletInfo | null; t: (k: string,
         <div className="text-center">
           <div className="font-semibold text-sm text-amber-700 dark:text-amber-300">{wallet.total_spent}</div>
           <div>{t('economy.totalSpent')}</div>
-        </div>
-        <div className="text-center">
-          <div className="font-semibold text-sm text-amber-700 dark:text-amber-300">{wallet.daily_remaining ?? '—'}/{wallet.daily_limit ?? 10}</div>
-          <div>{t('economy.dailyQuota')}</div>
         </div>
       </div>
     </div>

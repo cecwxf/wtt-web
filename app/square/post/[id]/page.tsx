@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
-import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown, Globe, Coins, Loader2, Zap, AlertCircle, Pencil, Check } from 'lucide-react'
+import { ArrowLeft, Bot, Star, ExternalLink, MessageCircle, ChevronDown, ChevronRight, Reply, ImagePlus, Maximize2, Minimize2, Send, Sparkles, Heart, Bookmark, X, ArrowUpDown, Globe, Loader2, Zap, AlertCircle, Pencil, Check } from 'lucide-react'
 import { parseRichBlocks, summarizeForReply, toThumbnailUrl } from '@/lib/rich-content'
 import { RICH_TABLE_CSS, RICH_CODE_CSS } from '@/components/ui/square-editor'
 import { useI18n } from '@/lib/i18n-provider'
@@ -230,8 +230,6 @@ export default function PostDetailPage() {
   const [dispatching, setDispatching] = useState(false)
   const [dispatchError, setDispatchError] = useState('')
   const [dispatchSuccess, setDispatchSuccess] = useState('')
-  const [dailyRemaining, setDailyRemaining] = useState<number | null>(null)
-  const [dailyLimit, setDailyLimit] = useState(10)
   const [availableTags, setAvailableTags] = useState<Array<{ key: string; label: string }>>([])
 
   // Edit state
@@ -258,16 +256,9 @@ export default function PostDetailPage() {
     return h
   }, [token])
 
-  // Load economy data when dispatch modal opens
+  // Load agent tag data when dispatch modal opens
   useEffect(() => {
     if (!showDispatch || !token) return
-    fetch('/api/wtt/economy/credits', { headers: authHeaders })
-      .then(r => r.json())
-      .then(d => {
-        setDailyRemaining(d.daily_remaining ?? null)
-        setDailyLimit(d.daily_limit ?? 10)
-      })
-      .catch(() => {})
     fetch('/api/wtt/economy/tags')
       .then(r => r.json())
       .then(d => setAvailableTags(Array.isArray(d?.tags) ? d.tags : []))
@@ -287,13 +278,11 @@ export default function PostDetailPage() {
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        if (res.status === 429) setDispatchError(t('economy.dailyQuotaExhausted'))
-        else setDispatchError(d.detail || t('economy.requestFailed'))
+        setDispatchError(d.detail || t('economy.requestFailed'))
         return
       }
-      const data = await res.json()
+      await res.json()
       setDispatchSuccess(t('economy.requestSuccess'))
-      setDailyRemaining(data.daily_remaining ?? (dailyRemaining !== null ? dailyRemaining - 1 : null))
       setTimeout(() => { setShowDispatch(false); setDispatchSuccess(''); setDispatchTags([]) }, 2000)
     } catch {
       setDispatchError(t('economy.requestFailed'))
@@ -1246,11 +1235,6 @@ export default function PostDetailPage() {
             <button onClick={() => setShowDispatch(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"><X className="w-4 h-4" /></button>
           </div>
 
-          <div className="flex items-center justify-between mb-4 p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
-            <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1"><Coins className="w-3 h-3" />{t('economy.dailyQuota')}</span>
-            <span className="font-bold text-amber-700 dark:text-amber-300">{dailyRemaining ?? '—'} / {dailyLimit}</span>
-          </div>
-
           <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{t('economy.requestSelectTags')}</label>
           <div className="flex flex-wrap gap-1.5 mb-4">
             {availableTags.map(tag => (
@@ -1268,16 +1252,12 @@ export default function PostDetailPage() {
             ))}
           </div>
 
-          <div className="text-xs text-gray-400 dark:text-gray-500 mb-3 flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" /> {t('economy.dailyQuotaHint')}
-          </div>
-
           {dispatchError && <div className="text-xs text-red-500 mb-3 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{dispatchError}</div>}
           {dispatchSuccess && <div className="text-xs text-green-500 mb-3 flex items-center gap-1">✓ {dispatchSuccess}</div>}
 
           <button
             onClick={handleDispatchAgent}
-            disabled={dispatching || dispatchTags.length === 0 || !!dispatchSuccess || dailyRemaining === 0}
+            disabled={dispatching || dispatchTags.length === 0 || !!dispatchSuccess}
             className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm font-medium disabled:opacity-50 hover:shadow-md transition flex items-center justify-center gap-2"
           >
             {dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
