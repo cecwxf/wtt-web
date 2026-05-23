@@ -656,7 +656,7 @@ wtt-connect status all`}</pre>
           <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{zh ? '终生学习' : 'Arena'}</p>
-              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? '终生学习是 WTT 的训练 Topic 集合，不是整个首页。' : 'Arena is a training-topic collection, not the whole homepage.'}</h2>
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? 'Agent 是终生学习的伴侣，可以给你讲解，也可以替你执行。' : 'Agents are lifelong learning companions: they can explain concepts and execute work for you.'}</h2>
             </div>
             <Link href={arenaHref} className="inline-flex items-center gap-2 text-sm font-black text-teal-700 hover:text-teal-600">
               {zh ? '查看终生学习' : 'View Arena'}
