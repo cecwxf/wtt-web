@@ -51,7 +51,7 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
   const users = [
     { id: 'a-user', label: 'User A', x: 76, y: 174 },
     { id: 'b-user', label: 'User B', x: 344, y: 174 },
-    { id: 'c-user', label: 'User C', x: 210, y: 370 },
+    { id: 'c-user', label: 'User C', x: 210, y: 362 },
   ]
   const agents = [
     { id: 'a-codex', owner: 'a', label: 'Codex', x: 70, y: 94 },
@@ -60,14 +60,14 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
     { id: 'b-codex', owner: 'b', label: 'Codex', x: 304, y: 94 },
     { id: 'b-claude', owner: 'b', label: 'Claude', x: 348, y: 132 },
     { id: 'b-openclaw', owner: 'b', label: 'OpenClaw', x: 326, y: 250 },
-    { id: 'c-codex', owner: 'c', label: 'Codex', x: 176, y: 318 },
-    { id: 'c-claude', owner: 'c', label: 'Claude', x: 244, y: 318 },
-    { id: 'c-openclaw', owner: 'c', label: 'OpenClaw', x: 210, y: 346 },
+    { id: 'c-codex', owner: 'c', label: 'Codex', x: 176, y: 314 },
+    { id: 'c-claude', owner: 'c', label: 'Claude', x: 244, y: 314 },
+    { id: 'c-openclaw', owner: 'c', label: 'OpenClaw', x: 210, y: 340 },
   ]
   const ownerGroups = [
-    { id: 'a', label: zh ? 'User A 和 Agent' : 'User A + Agents', x: 16, y: 54, width: 140, height: 220, stroke: '#5eead4' },
-    { id: 'b', label: zh ? 'User B 和 Agent' : 'User B + Agents', x: 264, y: 54, width: 140, height: 220, stroke: '#818cf8' },
-    { id: 'c', label: zh ? 'User C 和 Agent' : 'User C + Agents', x: 130, y: 286, width: 160, height: 108, stroke: '#fbbf24' },
+    { id: 'a', label: zh ? 'User A 和 Agent' : 'User A + Agents', x: 10, y: 48, width: 152, height: 236, stroke: '#5eead4' },
+    { id: 'b', label: zh ? 'User B 和 Agent' : 'User B + Agents', x: 258, y: 48, width: 152, height: 236, stroke: '#818cf8' },
+    { id: 'c', label: zh ? 'User C 和 Agent' : 'User C + Agents', x: 122, y: 282, width: 176, height: 116, stroke: '#fbbf24' },
   ]
   const byId = Object.fromEntries([...users, ...agents].map((node) => [node.id, node]))
   const intraAgentLinks = [

@@ -72,7 +72,7 @@ const softmaxWorkspaceAgents = [
 const loginMeshUsers = [
   { id: "a-user", label: "User A", x: 78, y: 190 },
   { id: "b-user", label: "User B", x: 342, y: 190 },
-  { id: "c-user", label: "User C", x: 210, y: 386 },
+  { id: "c-user", label: "User C", x: 210, y: 378 },
 ];
 
 const loginMeshAgents = [
@@ -82,17 +82,17 @@ const loginMeshAgents = [
   { id: "b-codex", owner: "b", label: "Codex", x: 304, y: 112 },
   { id: "b-claude", owner: "b", label: "Claude", x: 350, y: 142 },
   { id: "b-openclaw", owner: "b", label: "OpenClaw", x: 326, y: 272 },
-  { id: "c-codex", owner: "c", label: "Codex", x: 176, y: 334 },
-  { id: "c-claude", owner: "c", label: "Claude", x: 244, y: 334 },
-  { id: "c-openclaw", owner: "c", label: "OpenClaw", x: 210, y: 362 },
+  { id: "c-codex", owner: "c", label: "Codex", x: 176, y: 330 },
+  { id: "c-claude", owner: "c", label: "Claude", x: 244, y: 330 },
+  { id: "c-openclaw", owner: "c", label: "OpenClaw", x: 210, y: 356 },
 ];
 
 const loginMeshNodes = Object.fromEntries([...loginMeshUsers, ...loginMeshAgents].map((node) => [node.id, node]));
 
 const loginMeshGroups = [
-  { id: "a", label: "User A 和 Agents", x: 16, y: 68, width: 142, height: 230, stroke: "#5eead4" },
-  { id: "b", label: "User B 和 Agents", x: 262, y: 68, width: 142, height: 230, stroke: "#818cf8" },
-  { id: "c", label: "User C 和 Agents", x: 130, y: 304, width: 160, height: 106, stroke: "#fbbf24" },
+  { id: "a", label: "User A 和 Agents", x: 10, y: 62, width: 154, height: 242, stroke: "#5eead4" },
+  { id: "b", label: "User B 和 Agents", x: 256, y: 62, width: 154, height: 242, stroke: "#818cf8" },
+  { id: "c", label: "User C 和 Agents", x: 122, y: 300, width: 176, height: 120, stroke: "#fbbf24" },
 ];
 
 const loginInsideLinks = [
