@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronDown, ChevronRight, ClipboardList, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
   buildRoleSystemPrompt,
@@ -10,7 +10,6 @@ import {
   type AgentRoleTemplateId,
 } from '@/lib/agent-role-templates'
 import { AgentTerminalModal } from '@/components/ui/agent-terminal-modal'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
 
 export interface TopicItem {
@@ -33,16 +32,6 @@ export interface TopicItem {
 interface AgentOption {
   agent_id: string
   display_name: string
-}
-
-interface WorkerItem {
-  id: string
-  agent_id: string
-  name: string
-  description?: string
-  skills_config?: string[]
-  status?: string
-  topic_id?: string
 }
 
 export interface AgentRuntimeInfo {
@@ -196,7 +185,6 @@ export function TopicColumn(props: TopicColumnProps) {
     agentOptions = [],
     selectedAgentId = '',
     onSelectAgent,
-    onSelectWorkerTopic,
     isSelectedAgentOnline = false,
     onlineAgentIds,
     agentRoleMap,
@@ -221,8 +209,6 @@ export function TopicColumn(props: TopicColumnProps) {
     description: string
     custom: boolean
   } | null>(null)
-  const [workersByAgent, setWorkersByAgent] = useState<Record<string, WorkerItem[]>>({})
-  const [openingWorkerId, setOpeningWorkerId] = useState<string | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
     p2p: false,
     task: false,
@@ -256,63 +242,6 @@ export function TopicColumn(props: TopicColumnProps) {
   const isAgentOnline = (agentId: string) => {
     if (onlineAgentIds) return onlineAgentIds.has(agentId)
     return agentId === selectedAgentId ? isSelectedAgentOnline : false
-  }
-
-  const fetchWorkers = useCallback(async (agentId: string) => {
-    if (!agentId) return
-    try {
-      const headers: Record<string, string> = {}
-      if (userToken) headers.Authorization = `Bearer ${userToken}`
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/workers?agent_id=${encodeURIComponent(agentId)}`, {
-        credentials: 'include',
-        headers,
-      })
-      if (!response.ok) return
-      const data = await response.json()
-      if (Array.isArray(data)) {
-        setWorkersByAgent((prev) => ({ ...prev, [agentId]: data }))
-      }
-    } catch {
-      // Worker shortcuts are best-effort; the topic list still works without them.
-    }
-  }, [userToken])
-
-  useEffect(() => {
-    if (!selectedAgentId) return
-    void fetchWorkers(selectedAgentId)
-  }, [selectedAgentId, fetchWorkers])
-
-  const openWorkerTopic = async (agentId: string, worker: WorkerItem) => {
-    if (!onSelectWorkerTopic || openingWorkerId) return
-    setOpeningWorkerId(worker.id)
-    try {
-      const headers: Record<string, string> = {}
-      if (userToken) headers.Authorization = `Bearer ${userToken}`
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/workers/${encodeURIComponent(worker.id)}/session`, {
-        method: 'POST',
-        credentials: 'include',
-        headers,
-      })
-      if (!response.ok) throw new Error(await response.text())
-      const data = await response.json()
-      const topicId = String(data.topic_id || worker.topic_id || '')
-      if (!topicId) return
-      setWorkersByAgent((prev) => {
-        const rows = prev[agentId] || []
-        return { ...prev, [agentId]: rows.map((row) => row.id === worker.id ? { ...row, topic_id: topicId } : row) }
-      })
-      onSelectWorkerTopic(topicId, {
-        workerId: worker.id,
-        personaMd: String(data.persona_md || ''),
-        workerMd: String(data.worker_md || ''),
-        isFirstSession: Boolean(data.is_first_session ?? false),
-        personaChanged: Boolean(data.persona_changed ?? false),
-      })
-    } catch {
-      // Keep the UI quiet; failures still surface through the topic/chat path.
-    } finally {
-      setOpeningWorkerId(null)
-    }
   }
 
   const groupedTopics = useMemo(() => {
@@ -449,19 +378,16 @@ export function TopicColumn(props: TopicColumnProps) {
   return (
     <>
       <aside className="flex w-[var(--wtt-agent-rail-width)] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#f6f3ed] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-        <div className={`border-b border-[#e7e1d7] dark:border-zinc-800 ${compactLayout ? 'px-2 py-2' : 'px-3 py-3'}`}>
-          <div className="truncate text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">
-            {zh ? 'Agents' : 'Agents'}
-          </div>
-          <div className={`mt-1 text-sm font-semibold text-slate-600 dark:text-zinc-300 ${compactLayout ? 'hidden xl:block' : ''}`}>
-            {zh ? '选择工作身份' : 'Choose workspace identity'}
+        <div className="border-b border-[#e7e1d7] px-1.5 py-2 text-center dark:border-zinc-800">
+          <div className="truncate text-[10px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-zinc-500">
+            Agent
           </div>
         </div>
 
-        <div className={`min-h-0 flex-1 space-y-1.5 overflow-y-auto ${compactLayout ? 'p-1.5' : 'p-2.5'}`}>
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
           {agentOptions.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-[#ded6c8] bg-white/55 p-4 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
-              {t('agent.noAgents')}
+            <div className="rounded-xl border border-dashed border-[#ded6c8] bg-white/55 p-2 text-center text-[10px] text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
+              {zh ? '无 Agent' : 'No agents'}
             </div>
           )}
 
@@ -471,7 +397,6 @@ export function TopicColumn(props: TopicColumnProps) {
             const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
             const runtimeText = selected ? formatRuntime(agentRuntimeMap?.[agent.agent_id]) : ''
             const menuOpen = agentMenuFor === agent.agent_id
-            const workers = workersByAgent[agent.agent_id] || []
 
             return (
               <div key={agent.agent_id} className="relative">
@@ -479,19 +404,19 @@ export function TopicColumn(props: TopicColumnProps) {
                   type="button"
                   onClick={() => {
                     onSelectAgent?.(agent.agent_id)
-                    void fetchWorkers(agent.agent_id)
                   }}
                   onContextMenu={(event) => {
                     event.preventDefault()
                     setAgentMenuFor(agent.agent_id)
                   }}
-                  className={`group flex w-full items-center gap-2 rounded-xl border text-left transition ${compactLayout ? 'px-1.5 py-1.5' : 'px-2.5 py-2'} ${
+                  title={agent.display_name || agent.agent_id}
+                  className={`group flex w-full items-center justify-center rounded-xl border px-1 py-1.5 text-left transition ${
                     selected
                       ? 'border-[#d7cbb9] bg-[#ebe5db] shadow-sm dark:border-emerald-500/35 dark:bg-emerald-500/10'
                       : 'border-transparent bg-white/55 hover:border-[#ded6c8] hover:bg-white/80 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
                   }`}
                 >
-                  <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#28241f] text-xs font-black text-[#f5ead8] shadow-sm dark:bg-zinc-800">
+                  <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#28241f] text-xs font-black text-[#f5ead8] shadow-sm dark:bg-zinc-800">
                     {agentInitial(agent.display_name)}
                     <span
                       className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#f6f3ed] dark:border-zinc-950 ${
@@ -500,12 +425,12 @@ export function TopicColumn(props: TopicColumnProps) {
                     />
                   </span>
 
-                  <span className="min-w-0 flex-1">
+                  <span className="hidden min-w-0 flex-1">
                     <span className="flex items-center gap-2">
-                      <span className={`truncate text-sm font-black text-slate-800 dark:text-zinc-100 ${compactLayout ? 'max-xl:hidden' : ''}`}>
+                      <span className="truncate text-sm font-black text-slate-800 dark:text-zinc-100">
                         {agent.display_name || agent.agent_id}
                       </span>
-                      <span className={`shrink-0 rounded-full bg-[#dfe8d8] px-2 py-0.5 text-[10px] font-black text-[#46624b] dark:bg-emerald-500/15 dark:text-emerald-200 ${compactLayout ? 'max-xl:hidden' : ''}`}>
+                      <span className="shrink-0 rounded-full bg-[#dfe8d8] px-2 py-0.5 text-[10px] font-black text-[#46624b] dark:bg-emerald-500/15 dark:text-emerald-200">
                         {role.shortLabel}
                       </span>
                     </span>
@@ -533,33 +458,12 @@ export function TopicColumn(props: TopicColumnProps) {
                         setAgentMenuFor(menuOpen ? null : agent.agent_id)
                       }
                     }}
-                    className={`rounded-lg p-1 text-slate-400 opacity-70 transition hover:bg-[#f6f0e5] hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 ${compactLayout ? 'max-xl:hidden' : ''}`}
+                    className="hidden rounded-lg p-1 text-slate-400 opacity-70 transition hover:bg-[#f6f0e5] hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                     title={zh ? 'Agent 设置' : 'Agent settings'}
                   >
                     <MoreVertical className="h-4 w-4" />
                   </span>
                 </button>
-
-                {selected && workers.length > 0 && (
-                  <div className="ml-10 mt-1 space-y-1 pb-1 pr-1">
-                    <div className="px-1 text-[9px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
-                      P2P Workers
-                    </div>
-                    {workers.map((worker) => (
-                      <button
-                        key={worker.id}
-                        type="button"
-                        onClick={() => openWorkerTopic(agent.agent_id, worker)}
-                        className="flex w-full items-center gap-1.5 rounded-lg border border-transparent px-2 py-1.5 text-left text-[11px] font-semibold text-slate-500 transition hover:border-[#ded6c8] hover:bg-white/80 hover:text-slate-800 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-                        title={worker.description || worker.name}
-                      >
-                        <Lock className="h-3 w-3 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate">Worker: {worker.name}</span>
-                        {openingWorkerId === worker.id && <span className="text-[10px] text-teal-600">...</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
 
                 {menuOpen && (
                   <>

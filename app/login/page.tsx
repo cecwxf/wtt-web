@@ -16,14 +16,11 @@ import {
 } from "lucide-react";
 import { CLIENT_WTT_API_BASE } from "@/lib/api/base-url";
 import { useI18n } from "@/lib/i18n-provider";
-import { ANDROID_LATEST_LABEL } from "@/lib/android-release";
 
 type AuthTab = "signin" | "register";
 type SignInMethod = "phone-code" | "phone-password" | "email";
 type RegisterMethod = "phone" | "email";
 type PhoneCodePurpose = "login" | "register" | "reset_password";
-
-const APK_DOWNLOAD_URL = "/downloads/wtt-android-latest.apk";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -463,15 +460,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <a
-          href={APK_DOWNLOAD_URL}
-          download
-          className="wtt-login-apk mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 lg:mb-4 lg:py-3"
-        >
-          <Smartphone className="h-4 w-4" />
-          Download Android APK (Latest {ANDROID_LATEST_LABEL})
-        </a>
-
         <div className="mb-4 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
@@ -535,7 +523,7 @@ export default function LoginPage() {
                     value={signInPhone}
                     onChange={(e) => setSignInPhone(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    placeholder="中国手机号可直接输入 13800138000，海外请输入 +1..."
+                    placeholder="手机号"
                     required
                   />
                 </label>
@@ -834,7 +822,7 @@ export default function LoginPage() {
                 value={registerPhone}
                 onChange={(e) => setRegisterPhone(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="中国手机号可直接输入 13800138000，海外请输入 +1..."
+                placeholder="手机号"
                 required
               />
             </label>
@@ -900,10 +888,6 @@ export default function LoginPage() {
               {loading ? t("login.creatingAccount") : "注册并登录"}
               {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
-
-            <p className="text-center text-xs text-slate-500">
-              中国手机号可不输入国家码；海外号码请输入 E.164 格式，例如 +14155552671。
-            </p>
           </form>
           ) : (
           <form onSubmit={handleRegister} className="space-y-3 lg:space-y-3.5">

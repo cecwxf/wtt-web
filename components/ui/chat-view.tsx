@@ -1775,7 +1775,7 @@ export function ChatView({
           </div>
         </div>
       )}
-      <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pt-1' : 'px-4 pt-2'}`}>
+      <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 py-1' : 'px-4 pt-2'}`}>
         <div className={`flex items-start justify-between ${compactUi ? 'gap-1.5' : 'gap-3'}`}>
           <div className="min-w-0 flex-1">
             <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
@@ -1792,12 +1792,12 @@ export function ChatView({
                 </span>
               )}
             </div>
-            <div className={`flex items-center ${compactUi ? 'mt-1 gap-4' : 'mt-2 gap-5'}`}>
-              <div className="flex items-center gap-5">
+            <div className={`flex items-center ${compactUi ? 'mt-0.5 gap-3' : 'mt-2 gap-5'}`}>
+              <div className={`flex items-center ${compactUi ? 'gap-3' : 'gap-5'}`}>
                 <button
                   type="button"
                   onClick={() => setActiveTab('chat')}
-                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
                     activeTab === 'chat'
                       ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
                       : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
@@ -1815,7 +1815,7 @@ export function ChatView({
                 <button
                   type="button"
                   onClick={() => setActiveTab('files')}
-                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
                     activeTab === 'files'
                       ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
                       : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
@@ -2460,7 +2460,7 @@ export function ChatView({
         </div>
       )}
 
-      <div className="border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
+      <div className={`border-t border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pb-2 pt-1' : 'px-4 pb-4 pt-2 sm:px-6'}`}>
         {/* Slash command result display */}
         {slashResult && (
           <div className="mb-2 max-h-20 overflow-auto rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 px-2 py-1 text-[11px] text-slate-700 dark:text-zinc-300 whitespace-pre-wrap font-mono">
@@ -2475,15 +2475,15 @@ export function ChatView({
         )}
 
         {/* Compact control bar: model / think / quick slash */}
-        <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
+        <div className={`flex items-center flex-wrap sm:flex-nowrap ${compactUi ? 'mb-1 gap-1 text-[9px]' : 'mb-2 gap-1.5 text-[10px]'}`}>
           <div className="relative shrink-0" ref={modelMenuRef}>
               <button
                 onClick={() => setModelMenuOpen(!modelMenuOpen)}
-                className="flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className={`flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 ${compactUi ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
                 title="Select model"
               >
                 <span>🤖</span>
-                <span className="font-medium max-w-[140px] truncate">{availableModels.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+                <span className={`truncate font-medium ${compactUi ? 'max-w-[92px]' : 'max-w-[140px]'}`}>{availableModels.find(m => m.id === selectedModel)?.label || selectedModel}</span>
                 <span className="text-slate-400">▾</span>
               </button>
               {modelMenuOpen && (
@@ -2515,7 +2515,7 @@ export function ChatView({
           <div className="relative shrink-0" ref={thinkMenuRef}>
             <button
               onClick={() => setThinkMenuOpen((v) => !v)}
-              className="flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className={`flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 ${compactUi ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
               title="Select think mode"
             >
               <span>🧠</span>
@@ -2547,7 +2547,7 @@ export function ChatView({
             )}
           </div>
 
-          {QUICK_SLASH_ACTIONS.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd))).map((action) => (
+          {!compactUi && QUICK_SLASH_ACTIONS.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd))).map((action) => (
             <button
               key={action.cmd}
               type="button"

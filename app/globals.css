@@ -28,7 +28,7 @@ body {
    limited height, so the app shell uses variables instead of hard-coded rails. */
 .wtt-app-shell {
   --wtt-topbar-height: 54px;
-  --wtt-agent-rail-width: 208px;
+  --wtt-agent-rail-width: 88px;
   --wtt-topic-rail-width: 264px;
   --wtt-shell-density-scale: 1;
 }
@@ -36,24 +36,71 @@ body {
 @media (max-width: 1439px), (max-height: 849px) {
   .wtt-app-shell {
     --wtt-topbar-height: 50px;
-    --wtt-agent-rail-width: 176px;
-    --wtt-topic-rail-width: 232px;
+    --wtt-agent-rail-width: 78px;
+    --wtt-topic-rail-width: 246px;
     --wtt-shell-density-scale: 0.92;
   }
 }
 
 @media (max-width: 1279px) {
   .wtt-app-shell {
-    --wtt-agent-rail-width: 72px;
-    --wtt-topic-rail-width: 232px;
+    --wtt-agent-rail-width: 64px;
+    --wtt-topic-rail-width: 224px;
   }
 }
 
 @media (min-width: 1800px) and (min-height: 900px) {
   .wtt-app-shell {
-    --wtt-agent-rail-width: 216px;
-    --wtt-topic-rail-width: 280px;
+    --wtt-agent-rail-width: 96px;
+    --wtt-topic-rail-width: 288px;
   }
+}
+
+.wtt-login-card {
+  max-width: 380px;
+}
+
+.wtt-login-logo {
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.wtt-login-logo > span {
+  width: 2.35rem;
+  height: 2.35rem;
+}
+
+.wtt-login-title {
+  margin-bottom: 0.875rem;
+}
+
+.wtt-login-title h1 {
+  font-size: 1.5rem;
+}
+
+.wtt-login-title p {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+}
+
+.wtt-login-card form > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.55rem;
+}
+
+.wtt-login-card input {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.wtt-login-card button,
+.wtt-login-card a {
+  min-height: 0;
+}
+
+.wtt-login-card button {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 @media (max-height: 820px) and (min-width: 768px) {
@@ -62,7 +109,6 @@ body {
   }
 
   .wtt-login-card {
-    max-width: 400px;
     transform: scale(0.92);
     transform-origin: center;
   }
@@ -89,11 +135,6 @@ body {
   .wtt-login-title p {
     margin-top: 0.125rem;
     font-size: 0.75rem;
-  }
-
-  .wtt-login-apk {
-    margin-bottom: 0.5rem;
-    padding-block: 0.5rem;
   }
 
   .wtt-login-card form > :not([hidden]) ~ :not([hidden]) {
