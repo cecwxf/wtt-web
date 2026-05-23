@@ -8,8 +8,10 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import {
   parseRichBlocks,
+  proxyMediaUrl,
   summarizeForReply,
   toThumbnailUrl,
+  trimUrlTail,
 } from '@/lib/rich-content'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
@@ -360,6 +362,19 @@ type ParsedTask = {
   assetPath?: string
 }
 
+type ChatPanelTab = 'chat' | 'files'
+
+type ConversationFile = {
+  key: string
+  url: string
+  filename?: string
+  messageId: string
+  senderId: string
+  senderName?: string
+  senderType: 'human' | 'agent'
+  timestamp: string
+}
+
 function parseTaskContent(content: string): ParsedTask {
   const c = (content || '').replace(/\\n/g, '\n')
   if (!c.includes('[TASK_')) return { isTask: false }
@@ -547,6 +562,65 @@ function FileAttachmentCard({ url, filename, isMine }: { url: string; filename?:
   )
 }
 
+const CHAT_FILE_EXT_RE = /\.(pdf|docx?|pptx?|xlsx?|csv|zip|tar|gz|md|txt|html?)(?:[?#].*)?$/i
+
+function filenameFromFileUrl(url: string): string {
+  const clean = decodeURIComponent(String(url || 'file').split('?')[0].split('#')[0])
+  return clean.split('/').filter(Boolean).pop() || 'file'
+}
+
+function isConversationFileUrl(url?: string, filename?: string): boolean {
+  const candidate = `${filename || ''} ${url || ''}`.trim()
+  return CHAT_FILE_EXT_RE.test(candidate)
+}
+
+function extractConversationFiles(message: ChatMessage): ConversationFile[] {
+  const files: ConversationFile[] = []
+  const localSeen = new Set<string>()
+
+  const addFile = (rawUrl?: string, filename?: string) => {
+    const normalized = proxyMediaUrl(trimUrlTail(String(rawUrl || '').trim()))
+    if (!normalized || !isConversationFileUrl(normalized, filename)) return
+    const fname = filename || filenameFromFileUrl(normalized)
+    const key = `${message.message_id}:${normalized}`
+    if (localSeen.has(key)) return
+    localSeen.add(key)
+    files.push({
+      key,
+      url: normalized,
+      filename: fname,
+      messageId: message.message_id,
+      senderId: message.sender_id,
+      senderName: message.sender_display_name,
+      senderType: message.sender_type,
+      timestamp: message.timestamp,
+    })
+  }
+
+  const task = parseTaskContent(message.content || '')
+  if (task.kind === 'asset') addFile(task.assetUrl, task.assetPath)
+
+  const { body: cleanContent } = stripMetaBlocks(message.content || '')
+  const { body: actionCleanBody } = extractActionQuickButtons(cleanContent)
+  const blocks = parseRichBlocks(actionCleanBody)
+  for (const block of blocks) {
+    if (block.kind === 'file') addFile(block.url, block.filename)
+  }
+
+  const mdLinkRe = /\[([^\]]{0,160})\]\((https?:\/\/[^)\s]+|\/?media\/[^)\s]+)\)/gi
+  let match: RegExpExecArray | null
+  while ((match = mdLinkRe.exec(actionCleanBody)) !== null) {
+    addFile(match[2], match[1]?.trim() || undefined)
+  }
+
+  const bareUrlRe = /(https?:\/\/\S+|\/?media\/[\w\-./]+(?:\?[^\s)]*)?)/gi
+  while ((match = bareUrlRe.exec(actionCleanBody)) !== null) {
+    addFile(match[1])
+  }
+
+  return files
+}
+
 function avatarInitial(name?: string, fallback = '?'): string {
   const n = String(name || '').trim()
   if (!n) return fallback
@@ -611,6 +685,7 @@ export function ChatView({
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
+  const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
   const [sending, setSending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string; imageUrl?: string; replyToId?: string } | null>(null)
@@ -1655,6 +1730,20 @@ export function ChatView({
     }
   })
 
+  const conversationFiles = useMemo(() => {
+    const seen = new Set<string>()
+    const out: ConversationFile[] = []
+    for (const message of visibleMessages) {
+      for (const file of extractConversationFiles(message)) {
+        const key = file.url
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push(file)
+      }
+    }
+    return out
+  }, [visibleMessages])
+
 
   return (
     <div
@@ -1674,7 +1763,7 @@ export function ChatView({
       <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 py-0.5' : 'px-4 py-2'}`}>
         <div className={`flex items-center justify-between ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
           <div className="min-w-0">
-            <div className={`flex items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
+            <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
               <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}># {topicName}</h2>
               {!compactUi && (
                 <span className="shrink-0 text-[10px] text-slate-400">
@@ -1687,6 +1776,30 @@ export function ChatView({
                   {t('chat.live')}
                 </span>
               )}
+              <div className="ml-1 inline-flex shrink-0 rounded-full border border-[#e5e0d8] bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('chat')}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                    activeTab === 'chat'
+                      ? 'bg-[#1f2328] text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-950'
+                      : 'text-[#8a8378] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('files')}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                    activeTab === 'files'
+                      ? 'bg-[#1f2328] text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-950'
+                      : 'text-[#8a8378] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  Files {conversationFiles.length > 0 ? conversationFiles.length : ''}
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -1735,11 +1848,42 @@ export function ChatView({
           </div>
         )}
 
-        {!loading && messages.length === 0 && (
+        {!loading && activeTab === 'chat' && messages.length === 0 && (
           <div className="pt-20 text-center text-sm text-slate-400">{t('chat.noMessages')}</div>
         )}
 
-        {groupedMessages.map((group) => (
+        {activeTab === 'files' ? (
+          <div className="mx-auto w-full max-w-3xl">
+            <div className="mb-3 rounded-xl border border-[#eee9df] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
+              <p className="text-sm font-semibold text-[#283038] dark:text-zinc-100">Files</p>
+              <p className="mt-0.5 text-xs text-[#8a8378] dark:text-zinc-500">
+                当前对话中识别到 {conversationFiles.length} 个文件，可直接打开或下载。
+              </p>
+            </div>
+
+            {conversationFiles.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[#ded8ce] bg-white/45 px-4 py-12 text-center text-sm text-[#8a8378] dark:border-zinc-800 dark:bg-zinc-900/45 dark:text-zinc-500">
+                当前对话还没有文件。生成 docx / pptx / xlsx / pdf / zip / md / html 等文件后会显示在这里。
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {conversationFiles.map((file) => {
+                  const label = senderLabelText(file.senderName, file.senderId)
+                  return (
+                    <div key={file.key} className="rounded-xl border border-[#eee9df] bg-white/75 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/75">
+                      <FileAttachmentCard url={file.url} filename={file.filename} isMine={file.senderType === 'human'} />
+                      <div className="mt-2 flex flex-wrap items-center gap-2 px-1 text-[10px] text-[#9b9488] dark:text-zinc-500">
+                        <span className="truncate">{label || file.senderId}</span>
+                        <span>·</span>
+                        <span>{formatTime(file.timestamp)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : groupedMessages.map((group) => (
           <div key={group.label} className="mb-4">
             <div className="mb-3 flex items-center gap-3">
               <div className="h-px flex-1 bg-[#eee9df] dark:bg-zinc-900" />
