@@ -95,7 +95,6 @@ const loginMeshGroups = [
   { id: "c", label: "User C 和 Agents", x: 130, y: 304, width: 160, height: 106, stroke: "#fbbf24" },
 ];
 
-const loginClaimLinks = loginMeshAgents.map((agent) => [`${agent.owner}-user`, agent.id] as const);
 const loginInsideLinks = [
   ["a-codex", "a-claude"], ["a-codex", "a-openclaw"], ["a-claude", "a-openclaw"],
   ["b-codex", "b-claude"], ["b-codex", "b-openclaw"], ["b-claude", "b-openclaw"],
@@ -108,16 +107,16 @@ const loginCrossLinks = [
   ["b-codex", "c-openclaw"],
 ];
 
-const renderLoginMeshLine = (link: readonly string[], index: number, kind: "claim" | "inside" | "cross") => {
+const renderLoginMeshLine = (link: readonly string[], index: number, kind: "inside" | "cross") => {
   const from = loginMeshNodes[link[0]];
   const to = loginMeshNodes[link[1]];
   if (!from || !to) return null;
-  const stroke = kind === "claim" ? "#5eead4" : kind === "inside" ? "#fbbf24" : "#a5b4fc";
-  const dash = kind === "claim" ? "3 9" : kind === "inside" ? "7 8" : "8 7";
-  const width = kind === "claim" ? 1.2 : kind === "inside" ? 2 : 2.4;
+  const stroke = kind === "inside" ? "#fbbf24" : "#a5b4fc";
+  const dash = kind === "inside" ? "7 8" : "8 7";
+  const width = kind === "inside" ? 2 : 2.4;
   return (
     <g key={`${kind}-${link[0]}-${link[1]}`}>
-      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={stroke} strokeWidth={width + 2} strokeLinecap="round" opacity={kind === "claim" ? 0.08 : 0.18} />
+      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={stroke} strokeWidth={width + 2} strokeLinecap="round" opacity="0.18" />
       <motion.line
         x1={from.x}
         y1={from.y}
@@ -128,7 +127,7 @@ const renderLoginMeshLine = (link: readonly string[], index: number, kind: "clai
         strokeLinecap="round"
         strokeDasharray={dash}
         initial={{ opacity: 0.18 }}
-        animate={{ strokeDashoffset: [0, -32], opacity: kind === "claim" ? [0.24, 0.48, 0.24] : [0.42, 0.9, 0.42] }}
+        animate={{ strokeDashoffset: [0, -32], opacity: [0.42, 0.9, 0.42] }}
         transition={{ duration: kind === "cross" ? 2.8 : 3.2, repeat: Infinity, ease: "linear", delay: index * 0.1 }}
       />
     </g>
@@ -482,7 +481,6 @@ export default function LoginPage() {
                       </text>
                     </g>
                   ))}
-                  {loginClaimLinks.map((link, index) => renderLoginMeshLine(link, index, "claim"))}
                   {loginInsideLinks.map((link, index) => renderLoginMeshLine(link, index, "inside"))}
                   {loginCrossLinks.map((link, index) => renderLoginMeshLine(link, index, "cross"))}
                 </svg>

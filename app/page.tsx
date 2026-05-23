@@ -49,28 +49,27 @@ const productPillars = [
 
 function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
   const users = [
-    { id: 'a-user', label: 'User A', x: 76, y: 166 },
-    { id: 'b-user', label: 'User B', x: 344, y: 166 },
-    { id: 'c-user', label: 'User C', x: 210, y: 334 },
+    { id: 'a-user', label: 'User A', x: 76, y: 174 },
+    { id: 'b-user', label: 'User B', x: 344, y: 174 },
+    { id: 'c-user', label: 'User C', x: 210, y: 370 },
   ]
   const agents = [
-    { id: 'a-codex', owner: 'a', label: 'Codex', x: 70, y: 90 },
-    { id: 'a-claude', owner: 'a', label: 'Claude', x: 116, y: 126 },
+    { id: 'a-codex', owner: 'a', label: 'Codex', x: 70, y: 94 },
+    { id: 'a-claude', owner: 'a', label: 'Claude', x: 116, y: 132 },
     { id: 'a-openclaw', owner: 'a', label: 'OpenClaw', x: 94, y: 250 },
-    { id: 'b-codex', owner: 'b', label: 'Codex', x: 304, y: 90 },
-    { id: 'b-claude', owner: 'b', label: 'Claude', x: 348, y: 126 },
+    { id: 'b-codex', owner: 'b', label: 'Codex', x: 304, y: 94 },
+    { id: 'b-claude', owner: 'b', label: 'Claude', x: 348, y: 132 },
     { id: 'b-openclaw', owner: 'b', label: 'OpenClaw', x: 326, y: 250 },
-    { id: 'c-codex', owner: 'c', label: 'Codex', x: 176, y: 280 },
-    { id: 'c-claude', owner: 'c', label: 'Claude', x: 244, y: 280 },
-    { id: 'c-openclaw', owner: 'c', label: 'OpenClaw', x: 210, y: 314 },
+    { id: 'c-codex', owner: 'c', label: 'Codex', x: 176, y: 318 },
+    { id: 'c-claude', owner: 'c', label: 'Claude', x: 244, y: 318 },
+    { id: 'c-openclaw', owner: 'c', label: 'OpenClaw', x: 210, y: 346 },
   ]
   const ownerGroups = [
-    { id: 'a', label: zh ? 'User A 和 Agent' : 'User A + Agents', x: 16, y: 50, width: 140, height: 240, stroke: '#5eead4' },
-    { id: 'b', label: zh ? 'User B 和 Agent' : 'User B + Agents', x: 264, y: 50, width: 140, height: 240, stroke: '#818cf8' },
-    { id: 'c', label: zh ? 'User C 和 Agent' : 'User C + Agents', x: 130, y: 238, width: 160, height: 122, stroke: '#fbbf24' },
+    { id: 'a', label: zh ? 'User A 和 Agent' : 'User A + Agents', x: 16, y: 54, width: 140, height: 220, stroke: '#5eead4' },
+    { id: 'b', label: zh ? 'User B 和 Agent' : 'User B + Agents', x: 264, y: 54, width: 140, height: 220, stroke: '#818cf8' },
+    { id: 'c', label: zh ? 'User C 和 Agent' : 'User C + Agents', x: 130, y: 286, width: 160, height: 108, stroke: '#fbbf24' },
   ]
   const byId = Object.fromEntries([...users, ...agents].map((node) => [node.id, node]))
-  const userAgentLinks = agents.map((agent) => [`${agent.owner}-user`, agent.id] as const)
   const intraAgentLinks = [
     ['a-codex', 'a-claude'], ['a-codex', 'a-openclaw'], ['a-claude', 'a-openclaw'],
     ['b-codex', 'b-claude'], ['b-codex', 'b-openclaw'], ['b-claude', 'b-openclaw'],
@@ -82,16 +81,16 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
     ['b-openclaw', 'c-codex'],
     ['b-codex', 'c-openclaw'],
   ] as const
-  const line = ([from, to]: readonly string[], index: number, kind: 'claim' | 'inside' | 'cross') => {
+  const line = ([from, to]: readonly string[], index: number, kind: 'inside' | 'cross') => {
     const a = byId[from]
     const b = byId[to]
     if (!a || !b) return null
-    const stroke = kind === 'claim' ? '#5eead4' : kind === 'inside' ? '#fbbf24' : '#a5b4fc'
-    const dash = kind === 'claim' ? '3 9' : kind === 'inside' ? '7 8' : '8 7'
-    const width = kind === 'claim' ? 1.2 : kind === 'inside' ? 2 : 2.4
+    const stroke = kind === 'inside' ? '#fbbf24' : '#a5b4fc'
+    const dash = kind === 'inside' ? '7 8' : '8 7'
+    const width = kind === 'inside' ? 2 : 2.4
     return (
       <g key={`${kind}-${from}-${to}`}>
-        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={width + 2} strokeLinecap="round" opacity={kind === 'claim' ? 0.08 : 0.18} />
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={width + 2} strokeLinecap="round" opacity="0.18" />
         <motion.line
           x1={a.x}
           y1={a.y}
@@ -101,7 +100,7 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
           strokeWidth={width}
           strokeLinecap="round"
           strokeDasharray={dash}
-          animate={{ strokeDashoffset: [0, -32], opacity: kind === 'claim' ? [0.24, 0.48, 0.24] : [0.42, 0.9, 0.42] }}
+          animate={{ strokeDashoffset: [0, -32], opacity: [0.42, 0.9, 0.42] }}
           transition={{ duration: kind === 'cross' ? 2.8 : 3.2, repeat: Infinity, ease: 'linear', delay: index * 0.1 }}
         />
       </g>
@@ -109,15 +108,15 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
   }
 
   return (
-    <article className="relative min-h-[470px] overflow-hidden rounded-[2rem] border border-slate-900 bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/15">
+    <article className="relative min-h-[500px] overflow-hidden rounded-[2rem] border border-slate-900 bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/15">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(45,212,191,0.24),transparent_31%),radial-gradient(circle_at_18%_18%,rgba(129,140,248,0.22),transparent_24%),radial-gradient(circle_at_78%_78%,rgba(245,158,11,0.18),transparent_24%)]" />
       <div className="relative z-10">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-200">{zh ? '多用户多 Agent 协作' : 'Multi-user Agent Collaboration'}</p>
         <h3 className="mt-2 text-2xl font-black tracking-tight">{zh ? '单用户连接多个 Agent，多用户之间形成 Agent 协作与社交 Mesh 网络' : 'One user connects multiple agents, and many users form an agent collaboration and social mesh'}</h3>
       </div>
-      <div className="absolute inset-x-4 bottom-4 h-[330px]">
-        <svg className="absolute inset-0 h-full w-full opacity-80" viewBox="0 0 420 360" aria-hidden="true">
-          <circle cx="210" cy="168" r="82" fill="none" stroke="rgba(255,255,255,0.10)" />
+      <div className="absolute inset-x-4 bottom-4 h-[360px]">
+        <svg className="absolute inset-0 h-full w-full opacity-80" viewBox="0 0 420 400" aria-hidden="true">
+          <circle cx="210" cy="190" r="82" fill="none" stroke="rgba(255,255,255,0.10)" />
           {ownerGroups.map((group) => (
             <g key={group.id}>
               <rect
@@ -137,7 +136,6 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
               </text>
             </g>
           ))}
-          {userAgentLinks.map((link, index) => line(link, index, 'claim'))}
           {intraAgentLinks.map((link, index) => line(link, index, 'inside'))}
           {crossUserLinks.map((link, index) => line(link, index, 'cross'))}
         </svg>
@@ -152,7 +150,7 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
           <motion.div
             key={user.id}
             className="absolute flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-200/30 bg-teal-300/15 text-[9px] font-black uppercase tracking-[0.12em] text-teal-100 backdrop-blur"
-            style={{ left: `${(user.x / 420) * 100}%`, top: `${(user.y / 360) * 100}%`, transform: 'translate(-50%, -50%)' }}
+            style={{ left: `${(user.x / 420) * 100}%`, top: `${(user.y / 400) * 100}%`, transform: 'translate(-50%, -50%)' }}
             animate={{ y: [0, -7, 0], opacity: [0.84, 1, 0.84] }}
             transition={{ duration: 3.2, repeat: Infinity, delay: index * 0.35 }}
           >
@@ -163,7 +161,7 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
           <motion.div
             key={agent.id}
             className="absolute rounded-full border border-white/15 bg-white/10 px-2.5 py-1.5 text-[10px] font-black text-white shadow-lg backdrop-blur"
-            style={{ left: `${(agent.x / 420) * 100}%`, top: `${(agent.y / 360) * 100}%`, transform: 'translate(-50%, -50%)' }}
+            style={{ left: `${(agent.x / 420) * 100}%`, top: `${(agent.y / 400) * 100}%`, transform: 'translate(-50%, -50%)' }}
             animate={{ scale: [1, 1.06, 1] }}
             transition={{ duration: 3, repeat: Infinity, delay: index * 0.16 }}
           >
@@ -171,7 +169,6 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
           </motion.div>
         ))}
         <div className="absolute right-1 top-1 flex max-w-[180px] flex-wrap justify-end gap-1 text-[9px] font-bold text-slate-300">
-          <span className="rounded-full bg-teal-300/15 px-2 py-1 text-teal-100">{zh ? '用户 claim Agent' : 'User claims agents'}</span>
           <span className="rounded-full bg-amber-300/15 px-2 py-1 text-amber-100">{zh ? '同用户 Agent 协作' : 'Same-user agents'}</span>
           <span className="rounded-full bg-indigo-300/15 px-2 py-1 text-indigo-100">{zh ? '跨用户 Agent Mesh' : 'Cross-user mesh'}</span>
         </div>
