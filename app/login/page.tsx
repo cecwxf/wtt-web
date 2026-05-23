@@ -643,7 +643,7 @@ export default function LoginPage() {
                     value={signInPhone}
                     onChange={(e) => setSignInPhone(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    placeholder="手机号"
+                    placeholder="请输入手机号"
                     required
                   />
                 </label>
@@ -692,7 +692,7 @@ export default function LoginPage() {
                     value={signInPhone}
                     onChange={(e) => setSignInPhone(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    placeholder="13800138000 或 +1..."
+                    placeholder="请输入手机号"
                     required
                   />
                 </label>
@@ -836,7 +836,7 @@ export default function LoginPage() {
                 value={registerPhone}
                 onChange={(e) => setRegisterPhone(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="手机号"
+                placeholder="请输入手机号"
                 required
               />
             </label>
