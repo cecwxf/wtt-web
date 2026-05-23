@@ -148,12 +148,18 @@ function roleTone(agentId: string, role?: AgentRoleTemplate) {
   return ROLE_TONES[hashText(key) % ROLE_TONES.length] || ROLE_TONES[0]
 }
 
-function agentTooltip(agent: AgentOption, role: AgentRoleTemplate) {
+function agentTooltip(agent: AgentOption, role: AgentRoleTemplate, runtime?: AgentRuntimeInfo) {
+  const workdir = runtime?.workdir || runtime?.git?.repo || runtime?.workdir_name || ''
+  const git = runtime?.git
   return [
     agent.display_name || agent.agent_id,
     `${role.label} / ${role.shortLabel}`,
     `agentID: ${agent.agent_id}`,
-  ].join('\n')
+    workdir ? `workdir: ${workdir}` : '',
+    git?.branch ? `branch: ${git.branch}${git.dirty ? ' (dirty)' : ''}` : '',
+    runtime?.adapter || runtime?.kind ? `adapter: ${runtime.adapter || runtime.kind}` : '',
+    runtime?.hostname ? `host: ${runtime.hostname}` : '',
+  ].filter(Boolean).join('\n')
 }
 
 function stripTaskPrefix(name: string): string {
@@ -469,7 +475,9 @@ export function TopicColumn(props: TopicColumnProps) {
             const online = isAgentOnline(agent.agent_id)
             const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
             const tone = roleTone(agent.agent_id, role)
-            const runtimeText = selected ? formatRuntime(agentRuntimeMap?.[agent.agent_id]) : ''
+            const runtime = agentRuntimeMap?.[agent.agent_id]
+            const runtimeText = formatRuntime(runtime)
+            const hoverTitle = agentTooltip(agent, role, runtime)
             const menuOpen = agentMenuFor === agent.agent_id
 
             return (
@@ -483,7 +491,7 @@ export function TopicColumn(props: TopicColumnProps) {
                     event.preventDefault()
                     setAgentMenuFor(agent.agent_id)
                   }}
-                  title={agentTooltip(agent, role)}
+                  title={hoverTitle}
                   className={`group flex w-full flex-col items-center justify-center rounded-xl border px-1 py-1.5 text-center transition ${
                     selected
                       ? tone.selected
@@ -498,7 +506,7 @@ export function TopicColumn(props: TopicColumnProps) {
                       }`}
                     />
                   </span>
-                  <span className={`mt-1 max-w-full truncate text-[9px] font-black leading-none ${tone.label}`} title={role.label}>
+                  <span className={`mt-1 max-w-full truncate text-[9px] font-black leading-none ${tone.label}`} title={hoverTitle}>
                     {role.shortLabel}
                   </span>
 
