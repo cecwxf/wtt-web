@@ -12,6 +12,7 @@ import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useAgentId } from '@/lib/hooks/use-agent-id'
+import { useViewportClass } from '@/lib/hooks/use-viewport-class'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
@@ -1423,6 +1424,7 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMes
 
 export default function ArenaChallengePage({ params }: { params: { id: string } }) {
   const { data: session } = useSession()
+  const viewport = useViewportClass()
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [payload, setPayload] = useState<ChallengePayload | null>(null)
   const [locale, setLocale] = useState<Locale>('zh')
@@ -1455,7 +1457,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   function startPanelResize() {
     return (event: React.PointerEvent<HTMLDivElement>) => {
-      if (isCoding) return
+      if (isCoding || stackedArenaLayout) return
       event.preventDefault()
       const bounds = layoutRef.current?.getBoundingClientRect()
       if (!bounds) return
@@ -1474,7 +1476,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   function startChatWhiteboardResize() {
     return (event: React.PointerEvent<HTMLDivElement>) => {
-      if (isCoding || isGaokaoVolunteer) return
+      if (isCoding || isGaokaoVolunteer || stackedArenaLayout) return
       event.preventDefault()
       const chatPanel = event.currentTarget.previousElementSibling as HTMLElement | null
       const whiteboardPanel = event.currentTarget.nextElementSibling as HTMLElement | null
@@ -2170,46 +2172,54 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const submissionIsOpenCL = isOpenCLProvider(submission?.judge_provider)
   const runtimeLabel = submissionIsOpenCL ? 'kernel runtime' : 'runtime'
   const memoryLabel = submissionIsOpenCL ? 'kernel memory' : 'memory'
+  const stackedArenaLayout = !isCoding && viewport.isCompact
+  const chatColumnMin = viewport.isCompact ? 320 : 360
 
-  const arenaLayoutStyle = !isCoding
+  const arenaLayoutStyle = !isCoding && !stackedArenaLayout
     ? {
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftPanelWidth}px minmax(560px, 1fr)`
         : whiteboardExpanded
-        ? `${chatPanelWidth ? `minmax(360px, ${chatPanelWidth}px)` : 'minmax(360px, 1fr)'} 6px minmax(360px, 1fr)`
-        : `${leftPanelWidth}px 6px ${chatPanelWidth ? `minmax(360px, ${chatPanelWidth}px)` : 'minmax(360px, 1fr)'} 6px minmax(360px, 1fr)`,
+        ? `${chatPanelWidth ? `minmax(${chatColumnMin}px, ${chatPanelWidth}px)` : `minmax(${chatColumnMin}px, 1fr)`} 6px minmax(${chatColumnMin}px, 1fr)`
+        : `${leftPanelWidth}px 6px ${chatPanelWidth ? `minmax(${chatColumnMin}px, ${chatPanelWidth}px)` : `minmax(${chatColumnMin}px, 1fr)`} 6px minmax(${chatColumnMin}px, 1fr)`,
     }
     : undefined
 
   return (
-    <main className="min-h-screen bg-[#151515] text-gray-100">
-      <div className="flex h-screen flex-col overflow-hidden">
-        <header className="flex shrink-0 items-center justify-between border-b border-gray-800 bg-[#151515]/95 px-4 py-3 backdrop-blur">
-          <div className="flex items-center gap-5">
-            <Link href="/arena" className="bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-2xl font-black text-transparent">WTT Arena</Link>
-            <div className="hidden items-center gap-4 text-sm text-gray-500 md:flex">
+    <main className="min-h-[100dvh] bg-[#151515] text-gray-100">
+      <div className="flex h-[100dvh] flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-800 bg-[#151515]/95 px-3 py-2 backdrop-blur sm:px-4 sm:py-3">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+            <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">WTT Arena</Link>
+            <div className="hidden items-center gap-4 text-sm text-gray-500 lg:flex">
               <Link href="/arena" className="hover:text-[#3ce8e2]">{t.challenges}</Link>
               <span>{t.playground}</span>
               <span>{t.discuss}</span>
             </div>
           </div>
-          <div className="flex items-center gap-3 text-xs text-gray-500">
-            <button onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} className="rounded-md border border-gray-800 bg-[#202020] px-3 py-1 font-bold text-gray-300 hover:border-[#3ce8e2] hover:text-[#3ce8e2]">
+          <div className="flex shrink-0 items-center gap-2 text-xs text-gray-500 sm:gap-3">
+            <button onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} className="rounded-md border border-gray-800 bg-[#202020] px-2.5 py-1 font-bold text-gray-300 hover:border-[#3ce8e2] hover:text-[#3ce8e2] sm:px-3">
               {locale === 'zh' ? 'English' : '中文'}
             </button>
-            <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2]">OpenCL · Mac runner</span>
-            <span>{t.runner}</span>
+            <span className="hidden rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2] md:inline">OpenCL · Mac runner</span>
+            <span className="hidden sm:inline">{t.runner}</span>
           </div>
         </header>
 
         <div
           ref={layoutRef}
-          className={`grid min-h-0 flex-1 gap-3 overflow-hidden p-3 ${isCoding ? 'xl:grid-cols-[32%_1fr_480px] lg:grid-cols-[38%_62%]' : ''}`}
+          className={`grid min-h-0 flex-1 gap-2 p-2 lg:gap-3 lg:p-3 ${
+            isCoding
+              ? 'overflow-hidden lg:grid-cols-[38%_62%] xl:grid-cols-[30%_minmax(0,1fr)_420px] 2xl:grid-cols-[32%_minmax(0,1fr)_480px]'
+              : stackedArenaLayout
+              ? 'grid-cols-1 overflow-y-auto'
+              : 'overflow-hidden'
+          }`}
           style={arenaLayoutStyle}
         >
           {(isCoding || !whiteboardExpanded) && (
           <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
-            <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-800 bg-[#191919] px-4 py-3 text-sm">
+            <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-800 bg-[#191919] px-3 py-2.5 text-sm lg:px-4 lg:py-3">
               {(isGaokaoVolunteer
                 ? [['description', t.consultation]]
                 : [
@@ -2223,11 +2233,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               ))}
             </div>
 
-            <div className="h-full overflow-y-auto p-5 pb-24">
+            <div className="h-full overflow-y-auto p-4 pb-20 lg:p-5 lg:pb-24">
               {activeTab === 'description' && (
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-3xl font-black tracking-tight text-white">{challenge.title}</h1>
+                    <h1 className="text-2xl font-black tracking-tight text-white lg:text-3xl">{challenge.title}</h1>
                     {challengeAccepted && (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
                         ✓ {locale === 'zh' ? '已通过' : 'Accepted'}
@@ -2336,7 +2346,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           </section>
           )}
 
-          {!isCoding && !isGaokaoVolunteer && !whiteboardExpanded && (
+          {!isCoding && !isGaokaoVolunteer && !whiteboardExpanded && !stackedArenaLayout && (
             <div
               role="separator"
               aria-orientation="vertical"
@@ -2404,7 +2414,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           ) : null}
 
           <aside className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 ${isCoding ? 'lg:col-span-2 xl:col-span-1' : ''}`}>
-            <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515]">
+            <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515] lg:min-h-[520px]">
               <div className="border-b border-gray-800 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -2472,7 +2482,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendAgentChat() }}
                   placeholder={t.chatPlaceholder}
                   rows={4}
-                  className="min-h-[96px] w-full resize-y rounded-md border border-gray-800 bg-[#101010] p-3 text-sm leading-6 text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2]"
+                  className="min-h-[72px] w-full resize-y rounded-md border border-gray-800 bg-[#101010] p-3 text-sm leading-6 text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2] lg:min-h-[96px]"
                 />
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
                   <span className="min-w-0 flex-1 truncate">{locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}</span>
@@ -2498,7 +2508,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </div>
           </aside>
 
-          {!isCoding && !isGaokaoVolunteer && (
+          {!isCoding && !isGaokaoVolunteer && !stackedArenaLayout && (
             <div
               role="separator"
               aria-orientation="vertical"

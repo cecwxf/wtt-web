@@ -947,17 +947,17 @@ export default function PostDetailPage() {
 
   return (
     <>
-    <div className="min-h-screen bg-gradient-to-b from-[#f6f7f9] to-[#eef0f4] dark:from-[#0e0e10] dark:to-[#141417]">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-[#f6f7f9] to-[#eef0f4] dark:from-[#0e0e10] dark:to-[#141417]">
       {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex h-[52px] max-w-4xl items-center justify-between gap-3 px-3 sm:h-14 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Link href="/square" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
               <ArrowLeft className="w-4 h-4" />
-              <span className="text-sm">{t('square.title')}</span>
+              <span className="hidden text-sm sm:inline">{t('square.title')}</span>
             </Link>
             <span className="text-gray-300 dark:text-gray-600">/</span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 text-blue-600 dark:text-blue-400 font-medium">
+            <span className="truncate rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:from-blue-900/20 dark:to-indigo-900/20 dark:text-blue-400 sm:px-2.5">
               {post.category}/{post.sub}
             </span>
           </div>
@@ -972,10 +972,10 @@ export default function PostDetailPage() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="mx-auto max-w-4xl px-3 py-4 sm:px-4 sm:py-6">
         {/* ── Article Card ── */}
         <article id={`reply-${post.message_id}`} className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 shadow-sm overflow-hidden mb-5">
-          <div className="p-6 sm:p-8">
+          <div className="p-4 sm:p-6 lg:p-8">
             {isEditing ? (
               /* ── Edit Mode ── */
               <div className="space-y-4">
@@ -1015,7 +1015,7 @@ export default function PostDetailPage() {
               /* ── View Mode ── */
               <>
             <div className="flex items-start justify-between gap-3 mb-5">
-              <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 dark:text-white leading-tight tracking-tight flex-1">
+              <h1 className="flex-1 text-xl font-bold leading-tight tracking-tight text-gray-900 dark:text-white sm:text-2xl lg:text-[28px]">
                 {post.title}
               </h1>
               {isAuthor && token && (
@@ -1031,7 +1031,7 @@ export default function PostDetailPage() {
             </div>
 
             {/* Author card */}
-            <div className="flex items-center gap-3 mb-6 pb-5 border-b border-gray-100 dark:border-gray-800">
+            <div className="mb-5 flex flex-wrap items-center gap-3 border-b border-gray-100 pb-5 dark:border-gray-800 sm:mb-6">
               <Avatar name={resolveAuthorName(post.author, undefined, post.publisher_type, post.author_display_name)} avatarUrl={post.avatar_url} size="md" className="flex-shrink-0 ring-2 ring-gray-100 dark:ring-gray-800" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -1067,7 +1067,7 @@ export default function PostDetailPage() {
                 </div>
               </div>
               {token && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={toggleLike}
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
@@ -1101,7 +1101,7 @@ export default function PostDetailPage() {
             </div>
 
             {/* Article body with clickable images */}
-            <div className="prose prose-base dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed space-y-3 [&_p]:my-2 [&_h2]:mt-6 [&_h2]:mb-3">
+            <div className="prose prose-sm max-w-none space-y-3 leading-relaxed text-gray-800 dark:prose-invert dark:text-gray-200 sm:prose-base [&_h2]:mb-3 [&_h2]:mt-6 [&_p]:my-2">
               {parseRichBlocks(post.body).map((block, bi) => {
                 switch (block.kind) {
                   case 'image':
@@ -1160,7 +1160,7 @@ export default function PostDetailPage() {
           </div>
 
           {token && replyTo === post.message_id && (
-            <div className="px-6 sm:px-8 pb-6">
+            <div className="px-4 pb-5 sm:px-6 sm:pb-6 lg:px-8">
               {renderReplyComposer(true)}
             </div>
           )}
@@ -1168,7 +1168,7 @@ export default function PostDetailPage() {
 
         {/* ── Discussion Section ── */}
         <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800 sm:px-6 sm:py-4">
             <div className="flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-blue-500" />
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">

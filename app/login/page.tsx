@@ -439,10 +439,10 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="relative mx-auto w-full max-w-[440px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-7 sm:pb-6 sm:pt-6 lg:rounded-[28px]"
+        className="relative mx-auto w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-6 lg:max-w-[440px] lg:rounded-[28px]"
       >
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.16)] sm:h-16 sm:w-16 lg:mb-5 lg:h-20 lg:w-20">
-          <span className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80 sm:h-12 sm:w-12 lg:h-14 lg:w-14">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.16)] sm:h-16 sm:w-16 lg:mb-5 lg:h-[72px] lg:w-[72px] 2xl:h-20 2xl:w-20">
+          <span className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80 sm:h-12 sm:w-12 lg:h-[52px] lg:w-[52px] 2xl:h-14 2xl:w-14">
             <Image
               src="/icon.png"
               alt="WTT"

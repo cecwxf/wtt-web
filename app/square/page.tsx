@@ -253,6 +253,8 @@ export default function SquarePage() {
     setSub('')
   }
 
+  const selectedCategory = taxonomy?.categories.find(c => c.name === category)
+
   const toggleLike = async (e: React.MouseEvent, postId: string) => {
     e.preventDefault()
     e.stopPropagation()
@@ -308,10 +310,10 @@ export default function SquarePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0e0e10]">
+    <div className="min-h-[100dvh] bg-[#f6f7f9] dark:bg-[#0e0e10]">
       {/* ── Header ── */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/90 dark:bg-[#1a1a1d]/90 border-b border-gray-200/70 dark:border-gray-800/70">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
+        <div className="mx-auto flex h-[52px] max-w-5xl items-center gap-2 px-3 sm:h-14 sm:px-4 xl:max-w-6xl">
           <div className="flex items-center gap-2 flex-shrink-0">
             <Link href="/feed" className="flex items-center gap-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
               <ArrowLeft className="w-4 h-4" />
@@ -322,7 +324,7 @@ export default function SquarePage() {
             <h1 className="text-base font-bold text-gray-900 dark:text-white">{t('square.title')}</h1>
           </div>
 
-          <nav className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+          <nav className="hidden lg:flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={() => setSort('newest')}
               className={`px-3 py-1.5 text-sm rounded-lg transition-all ${sort !== 'column' ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
@@ -343,7 +345,7 @@ export default function SquarePage() {
             </Link>
           </nav>
 
-          <div className="relative flex items-center transition-all duration-200 flex-1 max-w-xl ml-0 md:ml-2">
+          <div className="relative ml-0 flex min-w-[120px] flex-1 items-center transition-all duration-200 sm:min-w-[180px] lg:ml-2 lg:max-w-sm xl:max-w-xl">
             <Search className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
             <input
               type="text"
@@ -356,7 +358,7 @@ export default function SquarePage() {
             />
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+          <div className="ml-auto flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               onClick={toggleLocale}
               className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all"
@@ -369,10 +371,10 @@ export default function SquarePage() {
             {token && (
               <Link
                 href="/square/compose"
-                className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-full transition-all shadow-sm hover:shadow-md"
+                className="hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:from-blue-600 hover:to-indigo-700 hover:shadow-md md:flex xl:px-3.5"
               >
                 <PenSquare className="w-3.5 h-3.5" />
-                <span>{t('square.compose')}</span>
+                <span className="hidden xl:inline">{t('square.compose')}</span>
               </Link>
             )}
 
@@ -438,9 +440,56 @@ export default function SquarePage() {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 py-5 flex gap-5">
+      <div className="mx-auto max-w-5xl px-3 pt-3 sm:px-4 xl:hidden">
+        <div className="overflow-x-auto rounded-2xl border border-gray-200/80 bg-white p-2 dark:border-gray-800/80 dark:bg-[#1a1a1d]">
+          <div className="flex min-w-max gap-1.5">
+            <button
+              onClick={clearFilter}
+              className={`rounded-full px-2.5 py-1 text-xs transition-all ${
+                !category
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
+              }`}
+            >
+              {t('square.allTopics')}
+            </button>
+            {taxonomy?.categories.map(cat => (
+              <button
+                key={cat.name}
+                onClick={() => selectCategory(cat.name)}
+                className={`rounded-full px-2.5 py-1 text-xs transition-all ${
+                  category === cat.name && !sub
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+          {category && selectedCategory?.subs && (
+            <div className="mt-2 flex min-w-max gap-1.5 border-t border-gray-100 pt-2 dark:border-gray-800">
+              {selectedCategory.subs.map(s => (
+                <button
+                  key={s}
+                  onClick={() => selectCategory(category, s)}
+                  className={`rounded-full px-2 py-0.5 text-[11px] transition-all ${
+                    sub === s
+                      ? 'bg-indigo-100 font-medium text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400'
+                      : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mx-auto flex max-w-5xl gap-4 px-3 py-3 sm:px-4 sm:py-5 xl:max-w-6xl xl:gap-5">
         {/* ── Left Sidebar ── */}
-        <aside className="w-52 flex-shrink-0 hidden lg:block">
+        <aside className="hidden w-52 flex-shrink-0 xl:block">
           <div className="sticky top-[4.5rem] space-y-4">
             {/* Category chips */}
             <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 p-4">
@@ -472,10 +521,10 @@ export default function SquarePage() {
               </div>
 
               {/* Sub-categories when a category is selected */}
-              {category && taxonomy?.categories.find(c => c.name === category)?.subs && (
+              {category && selectedCategory?.subs && (
                 <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                   <div className="flex flex-wrap gap-1.5">
-                    {taxonomy?.categories.find(c => c.name === category)?.subs.map(s => (
+                    {selectedCategory.subs.map(s => (
                       <button
                         key={s}
                         onClick={() => selectCategory(category, s)}
@@ -510,14 +559,14 @@ export default function SquarePage() {
         {/* ── Main Content ── */}
         <main className="flex-1 min-w-0">
           {/* Sort tabs - Telegram pill style */}
-          <div className="flex items-center gap-1 mb-4 p-1 bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80">
+          <div className="mb-3 flex items-center gap-1 rounded-2xl border border-gray-200/80 bg-white p-1 dark:border-gray-800/80 dark:bg-[#1a1a1d] sm:mb-4">
             {(['newest', 'hot', 'agent_picks', 'column'] as SortMode[]).map(s => {
               const Icon = SORT_ICONS[s]
               return (
                 <button
                   key={s}
                   onClick={() => setSort(s)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 text-sm rounded-xl transition-all flex-1 justify-center ${
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-1.5 text-xs transition-all sm:px-3.5 sm:py-2 sm:text-sm ${
                     sort === s
                       ? 'bg-blue-500 text-white font-medium shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
@@ -556,7 +605,7 @@ export default function SquarePage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-2 sm:space-y-2.5">
               {posts.map(post => {
                 const previewImg = extractPreviewImage(post.body)
                 const bodyText = stripHtmlToText(post.body)
@@ -574,7 +623,7 @@ export default function SquarePage() {
                     <div className="flex">
                       {/* Upvote column - Zhihu style */}
                       <div
-                        className="flex flex-col items-center justify-start py-4 px-3 border-r border-gray-100 dark:border-gray-800/60 min-w-[52px] cursor-pointer"
+                        className="flex min-w-[44px] cursor-pointer flex-col items-center justify-start border-r border-gray-100 px-2 py-3 dark:border-gray-800/60 sm:min-w-[52px] sm:px-3 sm:py-4"
                         onClick={(e) => toggleLike(e, post.id)}
                       >
                         <ChevronUp className={`w-5 h-5 transition-colors ${post.liked ? 'text-rose-500' : 'text-gray-300 dark:text-gray-600 group-hover:text-blue-400'}`} />
@@ -582,11 +631,11 @@ export default function SquarePage() {
                       </div>
 
                       {/* Content */}
-                      <div className="flex-1 min-w-0 p-4">
+                      <div className="min-w-0 flex-1 p-3 sm:p-4">
                         {/* Author row */}
                         <div className="flex items-center gap-2 mb-2">
                           <Avatar name={authorName} avatarUrl={post.avatar_url} size="xs" />
-                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[160px]">
+                          <span className="max-w-[110px] truncate text-sm font-medium text-gray-700 dark:text-gray-300 sm:max-w-[160px]">
                             {authorName}
                           </span>
                           {isAgent && (
@@ -660,14 +709,14 @@ export default function SquarePage() {
 
                       {/* Thumbnail - right side (Zhihu style) */}
                       {previewImg && (
-                        <div className="hidden sm:flex items-center pr-4 py-4">
+                        <div className="hidden items-center py-3 pr-3 md:flex lg:py-4 lg:pr-4">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={toThumbnailUrl(previewImg)}
                             alt=""
                             loading="lazy"
                             decoding="async"
-                            className="w-28 h-20 rounded-xl object-cover flex-shrink-0 border border-gray-200/60 dark:border-gray-700/60"
+                            className="h-16 w-24 flex-shrink-0 rounded-xl border border-gray-200/60 object-cover dark:border-gray-700/60 lg:h-20 lg:w-28"
                           />
                         </div>
                       )}

@@ -307,7 +307,7 @@ export function SquareEditor({
       attributes: {
         class: isMini
           ? `prose prose-sm dark:prose-invert max-w-none outline-none px-3 py-3 min-h-[360px] ${RICH_TABLE_CSS} ${RICH_CODE_CSS}`
-          : `prose prose-base dark:prose-invert max-w-none outline-none px-4 py-4 min-h-[820px] ${RICH_TABLE_CSS} ${RICH_CODE_CSS}`,
+          : `prose prose-base dark:prose-invert max-w-none outline-none px-4 py-4 min-h-[520px] lg:min-h-[680px] 2xl:min-h-[820px] ${RICH_TABLE_CSS} ${RICH_CODE_CSS}`,
       },
       handleDrop: (_view, event) => {
         const files = event.dataTransfer?.files

@@ -48,9 +48,9 @@ export function FeedView({ messages, loading = false, onLoadMore, hasMore = fals
   }
 
   return (
-    <div className={`relative grid h-full min-h-0 overflow-hidden ${activeArtifact ? 'grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_440px]' : 'grid-cols-[minmax(0,1fr)]'}`}>
+    <div className={`relative grid h-full min-h-0 overflow-hidden ${activeArtifact ? 'grid-cols-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_440px]' : 'grid-cols-[minmax(0,1fr)]'}`}>
       <div className="min-h-0 overflow-y-auto">
-      <div className="mx-auto max-w-2xl space-y-4 p-6">
+      <div className="mx-auto max-w-2xl space-y-3 p-3 sm:p-4 lg:space-y-4 xl:p-6">
         {visibleMessages.length === 0 && !loading && (
           <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center">
             <p className="text-sm text-slate-400">No messages yet</p>
@@ -73,7 +73,7 @@ export function FeedView({ messages, loading = false, onLoadMore, hasMore = fals
       </div>
 
       {activeArtifact && (
-        <div className="hidden min-h-0 border-l border-slate-200 bg-slate-950 p-3 lg:block">
+        <div className="hidden min-h-0 border-l border-slate-200 bg-slate-950 p-2 xl:block 2xl:p-3">
           <ArtifactPreviewPanel artifact={activeArtifact} onClose={() => setActiveArtifact(null)} className="h-full" />
         </div>
       )}
@@ -81,7 +81,7 @@ export function FeedView({ messages, loading = false, onLoadMore, hasMore = fals
       {onCompose && (
         <button
           onClick={onCompose}
-          className="fixed bottom-8 right-8 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500 text-white shadow-lg transition hover:bg-indigo-600 hover:scale-110"
+          className="fixed bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500 text-white shadow-lg transition hover:scale-110 hover:bg-indigo-600 lg:bottom-8 lg:right-8 lg:h-14 lg:w-14"
           title="Compose message"
         >
           <PenSquare className="h-6 w-6" />
