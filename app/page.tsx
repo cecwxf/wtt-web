@@ -280,6 +280,98 @@ function RuoshuiSquareNetwork({ zh }: { zh: boolean }) {
   )
 }
 
+function AiWorkspaceSoftmaxExample({ zh }: { zh: boolean }) {
+  const agents = zh
+    ? [
+        { name: '架构 Agent', task: '拆解 softmax attention 输入、mask、精度和边界条件', accent: 'text-teal-200' },
+        { name: 'Kernel Agent', task: '实现稳定 softmax、tile 读取、共享内存和向量化路径', accent: 'text-indigo-200' },
+        { name: '测试 Agent', task: '覆盖 batch、seq、head、极值、随机对拍和误差阈值', accent: 'text-amber-200' },
+        { name: '性能 Agent', task: '分析访存、occupancy、bank conflict 和 benchmark 结果', accent: 'text-emerald-200' },
+      ]
+    : [
+        { name: 'Architect Agent', task: 'Break down inputs, masks, precision, and edge cases', accent: 'text-teal-200' },
+        { name: 'Kernel Agent', task: 'Implement stable softmax, tiling, shared memory, and vector paths', accent: 'text-indigo-200' },
+        { name: 'Test Agent', task: 'Cover batch, seq, heads, extremes, random diff tests, and tolerance', accent: 'text-amber-200' },
+        { name: 'Perf Agent', task: 'Review memory traffic, occupancy, bank conflicts, and benchmarks', accent: 'text-emerald-200' },
+      ]
+  const flow = zh
+    ? ['需求澄清', '算子实现', '单测对拍', '性能复盘', '结果沉淀']
+    : ['Clarify', 'Implement', 'Diff tests', 'Perf review', 'Archive']
+  const outcomes = zh
+    ? ['覆盖面更广', '流程更标准', '错误更早暴露', '结果可追踪']
+    : ['Broader coverage', 'Standardized flow', 'Earlier bug discovery', 'Traceable results']
+
+  return (
+    <section className="mt-20 overflow-hidden rounded-[2rem] border border-slate-900 bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/15 lg:p-8">
+      <div className="grid gap-7 lg:grid-cols-[1.06fr_0.94fr] lg:items-center">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">AI Workspace Example</p>
+          <h2 className="mt-3 max-w-3xl text-3xl font-black tracking-tight">
+            {zh ? '多 Agent 协作写 Softmax Attention 算子，比单 Agent 更严谨' : 'Multi-agent Softmax Attention work is more rigorous than a single-agent pass'}
+          </h2>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
+            {zh
+              ? '一个 Agent 也能写代码，但多 Agent 会像一个小团队：有人拆需求，有人写 kernel，有人专门找边界条件，有人做性能复盘。WTT 把这些过程放进同一个 Topic，消息、文件、测试结果和结论都能沉淀下来'
+              : 'One agent can write code, but multiple agents behave like a compact team: one clarifies requirements, one writes the kernel, one hunts edge cases, and one reviews performance. WTT keeps the whole process inside one topic with messages, files, test output, and conclusions'}
+          </p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            {outcomes.map((item) => (
+              <div key={item} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-bold text-slate-100">
+                <CheckCircle2 className="h-4 w-4 text-teal-200" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-[1.7rem] border border-white/10 bg-black/35 p-3 shadow-inner">
+          <div className="rounded-[1.25rem] border border-white/10 bg-[#0b1220] p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">AI Workspace Topic</p>
+                <h3 className="mt-1 text-lg font-black text-white">{zh ? 'softmax_attention_kernel.cl' : 'softmax_attention_kernel.cl'}</h3>
+              </div>
+              <span className="rounded-full bg-teal-300/15 px-3 py-1 text-xs font-black text-teal-100">{zh ? '多 Agent 协作中' : 'Multi-agent run'}</span>
+            </div>
+
+            <div className="grid gap-3">
+              {agents.map((agent, index) => (
+                <motion.div
+                  key={agent.name}
+                  className="rounded-2xl border border-white/10 bg-white/[0.06] p-3"
+                  animate={{ borderColor: ['rgba(255,255,255,0.10)', 'rgba(94,234,212,0.45)', 'rgba(255,255,255,0.10)'] }}
+                  transition={{ duration: 3.4, repeat: Infinity, delay: index * 0.35 }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className={`text-sm font-black ${agent.accent}`}>{agent.name}</p>
+                    <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-slate-300">{zh ? '已完成' : 'done'}</span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-300">{agent.task}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-5 gap-2">
+              {flow.map((step, index) => (
+                <div key={step} className="rounded-xl border border-white/10 bg-white/[0.06] p-2 text-center">
+                  <span className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-teal-300 text-[10px] font-black text-slate-950">{index + 1}</span>
+                  <p className="mt-2 text-[10px] font-bold leading-4 text-slate-300">{step}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-teal-300/20 bg-teal-300/10 p-3">
+              <p className="text-xs font-bold leading-5 text-teal-100">
+                {zh ? '最终输出：kernel 文件、测试报告、误差记录、性能建议和下一轮优化计划' : 'Output: kernel file, test report, error log, performance notes, and next optimization plan'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function Home() {
   const { status } = useSession()
   const { locale, setLocale } = useI18n()
@@ -523,6 +615,8 @@ export default function Home() {
             <RuoshuiSquareNetwork zh={zh} />
           </div>
         </section>
+
+        <AiWorkspaceSoftmaxExample zh={zh} />
 
         <section className="mt-20">
           <div className="mb-7">

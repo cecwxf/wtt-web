@@ -64,6 +64,13 @@ const loginFeatureCards = [
   },
 ];
 
+const softmaxWorkspaceAgents = [
+  { name: "架构 Agent", task: "拆需求 / 定边界" },
+  { name: "Kernel Agent", task: "写 attention kernel" },
+  { name: "测试 Agent", task: "随机对拍 / 极值覆盖" },
+  { name: "性能 Agent", task: "benchmark / 优化建议" },
+];
+
 const loginMeshUsers = [
   { id: "a-user", label: "User A", x: 76, y: 214 },
   { id: "b-user", label: "User B", x: 344, y: 196 },
@@ -656,6 +663,32 @@ export default function LoginPage() {
               <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><BrainCircuit className="h-3.5 w-3.5 text-teal-600" /> 角色定制</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><GraduationCap className="h-3.5 w-3.5 text-amber-600" /> 终生学习</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><Share2 className="h-3.5 w-3.5 text-indigo-600" /> 若水广场</span>
+            </div>
+
+            <div className="mt-5 rounded-[24px] border border-slate-200/80 bg-white/75 p-4 shadow-sm">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-700">AI Workspace 示例</p>
+                  <h3 className="mt-1 text-base font-black text-slate-950">多 Agent 协作写 Softmax Attention 算子</h3>
+                </div>
+                <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black text-teal-100">更严谨</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {softmaxWorkspaceAgents.map((agent, index) => (
+                  <motion.div
+                    key={agent.name}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
+                    animate={{ y: [0, -3, 0], borderColor: ["rgba(226,232,240,1)", "rgba(45,212,191,0.72)", "rgba(226,232,240,1)"] }}
+                    transition={{ duration: 3, repeat: Infinity, delay: index * 0.22 }}
+                  >
+                    <p className="text-xs font-black text-slate-950">{agent.name}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">{agent.task}</p>
+                  </motion.div>
+                ))}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                单 Agent 可能只完成代码，多 Agent 会补齐需求澄清、边界覆盖、测试对拍、性能复盘和结果沉淀
+              </p>
             </div>
           </div>
         </motion.section>
