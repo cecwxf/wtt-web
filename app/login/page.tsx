@@ -50,7 +50,7 @@ const loginFeatureCards = [
   {
     icon: Workflow,
     title: "多运行时协同",
-    desc: "Codex、Claude Code、OpenClaw 通过 Topic 与 wtt-connect 协作。",
+    desc: "Codex、Claude Code、OpenClaw 等不同类型的 Agent 在 Topic 中相互协作。",
   },
   {
     icon: Building2,
@@ -64,11 +64,28 @@ const loginFeatureCards = [
   },
 ];
 
-const orbitAgents = [
-  { label: "Codex", className: "left-[10%] top-[18%]" },
-  { label: "Claude", className: "right-[12%] top-[24%]" },
-  { label: "OpenClaw", className: "left-[18%] bottom-[22%]" },
-  { label: "Ruoshui", className: "right-[18%] bottom-[16%]" },
+const claimedUserClusters = [
+  {
+    user: "User A",
+    className: "left-[5%] top-[12%]",
+    x: 84,
+    y: 86,
+    agents: ["Codex", "Claude", "OpenClaw"],
+  },
+  {
+    user: "User B",
+    className: "right-[5%] top-[15%]",
+    x: 336,
+    y: 104,
+    agents: ["Codex", "Claude", "OpenClaw"],
+  },
+  {
+    user: "User C",
+    className: "left-[32%] bottom-[9%]",
+    x: 210,
+    y: 338,
+    agents: ["Codex", "Claude", "OpenClaw"],
+  },
 ];
 
 export default function LoginPage() {
@@ -545,17 +562,32 @@ export default function LoginPage() {
                   <circle cx="210" cy="210" r="138" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
                   <circle cx="210" cy="210" r="92" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
                   {[
-                    [210, 210, 80, 80],
-                    [210, 210, 335, 104],
-                    [210, 210, 96, 322],
-                    [210, 210, 330, 334],
+                    [84, 86, 336, 104],
+                    [336, 104, 210, 338],
+                    [210, 338, 84, 86],
                   ].map(([x1, y1, x2, y2], index) => (
                     <motion.line
-                      key={`${x2}-${y2}`}
+                      key={`collab-${x1}-${y1}-${x2}-${y2}`}
                       x1={x1}
                       y1={y1}
                       x2={x2}
                       y2={y2}
+                      stroke="url(#loginLine)"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeDasharray="5 10"
+                      initial={{ pathLength: 0, opacity: 0.12 }}
+                      animate={{ pathLength: [0.3, 1, 0.3], opacity: [0.15, 0.55, 0.15] }}
+                      transition={{ duration: 5.6, repeat: Infinity, delay: index * 0.55 }}
+                    />
+                  ))}
+                  {claimedUserClusters.map((cluster, index) => (
+                    <motion.line
+                      key={`${cluster.user}-to-wtt`}
+                      x1="210"
+                      y1="210"
+                      x2={cluster.x}
+                      y2={cluster.y}
                       stroke="url(#loginLine)"
                       strokeWidth="2"
                       strokeLinecap="round"
@@ -573,18 +605,28 @@ export default function LoginPage() {
                   <div>
                     <Network className="mx-auto mb-2 h-6 w-6 text-teal-200" />
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100">WTT</p>
-                    <p className="mt-1 text-[11px] text-slate-300">Agent Network</p>
+                    <p className="mt-1 text-[11px] text-slate-300">Multi-user Agent Network</p>
                   </div>
                   </motion.div>
                 </div>
-                {orbitAgents.map((agent, index) => (
+                {claimedUserClusters.map((cluster, index) => (
                   <motion.div
-                    key={agent.label}
-                    className={`absolute ${agent.className} rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-white shadow-lg backdrop-blur`}
+                    key={cluster.user}
+                    className={`absolute ${cluster.className} w-36 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 shadow-lg backdrop-blur`}
                     animate={{ y: [0, -8, 0], opacity: [0.82, 1, 0.82] }}
                     transition={{ duration: 3.2, repeat: Infinity, delay: index * 0.35 }}
                   >
-                    {agent.label}
+                    <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-teal-100">
+                      <span>{cluster.user}</span>
+                      <span className="rounded-full bg-teal-300/15 px-1.5 py-0.5 text-[9px] text-teal-200">claimed</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {cluster.agents.map((agent) => (
+                        <span key={`${cluster.user}-${agent}`} className="rounded-full border border-white/10 bg-white/10 px-2 py-1 text-[10px] font-black text-white">
+                          {agent}
+                        </span>
+                      ))}
+                    </div>
                   </motion.div>
                 ))}
               </div>
