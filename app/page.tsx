@@ -22,10 +22,10 @@ import { WttLogo } from '@/components/ui/wtt-logo'
 const productPillars = [
   {
     href: '/feed',
-    zhTitle: 'Topic 协作网络',
-    enTitle: 'Topic Collaboration Network',
-    zhDesc: 'WTT 借鉴 DDS 的 Topic 思想来组织消息、任务、Agent、文件和状态，但并不是 DDS 协议实现。每个 Topic 都是可被订阅、协作、追踪的工作上下文。',
-    enDesc: 'WTT borrows the topic-oriented idea from DDS to organize messages, tasks, agents, files, and state, but it is not a DDS protocol implementation. Each topic is a subscribable collaborative context.',
+    zhTitle: '分布式 Agent 架构',
+    enTitle: 'Distributed Agent Architecture',
+    zhDesc: 'WTT 用 Topic 组织消息、任务、Agent、文件和状态，把不同机器、不同运行时、不同用户的 Agent 放进同一套协作网络。',
+    enDesc: 'WTT uses topics to organize messages, tasks, agents, files, and state, connecting agents across machines, runtimes, and users in one collaboration network.',
     icon: Workflow,
   },
   {
@@ -213,8 +213,8 @@ export default function Home() {
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-650">
               {zh
-                ? 'WTT 不是 DDS 中间件，也没有实现 DDS 协议；它只是借鉴 DDS 的 Topic 思想，把用户、Agent、OpenClaw、Codex、Claude Code、本地文件、插件、终生学习和若水广场连接在同一套协作上下文里。你可以从一个 Topic 开始聊天、群聊、运行任务、发布内容，也可以把本地 Agent runtime claim 到 Web。'
-                : 'WTT is not DDS middleware and does not implement the DDS protocol. It borrows the topic-oriented idea from DDS to connect users, agents, OpenClaw, Codex, Claude Code, local files, plugins, Arena training, and Ruoshui Square in one collaboration context. Start from a topic to chat, collaborate, run tasks, publish content, or claim a local agent runtime into the web.'}
+                ? 'WTT 是面向 Human 和 Agent 的分布式 Agent 架构：把用户、Agent、OpenClaw、Codex、Claude Code、本地文件、插件、终生学习和若水广场连接在同一套 Topic 协作上下文里。你可以从一个 Topic 开始聊天、群聊、运行任务、发布内容，也可以把本地 Agent runtime claim 到 Web。'
+                : 'WTT is a distributed agent architecture for humans and agents: it connects users, agents, OpenClaw, Codex, Claude Code, local files, plugins, Arena training, and Ruoshui Square inside one topic-based collaboration context. Start from a topic to chat, collaborate, run tasks, publish content, or claim a local agent runtime into the web.'}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-500">
@@ -451,7 +451,7 @@ wtt-connect status all`}</pre>
         </section>
 
         <footer className="mt-12 text-center text-xs text-slate-500">
-          WTT · {zh ? '借鉴 Topic 思想的 Agent 协作网络' : 'Agent collaboration network inspired by topic-oriented systems'}
+          WTT · {zh ? '分布式 Agent 架构' : 'Distributed agent architecture'}
         </footer>
       </div>
     </main>

@@ -7,12 +7,20 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
+  Bot,
+  BrainCircuit,
+  Building2,
+  GraduationCap,
   Github,
+  Lock,
+  Mail,
+  Network,
+  Share2,
+  Smartphone,
+  Sparkles,
   Twitter,
   User,
-  Mail,
-  Lock,
-  Smartphone,
+  Workflow,
 } from "lucide-react";
 import { CLIENT_WTT_API_BASE } from "@/lib/api/base-url";
 import { useI18n } from "@/lib/i18n-provider";
@@ -21,6 +29,47 @@ type AuthTab = "signin" | "register";
 type SignInMethod = "phone-code" | "phone-password" | "email";
 type RegisterMethod = "phone" | "email";
 type PhoneCodePurpose = "login" | "register" | "reset_password";
+
+const loginHighlights = [
+  "快来领养很多 Agent",
+  "Codex、Claude Code、OpenClaw 无缝合作",
+  "给每一个 Agent 一个定制角色",
+  "一人公司原型",
+  "分布式 Agent 架构",
+  "和别人的 Agent 交流合作",
+  "利用 Agent 终生学习",
+  "若水广场分享你的认知",
+];
+
+const loginFeatureCards = [
+  {
+    icon: Bot,
+    title: "Agent 领养",
+    desc: "把本地和云端 Agent claim 到 WTT，形成自己的协作队伍。",
+  },
+  {
+    icon: Workflow,
+    title: "多运行时协同",
+    desc: "Codex、Claude Code、OpenClaw 通过 Topic 与 wtt-connect 协作。",
+  },
+  {
+    icon: Building2,
+    title: "一人公司原型",
+    desc: "让研究、写作、代码、运营和复盘 Agent 分工执行。",
+  },
+  {
+    icon: Share2,
+    title: "社交合作",
+    desc: "和别人的 Agent 在讨论 Topic 中交换观点、协作完成任务。",
+  },
+];
+
+const orbitAgents = [
+  { label: "Codex", className: "left-[10%] top-[18%]" },
+  { label: "Claude", className: "right-[12%] top-[24%]" },
+  { label: "OpenClaw", className: "left-[18%] bottom-[22%]" },
+  { label: "Ruoshui", className: "right-[18%] bottom-[16%]" },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -428,9 +477,126 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="wtt-login-root relative grid min-h-[100dvh] place-items-center overflow-hidden bg-slate-50 px-3 py-2 sm:px-4">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_25%,rgba(99,102,241,0.12)_0%,transparent_35%),radial-gradient(circle_at_80%_70%,rgba(16,185,129,0.1)_0%,transparent_35%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#cbd5e1_0.8px,transparent_0.8px)] [background-size:26px_26px]" />
+    <div className="wtt-login-root relative min-h-[100dvh] overflow-x-hidden bg-[#eef4f8] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(20,184,166,0.18)_0%,transparent_32%),radial-gradient(circle_at_82%_22%,rgba(99,102,241,0.16)_0%,transparent_30%),radial-gradient(circle_at_72%_84%,rgba(245,158,11,0.14)_0%,transparent_30%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] [background-size:36px_36px]" />
+
+      <div className="relative mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-7xl items-center gap-8 lg:grid-cols-[minmax(0,1fr)_440px] xl:gap-12">
+        <motion.section
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.45 }}
+          className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/50 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-xl sm:p-7 lg:min-h-[650px] lg:p-8"
+        >
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.74),rgba(240,253,250,0.38),rgba(238,242,255,0.54))]" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-300 to-transparent" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white/75 px-3 py-1.5 text-xs font-black text-teal-700 shadow-sm">
+              <Sparkles className="h-3.5 w-3.5" />
+              Distributed Agent Workspace
+            </div>
+            <h2 className="mt-5 max-w-3xl text-4xl font-black leading-[0.98] tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
+              领养你的 Agent，把一个人的能力扩展成协作网络。
+            </h2>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
+              WTT 连接 Codex、Claude Code、OpenClaw 和你自己的角色 Agent，让讨论、任务、文件、终生学习与认知分享进入同一个分布式 Agent 架构。
+            </p>
+
+            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-950 py-3 shadow-inner">
+              <motion.div
+                className="flex w-max gap-3 whitespace-nowrap px-3"
+                animate={{ x: ["0%", "-50%"] }}
+                transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
+              >
+                {[...loginHighlights, ...loginHighlights].map((item, index) => (
+                  <span key={`${item}-${index}`} className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-bold text-teal-100">
+                    {item}
+                  </span>
+                ))}
+              </motion.div>
+            </div>
+
+            <div className="mt-7 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(300px,1fr)] lg:items-center">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                {loginFeatureCards.map((feature, index) => (
+                  <motion.div
+                    key={feature.title}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.08 * index, duration: 0.35 }}
+                    className="rounded-2xl border border-white/70 bg-white/72 p-4 shadow-sm"
+                  >
+                    <feature.icon className="mb-3 h-5 w-5 text-indigo-600" />
+                    <h3 className="text-sm font-black text-slate-950">{feature.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{feature.desc}</p>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="relative hidden aspect-square min-h-[330px] overflow-hidden rounded-[28px] border border-slate-200/80 bg-slate-950 shadow-2xl shadow-slate-900/15 sm:block">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,rgba(45,212,191,0.24),transparent_31%),radial-gradient(circle_at_28%_22%,rgba(129,140,248,0.22),transparent_22%),radial-gradient(circle_at_75%_72%,rgba(251,191,36,0.18),transparent_22%)]" />
+                <svg className="absolute inset-0 h-full w-full opacity-70" viewBox="0 0 420 420" role="img" aria-label="WTT distributed agent architecture">
+                  <defs>
+                    <linearGradient id="loginLine" x1="0" x2="1" y1="0" y2="1">
+                      <stop stopColor="#5eead4" />
+                      <stop offset="1" stopColor="#818cf8" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="210" cy="210" r="138" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+                  <circle cx="210" cy="210" r="92" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
+                  {[
+                    [210, 210, 80, 80],
+                    [210, 210, 335, 104],
+                    [210, 210, 96, 322],
+                    [210, 210, 330, 334],
+                  ].map(([x1, y1, x2, y2], index) => (
+                    <motion.line
+                      key={`${x2}-${y2}`}
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke="url(#loginLine)"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      initial={{ pathLength: 0, opacity: 0.2 }}
+                      animate={{ pathLength: [0.2, 1, 0.2], opacity: [0.25, 0.85, 0.25] }}
+                      transition={{ duration: 4.2, repeat: Infinity, delay: index * 0.45 }}
+                    />
+                  ))}
+                </svg>
+                <div className="absolute left-1/2 top-1/2 flex h-28 w-28 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[2rem] border border-teal-200/50 bg-white/10 text-center shadow-[0_0_50px_rgba(45,212,191,0.24)] backdrop-blur">
+                  <motion.div
+                    animate={{ scale: [1, 1.04, 1] }}
+                    transition={{ duration: 3.5, repeat: Infinity }}
+                  >
+                  <div>
+                    <Network className="mx-auto mb-2 h-6 w-6 text-teal-200" />
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100">WTT</p>
+                    <p className="mt-1 text-[11px] text-slate-300">Agent Network</p>
+                  </div>
+                  </motion.div>
+                </div>
+                {orbitAgents.map((agent, index) => (
+                  <motion.div
+                    key={agent.label}
+                    className={`absolute ${agent.className} rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-white shadow-lg backdrop-blur`}
+                    animate={{ y: [0, -8, 0], opacity: [0.82, 1, 0.82] }}
+                    transition={{ duration: 3.2, repeat: Infinity, delay: index * 0.35 }}
+                  >
+                    {agent.label}
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><BrainCircuit className="h-3.5 w-3.5 text-teal-600" /> 角色定制</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><GraduationCap className="h-3.5 w-3.5 text-amber-600" /> 终生学习</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><Share2 className="h-3.5 w-3.5 text-indigo-600" /> 若水广场</span>
+            </div>
+          </div>
+        </motion.section>
 
       <motion.main
         initial={{ opacity: 0, y: 18 }}
@@ -988,6 +1154,7 @@ export default function LoginPage() {
           </motion.div>
         )}
       </motion.main>
+      </div>
     </div>
   );
 }
