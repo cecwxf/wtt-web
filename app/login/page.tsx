@@ -431,7 +431,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-[100dvh] overflow-y-auto overflow-x-hidden bg-slate-50 px-3 py-4 sm:px-4 sm:py-6 lg:py-8">
+    <div className="wtt-login-root relative grid min-h-[100dvh] place-items-center overflow-hidden bg-slate-50 px-3 py-2 sm:px-4">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_25%,rgba(99,102,241,0.12)_0%,transparent_35%),radial-gradient(circle_at_80%_70%,rgba(16,185,129,0.1)_0%,transparent_35%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#cbd5e1_0.8px,transparent_0.8px)] [background-size:26px_26px]" />
 
@@ -439,9 +439,9 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="relative mx-auto w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-6 lg:max-w-[440px] lg:rounded-[28px]"
+        className="wtt-login-card relative mx-auto w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-6 lg:max-w-[440px] lg:rounded-[28px]"
       >
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.16)] sm:h-16 sm:w-16 lg:mb-5 lg:h-[72px] lg:w-[72px] 2xl:h-20 2xl:w-20">
+        <div className="wtt-login-logo mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.16)] sm:h-16 sm:w-16 lg:mb-5 lg:h-[72px] lg:w-[72px] 2xl:h-20 2xl:w-20">
           <span className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80 sm:h-12 sm:w-12 lg:h-[52px] lg:w-[52px] 2xl:h-14 2xl:w-14">
             <Image
               src="/icon.png"
@@ -454,7 +454,7 @@ export default function LoginPage() {
           </span>
         </div>
 
-        <div className="mb-5 text-center lg:mb-6">
+        <div className="wtt-login-title mb-5 text-center lg:mb-6">
           <h1 className="text-2xl font-semibold leading-tight text-slate-800 sm:text-[28px] lg:text-[32px]">
             Want To Talk
           </h1>
@@ -466,7 +466,7 @@ export default function LoginPage() {
         <a
           href={APK_DOWNLOAD_URL}
           download
-          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 lg:mb-4 lg:py-3"
+          className="wtt-login-apk mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 lg:mb-4 lg:py-3"
         >
           <Smartphone className="h-4 w-4" />
           Download Android APK (Latest {ANDROID_LATEST_LABEL})

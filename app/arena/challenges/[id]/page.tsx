@@ -2172,16 +2172,19 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const submissionIsOpenCL = isOpenCLProvider(submission?.judge_provider)
   const runtimeLabel = submissionIsOpenCL ? 'kernel runtime' : 'runtime'
   const memoryLabel = submissionIsOpenCL ? 'kernel memory' : 'memory'
-  const stackedArenaLayout = !isCoding && viewport.isCompact
-  const chatColumnMin = viewport.isCompact ? 320 : 360
+  const stackedArenaLayout = !isCoding && viewport.isNarrow
+  const compactArena = viewport.isCompact && !viewport.isNarrow
+  const leftColumnWidth = compactArena ? clampNumber(Math.round(leftPanelWidth * 0.88), 280, 330) : leftPanelWidth
+  const chatColumnMin = compactArena ? 300 : 360
+  const whiteboardColumnMin = compactArena ? 320 : 360
 
   const arenaLayoutStyle = !isCoding && !stackedArenaLayout
     ? {
       gridTemplateColumns: isGaokaoVolunteer
-        ? `${leftPanelWidth}px minmax(560px, 1fr)`
+        ? `${leftColumnWidth}px minmax(${compactArena ? 480 : 560}px, 1fr)`
         : whiteboardExpanded
-        ? `${chatPanelWidth ? `minmax(${chatColumnMin}px, ${chatPanelWidth}px)` : `minmax(${chatColumnMin}px, 1fr)`} 6px minmax(${chatColumnMin}px, 1fr)`
-        : `${leftPanelWidth}px 6px ${chatPanelWidth ? `minmax(${chatColumnMin}px, ${chatPanelWidth}px)` : `minmax(${chatColumnMin}px, 1fr)`} 6px minmax(${chatColumnMin}px, 1fr)`,
+        ? `${chatPanelWidth ? `minmax(${chatColumnMin}px, ${chatPanelWidth}px)` : `minmax(${chatColumnMin}px, 0.92fr)`} 6px minmax(${whiteboardColumnMin}px, 1.08fr)`
+        : `${leftColumnWidth}px 6px ${chatPanelWidth ? `minmax(${chatColumnMin}px, ${chatPanelWidth}px)` : `minmax(${chatColumnMin}px, 0.94fr)`} 6px minmax(${whiteboardColumnMin}px, 1.06fr)`,
     }
     : undefined
 
