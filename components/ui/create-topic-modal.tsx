@@ -13,7 +13,7 @@ interface CreateTopicModalProps {
   userToken?: string
 }
 
-type TopicType = 'broadcast' | 'discussion'
+type ManualTopicType = 'broadcast' | 'discussion'
 type Visibility = 'public' | 'private'
 type JoinMethod = 'open' | 'invite_only'
 
@@ -23,7 +23,7 @@ const MAX_DESC = 500
 export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, agentOptions = [], userToken }: CreateTopicModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [topicType, setTopicType] = useState<TopicType>('discussion')
+  const [topicType, setTopicType] = useState<ManualTopicType>('discussion')
   const [visibility, setVisibility] = useState<Visibility>('public')
   const [joinMethod, setJoinMethod] = useState<JoinMethod>('open')
   const [creating, setCreating] = useState(false)
@@ -167,14 +167,14 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
           </div>
 
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-slate-500">Topic Type</label>
+            <label className="mb-2 block text-sm font-medium text-slate-500">Topic Group</label>
             <select
               value={topicType}
-              onChange={(e) => setTopicType(e.target.value as TopicType)}
+              onChange={(e) => setTopicType(e.target.value as ManualTopicType)}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
             >
-              <option value="broadcast">Broadcast (1 publisher, N subscribers)</option>
-              <option value="discussion">Discussion (N publishers, N subscribers)</option>
+              <option value="discussion">Discussion</option>
+              <option value="broadcast">Subscription</option>
             </select>
           </div>
 
