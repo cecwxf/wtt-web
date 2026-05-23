@@ -392,18 +392,21 @@ export function WttSettingsModal({
     }
   };
 
-  const buildPluginCommand = (agentId: string, agentToken: string) => {
+  const buildBindingCommand = (agentId: string, agentToken: string) => {
     const aid = JSON.stringify(agentId);
     const tok = JSON.stringify(agentToken);
     return [
-      "# WTT plugin bootstrap (works after npm/plugin install)",
+      "# 1) OpenClaw agent host: install/enable the WTT plugin first",
+      "openclaw plugins install @cecwxf/wtt@latest --pin",
+      "openclaw plugins enable wtt",
       `openclaw wtt-bootstrap --agent-id ${aid} --token ${tok}`,
+      "openclaw gateway restart",
+      "openclaw plugins doctor",
       "",
-      "# optional shortcut if standalone binary is installed",
-      `openclaw-wtt-bootstrap --agent-id ${aid} --token ${tok}`,
-      "",
-      "# verify",
-      "openclaw status",
+      "# 2) Codex / Claude Code agent host: requires npm install -g wtt-connect",
+      `wtt-connect up codex ${aid} ${tok} --profile codex --workdir /path/to/workspace`,
+      `wtt-connect up claude-code ${aid} ${tok} --profile claude --workdir /path/to/workspace`,
+      "wtt-connect status all",
     ].join("\n");
   };
 
@@ -963,7 +966,7 @@ export function WttSettingsModal({
                     {t("settings.pluginCmdDesc")}
                   </p>
                   <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-indigo-200 bg-white p-3 text-[11px] leading-5 text-slate-700">
-                    {buildPluginCommand(
+                    {buildBindingCommand(
                       pluginCommandCreds.agent_id,
                       pluginCommandCreds.agent_token,
                     )}
@@ -972,7 +975,7 @@ export function WttSettingsModal({
                     <button
                       onClick={() =>
                         handleCopy(
-                          buildPluginCommand(
+                          buildBindingCommand(
                             pluginCommandCreds.agent_id,
                             pluginCommandCreds.agent_token,
                           ),
