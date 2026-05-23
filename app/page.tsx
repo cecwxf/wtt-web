@@ -251,13 +251,24 @@ function LifelongLearningNetwork({ zh }: { zh: boolean }) {
   const steps = zh
     ? ['学习 Topic', '练习题', '白板推导', 'Agent 讲解', '掌握度', '下一题']
     : ['Learning Topic', 'Exercise', 'Whiteboard', 'Agent Tutor', 'Mastery', 'Next Task']
+  const modes = zh
+    ? [
+        { name: '苏格拉底反问模式', desc: '连续追问假设、证据和边界，让理解从会背变成会推。' },
+        { name: '面试回答模式', desc: '按场景、权衡、方案和风险组织答案，训练可复用表达。' },
+        { name: 'ASK 模式', desc: '主动提问、补上下文、拆小问题，快速定位知识缺口。' },
+      ]
+    : [
+        { name: 'Socratic Questioning', desc: 'Probe assumptions, evidence, and boundaries until recall becomes reasoning.' },
+        { name: 'Interview Answer Mode', desc: 'Shape answers around context, tradeoffs, solution, and risks.' },
+        { name: 'ASK Mode', desc: 'Ask, scope, and split questions to expose knowledge gaps faster.' },
+      ]
 
   return (
-    <article className="relative min-h-[340px] overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+    <article className="relative min-h-[430px] overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_76%,rgba(129,140,248,0.18),transparent_26%),radial-gradient(circle_at_82%_16%,rgba(20,184,166,0.16),transparent_25%)]" />
       <div className="relative z-10">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-700">{zh ? 'Agent 终生学习' : 'Agent Lifelong Learning'}</p>
-        <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-950">{zh ? '每次学习都沉淀为可追踪的训练 Topic' : 'Every study loop becomes a traceable training topic'}</h3>
+        <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-950">{zh ? '用三类 Agent 学习模式，把每次训练沉淀为可追踪 Topic' : 'Three agent learning modes turn every study loop into a traceable topic'}</h3>
       </div>
       <div className="relative z-10 mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {steps.map((step, index) => (
@@ -272,9 +283,23 @@ function LifelongLearningNetwork({ zh }: { zh: boolean }) {
           </motion.div>
         ))}
       </div>
+      <div className="relative z-10 mt-4 grid gap-2 sm:grid-cols-3">
+        {modes.map((mode, index) => (
+          <motion.div
+            key={mode.name}
+            className="rounded-2xl border border-indigo-100 bg-indigo-50/80 p-3"
+            animate={{ borderColor: ['rgba(224,231,255,1)', 'rgba(99,102,241,0.55)', 'rgba(224,231,255,1)'] }}
+            transition={{ duration: 3.8, repeat: Infinity, delay: index * 0.3 }}
+          >
+            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-indigo-600">Mode 0{index + 1}</span>
+            <p className="mt-1 text-sm font-black text-slate-950">{mode.name}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-600">{mode.desc}</p>
+          </motion.div>
+        ))}
+      </div>
       <div className="relative z-10 mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white">
         <motion.div className="h-2 rounded-full bg-gradient-to-r from-teal-300 via-indigo-300 to-amber-300" animate={{ x: ['-55%', '0%', '55%'] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }} />
-        <p className="mt-3 text-xs font-bold text-slate-300">{zh ? 'Agent 记录薄弱点、生成练习、解释推导并更新掌握度。' : 'Agents record weak spots, generate practice, explain derivations, and update mastery.'}</p>
+        <p className="mt-3 text-xs font-bold text-slate-300">{zh ? 'Agent 记录薄弱点、生成练习、反问纠偏、模拟面试并更新掌握度。' : 'Agents record weak spots, generate practice, challenge reasoning, simulate interviews, and update mastery.'}</p>
       </div>
     </article>
   )
