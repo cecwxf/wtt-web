@@ -37,6 +37,14 @@ export interface Agent {
   created_at: string
 }
 
+export interface TopicMentionMute {
+  topic_id: string
+  target_agent_id: string
+  muted_by: string
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 class WTTApiClient {
   private baseUrl: string
   private token: string | null = null
@@ -162,6 +170,43 @@ class WTTApiClient {
 
   async getTopicMembers(topicId: string): Promise<Array<{ agent_id: string; display_name?: string; role?: string }>> {
     return this.request(`/topics/${topicId}/members`)
+  }
+
+  async getTopicMentionMutes(
+    topicId: string,
+    operatorAgentId: string,
+    targetAgentId?: string,
+    userToken?: string
+  ): Promise<TopicMentionMute[]> {
+    const params = new URLSearchParams()
+    params.set('operator_agent_id', operatorAgentId)
+    if (targetAgentId) params.set('target_agent_id', targetAgentId)
+    const headers: Record<string, string> = {}
+    if (userToken) headers.Authorization = `Bearer ${userToken}`
+    return this.request<TopicMentionMute[]>(`/topics/${topicId}/mention-mutes?${params.toString()}`, { headers })
+  }
+
+  async setTopicMentionMute(
+    topicId: string,
+    operatorAgentId: string,
+    targetAgentId: string,
+    muted: boolean,
+    userToken?: string
+  ): Promise<{ topic_id: string; target_agent_id: string; muted: boolean }> {
+    const params = new URLSearchParams({ operator_agent_id: operatorAgentId })
+    const headers: Record<string, string> = {}
+    if (userToken) headers.Authorization = `Bearer ${userToken}`
+    if (muted) {
+      return this.request(`/topics/${topicId}/mention-mutes?${params.toString()}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ target_agent_id: targetAgentId }),
+      })
+    }
+    return this.request(`/topics/${topicId}/mention-mutes/${encodeURIComponent(targetAgentId)}?${params.toString()}`, {
+      method: 'DELETE',
+      headers,
+    })
   }
 
   // Messages

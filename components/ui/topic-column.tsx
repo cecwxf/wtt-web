@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronDown, ChevronRight, ClipboardList, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
   buildRoleSystemPrompt,
@@ -11,6 +11,7 @@ import {
 } from '@/lib/agent-role-templates'
 import { AgentTerminalModal } from '@/components/ui/agent-terminal-modal'
 import { useI18n } from '@/lib/i18n-provider'
+import { wttApi } from '@/lib/api/wtt-client'
 
 export interface TopicItem {
   topic_id: string
@@ -280,6 +281,7 @@ export function TopicColumn(props: TopicColumnProps) {
   } = props
   const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
   const [topicMenuFor, setTopicMenuFor] = useState<string | null>(null)
+  const [mentionMuteByTopic, setMentionMuteByTopic] = useState<Record<string, boolean>>({})
   const [shellAgent, setShellAgent] = useState<AgentOption | null>(null)
   const [roleEditor, setRoleEditor] = useState<{
     agentId: string
@@ -296,6 +298,47 @@ export function TopicColumn(props: TopicColumnProps) {
   })
   const { locale, t } = useI18n()
   const zh = locale === 'zh'
+
+  useEffect(() => {
+    const closeMenus = () => {
+      setTopicMenuFor(null)
+      setAgentMenuFor(null)
+    }
+    window.addEventListener('click', closeMenus)
+    return () => window.removeEventListener('click', closeMenus)
+  }, [])
+
+  useEffect(() => {
+    if (!topicMenuFor || !selectedAgentId) return
+    const topic = topics.find((item) => item.topic_id === topicMenuFor)
+    if (!topic || topic.task_id || !['discussion', 'collaborative'].includes(topic.topic_type)) return
+    let cancelled = false
+    wttApi.getTopicMentionMutes(topic.topic_id, selectedAgentId, selectedAgentId, userToken)
+      .then((rows) => {
+        if (cancelled) return
+        setMentionMuteByTopic((prev) => ({ ...prev, [topic.topic_id]: rows.length > 0 }))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setMentionMuteByTopic((prev) => ({ ...prev, [topic.topic_id]: false }))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [topicMenuFor, selectedAgentId, topics, userToken])
+
+  const toggleTopicMentionMute = async (topic: TopicItem) => {
+    if (!selectedAgentId) return
+    const nextMuted = !mentionMuteByTopic[topic.topic_id]
+    setMentionMuteByTopic((prev) => ({ ...prev, [topic.topic_id]: nextMuted }))
+    setTopicMenuFor(null)
+    try {
+      await wttApi.setTopicMentionMute(topic.topic_id, selectedAgentId, selectedAgentId, nextMuted, userToken)
+    } catch (error) {
+      setMentionMuteByTopic((prev) => ({ ...prev, [topic.topic_id]: !nextMuted }))
+      console.error('Failed to update topic mention mute', error)
+    }
+  }
 
   const saveRoleEditor = () => {
     if (!roleEditor || !onSaveAgentRole) return
@@ -357,6 +400,9 @@ export function TopicColumn(props: TopicColumnProps) {
     const unread = Number(topic.unread_count || 0)
     const menuOpen = topicMenuFor === topic.topic_id
     const displayName = getTopicDisplayName(topic)
+    const canToggleMentionMute = !!selectedAgentId && !topic.task_id && ['discussion', 'collaborative'].includes(topic.topic_type)
+    const mentionMuted = !!mentionMuteByTopic[topic.topic_id]
+    const selectedAgentName = agentOptions.find((agent) => agent.agent_id === selectedAgentId)?.display_name || selectedAgentId
 
     return (
       <div
@@ -423,7 +469,22 @@ export function TopicColumn(props: TopicColumnProps) {
         </button>
 
         {menuOpen && (
-          <div className="absolute right-2 top-10 z-30 w-40 rounded-xl border border-[#ded6c8] bg-[#fffdf8] p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+          <div
+            className="absolute right-2 top-10 z-30 w-48 rounded-xl border border-[#ded6c8] bg-[#fffdf8] p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {canToggleMentionMute && (
+              <button
+                type="button"
+                onClick={() => {
+                  void toggleTopicMentionMute(topic)
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
+                title={selectedAgentName}
+              >
+                {mentionMuted ? (zh ? '开放 @' : 'Allow @') : (zh ? '屏蔽 @' : 'Mute @')}
+              </button>
+            )}
             {onLeaveTopic && (
               <button
                 type="button"
