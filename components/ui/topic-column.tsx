@@ -87,6 +87,7 @@ interface TopicColumnProps {
   onToggleSidebar?: () => void
   localLibrarySlot?: ReactNode
   userToken?: string
+  compactLayout?: boolean
 }
 
 function agentInitial(name: string) {
@@ -208,6 +209,7 @@ export function TopicColumn(props: TopicColumnProps) {
     onCreateGeneralTask,
     onToggleSidebar,
     userToken,
+    compactLayout = false,
   } = props
   const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
   const [topicMenuFor, setTopicMenuFor] = useState<string | null>(null)
@@ -446,17 +448,17 @@ export function TopicColumn(props: TopicColumnProps) {
 
   return (
     <>
-      <aside className="flex w-[208px] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#f6f3ed] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-        <div className="border-b border-[#e7e1d7] px-3 py-3 dark:border-zinc-800">
-          <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-400 dark:text-zinc-500">
+      <aside className="flex w-[var(--wtt-agent-rail-width)] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#f6f3ed] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+        <div className={`border-b border-[#e7e1d7] dark:border-zinc-800 ${compactLayout ? 'px-2 py-2' : 'px-3 py-3'}`}>
+          <div className="truncate text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">
             {zh ? 'Agents' : 'Agents'}
           </div>
-          <div className="mt-1 text-sm font-semibold text-slate-600 dark:text-zinc-300">
+          <div className={`mt-1 text-sm font-semibold text-slate-600 dark:text-zinc-300 ${compactLayout ? 'hidden xl:block' : ''}`}>
             {zh ? '选择工作身份' : 'Choose workspace identity'}
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2.5">
+        <div className={`min-h-0 flex-1 space-y-1.5 overflow-y-auto ${compactLayout ? 'p-1.5' : 'p-2.5'}`}>
           {agentOptions.length === 0 && (
             <div className="rounded-2xl border border-dashed border-[#ded6c8] bg-white/55 p-4 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
               {t('agent.noAgents')}
@@ -483,7 +485,7 @@ export function TopicColumn(props: TopicColumnProps) {
                     event.preventDefault()
                     setAgentMenuFor(agent.agent_id)
                   }}
-                  className={`group flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
+                  className={`group flex w-full items-center gap-2 rounded-xl border text-left transition ${compactLayout ? 'px-1.5 py-1.5' : 'px-2.5 py-2'} ${
                     selected
                       ? 'border-[#d7cbb9] bg-[#ebe5db] shadow-sm dark:border-emerald-500/35 dark:bg-emerald-500/10'
                       : 'border-transparent bg-white/55 hover:border-[#ded6c8] hover:bg-white/80 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
@@ -500,10 +502,10 @@ export function TopicColumn(props: TopicColumnProps) {
 
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
-                      <span className="truncate text-sm font-black text-slate-800 dark:text-zinc-100">
+                      <span className={`truncate text-sm font-black text-slate-800 dark:text-zinc-100 ${compactLayout ? 'max-xl:hidden' : ''}`}>
                         {agent.display_name || agent.agent_id}
                       </span>
-                      <span className="shrink-0 rounded-full bg-[#dfe8d8] px-2 py-0.5 text-[10px] font-black text-[#46624b] dark:bg-emerald-500/15 dark:text-emerald-200">
+                      <span className={`shrink-0 rounded-full bg-[#dfe8d8] px-2 py-0.5 text-[10px] font-black text-[#46624b] dark:bg-emerald-500/15 dark:text-emerald-200 ${compactLayout ? 'max-xl:hidden' : ''}`}>
                         {role.shortLabel}
                       </span>
                     </span>
@@ -531,7 +533,7 @@ export function TopicColumn(props: TopicColumnProps) {
                         setAgentMenuFor(menuOpen ? null : agent.agent_id)
                       }
                     }}
-                    className="rounded-lg p-1 text-slate-400 opacity-70 transition hover:bg-[#f6f0e5] hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                    className={`rounded-lg p-1 text-slate-400 opacity-70 transition hover:bg-[#f6f0e5] hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 ${compactLayout ? 'max-xl:hidden' : ''}`}
                     title={zh ? 'Agent 设置' : 'Agent settings'}
                   >
                     <MoreVertical className="h-4 w-4" />
@@ -562,7 +564,15 @@ export function TopicColumn(props: TopicColumnProps) {
                 {menuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setAgentMenuFor(null)} />
-                    <div className="fixed left-[212px] top-20 z-50 max-h-[calc(100vh-6rem)] w-[min(280px,calc(100vw-224px))] overflow-y-auto rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-2 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+                    <div
+                      className="fixed z-50 overflow-y-auto rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-2 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+                      style={{
+                        left: 'var(--wtt-agent-rail-width)',
+                        top: 'calc(var(--wtt-topbar-height) + 1rem)',
+                        maxHeight: 'calc(100dvh - var(--wtt-topbar-height) - 2rem)',
+                        width: 'min(280px, calc(100vw - var(--wtt-agent-rail-width) - 16px))',
+                      }}
+                    >
                       <div className="px-2 pb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">
                         {zh ? '角色模板' : 'Role Templates'}
                       </div>
@@ -701,13 +711,13 @@ export function TopicColumn(props: TopicColumnProps) {
         </div>
       </aside>
 
-      <aside className="flex w-[264px] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#fbfaf7] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-        <div className="flex items-center justify-between border-b border-[#e7e1d7] px-3 py-3 dark:border-zinc-800">
+      <aside className="flex w-[var(--wtt-topic-rail-width)] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#fbfaf7] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+        <div className={`flex items-center justify-between border-b border-[#e7e1d7] dark:border-zinc-800 ${compactLayout ? 'px-2 py-2' : 'px-3 py-3'}`}>
           <div>
-            <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-400 dark:text-zinc-500">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">
               Topics
             </div>
-            <div className="mt-1 text-sm font-semibold text-slate-600 dark:text-zinc-300">
+            <div className={`mt-1 text-sm font-semibold text-slate-600 dark:text-zinc-300 ${compactLayout ? 'hidden 2xl:block' : ''}`}>
               {zh ? '当前 Agent 的会话上下文' : 'Contexts for selected agent'}
             </div>
           </div>
@@ -735,7 +745,7 @@ export function TopicColumn(props: TopicColumnProps) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
+        <div className={`min-h-0 flex-1 overflow-y-auto ${compactLayout ? 'p-1.5' : 'p-2.5'}`}>
           {!selectedAgentId && (
             <div className="rounded-2xl border border-dashed border-[#ded6c8] bg-white/60 p-4 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
               {zh ? '先选择一个 Agent。' : 'Select an agent first.'}

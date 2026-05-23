@@ -908,7 +908,7 @@ function TasksPageInner() {
           </>}
         </div>
 
-        <div className="grid h-[calc(100%-88px)] grid-cols-[1fr_380px] gap-3">
+        <div className="grid h-[calc(100%-88px)] grid-cols-1 gap-2 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-3">
           {/* Flat task list */}
           <div className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/50 p-2 space-y-1.5">
             {visibleTasks.length === 0 && (
@@ -1007,7 +1007,7 @@ function TasksPageInner() {
             })}
           </div>
 
-          <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/50 p-3">
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-zinc-700 dark:bg-zinc-900/50 2xl:p-3">
             <div className="mb-3 shrink-0 rounded-lg border border-slate-200 bg-slate-100 p-2">
               <p className="text-xs font-semibold text-slate-600">{t('tasks.durationPieTop8')}</p>
               {taskDurationSummary.slices.length > 0 ? (
@@ -1228,7 +1228,7 @@ function TasksPageInner() {
           onClick={() => setRenameModal(null)}
         >
           <div
-            className="w-[420px] rounded-xl bg-white dark:bg-zinc-900 p-5 shadow-2xl border border-slate-200 dark:border-zinc-700"
+            className="w-[min(420px,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 2xl:p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-3">

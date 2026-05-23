@@ -24,6 +24,38 @@ body {
   line-height: 1.45;
 }
 
+/* Responsive shell density. Laptop screens often have desktop width but
+   limited height, so the app shell uses variables instead of hard-coded rails. */
+.wtt-app-shell {
+  --wtt-topbar-height: 54px;
+  --wtt-agent-rail-width: 208px;
+  --wtt-topic-rail-width: 264px;
+  --wtt-shell-density-scale: 1;
+}
+
+@media (max-width: 1439px), (max-height: 849px) {
+  .wtt-app-shell {
+    --wtt-topbar-height: 50px;
+    --wtt-agent-rail-width: 176px;
+    --wtt-topic-rail-width: 232px;
+    --wtt-shell-density-scale: 0.92;
+  }
+}
+
+@media (max-width: 1279px) {
+  .wtt-app-shell {
+    --wtt-agent-rail-width: 72px;
+    --wtt-topic-rail-width: 232px;
+  }
+}
+
+@media (min-width: 1800px) and (min-height: 900px) {
+  .wtt-app-shell {
+    --wtt-agent-rail-width: 216px;
+    --wtt-topic-rail-width: 280px;
+  }
+}
+
 /* Extra utility used by markdown rendering for nicer line breaks */
 @layer utilities {
   .text-balance {

@@ -10,6 +10,7 @@ import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
 import { useI18n } from '@/lib/i18n-provider'
 import type { AgentRoleTemplate } from '@/lib/agent-role-templates'
+import { useViewportClass } from '@/lib/hooks/use-viewport-class'
 
 interface P2PRequest {
   id: string
@@ -115,6 +116,7 @@ export function WttShellV2(props: WttShellV2Props) {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('profile')
   const [createTopicOpen, setCreateTopicOpen] = useState(false)
   const { t } = useI18n()
+  const viewport = useViewportClass()
 
   const openSettings = (page: SettingsPage) => {
     setSettingsPage(page)
@@ -140,6 +142,10 @@ export function WttShellV2(props: WttShellV2Props) {
   }, [])
 
   useEffect(() => {
+    if (viewport.isNarrow) setSidebarCollapsed(true)
+  }, [viewport.isNarrow])
+
+  useEffect(() => {
     try {
       localStorage.setItem('wtt.sidebarCollapsed', sidebarCollapsed ? '1' : '0')
     } catch {
@@ -157,7 +163,7 @@ export function WttShellV2(props: WttShellV2Props) {
   const isSelectedAgentOnline = onlineAgentIds?.has(selectedAgentId) ?? false
 
   return (
-    <div className="h-screen bg-[#f6f3ed] text-slate-800 dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="wtt-app-shell h-[100dvh] overflow-hidden bg-[#f6f3ed] text-slate-800 dark:bg-zinc-950 dark:text-zinc-200">
       <div className="flex h-full flex-col">
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}
@@ -255,11 +261,12 @@ export function WttShellV2(props: WttShellV2Props) {
               onCreateGeneralTask={onCreateGeneralTask}
               onToggleSidebar={() => setSidebarCollapsed(true)}
               userToken={userToken}
+              compactLayout={viewport.isCompact}
             />
           )}
 
           {!hideTopics && sidebarCollapsed && (
-            <aside className="flex w-10 items-start justify-center border-r border-[#e5e0d8] bg-[#f7f5f0] pt-2 dark:border-zinc-800 dark:bg-zinc-950">
+            <aside className="flex w-9 shrink-0 items-start justify-center border-r border-[#e5e0d8] bg-[#f7f5f0] pt-2 dark:border-zinc-800 dark:bg-zinc-950">
               <button
                 onClick={() => setSidebarCollapsed(false)}
                 className="rounded-lg border border-slate-200 dark:border-zinc-700 px-2 py-1.5 text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition"

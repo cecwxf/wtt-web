@@ -1332,7 +1332,7 @@ function PipelinesPageInner() {
             </div>
 
             {/* main area: palette | canvas | detail */}
-            <div className="grid flex-1 grid-cols-[80px_1fr_380px] gap-0 overflow-hidden">
+            <div className="grid flex-1 grid-cols-[64px_minmax(0,1fr)_320px] gap-0 overflow-hidden 2xl:grid-cols-[80px_minmax(0,1fr)_380px]">
 
               {/* ── shape & line palette ── */}
               <aside className="flex flex-col items-center gap-1 overflow-y-auto border-r border-slate-200 bg-slate-50 py-3">

@@ -45,7 +45,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
   const { locale, setLocale, t } = useI18n()
 
   return (
-    <header className="flex h-[54px] items-center gap-3 border-b border-slate-200/80 dark:border-zinc-700 bg-[#f7f5f2] dark:bg-zinc-900 px-3">
+    <header className="flex h-[var(--wtt-topbar-height)] shrink-0 items-center gap-2 border-b border-slate-200/80 bg-[#f7f5f2] px-2.5 dark:border-zinc-700 dark:bg-zinc-900 lg:gap-3 lg:px-3">
       <Link
         href={buildAgentUrl('/feed', agentId)}
         className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-indigo-600 dark:text-indigo-300 transition hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
@@ -59,10 +59,10 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
 
       <SearchBar onSelectTopic={onSelectTopic} onSubscribeTopic={onSubscribeTopic} subscribedTopicIds={subscribedTopicIds} agentId={agentId} />
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 lg:gap-2">
         <Link
           href={buildAgentUrl('/tasks', agentId)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-zinc-600 bg-white/90 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-600 transition hover:text-slate-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100 xl:px-2.5"
           title={t('top.tasksBoard')}
         >
           <KanbanSquare className="h-3.5 w-3.5" />
@@ -71,7 +71,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
 
         <Link
           href={buildAgentUrl('/arena', agentId)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-800 dark:hover:text-amber-200"
+          className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-2 py-1.5 text-xs text-amber-700 transition hover:bg-amber-100 hover:text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/40 dark:hover:text-amber-200 xl:px-2.5"
           title="Arena"
         >
           <Trophy className="h-3.5 w-3.5" />
@@ -80,11 +80,11 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
 
         <Link
           href={buildAgentUrl('/square', agentId)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/80 dark:bg-emerald-950/30 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
+          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50/80 px-2 py-1.5 text-xs text-emerald-700 transition hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-200 xl:px-2.5"
           title="若水广场"
         >
           <Compass className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">若水广场</span>
+          <span className="hidden xl:inline">若水广场</span>
         </Link>
 
         {/* KB hidden — feature temporarily disabled to reduce token consumption
@@ -103,22 +103,22 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         {!hideCreateTopic && (
           <button
             onClick={onOpenEditor}
-            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/90 dark:bg-indigo-950/30 px-2.5 py-1.5 text-xs text-indigo-700 dark:text-indigo-300 transition hover:bg-indigo-100 dark:hover:bg-indigo-950/40 hover:text-indigo-800 dark:hover:text-indigo-200"
+            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50/90 px-2 py-1.5 text-xs text-indigo-700 transition hover:bg-indigo-100 hover:text-indigo-800 dark:border-indigo-800/50 dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-200 xl:px-2.5"
             title={t('top.editor')}
           >
             <FileEdit className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t('top.editor')}</span>
+            <span className="hidden xl:inline">{t('top.editor')}</span>
           </button>
         )}
 
         {!hideCreateTopic && onCreateTopic && (
           <button
             onClick={onCreateTopic}
-            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/30 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-200"
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/90 px-2 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-200 xl:px-2.5"
             title={t('top.createTopic')}
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>+{t('top.topic')}</span>
+            <span className="hidden xl:inline">+{t('top.topic')}</span>
           </button>
         )}
 
@@ -139,7 +139,7 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
           {showNotifications && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowNotifications(false)} />
-              <div className="absolute right-0 top-12 z-20 w-96 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow-lg">
+              <div className="absolute right-0 top-12 z-20 w-[min(24rem,calc(100vw-1rem))] rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 lg:p-4">
                 <p className="mb-3 text-sm font-semibold dark:text-zinc-200">{t('top.notifications')}</p>
                 {p2pRequests.length > 0 ? (
                   <div className="space-y-2 max-h-[320px] overflow-y-auto">

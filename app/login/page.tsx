@@ -431,7 +431,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-50 px-4 py-10">
+    <div className="relative min-h-[100dvh] overflow-y-auto overflow-x-hidden bg-slate-50 px-3 py-4 sm:px-4 sm:py-6 lg:py-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_25%,rgba(99,102,241,0.12)_0%,transparent_35%),radial-gradient(circle_at_80%_70%,rgba(16,185,129,0.1)_0%,transparent_35%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#cbd5e1_0.8px,transparent_0.8px)] [background-size:26px_26px]" />
 
@@ -439,23 +439,23 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="relative mx-auto w-full max-w-[440px] rounded-[28px] border border-slate-200 bg-white px-6 pb-7 pt-8 shadow-[0_24px_70px_rgba(99,102,241,0.12)] sm:px-8"
+        className="relative mx-auto w-full max-w-[440px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-7 sm:pb-6 sm:pt-6 lg:rounded-[28px]"
       >
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_14px_28px_rgba(99,102,241,0.18)]">
-          <span className="inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.16)] sm:h-16 sm:w-16 lg:mb-5 lg:h-20 lg:w-20">
+          <span className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80 sm:h-12 sm:w-12 lg:h-14 lg:w-14">
             <Image
               src="/icon.png"
               alt="WTT"
               width={56}
               height={56}
-              className="h-14 w-14"
+              className="h-full w-full"
               priority
             />
           </span>
         </div>
 
-        <div className="mb-7 text-center">
-          <h1 className="text-[32px] font-semibold leading-tight text-slate-800">
+        <div className="mb-5 text-center lg:mb-6">
+          <h1 className="text-2xl font-semibold leading-tight text-slate-800 sm:text-[28px] lg:text-[32px]">
             Want To Talk
           </h1>
           <p className="mt-1 text-sm font-medium tracking-[0.12em] text-slate-400">
@@ -466,13 +466,13 @@ export default function LoginPage() {
         <a
           href={APK_DOWNLOAD_URL}
           download
-          className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600"
+          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 lg:mb-4 lg:py-3"
         >
           <Smartphone className="h-4 w-4" />
           Download Android APK (Latest {ANDROID_LATEST_LABEL})
         </a>
 
-        <div className="mb-5 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <div className="mb-4 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
             onClick={() => {
@@ -501,7 +501,7 @@ export default function LoginPage() {
 
         {tab === "signin" ? (
           <>
-            <div className="mb-4 grid grid-cols-3 rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <div className="mb-3 grid grid-cols-3 rounded-xl border border-slate-200 bg-slate-50 p-1 lg:mb-4">
               {[
                 ["phone-code", "手机验证码"],
                 ["phone-password", "手机密码"],
@@ -524,7 +524,7 @@ export default function LoginPage() {
             </div>
 
             {signInMethod === "phone-code" && (
-              <form onSubmit={handlePhoneCodeSignIn} className="space-y-3.5">
+              <form onSubmit={handlePhoneCodeSignIn} className="space-y-3 lg:space-y-3.5">
                 <label className="block">
                   <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                     <Smartphone className="h-3.5 w-3.5" />
@@ -564,7 +564,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60 lg:py-3"
                 >
                   {loading ? t("login.signingIn") : "手机号登录"}
                   {!loading && <ArrowRight className="h-4 w-4" />}
@@ -573,7 +573,7 @@ export default function LoginPage() {
             )}
 
             {signInMethod === "phone-password" && (
-              <form onSubmit={handlePhonePasswordSignIn} className="space-y-3.5">
+              <form onSubmit={handlePhonePasswordSignIn} className="space-y-3 lg:space-y-3.5">
                 <label className="block">
                   <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                     <Smartphone className="h-3.5 w-3.5" />
@@ -652,7 +652,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60 lg:py-3"
                 >
                   {loading ? t("login.signingIn") : "手机号密码登录"}
                   {!loading && <ArrowRight className="h-4 w-4" />}
@@ -662,7 +662,7 @@ export default function LoginPage() {
 
             {signInMethod === "email" && (
               <>
-            <form onSubmit={handleSignIn} className="space-y-3.5">
+            <form onSubmit={handleSignIn} className="space-y-3 lg:space-y-3.5">
               <label className="block">
                 <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                   <Mail className="h-3.5 w-3.5" />
@@ -722,7 +722,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60 lg:py-3"
               >
                 {loading ? t("login.signingIn") : t("login.signIn")}
                 {!loading && <ArrowRight className="h-4 w-4" />}
@@ -740,7 +740,7 @@ export default function LoginPage() {
               </>
             )}
 
-            <div className="relative my-5">
+            <div className="relative my-4 lg:my-5">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-slate-200" />
               </div>
@@ -749,7 +749,7 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2 lg:space-y-2.5">
               <button
                 onClick={() => handleOAuthSignIn("google")}
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
@@ -808,7 +808,7 @@ export default function LoginPage() {
           </div>
 
           {registerMethod === "phone" ? (
-          <form onSubmit={handlePhoneRegister} className="space-y-3.5">
+          <form onSubmit={handlePhoneRegister} className="space-y-3 lg:space-y-3.5">
             <label className="block">
               <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                 <User className="h-3.5 w-3.5" />
@@ -895,7 +895,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60 lg:py-3"
             >
               {loading ? t("login.creatingAccount") : "注册并登录"}
               {!loading && <ArrowRight className="h-4 w-4" />}
@@ -906,7 +906,7 @@ export default function LoginPage() {
             </p>
           </form>
           ) : (
-          <form onSubmit={handleRegister} className="space-y-3.5">
+          <form onSubmit={handleRegister} className="space-y-3 lg:space-y-3.5">
             <label className="block">
               <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
                 <User className="h-3.5 w-3.5" />
@@ -970,7 +970,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60 lg:py-3"
             >
               {loading ? t("login.creatingAccount") : t("login.register")}
               {!loading && <ArrowRight className="h-4 w-4" />}

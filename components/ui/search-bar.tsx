@@ -140,14 +140,14 @@ export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds 
   }
 
   return (
-    <div ref={searchRef} className="relative flex-1 max-w-lg">
+    <div ref={searchRef} className="relative min-w-[120px] flex-1 max-w-md xl:max-w-lg">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       <input
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-full border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-10 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 outline-none focus:border-indigo-500"
+        className="w-full rounded-full border border-slate-200 bg-slate-50 px-9 py-1.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 lg:px-10 lg:py-2"
       />
       {query && (
         <button
