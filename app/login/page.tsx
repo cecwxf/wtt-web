@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -21,6 +21,7 @@ import { ANDROID_LATEST_LABEL } from "@/lib/android-release";
 type AuthTab = "signin" | "register";
 type SignInMethod = "phone-code" | "phone-password" | "email";
 type RegisterMethod = "phone" | "email";
+type PhoneCodePurpose = "login" | "register" | "reset_password";
 
 const APK_DOWNLOAD_URL = "/downloads/wtt-android-latest.apk";
 
@@ -34,6 +35,17 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [phoneCodeSending, setPhoneCodeSending] = useState<PhoneCodePurpose | null>(null);
+  const [phoneCodeStatus, setPhoneCodeStatus] = useState<Record<PhoneCodePurpose, string>>({
+    login: "",
+    register: "",
+    reset_password: "",
+  });
+  const [phoneCodeCountdown, setPhoneCodeCountdown] = useState<Record<PhoneCodePurpose, number>>({
+    login: 0,
+    register: 0,
+    reset_password: 0,
+  });
 
   // Sign in
   const [signInEmail, setSignInEmail] = useState("");
@@ -55,6 +67,24 @@ export default function LoginPage() {
 
   const handleOAuthSignIn = (provider: string) => {
     signIn(provider, { callbackUrl: "/feed" });
+  };
+
+  useEffect(() => {
+    if (!Object.values(phoneCodeCountdown).some((value) => value > 0)) return;
+    const timer = window.setInterval(() => {
+      setPhoneCodeCountdown((current) => ({
+        login: Math.max(0, current.login - 1),
+        register: Math.max(0, current.register - 1),
+        reset_password: Math.max(0, current.reset_password - 1),
+      }));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [phoneCodeCountdown]);
+
+  const phoneCodeButtonText = (purpose: PhoneCodePurpose) => {
+    if (phoneCodeSending === purpose) return "发送中...";
+    if (phoneCodeCountdown[purpose] > 0) return `${phoneCodeCountdown[purpose]}s 后重发`;
+    return "发验证码";
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -96,7 +126,7 @@ export default function LoginPage() {
     }
   };
 
-  const sendPhoneCode = async (phone: string, purpose: "login" | "register" | "reset_password") => {
+  const sendPhoneCode = async (phone: string, purpose: PhoneCodePurpose) => {
     setError("");
     setInfo("");
     const normalized = phone.trim();
@@ -104,7 +134,8 @@ export default function LoginPage() {
       setError("请输入手机号");
       return;
     }
-    setLoading(true);
+    setPhoneCodeSending(purpose);
+    setPhoneCodeStatus((current) => ({ ...current, [purpose]: "正在发送验证码..." }));
     try {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/auth/phone/send-code`, {
         method: "POST",
@@ -113,14 +144,20 @@ export default function LoginPage() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(data.detail ?? "发送验证码失败");
+        const message = data.detail ?? "发送验证码失败";
+        setError(message);
+        setPhoneCodeStatus((current) => ({ ...current, [purpose]: "" }));
         return;
       }
-      setInfo(data.debug_code ? `验证码已发送。测试码：${data.debug_code}` : "验证码已发送");
+      const message = data.debug_code ? `验证码已发送。测试码：${data.debug_code}` : "验证码已发送，请查收短信";
+      setInfo(message);
+      setPhoneCodeStatus((current) => ({ ...current, [purpose]: message }));
+      setPhoneCodeCountdown((current) => ({ ...current, [purpose]: 60 }));
     } catch {
       setError("发送验证码时网络异常");
+      setPhoneCodeStatus((current) => ({ ...current, [purpose]: "" }));
     } finally {
-      setLoading(false);
+      setPhoneCodeSending(null);
     }
   };
 
@@ -515,12 +552,15 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => sendPhoneCode(signInPhone, "login")}
-                    disabled={loading}
+                    disabled={phoneCodeSending === "login" || phoneCodeCountdown.login > 0}
                     className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
                   >
-                    发验证码
+                    {phoneCodeButtonText("login")}
                   </button>
                 </div>
+                {phoneCodeStatus.login && (
+                  <p className="text-xs font-medium text-emerald-600">{phoneCodeStatus.login}</p>
+                )}
                 <button
                   type="submit"
                   disabled={loading}
@@ -583,12 +623,15 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => sendPhoneCode(signInPhone, "reset_password")}
-                        disabled={loading}
+                        disabled={phoneCodeSending === "reset_password" || phoneCodeCountdown.reset_password > 0}
                         className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
                       >
-                        发验证码
+                        {phoneCodeButtonText("reset_password")}
                       </button>
                     </div>
+                    {phoneCodeStatus.reset_password && (
+                      <p className="text-xs font-medium text-emerald-700">{phoneCodeStatus.reset_password}</p>
+                    )}
                     <input
                       type="password"
                       value={resetPhonePassword}
@@ -809,12 +852,15 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => sendPhoneCode(registerPhone, "register")}
-                disabled={loading}
+                disabled={phoneCodeSending === "register" || phoneCodeCountdown.register > 0}
                 className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
               >
-                发验证码
+                {phoneCodeButtonText("register")}
               </button>
             </div>
+            {phoneCodeStatus.register && (
+              <p className="text-xs font-medium text-emerald-600">{phoneCodeStatus.register}</p>
+            )}
 
             <label className="block">
               <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
