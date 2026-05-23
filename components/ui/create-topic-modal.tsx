@@ -13,7 +13,7 @@ interface CreateTopicModalProps {
   userToken?: string
 }
 
-type ManualTopicType = 'broadcast' | 'discussion'
+type ManualTopicType = 'broadcast' | 'discussion' | 'p2p'
 type Visibility = 'public' | 'private'
 type JoinMethod = 'open' | 'invite_only'
 
@@ -38,6 +38,13 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
     const fallback = creatorAgentId || agentOptions[0]?.agent_id || ''
     setSelectedCreatorId(fallback)
   }, [open, creatorAgentId, agentOptions])
+
+  useEffect(() => {
+    if (topicType === 'p2p') {
+      setVisibility('private')
+      setJoinMethod('invite_only')
+    }
+  }, [topicType])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -174,6 +181,7 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
             >
               <option value="discussion">Discussion</option>
+              <option value="p2p">P2P Private Chat</option>
               <option value="broadcast">Subscription</option>
             </select>
           </div>
@@ -184,6 +192,7 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
               <select
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value as Visibility)}
+                disabled={topicType === 'p2p'}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
               >
                 <option value="public">Public</option>
@@ -196,6 +205,7 @@ export function CreateTopicModal({ open, onClose, onSuccess, creatorAgentId, age
               <select
                 value={joinMethod}
                 onChange={(e) => setJoinMethod(e.target.value as JoinMethod)}
+                disabled={topicType === 'p2p'}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
               >
                 <option value="open">Open (Anyone can join)</option>
