@@ -490,29 +490,32 @@ function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
   )
 }
 
-function ThumbnailVideo({ url, isMine }: { url: string; isMine: boolean }) {
-  const [playing, setPlaying] = useState(false)
-  const thumbRef = useRef<HTMLVideoElement>(null)
-  if (playing) {
-    return (
-      <video controls autoPlay className="max-h-72 w-full rounded-lg border border-slate-200">
+function VideoAttachmentCard({ url, filename, isMine }: { url: string; filename?: string; isMine: boolean }) {
+  const fallback = filenameFromFileUrl(url)
+  const fname = filename || fallback || 'video'
+  return (
+    <div className={`overflow-hidden rounded-xl border text-sm shadow-sm ${isMine ? 'border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20' : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800'}`}>
+      <video controls preload="metadata" playsInline className="max-h-80 w-full bg-black">
         <source src={url} />
       </video>
-    )
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => setPlaying(true)}
-      className={`group relative block overflow-hidden rounded-lg border ${isMine ? 'border-indigo-400' : 'border-slate-200'}`}
-    >
-      <video ref={thumbRef} src={url} preload="metadata" muted className="h-20 w-auto max-w-[160px] object-cover" />
-      <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition group-hover:bg-black/50">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
-          <div className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-indigo-500" />
-        </div>
+      <div className="flex items-center gap-3 p-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-600">
+          <Video className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium text-slate-700 dark:text-zinc-200">{fname}</span>
+          <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>VIDEO · 可播放 / 打开 / 下载</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          <a href={url} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            打开
+          </a>
+          <a href={url} download={fname} className="rounded-md bg-cyan-600 px-2 py-1 text-xs font-semibold text-white hover:bg-cyan-500">
+            下载
+          </a>
+        </span>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -524,6 +527,8 @@ function fileMeta(nameOrUrl: string) {
     : ['doc', 'docx'].includes(ext) ? 'DOC'
     : ['ppt', 'pptx'].includes(ext) ? 'PPT'
     : ['xls', 'xlsx', 'csv'].includes(ext) ? 'XLS'
+    : ['mp4', 'webm', 'mov', 'm4v'].includes(ext) ? 'VID'
+    : ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext) ? 'AUD'
     : ['zip', 'tar', 'gz'].includes(ext) ? 'ZIP'
     : ext === 'md' ? 'MD'
     : ext === 'html' || ext === 'htm' ? 'HTML'
@@ -532,6 +537,8 @@ function fileMeta(nameOrUrl: string) {
     : ['doc', 'docx'].includes(ext) ? 'bg-blue-500/15 text-blue-600'
     : ['ppt', 'pptx'].includes(ext) ? 'bg-orange-500/15 text-orange-600'
     : ['xls', 'xlsx', 'csv'].includes(ext) ? 'bg-emerald-500/15 text-emerald-600'
+    : ['mp4', 'webm', 'mov', 'm4v'].includes(ext) ? 'bg-cyan-500/15 text-cyan-600'
+    : ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext) ? 'bg-pink-500/15 text-pink-600'
     : ['zip', 'tar', 'gz'].includes(ext) ? 'bg-violet-500/15 text-violet-600'
     : 'bg-slate-500/15 text-slate-600'
   return { ext, label, icon, tone }
@@ -562,7 +569,7 @@ function FileAttachmentCard({ url, filename, isMine }: { url: string; filename?:
   )
 }
 
-const CHAT_FILE_EXT_RE = /\.(pdf|docx?|pptx?|xlsx?|csv|zip|tar|gz|md|txt|html?)(?:[?#].*)?$/i
+const CHAT_FILE_EXT_RE = /\.(pdf|docx?|pptx?|xlsx?|csv|zip|tar|gz|md|txt|html?|mp4|webm|mov|m4v|mp3|wav|ogg|m4a|aac|flac)(?:[?#].*)?$/i
 
 function filenameFromFileUrl(url: string): string {
   const clean = decodeURIComponent(String(url || 'file').split('?')[0].split('#')[0])
@@ -604,7 +611,7 @@ function extractConversationFiles(message: ChatMessage): ConversationFile[] {
   const { body: actionCleanBody } = extractActionQuickButtons(cleanContent)
   const blocks = parseRichBlocks(actionCleanBody)
   for (const block of blocks) {
-    if (block.kind === 'file') addFile(block.url, block.filename)
+    if (block.kind === 'file' || block.kind === 'video' || block.kind === 'audio') addFile(block.url, block.filename)
   }
 
   const mdLinkRe = /\[([^\]]{0,160})\]\((https?:\/\/[^)\s]+|\/?media\/[^)\s]+)\)/gi
@@ -1873,13 +1880,13 @@ export function ChatView({
             <div className="mb-3 rounded-xl border border-[#eee9df] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
               <p className="text-sm font-semibold text-[#283038] dark:text-zinc-100">Files</p>
               <p className="mt-0.5 text-xs text-[#8a8378] dark:text-zinc-500">
-                当前对话中识别到 {conversationFiles.length} 个文件，可直接打开或下载。
+                当前对话中识别到 {conversationFiles.length} 个文件 / 媒体，可直接打开或下载。
               </p>
             </div>
 
             {conversationFiles.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[#ded8ce] bg-white/45 px-4 py-12 text-center text-sm text-[#8a8378] dark:border-zinc-800 dark:bg-zinc-900/45 dark:text-zinc-500">
-                当前对话还没有文件。生成 docx / pptx / xlsx / pdf / zip / md / html 等文件后会显示在这里。
+                当前对话还没有文件。生成 docx / pptx / xlsx / pdf / zip / md / html / mp4 等文件后会显示在这里。
               </div>
             ) : (
               <div className="space-y-2">
@@ -2155,7 +2162,7 @@ export function ChatView({
                                 return <audio key={bi} controls src={block.url} className="w-full max-w-xs" />
                               }
                               if (block.kind === 'video') {
-                                return <ThumbnailVideo key={bi} url={block.url} isMine={isMine} />
+                                return <VideoAttachmentCard key={bi} url={block.url} filename={block.filename} isMine={isMine} />
                               }
                               if (block.kind === 'file') {
                                 const url = block.url

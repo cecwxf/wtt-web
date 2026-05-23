@@ -209,8 +209,8 @@ export type ParsedRichBlock =
   | { kind: 'plain'; text: string }
   | { kind: 'html'; html: string }
   | { kind: 'image'; url: string }
-  | { kind: 'audio'; url: string }
-  | { kind: 'video'; url: string }
+  | { kind: 'audio'; url: string; filename?: string }
+  | { kind: 'video'; url: string; filename?: string }
   | { kind: 'file'; url: string; filename?: string }
   | { kind: 'link'; url: string }
   | { kind: 'markdown'; text: string }
@@ -220,8 +220,8 @@ function classifyUrl(rawUrl: string): ParsedRichBlock {
   const raw = trimUrlTail(rawUrl)
   const url = proxyMediaUrl(raw)
   const u = raw.toLowerCase()
-  if (/\.(mp4|webm|mov)(\?|$)/.test(u)) return { kind: 'video', url }
-  if (/\.(mp3|wav|ogg|m4a)(\?|$)/.test(u)) return { kind: 'audio', url }
+  if (/\.(mp4|webm|mov|m4v)(\?|$)/.test(u)) return { kind: 'video', url }
+  if (/\.(mp3|wav|ogg|m4a|aac|flac)(\?|$)/.test(u)) return { kind: 'audio', url }
   if (/\.(pdf|docx?|pptx?|xlsx?|csv|zip|md|txt|html?)(\?|$)/.test(u)) return { kind: 'file', url, filename: undefined }
   if (/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/.test(u) || /^\/?media\//i.test(u)) return { kind: 'image', url }
   return { kind: 'link', url }
@@ -234,9 +234,9 @@ function classifyLine(line: string): ParsedRichBlock {
   const imageMatch = c.match(/^!\[[^\]]*\]\(([^)]+)\)$/i)
   if (imageMatch) return { kind: 'image', url: proxyMediaUrl(trimUrlTail(imageMatch[1])) }
   const audioMatch = c.match(/^\[audio(?::([^\]]*))?\]\(([^)]+)\)$/i)
-  if (audioMatch) return { kind: 'audio', url: proxyMediaUrl(trimUrlTail(audioMatch[2])) }
+  if (audioMatch) return { kind: 'audio', url: proxyMediaUrl(trimUrlTail(audioMatch[2])), filename: audioMatch[1] || undefined }
   const videoMatch = c.match(/^\[video(?::([^\]]*))?\]\(([^)]+)\)$/i)
-  if (videoMatch) return { kind: 'video', url: proxyMediaUrl(trimUrlTail(videoMatch[2])) }
+  if (videoMatch) return { kind: 'video', url: proxyMediaUrl(trimUrlTail(videoMatch[2])), filename: videoMatch[1] || undefined }
   const fileMatch = c.match(/^\[file(?::([^\]]*))?\]\(([^)]+)\)$/i)
   if (fileMatch) return { kind: 'file', url: proxyMediaUrl(trimUrlTail(fileMatch[2])), filename: fileMatch[1] || undefined }
   const linkMatch = c.match(/^\[link\]\(([^)]+)\)$/i)
