@@ -260,6 +260,8 @@ const HAS_HTML_TAG = /<\/?[a-z][^>]*>/i
 export function parseRichBlocks(content: string): ParsedRichBlock[] {
   const c = stripMediaEnvelopeNoise(stripSourceMarker((content || '').trim()))
   if (!c) return [{ kind: 'plain', text: '' }]
+  const hasAttachmentToken = /(?:^|\n)\s*(?:!\[[^\]]*\]\([^)]+\)|\[(?:file|audio|video)(?::[^\]]*)?\]\([^)]+\))\s*(?:\n|$)/i.test(c)
+  const hasMarkdownSyntax = (text: string) => /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(text)
 
   // [preview] block
   if (c.startsWith('[preview]')) {
@@ -304,8 +306,10 @@ export function parseRichBlocks(content: string): ParsedRichBlock[] {
   }
 
   // Rich markdown (headings, lists, tables, code blocks)
-  const hasMarkdown = /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(c)
-  if (hasMarkdown && c.length > 30) return [{ kind: 'markdown', text: c }]
+  const hasMarkdown = hasMarkdownSyntax(c)
+  // When attachments are present, continue to line-by-line parsing so media
+  // tokens become cards instead of markdown URLs.
+  if (!hasAttachmentToken && hasMarkdown && c.length > 30) return [{ kind: 'markdown', text: c }]
 
   // Line-by-line classification
   const segments = c.split(/\n/)
@@ -314,7 +318,8 @@ export function parseRichBlocks(content: string): ParsedRichBlock[] {
 
   const flushText = () => {
     if (textBuf.length > 0) {
-      blocks.push({ kind: 'plain', text: textBuf.join('\n') })
+      const text = textBuf.join('\n')
+      blocks.push(hasMarkdownSyntax(text) && text.length > 30 ? { kind: 'markdown', text } : { kind: 'plain', text })
       textBuf = []
     }
   }

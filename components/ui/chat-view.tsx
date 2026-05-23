@@ -375,6 +375,13 @@ type ConversationFile = {
   timestamp: string
 }
 
+type PendingAsset = {
+  url: string
+  filename: string
+  kind: 'image' | 'audio' | 'video' | 'file'
+  token: string
+}
+
 function parseTaskContent(content: string): ParsedTask {
   const c = (content || '').replace(/\\n/g, '\n')
   if (!c.includes('[TASK_')) return { isTask: false }
@@ -714,7 +721,7 @@ export function ChatView({
   const modelPrefsByTopicRef = useRef<Record<string, ModelPref>>({})
   const workerConfigHydratedRef = useRef<Record<string, boolean>>({})
   const messageHintAppliedRef = useRef<Record<string, string>>({})
-  const [recentAssets, setRecentAssets] = useState<Array<{ url: string; kind: 'image' | 'audio' | 'file' }>>([])
+  const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [fileAccept, setFileAccept] = useState<string>('')
@@ -1445,12 +1452,13 @@ export function ChatView({
   }, [previewCache])
 
   const handleSend = async () => {
-    if (!draft.trim()) return
+    if (!draft.trim() && pendingAssets.length === 0) return
 
-    let content = draft.trim()
+    const attachmentContent = pendingAssets.map((asset) => asset.token).join('\n\n')
+    let content = [draft.trim(), attachmentContent].filter(Boolean).join('\n\n')
 
     // Handle slash commands
-    if (content.startsWith('/')) {
+    if (pendingAssets.length === 0 && content.startsWith('/')) {
       setDraft('')
       setSlashOpen(false)
       setSlashResult(null)
@@ -1492,6 +1500,7 @@ export function ChatView({
     try {
       await onSendMessage(content, modelConfig, replyContext?.replyToId)
       setDraft('')
+      setPendingAssets([])
       setReplyContext(null)
     } catch (error) {
       console.error('Failed to send message:', error)
@@ -1548,7 +1557,7 @@ export function ChatView({
       const isImage = file.type.startsWith('image/')
       const isAudio = file.type.startsWith('audio/')
       const isVideo = file.type.startsWith('video/')
-      const kind: 'image' | 'audio' | 'file' = isImage ? 'image' : isAudio ? 'audio' : 'file'
+      const kind: PendingAsset['kind'] = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'file'
       const token = isImage
         ? `![${file.name}](${asset.url})`
         : isAudio
@@ -1556,8 +1565,7 @@ export function ChatView({
           : isVideo
             ? `[video:${file.name}](${asset.url})`
             : `[file:${file.name}](${asset.url})`
-      setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
-      setRecentAssets((prev) => [{ url: asset.url, kind }, ...prev].slice(0, 8))
+      setPendingAssets((prev) => [...prev, { url: asset.url, filename: file.name, kind, token }])
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Upload failed')
     } finally {
@@ -2694,7 +2702,7 @@ export function ChatView({
           />
           <button
             onClick={handleSend}
-            disabled={sending || uploading || !draft.trim() || !currentAgentId}
+            disabled={sending || uploading || (!draft.trim() && pendingAssets.length === 0) || !currentAgentId}
             className={`flex items-center justify-center rounded-full bg-[#f87500] text-white transition hover:bg-[#dc6900] disabled:cursor-not-allowed disabled:opacity-60 ${compactUi ? 'h-9 w-9' : 'h-10 w-10'}`}
             aria-label={t('chat.send')}
           >
@@ -2715,16 +2723,32 @@ export function ChatView({
         </div>
         </div>
 
-        {recentAssets.length > 0 && (
+        {pendingAssets.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
-            {recentAssets.map((a, i) => {
-              const token = a.kind === 'image' ? `![](${a.url})` : a.kind === 'audio' ? `[audio](${a.url})` : `[file](${a.url})`
-              return (
-                <button key={`${a.url}-${i}`} type="button" onClick={() => setDraft((p) => `${p}${p ? '\n\n' : ''}${token}`)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-indigo-500">
-                  Insert {a.kind}
+            {pendingAssets.map((asset, i) => (
+              <div key={`${asset.url}-${i}`} className="flex max-w-[260px] items-center gap-2 rounded-xl border border-[#e4ded4] bg-white/80 px-2.5 py-2 text-xs shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80">
+                {asset.kind === 'image' ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={asset.url} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                ) : (
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${asset.kind === 'video' ? 'bg-cyan-500/15 text-cyan-600' : asset.kind === 'audio' ? 'bg-pink-500/15 text-pink-600' : 'bg-indigo-500/15 text-indigo-600'}`}>
+                    {asset.kind === 'video' ? 'VID' : asset.kind === 'audio' ? 'AUD' : 'FILE'}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold text-[#302b25] dark:text-zinc-200">{asset.filename}</span>
+                  <span className="block text-[10px] uppercase tracking-wide text-[#8a8378] dark:text-zinc-500">{asset.kind}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPendingAssets((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="rounded-full px-1.5 py-0.5 text-sm leading-none text-[#8a8378] hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"
+                  aria-label="Remove attachment"
+                >
+                  x
                 </button>
-              )
-            })}
+              </div>
+            ))}
           </div>
         )}
 
