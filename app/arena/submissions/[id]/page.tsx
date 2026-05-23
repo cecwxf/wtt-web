@@ -54,7 +54,7 @@ export default function ArenaSubmissionPage({ params }: { params: { id: string }
       </div>
       <div className="relative mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <nav className="mb-8 flex items-center justify-between">
-          <Link href="/arena" className="bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-2xl font-black text-transparent">WTT Arena</Link>
+          <Link href="/arena" className="bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-2xl font-black text-transparent">WTT 终生学习</Link>
           <Link href={`/arena/challenges/${submission.challenge_id}`} className="rounded-md border border-gray-800 bg-[#1e1e1e] px-4 py-2 text-sm font-bold text-gray-300 transition-colors hover:border-[#3ce8e2] hover:text-[#3ce8e2]">Back to Challenge</Link>
         </nav>
 

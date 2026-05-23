@@ -342,14 +342,14 @@ const copy = {
     function: '函数', timeLimit: '时间限制', memory: '内存', examples: '样例', input: '输入', expected: '期望输出',
     language: '语言', run: '交给 Agent 运行并提交', judging: 'Agent 运行中...', console: '运行结果', notSubmitted: '未提交', hidden: '隐藏测试已脱敏',
     noSubmission: '提交后会在这里看到真实 Agent/Runner 判题结果。历史提交会持久化到 WTT 后端。', firstAc: '暂无 AC 记录，拿下首个榜单位置。',
-    agentTitle: 'Agent 对话', agentRole: '固定使用 Codex Arena Coach：agent-16a45cf0dd8b。所有登录用户都可使用，不需要 claim 该 Agent。',
+    agentTitle: 'Agent 对话', agentRole: '固定使用 Codex 终生学习 Coach：agent-16a45cf0dd8b。所有登录用户都可使用，不需要 claim 该 Agent。',
     agentWaiting: '直接在下面和 Agent 对话。', openFull: '打开完整提交 →',
-    chatTitle: 'Arena Coach', chatIntro: '真实 WTT Agent 会话；Agent 会读取 Arena 题库长期记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录后可对话。', chatSyncing: '正在连接固定 Arena Agent...',
+    chatTitle: '终生学习 Coach', chatIntro: '真实 WTT Agent 会话；Agent 会读取终生学习题库长期记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录后可对话。', chatSyncing: '正在连接固定终生学习 Agent...',
     chatWorking: 'Agent 正在思考 / 输出中', whiteboardWorking: 'Agent 正在生成白板',
     mode: '模式',
     coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
     aiDesc: 'AI Kernel 题默认使用完整 OpenCL C 程序：包含 platform/device 选择、program build、kernel arg、enqueue、readback 和 JSON 输出。提交后由 agent-mac-opencl-kernel 在 Mac mini 上编译运行 example/hidden case，并返回时间和 kernel memory；CUDA C++ / Triton 作为目标语言保留给远程硬件 runner。',
-    interviewMode: 'AI 面试练习模式', interviewHint: '开放式面试题，直接在右侧和 Arena Coach 练习结构化回答。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
+    interviewMode: 'AI 面试练习模式', interviewHint: '开放式面试题，直接在右侧和终生学习 Coach 练习结构化回答。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
     consultation: '咨询说明', gaokaoIntro: '高考志愿 Ask 咨询。不是刷题 Problem；请直接输入省份、科类/选科、分数、位次、专业兴趣和城市偏好。',
   },
   en: {
@@ -1322,7 +1322,7 @@ function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge |
     return locale === 'zh' ? gaokaoVolunteerSkillZh : gaokaoVolunteerSkillEn
   }
   const whiteboardProtocol = locale === 'zh'
-    ? '本轮先输出正常 Arena Chat 回答，然后在末尾必须附带一个 WHITEBOARD_DIAGRAM JSON 协议块；前端会隐藏协议块，只在 chat 中显示正文，并同步渲染右侧 Markdown/HTML 白板。WHITEBOARD_DIAGRAM 必须包含 format/title/summary/mermaid/html/steps 字段。steps[0].mermaid 必须有第一段局部诊断/流程图；steps 中 architecture_concepts 必须有局部架构图，decomposition 或 complete_answer 必须有局部流程图。html 必须基于你刚刚写出的回答生成，不要按 Markdown 四步标题组织；要绘制大尺寸 SVG 主图（viewBox 至少约 1200x560，宽度 100%，主图高度不少于 420px），必须有真实 CSS 动画（@keyframes、stroke-dasharray/stroke-dashoffset 或 transform/opacity），箭头/路径动画结束后要完整可见；必须包含图旁文字说明、公式逐项说明、一个简单示例、动画说明和结论检查清单。不要使用通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。'
+    ? '本轮先输出正常学习 Coach 回答，然后在末尾必须附带一个 WHITEBOARD_DIAGRAM JSON 协议块；前端会隐藏协议块，只在 chat 中显示正文，并同步渲染右侧 Markdown/HTML 白板。WHITEBOARD_DIAGRAM 必须包含 format/title/summary/mermaid/html/steps 字段。steps[0].mermaid 必须有第一段局部诊断/流程图；steps 中 architecture_concepts 必须有局部架构图，decomposition 或 complete_answer 必须有局部流程图。html 必须基于你刚刚写出的回答生成，不要按 Markdown 四步标题组织；要绘制大尺寸 SVG 主图（viewBox 至少约 1200x560，宽度 100%，主图高度不少于 420px），必须有真实 CSS 动画（@keyframes、stroke-dasharray/stroke-dashoffset 或 transform/opacity），箭头/路径动画结束后要完整可见；必须包含图旁文字说明、公式逐项说明、一个简单示例、动画说明和结论检查清单。不要使用通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。'
     : 'First output the normal Arena Chat answer, then append one WHITEBOARD_DIAGRAM JSON protocol block at the end. The frontend hides the protocol block from chat and renders the Markdown/HTML board on the right. WHITEBOARD_DIAGRAM must include format/title/summary/mermaid/html/steps. steps[0].mermaid must include the first-section local diagnosis/flow diagram; architecture_concepts must include a local architecture diagram, and decomposition or complete_answer must include a local flow diagram. The html must be generated from the answer you just wrote and must not use the four Markdown step headings. Draw a large SVG main diagram with a viewBox of at least about 1200x560, width 100%, and main diagram height at least 420px. Include real CSS animation using @keyframes, stroke-dasharray/stroke-dashoffset, or transform/opacity; arrow/path animation must end fully visible. Include adjacent text explanations, formula-by-formula explanation, one simple example, animation explanation, and conclusion checklist. Do not use generic templates, placeholders, script, JavaScript, iframe, external resources, network images, or forms.'
   if (mode === 'interview_answer') {
     return locale === 'zh'
@@ -1628,7 +1628,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setArenaTyping({
       topicId,
       agentId: ARENA_AGENT_ID,
-      agentName: 'Arena Coach',
+      agentName: locale === 'zh' ? '终生学习 Coach' : 'Arena Coach',
       statusText,
       statusKind,
       startedAt: now,
@@ -2152,7 +2152,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       <div className="flex h-[100dvh] flex-col overflow-hidden">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-800 bg-[#151515]/95 px-3 py-2 backdrop-blur sm:px-4 sm:py-3">
           <div className="flex min-w-0 items-center gap-3 sm:gap-5">
-            <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">WTT Arena</Link>
+            <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">{locale === 'zh' ? 'WTT 终生学习' : 'WTT Arena'}</Link>
             <div className="hidden items-center gap-4 text-sm text-gray-500 lg:flex">
               <Link href="/arena" className="hover:text-[#3ce8e2]">{t.challenges}</Link>
               <span>{t.playground}</span>

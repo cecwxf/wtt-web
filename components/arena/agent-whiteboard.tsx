@@ -638,7 +638,7 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
                   title: locale === 'zh' ? '本地 HTML 动画白板' : 'Local HTML animation board',
                   summary: [locale === 'zh' ? 'wtt-web 已加载本地 HTML player。Agent 回答后会自动进行二次推理，并把 HTML/SVG 白板传入这里渲染。' : 'wtt-web has loaded the local HTML player. After each Agent answer, a second-pass HTML/SVG board will render here.'],
                   steps: [
-                    { title: locale === 'zh' ? '等待回答' : 'Waiting for answer', markdown: locale === 'zh' ? '发送 Arena Chat 后，Agent 会先输出文本回答，然后自动生成白板协议。' : 'After Arena Chat, the Agent first returns text, then automatically generates the board protocol.' },
+                    { title: locale === 'zh' ? '等待回答' : 'Waiting for answer', markdown: locale === 'zh' ? '发送学习 Coach 消息后，Agent 会先输出文本回答，然后自动生成白板协议。' : 'After Arena Chat, the Agent first returns text, then automatically generates the board protocol.' },
                     { title: locale === 'zh' ? 'HTML 渲染' : 'HTML rendering', markdown: locale === 'zh' ? 'HTML 模式只渲染 Agent 二次推理生成的 html 字段，不使用前端模板代替。' : 'HTML mode only renders the html field produced by the Agent second pass; it does not replace it with a frontend template.' },
                   ],
                 }}
@@ -650,7 +650,7 @@ export function AgentWhiteboard({ challengeId, locale, diagram, expanded, busy, 
                 <p className="text-base font-black text-slate-800">{locale === 'zh' ? '等待 Agent 生成白板' : 'Waiting for Agent whiteboard'}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
                   {locale === 'zh'
-                    ? '发送 Arena Chat 后，Agent 会先输出回答，再自动二次推理生成图文白板和 sandbox HTML 动画。'
+                    ? '发送学习 Coach 消息后，Agent 会先输出回答，再自动二次推理生成图文白板和 sandbox HTML 动画。'
                     : 'After Arena Chat, the Agent answers first, then automatically runs a second pass to generate diagram and sandboxed HTML boards.'}
                 </p>
               </div>

@@ -30,9 +30,9 @@ const productPillars = [
   },
   {
     href: '/arena',
-    zhTitle: 'Arena 训练场',
+    zhTitle: '终生学习',
     enTitle: 'Arena Training',
-    zhDesc: '技术面试、教育学科、AI Kernel、公式推导和白板动画集中在 Arena，用 Agent 做结构化训练。',
+    zhDesc: '技术面试、教育学科、AI Kernel、公式推导和白板动画集中在终生学习，用 Agent 做结构化训练。',
     enDesc: 'Technical interviews, education boards, AI kernels, derivations, and animated whiteboards live in Arena.',
     icon: Trophy,
   },
@@ -66,7 +66,7 @@ export default function Home() {
       desc: zh ? '多个 Agent 和用户围绕同一 Topic 协作，支持 P2P、团队讨论和任务分工。' : 'Multiple agents and users collaborate inside one topic for P2P, team discussion, and task delegation.',
     },
     {
-      title: zh ? 'Arena Topic' : 'Arena Topics',
+      title: zh ? '终生学习 Topic' : 'Arena Topics',
       desc: zh ? '一道题对应一个训练 Topic，保存提问、白板、提交记录、掌握度和下一步建议。' : 'Each challenge maps to a training topic with chat, whiteboards, submissions, mastery state, and next steps.',
     },
   ]
@@ -165,7 +165,7 @@ export default function Home() {
     },
     {
       href: '/arena/sections/education',
-      title: zh ? '教育学科' : 'Education',
+      title: zh ? '学科学习' : 'Education',
       desc: zh ? '小学、初中、高中学科训练；公式、物理过程、数学证明都用图和动画解释。' : 'Primary, middle, and high-school boards with diagrams and animations for formulas, physics, and proofs.',
       icon: GraduationCap,
     },
@@ -213,7 +213,7 @@ export default function Home() {
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-650">
               {zh
-                ? 'WTT 不是 DDS 中间件，也没有实现 DDS 协议；它只是借鉴 DDS 的 Topic 思想，把用户、Agent、OpenClaw、Codex、Claude Code、本地文件、插件、Arena 训练和若水广场连接在同一套协作上下文里。你可以从一个 Topic 开始聊天、群聊、运行任务、发布内容，也可以把本地 Agent runtime claim 到 Web。'
+                ? 'WTT 不是 DDS 中间件，也没有实现 DDS 协议；它只是借鉴 DDS 的 Topic 思想，把用户、Agent、OpenClaw、Codex、Claude Code、本地文件、插件、终生学习和若水广场连接在同一套协作上下文里。你可以从一个 Topic 开始聊天、群聊、运行任务、发布内容，也可以把本地 Agent runtime claim 到 Web。'
                 : 'WTT is not DDS middleware and does not implement the DDS protocol. It borrows the topic-oriented idea from DDS to connect users, agents, OpenClaw, Codex, Claude Code, local files, plugins, Arena training, and Ruoshui Square in one collaboration context. Start from a topic to chat, collaborate, run tasks, publish content, or claim a local agent runtime into the web.'}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -222,7 +222,7 @@ export default function Home() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href="/arena" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
-                {zh ? '进入 Arena' : 'Open Arena'}
+                {zh ? '进入终生学习' : 'Open Arena'}
               </Link>
               <Link href="/square" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
                 {zh ? '若水广场' : 'Ruoshui Square'}
@@ -415,11 +415,11 @@ wtt-connect status all`}</pre>
         <section className="mt-20">
           <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Arena</p>
-              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? 'Arena 是 WTT 的训练 Topic 集合，不是整个首页。' : 'Arena is a training-topic collection, not the whole homepage.'}</h2>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{zh ? '终生学习' : 'Arena'}</p>
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? '终生学习是 WTT 的训练 Topic 集合，不是整个首页。' : 'Arena is a training-topic collection, not the whole homepage.'}</h2>
             </div>
             <Link href="/arena" className="inline-flex items-center gap-2 text-sm font-black text-teal-700 hover:text-teal-600">
-              {zh ? '查看 Arena' : 'View Arena'}
+              {zh ? '查看终生学习' : 'View Arena'}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -445,7 +445,7 @@ wtt-connect status all`}</pre>
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link href="/arena" className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 text-sm font-black text-white hover:bg-white/15">
-              {zh ? '进入 Arena 训练' : 'Open Arena Training'}
+              {zh ? '进入终生学习' : 'Open Arena Training'}
             </Link>
           </div>
         </section>

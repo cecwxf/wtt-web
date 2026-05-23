@@ -72,10 +72,10 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         <Link
           href={buildAgentUrl('/arena', agentId)}
           className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-2 py-1.5 text-xs text-amber-700 transition hover:bg-amber-100 hover:text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/40 dark:hover:text-amber-200 xl:px-2.5"
-          title="Arena"
+          title={locale === 'zh' ? '终生学习' : 'Arena'}
         >
           <Trophy className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Arena</span>
+          <span className="hidden sm:inline">{locale === 'zh' ? '终生学习' : 'Arena'}</span>
         </Link>
 
         <Link

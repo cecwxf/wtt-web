@@ -417,7 +417,7 @@ function descriptionFor(bank: EducationBank, module: EducationModule, pattern: E
 
 白板提示：用 ${module.concepts.slice(0, 5).join('、')} 组织图示、公式、表格或流程，突出本题的关键步骤、易错点和迁移变式。
 
-答题要求：请先独立作答；需要帮助时，可让 Arena Coach 追问、点评或在白板上展开解题结构。`
+答题要求：请先独立作答；需要帮助时，可让终生学习 Coach 追问、点评或在白板上展开解题结构。`
 }
 
 function makeBankChallenges(bank: EducationBank): Challenge[] {

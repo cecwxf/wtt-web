@@ -36,7 +36,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
       <section className="relative mx-auto max-w-7xl px-3 py-6 sm:px-5 sm:py-8 lg:px-8 lg:py-10">
         <nav className="mb-8 flex flex-wrap items-center justify-between gap-3 lg:mb-12">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">WTT Arena</Link>
+            <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">WTT 终生学习</Link>
             <span className="text-gray-700">/</span>
             <span className="truncate text-sm font-bold text-gray-400">{section.titleZh}</span>
           </div>
@@ -177,7 +177,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
           <aside className="space-y-4">
             <div className="rounded-xl border border-gray-800 bg-[#1e1e1e] p-5">
               <h2 className="font-black text-white">来源参考</h2>
-              <p className="mt-2 text-sm leading-6 text-gray-400">题面按 WTT Arena 口径重写，板块选题参考以下公开来源方向。</p>
+              <p className="mt-2 text-sm leading-6 text-gray-400">题面按终生学习训练口径重写，板块选题参考以下公开来源方向。</p>
               <div className="mt-4 space-y-2">
                 {section.sources.map((source) => (
                   <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-gray-800 bg-[#151515] px-3 py-2 text-sm text-gray-300 hover:border-[#3ce8e2] hover:text-[#3ce8e2]">
@@ -190,7 +190,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
               <h2 className="font-black text-white">使用方式</h2>
               <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-400">
                 <li>• Judge 题：进入后可用 Python/C/C++ 提交给 Agent Runner。</li>
-                <li>• Coach 题：进入后直接用右侧 Arena Coach 做苏格拉底、答题点评或 Ask 问答。</li>
+                <li>• Coach 题：进入后直接用右侧学习 Coach 做苏格拉底、答题点评或 Ask 问答。</li>
                 <li>• 白板会根据 Agent 回答同步生成图表、公式和解题结构。</li>
                 <li>• 隐藏测试和上下文注入仍保持脱敏。</li>
               </ul>

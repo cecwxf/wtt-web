@@ -367,7 +367,7 @@ export const arenaSections: ArenaSection[] = [
     titleZh: '教育板块',
     eyebrow: '小学 · 初中 · 高中 · Coach',
     description: 'Stage-based learning boards with Arena Coach and whiteboard support.',
-    descriptionZh: '按小学、初中、高中组织学科训练；每道题复用 Arena Chat 和白板讲解。',
+    descriptionZh: '按小学、初中、高中组织学科训练；每道题复用学习 Coach 和白板讲解。',
     accent: 'from-amber-200 to-pink-500',
     href: '/arena/sections/education',
     sources: [

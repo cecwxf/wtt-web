@@ -9,7 +9,7 @@ export const gaokaoVolunteerChallenges: Challenge[] = [
     slug: 'gaokao-volunteer-advisor',
     description: `高考志愿 Ask 咨询入口。这里不是刷题 problem，而是基于本地院校知识库和公开来源索引做志愿咨询。
 
-请在右侧 Arena Coach 中直接提问，例如：
+请在右侧终生学习 Coach 中直接提问，例如：
 - 我是四川物理类，2026 高考预估 625 分，省排名约 9000，想学计算机或电子信息，怎么冲稳保？
 - 河南历史类 580 分，想当老师或考公，哪些大学和专业更稳？
 - 浙江考生，喜欢医学但不想读太长年限，应该怎么选专业和城市？
