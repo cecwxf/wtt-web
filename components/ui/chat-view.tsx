@@ -1760,9 +1760,9 @@ export function ChatView({
           </div>
         </div>
       )}
-      <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 py-0.5' : 'px-4 py-2'}`}>
-        <div className={`flex items-center justify-between ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
-          <div className="min-w-0">
+      <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pt-1' : 'px-4 pt-2'}`}>
+        <div className={`flex items-start justify-between ${compactUi ? 'gap-1.5' : 'gap-3'}`}>
+          <div className="min-w-0 flex-1">
             <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
               <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}># {topicName}</h2>
               {!compactUi && (
@@ -1776,33 +1776,49 @@ export function ChatView({
                   {t('chat.live')}
                 </span>
               )}
-              <div className="ml-1 inline-flex shrink-0 rounded-full border border-[#e5e0d8] bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
+            </div>
+            <div className={`flex items-center ${compactUi ? 'mt-1 gap-4' : 'mt-2 gap-5'}`}>
+              <div className="flex items-center gap-5">
                 <button
                   type="button"
                   onClick={() => setActiveTab('chat')}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
                     activeTab === 'chat'
-                      ? 'bg-[#1f2328] text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-950'
-                      : 'text-[#8a8378] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
+                      ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
+                      : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
                   }`}
                 >
-                  Chat
+                  <span>Chat</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                    activeTab === 'chat'
+                      ? 'bg-[#1f2328] text-white dark:bg-zinc-100 dark:text-zinc-950'
+                      : 'bg-[#eee8dd] text-[#8a8378] dark:bg-zinc-800 dark:text-zinc-400'
+                  }`}>
+                    {visibleMessages.length}
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('files')}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
                     activeTab === 'files'
-                      ? 'bg-[#1f2328] text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-950'
-                      : 'text-[#8a8378] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
+                      ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
+                      : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
                   }`}
                 >
-                  Files {conversationFiles.length > 0 ? conversationFiles.length : ''}
+                  <span>Files</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                    activeTab === 'files'
+                      ? 'bg-[#1f2328] text-white dark:bg-zinc-100 dark:text-zinc-950'
+                      : 'bg-[#eee8dd] text-[#8a8378] dark:bg-zinc-800 dark:text-zinc-400'
+                  }`}>
+                    {conversationFiles.length}
+                  </span>
                 </button>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             {extraHeaderActions}
             <div className="relative">
               <button
