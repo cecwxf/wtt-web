@@ -147,26 +147,34 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
           </motion.div>
         </div>
         {users.map((user, index) => (
-          <motion.div
+          <div
             key={user.id}
-            className="absolute flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-200/30 bg-teal-300/15 text-[9px] font-black uppercase tracking-[0.12em] text-teal-100 backdrop-blur"
+            className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{ left: `${(user.x / 420) * 100}%`, top: `${(user.y / 400) * 100}%`, transform: 'translate(-50%, -50%)' }}
-            animate={{ y: [0, -7, 0], opacity: [0.84, 1, 0.84] }}
-            transition={{ duration: 3.2, repeat: Infinity, delay: index * 0.35 }}
           >
-            {user.label}
-          </motion.div>
+            <motion.div
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-200/30 bg-teal-300/15 text-[9px] font-black uppercase tracking-[0.12em] text-teal-100 backdrop-blur"
+              animate={{ y: [0, -7, 0], opacity: [0.84, 1, 0.84] }}
+              transition={{ duration: 3.2, repeat: Infinity, delay: index * 0.35 }}
+            >
+              {user.label}
+            </motion.div>
+          </div>
         ))}
         {agents.map((agent, index) => (
-          <motion.div
+          <div
             key={agent.id}
-            className="absolute rounded-full border border-white/15 bg-white/10 px-2.5 py-1.5 text-[10px] font-black text-white shadow-lg backdrop-blur"
+            className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{ left: `${(agent.x / 420) * 100}%`, top: `${(agent.y / 400) * 100}%`, transform: 'translate(-50%, -50%)' }}
-            animate={{ scale: [1, 1.06, 1] }}
-            transition={{ duration: 3, repeat: Infinity, delay: index * 0.16 }}
           >
-            {agent.label}
-          </motion.div>
+            <motion.div
+              className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1.5 text-[10px] font-black text-white shadow-lg backdrop-blur"
+              animate={{ scale: [1, 1.06, 1] }}
+              transition={{ duration: 3, repeat: Infinity, delay: index * 0.16 }}
+            >
+              {agent.label}
+            </motion.div>
+          </div>
         ))}
         <div className="absolute right-1 top-1 flex max-w-[180px] flex-wrap justify-end gap-1 text-[9px] font-bold text-slate-300">
           <span className="rounded-full bg-amber-300/15 px-2 py-1 text-amber-100">{zh ? '同用户 Agent 协作' : 'Same-user agents'}</span>
