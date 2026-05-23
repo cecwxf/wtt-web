@@ -36,10 +36,20 @@ const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = (credentials?.email ?? (credentials as Record<string, string | undefined>)?.identifier ?? '').trim().toLowerCase()
+        const record = credentials as Record<string, string | undefined>
+        const authType = (record?.authType || 'email_password').trim()
+        const email = (credentials?.email ?? record?.identifier ?? '').trim().toLowerCase()
+        const phone = (record?.phone || record?.identifier || '').trim()
+        const code = (record?.code || '').trim()
         const password = credentials?.password ?? ''
 
-        if (!email || !password) {
+        if (authType === 'email_password' && (!email || !password)) {
+          return null
+        }
+        if (authType === 'phone_password' && (!phone || !password)) {
+          return null
+        }
+        if (authType === 'phone_code' && (!phone || !code)) {
           return null
         }
 
@@ -57,10 +67,20 @@ const authOptions: NextAuthOptions = {
         }
 
         try {
-          const response = await fetch(`${WTT_API_URL}/auth/login`, {
+          const endpoint = authType === 'phone_code'
+            ? '/auth/phone/login'
+            : authType === 'phone_password'
+              ? '/auth/phone/password-login'
+              : '/auth/login'
+          const body = authType === 'phone_code'
+            ? { phone, code }
+            : authType === 'phone_password'
+              ? { phone, password }
+              : { email, password }
+          const response = await fetch(`${WTT_API_URL}${endpoint}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify(body),
           })
 
           if (!response.ok) {
@@ -76,6 +96,7 @@ const authOptions: NextAuthOptions = {
           return {
             id: data.user_id,
             email: data.email ?? null,
+            phone: data.phone ?? null,
             name: data.display_name,
             accessToken: data.access_token ?? data.token,
           }

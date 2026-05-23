@@ -19,6 +19,8 @@ import { useI18n } from "@/lib/i18n-provider";
 import { ANDROID_LATEST_LABEL } from "@/lib/android-release";
 
 type AuthTab = "signin" | "register";
+type SignInMethod = "phone-code" | "phone-password" | "email";
+type RegisterMethod = "phone" | "email";
 
 const APK_DOWNLOAD_URL = "/downloads/wtt-android-latest.apk";
 
@@ -27,6 +29,8 @@ export default function LoginPage() {
   const { t } = useI18n();
 
   const [tab, setTab] = useState<AuthTab>("signin");
+  const [signInMethod, setSignInMethod] = useState<SignInMethod>("phone-code");
+  const [registerMethod, setRegisterMethod] = useState<RegisterMethod>("phone");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -35,10 +39,17 @@ export default function LoginPage() {
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [signInPhone, setSignInPhone] = useState("");
+  const [signInPhoneCode, setSignInPhoneCode] = useState("");
+  const [signInPhonePassword, setSignInPhonePassword] = useState("");
+  const [resetPhoneCode, setResetPhoneCode] = useState("");
+  const [resetPhonePassword, setResetPhonePassword] = useState("");
 
   // Register
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
+  const [registerPhoneCode, setRegisterPhoneCode] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerPassword2, setRegisterPassword2] = useState("");
 
@@ -80,6 +91,185 @@ export default function LoginPage() {
       setError(t("login.errorInvalidEmailOrPassword"));
     } catch {
       setError(t("login.errorAuthFailed"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendPhoneCode = async (phone: string, purpose: "login" | "register" | "reset_password") => {
+    setError("");
+    setInfo("");
+    const normalized = phone.trim();
+    if (!normalized) {
+      setError("请输入手机号");
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/auth/phone/send-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalized, purpose }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.detail ?? "发送验证码失败");
+        return;
+      }
+      setInfo(data.debug_code ? `验证码已发送。测试码：${data.debug_code}` : "验证码已发送");
+    } catch {
+      setError("发送验证码时网络异常");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhoneCodeSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setInfo("");
+    if (!signInPhone.trim() || !signInPhoneCode.trim()) {
+      setError("请输入手机号和验证码");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await signIn("credentials", {
+        authType: "phone_code",
+        phone: signInPhone.trim(),
+        code: signInPhoneCode.trim(),
+        redirect: false,
+      });
+      if (result?.ok) {
+        router.push("/feed");
+        return;
+      }
+      setError("手机号或验证码错误");
+    } catch {
+      setError("登录失败，请稍后重试");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhonePasswordSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setInfo("");
+    if (!signInPhone.trim() || !signInPhonePassword) {
+      setError("请输入手机号和密码");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await signIn("credentials", {
+        authType: "phone_password",
+        phone: signInPhone.trim(),
+        password: signInPhonePassword,
+        redirect: false,
+      });
+      if (result?.ok) {
+        router.push("/feed");
+        return;
+      }
+      setError("手机号或密码错误");
+    } catch {
+      setError("登录失败，请稍后重试");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhoneRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setInfo("");
+    const displayName = registerName.trim();
+    if (!displayName || !registerPhone.trim() || !registerPhoneCode.trim() || !registerPassword || !registerPassword2) {
+      setError("请完整填写手机号注册信息");
+      return;
+    }
+    if (registerPassword.length < 8) {
+      setError(t("login.errorPasswordMin"));
+      return;
+    }
+    if (registerPassword !== registerPassword2) {
+      setError(t("login.errorPasswordMismatch"));
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/auth/phone/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: registerPhone.trim(),
+          code: registerPhoneCode.trim(),
+          password: registerPassword,
+          display_name: displayName,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.detail ?? "手机号注册失败");
+        return;
+      }
+      const result = await signIn("credentials", {
+        authType: "phone_password",
+        phone: registerPhone.trim(),
+        password: registerPassword,
+        redirect: false,
+      });
+      if (result?.ok) {
+        router.push("/feed");
+        return;
+      }
+      setInfo("注册成功，请使用手机号登录");
+      setTab("signin");
+      setSignInMethod("phone-password");
+      setSignInPhone(registerPhone);
+    } catch {
+      setError("注册时网络异常");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhoneResetPassword = async () => {
+    setError("");
+    setInfo("");
+    if (!signInPhone.trim() || !resetPhoneCode.trim() || !resetPhonePassword) {
+      setError("请输入手机号、验证码和新密码");
+      return;
+    }
+    if (resetPhonePassword.length < 8) {
+      setError(t("login.errorPasswordMin"));
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/auth/phone/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: signInPhone.trim(),
+          code: resetPhoneCode.trim(),
+          new_password: resetPhonePassword,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.detail ?? "重置密码失败");
+        return;
+      }
+      setInfo("密码已重置，请使用手机号密码登录");
+      setShowForgotPassword(false);
+      setSignInMethod("phone-password");
+      setSignInPhonePassword("");
+      setResetPhoneCode("");
+      setResetPhonePassword("");
+    } catch {
+      setError("重置密码时网络异常");
     } finally {
       setLoading(false);
     }
@@ -274,61 +464,161 @@ export default function LoginPage() {
 
         {tab === "signin" ? (
           <>
-            {/* OAuth — primary sign-in methods */}
-            <div className="space-y-2.5">
-              <button
-                onClick={() => handleOAuthSignIn("google")}
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
-              >
-                <svg className="h-5 w-5" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                {t("login.continueGoogle")}
-              </button>
-
-              <button
-                onClick={() => handleOAuthSignIn("github")}
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
-              >
-                <Github className="h-5 w-5" />
-                {t("login.continueGithub")}
-              </button>
-
-              <button
-                onClick={() => handleOAuthSignIn("twitter")}
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
-              >
-                <Twitter className="h-5 w-5" />
-                {t("login.continueTwitter")}
-              </button>
+            <div className="mb-4 grid grid-cols-3 rounded-xl border border-slate-200 bg-slate-50 p-1">
+              {[
+                ["phone-code", "手机验证码"],
+                ["phone-password", "手机密码"],
+                ["email", "邮箱"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setSignInMethod(value as SignInMethod);
+                    setError("");
+                    setInfo("");
+                    setShowForgotPassword(false);
+                  }}
+                  className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${signInMethod === value ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
-            {/* Divider */}
-            <div className="relative my-5">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200" />
-              </div>
-              <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                {t("login.or")}
-              </p>
-            </div>
+            {signInMethod === "phone-code" && (
+              <form onSubmit={handlePhoneCodeSignIn} className="space-y-3.5">
+                <label className="block">
+                  <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
+                    <Smartphone className="h-3.5 w-3.5" />
+                    手机号
+                  </span>
+                  <input
+                    type="tel"
+                    value={signInPhone}
+                    onChange={(e) => setSignInPhone(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    placeholder="中国手机号可直接输入 13800138000，海外请输入 +1..."
+                    required
+                  />
+                </label>
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={signInPhoneCode}
+                    onChange={(e) => setSignInPhoneCode(e.target.value)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    placeholder="验证码"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => sendPhoneCode(signInPhone, "login")}
+                    disabled={loading}
+                    className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+                  >
+                    发验证码
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? t("login.signingIn") : "手机号登录"}
+                  {!loading && <ArrowRight className="h-4 w-4" />}
+                </button>
+              </form>
+            )}
 
-            {/* Email / password form */}
+            {signInMethod === "phone-password" && (
+              <form onSubmit={handlePhonePasswordSignIn} className="space-y-3.5">
+                <label className="block">
+                  <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
+                    <Smartphone className="h-3.5 w-3.5" />
+                    手机号
+                  </span>
+                  <input
+                    type="tel"
+                    value={signInPhone}
+                    onChange={(e) => setSignInPhone(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    placeholder="13800138000 或 +1..."
+                    required
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
+                    <Lock className="h-3.5 w-3.5" />
+                    密码
+                  </span>
+                  <input
+                    type="password"
+                    value={signInPhonePassword}
+                    onChange={(e) => setSignInPhonePassword(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    placeholder={t("login.passwordPlaceholder")}
+                    required
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword((v) => !v)}
+                  className="-mt-1 text-left text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                >
+                  {showForgotPassword ? "收起重置密码" : "用验证码重置密码"}
+                </button>
+                {showForgotPassword && (
+                  <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-xs text-indigo-700">
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={resetPhoneCode}
+                        onChange={(e) => setResetPhoneCode(e.target.value)}
+                        className="rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm text-slate-800 outline-none"
+                        placeholder="验证码"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => sendPhoneCode(signInPhone, "reset_password")}
+                        disabled={loading}
+                        className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+                      >
+                        发验证码
+                      </button>
+                    </div>
+                    <input
+                      type="password"
+                      value={resetPhonePassword}
+                      onChange={(e) => setResetPhonePassword(e.target.value)}
+                      className="w-full rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm text-slate-800 outline-none"
+                      placeholder="新密码，至少 8 位"
+                    />
+                    <button
+                      type="button"
+                      onClick={handlePhoneResetPassword}
+                      disabled={loading}
+                      className="w-full rounded-lg bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+                    >
+                      重置密码
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? t("login.signingIn") : "手机号密码登录"}
+                  {!loading && <ArrowRight className="h-4 w-4" />}
+                </button>
+              </form>
+            )}
+
+            {signInMethod === "email" && (
+              <>
             <form onSubmit={handleSignIn} className="space-y-3.5">
               <label className="block">
                 <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
@@ -404,8 +694,172 @@ export default function LoginPage() {
             >
               {t("login.resendActivation")}
             </button>
+              </>
+            )}
+
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200" />
+              </div>
+              <p className="relative mx-auto w-fit bg-white px-3 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                {t("login.or")}
+              </p>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                onClick={() => handleOAuthSignIn("google")}
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                {t("login.continueGoogle")}
+              </button>
+
+              <button
+                onClick={() => handleOAuthSignIn("github")}
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
+              >
+                <Github className="h-5 w-5" />
+                {t("login.continueGithub")}
+              </button>
+
+              <button
+                onClick={() => handleOAuthSignIn("twitter")}
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
+              >
+                <Twitter className="h-5 w-5" />
+                {t("login.continueTwitter")}
+              </button>
+            </div>
           </>
         ) : (
+          <>
+          <div className="mb-4 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setRegisterMethod("phone");
+                setError("");
+                setInfo("");
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${registerMethod === "phone" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              手机注册
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRegisterMethod("email");
+                setError("");
+                setInfo("");
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${registerMethod === "email" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              邮箱注册
+            </button>
+          </div>
+
+          {registerMethod === "phone" ? (
+          <form onSubmit={handlePhoneRegister} className="space-y-3.5">
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
+                <User className="h-3.5 w-3.5" />
+                {t("login.displayName")}
+              </span>
+              <input
+                type="text"
+                value={registerName}
+                onChange={(e) => setRegisterName(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                placeholder={t("login.displayNamePlaceholder")}
+                required
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
+                <Smartphone className="h-3.5 w-3.5" />
+                手机号
+              </span>
+              <input
+                type="tel"
+                value={registerPhone}
+                onChange={(e) => setRegisterPhone(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="中国手机号可直接输入 13800138000，海外请输入 +1..."
+                required
+              />
+            </label>
+
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={registerPhoneCode}
+                onChange={(e) => setRegisterPhoneCode(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="验证码"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => sendPhoneCode(registerPhone, "register")}
+                disabled={loading}
+                className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+              >
+                发验证码
+              </button>
+            </div>
+
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
+                <Lock className="h-3.5 w-3.5" />
+                {t("login.password")}
+              </span>
+              <input
+                type="password"
+                value={registerPassword}
+                onChange={(e) => setRegisterPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                placeholder={t("login.passwordMinPlaceholder")}
+                required
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
+                <Lock className="h-3.5 w-3.5" />
+                {t("login.confirmPassword")}
+              </span>
+              <input
+                type="password"
+                value={registerPassword2}
+                onChange={(e) => setRegisterPassword2(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                placeholder={t("login.confirmPasswordPlaceholder")}
+                required
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? t("login.creatingAccount") : "注册并登录"}
+              {!loading && <ArrowRight className="h-4 w-4" />}
+            </button>
+
+            <p className="text-center text-xs text-slate-500">
+              中国手机号可不输入国家码；海外号码请输入 E.164 格式，例如 +14155552671。
+            </p>
+          </form>
+          ) : (
           <form onSubmit={handleRegister} className="space-y-3.5">
             <label className="block">
               <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400">
@@ -480,6 +934,8 @@ export default function LoginPage() {
               {t("login.registerActivationHint")}
             </p>
           </form>
+          )}
+          </>
         )}
 
         {error && (

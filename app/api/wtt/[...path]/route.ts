@@ -144,7 +144,10 @@ function isPublicAuthPath(path: string[]): boolean {
     p === '/auth/forgot-password' ||
     p === '/auth/reset-password' ||
     p === '/auth/phone/send-code' ||
-    p === '/auth/phone/login'
+    p === '/auth/phone/login' ||
+    p === '/auth/phone/register' ||
+    p === '/auth/phone/password-login' ||
+    p === '/auth/phone/reset-password'
   )
 }
 
