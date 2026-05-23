@@ -49,25 +49,25 @@ const productPillars = [
 
 function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
   const users = [
-    { id: 'a-user', label: 'User A', x: 82, y: 164 },
-    { id: 'b-user', label: 'User B', x: 338, y: 164 },
-    { id: 'c-user', label: 'User C', x: 210, y: 314 },
+    { id: 'a-user', label: 'User A', x: 76, y: 166 },
+    { id: 'b-user', label: 'User B', x: 344, y: 166 },
+    { id: 'c-user', label: 'User C', x: 210, y: 334 },
   ]
   const agents = [
-    { id: 'a-codex', owner: 'a', label: 'Codex', x: 58, y: 86 },
-    { id: 'a-claude', owner: 'a', label: 'Claude', x: 124, y: 112 },
-    { id: 'a-openclaw', owner: 'a', label: 'OpenClaw', x: 92, y: 244 },
-    { id: 'b-codex', owner: 'b', label: 'Codex', x: 296, y: 86 },
-    { id: 'b-claude', owner: 'b', label: 'Claude', x: 362, y: 112 },
-    { id: 'b-openclaw', owner: 'b', label: 'OpenClaw', x: 330, y: 244 },
-    { id: 'c-codex', owner: 'c', label: 'Codex', x: 162, y: 266 },
-    { id: 'c-claude', owner: 'c', label: 'Claude', x: 258, y: 266 },
-    { id: 'c-openclaw', owner: 'c', label: 'OpenClaw', x: 210, y: 294 },
+    { id: 'a-codex', owner: 'a', label: 'Codex', x: 70, y: 90 },
+    { id: 'a-claude', owner: 'a', label: 'Claude', x: 116, y: 126 },
+    { id: 'a-openclaw', owner: 'a', label: 'OpenClaw', x: 94, y: 250 },
+    { id: 'b-codex', owner: 'b', label: 'Codex', x: 304, y: 90 },
+    { id: 'b-claude', owner: 'b', label: 'Claude', x: 348, y: 126 },
+    { id: 'b-openclaw', owner: 'b', label: 'OpenClaw', x: 326, y: 250 },
+    { id: 'c-codex', owner: 'c', label: 'Codex', x: 176, y: 280 },
+    { id: 'c-claude', owner: 'c', label: 'Claude', x: 244, y: 280 },
+    { id: 'c-openclaw', owner: 'c', label: 'OpenClaw', x: 210, y: 314 },
   ]
   const ownerGroups = [
-    { id: 'a', label: zh ? 'User A 的 Agent' : "User A's Agents", x: 22, y: 44, width: 126, height: 232, stroke: '#5eead4' },
-    { id: 'b', label: zh ? 'User B 的 Agent' : "User B's Agents", x: 272, y: 44, width: 126, height: 232, stroke: '#818cf8' },
-    { id: 'c', label: zh ? 'User C 的 Agent' : "User C's Agents", x: 142, y: 226, width: 136, height: 120, stroke: '#fbbf24' },
+    { id: 'a', label: zh ? 'User A 和 Agent' : 'User A + Agents', x: 16, y: 50, width: 140, height: 240, stroke: '#5eead4' },
+    { id: 'b', label: zh ? 'User B 和 Agent' : 'User B + Agents', x: 264, y: 50, width: 140, height: 240, stroke: '#818cf8' },
+    { id: 'c', label: zh ? 'User C 和 Agent' : 'User C + Agents', x: 130, y: 238, width: 160, height: 122, stroke: '#fbbf24' },
   ]
   const byId = Object.fromEntries([...users, ...agents].map((node) => [node.id, node]))
   const userAgentLinks = agents.map((agent) => [`${agent.owner}-user`, agent.id] as const)
@@ -87,20 +87,24 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
     const b = byId[to]
     if (!a || !b) return null
     const stroke = kind === 'claim' ? '#5eead4' : kind === 'inside' ? '#fbbf24' : '#a5b4fc'
+    const dash = kind === 'claim' ? '3 9' : kind === 'inside' ? '7 8' : '8 7'
+    const width = kind === 'claim' ? 1.2 : kind === 'inside' ? 2 : 2.4
     return (
-      <motion.line
-        key={`${kind}-${from}-${to}`}
-        x1={a.x}
-        y1={a.y}
-        x2={b.x}
-        y2={b.y}
-        stroke={stroke}
-        strokeWidth={kind === 'cross' ? 1.8 : 1.5}
-        strokeLinecap="round"
-        strokeDasharray={kind === 'claim' ? undefined : kind === 'inside' ? '4 8' : '2 7'}
-        animate={{ pathLength: [0.15, 1, 0.15], opacity: kind === 'cross' ? [0.18, 0.78, 0.18] : [0.18, 0.62, 0.18] }}
-        transition={{ duration: kind === 'cross' ? 4.6 : 4.2, repeat: Infinity, delay: index * 0.12 }}
-      />
+      <g key={`${kind}-${from}-${to}`}>
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={width + 2} strokeLinecap="round" opacity={kind === 'claim' ? 0.08 : 0.18} />
+        <motion.line
+          x1={a.x}
+          y1={a.y}
+          x2={b.x}
+          y2={b.y}
+          stroke={stroke}
+          strokeWidth={width}
+          strokeLinecap="round"
+          strokeDasharray={dash}
+          animate={{ strokeDashoffset: [0, -32], opacity: kind === 'claim' ? [0.24, 0.48, 0.24] : [0.42, 0.9, 0.42] }}
+          transition={{ duration: kind === 'cross' ? 2.8 : 3.2, repeat: Infinity, ease: 'linear', delay: index * 0.1 }}
+        />
+      </g>
     )
   }
 

@@ -70,29 +70,29 @@ const softmaxWorkspaceAgents = [
 ];
 
 const loginMeshUsers = [
-  { id: "a-user", label: "User A", x: 86, y: 184 },
-  { id: "b-user", label: "User B", x: 334, y: 184 },
+  { id: "a-user", label: "User A", x: 78, y: 190 },
+  { id: "b-user", label: "User B", x: 342, y: 190 },
   { id: "c-user", label: "User C", x: 210, y: 386 },
 ];
 
 const loginMeshAgents = [
-  { id: "a-codex", owner: "a", label: "Codex", x: 64, y: 108 },
-  { id: "a-claude", owner: "a", label: "Claude", x: 128, y: 134 },
-  { id: "a-openclaw", owner: "a", label: "OpenClaw", x: 92, y: 264 },
-  { id: "b-codex", owner: "b", label: "Codex", x: 292, y: 108 },
-  { id: "b-claude", owner: "b", label: "Claude", x: 356, y: 134 },
-  { id: "b-openclaw", owner: "b", label: "OpenClaw", x: 328, y: 264 },
-  { id: "c-codex", owner: "c", label: "Codex", x: 164, y: 334 },
-  { id: "c-claude", owner: "c", label: "Claude", x: 256, y: 334 },
-  { id: "c-openclaw", owner: "c", label: "OpenClaw", x: 210, y: 356 },
+  { id: "a-codex", owner: "a", label: "Codex", x: 70, y: 112 },
+  { id: "a-claude", owner: "a", label: "Claude", x: 118, y: 142 },
+  { id: "a-openclaw", owner: "a", label: "OpenClaw", x: 96, y: 272 },
+  { id: "b-codex", owner: "b", label: "Codex", x: 304, y: 112 },
+  { id: "b-claude", owner: "b", label: "Claude", x: 350, y: 142 },
+  { id: "b-openclaw", owner: "b", label: "OpenClaw", x: 326, y: 272 },
+  { id: "c-codex", owner: "c", label: "Codex", x: 176, y: 334 },
+  { id: "c-claude", owner: "c", label: "Claude", x: 244, y: 334 },
+  { id: "c-openclaw", owner: "c", label: "OpenClaw", x: 210, y: 362 },
 ];
 
 const loginMeshNodes = Object.fromEntries([...loginMeshUsers, ...loginMeshAgents].map((node) => [node.id, node]));
 
 const loginMeshGroups = [
-  { id: "a", label: "User A 的 Agents", x: 24, y: 62, width: 128, height: 238, stroke: "#5eead4" },
-  { id: "b", label: "User B 的 Agents", x: 268, y: 62, width: 128, height: 238, stroke: "#818cf8" },
-  { id: "c", label: "User C 的 Agents", x: 144, y: 292, width: 132, height: 118, stroke: "#fbbf24" },
+  { id: "a", label: "User A 和 Agents", x: 16, y: 68, width: 142, height: 230, stroke: "#5eead4" },
+  { id: "b", label: "User B 和 Agents", x: 262, y: 68, width: 142, height: 230, stroke: "#818cf8" },
+  { id: "c", label: "User C 和 Agents", x: 130, y: 304, width: 160, height: 106, stroke: "#fbbf24" },
 ];
 
 const loginClaimLinks = loginMeshAgents.map((agent) => [`${agent.owner}-user`, agent.id] as const);
@@ -113,21 +113,25 @@ const renderLoginMeshLine = (link: readonly string[], index: number, kind: "clai
   const to = loginMeshNodes[link[1]];
   if (!from || !to) return null;
   const stroke = kind === "claim" ? "#5eead4" : kind === "inside" ? "#fbbf24" : "#a5b4fc";
+  const dash = kind === "claim" ? "3 9" : kind === "inside" ? "7 8" : "8 7";
+  const width = kind === "claim" ? 1.2 : kind === "inside" ? 2 : 2.4;
   return (
-    <motion.line
-      key={`${kind}-${link[0]}-${link[1]}`}
-      x1={from.x}
-      y1={from.y}
-      x2={to.x}
-      y2={to.y}
-      stroke={stroke}
-      strokeWidth={kind === "cross" ? "1.8" : "1.5"}
-      strokeLinecap="round"
-      strokeDasharray={kind === "claim" ? undefined : kind === "inside" ? "4 8" : "2 7"}
-      initial={{ pathLength: 0, opacity: 0.12 }}
-      animate={{ pathLength: [0.16, 1, 0.16], opacity: kind === "cross" ? [0.18, 0.78, 0.18] : [0.16, 0.6, 0.16] }}
-      transition={{ duration: kind === "cross" ? 4.6 : 4.2, repeat: Infinity, delay: index * 0.12 }}
-    />
+    <g key={`${kind}-${link[0]}-${link[1]}`}>
+      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={stroke} strokeWidth={width + 2} strokeLinecap="round" opacity={kind === "claim" ? 0.08 : 0.18} />
+      <motion.line
+        x1={from.x}
+        y1={from.y}
+        x2={to.x}
+        y2={to.y}
+        stroke={stroke}
+        strokeWidth={width}
+        strokeLinecap="round"
+        strokeDasharray={dash}
+        initial={{ opacity: 0.18 }}
+        animate={{ strokeDashoffset: [0, -32], opacity: kind === "claim" ? [0.24, 0.48, 0.24] : [0.42, 0.9, 0.42] }}
+        transition={{ duration: kind === "cross" ? 2.8 : 3.2, repeat: Infinity, ease: "linear", delay: index * 0.1 }}
+      />
+    </g>
   );
 };
 
