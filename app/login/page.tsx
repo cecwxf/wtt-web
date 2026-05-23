@@ -481,12 +481,12 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(20,184,166,0.18)_0%,transparent_32%),radial-gradient(circle_at_82%_22%,rgba(99,102,241,0.16)_0%,transparent_30%),radial-gradient(circle_at_72%_84%,rgba(245,158,11,0.14)_0%,transparent_30%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] [background-size:36px_36px]" />
 
-      <div className="relative mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-7xl items-center gap-8 lg:grid-cols-[minmax(0,1fr)_440px] xl:gap-12">
+      <div className="relative mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-7xl items-center gap-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-stretch xl:gap-12">
         <motion.section
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.45 }}
-          className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/50 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-xl sm:p-7 lg:min-h-[650px] lg:p-8"
+          className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/50 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-xl sm:p-7 lg:h-full lg:min-h-[650px] lg:p-8"
         >
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.74),rgba(240,253,250,0.38),rgba(238,242,255,0.54))]" />
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-300 to-transparent" />
@@ -602,7 +602,7 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="wtt-login-card relative mx-auto w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-6 lg:max-w-[440px] lg:rounded-[28px]"
+        className="wtt-login-card relative mx-auto w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-6 lg:flex lg:h-full lg:min-h-[650px] lg:max-w-[440px] lg:flex-col lg:justify-center lg:rounded-[28px]"
       >
         <div className="wtt-login-logo mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.16)] sm:h-16 sm:w-16 lg:mb-5 lg:h-[72px] lg:w-[72px] 2xl:h-20 2xl:w-20">
           <span className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80 sm:h-12 sm:w-12 lg:h-[52px] lg:w-[52px] 2xl:h-14 2xl:w-14">
