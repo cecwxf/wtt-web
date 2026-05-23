@@ -83,6 +83,79 @@ function agentInitial(name: string) {
   return (name.trim()[0] || 'A').toUpperCase()
 }
 
+const ROLE_TONES = [
+  {
+    avatar: 'bg-sky-500 text-white',
+    selected: 'border-sky-300 bg-sky-50 shadow-sm dark:border-sky-500/45 dark:bg-sky-500/15',
+    idle: 'hover:border-sky-200 hover:bg-sky-50/80 dark:hover:border-sky-500/35 dark:hover:bg-sky-500/10',
+    label: 'text-sky-700 dark:text-sky-200',
+    ring: 'ring-sky-100 dark:ring-sky-500/25',
+  },
+  {
+    avatar: 'bg-emerald-500 text-white',
+    selected: 'border-emerald-300 bg-emerald-50 shadow-sm dark:border-emerald-500/45 dark:bg-emerald-500/15',
+    idle: 'hover:border-emerald-200 hover:bg-emerald-50/80 dark:hover:border-emerald-500/35 dark:hover:bg-emerald-500/10',
+    label: 'text-emerald-700 dark:text-emerald-200',
+    ring: 'ring-emerald-100 dark:ring-emerald-500/25',
+  },
+  {
+    avatar: 'bg-violet-500 text-white',
+    selected: 'border-violet-300 bg-violet-50 shadow-sm dark:border-violet-500/45 dark:bg-violet-500/15',
+    idle: 'hover:border-violet-200 hover:bg-violet-50/80 dark:hover:border-violet-500/35 dark:hover:bg-violet-500/10',
+    label: 'text-violet-700 dark:text-violet-200',
+    ring: 'ring-violet-100 dark:ring-violet-500/25',
+  },
+  {
+    avatar: 'bg-amber-500 text-white',
+    selected: 'border-amber-300 bg-amber-50 shadow-sm dark:border-amber-500/45 dark:bg-amber-500/15',
+    idle: 'hover:border-amber-200 hover:bg-amber-50/80 dark:hover:border-amber-500/35 dark:hover:bg-amber-500/10',
+    label: 'text-amber-700 dark:text-amber-200',
+    ring: 'ring-amber-100 dark:ring-amber-500/25',
+  },
+  {
+    avatar: 'bg-rose-500 text-white',
+    selected: 'border-rose-300 bg-rose-50 shadow-sm dark:border-rose-500/45 dark:bg-rose-500/15',
+    idle: 'hover:border-rose-200 hover:bg-rose-50/80 dark:hover:border-rose-500/35 dark:hover:bg-rose-500/10',
+    label: 'text-rose-700 dark:text-rose-200',
+    ring: 'ring-rose-100 dark:ring-rose-500/25',
+  },
+  {
+    avatar: 'bg-cyan-600 text-white',
+    selected: 'border-cyan-300 bg-cyan-50 shadow-sm dark:border-cyan-500/45 dark:bg-cyan-500/15',
+    idle: 'hover:border-cyan-200 hover:bg-cyan-50/80 dark:hover:border-cyan-500/35 dark:hover:bg-cyan-500/10',
+    label: 'text-cyan-700 dark:text-cyan-200',
+    ring: 'ring-cyan-100 dark:ring-cyan-500/25',
+  },
+  {
+    avatar: 'bg-fuchsia-500 text-white',
+    selected: 'border-fuchsia-300 bg-fuchsia-50 shadow-sm dark:border-fuchsia-500/45 dark:bg-fuchsia-500/15',
+    idle: 'hover:border-fuchsia-200 hover:bg-fuchsia-50/80 dark:hover:border-fuchsia-500/35 dark:hover:bg-fuchsia-500/10',
+    label: 'text-fuchsia-700 dark:text-fuchsia-200',
+    ring: 'ring-fuchsia-100 dark:ring-fuchsia-500/25',
+  },
+] as const
+
+function hashText(value: string) {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0
+  }
+  return hash
+}
+
+function roleTone(agentId: string, role?: AgentRoleTemplate) {
+  const key = `${role?.id || role?.label || 'agent'}:${agentId}`
+  return ROLE_TONES[hashText(key) % ROLE_TONES.length] || ROLE_TONES[0]
+}
+
+function agentTooltip(agent: AgentOption, role: AgentRoleTemplate) {
+  return [
+    agent.display_name || agent.agent_id,
+    `${role.label} / ${role.shortLabel}`,
+    `agentID: ${agent.agent_id}`,
+  ].join('\n')
+}
+
 function stripTaskPrefix(name: string): string {
   return name.replace(/^TASK-[a-f0-9]{8}\s*/i, '')
 }
@@ -395,6 +468,7 @@ export function TopicColumn(props: TopicColumnProps) {
             const selected = agent.agent_id === selectedAgentId
             const online = isAgentOnline(agent.agent_id)
             const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
+            const tone = roleTone(agent.agent_id, role)
             const runtimeText = selected ? formatRuntime(agentRuntimeMap?.[agent.agent_id]) : ''
             const menuOpen = agentMenuFor === agent.agent_id
 
@@ -409,20 +483,23 @@ export function TopicColumn(props: TopicColumnProps) {
                     event.preventDefault()
                     setAgentMenuFor(agent.agent_id)
                   }}
-                  title={agent.display_name || agent.agent_id}
-                  className={`group flex w-full items-center justify-center rounded-xl border px-1 py-1.5 text-left transition ${
+                  title={agentTooltip(agent, role)}
+                  className={`group flex w-full flex-col items-center justify-center rounded-xl border px-1 py-1.5 text-center transition ${
                     selected
-                      ? 'border-[#d7cbb9] bg-[#ebe5db] shadow-sm dark:border-emerald-500/35 dark:bg-emerald-500/10'
-                      : 'border-transparent bg-white/55 hover:border-[#ded6c8] hover:bg-white/80 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
+                      ? tone.selected
+                      : `border-transparent bg-white/55 dark:bg-zinc-900/60 ${tone.idle}`
                   }`}
                 >
-                  <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#28241f] text-xs font-black text-[#f5ead8] shadow-sm dark:bg-zinc-800">
+                  <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black shadow-sm ring-2 ${tone.avatar} ${tone.ring}`}>
                     {agentInitial(agent.display_name)}
                     <span
                       className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#f6f3ed] dark:border-zinc-950 ${
                         online ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-600'
                       }`}
                     />
+                  </span>
+                  <span className={`mt-1 max-w-full truncate text-[9px] font-black leading-none ${tone.label}`} title={role.label}>
+                    {role.shortLabel}
                   </span>
 
                   <span className="hidden min-w-0 flex-1">
