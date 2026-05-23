@@ -88,9 +88,23 @@ const claimedUserClusters = [
   },
 ];
 
+const normalizeCallbackUrl = (rawCallbackUrl: string | null) => {
+  if (!rawCallbackUrl) return "/feed";
+  if (rawCallbackUrl.startsWith("/") && !rawCallbackUrl.startsWith("//")) {
+    return rawCallbackUrl;
+  }
+  try {
+    const url = new URL(rawCallbackUrl);
+    return `${url.pathname}${url.search}${url.hash}` || "/feed";
+  } catch {
+    return "/feed";
+  }
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const { t } = useI18n();
+  const [callbackUrl, setCallbackUrl] = useState("/feed");
 
   const [tab, setTab] = useState<AuthTab>("signin");
   const [signInMethod, setSignInMethod] = useState<SignInMethod>("phone-code");
@@ -128,8 +142,12 @@ export default function LoginPage() {
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerPassword2, setRegisterPassword2] = useState("");
 
+  useEffect(() => {
+    setCallbackUrl(normalizeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl")));
+  }, []);
+
   const handleOAuthSignIn = (provider: string) => {
-    signIn(provider, { callbackUrl: "/feed" });
+    signIn(provider, { callbackUrl });
   };
 
   useEffect(() => {
@@ -172,7 +190,7 @@ export default function LoginPage() {
       });
 
       if (result?.ok) {
-        router.push("/feed");
+        router.push(callbackUrl);
         return;
       }
 
@@ -241,7 +259,7 @@ export default function LoginPage() {
         redirect: false,
       });
       if (result?.ok) {
-        router.push("/feed");
+        router.push(callbackUrl);
         return;
       }
       setError("手机号或验证码错误");
@@ -269,7 +287,7 @@ export default function LoginPage() {
         redirect: false,
       });
       if (result?.ok) {
-        router.push("/feed");
+        router.push(callbackUrl);
         return;
       }
       setError("手机号或密码错误");
@@ -321,7 +339,7 @@ export default function LoginPage() {
         redirect: false,
       });
       if (result?.ok) {
-        router.push("/feed");
+        router.push(callbackUrl);
         return;
       }
       setInfo("注册成功，请使用手机号登录");

@@ -269,6 +269,8 @@ export default function Home() {
   const { locale, setLocale } = useI18n()
   const zh = locale === 'zh'
   const consoleHref = status === 'authenticated' ? '/feed' : '/login'
+  const protectedHref = (href: string) => status === 'authenticated' ? href : `/login?callbackUrl=${encodeURIComponent(href)}`
+  const arenaHref = protectedHref('/arena')
 
   const topicTypes = [
     {
@@ -406,7 +408,7 @@ export default function Home() {
           </Link>
           <nav className="flex items-center gap-3">
             <Link href="/feed" className="hidden text-sm font-bold text-slate-700 hover:text-teal-700 sm:inline">Topics</Link>
-            <Link href="/arena" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">Arena</Link>
+            <Link href={arenaHref} className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">Arena</Link>
             <Link href="/square" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">{zh ? '若水广场' : 'Square'}</Link>
             <button
               type="button"
@@ -439,7 +441,7 @@ export default function Home() {
                 {zh ? '进入 Topic 工作台' : 'Open Topic Console'}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/arena" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
+              <Link href={arenaHref} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
                 {zh ? '进入终生学习' : 'Open Arena'}
               </Link>
               <Link href="/square" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
@@ -474,7 +476,7 @@ export default function Home() {
 
         <section className="mt-16 grid gap-4 md:grid-cols-3">
           {productPillars.map((pillar) => (
-            <Link key={pillar.href} href={pillar.href} className="group rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-sm transition hover:-translate-y-1 hover:border-teal-300 hover:shadow-xl hover:shadow-teal-900/10">
+            <Link key={pillar.href} href={pillar.href.startsWith('/arena') ? protectedHref(pillar.href) : pillar.href} className="group rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-sm transition hover:-translate-y-1 hover:border-teal-300 hover:shadow-xl hover:shadow-teal-900/10">
               <pillar.icon className="mb-5 h-7 w-7 text-teal-700" />
               <h2 className="text-xl font-black tracking-tight text-slate-950">{zh ? pillar.zhTitle : pillar.enTitle}</h2>
               <p className="mt-3 text-sm leading-6 text-slate-600">{zh ? pillar.zhDesc : pillar.enDesc}</p>
@@ -656,14 +658,14 @@ wtt-connect status all`}</pre>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{zh ? '终生学习' : 'Arena'}</p>
               <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? '终生学习是 WTT 的训练 Topic 集合，不是整个首页。' : 'Arena is a training-topic collection, not the whole homepage.'}</h2>
             </div>
-            <Link href="/arena" className="inline-flex items-center gap-2 text-sm font-black text-teal-700 hover:text-teal-600">
+            <Link href={arenaHref} className="inline-flex items-center gap-2 text-sm font-black text-teal-700 hover:text-teal-600">
               {zh ? '查看终生学习' : 'View Arena'}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {arenaTracks.map((track) => (
-              <Link key={track.href} href={track.href} className="rounded-3xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-300 hover:shadow-xl hover:shadow-amber-900/10">
+              <Link key={track.href} href={protectedHref(track.href)} className="rounded-3xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-300 hover:shadow-xl hover:shadow-amber-900/10">
                 <track.icon className="mb-5 h-7 w-7 text-amber-600" />
                 <h3 className="text-lg font-black text-slate-950">{track.title}</h3>
                 <p className="mt-3 text-sm leading-6 text-slate-600">{track.desc}</p>
@@ -682,7 +684,7 @@ wtt-connect status all`}</pre>
               {status === 'authenticated' ? (zh ? '进入工作台' : 'Open Console') : (zh ? '登录 / 注册' : 'Login / Sign up')}
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/arena" className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 text-sm font-black text-white hover:bg-white/15">
+            <Link href={arenaHref} className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-3 text-sm font-black text-white hover:bg-white/15">
               {zh ? '进入终生学习' : 'Open Arena Training'}
             </Link>
           </div>

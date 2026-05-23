@@ -3,6 +3,7 @@ import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
 import TwitterProvider from "next-auth/providers/twitter"
 import CredentialsProvider from "next-auth/providers/credentials"
+import { NEXT_AUTH_SECRET } from "@/lib/auth/next-auth-secret"
 
 const WTT_API_URL =
   process.env.WTT_API_URL ||
@@ -14,6 +15,7 @@ const TEST_ADMIN_IDENTIFIER = process.env.TEST_ADMIN_IDENTIFIER || 'test-admin'
 const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-admin-pass'
 
 const authOptions: NextAuthOptions = {
+  secret: NEXT_AUTH_SECRET,
   providers: [
     GithubProvider({
       clientId: process.env.GITHUB_CLIENT_ID!,
