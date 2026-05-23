@@ -70,24 +70,30 @@ const softmaxWorkspaceAgents = [
 ];
 
 const loginMeshUsers = [
-  { id: "a-user", label: "User A", x: 76, y: 214 },
-  { id: "b-user", label: "User B", x: 344, y: 196 },
-  { id: "c-user", label: "User C", x: 214, y: 342 },
+  { id: "a-user", label: "User A", x: 86, y: 184 },
+  { id: "b-user", label: "User B", x: 334, y: 184 },
+  { id: "c-user", label: "User C", x: 210, y: 386 },
 ];
 
 const loginMeshAgents = [
-  { id: "a-codex", owner: "a", label: "Codex", x: 72, y: 100 },
-  { id: "a-claude", owner: "a", label: "Claude", x: 158, y: 138 },
-  { id: "a-openclaw", owner: "a", label: "OpenClaw", x: 132, y: 286 },
-  { id: "b-codex", owner: "b", label: "Codex", x: 262, y: 112 },
-  { id: "b-claude", owner: "b", label: "Claude", x: 352, y: 104 },
-  { id: "b-openclaw", owner: "b", label: "OpenClaw", x: 326, y: 286 },
-  { id: "c-codex", owner: "c", label: "Codex", x: 154, y: 320 },
-  { id: "c-claude", owner: "c", label: "Claude", x: 270, y: 318 },
-  { id: "c-openclaw", owner: "c", label: "OpenClaw", x: 214, y: 246 },
+  { id: "a-codex", owner: "a", label: "Codex", x: 64, y: 108 },
+  { id: "a-claude", owner: "a", label: "Claude", x: 128, y: 134 },
+  { id: "a-openclaw", owner: "a", label: "OpenClaw", x: 92, y: 264 },
+  { id: "b-codex", owner: "b", label: "Codex", x: 292, y: 108 },
+  { id: "b-claude", owner: "b", label: "Claude", x: 356, y: 134 },
+  { id: "b-openclaw", owner: "b", label: "OpenClaw", x: 328, y: 264 },
+  { id: "c-codex", owner: "c", label: "Codex", x: 164, y: 334 },
+  { id: "c-claude", owner: "c", label: "Claude", x: 256, y: 334 },
+  { id: "c-openclaw", owner: "c", label: "OpenClaw", x: 210, y: 356 },
 ];
 
 const loginMeshNodes = Object.fromEntries([...loginMeshUsers, ...loginMeshAgents].map((node) => [node.id, node]));
+
+const loginMeshGroups = [
+  { id: "a", label: "User A 的 Agents", x: 24, y: 62, width: 128, height: 238, stroke: "#5eead4" },
+  { id: "b", label: "User B 的 Agents", x: 268, y: 62, width: 128, height: 238, stroke: "#818cf8" },
+  { id: "c", label: "User C 的 Agents", x: 144, y: 292, width: 132, height: 118, stroke: "#fbbf24" },
+];
 
 const loginClaimLinks = loginMeshAgents.map((agent) => [`${agent.owner}-user`, agent.id] as const);
 const loginInsideLinks = [
@@ -452,13 +458,31 @@ export default function LoginPage() {
                       <stop offset="1" stopColor="#818cf8" />
                     </linearGradient>
                   </defs>
-                  <circle cx="210" cy="210" r="138" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
-                  <circle cx="210" cy="210" r="92" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
+                  <circle cx="210" cy="206" r="82" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
+                  {loginMeshGroups.map((group) => (
+                    <g key={group.id}>
+                      <rect
+                        x={group.x}
+                        y={group.y}
+                        width={group.width}
+                        height={group.height}
+                        rx="18"
+                        fill="rgba(255,255,255,0.045)"
+                        stroke={group.stroke}
+                        strokeOpacity="0.42"
+                        strokeWidth="1.4"
+                        strokeDasharray="7 7"
+                      />
+                      <text x={group.x + 13} y={group.y + 21} fill={group.stroke} fontSize="10" fontWeight="800">
+                        {group.label}
+                      </text>
+                    </g>
+                  ))}
                   {loginClaimLinks.map((link, index) => renderLoginMeshLine(link, index, "claim"))}
                   {loginInsideLinks.map((link, index) => renderLoginMeshLine(link, index, "inside"))}
                   {loginCrossLinks.map((link, index) => renderLoginMeshLine(link, index, "cross"))}
                 </svg>
-                <div className="absolute left-1/2 top-1/2 flex h-28 w-28 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[2rem] border border-teal-200/50 bg-white/10 text-center shadow-[0_0_50px_rgba(45,212,191,0.24)] backdrop-blur">
+                <div className="absolute left-1/2 top-[49%] z-10 flex h-28 w-28 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[2rem] border border-teal-200/50 bg-white/10 text-center shadow-[0_0_50px_rgba(45,212,191,0.24)] backdrop-blur">
                   <motion.div
                     animate={{ scale: [1, 1.04, 1] }}
                     transition={{ duration: 3.5, repeat: Infinity }}
