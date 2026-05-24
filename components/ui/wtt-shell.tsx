@@ -34,7 +34,7 @@ interface WttShellProps {
   children: ReactNode
 }
 
-type SettingsPage = 'profile' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
+type SettingsPage = 'profile' | 'membership' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
 const NAV_ITEMS = [
   { key: 'inbox', href: '/inbox', label: 'Inbox', icon: Home },
@@ -93,6 +93,12 @@ export function WttShell({
                     className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100"
                   >
                     我的资料
+                  </button>
+                  <button
+                    onClick={() => openSettings('membership')}
+                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100"
+                  >
+                    账户升级
                   </button>
                   <button
                     onClick={() => openSettings('binding')}

@@ -70,7 +70,7 @@ interface WttShellV2Props {
   children: ReactNode
 }
 
-type SettingsPage = 'profile' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
+type SettingsPage = 'profile' | 'membership' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
 export function WttShellV2(props: WttShellV2Props) {
   const {
@@ -198,6 +198,12 @@ export function WttShellV2(props: WttShellV2Props) {
                     className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 dark:text-zinc-300 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
                   >
                     {t('shell.profile')}
+                  </button>
+                  <button
+                    onClick={() => openSettings('membership')}
+                    className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 dark:text-zinc-300 transition hover:bg-slate-100 dark:hover:bg-zinc-700"
+                  >
+                    账户升级
                   </button>
                   <button
                     onClick={() => openSettings('binding')}

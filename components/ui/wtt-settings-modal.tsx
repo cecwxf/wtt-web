@@ -8,6 +8,7 @@ import {
   Camera,
   Check,
   ClipboardCopy,
+  CreditCard,
   Loader2,
   Lock,
   RefreshCw,
@@ -24,6 +25,7 @@ import { Avatar } from "@/components/ui/avatar";
 
 type SettingsPage =
   | "profile"
+  | "membership"
   | "binding"
   | "notifications"
   | "poll"
@@ -67,12 +69,37 @@ const PAGE_ITEMS: Array<{
   icon: typeof User;
 }> = [
   { key: "profile", labelKey: "settings.profile", icon: User },
+  { key: "membership", labelKey: "settings.membership", icon: CreditCard },
   { key: "binding", labelKey: "settings.binding", icon: Bot },
   { key: "notifications", labelKey: "settings.notifications", icon: Bell },
   { key: "privacy", labelKey: "settings.privacy", icon: Lock },
   { key: "appearance", labelKey: "settings.appearance", icon: Brush },
   { key: "about", labelKey: "settings.about", icon: Bot },
 ];
+
+type BillingMode = "one_time" | "subscription";
+type PlanId = "plus" | "pro";
+
+type BillingMe = {
+  entitlement?: {
+    plan?: string;
+    status?: string;
+    ends_at?: string | null;
+    limits?: {
+      window_limit?: number;
+      monthly_limit?: number;
+    };
+  };
+  cloud_agent_usage?: {
+    window_count?: number;
+    monthly_count?: number;
+    blocked_until?: string | null;
+  };
+};
+
+type SessionWithAccessToken = {
+  accessToken?: string;
+};
 
 export function WttSettingsModal({
   open,
@@ -136,8 +163,33 @@ export function WttSettingsModal({
   const [profileError, setProfileError] = useState("");
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const accessToken = (session as any)?.accessToken as string | undefined;
+  const [billing, setBilling] = useState<BillingMe | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState("");
+
+  const accessToken = (session as SessionWithAccessToken | null)?.accessToken;
+
+  const loadBilling = useCallback(async () => {
+    if (!accessToken) return;
+    setBillingLoading(true);
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      if (response.ok) {
+        setBilling((await response.json()) as BillingMe);
+      }
+    } finally {
+      setBillingLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (activePage !== "membership") return;
+    void loadBilling();
+  }, [activePage, loadBilling]);
 
   // Load profile from backend
   useEffect(() => {
@@ -371,6 +423,43 @@ export function WttSettingsModal({
       setCloudClaimError(t("settings.networkError"));
     } finally {
       setCloudClaiming(false);
+    }
+  };
+
+  const handleCheckout = async (plan: PlanId, billingMode: BillingMode) => {
+    if (!accessToken) {
+      setCheckoutError(t("settings.sessionExpired"));
+      return;
+    }
+
+    const key = `${plan}:${billingMode}`;
+    setCheckoutLoading(key);
+    setCheckoutError("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          plan,
+          billing_mode: billingMode,
+          success_url: `${window.location.origin}/upgrade?checkout=success`,
+          cancel_url: `${window.location.origin}/upgrade?checkout=cancelled`,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.url) {
+        const detail = data.detail;
+        setCheckoutError(typeof detail === "string" ? detail : detail?.message || "创建支付链接失败");
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setCheckoutError(t("settings.networkError"));
+    } finally {
+      setCheckoutLoading(null);
     }
   };
 
@@ -827,6 +916,107 @@ export function WttSettingsModal({
                   </p>
                 )}
               </div>
+            </div>
+          )}
+
+          {activePage === "membership" && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">账户升级</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Plus / Pro 可申请云 Agent，并解锁技术面试和教育板块。国内用户走单次支付，海外用户可使用订阅。
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void loadBilling()}
+                    disabled={billingLoading || !accessToken}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    {billingLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    刷新权益
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-slate-400">当前计划</p>
+                    <p className="mt-1 text-lg font-bold text-indigo-600">
+                      {(billing?.entitlement?.plan || "free").toUpperCase()}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-slate-400">连续请求</p>
+                    <p className="mt-1 font-semibold text-slate-800">
+                      {billing?.cloud_agent_usage?.window_count || 0}/{billing?.entitlement?.limits?.window_limit || 0}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-slate-400">本月请求</p>
+                    <p className="mt-1 font-semibold text-slate-800">
+                      {billing?.cloud_agent_usage?.monthly_count || 0}/{billing?.entitlement?.limits?.monthly_limit || 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {checkoutError && (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {checkoutError}
+                </p>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  { plan: "plus" as const, name: "Plus", price: "¥20/月", window: "50 次连续请求", monthly: "500 次/月" },
+                  { plan: "pro" as const, name: "Pro", price: "¥30/月", window: "100 次连续请求", monthly: "1500 次/月" },
+                ].map((item) => (
+                  <div key={item.plan} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-bold text-slate-900">{item.name}</p>
+                        <p className="mt-1 text-sm font-semibold text-indigo-600">{item.price}</p>
+                      </div>
+                      {billing?.entitlement?.plan === item.plan && (
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          当前
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-3 space-y-1 text-xs text-slate-500">
+                      <p>{item.window}</p>
+                      <p>{item.monthly}</p>
+                      <p>云 Agent + 技术面试 + 教育板块</p>
+                    </div>
+                    <div className="mt-4 grid gap-2">
+                      <button
+                        onClick={() => void handleCheckout(item.plan, "one_time")}
+                        disabled={checkoutLoading !== null || !accessToken}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-60"
+                      >
+                        {checkoutLoading === `${item.plan}:one_time` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        国内单次支付
+                      </button>
+                      <button
+                        onClick={() => void handleCheckout(item.plan, "subscription")}
+                        disabled={checkoutLoading !== null || !accessToken}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        {checkoutLoading === `${item.plan}:subscription` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        海外订阅
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <a
+                href="/upgrade"
+                className="block rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+              >
+                打开完整升级页面
+              </a>
             </div>
           )}
 
