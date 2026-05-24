@@ -99,25 +99,25 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
                   <span className="rounded-full border border-gray-700 bg-[#1e1e1e] px-3 py-1">{tutorialGuide.chapters.length} 章</span>
                   <span className="rounded-full border border-gray-700 bg-[#1e1e1e] px-3 py-1">Markdown 渲染</span>
                   <span className="rounded-full border border-gray-700 bg-[#1e1e1e] px-3 py-1">支持公式 / 表格 / 图片</span>
-                  <span className="rounded-full border border-gray-700 bg-[#1e1e1e] px-3 py-1">目录跳转</span>
+                  <span className="rounded-full border border-gray-700 bg-[#1e1e1e] px-3 py-1">按章节阅读</span>
                   <a href={tutorialGuide.docsHref} target="_blank" rel="noreferrer" className="rounded-full border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-3 py-1 font-black text-[#3ce8e2] hover:border-[#3ce8e2]">官方文档 ↗</a>
                 </div>
               </div>
 
               <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:p-6 xl:grid-cols-[300px_minmax(0,1fr)]">
                 <nav className="rounded-xl border border-gray-800 bg-[#151515] p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">目录</p>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">章节目录</p>
                   <div className="mt-3 space-y-2">
                     {tutorialGuide.chapters.map((chapter, index) => (
-                      <a key={chapter.slug} href={`#chapter-${chapter.slug}`} className="block rounded-lg px-2 py-1.5 text-sm leading-5 text-gray-400 hover:bg-[#1e1e1e] hover:text-[#3ce8e2]">
+                      <Link key={chapter.slug} href={`/arena/sections/${tutorialGuide.slug}-${chapter.slug}`} className={`block rounded-lg px-2 py-1.5 text-sm leading-5 ${index === 0 ? 'bg-[#3ce8e2]/10 font-bold text-[#3ce8e2]' : 'text-gray-400 hover:bg-[#1e1e1e] hover:text-[#3ce8e2]'}`}>
                         {String(index + 1).padStart(2, '0')} · {chapter.titleZh.replace(/^\d+｜/, '')}
-                      </a>
+                      </Link>
                     ))}
                   </div>
                 </nav>
 
                 <div className="space-y-12">
-                  {tutorialGuide.chapters.map((chapter, chapterIndex) => (
+                  {tutorialGuide.chapters.slice(0, 1).map((chapter, chapterIndex) => (
                     <section key={chapter.slug} id={`chapter-${chapter.slug}`} className="scroll-mt-8 border-b border-gray-800 pb-12 last:border-b-0 last:pb-0">
                       <div className="mb-6">
                         <p className="font-mono text-sm font-black text-[#3ce8e2]">{String(chapterIndex + 1).padStart(2, '0')} / {tutorialGuide.chapters.length}</p>
@@ -170,7 +170,15 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
 
               <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[240px_minmax(0,1fr)] lg:p-6 xl:grid-cols-[280px_minmax(0,1fr)]">
                 <nav className="rounded-xl border border-gray-800 bg-[#151515] p-4 lg:sticky lg:top-6 lg:self-start">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">目录</p>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">章节目录</p>
+                  <div className="mt-3 space-y-2">
+                    {tutorialChapter.guide.chapters.map((chapter, index) => (
+                      <Link key={chapter.slug} href={`/arena/sections/${tutorialChapter.guide.slug}-${chapter.slug}`} className={`block rounded-lg px-2 py-1.5 text-sm leading-5 ${chapter.slug === tutorialChapter.chapter.slug ? 'bg-[#3ce8e2]/10 font-bold text-[#3ce8e2]' : 'text-gray-400 hover:bg-[#1e1e1e] hover:text-[#3ce8e2]'}`}>
+                        {String(index + 1).padStart(2, '0')} · {chapter.titleZh.replace(/^\d+｜/, '')}
+                      </Link>
+                    ))}
+                  </div>
+                  <p className="mt-6 text-xs font-black uppercase tracking-[0.2em] text-gray-500">本章目录</p>
                   <div className="mt-3 space-y-2">
                     {tutorialChapter.chapter.sections.map((item, index) => (
                       <a key={item.heading} href={`#section-${index + 1}`} className="block text-sm leading-5 text-gray-400 hover:text-[#3ce8e2]">
