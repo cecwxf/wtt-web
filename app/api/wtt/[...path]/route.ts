@@ -147,7 +147,8 @@ function isPublicAuthPath(path: string[]): boolean {
     p === '/auth/phone/login' ||
     p === '/auth/phone/register' ||
     p === '/auth/phone/password-login' ||
-    p === '/auth/phone/reset-password'
+    p === '/auth/phone/reset-password' ||
+    p === '/billing/lemonsqueezy/webhook'
   )
 }
 

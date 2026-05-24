@@ -1,5 +1,4 @@
 import type { Challenge } from './types'
-import { agentTutorialGuides } from './agent-tutorials'
 
 export type ArenaSectionSlug = string
 
@@ -346,35 +345,6 @@ const educationSubjectSections: ArenaSection[] = educationStages.flatMap((stage)
   ],
 })))
 
-const agentTutorialRootSections: ArenaSection[] = agentTutorialGuides.map((guide) => ({
-  slug: guide.slug,
-  title: guide.title,
-  titleZh: guide.titleZh,
-  eyebrow: guide.eyebrow,
-  description: guide.descriptionZh,
-  descriptionZh: guide.descriptionZh,
-  accent: guide.accent,
-  href: `/arena/sections/${guide.slug}`,
-  sources: [
-    { label: guide.sourceLabel, url: guide.docsHref },
-  ],
-}))
-
-const agentTutorialChapterSections: ArenaSection[] = agentTutorialGuides.flatMap((guide) => guide.chapters.map((chapter) => ({
-  slug: `${guide.slug}-${chapter.slug}`,
-  parentSlug: guide.slug,
-  title: chapter.titleZh,
-  titleZh: chapter.titleZh,
-  eyebrow: chapter.eyebrow,
-  description: chapter.descriptionZh,
-  descriptionZh: chapter.descriptionZh,
-  accent: guide.accent,
-  href: `/arena/sections/${guide.slug}-${chapter.slug}`,
-  sources: [
-    { label: chapter.sourceLabel, url: chapter.sourceUrl },
-  ],
-})))
-
 export const arenaSections: ArenaSection[] = [
   {
     slug: 'technology',
@@ -397,7 +367,7 @@ export const arenaSections: ArenaSection[] = [
     titleZh: '教育板块',
     eyebrow: '小学 · 初中 · 高中 · Coach',
     description: 'Stage-based learning boards with Arena Coach and whiteboard support.',
-    descriptionZh: '按小学、初中、高中组织学科训练；每道题复用学习 Coach 和白板讲解。',
+    descriptionZh: '按小学、初中、高中组织学科训练；每道题复用 Arena Chat 和白板讲解。',
     accent: 'from-amber-200 to-pink-500',
     href: '/arena/sections/education',
     sources: [
@@ -423,11 +393,9 @@ export const arenaSections: ArenaSection[] = [
       { label: '软科中国大学排名', url: 'https://www.shanghairanking.cn/' },
     ],
   },
-  ...agentTutorialRootSections,
   ...technologySections,
   ...educationStageSections,
   ...educationSubjectSections,
-  ...agentTutorialChapterSections,
 ]
 
 export function getArenaSection(slug: string) {
@@ -440,6 +408,18 @@ export function childSections(slug: string) {
 
 export function rootArenaSections() {
   return arenaSections.filter((section) => !section.parentSlug)
+}
+
+export function isPremiumArenaSection(slug: string) {
+  const section = getArenaSection(slug)
+  const category = section?.category || slug
+  if (category === 'ai-kernel' || slug === 'ai-kernel') return false
+  return category === 'education' ||
+    category.startsWith('education-') ||
+    slug === 'education' ||
+    slug.startsWith('education-') ||
+    category.includes('interview') ||
+    slug.includes('interview')
 }
 
 function categorySetForSection(slug: string): Set<string> {

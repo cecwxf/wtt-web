@@ -101,6 +101,9 @@ export function WttSettingsModal({
     agent_token: string;
     api_key?: string;
   } | null>(null);
+  const [cloudClaiming, setCloudClaiming] = useState(false);
+  const [cloudClaimError, setCloudClaimError] = useState("");
+  const [cloudClaimSuccess, setCloudClaimSuccess] = useState("");
   const [pluginCommandCreds, setPluginCommandCreds] = useState<{
     agent_id: string;
     agent_token: string;
@@ -328,6 +331,49 @@ export function WttSettingsModal({
     }
   };
 
+  const handleClaimCloudAgent = async () => {
+    const token = session?.accessToken as string | undefined;
+    if (!token) {
+      setCloudClaimError(t("settings.sessionExpired"));
+      return;
+    }
+
+    setCloudClaiming(true);
+    setCloudClaimError("");
+    setCloudClaimSuccess("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/claim`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          accepted_terms: true,
+          display_name: provisionDisplayName.trim() || "Cloud Agent",
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = data.detail;
+        setCloudClaimError(
+          typeof detail === "string"
+            ? detail
+            : detail?.message || "Cloud Agent 申请失败，请确认账号已升级 Plus / Pro。",
+        );
+        return;
+      }
+
+      setCloudClaimSuccess(`Cloud Agent 已开通：${data.agent_id || ""}`);
+      onBindingChanged?.();
+    } catch {
+      setCloudClaimError(t("settings.networkError"));
+    } finally {
+      setCloudClaiming(false);
+    }
+  };
+
   const handleClaimExisting = async () => {
     const token = session?.accessToken as string | undefined;
     if (!token) {
@@ -392,21 +438,18 @@ export function WttSettingsModal({
     }
   };
 
-  const buildBindingCommand = (agentId: string, agentToken: string) => {
+  const buildPluginCommand = (agentId: string, agentToken: string) => {
     const aid = JSON.stringify(agentId);
     const tok = JSON.stringify(agentToken);
     return [
-      "# 1) OpenClaw agent host: install/enable the WTT plugin first",
-      "openclaw plugins install @cecwxf/wtt@latest --pin",
-      "openclaw plugins enable wtt",
+      "# WTT plugin bootstrap (works after npm/plugin install)",
       `openclaw wtt-bootstrap --agent-id ${aid} --token ${tok}`,
-      "openclaw gateway restart",
-      "openclaw plugins doctor",
       "",
-      "# 2) Codex / Claude Code agent host: requires npm install -g wtt-connect",
-      `wtt-connect up codex ${aid} ${tok} --profile codex --workdir /path/to/workspace`,
-      `wtt-connect up claude-code ${aid} ${tok} --profile claude --workdir /path/to/workspace`,
-      "wtt-connect status all",
+      "# optional shortcut if standalone binary is installed",
+      `openclaw-wtt-bootstrap --agent-id ${aid} --token ${tok}`,
+      "",
+      "# verify",
+      "openclaw status",
     ].join("\n");
   };
 
@@ -789,6 +832,39 @@ export function WttSettingsModal({
 
           {activePage === "binding" && (
             <div className="space-y-3">
+              <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      Cloud Agent（Plus / Pro）
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Plus 可用 50 次连续请求 / 500 次月请求；Pro 可用 100 次连续请求 / 1500 次月请求。普通用户请先升级，或继续绑定自己的 Agent。
+                    </p>
+                  </div>
+                  <a
+                    href="/upgrade"
+                    className="shrink-0 rounded-lg border border-cyan-200 bg-white px-3 py-2 text-xs font-semibold text-cyan-700 transition hover:bg-cyan-100"
+                  >
+                    查看会员
+                  </a>
+                </div>
+                <button
+                  onClick={handleClaimCloudAgent}
+                  disabled={cloudClaiming}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {cloudClaiming && <Loader2 className="h-4 w-4 animate-spin" />}
+                  申请云 Agent
+                </button>
+                {cloudClaimError && (
+                  <p className="mt-2 text-sm text-red-500">{cloudClaimError}</p>
+                )}
+                {cloudClaimSuccess && (
+                  <p className="mt-2 text-sm text-emerald-600">{cloudClaimSuccess}</p>
+                )}
+              </div>
+
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">
                   {t("settings.claimNew")}
@@ -966,7 +1042,7 @@ export function WttSettingsModal({
                     {t("settings.pluginCmdDesc")}
                   </p>
                   <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-indigo-200 bg-white p-3 text-[11px] leading-5 text-slate-700">
-                    {buildBindingCommand(
+                    {buildPluginCommand(
                       pluginCommandCreds.agent_id,
                       pluginCommandCreds.agent_token,
                     )}
@@ -975,7 +1051,7 @@ export function WttSettingsModal({
                     <button
                       onClick={() =>
                         handleCopy(
-                          buildBindingCommand(
+                          buildPluginCommand(
                             pluginCommandCreds.agent_id,
                             pluginCommandCreds.agent_token,
                           ),
