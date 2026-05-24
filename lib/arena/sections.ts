@@ -413,8 +413,9 @@ export function rootArenaSections() {
 export function isPremiumArenaSection(slug: string) {
   const section = getArenaSection(slug)
   const category = section?.category || slug
-  if (category === 'ai-kernel' || slug === 'ai-kernel') return false
-  return category === 'education' ||
+  return category === 'ai-kernel' ||
+    slug === 'ai-kernel' ||
+    category === 'education' ||
     category.startsWith('education-') ||
     slug === 'education' ||
     slug.startsWith('education-') ||
