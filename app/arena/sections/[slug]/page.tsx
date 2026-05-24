@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { listChallenges } from '@/lib/arena/store'
 import { challengesForSection, childSections, getArenaSection, sectionStats } from '@/lib/arena/sections'
+import { getAgentTutorialChapter, getAgentTutorialGuide } from '@/lib/arena/agent-tutorials'
 import { c9Universities, doubleFirstClassUniversities, project211Universities, project985Universities, strongNon985211ByProvince, universityFactProfiles } from '@/lib/arena/gaokao-knowledge'
 
 function difficultyTone(difficulty: string) {
@@ -25,6 +26,8 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
   const rows = challengesForSection(challenges, section.slug)
   const stats = sectionStats(challenges, section.slug)
   const isGaokaoVolunteer = section.slug === 'gaokao-volunteer'
+  const tutorialGuide = getAgentTutorialGuide(section.slug)
+  const tutorialChapter = getAgentTutorialChapter(section.slug)
 
   return (
     <main className="min-h-[100dvh] bg-[#151515] text-white">
@@ -52,16 +55,57 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
               <p className="mt-4 max-w-3xl text-base leading-7 text-gray-400 lg:mt-5 lg:text-lg lg:leading-8">{section.descriptionZh}</p>
             </div>
             <div className="grid grid-cols-4 gap-2 text-center text-xs sm:text-sm">
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-white lg:text-2xl">{isGaokaoVolunteer ? 'Ask' : stats.total}</p><p className="text-gray-500">{isGaokaoVolunteer ? '咨询' : '题目'}</p></div>
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-emerald-300 lg:text-2xl">{isGaokaoVolunteer ? c9Universities.length : stats.easy}</p><p className="text-gray-500">{isGaokaoVolunteer ? 'C9' : 'Easy'}</p></div>
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-yellow-300 lg:text-2xl">{isGaokaoVolunteer ? project985Universities.length : stats.medium}</p><p className="text-gray-500">{isGaokaoVolunteer ? '985' : 'Medium'}</p></div>
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-rose-300 lg:text-2xl">{isGaokaoVolunteer ? project211Universities.length : stats.hard}</p><p className="text-gray-500">{isGaokaoVolunteer ? '211' : 'Hard'}</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-white lg:text-2xl">{tutorialGuide ? tutorialGuide.chapters.length : tutorialChapter ? tutorialChapter.chapter.sections.length : isGaokaoVolunteer ? 'Ask' : stats.total}</p><p className="text-gray-500">{tutorialGuide ? '章节' : tutorialChapter ? '小节' : isGaokaoVolunteer ? '咨询' : '题目'}</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-emerald-300 lg:text-2xl">{tutorialGuide || tutorialChapter ? '官方' : isGaokaoVolunteer ? c9Universities.length : stats.easy}</p><p className="text-gray-500">{tutorialGuide || tutorialChapter ? 'Docs' : isGaokaoVolunteer ? 'C9' : 'Easy'}</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-yellow-300 lg:text-2xl">{tutorialGuide || tutorialChapter ? '中文' : isGaokaoVolunteer ? project985Universities.length : stats.medium}</p><p className="text-gray-500">{tutorialGuide || tutorialChapter ? 'CN' : isGaokaoVolunteer ? '985' : 'Medium'}</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-rose-300 lg:text-2xl">{tutorialGuide || tutorialChapter ? 'WTT' : isGaokaoVolunteer ? project211Universities.length : stats.hard}</p><p className="text-gray-500">{tutorialGuide || tutorialChapter ? '接入' : isGaokaoVolunteer ? '211' : 'Hard'}</p></div>
             </div>
           </div>
         </header>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8">
-          {isGaokaoVolunteer ? (
+          {tutorialGuide ? (
+            <section className="grid gap-4 md:grid-cols-2">
+              {tutorialGuide.chapters.map((chapter, index) => (
+                <Link key={chapter.slug} href={`/arena/sections/${tutorialGuide.slug}-${chapter.slug}`} className="group overflow-hidden rounded-2xl border border-gray-800 bg-[#1b1b1b] p-5 transition hover:-translate-y-1 hover:border-[#3ce8e2]/40 hover:bg-[#202020]">
+                  <div className={`mb-5 h-1.5 w-24 rounded-full bg-gradient-to-r ${tutorialGuide.accent}`} />
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">{chapter.eyebrow}</p>
+                  <h2 className="mt-3 text-xl font-black leading-7 text-white group-hover:text-[#3ce8e2]">{chapter.titleZh}</h2>
+                  <p className="mt-4 min-h-[72px] text-sm leading-6 text-gray-400">{chapter.descriptionZh}</p>
+                  <div className="mt-6 flex items-center justify-between text-sm">
+                    <span className="font-mono text-gray-500">{String(index + 1).padStart(2, '0')} / {tutorialGuide.chapters.length}</span>
+                    <span className="font-black text-[#3ce8e2]">阅读 →</span>
+                  </div>
+                </Link>
+              ))}
+            </section>
+          ) : tutorialChapter ? (
+            <article className="rounded-2xl border border-gray-800 bg-[#1e1e1e] p-5 sm:p-6 lg:p-8">
+              <div className={`mb-6 h-1.5 w-28 rounded-full bg-gradient-to-r ${tutorialChapter.guide.accent}`} />
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#3ce8e2]">{tutorialChapter.chapter.eyebrow}</p>
+              <h2 className="mt-3 text-2xl font-black text-white sm:text-3xl">{tutorialChapter.chapter.titleZh}</h2>
+              <p className="mt-4 text-sm leading-7 text-gray-400">{tutorialChapter.chapter.descriptionZh}</p>
+              <div className="mt-8 space-y-6">
+                {tutorialChapter.chapter.sections.map((item) => (
+                  <section key={item.heading} className="rounded-xl border border-gray-800 bg-[#151515] p-5">
+                    <h3 className="text-lg font-black text-white">{item.heading}</h3>
+                    <p className="mt-3 text-sm leading-7 text-gray-300">{item.body}</p>
+                    {item.commands && item.commands.length > 0 && (
+                      <div className="mt-4 rounded-lg border border-gray-800 bg-black/50 p-3">
+                        {item.commands.map((command) => (
+                          <code key={command} className="block whitespace-pre-wrap break-words py-0.5 font-mono text-xs leading-5 text-cyan-200">{command}</code>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ))}
+              </div>
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 text-sm">
+                <span className="font-semibold text-gray-300">本页为官方教程中文化整理，并补充 WTT 接入语境。</span>
+                <a href={tutorialChapter.chapter.sourceUrl} target="_blank" rel="noreferrer" className="font-black text-[#3ce8e2] hover:underline">官方来源：{tutorialChapter.chapter.sourceLabel} →</a>
+              </div>
+            </article>
+          ) : isGaokaoVolunteer ? (
             <section className="space-y-6">
               <div className="rounded-xl border border-blue-400/20 bg-[#1e1e1e] p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -187,13 +231,22 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
               </div>
             </div>
             <div className="rounded-xl border border-gray-800 bg-[#1e1e1e] p-5">
-              <h2 className="font-black text-white">使用方式</h2>
-              <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-400">
-                <li>• Judge 题：进入后可用 Python/C/C++ 提交给 Agent Runner。</li>
-                <li>• Coach 题：进入后直接用右侧学习 Coach 做苏格拉底、答题点评或 Ask 问答。</li>
-                <li>• 白板会根据 Agent 回答同步生成图表、公式和解题结构。</li>
-                <li>• 隐藏测试和上下文注入仍保持脱敏。</li>
-              </ul>
+              <h2 className="font-black text-white">{tutorialGuide || tutorialChapter ? '教程说明' : '使用方式'}</h2>
+              {tutorialGuide || tutorialChapter ? (
+                <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-400">
+                  <li>• 与技术、教育、高考并列，作为一级学习板块。</li>
+                  <li>• 每章按官方文档中文化改写，并附官方来源链接。</li>
+                  <li>• 命令块保留可直接复制的最小操作路径。</li>
+                  <li>• WTT 段落说明如何接入本地 Agent 和云端 Agent。</li>
+                </ul>
+              ) : (
+                <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-400">
+                  <li>• Judge 题：进入后可用 Python/C/C++ 提交给 Agent Runner。</li>
+                  <li>• Coach 题：进入后直接用右侧学习 Coach 做苏格拉底、答题点评或 Ask 问答。</li>
+                  <li>• 白板会根据 Agent 回答同步生成图表、公式和解题结构。</li>
+                  <li>• 隐藏测试和上下文注入仍保持脱敏。</li>
+                </ul>
+              )}
             </div>
           </aside>
         </div>

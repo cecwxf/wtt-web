@@ -1,7 +1,6 @@
 import Link from 'next/link'
-import { agentTutorialGuides } from '@/lib/arena/agent-tutorials'
 import { listChallenges } from '@/lib/arena/store'
-import { rootArenaSections, sectionStats } from '@/lib/arena/sections'
+import { childSections, rootArenaSections, sectionStats } from '@/lib/arena/sections'
 
 function difficultyTone(difficulty: string) {
   if (difficulty === 'easy') return 'text-emerald-300'
@@ -41,7 +40,6 @@ export default function ArenaPage() {
           </Link>
           <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-400 sm:gap-4 lg:gap-5">
             <a href="#sections" className="hidden transition-colors hover:text-[#3ce8e2] sm:inline">学习板块</a>
-            <a href="#agent-guides" className="hidden transition-colors hover:text-[#3ce8e2] lg:inline">Agent 教程</a>
             <a href="#featured" className="hidden transition-colors hover:text-[#3ce8e2] sm:inline">推荐入口</a>
             <Link href="/feed" className="transition-colors hover:text-[#3ce8e2]">讨论</Link>
             <Link href="/arena/sections/ai-kernel" className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-3 py-2 text-xs font-black text-black transition-opacity hover:opacity-90 sm:px-4 sm:text-sm">
@@ -78,6 +76,8 @@ export default function ArenaPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-5">
             {sections.map((section) => {
               const stats = sectionStats(challenges, section.slug)
+              const childCount = childSections(section.slug).length
+              const isTutorial = section.slug === 'claude-code-tutorial' || section.slug === 'codex-tutorial'
               return (
                 <Link key={section.slug} href={section.href} className="group overflow-hidden rounded-2xl border border-gray-800 bg-[#1b1b1b] p-5 transition hover:-translate-y-1 hover:border-[#3ce8e2]/40 hover:bg-[#202020] lg:p-6">
                   <div className={`mb-5 h-1.5 w-24 rounded-full bg-gradient-to-r ${section.accent}`} />
@@ -85,10 +85,10 @@ export default function ArenaPage() {
                   <h3 className="mt-3 text-2xl font-black text-white group-hover:text-[#3ce8e2]">{section.titleZh}</h3>
                   <p className="mt-4 min-h-[54px] text-sm leading-6 text-gray-400 lg:min-h-[72px]">{section.descriptionZh}</p>
                   <div className="mt-6 grid grid-cols-4 gap-2 text-center text-xs">
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className="text-lg font-black text-white">{stats.total}</p><p className="text-gray-500">题</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${difficultyTone('easy')}`}>{stats.easy}</p><p className="text-gray-500">Easy</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${difficultyTone('medium')}`}>{stats.medium}</p><p className="text-gray-500">Med</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${difficultyTone('hard')}`}>{stats.hard}</p><p className="text-gray-500">Hard</p></div>
+                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className="text-lg font-black text-white">{isTutorial ? childCount : stats.total}</p><p className="text-gray-500">{isTutorial ? '章' : '题'}</p></div>
+                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-cyan-300' : difficultyTone('easy')}`}>{isTutorial ? '官方' : stats.easy}</p><p className="text-gray-500">{isTutorial ? 'Docs' : 'Easy'}</p></div>
+                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-yellow-300' : difficultyTone('medium')}`}>{isTutorial ? '中文' : stats.medium}</p><p className="text-gray-500">{isTutorial ? 'CN' : 'Med'}</p></div>
+                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-emerald-300' : difficultyTone('hard')}`}>{isTutorial ? 'WTT' : stats.hard}</p><p className="text-gray-500">{isTutorial ? '接入' : 'Hard'}</p></div>
                   </div>
                   <div className="mt-6 flex items-center justify-between text-sm">
                     <span className="text-gray-500">Sources: {section.sources.slice(0, 2).map((item) => item.label).join(' / ')}</span>
@@ -97,79 +97,6 @@ export default function ArenaPage() {
                 </Link>
               )
             })}
-          </div>
-        </section>
-
-        <section id="agent-guides" className="mb-12 lg:mb-20">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#3ce8e2]">Official Agent Tutorials</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">Claude Code / Codex 官方教程中文化</h2>
-            </div>
-            <p className="max-w-xl text-xs leading-6 text-gray-500 sm:text-right sm:text-sm">
-              基于官方文档做中文改写和 WTT 场景化整理：保留官方链接，补充安装、配置、安全、MCP、角色和 Cloud Agent 接入路径。
-            </p>
-          </div>
-
-          <div className="grid gap-5 xl:grid-cols-2">
-            {agentTutorialGuides.map((guide) => (
-              <article key={guide.slug} className="overflow-hidden rounded-2xl border border-gray-800 bg-[#1b1b1b]">
-                <div className={`h-1.5 w-full bg-gradient-to-r ${guide.accent}`} />
-                <div className="p-5 lg:p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">{guide.eyebrow}</p>
-                      <h3 className="mt-3 text-2xl font-black text-white">{guide.titleZh}</h3>
-                    </div>
-                    <a
-                      href={guide.docsHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-md border border-[#3ce8e2]/30 px-3 py-2 text-xs font-black text-[#3ce8e2] transition hover:bg-[#3ce8e2]/10"
-                    >
-                      官方文档
-                    </a>
-                  </div>
-                  <p className="mt-4 text-sm leading-6 text-gray-400">{guide.description}</p>
-
-                  <div className="mt-5 space-y-3">
-                    {guide.lessons.map((lesson) => (
-                      <details key={lesson.title} className="group rounded-xl border border-gray-800 bg-[#151515] p-4 open:border-[#3ce8e2]/30">
-                        <summary className="cursor-pointer list-none">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <h4 className="text-sm font-black leading-6 text-white group-open:text-[#3ce8e2]">{lesson.title}</h4>
-                              <p className="mt-1 text-xs leading-5 text-gray-500">{lesson.wttNote}</p>
-                            </div>
-                            <span className="shrink-0 rounded-full bg-[#242424] px-2 py-1 text-[10px] font-black text-gray-400 group-open:text-[#3ce8e2]">
-                              展开
-                            </span>
-                          </div>
-                        </summary>
-                        <div className="mt-4 border-t border-gray-800 pt-4">
-                          <p className="text-sm leading-7 text-gray-300">{lesson.summary}</p>
-                          {lesson.commands && lesson.commands.length > 0 && (
-                            <div className="mt-3 rounded-lg border border-gray-800 bg-black/40 p-3">
-                              {lesson.commands.map((command) => (
-                                <code key={command} className="block whitespace-pre-wrap break-words py-0.5 font-mono text-xs leading-5 text-cyan-200">
-                                  {command}
-                                </code>
-                              ))}
-                            </div>
-                          )}
-                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-                            <span className="font-semibold text-gray-500">中文化整理，不替代官方文档。</span>
-                            <a href={lesson.sourceUrl} target="_blank" rel="noreferrer" className="font-black text-[#3ce8e2] hover:underline">
-                              来源：{lesson.sourceLabel} →
-                            </a>
-                          </div>
-                        </div>
-                      </details>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            ))}
           </div>
         </section>
 
