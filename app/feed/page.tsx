@@ -1947,6 +1947,8 @@ function FeedPageInner() {
                 typingIndicatorText={selectedTopicTypingText}
                 onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
                 autoFocusNonce={composerFocusNonce}
+                workspaceAgentName={selectedAgentId ? (agentNameMap[selectedAgentId] || selectedAgentId) : undefined}
+                workspaceWorkdir={selectedAgentId ? agentRuntimeMap?.[selectedAgentId]?.workdir : undefined}
                 compactUi
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (

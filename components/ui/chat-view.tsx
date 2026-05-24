@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, Video } from 'lucide-react'
+import { Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -17,6 +17,7 @@ import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
 import { isDesktop, saveToLocal } from '@/lib/desktop'
 import { buildFileContext } from '@/lib/file-context'
+import { AgentTerminalPane } from '@/components/ui/agent-terminal-modal'
 
 export interface ChatMessage {
   message_id: string
@@ -316,6 +317,8 @@ interface ChatViewProps {
   onRequestPrivateDiscuss?: (targetAgentId: string, targetDisplayName?: string) => Promise<void> | void
   compactUi?: boolean
   autoFocusNonce?: number
+  workspaceAgentName?: string
+  workspaceWorkdir?: string
 }
 
 interface AgentProfileSummary {
@@ -362,7 +365,7 @@ type ParsedTask = {
   assetPath?: string
 }
 
-type ChatPanelTab = 'chat' | 'files'
+type ChatPanelTab = 'chat' | 'files' | 'workspace'
 
 type ConversationFile = {
   key: string
@@ -695,6 +698,8 @@ export function ChatView({
   onRequestPrivateDiscuss,
   compactUi = false,
   autoFocusNonce,
+  workspaceAgentName,
+  workspaceWorkdir,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -1809,6 +1814,21 @@ export function ChatView({
                     {conversationFiles.length}
                   </span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('workspace')}
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
+                    activeTab === 'workspace'
+                      ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
+                      : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <SquareTerminal className={compactUi ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+                  <span>Workspace</span>
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    currentAgentId ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-700'
+                  }`} />
+                </button>
               </div>
             </div>
           </div>
@@ -1840,8 +1860,13 @@ export function ChatView({
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-[#fbfaf7] px-4 py-3 dark:bg-zinc-950 sm:px-6"
+        className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
+          activeTab === 'workspace'
+            ? 'overflow-hidden px-3 py-3 sm:px-4'
+            : 'overflow-y-auto px-4 py-3 sm:px-6'
+        }`}
       >
+        {activeTab !== 'workspace' && (
         <div className="mb-3 flex justify-center">
           <button
             onClick={handleLoadOlder}
@@ -1851,6 +1876,7 @@ export function ChatView({
             {loadingOlder ? t('chat.loadingHistory') : hasOlder ? t('chat.loadOlder') : t('chat.noOlder')}
           </button>
         </div>
+        )}
 
         {loading && messages.length === 0 && (
           <div className="flex items-center justify-center py-20">
@@ -1862,7 +1888,27 @@ export function ChatView({
           <div className="pt-20 text-center text-sm text-slate-400">{t('chat.noMessages')}</div>
         )}
 
-        {activeTab === 'files' ? (
+        {activeTab === 'workspace' ? (
+          <div className="flex h-full min-h-[360px] w-full flex-col">
+            {currentAgentId && accessToken ? (
+              <div className="relative min-h-[320px] flex-1 resize overflow-hidden rounded-2xl">
+                <AgentTerminalPane
+                  agentId={currentAgentId}
+                  agentName={workspaceAgentName || currentAgentId}
+                  workdir={workspaceWorkdir}
+                  token={accessToken}
+                  compact={compactUi}
+                  className="h-full w-full resize overflow-hidden"
+                />
+                <span className="pointer-events-none absolute bottom-1.5 right-1.5 h-5 w-5 rounded-sm border-b-2 border-r-2 border-cyan-300/70 opacity-70" />
+              </div>
+            ) : (
+              <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[#ded8ce] bg-white/45 text-sm text-[#8a8378] dark:border-zinc-800 dark:bg-zinc-900/45 dark:text-zinc-500">
+                当前没有可连接的 Agent workspace。
+              </div>
+            )}
+          </div>
+        ) : activeTab === 'files' ? (
           <div className="mx-auto w-full max-w-3xl">
             <div className="mb-3 rounded-xl border border-[#eee9df] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
               <p className="text-sm font-semibold text-[#283038] dark:text-zinc-100">Files</p>

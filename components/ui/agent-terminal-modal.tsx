@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WS_BASE_URL } from '@/lib/api/base-url'
@@ -13,6 +13,17 @@ interface AgentTerminalModalProps {
   onClose: () => void
 }
 
+interface AgentTerminalPaneProps {
+  agentId: string
+  agentName: string
+  workdir?: string
+  token?: string
+  className?: string
+  actions?: ReactNode
+  compact?: boolean
+  onTerminalReady?: (terminal: Terminal | null, fit: FitAddon | null) => void
+}
+
 type Pending = {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
@@ -21,94 +32,34 @@ type Pending = {
 
 let reqCounter = 0
 
-export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose }: AgentTerminalModalProps) {
-  const shellRef = useRef<HTMLDivElement | null>(null)
+export function AgentTerminalPane({ agentId, agentName, workdir, token, className = '', actions, compact = false, onTerminalReady }: AgentTerminalPaneProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const sessionRef = useRef<string>('')
   const pendingRef = useRef<Map<string, Pending>>(new Map())
+  const onTerminalReadyRef = useRef(onTerminalReady)
   const [status, setStatus] = useState<'connecting' | 'connected' | 'closed' | 'error'>('connecting')
   const [error, setError] = useState('')
-  const [size, setSize] = useState({ width: 0, height: 0 })
-  const [maximized, setMaximized] = useState(false)
 
   const wsUrl = useMemo(() => `${WS_BASE_URL.replace(/\/$/, '')}/ws/${encodeURIComponent(agentId)}`, [agentId])
 
   useEffect(() => {
-    const setDefaultSize = () => {
-      setSize((prev) => {
-        if (prev.width > 0 && prev.height > 0) return prev
-        return {
-          width: Math.round(window.innerWidth * 0.96),
-          height: Math.round(window.innerHeight * 0.94),
-        }
-      })
-    }
-    setDefaultSize()
-  }, [])
-
-  const fitTerminal = () => {
-    try {
-      fitRef.current?.fit()
-    } catch {
-      // ignore transient layout races while dragging
-    }
-  }
-
-  const handleResizePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const startX = event.clientX
-    const startY = event.clientY
-    const startWidth = shellRef.current?.offsetWidth || size.width || window.innerWidth * 0.96
-    const startHeight = shellRef.current?.offsetHeight || size.height || window.innerHeight * 0.94
-    const minWidth = Math.min(520, window.innerWidth - 16)
-    const minHeight = Math.min(360, window.innerHeight - 16)
-    const maxWidth = window.innerWidth - 16
-    const maxHeight = window.innerHeight - 16
-
-    const onMove = (move: PointerEvent) => {
-      const nextWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + move.clientX - startX))
-      const nextHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + move.clientY - startY))
-      setSize({ width: Math.round(nextWidth), height: Math.round(nextHeight) })
-      setMaximized(false)
-      requestAnimationFrame(fitTerminal)
-    }
-
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      requestAnimationFrame(fitTerminal)
-      termRef.current?.focus()
-    }
-
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp, { once: true })
-  }
-
-  const toggleMaximized = () => {
-    if (maximized) {
-      setSize({
-        width: Math.round(window.innerWidth * 0.8),
-        height: Math.round(window.innerHeight * 0.76),
-      })
-      setMaximized(false)
-    } else {
-      setSize({
-        width: window.innerWidth - 16,
-        height: window.innerHeight - 16,
-      })
-      setMaximized(true)
-    }
-    requestAnimationFrame(fitTerminal)
-    setTimeout(() => termRef.current?.focus(), 0)
-  }
+    onTerminalReadyRef.current = onTerminalReady
+  }, [onTerminalReady])
 
   useEffect(() => {
     const root = rootRef.current
-    if (!root || !agentId || !token) return
+    if (!root || !agentId || !token) {
+      if (!token) {
+        setStatus('error')
+        setError('terminal auth token is missing')
+      }
+      return
+    }
+    setStatus('connecting')
+    setError('')
 
     const term = new Terminal({
       cursorBlink: true,
@@ -131,6 +82,7 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
     term.writeln('\x1b[36mConnecting to agent shell...\x1b[0m')
     termRef.current = term
     fitRef.current = fit
+    onTerminalReadyRef.current?.(term, fit)
 
     let closed = false
     const ws = new WebSocket(wsUrl)
@@ -262,8 +214,116 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
       termRef.current = null
       fitRef.current = null
       sessionRef.current = ''
+      onTerminalReadyRef.current?.(null, null)
     }
   }, [agentId, token, workdir, wsUrl])
+
+  return (
+    <div className={`flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#2b3a35] bg-[#0b0f14] shadow-2xl ${className}`}>
+      <div className={`flex items-center justify-between border-b border-white/10 bg-[#101820] ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
+        <div className="min-w-0">
+          <div className={`${compact ? 'text-xs' : 'text-sm'} truncate font-black text-slate-100`}>Terminal · {agentName}</div>
+          <div className="mt-1 truncate text-xs text-slate-400" title={workdir || ''}>
+            {workdir || 'agent shell'} · runs on the agent host
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${
+            status === 'connected'
+              ? 'bg-emerald-500/15 text-emerald-300'
+              : status === 'error'
+                ? 'bg-red-500/15 text-red-300'
+                : 'bg-slate-500/15 text-slate-300'
+          }`}>
+            {status}
+          </span>
+          {actions}
+        </div>
+      </div>
+      {error && (
+        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-200">{error}</div>
+      )}
+      <div ref={rootRef} className="min-h-0 flex-1 p-2" />
+    </div>
+  )
+}
+
+export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose }: AgentTerminalModalProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
+  const [size, setSize] = useState({ width: 0, height: 0 })
+  const [maximized, setMaximized] = useState(false)
+
+  useEffect(() => {
+    const setDefaultSize = () => {
+      setSize((prev) => {
+        if (prev.width > 0 && prev.height > 0) return prev
+        return {
+          width: Math.round(window.innerWidth * 0.96),
+          height: Math.round(window.innerHeight * 0.94),
+        }
+      })
+    }
+    setDefaultSize()
+  }, [])
+
+  const fitTerminal = () => {
+    try {
+      fitRef.current?.fit()
+    } catch {
+      // ignore transient layout races while dragging
+    }
+  }
+
+  const handleResizePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const startX = event.clientX
+    const startY = event.clientY
+    const startWidth = shellRef.current?.offsetWidth || size.width || window.innerWidth * 0.96
+    const startHeight = shellRef.current?.offsetHeight || size.height || window.innerHeight * 0.94
+    const minWidth = Math.min(520, window.innerWidth - 16)
+    const minHeight = Math.min(360, window.innerHeight - 16)
+    const maxWidth = window.innerWidth - 16
+    const maxHeight = window.innerHeight - 16
+
+    const onMove = (move: PointerEvent) => {
+      const nextWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + move.clientX - startX))
+      const nextHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + move.clientY - startY))
+      setSize({ width: Math.round(nextWidth), height: Math.round(nextHeight) })
+      setMaximized(false)
+      requestAnimationFrame(fitTerminal)
+    }
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      requestAnimationFrame(fitTerminal)
+      termRef.current?.focus()
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp, { once: true })
+  }
+
+  const toggleMaximized = () => {
+    if (maximized) {
+      setSize({
+        width: Math.round(window.innerWidth * 0.8),
+        height: Math.round(window.innerHeight * 0.76),
+      })
+      setMaximized(false)
+    } else {
+      setSize({
+        width: window.innerWidth - 16,
+        height: window.innerHeight - 16,
+      })
+      setMaximized(true)
+    }
+    requestAnimationFrame(fitTerminal)
+    setTimeout(() => termRef.current?.focus(), 0)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-2">
@@ -275,23 +335,18 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
           height: size.height ? `${size.height}px` : '94vh',
         }}
       >
-        <div className="flex items-center justify-between border-b border-white/10 bg-[#101820] px-4 py-3">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-black text-slate-100">Terminal · {agentName}</div>
-            <div className="mt-1 truncate text-xs text-slate-400" title={workdir || ''}>
-              {workdir || 'agent shell'} · runs on the agent host
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${
-              status === 'connected'
-                ? 'bg-emerald-500/15 text-emerald-300'
-                : status === 'error'
-                  ? 'bg-red-500/15 text-red-300'
-                  : 'bg-slate-500/15 text-slate-300'
-            }`}>
-              {status}
-            </span>
+        <AgentTerminalPane
+          agentId={agentId}
+          agentName={agentName}
+          workdir={workdir}
+          token={token}
+          className="h-full rounded-2xl border-0 shadow-none"
+          onTerminalReady={(term, fit) => {
+            termRef.current = term
+            fitRef.current = fit
+          }}
+          actions={
+            <>
             <button
               type="button"
               onClick={toggleMaximized}
@@ -307,12 +362,9 @@ export function AgentTerminalModal({ agentId, agentName, workdir, token, onClose
             >
               x
             </button>
-          </div>
-        </div>
-        {error && (
-          <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-200">{error}</div>
-        )}
-        <div ref={rootRef} className="min-h-0 flex-1 p-2" />
+            </>
+          }
+        />
         <button
           type="button"
           aria-label="Resize terminal"
