@@ -162,6 +162,8 @@ export function WttShellV2(props: WttShellV2Props) {
     agent_id: agent.agent_id,
     display_name: agent.display_name,
     is_primary: false,
+    binding_method: agent.binding_method,
+    bound_via: agent.bound_via,
   }))
 
   const isSelectedAgentOnline = onlineAgentIds?.has(selectedAgentId) ?? false

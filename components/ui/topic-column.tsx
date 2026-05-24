@@ -33,6 +33,8 @@ export interface TopicItem {
 interface AgentOption {
   agent_id: string
   display_name: string
+  binding_method?: string
+  bound_via?: string
 }
 
 export interface AgentRuntimeInfo {
@@ -391,6 +393,10 @@ export function TopicColumn(props: TopicColumnProps) {
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentOptions, agentRuntimeMap, onlineAgentIds, selectedAgentId, isSelectedAgentOnline, onNewAgentFromHost])
+  const hasCloudAgent = useMemo(
+    () => agentOptions.some((agent) => (agent.binding_method || agent.bound_via || '') === 'cloud_trial'),
+    [agentOptions],
+  )
 
   const openNewAgentModal = () => {
     const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId)
@@ -586,23 +592,19 @@ export function TopicColumn(props: TopicColumnProps) {
         </div>
 
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
-          {onCreateCloudAgent && (
+          {onCreateCloudAgent && !hasCloudAgent && (
             <button
               type="button"
               onClick={() => {
                 void createCloudAgent()
               }}
               disabled={cloudAgentBusy}
-              className="relative flex w-full flex-col items-center justify-center rounded-xl border border-sky-300 bg-gradient-to-b from-sky-50 to-cyan-50 px-1 pb-4 pt-2 text-center text-[9px] font-black leading-tight text-sky-700 shadow-sm ring-1 ring-sky-100 transition hover:border-sky-400 hover:from-sky-100 hover:to-cyan-100 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-500/45 dark:from-sky-500/15 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/20 dark:hover:border-sky-400"
-              title={zh ? 'New Cloud Agent 需要 Plus / Pro 账户' : 'New Cloud Agent requires Plus / Pro'}
+              className="flex w-full flex-col items-center justify-center rounded-xl border border-sky-300 bg-gradient-to-b from-sky-50 to-cyan-50 px-1 py-2 text-center text-[9px] font-black leading-tight text-sky-700 shadow-sm ring-1 ring-sky-100 transition hover:border-sky-400 hover:from-sky-100 hover:to-cyan-100 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-500/45 dark:from-sky-500/15 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/20 dark:hover:border-sky-400"
+              title={zh ? 'Cloud Agent 需要 Plus / Pro 账户' : 'Cloud Agent requires Plus / Pro'}
             >
               <Cloud className="mb-1 h-4 w-4" />
-              <span>New</span>
               <span>Cloud</span>
               <span>Agent</span>
-              <span className="absolute bottom-1 right-1 rounded-full bg-white/95 px-1 py-0.5 text-[8px] font-black leading-none text-sky-700 shadow-sm dark:bg-sky-100 dark:text-sky-800">
-                Plus+
-              </span>
             </button>
           )}
 

@@ -9,6 +9,8 @@ export interface AgentItem {
   agent_id: string
   display_name: string
   unread_count?: number
+  binding_method?: string
+  bound_via?: string
 }
 
 export interface SubAgentTask {

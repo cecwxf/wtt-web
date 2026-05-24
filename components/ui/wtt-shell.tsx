@@ -13,6 +13,8 @@ interface AgentOption {
   agent_id: string
   display_name: string
   is_primary: boolean
+  binding_method?: string
+  bound_via?: string
 }
 
 interface TopicLink {

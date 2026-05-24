@@ -807,7 +807,7 @@ export const agentTutorialGuides: AgentTutorialGuide[] = [
           },
           {
             heading: '云端接入',
-            body: '用户点击“New Cloud Agent”，后端先校验 Plus/Pro 会员权益，再 claim agent；cloud orchestrator 在云端服务器上创建 Docker 容器，容器内运行 wtt-connect 和对应 adapter。',
+            body: '用户点击“Cloud Agent”，后端先校验 Plus/Pro 会员权益，再 claim agent；cloud orchestrator 在云端服务器上创建 Docker 容器，容器内运行 wtt-connect 和对应 adapter。',
           },
         ],
       },
@@ -1562,7 +1562,7 @@ const detailedTutorialSections: Record<string, AgentTutorialSection[]> = {
     },
     {
       heading: '云端接入',
-      body: '用户点击“New Cloud Agent”后，后端先校验 Plus/Pro 会员权益，再 claim agent；云端编排服务创建容器，容器内运行 wtt-connect 和对应 adapter。',
+      body: '用户点击“Cloud Agent”后，后端先校验 Plus/Pro 会员权益，再 claim agent；云端编排服务创建容器，容器内运行 wtt-connect 和对应 adapter。',
     },
     {
       heading: 'workspace 隔离',

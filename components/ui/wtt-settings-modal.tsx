@@ -41,6 +41,8 @@ interface AgentOption {
   is_primary: boolean;
   invite_code?: string;
   invite_status?: "active" | "none";
+  binding_method?: string;
+  bound_via?: string;
 }
 
 interface MobileLoginSession {
@@ -115,6 +117,10 @@ export function WttSettingsModal({
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.agent_id === selectedAgentId),
     [agents, selectedAgentId],
+  );
+  const hasCloudAgent = useMemo(
+    () => agents.some((agent) => (agent.binding_method || agent.bound_via || "") === "cloud_trial"),
+    [agents],
   );
   const [messageNotify, setMessageNotify] = useState(true);
   const [agentAlert, setAgentAlert] = useState(true);
@@ -408,7 +414,11 @@ export function WttSettingsModal({
         }
       }
       if (!paid) {
-        setCloudClaimError("New Cloud Agent 需要升级为 Plus / Pro 账户后才能使用。");
+        setCloudClaimError("Cloud Agent 需要升级为 Plus / Pro 账户后才能使用。");
+        return;
+      }
+      if (hasCloudAgent) {
+        setCloudClaimError("该账号已经创建过 Cloud Agent，每个账号只能创建一个。");
         return;
       }
 
@@ -420,7 +430,7 @@ export function WttSettingsModal({
         },
         body: JSON.stringify({
           accepted_terms: true,
-          display_name: provisionDisplayName.trim() || "New Cloud Agent",
+          display_name: provisionDisplayName.trim() || "Cloud Agent",
         }),
       });
 
@@ -1045,10 +1055,10 @@ export function WttSettingsModal({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-slate-800">
-                      New Cloud Agent
+                      Cloud Agent
                     </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Plus 可用 50 次连续请求 / 500 次月请求；Pro 可用 100 次连续请求 / 1500 次月请求。普通用户请先升级，或继续绑定自己的 Agent。
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Plus 可用 50 次连续请求 / 500 次月请求；Pro 可用 100 次连续请求 / 1500 次月请求。每个账号只能创建一个 Cloud Agent。
                     </p>
                   </div>
                   <a
@@ -1060,14 +1070,11 @@ export function WttSettingsModal({
                 </div>
                 <button
                   onClick={handleClaimCloudAgent}
-                  disabled={cloudClaiming}
-                  className="relative mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={cloudClaiming || hasCloudAgent}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {cloudClaiming && <Loader2 className="h-4 w-4 animate-spin" />}
-                  New Cloud Agent
-                  <span className="absolute bottom-1 right-2 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-black leading-none text-cyan-700 shadow-sm">
-                    Plus+
-                  </span>
+                  {hasCloudAgent ? "Cloud Agent 已创建" : "Cloud Agent"}
                 </button>
                 {cloudClaimError && (
                   <p className="mt-2 text-sm text-red-500">{cloudClaimError}</p>

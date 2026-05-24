@@ -51,6 +51,8 @@ interface Agent {
   api_key?: string
   invite_code?: string
   invite_status?: 'active' | 'none'
+  binding_method?: string
+  bound_via?: string
   role_template_id?: string
   role_template?: Record<string, unknown>
 }
@@ -1170,6 +1172,8 @@ function FeedPageInner() {
       agent_id: agent.agent_id,
       display_name: agent.display_name,
       unread_count: 0,
+      binding_method: agent.binding_method,
+      bound_via: agent.bound_via,
     }))
   }, [agents])
 
@@ -1465,6 +1469,10 @@ function FeedPageInner() {
       alert(t('settings.sessionExpired'))
       return
     }
+    if (agents.some((agent) => (agent.binding_method || agent.bound_via || '') === 'cloud_trial')) {
+      alert('该账号已经创建过 Cloud Agent，每个账号只能创建一个。')
+      return
+    }
     try {
       const billingRes = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1474,7 +1482,7 @@ function FeedPageInner() {
         const billing = await billingRes.json().catch(() => ({}))
         const plan = String((billing as { entitlement?: { plan?: unknown } }).entitlement?.plan || 'free')
         if (plan !== 'plus' && plan !== 'pro') {
-          alert('New Cloud Agent 需要升级为 Plus / Pro 账户后才能使用。请到 设置中心 > 账户升级 开通。')
+          alert('Cloud Agent 需要升级为 Plus / Pro 账户后才能使用。请到 设置中心 > 账户升级 开通。')
           return
         }
       } else {
@@ -1486,11 +1494,11 @@ function FeedPageInner() {
       return
     }
     const accepted = window.confirm([
-      'New Cloud Agent 会在云端共享服务器的独立 Docker 容器中运行。',
+      'Cloud Agent 会在云端共享服务器的独立 Docker 容器中运行。',
       'Agent 运行在共享云服务器的独立 Docker 容器中，workspace 独立但不建议存放敏感信息。',
       '请勿进行挖矿、攻击、扫描、绕过限制等恶意操作，违规会封号。',
       '',
-      '确认创建 New Cloud Agent？',
+      '确认创建 Cloud Agent？',
     ].join('\n'))
     if (!accepted) return
 
@@ -1500,7 +1508,7 @@ function FeedPageInner() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           accepted_terms: true,
-          display_name: 'New Cloud Agent',
+          display_name: 'Cloud Agent',
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -1523,11 +1531,11 @@ function FeedPageInner() {
         void loadAgents()
         void mutateTopics()
       }, 2500)
-      alert(`New Cloud Agent created: ${newAgentId || 'success'}`)
+      alert(`Cloud Agent created: ${newAgentId || 'success'}`)
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Cloud Agent failed')
     }
-  }, [loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
+  }, [agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
 
   useEffect(() => {
     setMembersOpen(false)
