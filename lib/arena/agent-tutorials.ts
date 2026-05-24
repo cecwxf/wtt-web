@@ -1582,6 +1582,422 @@ Object.entries(detailedTutorialSections).forEach(([key, sections]) => {
   if (chapter) chapter.sections = sections
 })
 
+const chapterDeepDives: Record<string, AgentTutorialSection[]> = {
+  'claude-code-tutorial/overview': [
+    {
+      heading: '官方细节补充',
+      body: '官方概览强调 Claude Code 直接工作在终端和仓库里，因此它的价值不只在生成代码，而在“理解项目上下文 + 真实执行工具 + 反馈后修正”。学习时要把它当成会操作项目的协作者，而不是只会回答问题的模型。\n\n| 能力 | 具体含义 |\n| --- | --- |\n| 读项目 | 搜索目录、读取文件、理解入口和依赖 |\n| 改项目 | 编辑文件、生成补丁、处理重复工程任务 |\n| 验证 | 运行测试、lint、类型检查、构建命令 |\n| 扩展 | 通过 MCP、Hooks、Subagents 接外部工具和流程 |',
+    },
+    {
+      heading: '实践检查表',
+      body: '- 第一次进入仓库先问项目结构，不要直接让它改代码。\n- 每个任务都写清楚目标、边界、验收标准。\n- 对高风险改动要求先计划、再修改、最后展示 diff。\n- 合并前仍要人工检查测试、配置、依赖和安全风险。',
+    },
+  ],
+  'claude-code-tutorial/quickstart': [
+    {
+      heading: '官方细节补充',
+      body: '快速开始不是只安装一个 npm 包。真正的第一步是确认运行环境：Node 版本、npm 全局路径、项目根目录、登录方式和当前 git 状态。很多“Claude 不工作”的问题，本质是命令不在 PATH、项目目录不对，或 Agent 没看到构建配置。',
+      commands: ['node -v', 'npm root -g', 'which claude', 'git status --short'],
+    },
+    {
+      heading: '第一次任务模板',
+      body: '首次使用建议按三步来：先让它读仓库，第二步让它提出计划，第三步才允许小范围修改。\n\n```text\n1. Read README, package files, and test configuration.\n2. Explain the architecture and likely test command.\n3. Make one small change and run the related test.\n```',
+    },
+  ],
+  'claude-code-tutorial/cli': [
+    {
+      heading: '官方细节补充',
+      body: 'CLI 文档的重点是区分交互式和非交互式。交互式适合连续开发；`-p/--print` 适合脚本；管道输入适合处理日志或 diff；恢复会话适合长任务。不要把所有任务都放进同一个会话，否则上下文会混乱。',
+      commands: ['claude "start with this question"', 'claude -p "summarize this file"', 'git diff | claude -p "review this diff"', 'claude -c', 'claude -r "<session-id>"'],
+    },
+    {
+      heading: '选择命令的规则',
+      body: '| 场景 | 推荐入口 |\n| --- | --- |\n| 连续开发 | `claude` |\n| 一次性摘要 | `claude -p` |\n| 日志解释 | `cat log | claude -p` |\n| 继续刚才任务 | `claude -c` |\n| 多任务恢复 | `claude -r <session-id>` |',
+    },
+  ],
+  'claude-code-tutorial/workflows': [
+    {
+      heading: '官方细节补充',
+      body: '常见工作流文档覆盖代码理解、修 bug、重构、测试、提交和并行开发。核心原则是让 Agent 先建立上下文，再执行最小可验证改动。复杂任务建议拆成多个 worktree 或多个会话，避免文件冲突。',
+    },
+    {
+      heading: '工作流提示词模板',
+      body: '```text\nFirst inspect the repository. Identify relevant files and test commands.\nThen propose a plan with risks.\nAfter I confirm, make the smallest safe change.\nRun only the related tests first, then broaden validation if needed.\n```\n\n这个模板比“帮我重构一下”稳定得多，因为它把探索、计划、执行、验证分开了。',
+    },
+  ],
+  'claude-code-tutorial/memory-settings': [
+    {
+      heading: '官方细节补充',
+      body: '官方把 memory 和 settings 分开：memory 解决“长期项目说明和偏好”，settings 解决“行为、权限、环境变量和企业策略”。CLAUDE.md 应写项目事实，不应写临时任务；settings.local.json 应写个人偏好，不应提交到仓库。',
+    },
+    {
+      heading: 'CLAUDE.md 建议目录',
+      body: '```md\n# Project overview\n# Build and test commands\n# Coding style\n# Important directories\n# Files Claude must not edit\n# Release or PR checklist\n```\n\n写得越具体，Agent 越少猜测；但过时信息会误导 Agent，所以项目命令变化后要同步更新。',
+    },
+  ],
+  'claude-code-tutorial/mcp': [
+    {
+      heading: '官方细节补充',
+      body: 'MCP 文档强调 server 的作用域和传输方式。工具可以是本地 stdio，也可以是远程 HTTP/SSE。配置时要区分 local、project、user 等范围，避免把只适合个人的 MCP 配置提交给全团队。',
+      commands: ['claude mcp list', 'claude mcp add --transport sse private-api https://api.example.com/mcp', 'claude mcp add-json local-tool \'{"type":"stdio","command":"node","args":["server.js"]}\''],
+    },
+    {
+      heading: 'MCP 工具设计原则',
+      body: '- 输出要短而结构化，避免一次返回大量无关数据。\n- 工具命名要表达动作和对象，例如 `github_list_prs`。\n- 写操作必须比读操作更严格审批。\n- MCP 返回的错误也要清晰，方便 Agent 自我修正。',
+    },
+  ],
+  'claude-code-tutorial/subagents': [
+    {
+      heading: '官方细节补充',
+      body: 'Subagent 文档强调三件事：独立上下文、专业提示词、工具权限。它不是简单换一个名字，而是为某类任务创建独立执行环境。审查、调试、测试、文档、性能分析都适合拆成专门 subagent。',
+    },
+    {
+      heading: 'Subagent 文件结构',
+      body: '```md\n---\nname: code-reviewer\ndescription: Use for reviewing code changes before merge\ntools: Read, Grep, Glob, Bash\n---\nYou review code for regressions, security issues, missing tests, and maintainability risks.\nReturn findings first, ordered by severity.\n```\n\n工具列表要按职责收敛，审查类 agent 通常不需要写文件权限。',
+    },
+  ],
+  'claude-code-tutorial/hooks': [
+    {
+      heading: '官方细节补充',
+      body: 'Hooks 在权限系统前后介入工具调用。PreToolUse 可拦截或修改行为，PostToolUse 可在工具成功后补动作，UserPromptSubmit 可在用户提交时补上下文，Stop/SubagentStop 可在结束时总结或通知。',
+    },
+    {
+      heading: 'Hook 设计表',
+      body: '| 事件 | 适合做什么 |\n| --- | --- |\n| PreToolUse | 阻止危险命令、检查路径 |\n| PostToolUse | 格式化、记录日志、触发测试 |\n| UserPromptSubmit | 注入上下文、拦截敏感请求 |\n| Notification | 转发等待确认提醒 |\n| Stop | 生成任务摘要或状态报告 |',
+    },
+  ],
+  'claude-code-tutorial/github-actions': [
+    {
+      heading: '官方细节补充',
+      body: 'GitHub Actions 章节的重点是仓库事件和远程触发。Agent 可以根据 issue/PR 上下文执行任务，但 workflow 必须把 secret、触发条件、最大轮数和权限边界配置清楚。',
+    },
+    {
+      heading: '安全检查表',
+      body: '- API key 必须放在 GitHub Secrets。\n- 不要在 fork PR 上暴露高权限 secret。\n- 限制 `claude_args`，例如最大轮数、模型和工具配置。\n- 对自动生成的 PR 仍要求人类 review。\n- workflow 文件本身要纳入代码审查。',
+    },
+  ],
+  'claude-code-tutorial/security': [
+    {
+      heading: '官方细节补充',
+      body: '安全章节不只讲“不要泄露 key”。还包括权限模式、敏感文件 deny、网络访问、容器边界、企业策略、审计日志和人类审批。Agent 能执行真实命令，所以安全策略要围绕真实工程风险设计。',
+    },
+    {
+      heading: '敏感资产清单',
+      body: '| 类型 | 处理方式 |\n| --- | --- |\n| `.env` / secrets | deny 读取，必要时用占位变量 |\n| 生产证书 | 不放入 Agent workspace |\n| 数据库备份 | 不给默认读权限 |\n| 部署脚本 | 修改需人工审批 |\n| 依赖锁文件 | 修改后必须解释原因 |',
+    },
+  ],
+  'claude-code-tutorial/how-claude-code-works': [
+    {
+      heading: '官方细节补充',
+      body: 'Claude Code 的执行循环可以理解为：读取上下文、选择工具、执行动作、观察结果、更新计划。这个循环会不断消耗上下文窗口，所以中途总结、清理无关日志、拆分任务非常重要。',
+    },
+    {
+      heading: '控制 Agent 行为',
+      body: '你可以用明确指令控制它的工作节奏：先只读、先计划、不自动提交、不改公共 API、先跑最小测试、失败时停止并解释。这些约束比事后纠正更有效。',
+      commands: ['> do not edit files yet; inspect and summarize first', '> do not commit; show me the diff and tests first'],
+    },
+  ],
+  'claude-code-tutorial/extend-claude-code': [
+    {
+      heading: '官方细节补充',
+      body: '扩展 Claude Code 时要先判断扩展点：需要外部数据用 MCP；需要自动守卫用 Hooks；需要角色分工用 Subagents；需要产品化集成用 SDK；需要项目规则用 CLAUDE.md 和 settings。',
+    },
+    {
+      heading: '扩展选择表',
+      body: '| 需求 | 选什么 |\n| --- | --- |\n| 读内部文档 | MCP |\n| 写文件后自动格式化 | Hook |\n| 专门做安全审查 | Subagent |\n| 集成到平台 | SDK |\n| 统一团队规范 | CLAUDE.md + settings |',
+    },
+  ],
+  'claude-code-tutorial/claude-directory': [
+    {
+      heading: '官方细节补充',
+      body: '.claude 目录应该像工程配置一样管理。能共享的是角色、命令、非敏感 hooks 和项目设置；不能共享的是个人 token、本机路径和实验性权限。团队项目要定期审查这个目录。',
+    },
+    {
+      heading: '推荐文件职责',
+      body: '| 文件 | 职责 |\n| --- | --- |\n| `CLAUDE.md` | 项目长期说明 |\n| `.claude/settings.json` | 团队共享设置 |\n| `.claude/settings.local.json` | 个人本地设置 |\n| `.claude/agents/*.md` | 项目级 subagents |\n| `.claude/hooks/*` | 可审查自动化脚本 |',
+    },
+  ],
+  'claude-code-tutorial/context-window': [
+    {
+      heading: '官方细节补充',
+      body: '上下文窗口管理决定 Agent 能否持续可靠工作。长日志、全量文件、无关聊天会挤占空间；项目地图、关键文件、错误片段、验收标准才是高价值上下文。',
+    },
+    {
+      heading: '上下文压缩方法',
+      body: '- 让 Agent 总结已完成工作和剩余任务。\n- 把长日志裁剪到第一处错误和 stack trace。\n- 用文件路径和函数名精确定位。\n- 一个会话只做一个大目标。\n- 阶段结束后新开会话，并带上摘要。',
+    },
+  ],
+  'claude-code-tutorial/prompt-caching': [
+    {
+      heading: '官方细节补充',
+      body: 'Prompt caching 适合重复出现的长前缀：项目说明、工具说明、角色规则和团队规范。要想提高命中率，稳定内容应放前面，动态任务、日志、diff 放后面。',
+    },
+    {
+      heading: '缓存友好结构',
+      body: '```text\n[Stable] system rules\n[Stable] project memory\n[Stable] tool and permission guide\n[Dynamic] current user task\n[Dynamic] current files, logs, diff\n```\n\n缓存不能修复坏上下文。稳定前缀如果过时，会稳定地产生错误结果。',
+    },
+  ],
+  'claude-code-tutorial/permission-modes': [
+    {
+      heading: '官方细节补充',
+      body: '权限模式要按任务风险选择。只读适合解释；accept edits 适合常规开发；bypass/full-auto 只适合隔离环境。企业策略可以禁止用户启用危险模式。',
+    },
+    {
+      heading: '权限选择表',
+      body: '| 任务 | 建议权限 |\n| --- | --- |\n| 解释架构 | 只读 |\n| 代码审查 | 只读 + 可运行安全命令 |\n| 修 bug | 工作区写入 + 命令确认 |\n| CI 自动修复 | 隔离环境 + 限制轮数 |\n| 生产部署 | 不建议全自动 |',
+    },
+  ],
+  'claude-code-tutorial/manage-sessions': [
+    {
+      heading: '官方细节补充',
+      body: '会话管理解决的是长期任务连续性。继续最近会话适合短中断；恢复指定会话适合多任务并行；阶段总结适合跨天任务。不要把多个互不相关任务塞进一个长会话。',
+    },
+    {
+      heading: '会话交接模板',
+      body: '```md\n## Completed\n## Files changed\n## Commands run\n## Current failing issue\n## Next recommended step\n## Risks or assumptions\n```\n\n这个模板能让下一个会话或另一个人快速接手。',
+    },
+  ],
+  'claude-code-tutorial/prompt-library': [
+    {
+      heading: '官方细节补充',
+      body: 'Prompt library 的价值在于把常见任务标准化。解释、修复、审查、测试、文档、重构都可以做成模板。模板不是为了变长，而是为了让输入稳定、输出可审查。',
+    },
+    {
+      heading: '通用工程提示结构',
+      body: '```text\nGoal: what should change\nContext: files, logs, screenshots, constraints\nRules: what not to modify\nValidation: commands or checks to run\nOutput: summary, diff, tests, risks\n```\n\n缺少 Validation 的提示，往往只能得到“看起来对”的结果。',
+    },
+  ],
+  'claude-code-tutorial/best-practices': [
+    {
+      heading: '官方细节补充',
+      body: '最佳实践贯穿所有章节：小任务、清晰边界、先读后改、真实验证、人工审查。Agent 越强，越需要清楚的工程护栏，否则它会高效地做错方向。',
+    },
+    {
+      heading: '常见错误',
+      body: '- 让 Agent 一次性重构整个系统。\n- 没有告诉它测试命令。\n- 允许它修改无关文件。\n- 不看 diff 直接合并。\n- 把密钥和生产配置放进上下文。\n- 一个会话混入多个业务目标。',
+    },
+  ],
+  'claude-code-tutorial/ide-web-desktop': [
+    {
+      heading: '官方细节补充',
+      body: '多平台入口的区别在于上下文和审查方式。终端最贴近真实命令；IDE 最适合看 diff；Web/Cloud 适合远程长任务；Desktop 适合多会话和可视化工作流。',
+    },
+    {
+      heading: '入口选择建议',
+      body: '| 入口 | 更适合 |\n| --- | --- |\n| Terminal | 本地工程执行、脚本、测试 |\n| IDE | 文件定位、diff 审查、选区上下文 |\n| Web/Cloud | 异步任务、远程环境 |\n| Desktop | 多会话管理、可视化操作 |',
+    },
+  ],
+  'claude-code-tutorial/sdk-devcontainer-troubleshooting': [
+    {
+      heading: '官方细节补充',
+      body: 'SDK、devcontainer 和 troubleshooting 是进阶章节。SDK 用于产品化集成；devcontainer 用于可重复环境；排障要围绕版本、路径、权限、MCP 启动和 shell 差异逐层定位。',
+    },
+    {
+      heading: '排障顺序',
+      body: '```text\n1. Check Node and Claude Code version.\n2. Check PATH and global npm bin.\n3. Check current shell and working directory.\n4. Check project commands outside Claude.\n5. Check settings and permissions.\n6. Check MCP server logs.\n```',
+    },
+  ],
+  'codex-tutorial/overview': [
+    {
+      heading: '官方细节补充',
+      body: 'Codex CLI 官方定位是把推理模型带到终端里的开源编程 Agent。它强调本地仓库操作、沙箱、审批、图像输入和自动化。Codex Cloud 则偏任务级远程执行，两者不是同一使用场景。',
+    },
+    {
+      heading: '能力地图',
+      body: '| 能力 | CLI | Cloud |\n| --- | --- | --- |\n| 本地文件 | 直接访问 | 通过任务环境 |\n| 运行命令 | 本机/沙箱内 | 云沙箱内 |\n| 交互方式 | TUI / exec | 异步任务 |\n| 适合任务 | 日常开发 | 独立 issue / PR 任务 |',
+    },
+  ],
+  'codex-tutorial/install-login': [
+    {
+      heading: '官方细节补充',
+      body: '安装登录章节要关注 npm 包版本、PATH、认证方式和项目 trust。共享服务器上不要把个人长期 token 暴露给其他用户；个人机器上要确认 Codex 能读取当前仓库但不能越界访问敏感目录。',
+      commands: ['npm install -g @openai/codex', 'codex --version', 'codex login'],
+    },
+    {
+      heading: '首次运行检查',
+      body: '- `codex --help` 是否能运行。\n- 当前目录是否是仓库根目录。\n- 是否存在 AGENTS.md。\n- 测试命令是否能在不依赖 Codex 的情况下独立运行。\n- 当前 git 工作区是否干净或已知。',
+    },
+  ],
+  'codex-tutorial/cloud': [
+    {
+      heading: '官方细节补充',
+      body: 'Codex Cloud 的核心是任务级沙箱。每个任务应该有清楚的输入、期望输出、环境准备和验证命令。网络通常应默认受限，依赖要通过可重复脚本安装。',
+    },
+    {
+      heading: '云任务描述模板',
+      body: '```md\n## Goal\n## Repository context\n## Files likely involved\n## Constraints\n## Validation command\n## Expected output or PR shape\n```\n\n云端任务越独立、越可验证，成功率越高。',
+    },
+  ],
+  'codex-tutorial/agents-md': [
+    {
+      heading: '官方细节补充',
+      body: 'AGENTS.md 是 Codex 的项目说明书。它应比 README 更面向执行：如何安装、如何测试、如何检查、哪些目录生成、哪些文件不能动、完成后如何报告。',
+    },
+    {
+      heading: 'AGENTS.md 示例骨架',
+      body: '```md\n# How to work in this repo\n## Setup\n## Build\n## Test\n## Lint and typecheck\n## Code style\n## Generated files\n## Security and secrets\n## Final response checklist\n```',
+    },
+  ],
+  'codex-tutorial/sandbox-approvals': [
+    {
+      heading: '官方细节补充',
+      body: 'Codex 的沙箱和审批是同一套安全模型的两面：沙箱限制能做什么，审批控制什么时候需要人确认。读、写、联网、运行命令、访问工作区外文件都应有不同策略。',
+    },
+    {
+      heading: '审批实践',
+      body: '| 动作 | 建议 |\n| --- | --- |\n| 读源码 | 通常允许 |\n| 写工作区 | 开发任务允许 |\n| 删除文件 | 要确认 |\n| 联网安装包 | 要确认或禁用 |\n| 访问密钥 | 禁止 |',
+    },
+  ],
+  'codex-tutorial/config': [
+    {
+      heading: '官方细节补充',
+      body: 'config.toml 可以固化模型、推理级别、沙箱、审批、MCP 和 profile。团队使用时应把“安全默认值”写进配置，而不是依赖每个人记住启动参数。',
+    },
+    {
+      heading: 'Profile 思路',
+      body: '```toml\n[profiles.review]\napproval_policy = "on-request"\nsandbox_mode = "read-only"\n\n[profiles.dev]\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\n```\n\n不同 profile 对应不同风险级别。',
+    },
+  ],
+  'codex-tutorial/mcp': [
+    {
+      heading: '官方细节补充',
+      body: 'OpenAI Docs MCP 是只读文档工具，适合查最新官方 API、模型、SDK 和平台说明。它不会替你调用 API，只把官方文档内容带入 Agent 上下文。',
+      commands: ['codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp', 'codex mcp list'],
+    },
+    {
+      heading: 'MCP 使用建议',
+      body: '- 官方文档问题优先用 Docs MCP。\n- 内部系统 MCP 优先只读。\n- 写操作必须有人审查。\n- 工具返回内容要短、准、可解析。\n- 不要一次启用所有 MCP，让任务需要什么才给什么。',
+    },
+  ],
+  'codex-tutorial/workflows': [
+    {
+      heading: '官方细节补充',
+      body: 'Codex 工作流也应遵循“读项目 → 计划 → 修改 → 验证 → 总结”。CLI 适合在本地真实环境中闭环，尤其适合测试、lint、typecheck 和 PR 摘要。',
+    },
+    {
+      heading: '常用任务模板',
+      body: '```text\nExplain: summarize architecture, entry points, and tests.\nFix: reproduce failure, find root cause, make smallest change.\nReview: inspect diff for regressions and missing tests.\nPR: summarize changes, tests run, risks.\n```',
+    },
+  ],
+  'codex-tutorial/interactive-tui': [
+    {
+      heading: '官方细节补充',
+      body: 'TUI 是人和 Agent 协作的主界面。它适合查看计划、审批命令、观察 diff、继续追问。遇到不确定任务时，在 TUI 中分步确认比一次性 exec 更安全。',
+    },
+    {
+      heading: 'TUI 使用习惯',
+      body: '- 开始前看 git status。\n- 让 Codex 先说明计划。\n- 对危险命令拒绝或要求解释。\n- 修改后看 diff。\n- 最终让它说明测试和剩余风险。',
+    },
+  ],
+  'codex-tutorial/model-reasoning': [
+    {
+      heading: '官方细节补充',
+      body: '模型和推理级别影响质量、速度和成本。不要把所有任务都设成最高推理；应按任务风险调整。复杂根因分析和架构审查值得高推理，小修小补不一定需要。',
+    },
+    {
+      heading: '选择规则',
+      body: '| 任务 | 模型/推理倾向 |\n| --- | --- |\n| 文档摘要 | 快模型 / 低中推理 |\n| 小 bug | 标准模型 / 中推理 |\n| 跨模块重构 | 强模型 / 高推理 |\n| 安全审查 | 强模型 / 高推理 + 人审 |',
+    },
+  ],
+  'codex-tutorial/image-inputs-generation': [
+    {
+      heading: '官方细节补充',
+      body: '图像输入让 Codex 能结合截图、设计稿和错误界面理解任务。前端问题尤其需要图像上下文，因为布局、颜色、遮挡和响应式问题很难只用文字准确描述。',
+    },
+    {
+      heading: '截图任务模板',
+      body: '```text\nHere is the screenshot. Compare it with the expected behavior.\nFind the relevant component and CSS.\nFix only the layout issue.\nVerify desktop and mobile sizes.\n```\n\n图像任务完成后应实际截图验证。',
+    },
+  ],
+  'codex-tutorial/code-review': [
+    {
+      heading: '官方细节补充',
+      body: '代码审查不是让 Codex 夸代码。它应优先寻找可导致线上问题的风险：鉴权、数据兼容、并发、错误处理、资源泄露、测试缺口和部署影响。',
+    },
+    {
+      heading: '审查输出格式',
+      body: '```md\n## Findings\n- [Severity] file:line — issue and impact\n## Open questions\n## Tests not run\n## Residual risk\n```\n\n没有发现问题时也要说明检查范围和未覆盖风险。',
+    },
+  ],
+  'codex-tutorial/subagents': [
+    {
+      heading: '官方细节补充',
+      body: 'Subagents 适合把复杂任务拆成不同上下文。探索、实现、验证、审查可以并行，但必须避免多个 worker 写同一文件。主 Agent 要负责整合结果。',
+    },
+    {
+      heading: '拆分示例',
+      body: '| 角色 | 任务 | 写权限 |\n| --- | --- | --- |\n| explorer | 找相关文件和设计约束 | 无 |\n| worker | 实现明确改动 | 有，限定路径 |\n| reviewer | 审查 diff 和测试缺口 | 无 |\n| tester | 运行验证和整理日志 | 可运行命令 |',
+    },
+  ],
+  'codex-tutorial/web-search': [
+    {
+      heading: '官方细节补充',
+      body: 'Web Search 应用于可能变化的信息：API、价格、模型、云服务、依赖版本、安全公告。技术搜索应优先官方文档和仓库，而不是内容农场。',
+    },
+    {
+      heading: '搜索提示模板',
+      body: '```text\nSearch official docs only. Compare dates and versions.\nSummarize the current behavior and include source links.\nDo not rely on outdated blog posts.\n```\n\n搜索结果要标出时间和适用版本。',
+    },
+  ],
+  'codex-tutorial/cloud-tasks': [
+    {
+      heading: '官方细节补充',
+      body: 'Cloud Tasks 的关键是任务边界。云端执行适合独立、可验证的任务；不适合需要频繁产品澄清的大需求。云任务完成后仍要查看 diff 和测试。',
+    },
+    {
+      heading: '云任务验收',
+      body: '- 是否修改了预期文件。\n- 是否运行了指定验证命令。\n- 是否引入新依赖。\n- 是否影响公共 API。\n- 是否有未解释的失败测试。\n- 是否需要人工补充配置。',
+    },
+  ],
+  'codex-tutorial/exec-scripting': [
+    {
+      heading: '官方细节补充',
+      body: 'exec/非交互模式适合脚本化，但要求输入输出稳定。它不适合需要大量澄清的任务。CI 中使用时要设置超时、输出格式和权限限制。',
+    },
+    {
+      heading: '脚本化输出示例',
+      body: '```bash\ngit diff --stat | codex exec \"Return JSON with summary, risk, tests\"\ncat test.log | codex exec \"Extract failing tests as markdown table\"\n```\n\n传入日志前要脱敏，避免把 token 或生产数据放进 prompt。',
+    },
+  ],
+  'codex-tutorial/windows-setup': [
+    {
+      heading: '官方细节补充',
+      body: 'Windows 使用要区分 PowerShell 原生和 WSL2。原生命令适合普通项目；依赖 Linux 工具链、Docker、bash 脚本的仓库更适合 WSL2。',
+    },
+    {
+      heading: 'Windows 排障清单',
+      body: '- PATH 是否包含 npm 全局 bin。\n- PowerShell 执行策略是否阻止脚本。\n- 项目是否依赖 bash-only 命令。\n- 换行符是否影响测试。\n- WSL2 项目是否放在 Linux 文件系统内。',
+    },
+  ],
+  'codex-tutorial/open-source-changelog': [
+    {
+      heading: '官方细节补充',
+      body: 'Codex CLI 迭代很快，教程不能假设命令和配置永远不变。升级前应看 changelog、README、docs/config、docs/sandbox 和已知问题。',
+    },
+    {
+      heading: '升级流程',
+      body: '```text\n1. Record current version.\n2. Read release notes.\n3. Test on a sample repo.\n4. Verify sandbox and approval behavior.\n5. Roll out to shared environment.\n6. Keep rollback path.\n```',
+    },
+  ],
+  'codex-tutorial/wtt-integration': [
+    {
+      heading: '官方细节补充',
+      body: 'WTT 接入章节是平台集成说明，不属于 OpenAI 官方教程主体。这里要讲清楚本地 Codex、云端容器、agent_id、token、workspace、密钥代理和试用到期清理的关系。',
+    },
+    {
+      heading: '接入验收清单',
+      body: '- agent_id 和 token 是否只展示一次。\n- workspace 是否按 agent_id 隔离。\n- 容器内是否看不到长期模型 key。\n- wtt-connect 是否自动重启。\n- 7 天试用是否能停止服务。\n- 用户恶意操作是否有封禁和审计。',
+    },
+  ],
+}
+
+Object.entries(chapterDeepDives).forEach(([key, sections]) => {
+  const [guideSlug, chapterSlug] = key.split('/')
+  const guide = agentTutorialGuides.find((item) => item.slug === guideSlug)
+  const chapter = guide?.chapters.find((item) => item.slug === chapterSlug)
+  if (chapter) chapter.sections = [...chapter.sections, ...sections]
+})
+
 export function getAgentTutorialGuide(slug: string) {
   return agentTutorialGuides.find((guide) => guide.slug === slug) || null
 }
