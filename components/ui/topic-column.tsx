@@ -73,7 +73,7 @@ interface TopicColumnProps {
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
-  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate) => void | Promise<void>
+  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex') => void | Promise<void>
   onCreateCloudAgent?: () => void | Promise<void>
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
@@ -299,6 +299,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [newAgentOpen, setNewAgentOpen] = useState(false)
   const [newAgentHostId, setNewAgentHostId] = useState('')
   const [newAgentRoleId, setNewAgentRoleId] = useState<AgentRoleTemplateId>('general')
+  const [newAgentAdapter, setNewAgentAdapter] = useState<'claude-code' | 'codex'>('claude-code')
   const [newAgentBusy, setNewAgentBusy] = useState(false)
   const [newAgentError, setNewAgentError] = useState('')
   const [cloudAgentBusy, setCloudAgentBusy] = useState(false)
@@ -403,6 +404,7 @@ export function TopicColumn(props: TopicColumnProps) {
     const host = selectedHost || newAgentHosts[0]
     if (!host) return
     setNewAgentHostId(host.agent_id)
+    setNewAgentAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[host.agent_id]) || 'claude-code') as 'claude-code' | 'codex')
     setNewAgentRoleId('general')
     setNewAgentError('')
     setNewAgentOpen(true)
@@ -414,7 +416,7 @@ export function TopicColumn(props: TopicColumnProps) {
     setNewAgentBusy(true)
     setNewAgentError('')
     try {
-      await onNewAgentFromHost(newAgentHostId, role)
+      await onNewAgentFromHost(newAgentHostId, role, newAgentAdapter)
       setNewAgentOpen(false)
     } catch (error) {
       setNewAgentError(error instanceof Error ? error.message : (zh ? '创建失败' : 'Failed to create agent'))
@@ -1021,7 +1023,11 @@ export function TopicColumn(props: TopicColumnProps) {
               <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '运行主机' : 'Host'}</span>
               <select
                 value={newAgentHostId}
-                onChange={(event) => setNewAgentHostId(event.target.value)}
+                onChange={(event) => {
+                  const hostId = event.target.value
+                  setNewAgentHostId(hostId)
+                  setNewAgentAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[hostId]) || 'claude-code') as 'claude-code' | 'codex')
+                }}
                 disabled={newAgentBusy}
                 className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
               >
@@ -1037,6 +1043,33 @@ export function TopicColumn(props: TopicColumnProps) {
                 })}
               </select>
             </label>
+
+            <div className="mb-4">
+              <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '运行 Adapter' : 'Adapter'}</div>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ['claude-code', 'Claude Code'],
+                  ['codex', 'Codex'],
+                ] as const).map(([id, label]) => {
+                  const active = newAgentAdapter === id
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      disabled={newAgentBusy}
+                      onClick={() => setNewAgentAdapter(id)}
+                      className={`rounded-xl border px-3 py-2 text-left text-sm font-black transition ${
+                        active
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/45 dark:bg-emerald-500/15 dark:text-emerald-200'
+                          : 'border-[#eee6da] bg-white/70 text-slate-600 hover:border-[#ded6c8] hover:bg-[#f3eee5] dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
             <div>
               <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '角色' : 'Role'}</div>

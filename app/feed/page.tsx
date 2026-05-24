@@ -1320,15 +1320,16 @@ function FeedPageInner() {
     return ids
   }, [agentStatsRaw, agentRuntimeMap])
 
-  const handleNewAgentFromHost = useCallback(async (hostAgentId: string, role: AgentRoleTemplate) => {
+  const handleNewAgentFromHost = useCallback(async (hostAgentId: string, role: AgentRoleTemplate, requestedAdapter?: 'claude-code' | 'codex') => {
     const token = session?.accessToken as string | undefined
     if (!token) throw new Error(t('settings.sessionExpired'))
 
     const runtime = agentRuntimeMap[hostAgentId]
-    const adapter = normalizeWttConnectAdapter(runtime?.adapter || runtime?.kind)
-    if (!adapter) {
+    const hostAdapter = normalizeWttConnectAdapter(runtime?.adapter || runtime?.kind)
+    if (!hostAdapter) {
       throw new Error('Clone Agent only supports online codex / claude-code hosts')
     }
+    const adapter = requestedAdapter === 'codex' ? 'codex' : 'claude-code'
 
     const displayName = role.id === 'general'
       ? `${adapter} Agent`
