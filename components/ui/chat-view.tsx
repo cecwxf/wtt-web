@@ -736,7 +736,6 @@ export function ChatView({
   const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
   const modelPrefsByTopicRef = useRef<Record<string, ModelPref>>({})
   const workerConfigHydratedRef = useRef<Record<string, boolean>>({})
-  const cloudRuntimeHydratedRef = useRef<Record<string, boolean>>({})
   const messageHintAppliedRef = useRef<Record<string, string>>({})
   const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
@@ -1121,44 +1120,6 @@ export function ChatView({
       cancelled = true
     }
   }, [topicId, currentAgentId, accessToken, topicPreferenceKey, availableModels, selectedModel, reasoningEffort])
-
-  // Cloud Agent creation pins an initial runtime model; reflect that in the
-  // status bar when the selected agent is the user's Cloud Agent.
-  useEffect(() => {
-    if (!currentAgentId || !accessToken) return
-    const key = `${topicPreferenceKey}:${currentAgentId}`
-    if (cloudRuntimeHydratedRef.current[key]) return
-
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          cache: 'no-store',
-        })
-        if (!res.ok) return
-        const data = await res.json() as Record<string, unknown>
-        if (!data?.has_cloud_agent) return
-        if (String(data.agent_id || '') !== String(currentAgentId)) return
-        const model = String(data.model_id || '').trim()
-        if (!model || cancelled) return
-
-        setSelectedModel(model)
-        const pref: ModelPref = { model, effort: reasoningEffort }
-        modelPrefsByTopicRef.current[topicPreferenceKey] = pref
-        writeStoredModelPref(topicPreferenceKey, pref)
-      } catch {
-        // keep worker/message/local preference fallback
-      } finally {
-        cloudRuntimeHydratedRef.current[key] = true
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [currentAgentId, accessToken, topicPreferenceKey, reasoningEffort])
 
   // Close model menu on click outside
   useEffect(() => {
@@ -2580,7 +2541,6 @@ export function ChatView({
                       onClick={() => {
                         setSelectedModel(m.id)
                         setModelMenuOpen(false)
-                        void sendPassthroughSlash(`/model ${m.id}`, { silent: true })
                       }}
                       className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
                         selectedModel === m.id
@@ -2616,7 +2576,6 @@ export function ChatView({
                     onClick={() => {
                       setReasoningEffort(e.id)
                       setThinkMenuOpen(false)
-                      void sendPassthroughSlash(`/think ${e.id}`, { silent: true })
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
                       reasoningEffort === e.id
