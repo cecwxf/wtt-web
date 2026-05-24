@@ -593,22 +593,16 @@ export function TopicColumn(props: TopicColumnProps) {
                 void createCloudAgent()
               }}
               disabled={cloudAgentBusy}
-              className="flex w-full flex-col items-center justify-center rounded-xl border border-sky-300 bg-gradient-to-b from-sky-50 to-cyan-50 px-1 py-2 text-center text-[9px] font-black leading-tight text-sky-700 shadow-sm ring-1 ring-sky-100 transition hover:border-sky-400 hover:from-sky-100 hover:to-cyan-100 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-500/45 dark:from-sky-500/15 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/20 dark:hover:border-sky-400"
-              title={zh ? '申请 7 天云端试用 Agent' : 'Claim a 7-day cloud trial agent'}
+              className="relative flex w-full flex-col items-center justify-center rounded-xl border border-sky-300 bg-gradient-to-b from-sky-50 to-cyan-50 px-1 pb-4 pt-2 text-center text-[9px] font-black leading-tight text-sky-700 shadow-sm ring-1 ring-sky-100 transition hover:border-sky-400 hover:from-sky-100 hover:to-cyan-100 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-500/45 dark:from-sky-500/15 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/20 dark:hover:border-sky-400"
+              title={zh ? 'New Cloud Agent 需要 Plus / Pro 账户' : 'New Cloud Agent requires Plus / Pro'}
             >
               <Cloud className="mb-1 h-4 w-4" />
-              {zh ? (
-                <>
-                  <span>试用</span>
-                  <span>云端</span>
-                  <span>agent</span>
-                </>
-              ) : (
-                <>
-                  <span>Cloud</span>
-                  <span>Trial</span>
-                </>
-              )}
+              <span>New</span>
+              <span>Cloud</span>
+              <span>Agent</span>
+              <span className="absolute bottom-1 right-1 rounded-full bg-white/95 px-1 py-0.5 text-[8px] font-black leading-none text-sky-700 shadow-sm dark:bg-sky-100 dark:text-sky-800">
+                Plus+
+              </span>
             </button>
           )}
 

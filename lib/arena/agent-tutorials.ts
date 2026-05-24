@@ -238,7 +238,7 @@ export const agentTutorialGuides: AgentTutorialGuide[] = [
           },
           {
             heading: '云端使用安全线',
-            body: 'WTT Cloud Agent 当前用 Docker 隔离 workspace，用宿主机代理隐藏真实模型 key，用 7 天到期和 workspace 限额控制试用成本。它适合试用和轻量任务，不适合存放高敏密钥或生产私有资产。',
+            body: 'WTT Cloud Agent 当前用 Docker 隔离 workspace，用宿主机代理隐藏真实模型 key，并用 Plus/Pro 会员额度、workspace 限额和审计控制成本。它适合轻量任务，不适合存放高敏密钥或生产私有资产。',
           },
         ],
       },
@@ -511,7 +511,7 @@ export const agentTutorialGuides: AgentTutorialGuide[] = [
           },
           {
             heading: '与 WTT Cloud Agent 的区别',
-            body: 'WTT 现在是“用户 claim 一个 7 天容器”，容器里长期跑 wtt-connect；Codex Cloud 更像“每个任务一个沙箱”。WTT 后续可以从长期试用容器演进到任务级短生命周期容器。',
+            body: 'WTT 现在是“Plus/Pro 用户 claim 一个云端 Agent 容器”，容器里长期跑 wtt-connect；Codex Cloud 更像“每个任务一个沙箱”。WTT 后续可以从会员云端容器演进到任务级短生命周期容器。',
           },
         ],
       },
@@ -733,7 +733,7 @@ export const agentTutorialGuides: AgentTutorialGuide[] = [
           },
           {
             heading: 'WTT 演进方向',
-            body: 'WTT 当前是“7 天 cloud agent 容器”，后续可以增加“每个任务一个临时容器”，任务完成后自动销毁，成本和隔离会比长期容器更好。',
+            body: 'WTT 当前是“会员 cloud agent 容器”，后续可以增加“每个任务一个临时容器”，任务完成后自动销毁，成本和隔离会比长期容器更好。',
           },
         ],
       },
@@ -807,7 +807,7 @@ export const agentTutorialGuides: AgentTutorialGuide[] = [
           },
           {
             heading: '云端接入',
-            body: '用户点击“试用云端agent”，后端 claim agent，cloud orchestrator 在 174.196 上创建 Docker 容器，容器内运行 wtt-connect 和对应 adapter。7 天后自动停止。',
+            body: '用户点击“New Cloud Agent”，后端先校验 Plus/Pro 会员权益，再 claim agent；cloud orchestrator 在云端服务器上创建 Docker 容器，容器内运行 wtt-connect 和对应 adapter。',
           },
         ],
       },
@@ -1562,7 +1562,7 @@ const detailedTutorialSections: Record<string, AgentTutorialSection[]> = {
     },
     {
       heading: '云端接入',
-      body: '用户点击“试用云端agent”后，后端 claim agent，云端编排服务创建容器，容器内运行 wtt-connect 和对应 adapter。试用到期后容器停止。',
+      body: '用户点击“New Cloud Agent”后，后端先校验 Plus/Pro 会员权益，再 claim agent；云端编排服务创建容器，容器内运行 wtt-connect 和对应 adapter。',
     },
     {
       heading: 'workspace 隔离',
@@ -1982,11 +1982,11 @@ const chapterDeepDives: Record<string, AgentTutorialSection[]> = {
   'codex-tutorial/wtt-integration': [
     {
       heading: '官方细节补充',
-      body: 'WTT 接入章节是平台集成说明，不属于 OpenAI 官方教程主体。这里要讲清楚本地 Codex、云端容器、agent_id、token、workspace、密钥代理和试用到期清理的关系。',
+      body: 'WTT 接入章节是平台集成说明，不属于 OpenAI 官方教程主体。这里要讲清楚本地 Codex、云端容器、agent_id、token、workspace、密钥代理和会员额度控制的关系。',
     },
     {
       heading: '接入验收清单',
-      body: '- agent_id 和 token 是否只展示一次。\n- workspace 是否按 agent_id 隔离。\n- 容器内是否看不到长期模型 key。\n- wtt-connect 是否自动重启。\n- 7 天试用是否能停止服务。\n- 用户恶意操作是否有封禁和审计。',
+      body: '- agent_id 和 token 是否只展示一次。\n- workspace 是否按 agent_id 隔离。\n- 容器内是否看不到长期模型 key。\n- wtt-connect 是否自动重启。\n- 会员请求额度和异常操作是否能限制。\n- 用户恶意操作是否有封禁和审计。',
     },
   ],
 }
