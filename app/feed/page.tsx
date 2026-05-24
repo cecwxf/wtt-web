@@ -1327,7 +1327,7 @@ function FeedPageInner() {
     const runtime = agentRuntimeMap[hostAgentId]
     const adapter = normalizeWttConnectAdapter(runtime?.adapter || runtime?.kind)
     if (!adapter) {
-      throw new Error('New Agent only supports online codex / claude-code hosts')
+      throw new Error('Clone Agent only supports online codex / claude-code hosts')
     }
 
     const displayName = role.id === 'general'
@@ -1460,7 +1460,7 @@ function FeedPageInner() {
       void loadAgents()
       void mutateTopics()
     }, 2500)
-    alert(`New Agent started: ${newAgentId}`)
+    alert(`Clone Agent started: ${newAgentId}`)
   }, [agentRuntimeMap, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
 
   const handleCreateCloudAgent = useCallback(async () => {

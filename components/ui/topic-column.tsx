@@ -849,10 +849,10 @@ export function TopicColumn(props: TopicColumnProps) {
               type="button"
               onClick={openNewAgentModal}
               className="flex w-full flex-col items-center justify-center rounded-xl border border-emerald-400 bg-gradient-to-b from-emerald-500 to-teal-600 px-1 py-2 text-center text-[9px] font-black leading-tight text-white shadow-md shadow-emerald-900/15 ring-1 ring-emerald-200 transition hover:from-emerald-400 hover:to-teal-500 hover:shadow-lg dark:border-emerald-400/60 dark:from-emerald-500 dark:to-teal-600 dark:ring-emerald-400/25"
-              title={zh ? '在当前在线 Codex / Claude Code 主机上新增一个 Agent' : 'Create a new agent on an online Codex / Claude Code host'}
+              title={zh ? '克隆当前在线 Codex / Claude Code 主机上的 Agent' : 'Clone an agent on an online Codex / Claude Code host'}
             >
               <Plus className="mb-1 h-4 w-4" />
-              <span>New</span>
+              <span>Clone</span>
               <span>Agent</span>
             </button>
           </div>
@@ -1010,10 +1010,10 @@ export function TopicColumn(props: TopicColumnProps) {
           <div className="w-full max-w-lg rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
             <div className="mb-4">
               <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">
-                {zh ? '新增 Agent' : 'New Agent'}
+                {zh ? '克隆 Agent' : 'Clone Agent'}
               </h3>
               <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
-                {zh ? '选择一个在线 Codex / Claude Code 主机和角色。系统会自动 claim 新 agent，并在该主机上启动独立默认 workspace。' : 'Choose an online Codex / Claude Code host and role. WTT will claim a new agent and start it with its own default workspace.'}
+                {zh ? '选择一个在线 Codex / Claude Code 主机和角色。系统会自动 clone 一个 agent，并在该主机上启动独立默认 workspace。' : 'Choose an online Codex / Claude Code host and role. WTT will clone an agent and start it with its own default workspace.'}
               </p>
             </div>
 

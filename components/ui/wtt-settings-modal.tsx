@@ -130,19 +130,18 @@ type SessionWithAccessToken = {
 
 const CLOUD_AGENT_FALLBACK_MODELS: CloudModelOption[] = [
   { id: "deepseek-v4-pro[1m]", label: "DeepSeek V4 Pro", supports_reasoning: true, tier: "standard" },
-  { id: "deepseek/deepseek-r1", label: "DeepSeek R1", supports_reasoning: true, tier: "standard" },
-  { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", supports_reasoning: true, tier: "standard" },
-  { id: "anthropic/claude-opus-4", label: "Claude Opus 4", supports_reasoning: true, tier: "premium" },
+  { id: "anthropic/claude-opus-4.7", label: "Claude Opus 4.7", supports_reasoning: true, tier: "premium" },
+  { id: "anthropic/claude-sonnet-4.7", label: "Claude Sonnet 4.7", supports_reasoning: true, tier: "standard" },
   { id: "openai-codex/gpt-5.5", label: "GPT-5.5", supports_reasoning: true, tier: "premium" },
-  { id: "openai-codex/gpt-5.4", label: "GPT-5.4", supports_reasoning: true, tier: "premium" },
-  { id: "openai-codex/gpt-5.3-codex", label: "GPT-5.3 Codex", supports_reasoning: true, tier: "premium" },
 ];
 
 function mergeCloudModels(models: CloudModelOption[]): CloudModelOption[] {
   const merged = new Map<string, CloudModelOption>();
+  const supportedIds = new Set(CLOUD_AGENT_FALLBACK_MODELS.map((item) => item.id));
   for (const item of CLOUD_AGENT_FALLBACK_MODELS) merged.set(item.id, item);
   for (const item of models) {
     if (!item?.id) continue;
+    if (!supportedIds.has(item.id)) continue;
     merged.set(item.id, { ...item, supports_reasoning: item.supports_reasoning ?? true });
   }
   return Array.from(merged.values());

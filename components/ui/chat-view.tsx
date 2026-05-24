@@ -51,20 +51,23 @@ interface ModelOption {
   supports_reasoning?: boolean
 }
 
-const DEFAULT_MODEL_ID = 'openai-codex/gpt-5.5'
+const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
 
 const FALLBACK_MODELS: ModelOption[] = [
-  { id: DEFAULT_MODEL_ID, label: 'GPT-5.5', supports_reasoning: true },
-  { id: 'openai-codex/gpt-5.4', label: 'GPT-5.4', supports_reasoning: true },
-  { id: 'openai-codex/gpt-5.3-codex', label: 'GPT-5.3 Codex', supports_reasoning: true },
+  { id: DEFAULT_MODEL_ID, label: 'DeepSeek V4 Pro', supports_reasoning: true },
+  { id: 'anthropic/claude-opus-4.7', label: 'Claude Opus 4.7', supports_reasoning: true },
+  { id: 'anthropic/claude-sonnet-4.7', label: 'Claude Sonnet 4.7', supports_reasoning: true },
+  { id: 'openai-codex/gpt-5.5', label: 'GPT-5.5', supports_reasoning: true },
 ]
 
 function mergeModelOptions(models: ModelOption[]): ModelOption[] {
   const merged = new Map<string, ModelOption>()
+  const supportedIds = new Set(FALLBACK_MODELS.map((model) => model.id))
 
   for (const model of FALLBACK_MODELS) merged.set(model.id, model)
   for (const model of models) {
     if (!model?.id) continue
+    if (!supportedIds.has(model.id)) continue
     merged.set(model.id, {
       ...model,
       supports_reasoning: model.supports_reasoning ?? true,
@@ -1058,7 +1061,7 @@ export function ChatView({
 
     const nextModel = model && availableModels.some((m) => m.id === model)
       ? model
-      : (model || selectedModel)
+      : (availableModels.some((m) => m.id === selectedModel) ? selectedModel : DEFAULT_MODEL_ID)
     const nextEffort: ModelPref['effort'] = effort || reasoningEffort
 
     if (nextModel) setSelectedModel(nextModel)
@@ -1099,7 +1102,7 @@ export function ChatView({
 
         const nextModel = model && availableModels.some((m) => m.id === model)
           ? model
-          : (model || selectedModel)
+          : (availableModels.some((m) => m.id === selectedModel) ? selectedModel : DEFAULT_MODEL_ID)
         const nextEffort: ModelPref['effort'] = effort || reasoningEffort
 
         if (nextModel) setSelectedModel(nextModel)

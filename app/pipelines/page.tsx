@@ -83,6 +83,13 @@ const ELLIPSE_W = 160, ELLIPSE_H = 80
 const DIAMOND_S = 110
 const PARA_W = 200, PARA_H = 70
 const HEX_W = 160, HEX_H = 80
+const PIPELINE_MODEL_OPTIONS = [
+  { id: 'deepseek-v4-pro[1m]', label: 'DeepSeek V4 Pro', supports_reasoning: true },
+  { id: 'anthropic/claude-opus-4.7', label: 'Claude Opus 4.7', supports_reasoning: true },
+  { id: 'anthropic/claude-sonnet-4.7', label: 'Claude Sonnet 4.7', supports_reasoning: true },
+  { id: 'openai-codex/gpt-5.5', label: 'GPT-5.5', supports_reasoning: true },
+]
+const PIPELINE_MODEL_IDS = new Set(PIPELINE_MODEL_OPTIONS.map((model) => model.id))
 
 const actorSource = (session: unknown, selectedAgentId: string) => {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
@@ -305,7 +312,7 @@ function PipelinesPageInner() {
   const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
   const [connectLineStyle, setConnectLineStyle] = useState<LineStyle>('solid')
   const [taskDraft, setTaskDraft] = useState<TaskDraft>({})
-  const [availableModels, setAvailableModels] = useState<Array<{ id: string; label: string; supports_reasoning?: boolean }>>([])
+  const [availableModels, setAvailableModels] = useState<Array<{ id: string; label: string; supports_reasoning?: boolean }>>(PIPELINE_MODEL_OPTIONS)
   const [agentWorkers, setAgentWorkers] = useState<Array<{ id: string; name: string; model_config?: Record<string, string> }>>([])
   const [workerDropOpen, setWorkerDropOpen] = useState(false)
   const [modelDropOpen, setModelDropOpen] = useState(false)
@@ -314,7 +321,12 @@ function PipelinesPageInner() {
   useEffect(() => {
     fetch(`${CLIENT_WTT_API_BASE}/workers/models/available`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.models) setAvailableModels(d.models) })
+      .then(d => {
+        if (d?.models) {
+          const models = d.models.filter((model: { id?: string }) => model.id && PIPELINE_MODEL_IDS.has(model.id))
+          setAvailableModels(models.length ? models : PIPELINE_MODEL_OPTIONS)
+        }
+      })
       .catch(() => {})
   }, [])
 
