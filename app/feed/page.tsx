@@ -1385,6 +1385,12 @@ function FeedPageInner() {
     const command = [
       'BASE_URL="${WTT_BASE_URL:-https://www.waxbyte.com}"',
       [
+        'env',
+        '-u WTT_CONNECT_WORKDIR',
+        '-u WTT_CONNECT_STATE_DIR',
+        '-u WTT_CONNECT_STORE_FILE',
+        '-u WTT_CONNECT_ARTIFACT_DIR',
+        '-u WTT_CONNECT_INBOX_DIR',
         'wtt-connect up',
         shellQuote(adapter),
         shellQuote(newAgentId),
