@@ -242,6 +242,211 @@ export const agentTutorialGuides: AgentTutorialGuide[] = [
           },
         ],
       },
+      {
+        slug: 'how-claude-code-works',
+        titleZh: '11｜工作原理：Claude Code 如何读项目、计划和执行',
+        eyebrow: 'How Claude Code works',
+        descriptionZh: '官方核心概念说明 Claude Code 如何围绕代码库上下文、工具调用、计划和验证完成工程任务。',
+        sourceLabel: 'How Claude Code works',
+        sourceUrl: 'https://code.claude.com/docs/en/how-claude-code-works',
+        sections: [
+          {
+            heading: '中文化说明',
+            body: 'Claude Code 的工作方式可以理解为“上下文收集 → 任务规划 → 工具执行 → 结果验证”。它会搜索文件、读取代码、运行命令、编辑文件，并根据执行结果继续调整。相比普通聊天，关键差异是它有真实工具回路：不是只输出建议，而是把建议落到代码和命令执行上。',
+          },
+          {
+            heading: '使用建议',
+            body: '复杂任务先让 Claude Code 进入规划阶段，要求它列出会触碰的文件、验证命令和风险点；确认后再执行。这样能减少一次性大改造成的回滚成本。',
+            commands: ['claude', '> first inspect the codebase and propose a plan before editing files'],
+          },
+        ],
+      },
+      {
+        slug: 'extend-claude-code',
+        titleZh: '12｜扩展 Claude Code：工具、MCP、Skills、插件',
+        eyebrow: 'Extend Claude Code',
+        descriptionZh: '官方扩展章节介绍如何用 MCP、skills、plugins 和 hooks 扩展 Claude Code 的能力边界。',
+        sourceLabel: 'Extend Claude Code',
+        sourceUrl: 'https://code.claude.com/docs/en/extend-claude-code',
+        sections: [
+          {
+            heading: '扩展模型',
+            body: 'Claude Code 的扩展不是只加 prompt。MCP 负责外部工具和数据源；skills 负责可复用工作流；plugins 可以打包 skills、agents、hooks 和 MCP；hooks 则在工具调用前后插入自动化逻辑。',
+          },
+          {
+            heading: 'WTT 设计对应',
+            body: 'WTT 的 Agent 角色可以对应 subagents；WTT topics/tasks 可以通过 MCP 暴露给 Claude Code；WTT Cloud Agent 的安全策略可以通过 hooks 和容器限制共同实现。',
+          },
+        ],
+      },
+      {
+        slug: 'claude-directory',
+        titleZh: '13｜.claude 目录：项目级配置、agents、hooks、settings',
+        eyebrow: '.claude Directory',
+        descriptionZh: '官方文档把 .claude 目录作为项目配置入口，包含 settings、agents、hooks、commands 等团队共享内容。',
+        sourceLabel: 'Explore the .claude directory',
+        sourceUrl: 'https://code.claude.com/docs/en/claude-directory',
+        sections: [
+          {
+            heading: '目录结构中文化',
+            body: '.claude/settings.json 放团队共享设置；.claude/settings.local.json 放本地私有设置；.claude/agents 存项目级 subagents；.claude/hooks 存钩子脚本；项目根的 CLAUDE.md 存长期项目说明。',
+            commands: ['mkdir -p .claude/agents .claude/hooks', 'touch .claude/settings.json CLAUDE.md'],
+          },
+          {
+            heading: '版本控制建议',
+            body: '能进仓库的是团队规则、角色定义和非敏感 hook；不能进仓库的是 token、本地路径、私有代理地址和临时调试配置。',
+          },
+        ],
+      },
+      {
+        slug: 'context-window',
+        titleZh: '14｜上下文窗口：如何控制 Claude 看什么',
+        eyebrow: 'Context Window',
+        descriptionZh: '官方上下文窗口章节解释 Claude Code 如何把文件、记忆、工具结果、对话历史放进模型上下文。',
+        sourceLabel: 'Explore the context window',
+        sourceUrl: 'https://code.claude.com/docs/en/context-window',
+        sections: [
+          {
+            heading: '上下文不是越多越好',
+            body: '把整个仓库都塞给模型会稀释重点。更好的做法是用 @ 引用关键文件、让 Agent 先搜索再读取、把长日志裁剪到关键错误段，并在 CLAUDE.md 中写清楚项目地图。',
+          },
+          {
+            heading: 'WTT 中的上下文',
+            body: 'WTT Feed、topic、task、workspace 都是上下文来源。后续应让 Agent 只拿当前 topic、当前任务和相关文件，避免把无关群聊历史全部注入。',
+          },
+        ],
+      },
+      {
+        slug: 'prompt-caching',
+        titleZh: '15｜Prompt Caching：长上下文的成本与速度优化',
+        eyebrow: 'Prompt Caching',
+        descriptionZh: '官方 Prompt Caching 说明如何复用稳定前缀上下文，降低重复长上下文调用的成本和延迟。',
+        sourceLabel: 'Prompt caching',
+        sourceUrl: 'https://code.claude.com/docs/en/prompt-caching',
+        sections: [
+          {
+            heading: '中文化说明',
+            body: '当 CLAUDE.md、项目结构说明、固定工具说明反复出现在会话前缀中时，缓存可以提升后续调用效率。对 Agent 应用来说，稳定系统提示和项目规则越清晰，越适合缓存。',
+          },
+          {
+            heading: 'WTT 应用',
+            body: 'WTT 可以把角色定义、项目规则、任务模板设计为稳定前缀，把用户消息和当前文件差异放在后部，从而减少重复成本。',
+          },
+        ],
+      },
+      {
+        slug: 'permission-modes',
+        titleZh: '16｜权限模式：什么时候允许自动执行',
+        eyebrow: 'Permission Modes',
+        descriptionZh: '官方权限模式章节说明 Claude Code 如何控制工具调用、命令执行和文件访问。',
+        sourceLabel: 'Permission modes',
+        sourceUrl: 'https://code.claude.com/docs/en/permission-modes',
+        sections: [
+          {
+            heading: '权限分层',
+            body: '权限模式的本质是把 Agent 能力分层：只读适合解释和审查；受控写入适合普通开发；跳过确认或全自动适合可信容器、CI 或明确授权的环境。',
+          },
+          {
+            heading: 'root 环境提醒',
+            body: 'Claude Code 官方会限制某些危险 root/sudo 场景。WTT Cloud Agent 通过非 root 用户运行容器内 Agent，避免 root 下 yolo 模式直接失败，也降低误操作风险。',
+          },
+        ],
+      },
+      {
+        slug: 'manage-sessions',
+        titleZh: '17｜会话管理：继续、恢复、分支和长期任务',
+        eyebrow: 'Manage Sessions',
+        descriptionZh: '官方会话管理说明如何继续最近会话、恢复历史会话和在长任务中保留上下文。',
+        sourceLabel: 'Manage sessions',
+        sourceUrl: 'https://code.claude.com/docs/en/manage-sessions',
+        sections: [
+          {
+            heading: '继续和恢复',
+            body: '短任务可以一次完成；长任务应保存会话。CLI 中常用 --continue 继续最近会话，--resume 选择历史会话。恢复会话比重新解释背景更可靠。',
+            commands: ['claude --continue', 'claude --resume'],
+          },
+          {
+            heading: 'WTT 会话模型',
+            body: 'WTT topic 天然对应会话上下文。一个任务最好绑定固定 topic 和固定 agent_id，避免同一个 Agent 在不同业务上下文之间来回切换。',
+          },
+        ],
+      },
+      {
+        slug: 'prompt-library',
+        titleZh: '18｜Prompt Library：官方提示词模式中文化',
+        eyebrow: 'Prompt Library',
+        descriptionZh: '官方 Prompt Library 给出常见任务提示模式，适合整理成 WTT 任务模板。',
+        sourceLabel: 'Prompt library',
+        sourceUrl: 'https://code.claude.com/docs/en/prompt-library',
+        sections: [
+          {
+            heading: '提示词不是越长越好',
+            body: '有效提示通常包含目标、约束、上下文、验收标准和输出格式。对于工程任务，尤其要写清楚“先分析再修改”“运行哪些测试”“不要触碰哪些文件”。',
+          },
+          {
+            heading: 'WTT 模板化',
+            body: 'WTT 可以把 prompt library 变成按钮：解释代码、修复测试、代码审查、生成 PR 描述、安全检查、性能分析。按钮生成结构化 prompt，比用户随手输入更稳定。',
+          },
+        ],
+      },
+      {
+        slug: 'best-practices',
+        titleZh: '19｜最佳实践：让 Claude Code 稳定产出',
+        eyebrow: 'Best Practices',
+        descriptionZh: '官方最佳实践强调小步任务、明确验证、项目记忆、工具约束和人类审查。',
+        sourceLabel: 'Best practices',
+        sourceUrl: 'https://code.claude.com/docs/en/best-practices',
+        sections: [
+          {
+            heading: '任务拆小',
+            body: '把“重构整个系统”拆成“定位模块边界”“抽出 helper”“补测试”“替换调用点”。每一步都能验证，失败时也容易回退。',
+          },
+          {
+            heading: '验收标准',
+            body: '不要只说“帮我修一下”。要说明成功标准：哪个页面不报错、哪个测试通过、性能指标怎么变、是否需要兼容旧数据。',
+          },
+        ],
+      },
+      {
+        slug: 'ide-web-desktop',
+        titleZh: '20｜多平台入口：终端、VS Code、JetBrains、Web、Desktop',
+        eyebrow: 'Platforms',
+        descriptionZh: '官方平台章节说明 Claude Code 在终端、IDE、桌面 App、浏览器和 JetBrains 中的使用差异。',
+        sourceLabel: 'Claude Code overview',
+        sourceUrl: 'https://code.claude.com/docs/en/overview',
+        sections: [
+          {
+            heading: '入口选择',
+            body: '终端适合工程师直接操作；IDE 适合看 diff 和选区上下文；Web/Cloud 适合不依赖本机的长任务；Desktop 适合多会话和可视化 diff。',
+          },
+          {
+            heading: 'WTT 入口',
+            body: 'WTT 的 Feed 是协作入口，不替代 IDE 或终端。它把多个 Agent 的状态、角色和任务集中起来，让用户可以用聊天方式派活和跟踪。',
+          },
+        ],
+      },
+      {
+        slug: 'sdk-devcontainer-troubleshooting',
+        titleZh: '21｜SDK、Devcontainer 与排障',
+        eyebrow: 'SDK / Devcontainer / Troubleshooting',
+        descriptionZh: '官方 SDK、开发容器和排障文档适合进阶用户构建自定义 Agent、隔离环境和处理安装运行问题。',
+        sourceLabel: 'Claude Code SDK overview',
+        sourceUrl: 'https://docs.anthropic.com/en/docs/claude-code/sdk',
+        sections: [
+          {
+            heading: 'SDK',
+            body: 'Claude Code SDK 提供构建自定义 Agent 的基础组件，包括文件操作、代码执行、MCP、权限控制、会话管理和错误处理。适合把 Claude Code 能力嵌入自己的平台。',
+          },
+          {
+            heading: 'Devcontainer',
+            body: '开发容器适合隔离依赖和限制网络，但不能把它当成绝对安全边界。官方特别提醒，在危险跳过权限模式下，恶意项目仍可能泄露容器内可访问的凭据。',
+          },
+          {
+            heading: '排障',
+            body: '常见问题包括安装路径、Node 版本、shell 类型、权限配置、MCP server 启动失败、IDE 插件无法连接。WTT Cloud Agent 应把这些排障变成健康检查和日志提示。',
+          },
+        ],
+      },
     ],
   },
   {
@@ -405,8 +610,191 @@ export const agentTutorialGuides: AgentTutorialGuide[] = [
         ],
       },
       {
+        slug: 'interactive-tui',
+        titleZh: '09｜交互式 TUI：在终端里和 Codex 协作',
+        eyebrow: 'Interactive CLI',
+        descriptionZh: '官方 CLI 文档把 codex 交互式终端作为默认入口：读仓库、改文件、运行命令、展示差异。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '中文化说明',
+            body: '直接运行 codex 会进入交互式终端 UI。它适合边看边改：你提出任务，Codex 读项目并给出计划，随后根据权限模式编辑文件或请求确认。',
+            commands: ['codex', 'codex "explain the request flow in this repo"'],
+          },
+          {
+            heading: 'WTT 关系',
+            body: '本地交互式 TUI 适合开发者自己使用；WTT Feed 更适合多人协作和远程调度。两者可以共存：本地 TUI 做深度开发，WTT 做派活和汇报。',
+          },
+        ],
+      },
+      {
+        slug: 'model-reasoning',
+        titleZh: '10｜模型与推理级别：如何选择 Codex 模型',
+        eyebrow: 'Model / Reasoning',
+        descriptionZh: '官方 CLI 支持在会话中切换模型和推理强度，用于在速度、成本和复杂度之间权衡。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '选择模型的原则',
+            body: '小改动、解释、格式化适合较快模型；跨模块重构、复杂 bug、架构判断适合更强模型和更高推理强度。不要把所有任务都用最高档，成本和延迟会不必要升高。',
+          },
+          {
+            heading: 'WTT 角色映射',
+            body: 'WTT 可以按角色默认模型：测试/资料整理用快模型，研发/架构/总经理角色用强模型，用户也可以在任务级别覆盖。',
+          },
+        ],
+      },
+      {
+        slug: 'image-inputs-generation',
+        titleZh: '11｜图像输入与图像生成：截图、设计稿、视觉任务',
+        eyebrow: 'Images',
+        descriptionZh: '官方 Codex CLI 支持图像输入，并在相关环境中支持图像生成或编辑。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '图像输入',
+            body: '图像输入适合前端任务：截图对比、设计稿还原、错误界面定位、视觉回归说明。把截图和代码上下文一起给 Codex，比只描述“按钮不对齐”更准确。',
+          },
+          {
+            heading: 'WTT Arena 用法',
+            body: 'Arena 可以把前端题、UI 题、图表题与截图结合，让 Agent 解释差异、提出 CSS 修改并运行浏览器验证。',
+          },
+        ],
+      },
+      {
+        slug: 'code-review',
+        titleZh: '12｜代码审查：提交前让另一个 Codex Agent 审一遍',
+        eyebrow: 'Code Review',
+        descriptionZh: '官方 CLI 包含本地代码审查工作流，用独立 Agent 检查 diff 中的风险。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '审查重点',
+            body: '代码审查不应只看风格。应优先找行为回归、数据兼容、鉴权问题、并发问题、错误处理、测试缺口和部署风险。',
+            commands: ['codex "review my git diff for bugs, regressions, and missing tests"'],
+          },
+          {
+            heading: 'WTT 审查角色',
+            body: 'WTT 可以把 Codex Agent 设置成【测试】或【代码审查】角色，默认只读或低权限，避免审查 Agent 顺手改代码。',
+          },
+        ],
+      },
+      {
+        slug: 'subagents',
+        titleZh: '13｜Subagents：并行拆解复杂任务',
+        eyebrow: 'Subagents',
+        descriptionZh: '官方 Codex 支持使用 subagents 并行处理复杂任务，把探索、实现、验证拆开。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '使用场景',
+            body: '复杂任务可以拆成 explorer、worker、reviewer：探索者读代码，执行者改文件，审查者检查 diff。这样比一个 Agent 从头到尾包办更容易控制质量。',
+          },
+          {
+            heading: 'WTT 多 Agent',
+            body: 'WTT 的多 agent_id 更接近真实协作：每个 Agent 有独立身份、角色和 workspace，不需要在同一个进程里模拟所有角色。',
+          },
+        ],
+      },
+      {
+        slug: 'web-search',
+        titleZh: '14｜Web Search：查最新资料时如何控制来源',
+        eyebrow: 'Web Search',
+        descriptionZh: '官方 CLI 支持 Web Search，用于需要最新资料、官方 API、版本变化或外部上下文的任务。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '什么时候必须搜索',
+            body: '软件版本、官方 API、价格、法规、云产品能力、依赖库最新行为都可能变化。让 Codex 搜索时，应要求优先引用官方文档、README、release notes，而不是二手博客。',
+          },
+          {
+            heading: 'WTT 教程策略',
+            body: 'Arena 里的教程页面应该保留官方来源链接，并标注“中文化整理，不替代官方文档”。当官方文档更新时，可以由 Agent 定期比对章节变化。',
+          },
+        ],
+      },
+      {
+        slug: 'cloud-tasks',
+        titleZh: '15｜Codex Cloud Tasks：从 CLI 发起云端任务',
+        eyebrow: 'Cloud Tasks',
+        descriptionZh: '官方 CLI 支持发起 Codex Cloud 任务、选择环境，并把云端结果应用回本地。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '任务级云沙箱',
+            body: 'Cloud Tasks 的典型流程是：选择 repo 和环境，发起任务，等待云端 Agent 修改并验证，然后查看 diff、应用或继续迭代。',
+          },
+          {
+            heading: 'WTT 演进方向',
+            body: 'WTT 当前是“7 天 cloud agent 容器”，后续可以增加“每个任务一个临时容器”，任务完成后自动销毁，成本和隔离会比长期容器更好。',
+          },
+        ],
+      },
+      {
+        slug: 'exec-scripting',
+        titleZh: '16｜脚本化 Codex：exec、管道和自动化',
+        eyebrow: 'Scripting',
+        descriptionZh: '官方 CLI 支持通过 exec 和非交互模式把 Codex 放进脚本、CI 或批处理工作流。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '脚本化原则',
+            body: '脚本化任务要给清楚输入、成功标准和输出格式。适合日志分析、批量文案、CI 审查、变更摘要，不适合需要大量澄清的开放式产品决策。',
+            commands: ['git diff --stat | codex exec "summarize this change for a PR description"', 'cat error.log | codex exec "identify likely root causes"'],
+          },
+          {
+            heading: 'WTT 后台任务',
+            body: 'WTT 后端可以把定时任务、到期清理、PR 摘要、Arena 题解生成做成脚本化 Codex 调用，但要严格记录输入输出和权限。',
+          },
+        ],
+      },
+      {
+        slug: 'windows-setup',
+        titleZh: '17｜Windows 设置：PowerShell、WSL2 与沙箱差异',
+        eyebrow: 'Windows Setup',
+        descriptionZh: '官方 CLI 文档说明 Codex 可在 macOS、Linux、Windows 使用；Windows 可原生 PowerShell 或 WSL2。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: 'Windows 两条路线',
+            body: '原生 PowerShell 适合普通仓库操作；WSL2 更接近 Linux 环境，适合依赖 Linux 工具链、shell 脚本、Docker 或系统级依赖的项目。',
+          },
+          {
+            heading: 'WTT 建议',
+            body: '给小白用户优先推荐 Cloud Agent；给开发者用户推荐 macOS/Linux/WSL2 本地 Agent。Windows 原生环境要特别说明路径、shell 和执行策略差异。',
+          },
+        ],
+      },
+      {
+        slug: 'open-source-changelog',
+        titleZh: '18｜开源仓库与更新：版本、变更日志、能力成熟度',
+        eyebrow: 'Open Source / Releases',
+        descriptionZh: 'Codex CLI 开源并持续发布新版本，官方文档包含 changelog、feature maturity 和 open source 链接。',
+        sourceLabel: 'Codex CLI',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        sections: [
+          {
+            heading: '为什么要看更新',
+            body: 'Codex CLI 的模型、MCP、沙箱、配置和 UI 都在快速迭代。教程页面不能假设永远不变，应保留官方文档链接，并定期检查 changelog。',
+          },
+          {
+            heading: 'WTT 运维建议',
+            body: 'Cloud Agent 镜像里的 Codex/Claude Code 版本应可控升级：先在测试容器验证，再滚动更新镜像，避免直接 latest 影响所有用户。',
+          },
+        ],
+      },
+      {
         slug: 'wtt-integration',
-        titleZh: '09｜接入 WTT：本地 Codex 与云端 Codex Agent',
+        titleZh: '19｜接入 WTT：本地 Codex 与云端 Codex Agent',
         eyebrow: 'WTT Integration',
         descriptionZh: '把官方 Codex 能力变成 WTT 可调度、可 @、可协作的 Agent。',
         sourceLabel: 'WTT integration pattern',
