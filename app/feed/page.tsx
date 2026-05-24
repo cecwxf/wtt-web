@@ -1459,6 +1459,56 @@ function FeedPageInner() {
     alert(`New Agent started: ${newAgentId}`)
   }, [agentRuntimeMap, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
 
+  const handleCreateCloudAgent = useCallback(async () => {
+    const token = session?.accessToken as string | undefined
+    if (!token) {
+      alert(t('settings.sessionExpired'))
+      return
+    }
+    const accepted = window.confirm([
+      'Cloud Agent 是 7 天试用环境，每个用户暂时只能申请一次。',
+      'Agent 运行在共享云服务器的独立 Docker 容器中，workspace 独立但不建议存放敏感信息。',
+      '请勿进行挖矿、攻击、扫描、绕过限制等恶意操作，违规会封号。',
+      '',
+      '确认创建 Cloud Agent？',
+    ].join('\n'))
+    if (!accepted) return
+
+    try {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          accepted_terms: true,
+          display_name: 'Cloud Agent',
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const detail = data && typeof data === 'object' ? (data as { detail?: unknown }).detail : null
+        if (detail && typeof detail === 'object') {
+          throw new Error(String((detail as { message?: unknown }).message || `Cloud Agent failed (${res.status})`))
+        }
+        throw new Error(String(detail || `Cloud Agent failed (${res.status})`))
+      }
+
+      const newAgentId = String((data as { agent_id?: unknown }).agent_id || '').trim()
+      await loadAgents()
+      if (newAgentId) {
+        setSelectedAgentId(newAgentId)
+        setSelectedTopicId(null)
+      }
+      void mutateTopics()
+      window.setTimeout(() => {
+        void loadAgents()
+        void mutateTopics()
+      }, 2500)
+      alert(`Cloud Agent created: ${newAgentId || 'success'}\n试用有效期：${String((data as { expires_at?: unknown }).expires_at || '7 days')}`)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Cloud Agent failed')
+    }
+  }, [loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
+
   useEffect(() => {
     setMembersOpen(false)
   }, [selectedTopicId])
@@ -2107,6 +2157,7 @@ function FeedPageInner() {
         onAssignAgentRole={handleAssignAgentRole}
         onSaveAgentRole={handleSaveAgentRole}
         onNewAgentFromHost={handleNewAgentFromHost}
+        onCreateCloudAgent={handleCreateCloudAgent}
         userToken={session?.accessToken as string | undefined}
         forceOpenSettingsPage={forceOpenSettingsPage}
         onForceOpenHandled={() => setForceOpenSettingsPage(null)}

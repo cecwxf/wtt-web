@@ -63,6 +63,7 @@ interface WttShellV2Props {
   onAssignAgentRole?: (agentId: string, roleId: string) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
   onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate) => void | Promise<void>
+  onCreateCloudAgent?: () => void | Promise<void>
   userToken?: string
   forceOpenSettingsPage?: SettingsPage | null
   onForceOpenHandled?: () => void
@@ -110,6 +111,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onAssignAgentRole,
     onSaveAgentRole,
     onNewAgentFromHost,
+    onCreateCloudAgent,
     children,
   } = props
   const [menuOpen, setMenuOpen] = useState(false)
@@ -259,6 +261,7 @@ export function WttShellV2(props: WttShellV2Props) {
               onAssignAgentRole={onAssignAgentRole}
               onSaveAgentRole={onSaveAgentRole}
               onNewAgentFromHost={onNewAgentFromHost}
+              onCreateCloudAgent={onCreateCloudAgent}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
               onCreateGeneralTask={onCreateGeneralTask}

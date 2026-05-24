@@ -72,6 +72,7 @@ interface TopicColumnProps {
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
   onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate) => void | Promise<void>
+  onCreateCloudAgent?: () => void | Promise<void>
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   onCreateGeneralTask?: () => void
@@ -281,6 +282,7 @@ export function TopicColumn(props: TopicColumnProps) {
     onAssignAgentRole,
     onSaveAgentRole,
     onNewAgentFromHost,
+    onCreateCloudAgent,
     onRenameAgent,
     onUnclaimAgent,
     onCreateGeneralTask,
@@ -297,6 +299,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [newAgentRoleId, setNewAgentRoleId] = useState<AgentRoleTemplateId>('general')
   const [newAgentBusy, setNewAgentBusy] = useState(false)
   const [newAgentError, setNewAgentError] = useState('')
+  const [cloudAgentBusy, setCloudAgentBusy] = useState(false)
   const [roleEditor, setRoleEditor] = useState<{
     agentId: string
     sourceRole?: AgentRoleTemplate
@@ -411,6 +414,16 @@ export function TopicColumn(props: TopicColumnProps) {
       setNewAgentError(error instanceof Error ? error.message : (zh ? '创建失败' : 'Failed to create agent'))
     } finally {
       setNewAgentBusy(false)
+    }
+  }
+
+  const createCloudAgent = async () => {
+    if (!onCreateCloudAgent || cloudAgentBusy) return
+    setCloudAgentBusy(true)
+    try {
+      await onCreateCloudAgent()
+    } finally {
+      setCloudAgentBusy(false)
     }
   }
 
@@ -808,18 +821,35 @@ export function TopicColumn(props: TopicColumnProps) {
           })}
         </div>
 
-        {newAgentHosts.length > 0 && (
-          <div className="border-t border-[#e7e1d7] p-1.5 dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={openNewAgentModal}
-              className="flex w-full flex-col items-center justify-center rounded-xl border border-[#ded6c8] bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200"
-              title={zh ? '在当前在线 Codex / Claude Code 主机上新增一个 Agent' : 'Create a new agent on an online Codex / Claude Code host'}
-            >
-              <Plus className="mb-1 h-4 w-4" />
-              <span>New</span>
-              <span>Agent</span>
-            </button>
+        {(newAgentHosts.length > 0 || onCreateCloudAgent) && (
+          <div className="space-y-1.5 border-t border-[#e7e1d7] p-1.5 dark:border-zinc-800">
+            {onCreateCloudAgent && (
+              <button
+                type="button"
+                onClick={() => {
+                  void createCloudAgent()
+                }}
+                disabled={cloudAgentBusy}
+                className="flex w-full flex-col items-center justify-center rounded-xl border border-[#ded6c8] bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-slate-600 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:border-sky-500/40 dark:hover:bg-sky-500/10 dark:hover:text-sky-200"
+                title={zh ? '申请 7 天云端试用 Agent' : 'Claim a 7-day cloud trial agent'}
+              >
+                <Plus className="mb-1 h-4 w-4" />
+                <span>Cloud</span>
+                <span>Agent</span>
+              </button>
+            )}
+            {newAgentHosts.length > 0 && (
+              <button
+                type="button"
+                onClick={openNewAgentModal}
+                className="flex w-full flex-col items-center justify-center rounded-xl border border-[#ded6c8] bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200"
+                title={zh ? '在当前在线 Codex / Claude Code 主机上新增一个 Agent' : 'Create a new agent on an online Codex / Claude Code host'}
+              >
+                <Plus className="mb-1 h-4 w-4" />
+                <span>New</span>
+                <span>Agent</span>
+              </button>
+            )}
           </div>
         )}
       </aside>
