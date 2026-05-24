@@ -58,7 +58,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
               <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-white lg:text-2xl">{tutorialGuide ? tutorialGuide.chapters.length : tutorialChapter ? tutorialChapter.chapter.sections.length : isGaokaoVolunteer ? 'Ask' : stats.total}</p><p className="text-gray-500">{tutorialGuide ? '章节' : tutorialChapter ? '小节' : isGaokaoVolunteer ? '咨询' : '题目'}</p></div>
               <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-emerald-300 lg:text-2xl">{tutorialGuide || tutorialChapter ? '官方' : isGaokaoVolunteer ? c9Universities.length : stats.easy}</p><p className="text-gray-500">{tutorialGuide || tutorialChapter ? 'Docs' : isGaokaoVolunteer ? 'C9' : 'Easy'}</p></div>
               <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-yellow-300 lg:text-2xl">{tutorialGuide || tutorialChapter ? '中文' : isGaokaoVolunteer ? project985Universities.length : stats.medium}</p><p className="text-gray-500">{tutorialGuide || tutorialChapter ? 'CN' : isGaokaoVolunteer ? '985' : 'Medium'}</p></div>
-              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-rose-300 lg:text-2xl">{tutorialGuide || tutorialChapter ? 'WTT' : isGaokaoVolunteer ? project211Universities.length : stats.hard}</p><p className="text-gray-500">{tutorialGuide || tutorialChapter ? '接入' : isGaokaoVolunteer ? '211' : 'Hard'}</p></div>
+              <div className="rounded-xl border border-gray-800 bg-[#151515] p-3 lg:p-4"><p className="text-xl font-black text-rose-300 lg:text-2xl">{tutorialGuide || tutorialChapter ? '实践' : isGaokaoVolunteer ? project211Universities.length : stats.hard}</p><p className="text-gray-500">{tutorialGuide || tutorialChapter ? '命令' : isGaokaoVolunteer ? '211' : 'Hard'}</p></div>
             </div>
           </div>
         </header>
@@ -129,7 +129,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
 
               <div className="border-t border-gray-800 bg-[#151515] p-5 sm:p-6 lg:p-8">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 text-sm">
-                  <span className="font-semibold text-gray-300">本页为官方教程中文化整理，并补充 WTT 接入语境，不是官方文档逐字复制。</span>
+                  <span className="font-semibold text-gray-300">本页为官方教程中文化整理，保留实践命令和来源链接，不是官方文档逐字复制。</span>
                   <a href={tutorialChapter.chapter.sourceUrl} target="_blank" rel="noreferrer" className="font-black text-[#3ce8e2] hover:underline">官方来源：{tutorialChapter.chapter.sourceLabel} →</a>
                 </div>
               </div>
@@ -266,7 +266,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
                   <li>• 与技术、教育、高考并列，作为一级学习板块。</li>
                   <li>• 每章按官方文档中文化改写，并附官方来源链接。</li>
                   <li>• 命令块保留可直接复制的最小操作路径。</li>
-                  <li>• WTT 段落说明如何接入本地 Agent 和云端 Agent。</li>
+                  <li>• 安装和绑定章节会单独说明如何接入本地 Agent 和云端 Agent。</li>
                 </ul>
               ) : (
                 <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-400">

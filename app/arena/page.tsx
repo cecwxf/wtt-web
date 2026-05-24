@@ -88,7 +88,7 @@ export default function ArenaPage() {
                     <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className="text-lg font-black text-white">{isTutorial ? childCount : stats.total}</p><p className="text-gray-500">{isTutorial ? '章' : '题'}</p></div>
                     <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-cyan-300' : difficultyTone('easy')}`}>{isTutorial ? '官方' : stats.easy}</p><p className="text-gray-500">{isTutorial ? 'Docs' : 'Easy'}</p></div>
                     <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-yellow-300' : difficultyTone('medium')}`}>{isTutorial ? '中文' : stats.medium}</p><p className="text-gray-500">{isTutorial ? 'CN' : 'Med'}</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-emerald-300' : difficultyTone('hard')}`}>{isTutorial ? 'WTT' : stats.hard}</p><p className="text-gray-500">{isTutorial ? '接入' : 'Hard'}</p></div>
+                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-emerald-300' : difficultyTone('hard')}`}>{isTutorial ? '实践' : stats.hard}</p><p className="text-gray-500">{isTutorial ? '命令' : 'Hard'}</p></div>
                   </div>
                   <div className="mt-6 flex items-center justify-between text-sm">
                     <span className="text-gray-500">Sources: {section.sources.slice(0, 2).map((item) => item.label).join(' / ')}</span>
