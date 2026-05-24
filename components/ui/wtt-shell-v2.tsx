@@ -62,6 +62,7 @@ interface WttShellV2Props {
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: string) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
+  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate) => void | Promise<void>
   userToken?: string
   forceOpenSettingsPage?: SettingsPage | null
   onForceOpenHandled?: () => void
@@ -108,6 +109,7 @@ export function WttShellV2(props: WttShellV2Props) {
     agentRuntimeMap,
     onAssignAgentRole,
     onSaveAgentRole,
+    onNewAgentFromHost,
     children,
   } = props
   const [menuOpen, setMenuOpen] = useState(false)
@@ -256,6 +258,7 @@ export function WttShellV2(props: WttShellV2Props) {
               agentRuntimeMap={agentRuntimeMap}
               onAssignAgentRole={onAssignAgentRole}
               onSaveAgentRole={onSaveAgentRole}
+              onNewAgentFromHost={onNewAgentFromHost}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
               onCreateGeneralTask={onCreateGeneralTask}

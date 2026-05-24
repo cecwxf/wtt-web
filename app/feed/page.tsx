@@ -55,6 +55,25 @@ interface Agent {
   role_template?: Record<string, unknown>
 }
 
+function normalizeWttConnectAdapter(raw: unknown): 'codex' | 'claude-code' | '' {
+  const value = String(raw || '').trim().toLowerCase()
+  if (value === 'codex') return 'codex'
+  if (value === 'claude' || value === 'claude-code' || value === 'claude_code') return 'claude-code'
+  return ''
+}
+
+function shellQuote(value: string): string {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`
+}
+
+function responseErrorMessage(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object') {
+    const detail = (data as { detail?: unknown; message?: unknown }).detail ?? (data as { message?: unknown }).message
+    if (detail) return String(detail)
+  }
+  return fallback
+}
+
 function getHumanSender(session: unknown): string {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
   const uid = s?.userId || ''
@@ -1297,6 +1316,118 @@ function FeedPageInner() {
     return ids
   }, [agentStatsRaw, agentRuntimeMap])
 
+  const handleNewAgentFromHost = useCallback(async (hostAgentId: string, role: AgentRoleTemplate) => {
+    const token = session?.accessToken as string | undefined
+    if (!token) throw new Error(t('settings.sessionExpired'))
+
+    const runtime = agentRuntimeMap[hostAgentId]
+    const adapter = normalizeWttConnectAdapter(runtime?.adapter || runtime?.kind)
+    if (!adapter) {
+      throw new Error('New Agent only supports online codex / claude-code hosts')
+    }
+
+    const displayName = role.id === 'general'
+      ? `${adapter} Agent`
+      : (role.shortLabel || role.label || `${adapter} Agent`)
+
+    const provisionRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/provision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        display_name: displayName,
+        platform: adapter,
+      }),
+    })
+    const provisionData = await provisionRes.json().catch(() => ({}))
+    if (!provisionRes.ok) {
+      throw new Error(responseErrorMessage(provisionData, `Provision failed (${provisionRes.status})`))
+    }
+
+    const newAgentId = String((provisionData as { agent_id?: unknown }).agent_id || '').trim()
+    const newAgentToken = String((provisionData as { agent_token?: unknown }).agent_token || '').trim()
+    if (!newAgentId || !newAgentToken) {
+      throw new Error('Provision succeeded but did not return agent credentials')
+    }
+
+    const rolePayload = {
+      display_name: displayName,
+      role_template_id: role.id === 'general' ? '' : role.id,
+      role_template: role.id === 'general' ? {} : serializeAgentRoleTemplate(role),
+    }
+    const profileRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(newAgentId)}/profile`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(rolePayload),
+    })
+    const profileData = await profileRes.json().catch(() => ({}))
+    if (!profileRes.ok) {
+      throw new Error(responseErrorMessage(profileData, `Agent role update failed (${profileRes.status})`))
+    }
+
+    setAgentRoleMap((prev) => {
+      const next = { ...prev }
+      if (role.id === 'general') delete next[newAgentId]
+      else next[newAgentId] = role.id
+      try {
+        localStorage.setItem('wtt:feed-agent-role-map', JSON.stringify(next))
+      } catch {
+        // ignore local storage failures
+      }
+      return next
+    })
+    setAgentRoleTemplateMap((prev) => {
+      const next = { ...prev }
+      if (role.id === 'general') delete next[newAgentId]
+      else next[newAgentId] = role
+      return next
+    })
+
+    const command = [
+      'BASE_URL="${WTT_BASE_URL:-https://www.waxbyte.com}"',
+      [
+        'wtt-connect up',
+        shellQuote(adapter),
+        shellQuote(newAgentId),
+        shellQuote(newAgentToken),
+        '--base-url "$BASE_URL"',
+        '--mode full-auto',
+        '--yes',
+      ].join(' '),
+    ].join('; ')
+
+    const shellRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/shell/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        command,
+        timeout_seconds: 120,
+      }),
+    })
+    const shellData = await shellRes.json().catch(() => ({}))
+    if (!shellRes.ok) {
+      throw new Error(responseErrorMessage(shellData, `Agent created, but host shell failed (${shellRes.status})`))
+    }
+
+    const result = (shellData as { result?: Record<string, unknown> }).result || {}
+    const exitCode = Number(result.exit_code ?? result.exitCode ?? 0)
+    if (exitCode !== 0) {
+      const stderr = String(result.stderr || '').trim()
+      const stdout = String(result.stdout || '').trim()
+      const detail = [stderr, stdout].filter(Boolean).join('\n').slice(-1200)
+      throw new Error(`Agent created, but wtt-connect up exited ${exitCode}${detail ? `:\n${detail}` : ''}`)
+    }
+
+    await loadAgents()
+    setSelectedAgentId(newAgentId)
+    setSelectedTopicId(null)
+    void mutateTopics()
+    window.setTimeout(() => {
+      void loadAgents()
+      void mutateTopics()
+    }, 2500)
+    alert(`New Agent started: ${newAgentId}`)
+  }, [agentRuntimeMap, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
+
   useEffect(() => {
     setMembersOpen(false)
   }, [selectedTopicId])
@@ -1944,6 +2075,7 @@ function FeedPageInner() {
         agentRuntimeMap={agentRuntimeMap}
         onAssignAgentRole={handleAssignAgentRole}
         onSaveAgentRole={handleSaveAgentRole}
+        onNewAgentFromHost={handleNewAgentFromHost}
         userToken={session?.accessToken as string | undefined}
         forceOpenSettingsPage={forceOpenSettingsPage}
         onForceOpenHandled={() => setForceOpenSettingsPage(null)}

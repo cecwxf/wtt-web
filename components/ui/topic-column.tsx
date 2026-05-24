@@ -71,6 +71,7 @@ interface TopicColumnProps {
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
+  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate) => void | Promise<void>
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   onCreateGeneralTask?: () => void
@@ -255,6 +256,13 @@ function formatRuntime(runtime?: AgentRuntimeInfo) {
   return [workdir, branch, adapter].filter(Boolean).join(' · ')
 }
 
+function normalizeNewAgentAdapter(runtime?: AgentRuntimeInfo) {
+  const raw = String(runtime?.adapter || runtime?.kind || '').trim().toLowerCase()
+  if (raw === 'codex') return 'codex'
+  if (raw === 'claude' || raw === 'claude-code' || raw === 'claude_code') return 'claude-code'
+  return ''
+}
+
 export function TopicColumn(props: TopicColumnProps) {
   const {
     topics,
@@ -272,6 +280,7 @@ export function TopicColumn(props: TopicColumnProps) {
     agentRuntimeMap,
     onAssignAgentRole,
     onSaveAgentRole,
+    onNewAgentFromHost,
     onRenameAgent,
     onUnclaimAgent,
     onCreateGeneralTask,
@@ -283,6 +292,11 @@ export function TopicColumn(props: TopicColumnProps) {
   const [topicMenuFor, setTopicMenuFor] = useState<string | null>(null)
   const [mentionMuteByTopic, setMentionMuteByTopic] = useState<Record<string, boolean>>({})
   const [shellAgent, setShellAgent] = useState<AgentOption | null>(null)
+  const [newAgentOpen, setNewAgentOpen] = useState(false)
+  const [newAgentHostId, setNewAgentHostId] = useState('')
+  const [newAgentRoleId, setNewAgentRoleId] = useState<AgentRoleTemplateId>('general')
+  const [newAgentBusy, setNewAgentBusy] = useState(false)
+  const [newAgentError, setNewAgentError] = useState('')
   const [roleEditor, setRoleEditor] = useState<{
     agentId: string
     sourceRole?: AgentRoleTemplate
@@ -364,6 +378,40 @@ export function TopicColumn(props: TopicColumnProps) {
   const isAgentOnline = (agentId: string) => {
     if (onlineAgentIds) return onlineAgentIds.has(agentId)
     return agentId === selectedAgentId ? isSelectedAgentOnline : false
+  }
+
+  const newAgentHosts = useMemo(() => {
+    if (!onNewAgentFromHost) return []
+    return agentOptions.filter((agent) => {
+      if (!isAgentOnline(agent.agent_id)) return false
+      return Boolean(normalizeNewAgentAdapter(agentRuntimeMap?.[agent.agent_id]))
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentOptions, agentRuntimeMap, onlineAgentIds, selectedAgentId, isSelectedAgentOnline, onNewAgentFromHost])
+
+  const openNewAgentModal = () => {
+    const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId)
+    const host = selectedHost || newAgentHosts[0]
+    if (!host) return
+    setNewAgentHostId(host.agent_id)
+    setNewAgentRoleId('general')
+    setNewAgentError('')
+    setNewAgentOpen(true)
+  }
+
+  const createNewAgentFromHost = async () => {
+    if (!onNewAgentFromHost || !newAgentHostId) return
+    const role = AGENT_ROLE_TEMPLATES.find((template) => template.id === newAgentRoleId) || getAgentRoleTemplate(newAgentRoleId)
+    setNewAgentBusy(true)
+    setNewAgentError('')
+    try {
+      await onNewAgentFromHost(newAgentHostId, role)
+      setNewAgentOpen(false)
+    } catch (error) {
+      setNewAgentError(error instanceof Error ? error.message : (zh ? '创建失败' : 'Failed to create agent'))
+    } finally {
+      setNewAgentBusy(false)
+    }
   }
 
   const groupedTopics = useMemo(() => {
@@ -759,6 +807,21 @@ export function TopicColumn(props: TopicColumnProps) {
             )
           })}
         </div>
+
+        {newAgentHosts.length > 0 && (
+          <div className="border-t border-[#e7e1d7] p-1.5 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={openNewAgentModal}
+              className="flex w-full flex-col items-center justify-center rounded-xl border border-[#ded6c8] bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200"
+              title={zh ? '在当前在线 Codex / Claude Code 主机上新增一个 Agent' : 'Create a new agent on an online Codex / Claude Code host'}
+            >
+              <Plus className="mb-1 h-4 w-4" />
+              <span>New</span>
+              <span>Agent</span>
+            </button>
+          </div>
+        )}
       </aside>
 
       <aside className="flex w-[var(--wtt-topic-rail-width)] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#fbfaf7] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
@@ -901,6 +964,94 @@ export function TopicColumn(props: TopicColumnProps) {
                 className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {zh ? '保存并同步' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {newAgentOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mb-4">
+              <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">
+                {zh ? '新增 Agent' : 'New Agent'}
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
+                {zh ? '选择一个在线 Codex / Claude Code 主机和角色。系统会自动 claim 新 agent，并在该主机上启动独立默认 workspace。' : 'Choose an online Codex / Claude Code host and role. WTT will claim a new agent and start it with its own default workspace.'}
+              </p>
+            </div>
+
+            <label className="mb-4 block">
+              <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '运行主机' : 'Host'}</span>
+              <select
+                value={newAgentHostId}
+                onChange={(event) => setNewAgentHostId(event.target.value)}
+                disabled={newAgentBusy}
+                className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              >
+                {newAgentHosts.map((agent) => {
+                  const runtime = agentRuntimeMap?.[agent.agent_id]
+                  const adapter = normalizeNewAgentAdapter(runtime)
+                  const hostLabel = [agent.display_name || agent.agent_id, adapter, runtime?.hostname].filter(Boolean).join(' · ')
+                  return (
+                    <option key={agent.agent_id} value={agent.agent_id}>
+                      {hostLabel}
+                    </option>
+                  )
+                })}
+              </select>
+            </label>
+
+            <div>
+              <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '角色' : 'Role'}</div>
+              <div className="grid max-h-[42vh] gap-2 overflow-y-auto sm:grid-cols-2">
+                {AGENT_ROLE_TEMPLATES.map((template) => {
+                  const active = template.id === newAgentRoleId
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      disabled={newAgentBusy}
+                      onClick={() => setNewAgentRoleId(template.id)}
+                      className={`rounded-xl border px-3 py-2 text-left transition ${
+                        active
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/45 dark:bg-emerald-500/15 dark:text-emerald-200'
+                          : 'border-[#eee6da] bg-white/70 text-slate-600 hover:border-[#ded6c8] hover:bg-[#f3eee5] dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <span className="block truncate text-sm font-black" title={template.label}>{template.label}</span>
+                      <span className="mt-0.5 block line-clamp-2 text-xs opacity-75" title={template.description}>{template.description}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {newAgentError && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                {newAgentError}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setNewAgentOpen(false)}
+                disabled={newAgentBusy}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                {zh ? '取消' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void createNewAgentFromHost()
+                }}
+                disabled={newAgentBusy || !newAgentHostId}
+                className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-black text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {newAgentBusy ? (zh ? '创建中...' : 'Creating...') : (zh ? '创建并启动' : 'Create & Start')}
               </button>
             </div>
           </div>
