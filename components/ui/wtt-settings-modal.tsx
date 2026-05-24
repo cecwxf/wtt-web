@@ -99,9 +99,71 @@ type BillingMe = {
   };
 };
 
+type CloudAgentType = "claude-code" | "codex";
+
+type CloudModelOption = {
+  id: string;
+  label: string;
+  supports_reasoning?: boolean;
+  tier?: string;
+};
+
+type CloudAgentInfo = {
+  has_cloud_agent?: boolean;
+  agent_id?: string;
+  agent_type?: CloudAgentType | string;
+  model_id?: string;
+  resource_profile?: string;
+  status?: string;
+  docker_status?: string;
+  workspace_bytes?: number;
+  workspace_limit_bytes?: number;
+  usage_totals?: {
+    requests?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+  };
+};
+
 type SessionWithAccessToken = {
   accessToken?: string;
 };
+
+const CLOUD_AGENT_FALLBACK_MODELS: CloudModelOption[] = [
+  { id: "deepseek-v4-pro[1m]", label: "DeepSeek V4 Pro", supports_reasoning: true, tier: "standard" },
+  { id: "deepseek/deepseek-r1", label: "DeepSeek R1", supports_reasoning: true, tier: "standard" },
+  { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", supports_reasoning: true, tier: "standard" },
+  { id: "anthropic/claude-opus-4", label: "Claude Opus 4", supports_reasoning: true, tier: "premium" },
+  { id: "openai-codex/gpt-5.5", label: "GPT-5.5", supports_reasoning: true, tier: "premium" },
+  { id: "openai-codex/gpt-5.4", label: "GPT-5.4", supports_reasoning: true, tier: "premium" },
+  { id: "openai-codex/gpt-5.3-codex", label: "GPT-5.3 Codex", supports_reasoning: true, tier: "premium" },
+];
+
+function mergeCloudModels(models: CloudModelOption[]): CloudModelOption[] {
+  const merged = new Map<string, CloudModelOption>();
+  for (const item of CLOUD_AGENT_FALLBACK_MODELS) merged.set(item.id, item);
+  for (const item of models) {
+    if (!item?.id) continue;
+    merged.set(item.id, { ...item, supports_reasoning: item.supports_reasoning ?? true });
+  }
+  return Array.from(merged.values());
+}
+
+function filterCloudModels(agentType: CloudAgentType, models: CloudModelOption[]): CloudModelOption[] {
+  if (agentType === "codex") {
+    return models.filter((item) => item.id.startsWith("openai") || item.id.startsWith("openai-codex"));
+  }
+  const preferred = models.filter((item) => !item.id.startsWith("openai") && !item.id.startsWith("openai-codex"));
+  return preferred.length > 0 ? preferred : models;
+}
+
+function formatBytes(value?: number): string {
+  if (!value || value <= 0) return "-";
+  if (value >= 1024 * 1024 * 1024) return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.round(value / 1024)} KB`;
+}
 
 export function WttSettingsModal({
   open,
@@ -137,6 +199,11 @@ export function WttSettingsModal({
   const [cloudClaiming, setCloudClaiming] = useState(false);
   const [cloudClaimError, setCloudClaimError] = useState("");
   const [cloudClaimSuccess, setCloudClaimSuccess] = useState("");
+  const [cloudAgentType, setCloudAgentType] = useState<CloudAgentType>("claude-code");
+  const [cloudAgentModelId, setCloudAgentModelId] = useState("deepseek-v4-pro[1m]");
+  const [cloudModels, setCloudModels] = useState<CloudModelOption[]>(CLOUD_AGENT_FALLBACK_MODELS);
+  const [cloudAgentInfo, setCloudAgentInfo] = useState<CloudAgentInfo | null>(null);
+  const [cloudAgentInfoLoading, setCloudAgentInfoLoading] = useState(false);
   const [pluginCommandCreds, setPluginCommandCreds] = useState<{
     agent_id: string;
     agent_token: string;
@@ -176,6 +243,15 @@ export function WttSettingsModal({
 
   const accessToken = (session as SessionWithAccessToken | null)?.accessToken;
   const isPaidPlan = (billing?.entitlement?.plan === "plus" || billing?.entitlement?.plan === "pro");
+  const hasCloudAgentRecord = hasCloudAgent || Boolean(cloudAgentInfo?.has_cloud_agent);
+  const cloudAgentModelOptions = useMemo(
+    () => filterCloudModels(cloudAgentType, cloudModels),
+    [cloudAgentType, cloudModels],
+  );
+  const cloudAgentModelLabel = useMemo(() => {
+    const modelId = cloudAgentInfo?.model_id || cloudAgentModelId;
+    return cloudModels.find((item) => item.id === modelId)?.label || modelId || "-";
+  }, [cloudAgentInfo?.model_id, cloudAgentModelId, cloudModels]);
 
   const loadBilling = useCallback(async () => {
     if (!accessToken) return;
@@ -193,10 +269,52 @@ export function WttSettingsModal({
     }
   }, [accessToken]);
 
+  const loadCloudModels = useCallback(async () => {
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/workers/models/available`, {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      const rows = Array.isArray(data?.models) ? data.models : [];
+      setCloudModels(mergeCloudModels(rows as CloudModelOption[]));
+    } catch {
+      // keep fallback model list
+    }
+  }, []);
+
+  const loadCloudAgentInfo = useCallback(async () => {
+    if (!accessToken) return;
+    setCloudAgentInfoLoading(true);
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      if (response.ok) {
+        setCloudAgentInfo((await response.json()) as CloudAgentInfo);
+      }
+    } finally {
+      setCloudAgentInfoLoading(false);
+    }
+  }, [accessToken]);
+
   useEffect(() => {
     if (activePage !== "membership") return;
     void loadBilling();
   }, [activePage, loadBilling]);
+
+  useEffect(() => {
+    if (activePage !== "binding") return;
+    void loadBilling();
+    void loadCloudModels();
+    void loadCloudAgentInfo();
+  }, [activePage, loadBilling, loadCloudModels, loadCloudAgentInfo]);
+
+  useEffect(() => {
+    if (cloudAgentModelOptions.some((item) => item.id === cloudAgentModelId)) return;
+    setCloudAgentModelId(cloudAgentModelOptions[0]?.id || CLOUD_AGENT_FALLBACK_MODELS[0].id);
+  }, [cloudAgentModelId, cloudAgentModelOptions]);
 
   // Load profile from backend
   useEffect(() => {
@@ -417,7 +535,7 @@ export function WttSettingsModal({
         setCloudClaimError("Cloud Agent 需要升级为 Plus / Pro 账户后才能使用。");
         return;
       }
-      if (hasCloudAgent) {
+      if (hasCloudAgentRecord) {
         setCloudClaimError("该账号已经创建过 Cloud Agent，每个账号只能创建一个。");
         return;
       }
@@ -431,6 +549,8 @@ export function WttSettingsModal({
         body: JSON.stringify({
           accepted_terms: true,
           display_name: provisionDisplayName.trim() || "Cloud Agent",
+          agent_type: cloudAgentType,
+          model_id: cloudAgentModelId,
         }),
       });
 
@@ -447,6 +567,7 @@ export function WttSettingsModal({
 
       setCloudClaimSuccess(`Cloud Agent 已开通：${data.agent_id || ""}`);
       void loadBilling();
+      void loadCloudAgentInfo();
       onBindingChanged?.();
     } catch {
       setCloudClaimError(t("settings.networkError"));
@@ -1057,7 +1178,7 @@ export function WttSettingsModal({
                     <p className="text-sm font-semibold text-slate-800">
                       Cloud Agent
                     </p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
                       Plus 可用 50 次连续请求 / 500 次月请求；Pro 可用 100 次连续请求 / 1500 次月请求。每个账号只能创建一个 Cloud Agent。
                     </p>
                   </div>
@@ -1068,13 +1189,78 @@ export function WttSettingsModal({
                     查看会员
                   </a>
                 </div>
+                {!hasCloudAgentRecord && (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-[11px] font-semibold text-slate-500">Agent 类型</span>
+                      <select
+                        value={cloudAgentType}
+                        onChange={(event) => setCloudAgentType(event.target.value as CloudAgentType)}
+                        className="mt-1 w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-cyan-500"
+                      >
+                        <option value="claude-code">Claude Code</option>
+                        <option value="codex">OpenAI Codex</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-[11px] font-semibold text-slate-500">模型</span>
+                      <select
+                        value={cloudAgentModelId}
+                        onChange={(event) => setCloudAgentModelId(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-cyan-500"
+                      >
+                        {cloudAgentModelOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {hasCloudAgentRecord && (
+                  <div className="mt-3 grid gap-2 rounded-lg border border-cyan-200 bg-white p-3 text-xs text-slate-600 sm:grid-cols-2">
+                    <div>
+                      <p className="text-slate-400">Agent</p>
+                      <p className="mt-1 truncate font-semibold text-slate-800">
+                        {cloudAgentInfo?.agent_id || selectedAgent?.agent_id || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400">运行时</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {(cloudAgentInfo?.agent_type || "claude-code") === "codex" ? "OpenAI Codex" : "Claude Code"} / {cloudAgentModelLabel}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400">状态</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {cloudAgentInfoLoading ? "刷新中" : (cloudAgentInfo?.docker_status || cloudAgentInfo?.status || "-")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400">资源</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {(cloudAgentInfo?.resource_profile || billing?.entitlement?.plan || "-").toString().toUpperCase()}
+                        {" "}
+                        {formatBytes(cloudAgentInfo?.workspace_bytes)} / {formatBytes(cloudAgentInfo?.workspace_limit_bytes)}
+                      </p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="text-slate-400">模型用量</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {cloudAgentInfo?.usage_totals?.requests || 0} requests / {cloudAgentInfo?.usage_totals?.total_tokens || 0} tokens
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <button
                   onClick={handleClaimCloudAgent}
-                  disabled={cloudClaiming || hasCloudAgent}
+                  disabled={cloudClaiming || hasCloudAgentRecord}
                   className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {cloudClaiming && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {hasCloudAgent ? "Cloud Agent 已创建" : "Cloud Agent"}
+                  {hasCloudAgentRecord ? "Cloud Agent 已创建" : "Cloud Agent"}
                 </button>
                 {cloudClaimError && (
                   <p className="mt-2 text-sm text-red-500">{cloudClaimError}</p>
