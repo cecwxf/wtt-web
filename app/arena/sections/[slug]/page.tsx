@@ -65,20 +65,75 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8">
           {tutorialGuide ? (
-            <section className="grid gap-4 md:grid-cols-2">
-              {tutorialGuide.chapters.map((chapter, index) => (
-                <Link key={chapter.slug} href={`/arena/sections/${tutorialGuide.slug}-${chapter.slug}`} className="group overflow-hidden rounded-2xl border border-gray-800 bg-[#1b1b1b] p-5 transition hover:-translate-y-1 hover:border-[#3ce8e2]/40 hover:bg-[#202020]">
-                  <div className={`mb-5 h-1.5 w-24 rounded-full bg-gradient-to-r ${tutorialGuide.accent}`} />
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">{chapter.eyebrow}</p>
-                  <h2 className="mt-3 text-xl font-black leading-7 text-white group-hover:text-[#3ce8e2]">{chapter.titleZh}</h2>
-                  <p className="mt-4 min-h-[72px] text-sm leading-6 text-gray-400">{chapter.descriptionZh}</p>
-                  <div className="mt-6 flex items-center justify-between text-sm">
-                    <span className="font-mono text-gray-500">{String(index + 1).padStart(2, '0')} / {tutorialGuide.chapters.length}</span>
-                    <span className="font-black text-[#3ce8e2]">阅读 →</span>
+            <article className="overflow-hidden rounded-2xl border border-gray-800 bg-[#1e1e1e]">
+              <div className={`h-1.5 w-full bg-gradient-to-r ${tutorialGuide.accent}`} />
+              <div className="border-b border-gray-800 bg-[#151515] p-5 sm:p-6 lg:p-8">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#3ce8e2]">{tutorialGuide.eyebrow}</p>
+                <h2 className="mt-4 text-3xl font-black leading-tight text-white sm:text-4xl">{tutorialGuide.titleZh}</h2>
+                <p className="mt-4 max-w-3xl text-base leading-8 text-gray-400">{tutorialGuide.descriptionZh}</p>
+                <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-gray-400">
+                  <span className="rounded-full border border-gray-700 bg-[#1e1e1e] px-3 py-1">{tutorialGuide.chapters.length} 章</span>
+                  <span className="rounded-full border border-gray-700 bg-[#1e1e1e] px-3 py-1">博客式长文</span>
+                  <span className="rounded-full border border-gray-700 bg-[#1e1e1e] px-3 py-1">目录跳转</span>
+                  <a href={tutorialGuide.docsHref} target="_blank" rel="noreferrer" className="rounded-full border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-3 py-1 font-black text-[#3ce8e2] hover:border-[#3ce8e2]">官方文档 ↗</a>
+                </div>
+              </div>
+
+              <div className="grid gap-6 p-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:p-8">
+                <nav className="rounded-xl border border-gray-800 bg-[#151515] p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">目录</p>
+                  <div className="mt-3 space-y-2">
+                    {tutorialGuide.chapters.map((chapter, index) => (
+                      <a key={chapter.slug} href={`#chapter-${chapter.slug}`} className="block rounded-lg px-2 py-1.5 text-sm leading-5 text-gray-400 hover:bg-[#1e1e1e] hover:text-[#3ce8e2]">
+                        {String(index + 1).padStart(2, '0')} · {chapter.titleZh.replace(/^\d+｜/, '')}
+                      </a>
+                    ))}
                   </div>
-                </Link>
-              ))}
-            </section>
+                </nav>
+
+                <div className="space-y-10">
+                  {tutorialGuide.chapters.map((chapter, chapterIndex) => (
+                    <section key={chapter.slug} id={`chapter-${chapter.slug}`} className="scroll-mt-8 border-b border-gray-800 pb-10 last:border-b-0 last:pb-0">
+                      <div className="mb-5">
+                        <p className="font-mono text-sm font-black text-[#3ce8e2]">{String(chapterIndex + 1).padStart(2, '0')} / {tutorialGuide.chapters.length}</p>
+                        <h3 className="mt-2 text-2xl font-black leading-tight text-white sm:text-3xl">{chapter.titleZh}</h3>
+                        <p className="mt-3 text-[15px] leading-8 text-gray-400">{chapter.descriptionZh}</p>
+                        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                          <span className="rounded-full border border-gray-700 bg-[#151515] px-3 py-1 text-gray-400">官方章节：{chapter.eyebrow}</span>
+                          <a href={chapter.sourceUrl} target="_blank" rel="noreferrer" className="rounded-full border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-3 py-1 font-black text-[#3ce8e2] hover:border-[#3ce8e2]">来源：{chapter.sourceLabel} ↗</a>
+                          <Link href={`/arena/sections/${tutorialGuide.slug}-${chapter.slug}`} className="rounded-full border border-gray-700 bg-[#151515] px-3 py-1 text-gray-300 hover:border-[#3ce8e2] hover:text-[#3ce8e2]">单章阅读</Link>
+                        </div>
+                      </div>
+
+                      <div className="space-y-6">
+                        {chapter.sections.map((item, sectionIndex) => (
+                          <section key={`${chapter.slug}-${item.heading}`} id={`chapter-${chapter.slug}-section-${sectionIndex + 1}`} className="rounded-xl border border-gray-800 bg-[#151515] p-4 sm:p-5">
+                            <div className="mb-3 flex items-center gap-3">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#3ce8e2] text-sm font-black text-black">{sectionIndex + 1}</span>
+                              <h4 className="text-lg font-black text-white">{item.heading}</h4>
+                            </div>
+                            <p className="text-[15px] leading-8 text-gray-300">{item.body}</p>
+                            {item.commands && item.commands.length > 0 && (
+                              <div className="mt-5 rounded-xl border border-gray-800 bg-black/60 p-4">
+                                {item.commands.map((command) => (
+                                  <code key={command} className="block whitespace-pre-wrap break-words py-1 font-mono text-sm leading-6 text-cyan-200">{command}</code>
+                                ))}
+                              </div>
+                            )}
+                          </section>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 bg-[#151515] p-5 sm:p-6 lg:p-8">
+                <div className="rounded-xl border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 text-sm leading-6 text-gray-300">
+                  本教程为官方文档的中文化学习整理，覆盖章节结构、关键概念、实践命令和使用边界。官方完整原文请以来源链接为准。
+                </div>
+              </div>
+            </article>
           ) : tutorialChapter ? (
             <article className="overflow-hidden rounded-2xl border border-gray-800 bg-[#1e1e1e]">
               <div className={`h-1.5 w-full bg-gradient-to-r ${tutorialChapter.guide.accent}`} />
