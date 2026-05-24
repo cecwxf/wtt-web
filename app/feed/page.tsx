@@ -1382,22 +1382,49 @@ function FeedPageInner() {
       return next
     })
 
+    const profile = `${newAgentId}-${adapter}`
+    const cleanEnv = [
+      'env',
+      '-u WTT_BASE_URL',
+      '-u WTT_WS_URL',
+      '-u WTT_AGENT_ID',
+      '-u WTT_TOKEN',
+      '-u WTT_AGENT_TOKEN',
+      '-u WTT_HTTP_TOKEN',
+      '-u WTT_CONNECT_CONFIG',
+      '-u WTT_CONNECT_ENV_FILE',
+      '-u WTT_CONNECT_ADAPTER',
+      '-u WTT_CONNECT_ADAPTERS',
+      '-u WTT_CONNECT_WORKDIR',
+      '-u WTT_CONNECT_STATE_DIR',
+      '-u WTT_CONNECT_STORE_FILE',
+      '-u WTT_CONNECT_ARTIFACT_DIR',
+      '-u WTT_CONNECT_INBOX_DIR',
+      '-u WTT_CONNECT_MODE',
+      '-u WTT_CODEX_BIN',
+      '-u WTT_CLAUDE_BIN',
+    ].join(' ')
+    const upCommand = [
+      cleanEnv,
+      'wtt-connect up',
+      shellQuote(adapter),
+      shellQuote(newAgentId),
+      shellQuote(newAgentToken),
+      '--profile "$PROFILE"',
+      '--base-url "$BASE_URL"',
+      '--mode full-auto',
+      '--yes',
+    ].join(' ')
     const command = [
       'BASE_URL="${WTT_BASE_URL:-https://www.waxbyte.com}"',
+      `PROFILE=${shellQuote(profile)}`,
+      'LOG_DIR="${HOME:-/tmp}/.wtt-connect"',
+      'mkdir -p "$LOG_DIR"',
       [
-        'env',
-        '-u WTT_CONNECT_WORKDIR',
-        '-u WTT_CONNECT_STATE_DIR',
-        '-u WTT_CONNECT_STORE_FILE',
-        '-u WTT_CONNECT_ARTIFACT_DIR',
-        '-u WTT_CONNECT_INBOX_DIR',
-        'wtt-connect up',
-        shellQuote(adapter),
-        shellQuote(newAgentId),
-        shellQuote(newAgentToken),
-        '--base-url "$BASE_URL"',
-        '--mode full-auto',
-        '--yes',
+        'if systemctl --user show-environment >/dev/null 2>&1',
+        `then ${upCommand}`,
+        `else ${upCommand} --no-start && (nohup ${cleanEnv} wtt-connect start --profile "$PROFILE" > "$LOG_DIR/$PROFILE.nohup.log" 2>&1 &)`,
+        'fi',
       ].join(' '),
     ].join('; ')
 
