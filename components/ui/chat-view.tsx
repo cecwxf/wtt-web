@@ -247,6 +247,7 @@ const DEFAULT_EFFORT_BY_TASK: Record<string, 'off' | 'low' | 'medium' | 'high'> 
 export interface MentionableAgent {
   agent_id: string
   display_name: string
+  roleLabel?: string
 }
 
 type ActionQuickButton = {
@@ -319,6 +320,7 @@ interface ChatViewProps {
   autoFocusNonce?: number
   workspaceAgentName?: string
   workspaceWorkdir?: string
+  agentRoleLabelMap?: Record<string, string>
 }
 
 interface AgentProfileSummary {
@@ -662,6 +664,14 @@ function senderLabelText(label?: string, senderId?: string): string {
   return text
 }
 
+function appendRoleLabel(label: string, roleLabel?: string): string {
+  const base = String(label || '').trim()
+  const role = String(roleLabel || '').trim()
+  if (!base || !role) return base
+  if (base.includes(`【${role}】`)) return base
+  return `${base}【${role}】`
+}
+
 function avatarTone(seed: string, kind: 'agent' | 'human') {
   let hash = 0
   for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0
@@ -700,6 +710,7 @@ export function ChatView({
   autoFocusNonce,
   workspaceAgentName,
   workspaceWorkdir,
+  agentRoleLabelMap = {},
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -854,9 +865,16 @@ export function ChatView({
     if (!mentionQuery) return topicMembers
     const q = mentionQuery.toLowerCase()
     return topicMembers.filter(m =>
-      m.display_name.toLowerCase().includes(q) || m.agent_id.toLowerCase().includes(q)
+      m.display_name.toLowerCase().includes(q) ||
+      m.agent_id.toLowerCase().includes(q) ||
+      String(m.roleLabel || '').toLowerCase().includes(q)
     )
   }, [topicMembers, mentionQuery])
+
+  const roleLabelForAgent = useCallback((agentId?: string) => {
+    if (!agentId) return ''
+    return agentRoleLabelMap[agentId] || topicMembers.find((member) => member.agent_id === agentId)?.roleLabel || ''
+  }, [agentRoleLabelMap, topicMembers])
 
   const openAgentCard = useCallback(async (agentId: string, fallbackName?: string, fallbackAvatar?: string) => {
     if (!agentId) return
@@ -1950,7 +1968,10 @@ export function ChatView({
             <div className="overflow-hidden rounded-xl border border-[#eee9df] bg-white/55 dark:border-zinc-900 dark:bg-zinc-950">
               {group.messages.map((message) => {
                 const isMine = message.sender_type === 'human'
-                const label = senderLabelText(message.sender_display_name, message.sender_id)
+                const baseLabel = senderLabelText(message.sender_display_name, message.sender_id)
+                const label = message.sender_type === 'agent'
+                  ? appendRoleLabel(baseLabel, roleLabelForAgent(message.sender_id))
+                  : baseLabel
 
                 // Broadcast card view — render as content card instead of chat bubble
                 if (isBroadcastTopic) {
@@ -2635,7 +2656,7 @@ export function ChatView({
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
                     {m.display_name.charAt(0).toUpperCase()}
                   </span>
-                  <span className="font-medium">{m.display_name}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{appendRoleLabel(m.display_name, m.roleLabel)}</span>
                   <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500 font-mono truncate max-w-[120px]">{m.agent_id.slice(0, 8)}…</span>
                 </button>
               ))}

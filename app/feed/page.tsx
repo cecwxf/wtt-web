@@ -61,6 +61,11 @@ function getHumanSender(session: unknown): string {
   return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
 }
 
+function agentRoleDisplayLabel(role?: AgentRoleTemplate | null): string {
+  if (!role || role.id === 'general') return ''
+  return String(role.shortLabel || role.label || '').trim()
+}
+
 function normalizeSenderType(
   rawType: unknown,
   senderId?: string,
@@ -566,6 +571,16 @@ function FeedPageInner() {
   }, [agents])
 
   const knownAgentIds = useMemo(() => new Set(agents.map((a) => a.agent_id)), [agents])
+
+  const agentRoleLabelMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const agent of agents) {
+      const role = agentRoleTemplateMap[agent.agent_id] || getAgentRoleTemplate(agentRoleMap[agent.agent_id])
+      const label = agentRoleDisplayLabel(role)
+      if (label) map[agent.agent_id] = label
+    }
+    return map
+  }, [agents, agentRoleMap, agentRoleTemplateMap])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -1185,12 +1200,24 @@ function FeedPageInner() {
     return topicMembersRaw
       .map((m) => (m && typeof m === 'object' ? (m as Record<string, unknown>) : null))
       .filter(Boolean)
-      .map((m) => ({
-        agent_id: String((m as Record<string, unknown>).agent_id || ''),
-        display_name: String((m as Record<string, unknown>).display_name || (m as Record<string, unknown>).agent_id || ''),
-      }))
+      .map((m) => {
+        const row = m as Record<string, unknown>
+        const agentId = String(row.agent_id || '')
+        const rawRoleTemplate = row.role_template && typeof row.role_template === 'object'
+          ? row.role_template as Record<string, unknown>
+          : undefined
+        const rawRoleId = String(row.role_template_id || rawRoleTemplate?.id || '').trim()
+        const role = rawRoleId || rawRoleTemplate
+          ? roleTemplateFromPayload(rawRoleId || undefined, rawRoleTemplate)
+          : agentRoleTemplateMap[agentId] || getAgentRoleTemplate(agentRoleMap[agentId])
+        return {
+          agent_id: agentId,
+          display_name: String(row.display_name || row.agent_id || ''),
+          roleLabel: agentRoleDisplayLabel(role),
+        }
+      })
       .filter((m) => m.agent_id)
-  }, [topicMembersRaw])
+  }, [agentRoleMap, agentRoleTemplateMap, topicMembersRaw])
 
   const discussMemberCount = useMemo(() => topicMembers.length, [topicMembers])
 
@@ -1949,6 +1976,7 @@ function FeedPageInner() {
                 autoFocusNonce={composerFocusNonce}
                 workspaceAgentName={selectedAgentId ? (agentNameMap[selectedAgentId] || selectedAgentId) : undefined}
                 workspaceWorkdir={selectedAgentId ? agentRuntimeMap?.[selectedAgentId]?.workdir : undefined}
+                agentRoleLabelMap={agentRoleLabelMap}
                 compactUi
                 extraHeaderActions={
                   shouldShowDiscussMembers ? (
