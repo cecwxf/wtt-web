@@ -1401,8 +1401,6 @@ function FeedPageInner() {
       '-u WTT_CONNECT_ARTIFACT_DIR',
       '-u WTT_CONNECT_INBOX_DIR',
       '-u WTT_CONNECT_MODE',
-      '-u WTT_CODEX_BIN',
-      '-u WTT_CLAUDE_BIN',
     ].join(' ')
     const upCommand = [
       cleanEnv,
@@ -1420,13 +1418,13 @@ function FeedPageInner() {
       `PROFILE=${shellQuote(profile)}`,
       'LOG_DIR="${HOME:-/tmp}/.wtt-connect"',
       'mkdir -p "$LOG_DIR"',
-      [
-        'if systemctl --user show-environment >/dev/null 2>&1',
-        `then ${upCommand}`,
-        `else ${upCommand} --no-start && (nohup ${cleanEnv} wtt-connect start --profile "$PROFILE" > "$LOG_DIR/$PROFILE.nohup.log" 2>&1 &)`,
-        'fi',
-      ].join(' '),
-    ].join('; ')
+      'if systemctl --user show-environment >/dev/null 2>&1; then',
+      `  ${upCommand}`,
+      'else',
+      `  ${upCommand} --no-start`,
+      `  nohup ${cleanEnv} wtt-connect start --profile "$PROFILE" > "$LOG_DIR/$PROFILE.nohup.log" 2>&1 &`,
+      'fi',
+    ].join('\n')
 
     const shellRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/shell/run`, {
       method: 'POST',
