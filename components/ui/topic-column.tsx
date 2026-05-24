@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardList, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardList, Cloud, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -586,6 +586,32 @@ export function TopicColumn(props: TopicColumnProps) {
         </div>
 
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
+          {onCreateCloudAgent && (
+            <button
+              type="button"
+              onClick={() => {
+                void createCloudAgent()
+              }}
+              disabled={cloudAgentBusy}
+              className="flex w-full flex-col items-center justify-center rounded-xl border border-sky-300 bg-gradient-to-b from-sky-50 to-cyan-50 px-1 py-2 text-center text-[9px] font-black leading-tight text-sky-700 shadow-sm ring-1 ring-sky-100 transition hover:border-sky-400 hover:from-sky-100 hover:to-cyan-100 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-500/45 dark:from-sky-500/15 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/20 dark:hover:border-sky-400"
+              title={zh ? '申请 7 天云端试用 Agent' : 'Claim a 7-day cloud trial agent'}
+            >
+              <Cloud className="mb-1 h-4 w-4" />
+              {zh ? (
+                <>
+                  <span>试用</span>
+                  <span>云端</span>
+                  <span>agent</span>
+                </>
+              ) : (
+                <>
+                  <span>Cloud</span>
+                  <span>Trial</span>
+                </>
+              )}
+            </button>
+          )}
+
           {agentOptions.length === 0 && (
             <div className="rounded-xl border border-dashed border-[#ded6c8] bg-white/55 p-2 text-center text-[10px] text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
               {zh ? '无 Agent' : 'No agents'}
@@ -821,35 +847,18 @@ export function TopicColumn(props: TopicColumnProps) {
           })}
         </div>
 
-        {(newAgentHosts.length > 0 || onCreateCloudAgent) && (
+        {newAgentHosts.length > 0 && (
           <div className="space-y-1.5 border-t border-[#e7e1d7] p-1.5 dark:border-zinc-800">
-            {onCreateCloudAgent && (
-              <button
-                type="button"
-                onClick={() => {
-                  void createCloudAgent()
-                }}
-                disabled={cloudAgentBusy}
-                className="flex w-full flex-col items-center justify-center rounded-xl border border-[#ded6c8] bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-slate-600 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:border-sky-500/40 dark:hover:bg-sky-500/10 dark:hover:text-sky-200"
-                title={zh ? '申请 7 天云端试用 Agent' : 'Claim a 7-day cloud trial agent'}
-              >
-                <Plus className="mb-1 h-4 w-4" />
-                <span>Cloud</span>
-                <span>Agent</span>
-              </button>
-            )}
-            {newAgentHosts.length > 0 && (
-              <button
-                type="button"
-                onClick={openNewAgentModal}
-                className="flex w-full flex-col items-center justify-center rounded-xl border border-[#ded6c8] bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200"
-                title={zh ? '在当前在线 Codex / Claude Code 主机上新增一个 Agent' : 'Create a new agent on an online Codex / Claude Code host'}
-              >
-                <Plus className="mb-1 h-4 w-4" />
-                <span>New</span>
-                <span>Agent</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={openNewAgentModal}
+              className="flex w-full flex-col items-center justify-center rounded-xl border border-emerald-400 bg-gradient-to-b from-emerald-500 to-teal-600 px-1 py-2 text-center text-[9px] font-black leading-tight text-white shadow-md shadow-emerald-900/15 ring-1 ring-emerald-200 transition hover:from-emerald-400 hover:to-teal-500 hover:shadow-lg dark:border-emerald-400/60 dark:from-emerald-500 dark:to-teal-600 dark:ring-emerald-400/25"
+              title={zh ? '在当前在线 Codex / Claude Code 主机上新增一个 Agent' : 'Create a new agent on an online Codex / Claude Code host'}
+            >
+              <Plus className="mb-1 h-4 w-4" />
+              <span>New</span>
+              <span>Agent</span>
+            </button>
           </div>
         )}
       </aside>
