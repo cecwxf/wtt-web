@@ -169,6 +169,7 @@ export function WttSettingsModal({
   const [checkoutError, setCheckoutError] = useState("");
 
   const accessToken = (session as SessionWithAccessToken | null)?.accessToken;
+  const isPaidPlan = (billing?.entitlement?.plan === "plus" || billing?.entitlement?.plan === "pro");
 
   const loadBilling = useCallback(async () => {
     if (!accessToken) return;
@@ -384,8 +385,7 @@ export function WttSettingsModal({
   };
 
   const handleClaimCloudAgent = async () => {
-    const token = session?.accessToken as string | undefined;
-    if (!token) {
+    if (!accessToken) {
       setCloudClaimError(t("settings.sessionExpired"));
       return;
     }
@@ -394,15 +394,33 @@ export function WttSettingsModal({
     setCloudClaimError("");
     setCloudClaimSuccess("");
     try {
+      let paid = isPaidPlan;
+      if (!paid) {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store",
+        });
+        if (response.ok) {
+          const nextBilling = (await response.json()) as BillingMe;
+          setBilling(nextBilling);
+          const plan = nextBilling.entitlement?.plan;
+          paid = plan === "plus" || plan === "pro";
+        }
+      }
+      if (!paid) {
+        setCloudClaimError("New Cloud Agent 需要升级为 Plus / Pro 账户后才能使用。");
+        return;
+      }
+
       const response = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/claim`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           accepted_terms: true,
-          display_name: provisionDisplayName.trim() || "Cloud Agent",
+          display_name: provisionDisplayName.trim() || "New Cloud Agent",
         }),
       });
 
@@ -418,6 +436,7 @@ export function WttSettingsModal({
       }
 
       setCloudClaimSuccess(`Cloud Agent 已开通：${data.agent_id || ""}`);
+      void loadBilling();
       onBindingChanged?.();
     } catch {
       setCloudClaimError(t("settings.networkError"));
@@ -1022,11 +1041,11 @@ export function WttSettingsModal({
 
           {activePage === "binding" && (
             <div className="space-y-3">
-              <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+              <div className="relative rounded-xl border border-cyan-200 bg-cyan-50 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-slate-800">
-                      Cloud Agent（Plus / Pro）
+                      New Cloud Agent
                     </p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                       Plus 可用 50 次连续请求 / 500 次月请求；Pro 可用 100 次连续请求 / 1500 次月请求。普通用户请先升级，或继续绑定自己的 Agent。
@@ -1042,10 +1061,13 @@ export function WttSettingsModal({
                 <button
                   onClick={handleClaimCloudAgent}
                   disabled={cloudClaiming}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="relative mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {cloudClaiming && <Loader2 className="h-4 w-4 animate-spin" />}
-                  申请云 Agent
+                  New Cloud Agent
+                  <span className="absolute bottom-1 right-2 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-black leading-none text-cyan-700 shadow-sm">
+                    Plus+
+                  </span>
                 </button>
                 {cloudClaimError && (
                   <p className="mt-2 text-sm text-red-500">{cloudClaimError}</p>
