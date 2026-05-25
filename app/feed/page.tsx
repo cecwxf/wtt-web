@@ -1178,6 +1178,10 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
+  const selectedAgent = selectedAgentId ? agents.find((agent) => agent.agent_id === selectedAgentId) : undefined
+  const selectedAgentIsCloud = Boolean(
+    selectedAgent && (selectedAgent.binding_method || selectedAgent.bound_via || '') === 'cloud_trial',
+  )
 
   const selectedTopicTypingText = useMemo(() => {
     if (!selectedTopicId) return null
@@ -2219,6 +2223,8 @@ function FeedPageInner() {
                 autoFocusNonce={composerFocusNonce}
                 workspaceAgentName={selectedAgentId ? (agentNameMap[selectedAgentId] || selectedAgentId) : undefined}
                 workspaceWorkdir={selectedAgentId ? agentRuntimeMap?.[selectedAgentId]?.workdir : undefined}
+                currentAgentRuntime={selectedAgentId ? agentRuntimeMap?.[selectedAgentId] : undefined}
+                currentAgentIsCloud={selectedAgentIsCloud}
                 agentRoleLabelMap={agentRoleLabelMap}
                 compactUi
                 extraHeaderActions={

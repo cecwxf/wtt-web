@@ -40,6 +40,10 @@ interface AgentOption {
 export interface AgentRuntimeInfo {
   kind?: string
   adapter?: string
+  model?: string
+  model_id?: string
+  current_model?: string
+  reasoning_effort?: string
   workdir?: string
   workdir_name?: string
   hostname?: string

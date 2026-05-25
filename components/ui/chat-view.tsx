@@ -51,6 +51,14 @@ interface ModelOption {
   supports_reasoning?: boolean
 }
 
+interface CurrentAgentRuntimeInfo {
+  adapter?: string
+  model?: string
+  model_id?: string
+  current_model?: string
+  reasoning_effort?: string
+}
+
 const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
 
 const FALLBACK_MODELS: ModelOption[] = [
@@ -77,6 +85,29 @@ function mergeModelOptions(models: ModelOption[]): ModelOption[] {
   const defaultModel = merged.get(DEFAULT_MODEL_ID) ?? FALLBACK_MODELS[0]
   const rest = Array.from(merged.values()).filter((model) => model.id !== DEFAULT_MODEL_ID)
   return [defaultModel, ...rest]
+}
+
+function normalizeRuntimeModelId(raw: unknown): string {
+  const value = String(raw || '').trim()
+  if (!value) return ''
+  if (value === 'deepseek-v4-pro') return DEFAULT_MODEL_ID
+  if (value === 'deepseek-v4-pro[1m]') return value
+  if (value.startsWith('anthropic/') || value.startsWith('openai-codex/') || value.startsWith('openai/')) return value
+  if (value.startsWith('claude-')) return `anthropic/${value}`
+  if (value.startsWith('gpt-')) return `openai-codex/${value}`
+  return value
+}
+
+function runtimeModelPref(runtime?: CurrentAgentRuntimeInfo): Partial<ModelPref> | null {
+  if (!runtime) return null
+  const model = normalizeRuntimeModelId(runtime.current_model || runtime.model_id || runtime.model)
+  const effortRaw = String(runtime.reasoning_effort || '').trim().toLowerCase()
+  const effort = ['off', 'low', 'medium', 'high'].includes(effortRaw) ? effortRaw as ModelPref['effort'] : undefined
+  if (!model && !effort) return null
+  return {
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {}),
+  }
 }
 
 type ModelPref = { model: string; effort: 'off' | 'low' | 'medium' | 'high' }
@@ -323,6 +354,8 @@ interface ChatViewProps {
   autoFocusNonce?: number
   workspaceAgentName?: string
   workspaceWorkdir?: string
+  currentAgentRuntime?: CurrentAgentRuntimeInfo
+  currentAgentIsCloud?: boolean
   agentRoleLabelMap?: Record<string, string>
 }
 
@@ -713,6 +746,8 @@ export function ChatView({
   autoFocusNonce,
   workspaceAgentName,
   workspaceWorkdir,
+  currentAgentRuntime,
+  currentAgentIsCloud = false,
   agentRoleLabelMap = {},
 }: ChatViewProps) {
   const { t } = useI18n()
@@ -863,6 +898,7 @@ export function ChatView({
   }, [])
 
   const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
+  const currentRuntimePref = runtimeModelPref(currentAgentRuntime)
 
   const filteredMembers = useMemo(() => {
     if (!mentionQuery) return topicMembers
@@ -1023,17 +1059,24 @@ export function ChatView({
     const inMemory = modelPrefsByTopicRef.current[topicPreferenceKey]
     const persisted = readStoredModelPref(topicPreferenceKey)
     const saved = inMemory ?? persisted
+    const runtimeModel = currentRuntimePref?.model && availableModels.some((m) => m.id === currentRuntimePref.model)
+      ? currentRuntimePref.model
+      : ''
 
-    const preferredEffort = saved?.effort ?? ((taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off')
+    const preferredEffort = (!currentAgentIsCloud && currentRuntimePref?.effort)
+      || saved?.effort
+      || ((taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off')
 
-    let preferredModel = saved?.model
+    let preferredModel = (!currentAgentIsCloud && runtimeModel) || saved?.model
     if (!preferredModel || !availableModels.some((m) => m.id === preferredModel)) {
-      preferredModel = availableModels[0]?.id || FALLBACK_MODELS[0].id
+      preferredModel = currentAgentIsCloud
+        ? DEFAULT_MODEL_ID
+        : (availableModels[0]?.id || FALLBACK_MODELS[0].id)
     }
 
     setSelectedModel(preferredModel)
     setReasoningEffort(preferredEffort)
-  }, [topicPreferenceKey, taskType, availableModels])
+  }, [topicPreferenceKey, taskType, availableModels, currentRuntimePref?.model, currentRuntimePref?.effort, currentAgentIsCloud])
 
   useEffect(() => {
     const pref: ModelPref = {
