@@ -551,9 +551,13 @@ function VideoAttachmentCard({ url, filename, isMine }: { url: string; filename?
   )
 }
 
-function fileMeta(nameOrUrl: string) {
-  const clean = decodeURIComponent(String(nameOrUrl || 'file').split('?')[0].split('#')[0])
-  const ext = (clean.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+function fileExt(nameOrUrl?: string): string {
+  const clean = decodeURIComponent(String(nameOrUrl || '').split('?')[0].split('#')[0])
+  return (clean.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+}
+
+function fileMeta(nameOrUrl: string, fallbackUrl?: string) {
+  const ext = fileExt(nameOrUrl) || fileExt(fallbackUrl)
   const label = ext ? ext.toUpperCase() : 'FILE'
   const icon = ext === 'pdf' ? 'PDF'
     : ['doc', 'docx'].includes(ext) ? 'DOC'
@@ -579,7 +583,7 @@ function fileMeta(nameOrUrl: string) {
 function FileAttachmentCard({ url, filename, isMine, onPreview }: { url: string; filename?: string; isMine: boolean; onPreview?: () => void }) {
   const fallback = url.split('/').pop() || 'file'
   const fname = filename || fallback
-  const meta = fileMeta(fname || url)
+  const meta = fileMeta(fname || url, url)
   return (
     <div className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${isMine ? 'border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20 text-slate-700 dark:text-zinc-300' : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'}`}>
       <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${meta.tone}`}>
@@ -670,7 +674,7 @@ function extractConversationFiles(message: ChatMessage): ConversationFile[] {
 }
 
 function previewExt(file: Pick<ConversationFile, 'url' | 'filename'>): string {
-  return fileMeta(file.filename || file.url).ext
+  return fileMeta(file.filename || '', file.url).ext
 }
 
 function canPreviewConversationFile(file: Pick<ConversationFile, 'url' | 'filename'>): boolean {
@@ -731,7 +735,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
               <p className="text-xs font-semibold uppercase tracking-wide text-[#9b9488] dark:text-zinc-500">Preview</p>
               <h3 className="mt-1 truncate text-sm font-semibold text-[#1f2328] dark:text-zinc-100">{fname}</h3>
               <p className="mt-0.5 truncate text-[11px] text-[#8a8378] dark:text-zinc-500">
-                {fileMeta(fname).label} · {label} · {formatTime(file.timestamp)}
+                {fileMeta(fname, file.url).label} · {label} · {formatTime(file.timestamp)}
               </p>
             </div>
             <button
@@ -785,8 +789,8 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-[#ded8ce] bg-[#fbfaf7] p-6 text-center dark:border-zinc-800 dark:bg-zinc-900">
                 <div>
-                  <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl text-xs font-black ${fileMeta(fname).tone}`}>
-                    {fileMeta(fname).icon}
+                  <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl text-xs font-black ${fileMeta(fname, file.url).tone}`}>
+                    {fileMeta(fname, file.url).icon}
                   </div>
                   <p className="text-sm font-semibold text-[#283038] dark:text-zinc-100">{fname}</p>
                   <p className="mt-1 text-xs text-[#8a8378] dark:text-zinc-500">Office 文件需要公网可访问 URL 才能内嵌预览，可先打开或下载查看。</p>
