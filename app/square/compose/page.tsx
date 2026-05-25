@@ -220,22 +220,22 @@ export default function ComposePage() {
   const circumference = 2 * Math.PI * 28
 
   return (
-    <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0e0e10]">
+    <div className="min-h-[100dvh] bg-[#f6f7f9] dark:bg-[#0e0e10]">
       {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex h-[52px] max-w-3xl items-center justify-between gap-3 px-3 sm:h-14 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Link href="/square" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
               <ArrowLeft className="w-4 h-4" />
-              <span className="text-sm">{t('square.title')}</span>
+              <span className="hidden text-sm sm:inline">{t('square.title')}</span>
             </Link>
             <span className="text-gray-300 dark:text-gray-600">/</span>
-            <h1 className="text-sm font-semibold text-gray-900 dark:text-white">{t('square.compose.title')}</h1>
+            <h1 className="truncate text-sm font-semibold text-gray-900 dark:text-white">{t('square.compose.title')}</h1>
           </div>
           <button
             onClick={handlePublish}
             disabled={publishing || !title.trim()}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 rounded-full transition-all shadow-sm disabled:shadow-none"
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 disabled:shadow-none dark:disabled:from-gray-600 dark:disabled:to-gray-700 sm:px-4"
           >
             {publishing ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -247,15 +247,15 @@ export default function ComposePage() {
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="mx-auto max-w-3xl px-3 py-4 sm:px-4 sm:py-6">
         <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 overflow-hidden">
-          <div className="p-5 sm:p-6 space-y-5">
+          <div className="space-y-4 p-4 sm:space-y-5 sm:p-6">
             {/* Category chip selectors */}
             <div className="space-y-3">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 {t('square.compose.category')}
               </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto pr-1 sm:max-h-none">
                 {taxonomy?.categories.map(c => (
                   <button
                     key={c.name}
@@ -334,7 +334,7 @@ export default function ComposePage() {
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder={t('square.compose.titlePlaceholder')}
-                className="w-full px-0 py-2 text-xl font-bold border-0 border-b-2 border-gray-100 dark:border-gray-800 bg-transparent text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
+                className="w-full border-0 border-b-2 border-gray-100 bg-transparent px-0 py-2 text-lg font-bold text-gray-900 placeholder-gray-300 transition-colors focus:border-blue-400 focus:outline-none dark:border-gray-800 dark:text-white dark:placeholder-gray-600 dark:focus:border-blue-500 sm:text-xl"
               />
             </div>
 

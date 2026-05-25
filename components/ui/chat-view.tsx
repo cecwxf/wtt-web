@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, Video, X } from 'lucide-react'
+import { Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -17,6 +17,7 @@ import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
 import { isDesktop, saveToLocal } from '@/lib/desktop'
 import { buildFileContext } from '@/lib/file-context'
+import { AgentTerminalPane } from '@/components/ui/agent-terminal-modal'
 
 export interface ChatMessage {
   message_id: string
@@ -259,6 +260,7 @@ const DEFAULT_EFFORT_BY_TASK: Record<string, 'off' | 'low' | 'medium' | 'high'> 
 export interface MentionableAgent {
   agent_id: string
   display_name: string
+  roleLabel?: string
 }
 
 type ActionQuickButton = {
@@ -380,7 +382,7 @@ type ParsedTask = {
   assetPath?: string
 }
 
-type ChatPanelTab = 'chat' | 'files'
+type ChatPanelTab = 'chat' | 'files' | 'workspace'
 
 type ConversationFile = {
   key: string
@@ -817,6 +819,14 @@ function senderLabelText(label?: string, senderId?: string): string {
   return text
 }
 
+function appendRoleLabel(label: string, roleLabel?: string): string {
+  const base = String(label || '').trim()
+  const role = String(roleLabel || '').trim()
+  if (!base || !role) return base
+  if (base.includes(`(${role})`) || base.includes(`（${role}）`)) return base
+  return `${base}(${role})`
+}
+
 function avatarTone(seed: string, kind: 'agent' | 'human') {
   let hash = 0
   for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0
@@ -855,12 +865,9 @@ export function ChatView({
   autoFocusNonce,
   currentAgentRuntime,
   currentAgentIsCloud = false,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   workspaceAgentName,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   workspaceWorkdir,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  agentRoleLabelMap,
+  agentRoleLabelMap = {},
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -1043,9 +1050,16 @@ export function ChatView({
     if (!mentionQuery) return topicMembers
     const q = mentionQuery.toLowerCase()
     return topicMembers.filter(m =>
-      m.display_name.toLowerCase().includes(q) || m.agent_id.toLowerCase().includes(q)
+      m.display_name.toLowerCase().includes(q) ||
+      m.agent_id.toLowerCase().includes(q) ||
+      String(m.roleLabel || '').toLowerCase().includes(q)
     )
   }, [topicMembers, mentionQuery])
+
+  const roleLabelForAgent = useCallback((agentId?: string) => {
+    if (!agentId) return ''
+    return agentRoleLabelMap[agentId] || topicMembers.find((member) => member.agent_id === agentId)?.roleLabel || ''
+  }, [agentRoleLabelMap, topicMembers])
 
   const openAgentCard = useCallback(async (agentId: string, fallbackName?: string, fallbackAvatar?: string) => {
     if (!agentId) return
@@ -2034,12 +2048,12 @@ export function ChatView({
                 </span>
               )}
             </div>
-            <div className={`flex items-center ${compactUi ? 'mt-1 gap-4' : 'mt-2 gap-5'}`}>
-              <div className="flex items-center gap-5">
+            <div className={`flex items-center ${compactUi ? 'mt-0.5 gap-3' : 'mt-2 gap-5'}`}>
+              <div className={`flex items-center ${compactUi ? 'gap-3' : 'gap-5'}`}>
                 <button
                   type="button"
                   onClick={() => setActiveTab('chat')}
-                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
                     activeTab === 'chat'
                       ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
                       : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
@@ -2057,7 +2071,7 @@ export function ChatView({
                 <button
                   type="button"
                   onClick={() => setActiveTab('files')}
-                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
                     activeTab === 'files'
                       ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
                       : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
@@ -2071,6 +2085,21 @@ export function ChatView({
                   }`}>
                     {conversationFiles.length}
                   </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('workspace')}
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
+                    activeTab === 'workspace'
+                      ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
+                      : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <SquareTerminal className={compactUi ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+                  <span>Workspace</span>
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    currentAgentId ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-700'
+                  }`} />
                 </button>
               </div>
             </div>
@@ -2105,8 +2134,13 @@ export function ChatView({
         <div className="min-w-0 flex flex-1 flex-col">
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-[#fbfaf7] px-4 py-3 dark:bg-zinc-950 sm:px-6"
+        className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
+          activeTab === 'workspace'
+            ? 'overflow-hidden px-3 py-3 sm:px-4'
+            : 'overflow-y-auto px-4 py-3 sm:px-6'
+        }`}
       >
+        {activeTab !== 'workspace' && (
         <div className="mb-3 flex justify-center">
           <button
             onClick={handleLoadOlder}
@@ -2116,6 +2150,7 @@ export function ChatView({
             {loadingOlder ? t('chat.loadingHistory') : hasOlder ? t('chat.loadOlder') : t('chat.noOlder')}
           </button>
         </div>
+        )}
 
         {loading && messages.length === 0 && (
           <div className="flex items-center justify-center py-20">
@@ -2127,7 +2162,27 @@ export function ChatView({
           <div className="pt-20 text-center text-sm text-slate-400">{t('chat.noMessages')}</div>
         )}
 
-        {activeTab === 'files' ? (
+        {activeTab === 'workspace' ? (
+          <div className="flex h-full min-h-[360px] w-full flex-col">
+            {currentAgentId && accessToken ? (
+              <div className="relative min-h-[320px] flex-1 resize overflow-hidden rounded-2xl">
+                <AgentTerminalPane
+                  agentId={currentAgentId}
+                  agentName={workspaceAgentName || currentAgentId}
+                  workdir={workspaceWorkdir}
+                  token={accessToken}
+                  compact={compactUi}
+                  className="h-full w-full resize overflow-hidden"
+                />
+                <span className="pointer-events-none absolute bottom-1.5 right-1.5 h-5 w-5 rounded-sm border-b-2 border-r-2 border-cyan-300/70 opacity-70" />
+              </div>
+            ) : (
+              <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[#ded8ce] bg-white/45 text-sm text-[#8a8378] dark:border-zinc-800 dark:bg-zinc-900/45 dark:text-zinc-500">
+                当前没有可连接的 Agent workspace。
+              </div>
+            )}
+          </div>
+        ) : activeTab === 'files' ? (
           <div className="mx-auto w-full max-w-3xl">
             <div className="mb-3 rounded-xl border border-[#eee9df] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
               <p className="text-sm font-semibold text-[#283038] dark:text-zinc-100">Files</p>
@@ -2174,7 +2229,10 @@ export function ChatView({
             <div className="overflow-hidden rounded-xl border border-[#eee9df] bg-white/55 dark:border-zinc-900 dark:bg-zinc-950">
               {group.messages.map((message) => {
                 const isMine = message.sender_type === 'human'
-                const label = senderLabelText(message.sender_display_name, message.sender_id)
+                const baseLabel = senderLabelText(message.sender_display_name, message.sender_id)
+                const label = message.sender_type === 'agent'
+                  ? appendRoleLabel(baseLabel, roleLabelForAgent(message.sender_id))
+                  : baseLabel
 
                 // Broadcast card view — render as content card instead of chat bubble
                 if (isBroadcastTopic) {
@@ -2889,7 +2947,7 @@ export function ChatView({
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
                     {m.display_name.charAt(0).toUpperCase()}
                   </span>
-                  <span className="font-medium">{m.display_name}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{appendRoleLabel(m.display_name, m.roleLabel)}</span>
                   <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500 font-mono truncate max-w-[120px]">{m.agent_id.slice(0, 8)}…</span>
                 </button>
               ))}
@@ -3034,7 +3092,7 @@ export function ChatView({
         )}
         </div>
         </div>
-        {sidePreviewFile && (
+        {activeTab !== 'workspace' && sidePreviewFile && (
           <DocumentSidePreview file={sidePreviewFile} onClose={closeFilePreview} />
         )}
       </div>
