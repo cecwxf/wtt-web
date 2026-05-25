@@ -109,6 +109,16 @@ function runtimeModelPref(runtime?: CurrentAgentRuntimeInfo): Partial<ModelPref>
   }
 }
 
+function normalizeAgentAdapter(runtime?: CurrentAgentRuntimeInfo): 'claude-code' | 'codex' | 'generic' {
+  const raw = String(runtime?.adapter || '').trim().toLowerCase()
+  if (raw === 'codex' || raw.includes('codex')) return 'codex'
+  if (raw === 'claude-code' || raw === 'claude' || raw.includes('claude')) return 'claude-code'
+  const model = normalizeRuntimeModelId(runtime?.current_model || runtime?.model_id || runtime?.model).toLowerCase()
+  if (model.startsWith('openai-codex/') || model.startsWith('openai/') || model.includes('gpt')) return 'codex'
+  if (model.startsWith('anthropic/') || model.includes('claude') || model.includes('deepseek')) return 'claude-code'
+  return 'generic'
+}
+
 type ModelPref = { model: string; effort: 'off' | 'low' | 'medium' | 'high' }
 
 const MODEL_PREF_STORAGE_PREFIX = 'wtt:model-pref:v2:'
@@ -138,82 +148,58 @@ function writeStoredModelPref(key: string, pref: ModelPref): void {
 }
 
 type SlashCommandMode = 'local' | 'passthrough'
+type SlashCommandFamily = 'wtt' | 'codex' | 'claude-code' | 'generic'
 
 type SlashCommandDef = {
   cmd: string
   desc: string
   icon: string
   mode?: SlashCommandMode
+  family?: SlashCommandFamily
 }
 
 const LOCAL_SLASH_COMMANDS: SlashCommandDef[] = [
-  { cmd: '/new task', desc: 'Create a general task', icon: '📋', mode: 'local' },
-  { cmd: '/new code task', desc: 'Create a code task', icon: '💻', mode: 'local' },
-  { cmd: '/new research task', desc: 'Create a research task', icon: '🔬', mode: 'local' },
-  { cmd: '/new session', desc: 'Start a new chat session', icon: '💬', mode: 'local' },
-  { cmd: '/new topic', desc: 'Create a new topic', icon: '📢', mode: 'local' },
-  { cmd: '/run', desc: 'Run the current task', icon: '▶️', mode: 'local' },
-  { cmd: '/workers', desc: 'List workers for agent', icon: '👷', mode: 'local' },
+  { cmd: '/new task', desc: 'WTT · Create a general task', icon: '📋', mode: 'local', family: 'wtt' },
+  { cmd: '/new code task', desc: 'WTT · Create a code task', icon: '💻', mode: 'local', family: 'wtt' },
+  { cmd: '/new research task', desc: 'WTT · Create a research task', icon: '🔬', mode: 'local', family: 'wtt' },
+  { cmd: '/new session', desc: 'WTT · Start a new chat session', icon: '💬', mode: 'local', family: 'wtt' },
+  { cmd: '/new topic', desc: 'WTT · Create a new topic', icon: '📢', mode: 'local', family: 'wtt' },
+  { cmd: '/run', desc: 'WTT · Run the current task', icon: '▶️', mode: 'local', family: 'wtt' },
+  { cmd: '/workers', desc: 'WTT · List workers for agent', icon: '👷', mode: 'local', family: 'wtt' },
 ]
 
-// Full OpenClaw built-ins (aligned with /commands docs). Shown in autocomplete,
-// executed by pass-through unless handled locally above.
-const OPENCLAW_PASSTHROUGH_COMMANDS: SlashCommandDef[] = [
-  { cmd: '/help', desc: 'OpenClaw help', icon: '❓', mode: 'passthrough' },
-  { cmd: '/commands', desc: 'List all commands', icon: '📚', mode: 'passthrough' },
-  { cmd: '/status', desc: 'Session/runtime status', icon: '📊', mode: 'passthrough' },
-  { cmd: '/skill', desc: 'Run a skill by name', icon: '🧩', mode: 'passthrough' },
-  { cmd: '/allowlist', desc: 'Manage command allowlist', icon: '🛡️', mode: 'passthrough' },
-  { cmd: '/approve', desc: 'Resolve exec approval', icon: '✅', mode: 'passthrough' },
-  { cmd: '/context', desc: 'Show context summary/detail', icon: '🧾', mode: 'passthrough' },
-  { cmd: '/export-session', desc: 'Export session HTML', icon: '📤', mode: 'passthrough' },
-  { cmd: '/export', desc: 'Alias of /export-session', icon: '📤', mode: 'passthrough' },
-  { cmd: '/whoami', desc: 'Show sender id', icon: '🪪', mode: 'passthrough' },
-  { cmd: '/id', desc: 'Alias of /whoami', icon: '🪪', mode: 'passthrough' },
-  { cmd: '/session idle', desc: 'Set session idle max', icon: '⏲️', mode: 'passthrough' },
-  { cmd: '/session max-age', desc: 'Set session max age', icon: '🕒', mode: 'passthrough' },
-  { cmd: '/subagents', desc: 'Control subagents', icon: '🛰️', mode: 'passthrough' },
-  { cmd: '/acp', desc: 'ACP runtime control', icon: '🛠️', mode: 'passthrough' },
-  { cmd: '/agents', desc: 'List thread-bound agents', icon: '👥', mode: 'passthrough' },
-  { cmd: '/focus', desc: 'Focus thread binding', icon: '🎯', mode: 'passthrough' },
-  { cmd: '/unfocus', desc: 'Clear thread binding', icon: '🧭', mode: 'passthrough' },
-  { cmd: '/kill', desc: 'Abort subagent(s)', icon: '🛑', mode: 'passthrough' },
-  { cmd: '/steer', desc: 'Steer a subagent', icon: '🕹️', mode: 'passthrough' },
-  { cmd: '/tell', desc: 'Alias of /steer', icon: '🕹️', mode: 'passthrough' },
-  { cmd: '/config', desc: 'Config show/get/set/unset', icon: '⚙️', mode: 'passthrough' },
-  { cmd: '/debug', desc: 'Runtime debug overrides', icon: '🐞', mode: 'passthrough' },
-  { cmd: '/usage', desc: 'Usage footer/cost', icon: '💳', mode: 'passthrough' },
-  { cmd: '/tts', desc: 'Text-to-speech controls', icon: '🔊', mode: 'passthrough' },
-  { cmd: '/stop', desc: 'Stop active run', icon: '⛔', mode: 'passthrough' },
-  { cmd: '/restart', desc: 'Restart runtime', icon: '♻️', mode: 'passthrough' },
-  { cmd: '/dock-telegram', desc: 'Dock replies to Telegram', icon: '📨', mode: 'passthrough' },
-  { cmd: '/dock-discord', desc: 'Dock replies to Discord', icon: '💬', mode: 'passthrough' },
-  { cmd: '/dock-slack', desc: 'Dock replies to Slack', icon: '🧵', mode: 'passthrough' },
-  { cmd: '/activation', desc: 'Group activation mode', icon: '📣', mode: 'passthrough' },
-  { cmd: '/send', desc: 'Send mode on/off/inherit', icon: '✉️', mode: 'passthrough' },
-  { cmd: '/reset', desc: 'Reset/new session', icon: '🆕', mode: 'passthrough' },
-  { cmd: '/new', desc: 'New session (optional model)', icon: '🆕', mode: 'passthrough' },
-  { cmd: '/think', desc: 'Thinking effort', icon: '🧠', mode: 'passthrough' },
-  { cmd: '/thinking', desc: 'Alias of /think', icon: '🧠', mode: 'passthrough' },
-  { cmd: '/t', desc: 'Alias of /think', icon: '🧠', mode: 'passthrough' },
-  { cmd: '/verbose', desc: 'Verbose visibility', icon: '🔍', mode: 'passthrough' },
-  { cmd: '/v', desc: 'Alias of /verbose', icon: '🔍', mode: 'passthrough' },
-  { cmd: '/reasoning', desc: 'Reasoning visibility', icon: '🧠', mode: 'passthrough' },
-  { cmd: '/reason', desc: 'Alias of /reasoning', icon: '🧠', mode: 'passthrough' },
-  { cmd: '/elevated', desc: 'Elevated mode', icon: '🔐', mode: 'passthrough' },
-  { cmd: '/elev', desc: 'Alias of /elevated', icon: '🔐', mode: 'passthrough' },
-  { cmd: '/exec', desc: 'Exec security/host mode', icon: '🧪', mode: 'passthrough' },
-  { cmd: '/model', desc: 'Show/switch model', icon: '🤖', mode: 'passthrough' },
-  { cmd: '/models', desc: 'Alias of /model', icon: '🤖', mode: 'passthrough' },
-  { cmd: '/queue', desc: 'Queue mode/options', icon: '🧵', mode: 'passthrough' },
-  { cmd: '/bash', desc: 'Host shell command', icon: '💻', mode: 'passthrough' },
-  { cmd: '/compact', desc: 'Compact session context', icon: '🗜️', mode: 'passthrough' },
-  { cmd: '/wtt', desc: 'WTT command namespace', icon: '💬', mode: 'passthrough' },
+const GENERIC_AGENT_COMMANDS: SlashCommandDef[] = [
+  { cmd: '/help', desc: 'Agent · Help', icon: '❓', mode: 'passthrough', family: 'generic' },
+  { cmd: '/status', desc: 'Agent · Runtime status', icon: '📊', mode: 'passthrough', family: 'generic' },
+  { cmd: '/model', desc: 'Agent · Show/switch model', icon: '🤖', mode: 'passthrough', family: 'generic' },
+  { cmd: '/compact', desc: 'Agent · Compact context', icon: '🗜️', mode: 'passthrough', family: 'generic' },
 ]
 
-const SLASH_COMMANDS: SlashCommandDef[] = [
-  ...LOCAL_SLASH_COMMANDS,
-  ...OPENCLAW_PASSTHROUGH_COMMANDS,
+const CODEX_SLASH_COMMANDS: SlashCommandDef[] = [
+  { cmd: '/help', desc: 'Codex · Help', icon: '❓', mode: 'passthrough', family: 'codex' },
+  { cmd: '/status', desc: 'Codex · Session/runtime status', icon: '📊', mode: 'passthrough', family: 'codex' },
+  { cmd: '/model', desc: 'Codex · Show/switch model', icon: '🤖', mode: 'passthrough', family: 'codex' },
+  { cmd: '/approvals', desc: 'Codex · Approval policy', icon: '✅', mode: 'passthrough', family: 'codex' },
+  { cmd: '/review', desc: 'Codex · Review current changes', icon: '🔎', mode: 'passthrough', family: 'codex' },
+  { cmd: '/init', desc: 'Codex · Inspect project and create guidance', icon: '🧭', mode: 'passthrough', family: 'codex' },
+  { cmd: '/compact', desc: 'Codex · Compact conversation context', icon: '🗜️', mode: 'passthrough', family: 'codex' },
+  { cmd: '/clear', desc: 'Codex · Clear current conversation view', icon: '🧹', mode: 'passthrough', family: 'codex' },
+  { cmd: '/diff', desc: 'Codex · Show pending diff', icon: '📄', mode: 'passthrough', family: 'codex' },
+]
+
+const CLAUDE_CODE_SLASH_COMMANDS: SlashCommandDef[] = [
+  { cmd: '/help', desc: 'Claude Code · Help', icon: '❓', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/status', desc: 'Claude Code · Session status', icon: '📊', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/model', desc: 'Claude Code · Show/switch model', icon: '🤖', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/config', desc: 'Claude Code · Configure runtime', icon: '⚙️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/permissions', desc: 'Claude Code · Manage permissions', icon: '🛡️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/init', desc: 'Claude Code · Create/update CLAUDE.md', icon: '🧭', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/review', desc: 'Claude Code · Review code changes', icon: '🔎', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/security-review', desc: 'Claude Code · Security review', icon: '🔐', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/compact', desc: 'Claude Code · Compact context', icon: '🗜️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/clear', desc: 'Claude Code · Clear conversation view', icon: '🧹', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/memory', desc: 'Claude Code · Manage memory files', icon: '🧠', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/cost', desc: 'Claude Code · Show usage/cost', icon: '💳', mode: 'passthrough', family: 'claude-code' },
 ]
 
 const LOCAL_NOARG_SLASH_COMMANDS = new Set([
@@ -226,13 +212,6 @@ const LOCAL_NOARG_SLASH_COMMANDS = new Set([
   '/rerun',
   '/workers',
 ])
-
-const QUICK_SLASH_ACTIONS = [
-  { label: 'Status', cmd: '/status' },
-  { label: 'Commands', cmd: '/commands' },
-  { label: 'Model', cmd: '/model' },
-  { label: 'WTT Help', cmd: '/wtt help' },
-] as const
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
@@ -1055,6 +1034,10 @@ export function ChatView({
 
   const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
   const currentRuntimePref = runtimeModelPref(currentAgentRuntime)
+  const activeAgentAdapter = normalizeAgentAdapter(currentAgentRuntime)
+  const activeAgentLabel = activeAgentAdapter === 'codex' ? 'Codex'
+    : activeAgentAdapter === 'claude-code' ? 'Claude Code'
+      : 'Agent'
 
   const filteredMembers = useMemo(() => {
     if (!mentionQuery) return topicMembers
@@ -1368,16 +1351,50 @@ export function ChatView({
   }, [])
 
   const availableSlashCommands = useMemo(() => {
-    if (!isNonTaskDiscussTopic) return SLASH_COMMANDS
+    const runtimeCommands = activeAgentAdapter === 'codex'
+      ? CODEX_SLASH_COMMANDS
+      : activeAgentAdapter === 'claude-code'
+        ? CLAUDE_CODE_SLASH_COMMANDS
+        : GENERIC_AGENT_COMMANDS
+    const deduped = new Map<string, SlashCommandDef>()
+    for (const command of [...LOCAL_SLASH_COMMANDS, ...runtimeCommands]) {
+      deduped.set(command.cmd, command)
+    }
+    const commands = Array.from(deduped.values())
+    if (!isNonTaskDiscussTopic) return commands
     // In non-task discuss topics, model switching must be blocked to avoid all
     // agents reacting to the same slash command.
-    return SLASH_COMMANDS.filter((c) => !isModelCommand(c.cmd))
-  }, [isNonTaskDiscussTopic, isModelCommand])
+    return commands.filter((c) => !isModelCommand(c.cmd))
+  }, [activeAgentAdapter, isNonTaskDiscussTopic, isModelCommand])
 
   // Slash command filtering
   const filteredCommands = slashFilter
     ? availableSlashCommands.filter(c => c.cmd.startsWith(slashFilter.toLowerCase()))
     : availableSlashCommands
+
+  const quickSlashActions = useMemo(() => {
+    const commands = activeAgentAdapter === 'codex'
+      ? [
+          { label: 'Codex Status', cmd: '/status' },
+          { label: 'Approvals', cmd: '/approvals' },
+          { label: 'Review', cmd: '/review' },
+          { label: 'Compact', cmd: '/compact' },
+        ]
+      : activeAgentAdapter === 'claude-code'
+        ? [
+            { label: 'Claude Status', cmd: '/status' },
+            { label: 'Init', cmd: '/init' },
+            { label: 'Review', cmd: '/review' },
+            { label: 'Compact', cmd: '/compact' },
+          ]
+        : [
+            { label: 'Status', cmd: '/status' },
+            { label: 'Help', cmd: '/help' },
+            { label: 'Model', cmd: '/model' },
+            { label: 'Compact', cmd: '/compact' },
+          ]
+    return commands.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd)))
+  }, [activeAgentAdapter, isModelCommand, isNonTaskDiscussTopic])
 
   const handleDraftChange = useCallback((value: string) => {
     setDraft(value)
@@ -2717,7 +2734,7 @@ export function ChatView({
           </div>
         )}
 
-        {/* Compact control bar: model / think / quick slash */}
+        {/* Compact control bar: model / think / adapter-aware slash */}
         <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
           <div className="relative shrink-0" ref={modelMenuRef}>
               <button
@@ -2788,7 +2805,10 @@ export function ChatView({
             )}
           </div>
 
-          {QUICK_SLASH_ACTIONS.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd))).map((action) => (
+          <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+            {activeAgentLabel}
+          </span>
+          {quickSlashActions.map((action) => (
             <button
               key={action.cmd}
               type="button"
@@ -2828,6 +2848,19 @@ export function ChatView({
                 >
                   <span>{c.icon}</span>
                   <span className="font-medium">{c.cmd}</span>
+                  {c.family && (
+                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${
+                      c.family === 'wtt'
+                        ? 'bg-orange-50 text-orange-600 dark:bg-orange-950/30 dark:text-orange-300'
+                        : c.family === 'codex'
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-300'
+                          : c.family === 'claude-code'
+                            ? 'bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-300'
+                            : 'bg-slate-100 text-slate-500 dark:bg-zinc-700 dark:text-zinc-300'
+                    }`}>
+                      {c.family === 'wtt' ? 'WTT' : c.family === 'claude-code' ? 'Claude' : c.family === 'codex' ? 'Codex' : 'Agent'}
+                    </span>
+                  )}
                   <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500">{c.desc}</span>
                 </button>
               ))}
