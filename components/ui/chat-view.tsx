@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video } from 'lucide-react'
+import { Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -17,7 +17,6 @@ import { CircularProgress } from '@/components/ui/circular-progress'
 import { useI18n } from '@/lib/i18n-provider'
 import { isDesktop, saveToLocal } from '@/lib/desktop'
 import { buildFileContext } from '@/lib/file-context'
-import { AgentTerminalPane } from '@/components/ui/agent-terminal-modal'
 
 export interface ChatMessage {
   message_id: string
@@ -281,7 +280,6 @@ const DEFAULT_EFFORT_BY_TASK: Record<string, 'off' | 'low' | 'medium' | 'high'> 
 export interface MentionableAgent {
   agent_id: string
   display_name: string
-  roleLabel?: string
 }
 
 type ActionQuickButton = {
@@ -352,10 +350,10 @@ interface ChatViewProps {
   onRequestPrivateDiscuss?: (targetAgentId: string, targetDisplayName?: string) => Promise<void> | void
   compactUi?: boolean
   autoFocusNonce?: number
-  workspaceAgentName?: string
-  workspaceWorkdir?: string
   currentAgentRuntime?: CurrentAgentRuntimeInfo
   currentAgentIsCloud?: boolean
+  workspaceAgentName?: string
+  workspaceWorkdir?: string
   agentRoleLabelMap?: Record<string, string>
 }
 
@@ -403,7 +401,7 @@ type ParsedTask = {
   assetPath?: string
 }
 
-type ChatPanelTab = 'chat' | 'files' | 'workspace'
+type ChatPanelTab = 'chat' | 'files'
 
 type ConversationFile = {
   key: string
@@ -592,7 +590,7 @@ function fileMeta(nameOrUrl: string) {
   return { ext, label, icon, tone }
 }
 
-function FileAttachmentCard({ url, filename, isMine }: { url: string; filename?: string; isMine: boolean }) {
+function FileAttachmentCard({ url, filename, isMine, onPreview }: { url: string; filename?: string; isMine: boolean; onPreview?: () => void }) {
   const fallback = url.split('/').pop() || 'file'
   const fname = filename || fallback
   const meta = fileMeta(fname || url)
@@ -606,6 +604,15 @@ function FileAttachmentCard({ url, filename, isMine }: { url: string; filename?:
         <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>{meta.label} · 可打开 / 下载</span>
       </span>
       <span className="flex shrink-0 items-center gap-2">
+        {onPreview && (
+          <button
+            type="button"
+            onClick={onPreview}
+            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-amber-300 hover:text-amber-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+          >
+            预览
+          </button>
+        )}
         <a href={url} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
           打开
         </a>
@@ -676,6 +683,137 @@ function extractConversationFiles(message: ChatMessage): ConversationFile[] {
   return files
 }
 
+function previewExt(file: Pick<ConversationFile, 'url' | 'filename'>): string {
+  return fileMeta(file.filename || file.url).ext
+}
+
+function canPreviewConversationFile(file: Pick<ConversationFile, 'url' | 'filename'>): boolean {
+  return ['pdf', 'md', 'markdown', 'txt', 'html', 'htm', 'doc', 'docx', 'ppt', 'pptx'].includes(previewExt(file))
+}
+
+function absoluteBrowserUrl(url: string): string {
+  if (typeof window === 'undefined') return url
+  try {
+    return new URL(url, window.location.origin).toString()
+  } catch {
+    return url
+  }
+}
+
+function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClose: () => void }) {
+  const [text, setText] = useState('')
+  const [loadingText, setLoadingText] = useState(false)
+  const [textError, setTextError] = useState('')
+  const ext = previewExt(file)
+  const fname = file.filename || filenameFromFileUrl(file.url)
+  const label = senderLabelText(file.senderName, file.senderId) || file.senderId
+  const isTextLike = ['md', 'markdown', 'txt'].includes(ext)
+  const absoluteUrl = absoluteBrowserUrl(file.url)
+  const canUseOfficeViewer = /^https?:\/\//i.test(absoluteUrl) && ['doc', 'docx', 'ppt', 'pptx'].includes(ext)
+
+  useEffect(() => {
+    let cancelled = false
+    setText('')
+    setTextError('')
+    if (!isTextLike) return
+    setLoadingText(true)
+    fetch(file.url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`${res.status}`)
+        return res.text()
+      })
+      .then((value) => {
+        if (!cancelled) setText(value)
+      })
+      .catch((err) => {
+        if (!cancelled) setTextError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingText(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [file.url, isTextLike])
+
+  return (
+    <aside className="hidden w-[380px] shrink-0 border-l border-[#e5e0d8] bg-white/90 dark:border-zinc-800 dark:bg-zinc-950/95 lg:flex xl:w-[440px]">
+      <div className="flex min-h-0 w-full flex-col">
+        <div className="border-b border-[#eee9df] px-4 py-3 dark:border-zinc-800">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#9b9488] dark:text-zinc-500">Preview</p>
+              <h3 className="mt-1 truncate text-sm font-semibold text-[#1f2328] dark:text-zinc-100">{fname}</h3>
+              <p className="mt-0.5 truncate text-[11px] text-[#8a8378] dark:text-zinc-500">
+                {fileMeta(fname).label} · {label} · {formatTime(file.timestamp)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-[#8a8378] transition hover:bg-[#f4f1eb] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              aria-label="Close preview"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <a href={file.url} target="_blank" rel="noreferrer" className="rounded-md border border-[#ded8ce] bg-[#fbfaf7] px-2.5 py-1 text-xs font-semibold text-[#615d55] transition hover:border-indigo-300 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+              打开
+            </a>
+            <a href={file.url} download={fname} className="rounded-md bg-[#1f2328] px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-[#343a40] dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-300">
+              下载
+            </a>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden p-3">
+          {ext === 'pdf' && (
+            <iframe src={file.url} title={fname} className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900" />
+          )}
+          {['html', 'htm'].includes(ext) && (
+            <iframe src={file.url} title={fname} sandbox="allow-same-origin allow-scripts allow-forms allow-popups" className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900" />
+          )}
+          {isTextLike && (
+            <div className="h-full overflow-auto rounded-xl border border-[#eee9df] bg-[#fbfaf7] p-4 text-sm leading-6 text-[#283038] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+              {loadingText ? (
+                <p className="text-xs text-[#8a8378] dark:text-zinc-500">加载预览中...</p>
+              ) : textError ? (
+                <p className="text-xs text-red-500">预览加载失败：{textError}</p>
+              ) : ext === 'md' || ext === 'markdown' ? (
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+                </div>
+              ) : (
+                <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">{text}</pre>
+              )}
+            </div>
+          )}
+          {['doc', 'docx', 'ppt', 'pptx'].includes(ext) && (
+            canUseOfficeViewer ? (
+              <iframe
+                src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteUrl)}`}
+                title={fname}
+                className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-[#ded8ce] bg-[#fbfaf7] p-6 text-center dark:border-zinc-800 dark:bg-zinc-900">
+                <div>
+                  <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl text-xs font-black ${fileMeta(fname).tone}`}>
+                    {fileMeta(fname).icon}
+                  </div>
+                  <p className="text-sm font-semibold text-[#283038] dark:text-zinc-100">{fname}</p>
+                  <p className="mt-1 text-xs text-[#8a8378] dark:text-zinc-500">Office 文件需要公网可访问 URL 才能内嵌预览，可先打开或下载查看。</p>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </aside>
+  )
+}
+
 function avatarInitial(name?: string, fallback = '?'): string {
   const n = String(name || '').trim()
   if (!n) return fallback
@@ -698,14 +836,6 @@ function senderLabelText(label?: string, senderId?: string): string {
     text = humanName ? `${humanName}(@${agentName})` : `@${agentName}`
   }
   return text
-}
-
-function appendRoleLabel(label: string, roleLabel?: string): string {
-  const base = String(label || '').trim()
-  const role = String(roleLabel || '').trim()
-  if (!base || !role) return base
-  if (base.includes(`【${role}】`)) return base
-  return `${base}【${role}】`
 }
 
 function avatarTone(seed: string, kind: 'agent' | 'human') {
@@ -744,16 +874,21 @@ export function ChatView({
   onRequestPrivateDiscuss,
   compactUi = false,
   autoFocusNonce,
-  workspaceAgentName,
-  workspaceWorkdir,
   currentAgentRuntime,
   currentAgentIsCloud = false,
-  agentRoleLabelMap = {},
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  workspaceAgentName,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  workspaceWorkdir,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  agentRoleLabelMap,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
+  const [manualPreviewFile, setManualPreviewFile] = useState<ConversationFile | null>(null)
+  const [closedPreviewKey, setClosedPreviewKey] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string; imageUrl?: string; replyToId?: string } | null>(null)
@@ -795,7 +930,28 @@ export function ChatView({
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionStartPos, setMentionStartPos] = useState(-1)
+  // Daily cross-user @mention quota (read-only display).
+  const [mentionQuota, setMentionQuota] = useState<{ limit: number; used: number; remaining: number } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (!accessToken) { setMentionQuota(null); return }
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch(`${CLIENT_WTT_API_BASE}/me/mention-quota`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setMentionQuota({ limit: data.limit, used: data.used, remaining: data.remaining })
+      } catch {}
+    }
+    load()
+    // refresh when the mention dropdown opens (so it reflects the latest count)
+    return () => { cancelled = true }
+  }, [accessToken, mentionOpen])
+
 
   const focusComposerInput = useCallback(() => {
     const input = textareaRef.current
@@ -904,16 +1060,9 @@ export function ChatView({
     if (!mentionQuery) return topicMembers
     const q = mentionQuery.toLowerCase()
     return topicMembers.filter(m =>
-      m.display_name.toLowerCase().includes(q) ||
-      m.agent_id.toLowerCase().includes(q) ||
-      String(m.roleLabel || '').toLowerCase().includes(q)
+      m.display_name.toLowerCase().includes(q) || m.agent_id.toLowerCase().includes(q)
     )
   }, [topicMembers, mentionQuery])
-
-  const roleLabelForAgent = useCallback((agentId?: string) => {
-    if (!agentId) return ''
-    return agentRoleLabelMap[agentId] || topicMembers.find((member) => member.agent_id === agentId)?.roleLabel || ''
-  }, [agentRoleLabelMap, topicMembers])
 
   const openAgentCard = useCallback(async (agentId: string, fallbackName?: string, fallbackAvatar?: string) => {
     if (!agentId) return
@@ -1807,6 +1956,34 @@ export function ChatView({
     return out
   }, [visibleMessages])
 
+  const latestAgentPreviewFile = useMemo(() => {
+    for (let i = conversationFiles.length - 1; i >= 0; i--) {
+      const file = conversationFiles[i]
+      if (file.senderType === 'agent' && canPreviewConversationFile(file)) return file
+    }
+    return null
+  }, [conversationFiles])
+
+  const sidePreviewFile = manualPreviewFile || (
+    latestAgentPreviewFile && latestAgentPreviewFile.key !== closedPreviewKey ? latestAgentPreviewFile : null
+  )
+
+  useEffect(() => {
+    if (!manualPreviewFile) return
+    if (!conversationFiles.some((file) => file.key === manualPreviewFile.key)) {
+      setManualPreviewFile(null)
+    }
+  }, [conversationFiles, manualPreviewFile])
+
+  const openFilePreview = useCallback((file: ConversationFile) => {
+    setManualPreviewFile(file)
+    setClosedPreviewKey(null)
+  }, [])
+
+  const closeFilePreview = useCallback(() => {
+    if (sidePreviewFile) setClosedPreviewKey(sidePreviewFile.key)
+    setManualPreviewFile(null)
+  }, [sidePreviewFile])
 
   return (
     <div
@@ -1823,7 +2000,7 @@ export function ChatView({
           </div>
         </div>
       )}
-      <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 py-1' : 'px-4 pt-2'}`}>
+      <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pt-1' : 'px-4 pt-2'}`}>
         <div className={`flex items-start justify-between ${compactUi ? 'gap-1.5' : 'gap-3'}`}>
           <div className="min-w-0 flex-1">
             <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
@@ -1840,12 +2017,12 @@ export function ChatView({
                 </span>
               )}
             </div>
-            <div className={`flex items-center ${compactUi ? 'mt-0.5 gap-3' : 'mt-2 gap-5'}`}>
-              <div className={`flex items-center ${compactUi ? 'gap-3' : 'gap-5'}`}>
+            <div className={`flex items-center ${compactUi ? 'mt-1 gap-4' : 'mt-2 gap-5'}`}>
+              <div className="flex items-center gap-5">
                 <button
                   type="button"
                   onClick={() => setActiveTab('chat')}
-                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
                     activeTab === 'chat'
                       ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
                       : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
@@ -1863,7 +2040,7 @@ export function ChatView({
                 <button
                   type="button"
                   onClick={() => setActiveTab('files')}
-                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
+                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
                     activeTab === 'files'
                       ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
                       : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
@@ -1877,21 +2054,6 @@ export function ChatView({
                   }`}>
                     {conversationFiles.length}
                   </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('workspace')}
-                  className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
-                    activeTab === 'workspace'
-                      ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
-                      : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
-                  }`}
-                >
-                  <SquareTerminal className={compactUi ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-                  <span>Workspace</span>
-                  <span className={`h-1.5 w-1.5 rounded-full ${
-                    currentAgentId ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-700'
-                  }`} />
                 </button>
               </div>
             </div>
@@ -1922,15 +2084,12 @@ export function ChatView({
         </div>
       </div>
 
+      <div className="min-h-0 flex flex-1 overflow-hidden bg-[#fbfaf7] dark:bg-zinc-950">
+        <div className="min-w-0 flex flex-1 flex-col">
       <div
         ref={scrollRef}
-        className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
-          activeTab === 'workspace'
-            ? 'overflow-hidden px-3 py-3 sm:px-4'
-            : 'overflow-y-auto px-4 py-3 sm:px-6'
-        }`}
+        className="min-h-0 flex-1 overflow-y-auto bg-[#fbfaf7] px-4 py-3 dark:bg-zinc-950 sm:px-6"
       >
-        {activeTab !== 'workspace' && (
         <div className="mb-3 flex justify-center">
           <button
             onClick={handleLoadOlder}
@@ -1940,7 +2099,6 @@ export function ChatView({
             {loadingOlder ? t('chat.loadingHistory') : hasOlder ? t('chat.loadOlder') : t('chat.noOlder')}
           </button>
         </div>
-        )}
 
         {loading && messages.length === 0 && (
           <div className="flex items-center justify-center py-20">
@@ -1952,27 +2110,7 @@ export function ChatView({
           <div className="pt-20 text-center text-sm text-slate-400">{t('chat.noMessages')}</div>
         )}
 
-        {activeTab === 'workspace' ? (
-          <div className="flex h-full min-h-[360px] w-full flex-col">
-            {currentAgentId && accessToken ? (
-              <div className="relative min-h-[320px] flex-1 resize overflow-hidden rounded-2xl">
-                <AgentTerminalPane
-                  agentId={currentAgentId}
-                  agentName={workspaceAgentName || currentAgentId}
-                  workdir={workspaceWorkdir}
-                  token={accessToken}
-                  compact={compactUi}
-                  className="h-full w-full resize overflow-hidden"
-                />
-                <span className="pointer-events-none absolute bottom-1.5 right-1.5 h-5 w-5 rounded-sm border-b-2 border-r-2 border-cyan-300/70 opacity-70" />
-              </div>
-            ) : (
-              <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[#ded8ce] bg-white/45 text-sm text-[#8a8378] dark:border-zinc-800 dark:bg-zinc-900/45 dark:text-zinc-500">
-                当前没有可连接的 Agent workspace。
-              </div>
-            )}
-          </div>
-        ) : activeTab === 'files' ? (
+        {activeTab === 'files' ? (
           <div className="mx-auto w-full max-w-3xl">
             <div className="mb-3 rounded-xl border border-[#eee9df] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
               <p className="text-sm font-semibold text-[#283038] dark:text-zinc-100">Files</p>
@@ -1991,7 +2129,12 @@ export function ChatView({
                   const label = senderLabelText(file.senderName, file.senderId)
                   return (
                     <div key={file.key} className="rounded-xl border border-[#eee9df] bg-white/75 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/75">
-                      <FileAttachmentCard url={file.url} filename={file.filename} isMine={file.senderType === 'human'} />
+                      <FileAttachmentCard
+                        url={file.url}
+                        filename={file.filename}
+                        isMine={file.senderType === 'human'}
+                        onPreview={canPreviewConversationFile(file) ? () => openFilePreview(file) : undefined}
+                      />
                       <div className="mt-2 flex flex-wrap items-center gap-2 px-1 text-[10px] text-[#9b9488] dark:text-zinc-500">
                         <span className="truncate">{label || file.senderId}</span>
                         <span>·</span>
@@ -2014,10 +2157,7 @@ export function ChatView({
             <div className="overflow-hidden rounded-xl border border-[#eee9df] bg-white/55 dark:border-zinc-900 dark:bg-zinc-950">
               {group.messages.map((message) => {
                 const isMine = message.sender_type === 'human'
-                const baseLabel = senderLabelText(message.sender_display_name, message.sender_id)
-                const label = message.sender_type === 'agent'
-                  ? appendRoleLabel(baseLabel, roleLabelForAgent(message.sender_id))
-                  : baseLabel
+                const label = senderLabelText(message.sender_display_name, message.sender_id)
 
                 // Broadcast card view — render as content card instead of chat bubble
                 if (isBroadcastTopic) {
@@ -2267,16 +2407,27 @@ export function ChatView({
                               if (block.kind === 'file') {
                                 const url = block.url
                                 const fname = block.filename || url.split('/').pop() || 'file'
+                                const previewFile: ConversationFile = {
+                                  key: `${message.message_id}:${url}`,
+                                  url,
+                                  filename: fname,
+                                  messageId: message.message_id,
+                                  senderId: message.sender_id,
+                                  senderName: message.sender_display_name,
+                                  senderType: message.sender_type,
+                                  timestamp: message.timestamp,
+                                }
+                                const previewAction = canPreviewConversationFile(previewFile) ? () => openFilePreview(previewFile) : undefined
                                 const isPdf = /\.pdf(\?|$)/i.test(url)
                                 if (isPdf) {
                                   return (
                                     <div key={bi} className="space-y-1">
                                       <iframe src={url} title={fname} className="h-80 w-full rounded-lg border border-slate-200" />
-                                      <FileAttachmentCard url={url} filename={fname} isMine={isMine} />
+                                      <FileAttachmentCard url={url} filename={fname} isMine={isMine} onPreview={previewAction} />
                                     </div>
                                   )
                                 }
-                                return <FileAttachmentCard key={bi} url={url} filename={fname} isMine={isMine} />
+                                return <FileAttachmentCard key={bi} url={url} filename={fname} isMine={isMine} onPreview={previewAction} />
                               }
                               if (block.kind === 'markdown') {
                                 return (
@@ -2552,7 +2703,7 @@ export function ChatView({
         </div>
       )}
 
-      <div className={`border-t border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pb-2 pt-1' : 'px-4 pb-4 pt-2 sm:px-6'}`}>
+      <div className="border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
         {/* Slash command result display */}
         {slashResult && (
           <div className="mb-2 max-h-20 overflow-auto rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 px-2 py-1 text-[11px] text-slate-700 dark:text-zinc-300 whitespace-pre-wrap font-mono">
@@ -2567,15 +2718,15 @@ export function ChatView({
         )}
 
         {/* Compact control bar: model / think / quick slash */}
-        <div className={`flex items-center flex-wrap sm:flex-nowrap ${compactUi ? 'mb-1 gap-1 text-[9px]' : 'mb-2 gap-1.5 text-[10px]'}`}>
+        <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
           <div className="relative shrink-0" ref={modelMenuRef}>
               <button
                 onClick={() => setModelMenuOpen(!modelMenuOpen)}
-                className={`flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 ${compactUi ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
+                className="flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 title="Select model"
               >
                 <span>🤖</span>
-                <span className={`truncate font-medium ${compactUi ? 'max-w-[92px]' : 'max-w-[140px]'}`}>{availableModels.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+                <span className="font-medium max-w-[140px] truncate">{availableModels.find(m => m.id === selectedModel)?.label || selectedModel}</span>
                 <span className="text-slate-400">▾</span>
               </button>
               {modelMenuOpen && (
@@ -2606,7 +2757,7 @@ export function ChatView({
           <div className="relative shrink-0" ref={thinkMenuRef}>
             <button
               onClick={() => setThinkMenuOpen((v) => !v)}
-              className={`flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 ${compactUi ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
+              className="flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               title="Select think mode"
             >
               <span>🧠</span>
@@ -2637,7 +2788,7 @@ export function ChatView({
             )}
           </div>
 
-          {!compactUi && QUICK_SLASH_ACTIONS.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd))).map((action) => (
+          {QUICK_SLASH_ACTIONS.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd))).map((action) => (
             <button
               key={action.cmd}
               type="button"
@@ -2686,6 +2837,11 @@ export function ChatView({
           {/* @mention autocomplete */}
           {mentionOpen && filteredMembers.length > 0 && (
             <div className="absolute bottom-full left-0 mb-1 w-full max-w-sm z-40 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg max-h-48 overflow-y-auto">
+              {mentionQuota && (
+                <div className={`px-3 py-1 text-[10px] border-b border-slate-100 dark:border-zinc-700 ${mentionQuota.remaining <= 2 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-zinc-500'}`}>
+                  跨用户 @ 今日剩余 {mentionQuota.remaining}/{mentionQuota.limit} 次
+                </div>
+              )}
               {filteredMembers.map((m, i) => (
                 <button
                   key={m.agent_id}
@@ -2700,7 +2856,7 @@ export function ChatView({
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
                     {m.display_name.charAt(0).toUpperCase()}
                   </span>
-                  <span className="min-w-0 flex-1 truncate font-medium">{appendRoleLabel(m.display_name, m.roleLabel)}</span>
+                  <span className="font-medium">{m.display_name}</span>
                   <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500 font-mono truncate max-w-[120px]">{m.agent_id.slice(0, 8)}…</span>
                 </button>
               ))}
@@ -2842,6 +2998,11 @@ export function ChatView({
             {uploading && <CircularProgress value={uploadProgress} size={20} strokeWidth={2.5} />}
             <span>{uploading ? `${t('chat.uploading')}${uploadProgress !== undefined ? ` ${uploadProgress}%` : '…'}` : t('chat.loadingHistory')}</span>
           </div>
+        )}
+        </div>
+        </div>
+        {sidePreviewFile && (
+          <DocumentSidePreview file={sidePreviewFile} onClose={closeFilePreview} />
         )}
       </div>
     </div>

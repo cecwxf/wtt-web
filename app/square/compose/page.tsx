@@ -28,7 +28,31 @@ interface EditorHelpers {
   getHTML: () => string
   isEmpty: () => boolean
   clear: () => void
+  setHTML: (html: string) => void
 }
+
+const FEEDBACK_CATEGORY = '问题反馈'
+const FEEDBACK_TEMPLATE_HTML = `
+<h2>问题现象</h2>
+<p>请描述你看到的问题、报错文案、异常行为，以及问题出现的时间。</p>
+<h2>使用场景</h2>
+<ul>
+  <li><p>入口页面：</p></li>
+  <li><p>使用的 Agent：</p></li>
+  <li><p>Agent 类型：Cloud Agent / 本地 Agent</p></li>
+  <li><p>模型：</p></li>
+</ul>
+<h2>复现步骤</h2>
+<ol>
+  <li><p></p></li>
+  <li><p></p></li>
+  <li><p></p></li>
+</ol>
+<h2>期望结果</h2>
+<p></p>
+<h2>补充信息</h2>
+<p>可以附截图、日志、相关链接或生成文件。</p>
+`.trim()
 
 export default function ComposePage() {
   const { data: session, status } = useSession()
@@ -52,6 +76,16 @@ export default function ComposePage() {
   const handleEditorReady = useCallback((helpers: EditorHelpers) => {
     editorRef.current = helpers
   }, [])
+
+  const applyFeedbackTemplate = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const hasContent = !editor.isEmpty()
+    if (hasContent && !window.confirm('当前正文已有内容，是否用问题反馈模板覆盖？')) return
+    editor.setHTML(FEEDBACK_TEMPLATE_HTML)
+    setBodyHtml(FEEDBACK_TEMPLATE_HTML)
+    if (!title.trim()) setTitle('【问题反馈】')
+  }, [title])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = (session as any)?.accessToken as string | undefined
@@ -186,22 +220,22 @@ export default function ComposePage() {
   const circumference = 2 * Math.PI * 28
 
   return (
-    <div className="min-h-[100dvh] bg-[#f6f7f9] dark:bg-[#0e0e10]">
+    <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0e0e10]">
       {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#1a1a1d]/80 border-b border-gray-200/60 dark:border-gray-800/60">
-        <div className="mx-auto flex h-[52px] max-w-3xl items-center justify-between gap-3 px-3 sm:h-14 sm:px-4">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <Link href="/square" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
               <ArrowLeft className="w-4 h-4" />
-              <span className="hidden text-sm sm:inline">{t('square.title')}</span>
+              <span className="text-sm">{t('square.title')}</span>
             </Link>
             <span className="text-gray-300 dark:text-gray-600">/</span>
-            <h1 className="truncate text-sm font-semibold text-gray-900 dark:text-white">{t('square.compose.title')}</h1>
+            <h1 className="text-sm font-semibold text-gray-900 dark:text-white">{t('square.compose.title')}</h1>
           </div>
           <button
             onClick={handlePublish}
             disabled={publishing || !title.trim()}
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 disabled:shadow-none dark:disabled:from-gray-600 dark:disabled:to-gray-700 sm:px-4"
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 rounded-full transition-all shadow-sm disabled:shadow-none"
           >
             {publishing ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -213,15 +247,15 @@ export default function ComposePage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-3xl px-3 py-4 sm:px-4 sm:py-6">
+      <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="bg-white dark:bg-[#1a1a1d] rounded-2xl border border-gray-200/80 dark:border-gray-800/80 overflow-hidden">
-          <div className="space-y-4 p-4 sm:space-y-5 sm:p-6">
+          <div className="p-5 sm:p-6 space-y-5">
             {/* Category chip selectors */}
             <div className="space-y-3">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 {t('square.compose.category')}
               </label>
-              <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto pr-1 sm:max-h-none">
+              <div className="flex flex-wrap gap-2">
                 {taxonomy?.categories.map(c => (
                   <button
                     key={c.name}
@@ -253,6 +287,25 @@ export default function ComposePage() {
                   ))}
                 </div>
               )}
+              {category === FEEDBACK_CATEGORY && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/20">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-medium text-amber-800 dark:text-amber-200">问题反馈模板</p>
+                      <p className="mt-0.5 text-xs text-amber-700/75 dark:text-amber-300/75">
+                        模板会补充问题现象、使用 Agent、复现步骤、期望结果等字段，方便定位。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyFeedbackTemplate}
+                      className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-500"
+                    >
+                      填入模板
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
@@ -281,7 +334,7 @@ export default function ComposePage() {
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder={t('square.compose.titlePlaceholder')}
-                className="w-full border-0 border-b-2 border-gray-100 bg-transparent px-0 py-2 text-lg font-bold text-gray-900 placeholder-gray-300 transition-colors focus:border-blue-400 focus:outline-none dark:border-gray-800 dark:text-white dark:placeholder-gray-600 dark:focus:border-blue-500 sm:text-xl"
+                className="w-full px-0 py-2 text-xl font-bold border-0 border-b-2 border-gray-100 dark:border-gray-800 bg-transparent text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
               />
             </div>
 
