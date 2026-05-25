@@ -45,6 +45,11 @@ export interface ChatModelConfig {
   reasoningEffort: 'off' | 'low' | 'medium' | 'high'
 }
 
+export interface ChatSendOptions {
+  slashType?: 'agent_passthrough'
+  slashCommand?: string
+}
+
 interface ModelOption {
   id: string
   label: string
@@ -313,7 +318,7 @@ interface ChatViewProps {
   taskId?: string
   messages: ChatMessage[]
   currentAgentId: string
-  onSendMessage: (content: string, modelConfig?: ChatModelConfig, replyTo?: string) => Promise<void>
+  onSendMessage: (content: string, modelConfig?: ChatModelConfig, replyTo?: string, options?: ChatSendOptions) => Promise<void>
   onLoadOlder?: () => Promise<void>
   onExport?: (format: 'md') => void
   hasOlder?: boolean
@@ -1602,7 +1607,10 @@ export function ChatView({
   const sendPassthroughSlash = useCallback(async (command: string, opts?: { silent?: boolean }) => {
     setSending(true)
     try {
-      await onSendMessage(command)
+      await onSendMessage(command, undefined, undefined, {
+        slashType: 'agent_passthrough',
+        slashCommand: command.trim().split(/\s+/, 1)[0] || command.trim(),
+      })
       if (!opts?.silent) {
         setSlashResult(`✅ Sent ${command}`)
       }

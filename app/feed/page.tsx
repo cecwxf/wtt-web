@@ -9,7 +9,7 @@ import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
-import { ChatView, ChatMessage, ChatModelConfig } from '@/components/ui/chat-view'
+import { ChatView, ChatMessage, ChatModelConfig, ChatSendOptions } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { AgentRuntimeInfo, TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
@@ -1640,7 +1640,7 @@ function FeedPageInner() {
     }
   }, [selectedAgentId, session, mutateRecentTasks, mutateTopics, router, t, setSelectedTopicId])
 
-  const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig, replyTo?: string) => {
+  const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig, replyTo?: string, options?: ChatSendOptions) => {
     if (!selectedTopicId || !selectedAgentId) return
 
     const topicIdForSend = selectedTopicId
@@ -1675,6 +1675,10 @@ function FeedPageInner() {
         model: modelConfig.model,
         reasoning_effort: modelConfig.reasoningEffort,
       }
+    }
+    if (options?.slashType) {
+      metadata.slash_type = options.slashType
+      metadata.slash_command = options.slashCommand || content.trim().split(/\s+/, 1)[0] || content.trim()
     }
 
     if (isSlashCommand && isNonTaskDiscuss) {
