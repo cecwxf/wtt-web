@@ -566,7 +566,7 @@ function fileMeta(nameOrUrl: string, fallbackUrl?: string) {
     : ['mp4', 'webm', 'mov', 'm4v'].includes(ext) ? 'VID'
     : ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext) ? 'AUD'
     : ['zip', 'tar', 'gz'].includes(ext) ? 'ZIP'
-    : ext === 'md' ? 'MD'
+    : ['md', 'markdown', 'mdx'].includes(ext) ? 'MD'
     : ext === 'html' || ext === 'htm' ? 'HTML'
     : label
   const tone = ext === 'pdf' ? 'bg-red-500/15 text-red-600'
@@ -614,7 +614,7 @@ function FileAttachmentCard({ url, filename, isMine, onPreview }: { url: string;
   )
 }
 
-const CHAT_FILE_EXT_RE = /\.(pdf|docx?|pptx?|xlsx?|csv|zip|tar|gz|md|txt|html?|mp4|webm|mov|m4v|mp3|wav|ogg|m4a|aac|flac)(?:[?#].*)?$/i
+const CHAT_FILE_EXT_RE = /\.(pdf|docx?|pptx?|xlsx?|csv|zip|tar|gz|md|markdown|mdx|txt|html?|mp4|webm|mov|m4v|mp3|wav|ogg|m4a|aac|flac)(?:[?#].*)?$/i
 
 function filenameFromFileUrl(url: string): string {
   const clean = decodeURIComponent(String(url || 'file').split('?')[0].split('#')[0])
@@ -677,8 +677,21 @@ function previewExt(file: Pick<ConversationFile, 'url' | 'filename'>): string {
   return fileMeta(file.filename || '', file.url).ext
 }
 
+const TEXT_PREVIEW_EXT_LIST = ['md', 'markdown', 'mdx', 'txt', 'csv']
+const HTML_PREVIEW_EXT_LIST = ['html', 'htm']
+const OFFICE_PREVIEW_EXT_LIST = ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx']
+const TEXT_PREVIEW_EXTS = new Set(TEXT_PREVIEW_EXT_LIST)
+const HTML_PREVIEW_EXTS = new Set(HTML_PREVIEW_EXT_LIST)
+const OFFICE_PREVIEW_EXTS = new Set(OFFICE_PREVIEW_EXT_LIST)
+const PREVIEWABLE_FILE_EXTS = new Set([
+  'pdf',
+  ...TEXT_PREVIEW_EXT_LIST,
+  ...HTML_PREVIEW_EXT_LIST,
+  ...OFFICE_PREVIEW_EXT_LIST,
+])
+
 function canPreviewConversationFile(file: Pick<ConversationFile, 'url' | 'filename'>): boolean {
-  return ['pdf', 'md', 'markdown', 'txt', 'html', 'htm', 'doc', 'docx', 'ppt', 'pptx'].includes(previewExt(file))
+  return PREVIEWABLE_FILE_EXTS.has(previewExt(file))
 }
 
 function absoluteBrowserUrl(url: string): string {
@@ -697,9 +710,9 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
   const ext = previewExt(file)
   const fname = file.filename || filenameFromFileUrl(file.url)
   const label = senderLabelText(file.senderName, file.senderId) || file.senderId
-  const isTextLike = ['md', 'markdown', 'txt'].includes(ext)
+  const isTextLike = TEXT_PREVIEW_EXTS.has(ext)
   const absoluteUrl = absoluteBrowserUrl(file.url)
-  const canUseOfficeViewer = /^https?:\/\//i.test(absoluteUrl) && ['doc', 'docx', 'ppt', 'pptx'].includes(ext)
+  const canUseOfficeViewer = /^https?:\/\//i.test(absoluteUrl) && OFFICE_PREVIEW_EXTS.has(ext)
 
   useEffect(() => {
     let cancelled = false
@@ -761,7 +774,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
           {ext === 'pdf' && (
             <iframe src={file.url} title={fname} className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900" />
           )}
-          {['html', 'htm'].includes(ext) && (
+          {HTML_PREVIEW_EXTS.has(ext) && (
             <iframe src={file.url} title={fname} sandbox="allow-same-origin allow-scripts allow-forms allow-popups" className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900" />
           )}
           {isTextLike && (
@@ -770,7 +783,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
                 <p className="text-xs text-[#8a8378] dark:text-zinc-500">加载预览中...</p>
               ) : textError ? (
                 <p className="text-xs text-red-500">预览加载失败：{textError}</p>
-              ) : ext === 'md' || ext === 'markdown' ? (
+              ) : ['md', 'markdown', 'mdx'].includes(ext) ? (
                 <div className="prose prose-sm max-w-none dark:prose-invert">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
                 </div>
@@ -779,7 +792,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
               )}
             </div>
           )}
-          {['doc', 'docx', 'ppt', 'pptx'].includes(ext) && (
+          {OFFICE_PREVIEW_EXTS.has(ext) && (
             canUseOfficeViewer ? (
               <iframe
                 src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteUrl)}`}
