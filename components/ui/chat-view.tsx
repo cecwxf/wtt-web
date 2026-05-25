@@ -723,7 +723,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
   }, [file.url, isTextLike])
 
   return (
-    <aside className="hidden w-[380px] shrink-0 border-l border-[#e5e0d8] bg-white/90 dark:border-zinc-800 dark:bg-zinc-950/95 lg:flex xl:w-[440px]">
+    <aside className="hidden w-[340px] shrink-0 border-l border-[#e5e0d8] bg-white/90 dark:border-zinc-800 dark:bg-zinc-950/95 md:flex lg:w-[380px] xl:w-[440px]">
       <div className="flex min-h-0 w-full flex-col">
         <div className="border-b border-[#eee9df] px-4 py-3 dark:border-zinc-800">
           <div className="flex items-start justify-between gap-3">
@@ -880,6 +880,7 @@ export function ChatView({
   const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
   const [manualPreviewFile, setManualPreviewFile] = useState<ConversationFile | null>(null)
   const [closedPreviewKey, setClosedPreviewKey] = useState<string | null>(null)
+  const lastAutoPreviewKeyRef = useRef<string | null>(null)
   const [sending, setSending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string; imageUrl?: string; replyToId?: string } | null>(null)
@@ -1984,7 +1985,7 @@ export function ChatView({
   const conversationFiles = useMemo(() => {
     const seen = new Set<string>()
     const out: ConversationFile[] = []
-    for (const message of visibleMessages) {
+    for (const message of messages) {
       for (const file of extractConversationFiles(message)) {
         const key = file.url
         if (seen.has(key)) continue
@@ -1993,7 +1994,7 @@ export function ChatView({
       }
     }
     return out
-  }, [visibleMessages])
+  }, [messages])
 
   const latestAgentPreviewFile = useMemo(() => {
     for (let i = conversationFiles.length - 1; i >= 0; i--) {
@@ -2006,6 +2007,15 @@ export function ChatView({
   const sidePreviewFile = manualPreviewFile || (
     latestAgentPreviewFile && latestAgentPreviewFile.key !== closedPreviewKey ? latestAgentPreviewFile : null
   )
+
+  useEffect(() => {
+    if (!latestAgentPreviewFile) return
+    if (lastAutoPreviewKeyRef.current === latestAgentPreviewFile.key) return
+    lastAutoPreviewKeyRef.current = latestAgentPreviewFile.key
+    setManualPreviewFile(null)
+    setClosedPreviewKey(null)
+    if (activeTab === 'workspace') setActiveTab('chat')
+  }, [activeTab, latestAgentPreviewFile])
 
   useEffect(() => {
     if (!manualPreviewFile) return
