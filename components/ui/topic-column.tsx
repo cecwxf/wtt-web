@@ -260,7 +260,8 @@ function formatRuntime(runtime?: AgentRuntimeInfo) {
   const workdir = runtime.workdir || runtime.git?.repo || runtime.workdir_name || ''
   const branch = runtime.git?.branch || ''
   const adapter = runtime.adapter || runtime.kind || ''
-  return [workdir, branch, adapter].filter(Boolean).join(' · ')
+  const model = runtime.current_model || runtime.model_id || runtime.model || ''
+  return [adapter, model, workdir, branch].filter(Boolean).join(' · ')
 }
 
 function normalizeNewAgentAdapter(runtime?: AgentRuntimeInfo) {

@@ -62,9 +62,11 @@ interface CurrentAgentRuntimeInfo {
   model_id?: string
   current_model?: string
   reasoning_effort?: string
+  last_heartbeat_secs_ago?: number
 }
 
 const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
+const DEFAULT_CODEX_MODEL_ID = 'openai-codex/gpt-5.5'
 
 const FALLBACK_MODELS: ModelOption[] = [
   { id: DEFAULT_MODEL_ID, label: 'DeepSeek V4 Pro', supports_reasoning: true },
@@ -105,6 +107,7 @@ function normalizeRuntimeModelId(raw: unknown): string {
 
 function runtimeModelPref(runtime?: CurrentAgentRuntimeInfo): Partial<ModelPref> | null {
   if (!runtime) return null
+  if (typeof runtime.last_heartbeat_secs_ago === 'number' && runtime.last_heartbeat_secs_ago > 90) return null
   const model = normalizeRuntimeModelId(runtime.current_model || runtime.model_id || runtime.model)
   const effortRaw = String(runtime.reasoning_effort || '').trim().toLowerCase()
   const effort = ['off', 'low', 'medium', 'high'].includes(effortRaw) ? effortRaw as ModelPref['effort'] : undefined
@@ -886,7 +889,6 @@ export function ChatView({
   compactUi = false,
   autoFocusNonce,
   currentAgentRuntime,
-  currentAgentIsCloud = false,
   workspaceAgentName,
   workspaceWorkdir,
   agentRoleLabelMap = {},
@@ -1223,7 +1225,7 @@ export function ChatView({
   }, [])
 
   // Keep model/think preference per topic/task/p2p session.
-  // Priority: worker current config (if available) > local persisted per-topic pref > task defaults.
+  // Priority: live connector heartbeat > local persisted per-topic pref > task defaults.
   useEffect(() => {
     const inMemory = modelPrefsByTopicRef.current[topicPreferenceKey]
     const persisted = readStoredModelPref(topicPreferenceKey)
@@ -1232,20 +1234,18 @@ export function ChatView({
       ? currentRuntimePref.model
       : ''
 
-    const preferredEffort = (!currentAgentIsCloud && currentRuntimePref?.effort)
+    const preferredEffort = currentRuntimePref?.effort
       || saved?.effort
       || ((taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off')
 
-    let preferredModel = (!currentAgentIsCloud && runtimeModel) || saved?.model
+    let preferredModel = runtimeModel || saved?.model
     if (!preferredModel || !availableModels.some((m) => m.id === preferredModel)) {
-      preferredModel = currentAgentIsCloud
-        ? DEFAULT_MODEL_ID
-        : (availableModels[0]?.id || FALLBACK_MODELS[0].id)
+      preferredModel = activeAgentAdapter === 'codex' ? DEFAULT_CODEX_MODEL_ID : DEFAULT_MODEL_ID
     }
 
     setSelectedModel(preferredModel)
     setReasoningEffort(preferredEffort)
-  }, [topicPreferenceKey, taskType, availableModels, currentRuntimePref?.model, currentRuntimePref?.effort, currentAgentIsCloud])
+  }, [topicPreferenceKey, taskType, availableModels, currentRuntimePref?.model, currentRuntimePref?.effort, activeAgentAdapter])
 
   useEffect(() => {
     const pref: ModelPref = {
