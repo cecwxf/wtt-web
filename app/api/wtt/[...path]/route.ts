@@ -43,6 +43,10 @@ function filterResponseHeaders(headers: Headers): Headers {
   return outgoing
 }
 
+function isWorkspacePath(path: string[]): boolean {
+  return path.length >= 4 && path[0] === 'agents' && path[2] === 'workspace'
+}
+
 function shouldRetry(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const code = (error as { code?: string }).code
@@ -189,7 +193,13 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   const hasBody = !['GET', 'HEAD'].includes(request.method.toUpperCase())
   const body = hasBody ? Buffer.from(await request.arrayBuffer()) : undefined
 
-  return requestUpstream(url, request.method, headers, body)
+  const response = await requestUpstream(url, request.method, headers, body)
+  if (isWorkspacePath(path)) {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+  }
+  return response
 }
 
 type Ctx = { params: { path: string[] } }

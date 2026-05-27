@@ -227,9 +227,15 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     try {
       const qs = new URLSearchParams()
       if (requestedRelPath) qs.set('path', requestedRelPath)
+      qs.set('_', `${Date.now()}-${loadSeq}`)
       const suffix = qs.toString() ? `?${qs.toString()}` : ''
       const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/list${suffix}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Cache-Control': 'no-store',
+          Pragma: 'no-cache',
+        },
       })
       const data = await res.json().catch(() => ({})) as Partial<WorkspaceListResponse> & { detail?: string }
       if (!res.ok) throw new Error(data.detail || `workspace list failed: ${res.status}`)
