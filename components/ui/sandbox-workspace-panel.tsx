@@ -393,9 +393,8 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   }
 
   const renderTree = (path: string, depth = 0): React.ReactNode => {
-    const rows = entriesByPath[path] || []
+    const rows = (entriesByPath[path] || []).filter((entry) => entry.type === 'directory')
     return rows.map((entry) => {
-      const isDirectory = entry.type === 'directory'
       const isExpanded = expanded.has(entry.path)
       const isSelected = selectedEntry?.path === entry.path || currentPath === entry.path
       return (
@@ -418,27 +417,23 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                 <span className="absolute top-1/2 h-px w-4 bg-[#d0c3ae] dark:bg-zinc-700" style={{ left: 10 + (depth - 1) * 24 }} />
               </>
             )}
-            {isDirectory ? (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  toggleDirectory(entry)
-                }}
-                className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
-              >
-                <ChevronRight className={`h-3 w-3 transition ${isExpanded ? 'rotate-90' : ''}`} />
-              </button>
-            ) : (
-              <span className="h-4 w-4" />
-            )}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                toggleDirectory(entry)
+              }}
+              className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
+            >
+              <ChevronRight className={`h-3 w-3 transition ${isExpanded ? 'rotate-90' : ''}`} />
+            </button>
             <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-              {isDirectory ? <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" />}
+              <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" />
               <span className="truncate">{entry.name}</span>
-              {isDirectory && <span className="ml-auto hidden text-[10px] text-[#a79c8b] group-hover:inline dark:text-zinc-500">open</span>}
+              <span className="ml-auto hidden text-[10px] text-[#a79c8b] group-hover:inline dark:text-zinc-500">open</span>
             </div>
           </div>
-          {isDirectory && isExpanded && (
+          {isExpanded && (
             <div>{renderTree(entry.path, depth + 1)}</div>
           )}
         </div>
@@ -512,7 +507,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-xl border border-[#eee9df] bg-white/70 dark:border-zinc-800 dark:bg-zinc-900/60 md:grid-cols-[320px_1fr]">
         <aside className="min-h-0 border-b border-[#eee9df] dark:border-zinc-800 md:border-b-0 md:border-r">
           <div className="border-b border-[#eee9df] px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#9b9488] dark:border-zinc-800 dark:text-zinc-500">
-            Sandbox Tree
+            Directories
           </div>
           <div className="h-full overflow-y-auto p-2">
             {rootEntry ? (
@@ -586,25 +581,41 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                 {currentEntries.map((entry) => (
                   <div
                     key={entry.path}
+                    onClick={() => {
+                      if (entry.type === 'directory') openDirectory(entry)
+                      else setSelectedEntry(entry)
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault()
                       setSelectedEntry(entry)
                       setContextMenu({ x: event.clientX, y: event.clientY, entry })
                     }}
-                    className="flex items-center gap-3 px-2 py-2 text-sm hover:bg-[#f8f4ed] dark:hover:bg-zinc-800/60"
+                    className="flex cursor-pointer items-center gap-3 px-2 py-2 text-sm hover:bg-[#f8f4ed] dark:hover:bg-zinc-800/60"
                   >
-                    <button
-                      type="button"
-                      onClick={() => selectEntry(entry)}
-                      className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left"
-                    >
+                    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left">
                       {entry.type === 'directory' ? <Folder className="h-4 w-4 shrink-0 text-amber-600" /> : <FileText className="h-4 w-4 shrink-0 text-slate-500 dark:text-zinc-400" />}
                       <span className="truncate font-semibold text-[#283038] dark:text-zinc-100">{entry.name}</span>
-                    </button>
+                    </div>
                     <span className="hidden w-20 text-right text-xs text-[#9b9488] dark:text-zinc-500 sm:inline">{entry.type === 'directory' ? '-' : formatBytes(entry.size)}</span>
+                    {entry.type === 'directory' && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openDirectory(entry)
+                        }}
+                        disabled={busy}
+                        className="rounded-lg border border-[#ded8ce] px-2 py-1 text-xs font-semibold text-[#6f665c] transition hover:bg-[#f4f1eb] disabled:opacity-30 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      >
+                        Open
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => handleDownload(entry)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleDownload(entry)
+                      }}
                       disabled={busy}
                       className="rounded-lg p-1.5 text-[#7b7368] transition hover:bg-[#f4f1eb] hover:text-[#1f2328] disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                       title={entry.type === 'directory' ? 'Download folder as tar.gz' : 'Download'}
