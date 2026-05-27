@@ -47,6 +47,15 @@ function parentPath(path: string): string {
   return idx > 0 ? path.slice(0, idx) : path
 }
 
+function upsertEntry(entries: WorkspaceEntry[], entry: WorkspaceEntry): WorkspaceEntry[] {
+  const next = entries.filter((item) => item.path !== entry.path)
+  next.push(entry)
+  return next.sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+}
+
 function downloadBlob(filename: string, contentBase64: string, contentType = 'application/octet-stream'): void {
   const binary = atob(contentBase64)
   const bytes = new Uint8Array(binary.length)
@@ -235,7 +244,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       const contentBase64 = await fileToBase64(file, (progress) => {
         setOperation({ kind: 'upload', label: file.name, progress })
       })
-      await postJsonWithUploadProgress<{ detail?: string }>(
+      const uploaded = await postJsonWithUploadProgress<{ path?: string; filename?: string; size?: number; detail?: string }>(
         `${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/upload`,
         accessToken,
         {
@@ -246,6 +255,20 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
         },
         (progress) => setOperation({ kind: 'upload', label: file.name, progress }),
       )
+      if (uploaded.path) {
+        const uploadedParent = parentPath(uploaded.path)
+        setEntriesByPath((prev) => ({
+          ...prev,
+          [uploadedParent]: upsertEntry(prev[uploadedParent] || [], {
+            name: uploaded.filename || file.name,
+            path: uploaded.path || `${uploadedParent}/${file.name}`,
+            type: 'file',
+            size: uploaded.size ?? file.size,
+            mtime: new Date().toISOString(),
+          }),
+        }))
+        setExpanded((prev) => new Set(prev).add(uploadedParent))
+      }
       await loadPath(targetPath)
       setOperation({ kind: 'upload', label: file.name, progress: 100 })
     } catch (exc) {
@@ -372,11 +395,14 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
               setSelectedEntry(entry)
               setContextMenu({ x: event.clientX, y: event.clientY, entry })
             }}
-            className={`flex cursor-default items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
+            className={`relative flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
               isSelected ? 'bg-[#ede6da] text-[#1f2328] dark:bg-zinc-800 dark:text-zinc-100' : 'text-[#665d52] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
             }`}
-            style={{ paddingLeft: 8 + depth * 14 }}
+            style={{ paddingLeft: 8 + depth * 10 }}
           >
+            {depth > 0 && (
+              <span className="absolute left-1 top-0 h-full border-l border-[#ded6c9] dark:border-zinc-700" />
+            )}
             {isDirectory ? (
               <button
                 type="button"
@@ -403,7 +429,11 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
               <span className="truncate">{entry.name}</span>
             </button>
           </div>
-          {isDirectory && isExpanded && renderTree(entry.path, depth + 1)}
+          {isDirectory && isExpanded && (
+            <div className="ml-4 border-l border-[#e6dece] pl-1 dark:border-zinc-800">
+              {renderTree(entry.path, depth + 1)}
+            </div>
+          )}
         </div>
       )
     })
@@ -517,7 +547,11 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                     <span className="truncate">{rootEntry.name}</span>
                   </button>
                 </div>
-                {expanded.has(basePath) && renderTree(basePath)}
+                {expanded.has(basePath) && (
+                  <div className="ml-4 border-l border-[#e6dece] pl-1 dark:border-zinc-800">
+                    {renderTree(basePath)}
+                  </div>
+                )}
               </>
             ) : (
               <div className="py-10 text-center text-xs text-[#8a8378] dark:text-zinc-500">Loading tree...</div>
