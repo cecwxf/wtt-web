@@ -242,7 +242,11 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       setBasePath(nextBase)
       basePathRef.current = nextBase
       setCurrentRelPath(nextRelPath)
-      setEntriesByPath((prev) => ({ ...prev, [requestedKey]: nextEntries, [nextKey]: nextEntries }))
+      setEntriesByPath((prev) => {
+        const next = { ...prev, [nextKey]: nextEntries }
+        if (requestedKey === nextKey) next[requestedKey] = nextEntries
+        return next
+      })
       setExpanded((prev) => new Set(prev).add(nextKey))
     } catch (exc) {
       if (loadSeq !== loadSeqRef.current) return
