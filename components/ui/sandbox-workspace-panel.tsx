@@ -71,6 +71,10 @@ function parentRelPath(relPath: string): string {
   return idx >= 0 ? normalized.slice(0, idx) : ''
 }
 
+function joinRelPath(parent: string, name: string): string {
+  return normalizeRelPath([parent, name].filter(Boolean).join('/'))
+}
+
 function absolutePathFor(basePath: string, relPath: string): string {
   const base = String(basePath || '').replace(/\/+$/g, '')
   const rel = normalizeRelPath(relPath)
@@ -84,6 +88,13 @@ function relPathFromAbsolute(basePath: string, absolutePath: string): string {
   if (!base || !raw || raw === base) return ''
   if (raw.startsWith(`${base}/`)) return normalizeRelPath(raw.slice(base.length + 1))
   return normalizeRelPath(raw.replace(/^\/+/g, ''))
+}
+
+function relPathFromEntry(basePath: string, parentRelPath: string, entry: WorkspaceEntry): string {
+  const parent = normalizeRelPath(parentRelPath)
+  const fromAbsolute = relPathFromAbsolute(basePath, entry.path)
+  if (fromAbsolute && fromAbsolute !== parent) return fromAbsolute
+  return joinRelPath(parent, entry.name)
 }
 
 function upsertEntry(entries: WorkspaceEntry[], entry: WorkspaceEntry): WorkspaceEntry[] {
@@ -451,13 +462,17 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     }
   }
 
-  const renderTree = (relPath: string, depth = 0): React.ReactNode => {
-    const rows = (entriesByPath[pathKey(relPath)] || []).filter((entry) => entry.type === 'directory')
+  const renderTree = (relPath: string, depth = 0, seen = new Set<string>()): React.ReactNode => {
+    const currentTreeKey = pathKey(relPath)
+    if (seen.has(currentTreeKey) || depth > 40) return null
+    const nextSeen = new Set(seen).add(currentTreeKey)
+    const rows = (entriesByPath[currentTreeKey] || []).filter((entry) => entry.type === 'directory')
     return rows.map((entry) => {
-      const entryRelPath = relPathFromAbsolute(basePath, entry.path)
+      const entryRelPath = relPathFromEntry(basePath, relPath, entry)
       const entryKey = pathKey(entryRelPath)
       const isExpanded = expanded.has(entryKey)
       const isSelected = selectedEntry?.path === entry.path || currentRelPath === entryRelPath
+      const canRenderChildren = isExpanded && entryKey !== currentTreeKey && !nextSeen.has(entryKey)
       return (
         <div key={entry.path} className="relative">
           <div
@@ -494,8 +509,8 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
               <span className="ml-auto hidden text-[10px] text-[#a79c8b] group-hover:inline dark:text-zinc-500">open</span>
             </div>
           </div>
-          {isExpanded && (
-            <div>{renderTree(entryRelPath, depth + 1)}</div>
+          {canRenderChildren && (
+            <div>{renderTree(entryRelPath, depth + 1, nextSeen)}</div>
           )}
         </div>
       )
