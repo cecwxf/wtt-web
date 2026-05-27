@@ -53,6 +53,8 @@ interface Agent {
   invite_status?: 'active' | 'none'
   binding_method?: string
   bound_via?: string
+  is_cloud_sandbox?: boolean
+  cloud_host_agent_id?: string
   role_template_id?: string
   role_template?: Record<string, unknown>
 }
@@ -1313,7 +1315,8 @@ function FeedPageInner() {
   const selectedAgentRuntime = selectedAgentId ? agentRuntimeMap?.[selectedAgentId] : undefined
   const selectedAgentIsCloud = Boolean(
     selectedAgent && (selectedAgent.binding_method || selectedAgent.bound_via || '') === 'cloud_trial',
-  ) || String(selectedAgentRuntime?.provider || '').includes('cloudflare_sandbox')
+  ) || Boolean(selectedAgent?.is_cloud_sandbox || selectedAgent?.cloud_host_agent_id)
+    || String(selectedAgentRuntime?.provider || '').includes('cloudflare_sandbox')
     || Boolean(selectedAgentRuntime?.host_agent_id)
   const onlineAgentIds = useMemo(() => {
     const arr = (agentStatsRaw as Record<string, unknown>)?.online_agents as string[] | undefined

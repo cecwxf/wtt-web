@@ -8,6 +8,8 @@ export interface RawAgentLike {
   invite_status?: string
   binding_method?: string
   bound_via?: string
+  is_cloud_sandbox?: boolean
+  cloud_host_agent_id?: string
   role_template_id?: string
   role_template?: Record<string, unknown>
 }
@@ -22,6 +24,8 @@ export interface NormalizedAgent {
   invite_status?: 'active' | 'none'
   binding_method?: string
   bound_via?: string
+  is_cloud_sandbox?: boolean
+  cloud_host_agent_id?: string
   role_template_id?: string
   role_template?: Record<string, unknown>
 }
@@ -46,6 +50,8 @@ export function normalizeAndFilterAgents(raw: unknown): NormalizedAgent[] {
       invite_status: data.invite_status === 'active' ? 'active' : 'none',
       binding_method: typeof data.binding_method === 'string' ? data.binding_method : undefined,
       bound_via: typeof data.bound_via === 'string' ? data.bound_via : undefined,
+      is_cloud_sandbox: Boolean(data.is_cloud_sandbox),
+      cloud_host_agent_id: typeof data.cloud_host_agent_id === 'string' ? data.cloud_host_agent_id : undefined,
       role_template_id: typeof data.role_template_id === 'string' ? data.role_template_id : undefined,
       role_template: data.role_template && typeof data.role_template === 'object'
         ? data.role_template as Record<string, unknown>
