@@ -175,6 +175,7 @@ const LOCAL_SLASH_COMMANDS: SlashCommandDef[] = [
   { cmd: '/new topic', desc: 'WTT · Create a new topic', icon: '📢', mode: 'local', family: 'wtt' },
   { cmd: '/run', desc: 'WTT · Run the current task', icon: '▶️', mode: 'local', family: 'wtt' },
   { cmd: '/workers', desc: 'WTT · List workers for agent', icon: '👷', mode: 'local', family: 'wtt' },
+  { cmd: '/upgrade', desc: 'WTT · Upgrade agent toolchain', icon: '⬆️', mode: 'passthrough', family: 'wtt' },
 ]
 
 const GENERIC_AGENT_COMMANDS: SlashCommandDef[] = [
