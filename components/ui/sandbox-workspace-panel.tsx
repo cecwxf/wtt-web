@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, FileText, Folder, RefreshCw, Upload } from 'lucide-react'
+import { ChevronRight, Download, FileText, Folder, Loader2, RefreshCw, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
@@ -17,6 +17,12 @@ type WorkspaceListResponse = {
   path: string
   entries: WorkspaceEntry[]
 }
+
+type OperationState = {
+  kind: 'upload' | 'download'
+  label: string
+  progress?: number
+} | null
 
 interface SandboxWorkspacePanelProps {
   agentId: string
@@ -36,6 +42,11 @@ function formatBytes(value?: number): string {
   return `${size.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`
 }
 
+function parentPath(path: string): string {
+  const idx = path.lastIndexOf('/')
+  return idx > 0 ? path.slice(0, idx) : path
+}
+
 function downloadBlob(filename: string, contentBase64: string): void {
   const binary = atob(contentBase64)
   const bytes = new Uint8Array(binary.length)
@@ -50,12 +61,18 @@ function downloadBlob(filename: string, contentBase64: string): void {
   URL.revokeObjectURL(url)
 }
 
-function fileToBase64(file: File): Promise<string> {
+function fileToBase64(file: File, onProgress: (progress: number) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(new Error('failed to read file'))
+    reader.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress(Math.min(35, Math.round((event.loaded / event.total) * 35)))
+      }
+    }
     reader.onload = () => {
       const value = String(reader.result || '')
+      onProgress(40)
       resolve(value.includes(',') ? value.split(',').pop() || '' : value)
     }
     reader.readAsDataURL(file)
@@ -65,31 +82,43 @@ function fileToBase64(file: File): Promise<string> {
 export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspacePanelProps) {
   const [basePath, setBasePath] = useState('')
   const [currentPath, setCurrentPath] = useState('')
-  const [entries, setEntries] = useState<WorkspaceEntry[]>([])
-  const [loading, setLoading] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [entriesByPath, setEntriesByPath] = useState<Record<string, WorkspaceEntry[]>>({})
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [loadingPath, setLoadingPath] = useState<string | null>(null)
+  const [selectedEntry, setSelectedEntry] = useState<WorkspaceEntry | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: WorkspaceEntry } | null>(null)
+  const [uploadTargetPath, setUploadTargetPath] = useState('')
+  const [operation, setOperation] = useState<OperationState>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const currentEntries = currentPath ? (entriesByPath[currentPath] || []) : []
+  const busy = Boolean(operation)
+
   const loadPath = useCallback(async (path = '') => {
     if (!agentId || !accessToken) return
-    setLoading(true)
+    setLoadingPath(path || 'root')
     setError(null)
     try {
       const qs = new URLSearchParams()
       if (path) qs.set('path', path)
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/list?${qs.toString()}`, {
+      const suffix = qs.toString() ? `?${qs.toString()}` : ''
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/list${suffix}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       })
       const data = await res.json().catch(() => ({})) as Partial<WorkspaceListResponse> & { detail?: string }
       if (!res.ok) throw new Error(data.detail || `workspace list failed: ${res.status}`)
-      setBasePath(String(data.base_path || ''))
-      setCurrentPath(String(data.path || ''))
-      setEntries(Array.isArray(data.entries) ? data.entries : [])
+      const nextBase = String(data.base_path || '')
+      const nextPath = String(data.path || nextBase || path)
+      const nextEntries = Array.isArray(data.entries) ? data.entries : []
+      setBasePath(nextBase)
+      setCurrentPath(nextPath)
+      setEntriesByPath((prev) => ({ ...prev, [nextPath]: nextEntries }))
+      setExpanded((prev) => new Set(prev).add(nextPath))
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc))
     } finally {
-      setLoading(false)
+      setLoadingPath(null)
     }
   }, [accessToken, agentId])
 
@@ -97,20 +126,51 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     loadPath('')
   }, [loadPath])
 
-  const goUp = () => {
-    if (!basePath || !currentPath || currentPath === basePath) return
-    const parent = currentPath.split('/').slice(0, -1).join('/') || basePath
-    loadPath(parent.startsWith(basePath) ? parent : basePath)
+  useEffect(() => {
+    const close = () => setContextMenu(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [])
+
+  const toggleDirectory = async (entry: WorkspaceEntry) => {
+    if (entry.type !== 'directory') return
+    const isExpanded = expanded.has(entry.path)
+    if (isExpanded) {
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        next.delete(entry.path)
+        return next
+      })
+      return
+    }
+    if (!entriesByPath[entry.path]) await loadPath(entry.path)
+    setExpanded((prev) => new Set(prev).add(entry.path))
+  }
+
+  const selectEntry = async (entry: WorkspaceEntry) => {
+    setSelectedEntry(entry)
+    if (entry.type === 'directory') await loadPath(entry.path)
+  }
+
+  const openUpload = (directoryPath: string) => {
+    setContextMenu(null)
+    setUploadTargetPath(directoryPath)
+    fileInputRef.current?.click()
   }
 
   const handleDownload = async (entry: WorkspaceEntry) => {
-    if (!accessToken || entry.type === 'directory') return
-    setBusy(true)
+    if (!accessToken || entry.type === 'directory' || !entry.path) return
+    setContextMenu(null)
+    setOperation({ kind: 'download', label: entry.name })
     setError(null)
     try {
-      const qs = new URLSearchParams({ path: entry.path })
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/download?${qs.toString()}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/download`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: entry.path }),
       })
       const data = await res.json().catch(() => ({})) as { filename?: string; content_base64?: string; detail?: string }
       if (!res.ok || !data.content_base64) throw new Error(data.detail || `download failed: ${res.status}`)
@@ -118,17 +178,21 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc))
     } finally {
-      setBusy(false)
+      setOperation(null)
     }
   }
 
   const handleUpload = async (files: FileList | null) => {
     const file = files?.[0]
-    if (!file || !accessToken || !currentPath) return
-    setBusy(true)
+    const targetPath = uploadTargetPath || currentPath
+    if (!file || !accessToken || !targetPath) return
+    setOperation({ kind: 'upload', label: file.name, progress: 0 })
     setError(null)
     try {
-      const contentBase64 = await fileToBase64(file)
+      const contentBase64 = await fileToBase64(file, (progress) => {
+        setOperation({ kind: 'upload', label: file.name, progress })
+      })
+      setOperation({ kind: 'upload', label: file.name, progress: 55 })
       const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/upload`, {
         method: 'POST',
         headers: {
@@ -136,7 +200,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          path: currentPath,
+          path: targetPath,
           filename: file.name,
           content_base64: contentBase64,
           overwrite: true,
@@ -144,17 +208,67 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       })
       const data = await res.json().catch(() => ({})) as { detail?: string }
       if (!res.ok) throw new Error(data.detail || `upload failed: ${res.status}`)
-      await loadPath(currentPath)
+      setOperation({ kind: 'upload', label: file.name, progress: 90 })
+      await loadPath(targetPath)
+      setOperation({ kind: 'upload', label: file.name, progress: 100 })
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc))
     } finally {
-      setBusy(false)
+      window.setTimeout(() => setOperation(null), 250)
+      setUploadTargetPath('')
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
+  const renderTree = (path: string, depth = 0): React.ReactNode => {
+    const rows = entriesByPath[path] || []
+    return rows.map((entry) => {
+      const isDirectory = entry.type === 'directory'
+      const isExpanded = expanded.has(entry.path)
+      const isSelected = selectedEntry?.path === entry.path || currentPath === entry.path
+      return (
+        <div key={entry.path}>
+          <div
+            onContextMenu={(event) => {
+              event.preventDefault()
+              setSelectedEntry(entry)
+              setContextMenu({ x: event.clientX, y: event.clientY, entry })
+            }}
+            className={`flex cursor-default items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
+              isSelected ? 'bg-[#ede6da] text-[#1f2328] dark:bg-zinc-800 dark:text-zinc-100' : 'text-[#665d52] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
+            }`}
+            style={{ paddingLeft: 8 + depth * 14 }}
+          >
+            {isDirectory ? (
+              <button
+                type="button"
+                onClick={() => toggleDirectory(entry)}
+                className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                <ChevronRight className={`h-3 w-3 transition ${isExpanded ? 'rotate-90' : ''}`} />
+              </button>
+            ) : (
+              <span className="h-4 w-4" />
+            )}
+            <button
+              type="button"
+              onClick={() => selectEntry(entry)}
+              className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+            >
+              {isDirectory ? <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" />}
+              <span className="truncate">{entry.name}</span>
+            </button>
+          </div>
+          {isDirectory && isExpanded && renderTree(entry.path, depth + 1)}
+        </div>
+      )
+    })
+  }
+
+  const rootEntry: WorkspaceEntry | null = basePath ? { name: basePath.split('/').pop() || basePath, path: basePath, type: 'directory' } : null
+
   return (
-    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-3">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-3">
       <div className="rounded-xl border border-[#eee9df] bg-white/80 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/75">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
@@ -162,18 +276,24 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             <p className="mt-1 truncate font-mono text-xs text-[#7b7368] dark:text-zinc-500">{currentPath || 'loading...'}</p>
           </div>
           <div className="flex items-center gap-2">
+            {operation && (
+              <span className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {operation.kind === 'upload' ? 'Uploading' : 'Downloading'} {operation.progress !== undefined ? `${operation.progress}%` : ''}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => loadPath(currentPath)}
-              disabled={loading || busy}
+              disabled={loadingPath !== null || busy}
               className="inline-flex items-center gap-1 rounded-lg border border-[#ded8ce] px-2 py-1 text-xs font-semibold text-[#5f574d] transition hover:bg-[#f4f1eb] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
-              <RefreshCw className="h-3.5 w-3.5" /> Refresh
+              <RefreshCw className={`h-3.5 w-3.5 ${loadingPath ? 'animate-spin' : ''}`} /> Refresh
             </button>
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={loading || busy || !currentPath}
+              onClick={() => openUpload(currentPath)}
+              disabled={loadingPath !== null || busy || !currentPath}
               className="inline-flex items-center gap-1 rounded-lg bg-[#1f2328] px-2 py-1 text-xs font-semibold text-white transition hover:bg-black disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-950"
             >
               <Upload className="h-3.5 w-3.5" /> Upload
@@ -182,7 +302,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
           </div>
         </div>
         <p className="mt-2 text-xs text-[#8a8378] dark:text-zinc-500">
-          Files are transferred to the sandbox workspace API directly and are not stored in WTT media cache.
+          Right-click folders to upload into them. Right-click files to download from the sandbox.
         </p>
       </div>
 
@@ -192,51 +312,124 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-[#eee9df] bg-white/70 dark:border-zinc-800 dark:bg-zinc-900/60">
-        <div className="flex items-center gap-2 border-b border-[#eee9df] px-3 py-2 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={goUp}
-            disabled={!basePath || currentPath === basePath || loading}
-            className="rounded-md px-2 py-1 text-xs font-semibold text-[#6f665c] transition hover:bg-[#f4f1eb] disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            Up
-          </button>
-          <span className="truncate font-mono text-[11px] text-[#9b9488] dark:text-zinc-500">{basePath}</span>
-        </div>
-        <div className="h-full overflow-y-auto p-2">
-          {loading ? (
-            <div className="py-12 text-center text-sm text-[#8a8378] dark:text-zinc-500">Loading workspace...</div>
-          ) : entries.length === 0 ? (
-            <div className="py-12 text-center text-sm text-[#8a8378] dark:text-zinc-500">This directory is empty.</div>
-          ) : (
-            <div className="divide-y divide-[#f0ebe3] dark:divide-zinc-800">
-              {entries.map((entry) => (
-                <div key={entry.path} className="flex items-center gap-3 px-2 py-2 text-sm">
-                  <button
-                    type="button"
-                    onClick={() => entry.type === 'directory' ? loadPath(entry.path) : undefined}
-                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left ${entry.type === 'directory' ? 'hover:bg-[#f4f1eb] dark:hover:bg-zinc-800' : ''}`}
-                  >
-                    {entry.type === 'directory' ? <Folder className="h-4 w-4 shrink-0 text-amber-600" /> : <FileText className="h-4 w-4 shrink-0 text-slate-500 dark:text-zinc-400" />}
-                    <span className="truncate font-semibold text-[#283038] dark:text-zinc-100">{entry.name}</span>
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-xl border border-[#eee9df] bg-white/70 dark:border-zinc-800 dark:bg-zinc-900/60 md:grid-cols-[320px_1fr]">
+        <aside className="min-h-0 border-b border-[#eee9df] dark:border-zinc-800 md:border-b-0 md:border-r">
+          <div className="border-b border-[#eee9df] px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#9b9488] dark:border-zinc-800 dark:text-zinc-500">
+            Sandbox Tree
+          </div>
+          <div className="h-full overflow-y-auto p-2">
+            {rootEntry ? (
+              <>
+                <div
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    setContextMenu({ x: event.clientX, y: event.clientY, entry: rootEntry })
+                  }}
+                  className={`flex cursor-default items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${
+                    currentPath === basePath ? 'bg-[#ede6da] text-[#1f2328] dark:bg-zinc-800 dark:text-zinc-100' : 'text-[#665d52] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  <button type="button" onClick={() => setExpanded((prev) => new Set(prev).add(basePath))} className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10">
+                    <ChevronRight className={`h-3 w-3 transition ${expanded.has(basePath) ? 'rotate-90' : ''}`} />
                   </button>
-                  <span className="hidden w-20 text-right text-xs text-[#9b9488] dark:text-zinc-500 sm:inline">{entry.type === 'directory' ? '-' : formatBytes(entry.size)}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(entry)}
-                    disabled={entry.type === 'directory' || busy}
-                    className="rounded-lg p-1.5 text-[#7b7368] transition hover:bg-[#f4f1eb] hover:text-[#1f2328] disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                    title="Download"
-                  >
-                    <Download className="h-4 w-4" />
+                  <button type="button" onClick={() => loadPath(basePath)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+                    <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <span className="truncate">{rootEntry.name}</span>
                   </button>
                 </div>
-              ))}
-            </div>
+                {expanded.has(basePath) && renderTree(basePath)}
+              </>
+            ) : (
+              <div className="py-10 text-center text-xs text-[#8a8378] dark:text-zinc-500">Loading tree...</div>
+            )}
+          </div>
+        </aside>
+
+        <section className="min-h-0">
+          <div className="flex items-center justify-between gap-2 border-b border-[#eee9df] px-3 py-2 dark:border-zinc-800">
+            <span className="truncate font-mono text-[11px] text-[#9b9488] dark:text-zinc-500">{currentPath || basePath}</span>
+            <button
+              type="button"
+              onClick={() => currentPath && currentPath !== basePath ? loadPath(parentPath(currentPath)) : undefined}
+              disabled={!basePath || currentPath === basePath || loadingPath !== null}
+              className="rounded-md px-2 py-1 text-xs font-semibold text-[#6f665c] transition hover:bg-[#f4f1eb] disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              Up
+            </button>
+          </div>
+          <div className="h-full overflow-y-auto p-2">
+            {loadingPath === currentPath ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#8a8378] dark:text-zinc-500">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading workspace...
+              </div>
+            ) : currentEntries.length === 0 ? (
+              <div className="py-12 text-center text-sm text-[#8a8378] dark:text-zinc-500">This directory is empty.</div>
+            ) : (
+              <div className="divide-y divide-[#f0ebe3] dark:divide-zinc-800">
+                {currentEntries.map((entry) => (
+                  <div
+                    key={entry.path}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      setSelectedEntry(entry)
+                      setContextMenu({ x: event.clientX, y: event.clientY, entry })
+                    }}
+                    className="flex items-center gap-3 px-2 py-2 text-sm hover:bg-[#f8f4ed] dark:hover:bg-zinc-800/60"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => selectEntry(entry)}
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left"
+                    >
+                      {entry.type === 'directory' ? <Folder className="h-4 w-4 shrink-0 text-amber-600" /> : <FileText className="h-4 w-4 shrink-0 text-slate-500 dark:text-zinc-400" />}
+                      <span className="truncate font-semibold text-[#283038] dark:text-zinc-100">{entry.name}</span>
+                    </button>
+                    <span className="hidden w-20 text-right text-xs text-[#9b9488] dark:text-zinc-500 sm:inline">{entry.type === 'directory' ? '-' : formatBytes(entry.size)}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(entry)}
+                      disabled={entry.type === 'directory' || busy}
+                      className="rounded-lg p-1.5 text-[#7b7368] transition hover:bg-[#f4f1eb] hover:text-[#1f2328] disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                      title="Download"
+                    >
+                      {operation?.kind === 'download' && operation.label === entry.name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {contextMenu && (
+        <div
+          className="fixed z-[90] min-w-40 rounded-xl border border-[#ded8ce] bg-white py-1 text-sm shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {contextMenu.entry.type === 'directory' && (
+            <button
+              type="button"
+              onClick={() => openUpload(contextMenu.entry.path)}
+              disabled={busy}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <Upload className="h-4 w-4" /> Upload file here
+            </button>
+          )}
+          {contextMenu.entry.type !== 'directory' && (
+            <button
+              type="button"
+              onClick={() => handleDownload(contextMenu.entry)}
+              disabled={busy}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <Download className="h-4 w-4" /> Download file
+            </button>
           )}
         </div>
-      </div>
+      )}
     </div>
   )
 }
