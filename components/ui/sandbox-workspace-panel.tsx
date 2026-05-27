@@ -207,9 +207,16 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setExpanded((prev) => new Set(prev).add(entry.path))
   }
 
+  const openDirectory = async (entry: WorkspaceEntry) => {
+    if (entry.type !== 'directory') return
+    setSelectedEntry(entry)
+    await loadPath(entry.path)
+    setExpanded((prev) => new Set(prev).add(entry.path))
+  }
+
   const selectEntry = async (entry: WorkspaceEntry) => {
     setSelectedEntry(entry)
-    if (entry.type === 'directory') await loadPath(entry.path)
+    if (entry.type === 'directory') await openDirectory(entry)
   }
 
   const openUpload = (directoryPath: string) => {
@@ -387,7 +394,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       const isExpanded = expanded.has(entry.path)
       const isSelected = selectedEntry?.path === entry.path || currentPath === entry.path
       return (
-        <div key={entry.path}>
+        <div key={entry.path} className={depth > 0 ? 'ml-5 border-l border-[#d8cfbf] pl-2 dark:border-zinc-700' : ''}>
           <div
             onClick={() => selectEntry(entry)}
             onContextMenu={(event) => {
@@ -395,14 +402,12 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
               setSelectedEntry(entry)
               setContextMenu({ x: event.clientX, y: event.clientY, entry })
             }}
-            className={`relative flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
+            className={`group relative flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
               isSelected ? 'bg-[#ede6da] text-[#1f2328] dark:bg-zinc-800 dark:text-zinc-100' : 'text-[#665d52] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
             }`}
-            style={{ paddingLeft: 8 + depth * 10 }}
+            style={{ marginLeft: depth === 0 ? 0 : 2 }}
           >
-            {depth > 0 && (
-              <span className="absolute left-1 top-0 h-full border-l border-[#ded6c9] dark:border-zinc-700" />
-            )}
+            {depth > 0 && <span className="absolute -left-2 top-1/2 h-px w-2 bg-[#d8cfbf] dark:bg-zinc-700" />}
             {isDirectory ? (
               <button
                 type="button"
@@ -417,22 +422,14 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             ) : (
               <span className="h-4 w-4" />
             )}
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation()
-                selectEntry(entry)
-              }}
-              className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-            >
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
               {isDirectory ? <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" />}
               <span className="truncate">{entry.name}</span>
-            </button>
+              {isDirectory && <span className="ml-auto hidden text-[10px] text-[#a79c8b] group-hover:inline dark:text-zinc-500">open</span>}
+            </div>
           </div>
           {isDirectory && isExpanded && (
-            <div className="ml-4 border-l border-[#e6dece] pl-1 dark:border-zinc-800">
-              {renderTree(entry.path, depth + 1)}
-            </div>
+            <div className="mt-0.5">{renderTree(entry.path, depth + 1)}</div>
           )}
         </div>
       )
@@ -547,11 +544,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                     <span className="truncate">{rootEntry.name}</span>
                   </button>
                 </div>
-                {expanded.has(basePath) && (
-                  <div className="ml-4 border-l border-[#e6dece] pl-1 dark:border-zinc-800">
-                    {renderTree(basePath)}
-                  </div>
-                )}
+                {expanded.has(basePath) && <div className="mt-0.5">{renderTree(basePath)}</div>}
               </>
             ) : (
               <div className="py-10 text-center text-xs text-[#8a8378] dark:text-zinc-500">Loading tree...</div>
