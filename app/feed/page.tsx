@@ -1179,11 +1179,6 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
-  const selectedAgent = selectedAgentId ? agents.find((agent) => agent.agent_id === selectedAgentId) : undefined
-  const selectedAgentIsCloud = Boolean(
-    selectedAgent && (selectedAgent.binding_method || selectedAgent.bound_via || '') === 'cloud_trial',
-  )
-
   const selectedTopicTypingText = useMemo(() => {
     if (!selectedTopicId) return null
     const typing = typingByTopic[selectedTopicId]
@@ -1314,6 +1309,12 @@ function FeedPageInner() {
     () => (((agentStatsRaw as Record<string, unknown>)?.runtimes || {}) as Record<string, AgentRuntimeInfo>),
     [agentStatsRaw]
   )
+  const selectedAgent = selectedAgentId ? agents.find((agent) => agent.agent_id === selectedAgentId) : undefined
+  const selectedAgentRuntime = selectedAgentId ? agentRuntimeMap?.[selectedAgentId] : undefined
+  const selectedAgentIsCloud = Boolean(
+    selectedAgent && (selectedAgent.binding_method || selectedAgent.bound_via || '') === 'cloud_trial',
+  ) || String(selectedAgentRuntime?.provider || '').includes('cloudflare_sandbox')
+    || Boolean(selectedAgentRuntime?.host_agent_id)
   const onlineAgentIds = useMemo(() => {
     const arr = (agentStatsRaw as Record<string, unknown>)?.online_agents as string[] | undefined
     const ids = new Set(arr ?? [])
@@ -2228,7 +2229,7 @@ function FeedPageInner() {
                 autoFocusNonce={composerFocusNonce}
                 workspaceAgentName={selectedAgentId ? (agentNameMap[selectedAgentId] || selectedAgentId) : undefined}
                 workspaceWorkdir={selectedAgentId ? agentRuntimeMap?.[selectedAgentId]?.workdir : undefined}
-                currentAgentRuntime={selectedAgentId ? agentRuntimeMap?.[selectedAgentId] : undefined}
+                currentAgentRuntime={selectedAgentRuntime}
                 currentAgentIsCloud={selectedAgentIsCloud}
                 agentRoleLabelMap={agentRoleLabelMap}
                 compactUi

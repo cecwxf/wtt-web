@@ -18,6 +18,7 @@ import { useI18n } from '@/lib/i18n-provider'
 import { isDesktop, saveToLocal } from '@/lib/desktop'
 import { buildFileContext } from '@/lib/file-context'
 import { AgentTerminalPane } from '@/components/ui/agent-terminal-modal'
+import { SandboxWorkspacePanel } from '@/components/ui/sandbox-workspace-panel'
 
 export interface ChatMessage {
   message_id: string
@@ -391,7 +392,7 @@ type ParsedTask = {
   assetPath?: string
 }
 
-type ChatPanelTab = 'chat' | 'files' | 'workspace'
+type ChatPanelTab = 'chat' | 'files' | 'terminal' | 'workspace'
 
 type ConversationFile = {
   key: string
@@ -890,6 +891,7 @@ export function ChatView({
   compactUi = false,
   autoFocusNonce,
   currentAgentRuntime,
+  currentAgentIsCloud = false,
   workspaceAgentName,
   workspaceWorkdir,
   agentRoleLabelMap = {},
@@ -2032,7 +2034,7 @@ export function ChatView({
     lastAutoPreviewKeyRef.current = latestAgentPreviewFile.key
     setManualPreviewFile(null)
     setClosedPreviewKey(null)
-    if (activeTab === 'workspace') setActiveTab('chat')
+    if (activeTab === 'terminal' || activeTab === 'workspace') setActiveTab('chat')
   }, [activeTab, latestAgentPreviewFile])
 
   useEffect(() => {
@@ -2124,19 +2126,32 @@ export function ChatView({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('workspace')}
+                  onClick={() => setActiveTab('terminal')}
                   className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
-                    activeTab === 'workspace'
+                    activeTab === 'terminal'
                       ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
                       : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
                   }`}
                 >
                   <SquareTerminal className={compactUi ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-                  <span>Workspace</span>
+                  <span>Terminal</span>
                   <span className={`h-1.5 w-1.5 rounded-full ${
                     currentAgentId ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-700'
                   }`} />
                 </button>
+                {currentAgentIsCloud && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('workspace')}
+                    className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
+                      activeTab === 'workspace'
+                        ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
+                        : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    <span>Workspace</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2171,12 +2186,12 @@ export function ChatView({
       <div
         ref={scrollRef}
         className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
-          activeTab === 'workspace'
+          activeTab === 'terminal' || activeTab === 'workspace'
             ? 'overflow-hidden px-3 py-3 sm:px-4'
             : 'overflow-y-auto px-4 py-3 sm:px-6'
         }`}
       >
-        {activeTab !== 'workspace' && (
+        {activeTab !== 'terminal' && activeTab !== 'workspace' && (
         <div className="mb-3 flex justify-center">
           <button
             onClick={handleLoadOlder}
@@ -2198,7 +2213,7 @@ export function ChatView({
           <div className="pt-20 text-center text-sm text-slate-400">{t('chat.noMessages')}</div>
         )}
 
-        {activeTab === 'workspace' ? (
+        {activeTab === 'terminal' ? (
           <div className="flex h-full min-h-[360px] w-full flex-col">
             {currentAgentId && accessToken ? (
               <div className="relative min-h-[320px] flex-1 resize overflow-hidden rounded-2xl">
@@ -2218,6 +2233,8 @@ export function ChatView({
               </div>
             )}
           </div>
+        ) : activeTab === 'workspace' && currentAgentIsCloud ? (
+          <SandboxWorkspacePanel agentId={currentAgentId} accessToken={accessToken} />
         ) : activeTab === 'files' ? (
           <div className="mx-auto w-full max-w-3xl">
             <div className="mb-3 rounded-xl border border-[#eee9df] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">

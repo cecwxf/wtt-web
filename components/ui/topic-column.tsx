@@ -48,6 +48,9 @@ export interface AgentRuntimeInfo {
   workdir_name?: string
   hostname?: string
   platform?: string
+  provider?: string
+  host_agent_id?: string
+  workspace_path?: string
   git?: {
     repo?: string
     branch?: string
@@ -813,7 +816,7 @@ export function TopicColumn(props: TopicColumnProps) {
                               }}
                               className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f3eee5] dark:text-zinc-300 dark:hover:bg-zinc-800"
                             >
-                              {zh ? '打开 Shell' : 'Open Shell'}
+                              {zh ? '打开 Terminal' : 'Open Terminal'}
                             </button>
                           )}
                           {onRenameAgent && (
