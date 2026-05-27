@@ -187,6 +187,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const loadSeqRef = useRef(0)
+  const basePathRef = useRef('')
 
   const currentKey = pathKey(currentRelPath)
   const currentPath = absolutePathFor(basePath, currentRelPath)
@@ -208,9 +209,14 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     return data
   }, [accessToken, agentId])
 
+  useEffect(() => {
+    basePathRef.current = basePath
+  }, [basePath])
+
   const loadPath = useCallback(async (path = '') => {
     if (!agentId || !accessToken) return
-    const requestedRelPath = normalizeRelPath(path)
+    const currentBasePath = basePathRef.current
+    const requestedRelPath = path.startsWith('/') ? relPathFromAbsolute(currentBasePath, path) : normalizeRelPath(path)
     const requestedKey = pathKey(requestedRelPath)
     const loadSeq = loadSeqRef.current + 1
     loadSeqRef.current = loadSeq
@@ -234,8 +240,9 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       const nextEntries = Array.isArray(data.entries) ? data.entries : []
       if (loadSeq !== loadSeqRef.current) return
       setBasePath(nextBase)
+      basePathRef.current = nextBase
       setCurrentRelPath(nextRelPath)
-      setEntriesByPath((prev) => ({ ...prev, [nextKey]: nextEntries }))
+      setEntriesByPath((prev) => ({ ...prev, [requestedKey]: nextEntries, [nextKey]: nextEntries }))
       setExpanded((prev) => new Set(prev).add(nextKey))
     } catch (exc) {
       if (loadSeq !== loadSeqRef.current) return
@@ -255,9 +262,9 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     return () => window.removeEventListener('click', close)
   }, [])
 
-  const toggleDirectory = async (entry: WorkspaceEntry) => {
+  const toggleDirectory = async (entry: WorkspaceEntry, parentRelPathForEntry = currentRelPath) => {
     if (entry.type !== 'directory') return
-    const entryRelPath = relPathFromAbsolute(basePath, entry.path)
+    const entryRelPath = relPathFromEntry(basePath, parentRelPathForEntry, entry)
     const entryKey = pathKey(entryRelPath)
     const isExpanded = expanded.has(entryKey)
     if (isExpanded) {
@@ -272,17 +279,17 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setExpanded((prev) => new Set(prev).add(entryKey))
   }
 
-  const openDirectory = async (entry: WorkspaceEntry) => {
+  const openDirectory = async (entry: WorkspaceEntry, parentRelPathForEntry = currentRelPath) => {
     if (entry.type !== 'directory') return
     setSelectedEntry(entry)
-    const entryRelPath = relPathFromAbsolute(basePath, entry.path)
+    const entryRelPath = relPathFromEntry(basePath, parentRelPathForEntry, entry)
     await loadPath(entryRelPath)
     setExpanded((prev) => new Set(prev).add(pathKey(entryRelPath)))
   }
 
-  const selectEntry = async (entry: WorkspaceEntry) => {
+  const selectEntry = async (entry: WorkspaceEntry, parentRelPathForEntry = currentRelPath) => {
     setSelectedEntry(entry)
-    if (entry.type === 'directory') await openDirectory(entry)
+    if (entry.type === 'directory') await openDirectory(entry, parentRelPathForEntry)
   }
 
   const openUpload = (directoryPath: string) => {
@@ -476,7 +483,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       return (
         <div key={entry.path} className="relative">
           <div
-            onClick={() => selectEntry(entry)}
+            onClick={() => selectEntry(entry, relPath)}
             onContextMenu={(event) => {
               event.preventDefault()
               setSelectedEntry(entry)
@@ -497,7 +504,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
-                toggleDirectory(entry)
+                toggleDirectory(entry, relPath)
               }}
               className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
             >
@@ -658,7 +665,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                   <div
                     key={entry.path}
                     onClick={() => {
-                      if (entry.type === 'directory') openDirectory(entry)
+                      if (entry.type === 'directory') openDirectory(entry, currentRelPath)
                       else setSelectedEntry(entry)
                     }}
                     onContextMenu={(event) => {
@@ -678,7 +685,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation()
-                          openDirectory(entry)
+                          openDirectory(entry, currentRelPath)
                         }}
                         disabled={busy}
                         className="rounded-lg border border-[#ded8ce] px-2 py-1 text-xs font-semibold text-[#6f665c] transition hover:bg-[#f4f1eb] disabled:opacity-30 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
