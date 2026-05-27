@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, Download, FileText, Folder, FolderPlus, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { ChevronRight, Download, FilePlus, FileText, Folder, FolderPlus, Loader2, Pencil, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
@@ -19,7 +19,7 @@ type WorkspaceListResponse = {
 }
 
 type OperationState = {
-  kind: 'upload' | 'download' | 'mkdir' | 'delete'
+  kind: 'upload' | 'download' | 'mkdir' | 'touch' | 'rename' | 'delete'
   label: string
   progress?: number
 } | null
@@ -47,11 +47,11 @@ function parentPath(path: string): string {
   return idx > 0 ? path.slice(0, idx) : path
 }
 
-function downloadBlob(filename: string, contentBase64: string): void {
+function downloadBlob(filename: string, contentBase64: string, contentType = 'application/octet-stream'): void {
   const binary = atob(contentBase64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
-  const url = URL.createObjectURL(new Blob([bytes]))
+  const url = URL.createObjectURL(new Blob([bytes], { type: contentType }))
   const link = document.createElement('a')
   link.href = url
   link.download = filename
@@ -131,6 +131,21 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   const currentEntries = currentPath ? (entriesByPath[currentPath] || []) : []
   const busy = Boolean(operation)
 
+  const postWorkspaceAction = useCallback(async (action: string, payload: unknown) => {
+    if (!accessToken) throw new Error('missing access token')
+    const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/${action}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json().catch(() => ({})) as Record<string, unknown> & { detail?: string }
+    if (!res.ok) throw new Error(data.detail || `${action} failed: ${res.status}`)
+    return data
+  }, [accessToken, agentId])
+
   const loadPath = useCallback(async (path = '') => {
     if (!agentId || !accessToken) return
     setLoadingPath(path || 'root')
@@ -195,22 +210,14 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   }
 
   const handleDownload = async (entry: WorkspaceEntry) => {
-    if (!accessToken || entry.type === 'directory' || !entry.path) return
+    if (!accessToken || !entry.path || busy) return
     setContextMenu(null)
     setOperation({ kind: 'download', label: entry.name })
     setError(null)
     try {
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/download`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ path: entry.path }),
-      })
-      const data = await res.json().catch(() => ({})) as { filename?: string; content_base64?: string; detail?: string }
-      if (!res.ok || !data.content_base64) throw new Error(data.detail || `download failed: ${res.status}`)
-      downloadBlob(data.filename || entry.name, data.content_base64)
+      const data = await postWorkspaceAction('download', { path: entry.path }) as { filename?: string; content_base64?: string; content_type?: string; detail?: string }
+      if (!data.content_base64) throw new Error(data.detail || 'download failed')
+      downloadBlob(data.filename || entry.name, data.content_base64, data.content_type)
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc))
     } finally {
@@ -259,17 +266,61 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setOperation({ kind: 'mkdir', label: cleanName })
     setError(null)
     try {
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/mkdir`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ path: directoryPath, name: cleanName }),
-      })
-      const data = await res.json().catch(() => ({})) as { detail?: string }
-      if (!res.ok) throw new Error(data.detail || `create directory failed: ${res.status}`)
+      await postWorkspaceAction('mkdir', { path: directoryPath, name: cleanName })
       await loadPath(directoryPath)
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc))
+    } finally {
+      setOperation(null)
+    }
+  }
+
+  const handleCreateFile = async (directoryPath: string) => {
+    if (!accessToken || !directoryPath || busy) return
+    setContextMenu(null)
+    const name = window.prompt('New file name')
+    const cleanName = String(name || '').trim()
+    if (!cleanName) return
+    setOperation({ kind: 'touch', label: cleanName })
+    setError(null)
+    try {
+      await postWorkspaceAction('touch', { path: directoryPath, name: cleanName })
+      await loadPath(directoryPath)
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc))
+    } finally {
+      setOperation(null)
+    }
+  }
+
+  const handleRename = async (entry: WorkspaceEntry) => {
+    if (!accessToken || !entry.path || entry.path === basePath || busy) return
+    setContextMenu(null)
+    const name = window.prompt('Rename to', entry.name)
+    const cleanName = String(name || '').trim()
+    if (!cleanName || cleanName === entry.name) return
+    const refreshPath = parentPath(entry.path)
+    setOperation({ kind: 'rename', label: entry.name })
+    setError(null)
+    try {
+      const data = await postWorkspaceAction('rename', { path: entry.path, name: cleanName })
+      const nextPath = String(data.path || `${refreshPath}/${cleanName}`)
+      setEntriesByPath((prev) => {
+        const next = { ...prev }
+        delete next[entry.path]
+        return next
+      })
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        if (next.delete(entry.path) && entry.type === 'directory') next.add(nextPath)
+        return next
+      })
+      setSelectedEntry(null)
+      if (entry.type === 'directory' && (currentPath === entry.path || currentPath.startsWith(`${entry.path}/`))) {
+        await loadPath(nextPath)
+      } else {
+        await loadPath(refreshPath)
+      }
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc))
     } finally {
@@ -286,16 +337,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setOperation({ kind: 'delete', label: entry.name })
     setError(null)
     try {
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/delete`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ path: entry.path, recursive: true }),
-      })
-      const data = await res.json().catch(() => ({})) as { detail?: string }
-      if (!res.ok) throw new Error(data.detail || `delete failed: ${res.status}`)
+      await postWorkspaceAction('delete', { path: entry.path, recursive: true })
       setEntriesByPath((prev) => {
         const next = { ...prev }
         delete next[entry.path]
@@ -307,7 +349,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
         return next
       })
       setSelectedEntry(null)
-      await loadPath(currentPath === entry.path ? refreshPath : refreshPath)
+      await loadPath(refreshPath)
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc))
     } finally {
@@ -381,9 +423,25 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             {operation && (
               <span className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {operation.kind === 'upload' ? 'Uploading' : operation.kind === 'download' ? 'Downloading' : operation.kind === 'mkdir' ? 'Creating' : 'Deleting'} {operation.progress !== undefined ? `${operation.progress}%` : ''}
+                {operation.kind === 'upload' ? 'Uploading' : operation.kind === 'download' ? 'Downloading' : operation.kind === 'mkdir' || operation.kind === 'touch' ? 'Creating' : operation.kind === 'rename' ? 'Renaming' : 'Deleting'} {operation.progress !== undefined ? `${operation.progress}%` : ''}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => handleCreateDirectory(currentPath)}
+              disabled={loadingPath !== null || busy || !currentPath}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#ded8ce] px-2 py-1 text-xs font-semibold text-[#5f574d] transition hover:bg-[#f4f1eb] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <FolderPlus className="h-3.5 w-3.5" /> New Folder
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCreateFile(currentPath)}
+              disabled={loadingPath !== null || busy || !currentPath}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#ded8ce] px-2 py-1 text-xs font-semibold text-[#5f574d] transition hover:bg-[#f4f1eb] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <FilePlus className="h-3.5 w-3.5" /> New File
+            </button>
             <button
               type="button"
               onClick={() => loadPath(currentPath)}
@@ -404,7 +462,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
           </div>
         </div>
         <p className="mt-2 text-xs text-[#8a8378] dark:text-zinc-500">
-          Right-click folders/files for upload, download, create folder, and delete operations.
+          Right-click folders/files for open, refresh, upload, download, create, rename, and delete operations.
         </p>
       </div>
 
@@ -510,9 +568,9 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                     <button
                       type="button"
                       onClick={() => handleDownload(entry)}
-                      disabled={entry.type === 'directory' || busy}
+                      disabled={busy}
                       className="rounded-lg p-1.5 text-[#7b7368] transition hover:bg-[#f4f1eb] hover:text-[#1f2328] disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                      title="Download"
+                      title={entry.type === 'directory' ? 'Download folder as tar.gz' : 'Download'}
                     >
                       {operation?.kind === 'download' && operation.label === entry.name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                     </button>
@@ -534,11 +592,43 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             <>
               <button
                 type="button"
+                onClick={() => {
+                  const entry = contextMenu.entry
+                  setContextMenu(null)
+                  selectEntry(entry)
+                }}
+                disabled={busy}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                <Folder className="h-4 w-4" /> Open folder
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const path = contextMenu.entry.path
+                  setContextMenu(null)
+                  loadPath(path)
+                }}
+                disabled={busy}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                <RefreshCw className="h-4 w-4" /> Refresh folder
+              </button>
+              <button
+                type="button"
                 onClick={() => handleCreateDirectory(contextMenu.entry.path)}
                 disabled={busy}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 <FolderPlus className="h-4 w-4" /> Create folder
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCreateFile(contextMenu.entry.path)}
+                disabled={busy}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                <FilePlus className="h-4 w-4" /> Create file
               </button>
               <button
                 type="button"
@@ -548,6 +638,16 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
               >
                 <Upload className="h-4 w-4" /> Upload file here
               </button>
+              {contextMenu.entry.path !== basePath && (
+                <button
+                  type="button"
+                  onClick={() => handleDownload(contextMenu.entry)}
+                  disabled={busy}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  <Download className="h-4 w-4" /> Download folder
+                </button>
+              )}
             </>
           )}
           {contextMenu.entry.type !== 'directory' && (
@@ -558,6 +658,16 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
               className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               <Download className="h-4 w-4" /> Download file
+            </button>
+          )}
+          {contextMenu.entry.path !== basePath && (
+            <button
+              type="button"
+              onClick={() => handleRename(contextMenu.entry)}
+              disabled={busy}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-[#51483f] hover:bg-[#f4f1eb] disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <Pencil className="h-4 w-4" /> Rename
             </button>
           )}
           {contextMenu.entry.path !== basePath && (
