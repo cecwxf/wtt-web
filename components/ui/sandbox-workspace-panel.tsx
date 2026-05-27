@@ -67,15 +67,51 @@ function fileToBase64(file: File, onProgress: (progress: number) => void): Promi
     reader.onerror = () => reject(new Error('failed to read file'))
     reader.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
-        onProgress(Math.min(35, Math.round((event.loaded / event.total) * 35)))
+        onProgress(Math.min(15, Math.round((event.loaded / event.total) * 15)))
       }
     }
     reader.onload = () => {
       const value = String(reader.result || '')
-      onProgress(40)
+      onProgress(15)
       resolve(value.includes(',') ? value.split(',').pop() || '' : value)
     }
     reader.readAsDataURL(file)
+  })
+}
+
+function postJsonWithUploadProgress<T>(
+  url: string,
+  accessToken: string,
+  payload: unknown,
+  onProgress: (progress: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`)
+    xhr.setRequestHeader('Content-Type', 'application/json')
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress(15 + Math.round((event.loaded / event.total) * 75))
+      }
+    }
+    xhr.upload.onload = () => onProgress(90)
+    xhr.onerror = () => reject(new Error('network error during upload'))
+    xhr.onload = () => {
+      let data = {} as T & { detail?: string }
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) as T & { detail?: string } : data
+      } catch {
+        data = {} as T & { detail?: string }
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(data.detail || `upload failed: ${xhr.status}`))
+        return
+      }
+      onProgress(95)
+      resolve(data)
+    }
+    xhr.send(JSON.stringify(payload))
   })
 }
 
@@ -192,23 +228,17 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       const contentBase64 = await fileToBase64(file, (progress) => {
         setOperation({ kind: 'upload', label: file.name, progress })
       })
-      setOperation({ kind: 'upload', label: file.name, progress: 55 })
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/upload`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      await postJsonWithUploadProgress<{ detail?: string }>(
+        `${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/upload`,
+        accessToken,
+        {
           path: targetPath,
           filename: file.name,
           content_base64: contentBase64,
           overwrite: true,
-        }),
-      })
-      const data = await res.json().catch(() => ({})) as { detail?: string }
-      if (!res.ok) throw new Error(data.detail || `upload failed: ${res.status}`)
-      setOperation({ kind: 'upload', label: file.name, progress: 90 })
+        },
+        (progress) => setOperation({ kind: 'upload', label: file.name, progress }),
+      )
       await loadPath(targetPath)
       setOperation({ kind: 'upload', label: file.name, progress: 100 })
     } catch (exc) {
@@ -294,6 +324,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       return (
         <div key={entry.path}>
           <div
+            onClick={() => selectEntry(entry)}
             onContextMenu={(event) => {
               event.preventDefault()
               setSelectedEntry(entry)
@@ -307,7 +338,10 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             {isDirectory ? (
               <button
                 type="button"
-                onClick={() => toggleDirectory(entry)}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggleDirectory(entry)
+                }}
                 className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
               >
                 <ChevronRight className={`h-3 w-3 transition ${isExpanded ? 'rotate-90' : ''}`} />
@@ -317,7 +351,10 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             )}
             <button
               type="button"
-              onClick={() => selectEntry(entry)}
+              onClick={(event) => {
+                event.stopPropagation()
+                selectEntry(entry)
+              }}
               className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
             >
               {isDirectory ? <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" />}
@@ -386,6 +423,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             {rootEntry ? (
               <>
                 <div
+                  onClick={() => loadPath(basePath)}
                   onContextMenu={(event) => {
                     event.preventDefault()
                     setContextMenu({ x: event.clientX, y: event.clientY, entry: rootEntry })
@@ -394,10 +432,29 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                     currentPath === basePath ? 'bg-[#ede6da] text-[#1f2328] dark:bg-zinc-800 dark:text-zinc-100' : 'text-[#665d52] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
                   }`}
                 >
-                  <button type="button" onClick={() => setExpanded((prev) => new Set(prev).add(basePath))} className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setExpanded((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(basePath)) next.delete(basePath)
+                        else next.add(basePath)
+                        return next
+                      })
+                    }}
+                    className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
+                  >
                     <ChevronRight className={`h-3 w-3 transition ${expanded.has(basePath) ? 'rotate-90' : ''}`} />
                   </button>
-                  <button type="button" onClick={() => loadPath(basePath)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      loadPath(basePath)
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                  >
                     <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" />
                     <span className="truncate">{rootEntry.name}</span>
                   </button>
