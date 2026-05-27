@@ -136,6 +136,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   const [operation, setOperation] = useState<OperationState>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const loadSeqRef = useRef(0)
 
   const currentEntries = currentPath ? (entriesByPath[currentPath] || []) : []
   const busy = Boolean(operation)
@@ -158,6 +159,8 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   const loadPath = useCallback(async (path = '') => {
     if (!agentId || !accessToken) return
     const requestedPath = path || ''
+    const loadSeq = loadSeqRef.current + 1
+    loadSeqRef.current = loadSeq
     setLoadingPath(requestedPath || 'root')
     setError(null)
     if (requestedPath) {
@@ -176,14 +179,16 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       const nextBase = String(data.base_path || '')
       const nextPath = String(data.path || nextBase || requestedPath)
       const nextEntries = Array.isArray(data.entries) ? data.entries : []
+      if (loadSeq !== loadSeqRef.current) return
       setBasePath(nextBase)
       setCurrentPath(nextPath)
       setEntriesByPath((prev) => ({ ...prev, [nextPath]: nextEntries }))
       setExpanded((prev) => new Set(prev).add(nextPath))
     } catch (exc) {
+      if (loadSeq !== loadSeqRef.current) return
       setError(exc instanceof Error ? exc.message : String(exc))
     } finally {
-      setLoadingPath(null)
+      if (loadSeq === loadSeqRef.current) setLoadingPath(null)
     }
   }, [accessToken, agentId])
 
