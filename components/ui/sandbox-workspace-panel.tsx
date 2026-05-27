@@ -157,11 +157,16 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
 
   const loadPath = useCallback(async (path = '') => {
     if (!agentId || !accessToken) return
-    setLoadingPath(path || 'root')
+    const requestedPath = path || ''
+    setLoadingPath(requestedPath || 'root')
     setError(null)
+    if (requestedPath) {
+      setCurrentPath(requestedPath)
+      setExpanded((prev) => new Set(prev).add(requestedPath))
+    }
     try {
       const qs = new URLSearchParams()
-      if (path) qs.set('path', path)
+      if (requestedPath) qs.set('path', requestedPath)
       const suffix = qs.toString() ? `?${qs.toString()}` : ''
       const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/list${suffix}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -169,7 +174,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       const data = await res.json().catch(() => ({})) as Partial<WorkspaceListResponse> & { detail?: string }
       if (!res.ok) throw new Error(data.detail || `workspace list failed: ${res.status}`)
       const nextBase = String(data.base_path || '')
-      const nextPath = String(data.path || nextBase || path)
+      const nextPath = String(data.path || nextBase || requestedPath)
       const nextEntries = Array.isArray(data.entries) ? data.entries : []
       setBasePath(nextBase)
       setCurrentPath(nextPath)
@@ -394,7 +399,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       const isExpanded = expanded.has(entry.path)
       const isSelected = selectedEntry?.path === entry.path || currentPath === entry.path
       return (
-        <div key={entry.path} className={depth > 0 ? 'ml-5 border-l border-[#d8cfbf] pl-2 dark:border-zinc-700' : ''}>
+        <div key={entry.path} className="relative">
           <div
             onClick={() => selectEntry(entry)}
             onContextMenu={(event) => {
@@ -405,9 +410,14 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             className={`group relative flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
               isSelected ? 'bg-[#ede6da] text-[#1f2328] dark:bg-zinc-800 dark:text-zinc-100' : 'text-[#665d52] hover:bg-[#f4f1eb] dark:text-zinc-400 dark:hover:bg-zinc-800'
             }`}
-            style={{ marginLeft: depth === 0 ? 0 : 2 }}
+            style={{ paddingLeft: 8 + depth * 24 }}
           >
-            {depth > 0 && <span className="absolute -left-2 top-1/2 h-px w-2 bg-[#d8cfbf] dark:bg-zinc-700" />}
+            {depth > 0 && (
+              <>
+                <span className="absolute bottom-0 top-0 w-px bg-[#d0c3ae] dark:bg-zinc-700" style={{ left: 10 + (depth - 1) * 24 }} />
+                <span className="absolute top-1/2 h-px w-4 bg-[#d0c3ae] dark:bg-zinc-700" style={{ left: 10 + (depth - 1) * 24 }} />
+              </>
+            )}
             {isDirectory ? (
               <button
                 type="button"
@@ -429,7 +439,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             </div>
           </div>
           {isDirectory && isExpanded && (
-            <div className="mt-0.5">{renderTree(entry.path, depth + 1)}</div>
+            <div>{renderTree(entry.path, depth + 1)}</div>
           )}
         </div>
       )
@@ -544,7 +554,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                     <span className="truncate">{rootEntry.name}</span>
                   </button>
                 </div>
-                {expanded.has(basePath) && <div className="mt-0.5">{renderTree(basePath)}</div>}
+                {expanded.has(basePath) && <div>{renderTree(basePath, 1)}</div>}
               </>
             ) : (
               <div className="py-10 text-center text-xs text-[#8a8378] dark:text-zinc-500">Loading tree...</div>
