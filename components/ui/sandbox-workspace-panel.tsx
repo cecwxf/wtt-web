@@ -27,6 +27,23 @@ type OperationState = {
   progress?: number
 } | null
 
+type MultipartCreateResponse = {
+  upload_token: string
+  part_size: number
+  path: string
+  filename: string
+  upload_part_url_template: string
+  complete_url: string
+  abort_url?: string
+}
+
+type MultipartCompleteResponse = {
+  path?: string
+  filename?: string
+  size?: number
+  detail?: string
+}
+
 interface SandboxWorkspacePanelProps {
   agentId: string
   accessToken?: string
@@ -174,6 +191,36 @@ function postJsonWithUploadProgress<T>(
       resolve(data)
     }
     xhr.send(JSON.stringify(payload))
+  })
+}
+
+function putBlobWithProgress<T>(
+  url: string,
+  blob: Blob,
+  onProgress: (loaded: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded)
+    }
+    xhr.onerror = () => reject(new Error('network error during chunk upload'))
+    xhr.onload = () => {
+      let data = {} as T & { detail?: string }
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) as T & { detail?: string } : data
+      } catch {
+        data = {} as T & { detail?: string }
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(data.detail || `chunk upload failed: ${xhr.status}`))
+        return
+      }
+      resolve(data)
+    }
+    xhr.send(blob)
   })
 }
 
@@ -348,6 +395,59 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setOperation({ kind: 'upload', label: file.name, progress: 0 })
     setError(null)
     try {
+      if (storageRoot === 'r2') {
+        const create = await postWorkspaceAction('multipart/create', {
+          path: targetPath,
+          filename: file.name,
+          size: file.size,
+          content_type: file.type || 'application/octet-stream',
+        }) as MultipartCreateResponse
+        const partSize = Math.max(5 * 1024 * 1024, Number(create.part_size || 32 * 1024 * 1024))
+        let uploadedBytes = 0
+        let partNumber = 1
+        for (let offset = 0; offset < file.size || (file.size === 0 && partNumber === 1); offset += partSize) {
+          const end = file.size === 0 ? 0 : Math.min(offset + partSize, file.size)
+          const chunk = file.slice(offset, end)
+          const partUrl = create.upload_part_url_template.replace('{partNumber}', String(partNumber))
+          await putBlobWithProgress(partUrl, chunk, (loaded) => {
+            const total = file.size || 1
+            setOperation({ kind: 'upload', label: file.name, progress: Math.min(95, Math.round(((uploadedBytes + loaded) / total) * 95)) })
+          })
+          uploadedBytes += chunk.size
+          partNumber += 1
+        }
+        setOperation({ kind: 'upload', label: file.name, progress: 98 })
+        const completeRes = await fetch(create.complete_url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+        const completed = await completeRes.json().catch(() => ({})) as MultipartCompleteResponse
+        if (!completeRes.ok) throw new Error(completed.detail || `complete upload failed: ${completeRes.status}`)
+        if (completed.path) {
+          const uploadedParent = parentPath(completed.path)
+          const uploadedParentRelPath = relPathFromAbsolute(basePath, uploadedParent)
+          const uploadedParentKey = pathKey(uploadedParentRelPath)
+          setEntriesByPath((prev) => ({
+            ...prev,
+            [uploadedParentKey]: upsertEntry(prev[uploadedParentKey] || [], {
+              name: completed.filename || file.name,
+              path: completed.path || `${uploadedParent}/${file.name}`,
+              type: 'file',
+              size: completed.size ?? file.size,
+              mtime: new Date().toISOString(),
+            }),
+          }))
+          setExpanded((prev) => new Set(prev).add(uploadedParentKey))
+        }
+        await loadPath(targetPath)
+        setOperation({ kind: 'upload', label: file.name, progress: 100 })
+        return
+      }
+
+      if (file.size > 50 * 1024 * 1024) {
+        throw new Error('Workspace upload is limited to small files. Switch to R2 Storage for large files, or upload to R2 then copy into Workspace from Terminal.')
+      }
       const contentBase64 = await fileToBase64(file, (progress) => {
         setOperation({ kind: 'upload', label: file.name, progress })
       })
