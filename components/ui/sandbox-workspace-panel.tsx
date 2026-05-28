@@ -85,6 +85,10 @@ function pathKey(relPath: string): string {
   return normalizeRelPath(relPath) || '.'
 }
 
+function storagePathKey(storage: StorageRoot, relPath: string): string {
+  return `${storage}:${pathKey(relPath)}`
+}
+
 function parentRelPath(relPath: string): string {
   const normalized = normalizeRelPath(relPath)
   const idx = normalized.lastIndexOf('/')
@@ -241,7 +245,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   const loadSeqRef = useRef(0)
   const basePathRef = useRef('')
 
-  const currentKey = pathKey(currentRelPath)
+  const currentKey = storagePathKey(storageRoot, currentRelPath)
   const currentPath = absolutePathFor(basePath, currentRelPath)
   const busy = Boolean(operation)
   const rootLabel = storageRoot === 'r2' ? 'R2 Storage' : 'Workspace'
@@ -272,7 +276,8 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     if (!agentId || !accessToken) return
     const currentBasePath = basePathRef.current
     const requestedRelPath = path.startsWith('/') ? relPathFromAbsolute(currentBasePath, path) : normalizeRelPath(path)
-    const requestedKey = pathKey(requestedRelPath)
+    const requestedStorageRoot = storageRoot
+    const requestedKey = storagePathKey(requestedStorageRoot, requestedRelPath)
     const loadSeq = loadSeqRef.current + 1
     loadSeqRef.current = loadSeq
     setLoadingPath(requestedKey)
@@ -293,10 +298,11 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       })
       const data = await res.json().catch(() => ({})) as Partial<WorkspaceListResponse> & { detail?: string }
       if (!res.ok) throw new Error(data.detail || `workspace list failed: ${res.status}`)
+      if (data.storage && data.storage !== requestedStorageRoot) return
       const nextBase = String(data.base_path || '')
       const nextPath = String(data.path || nextBase || requestedRelPath)
       const nextRelPath = relPathFromAbsolute(nextBase, nextPath) || requestedRelPath
-      const nextKey = pathKey(nextRelPath)
+      const nextKey = storagePathKey(requestedStorageRoot, nextRelPath)
       const nextEntries = Array.isArray(data.entries) ? data.entries : []
       if (loadSeq !== loadSeqRef.current) return
       setBasePath(nextBase)
@@ -339,7 +345,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   const toggleDirectory = async (entry: WorkspaceEntry, parentRelPathForEntry = currentRelPath) => {
     if (entry.type !== 'directory') return
     const entryRelPath = relPathFromEntry(basePath, parentRelPathForEntry, entry)
-    const entryKey = pathKey(entryRelPath)
+    const entryKey = storagePathKey(storageRoot, entryRelPath)
     const isExpanded = expanded.has(entryKey)
     if (isExpanded) {
       setExpanded((prev) => {
@@ -358,7 +364,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setSelectedEntry(entry)
     const entryRelPath = relPathFromEntry(basePath, parentRelPathForEntry, entry)
     await loadPath(entryRelPath)
-    setExpanded((prev) => new Set(prev).add(pathKey(entryRelPath)))
+    setExpanded((prev) => new Set(prev).add(storagePathKey(storageRoot, entryRelPath)))
   }
 
   const selectEntry = async (entry: WorkspaceEntry, parentRelPathForEntry = currentRelPath) => {
@@ -429,7 +435,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
         if (completed.path) {
           const uploadedParent = parentPath(completed.path)
           const uploadedParentRelPath = relPathFromAbsolute(basePath, uploadedParent)
-          const uploadedParentKey = pathKey(uploadedParentRelPath)
+          const uploadedParentKey = storagePathKey(storageRoot, uploadedParentRelPath)
           setEntriesByPath((prev) => ({
             ...prev,
             [uploadedParentKey]: upsertEntry(prev[uploadedParentKey] || [], {
@@ -468,7 +474,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       if (uploaded.path) {
         const uploadedParent = parentPath(uploaded.path)
         const uploadedParentRelPath = relPathFromAbsolute(basePath, uploadedParent)
-        const uploadedParentKey = pathKey(uploadedParentRelPath)
+        const uploadedParentKey = storagePathKey(storageRoot, uploadedParentRelPath)
         setEntriesByPath((prev) => ({
           ...prev,
           [uploadedParentKey]: upsertEntry(prev[uploadedParentKey] || [], {
@@ -550,12 +556,12 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       const nextRelPath = relPathFromAbsolute(basePath, nextPath)
       setEntriesByPath((prev) => {
         const next = { ...prev }
-        delete next[pathKey(entryRelPath)]
+        delete next[storagePathKey(storageRoot, entryRelPath)]
         return next
       })
       setExpanded((prev) => {
         const next = new Set(prev)
-        if (next.delete(pathKey(entryRelPath)) && entry.type === 'directory') next.add(pathKey(nextRelPath))
+        if (next.delete(storagePathKey(storageRoot, entryRelPath)) && entry.type === 'directory') next.add(storagePathKey(storageRoot, nextRelPath))
         return next
       })
       setSelectedEntry(null)
@@ -585,12 +591,12 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       await postWorkspaceAction('delete', { path: entry.path, recursive: true })
       setEntriesByPath((prev) => {
         const next = { ...prev }
-        delete next[pathKey(entryRelPath)]
+        delete next[storagePathKey(storageRoot, entryRelPath)]
         return next
       })
       setExpanded((prev) => {
         const next = new Set(prev)
-        next.delete(pathKey(entryRelPath))
+      next.delete(storagePathKey(storageRoot, entryRelPath))
         return next
       })
       setSelectedEntry(null)
@@ -603,13 +609,13 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   }
 
   const renderTree = (relPath: string, depth = 0, seen = new Set<string>()): React.ReactNode => {
-    const currentTreeKey = pathKey(relPath)
+    const currentTreeKey = storagePathKey(storageRoot, relPath)
     if (seen.has(currentTreeKey) || depth > 40) return null
     const nextSeen = new Set(seen).add(currentTreeKey)
     const rows = (entriesByPath[currentTreeKey] || []).filter((entry) => entry.type === 'directory')
     return rows.map((entry) => {
       const entryRelPath = relPathFromEntry(basePath, relPath, entry)
-      const entryKey = pathKey(entryRelPath)
+      const entryKey = storagePathKey(storageRoot, entryRelPath)
       const isExpanded = expanded.has(entryKey)
       const isSelected = selectedEntry?.path === entry.path || currentRelPath === entryRelPath
       const canRenderChildren = isExpanded && entryKey !== currentTreeKey && !nextSeen.has(entryKey)
@@ -761,14 +767,15 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                       event.stopPropagation()
                       setExpanded((prev) => {
                         const next = new Set(prev)
-                        if (next.has(pathKey(''))) next.delete(pathKey(''))
-                        else next.add(pathKey(''))
+                    const rootKey = storagePathKey(storageRoot, '')
+                    if (next.has(rootKey)) next.delete(rootKey)
+                    else next.add(rootKey)
                         return next
                       })
                     }}
                     className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
                   >
-                    <ChevronRight className={`h-3 w-3 transition ${expanded.has(pathKey('')) ? 'rotate-90' : ''}`} />
+                    <ChevronRight className={`h-3 w-3 transition ${expanded.has(storagePathKey(storageRoot, '')) ? 'rotate-90' : ''}`} />
                   </button>
                   <button
                     type="button"
@@ -782,7 +789,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
                     <span className="truncate">{rootEntry.name}</span>
                   </button>
                 </div>
-                {expanded.has(pathKey('')) && <div>{renderTree('', 1)}</div>}
+                {expanded.has(storagePathKey(storageRoot, '')) && <div>{renderTree('', 1)}</div>}
               </>
             ) : (
               <div className="py-10 text-center text-xs text-[#8a8378] dark:text-zinc-500">Loading tree...</div>
