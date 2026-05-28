@@ -29,6 +29,7 @@ type OperationState = {
 
 type MultipartCreateResponse = {
   upload_token: string
+  storage?: StorageRoot
   part_size: number
   path: string
   filename: string
@@ -38,6 +39,7 @@ type MultipartCreateResponse = {
 }
 
 type MultipartCompleteResponse = {
+  storage?: StorageRoot
   path?: string
   filename?: string
   size?: number
@@ -142,60 +144,6 @@ function downloadBlob(filename: string, contentBase64: string, contentType = 'ap
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
-}
-
-function fileToBase64(file: File, onProgress: (progress: number) => void): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('failed to read file'))
-    reader.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress(Math.min(15, Math.round((event.loaded / event.total) * 15)))
-      }
-    }
-    reader.onload = () => {
-      const value = String(reader.result || '')
-      onProgress(15)
-      resolve(value.includes(',') ? value.split(',').pop() || '' : value)
-    }
-    reader.readAsDataURL(file)
-  })
-}
-
-function postJsonWithUploadProgress<T>(
-  url: string,
-  accessToken: string,
-  payload: unknown,
-  onProgress: (progress: number) => void,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', url)
-    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`)
-    xhr.setRequestHeader('Content-Type', 'application/json')
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress(15 + Math.round((event.loaded / event.total) * 75))
-      }
-    }
-    xhr.upload.onload = () => onProgress(90)
-    xhr.onerror = () => reject(new Error('network error during upload'))
-    xhr.onload = () => {
-      let data = {} as T & { detail?: string }
-      try {
-        data = xhr.responseText ? JSON.parse(xhr.responseText) as T & { detail?: string } : data
-      } catch {
-        data = {} as T & { detail?: string }
-      }
-      if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(data.detail || `upload failed: ${xhr.status}`))
-        return
-      }
-      onProgress(95)
-      resolve(data)
-    }
-    xhr.send(JSON.stringify(payload))
-  })
 }
 
 function putBlobWithProgress<T>(
@@ -404,86 +352,53 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setError(null)
     let multipartAbortUrl = ''
     try {
-      if (storageRoot === 'r2') {
-        const create = await postWorkspaceAction('multipart/create', {
-          path: targetPath,
-          filename: file.name,
-          size: file.size,
-          content_type: file.type || 'application/octet-stream',
-        }) as MultipartCreateResponse
-        multipartAbortUrl = create.abort_url || ''
-        const partSize = Math.max(5 * 1024 * 1024, Number(create.part_size || 32 * 1024 * 1024))
-        let uploadedBytes = 0
-        let partNumber = 1
-        for (let offset = 0; offset < file.size || (file.size === 0 && partNumber === 1); offset += partSize) {
-          const end = file.size === 0 ? 0 : Math.min(offset + partSize, file.size)
-          const chunk = file.slice(offset, end)
-          const partUrl = create.upload_part_url_template.replace('{partNumber}', String(partNumber))
-          await putBlobWithProgress(partUrl, chunk, (loaded) => {
-            const total = file.size || 1
-            setOperation({ kind: 'upload', label: file.name, progress: Math.min(95, Math.round(((uploadedBytes + loaded) / total) * 95)) })
-          })
-          uploadedBytes += chunk.size
-          partNumber += 1
-        }
-        setOperation({ kind: 'upload', label: file.name, progress: 98 })
-        const completeRes = await fetch(create.complete_url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
+      const create = await postWorkspaceAction('multipart/create', {
+        path: targetPath,
+        filename: file.name,
+        size: file.size,
+        content_type: file.type || 'application/octet-stream',
+        overwrite: true,
+      }) as MultipartCreateResponse
+      if (create.storage && create.storage !== storageRoot) {
+        throw new Error(`multipart upload returned ${create.storage}, expected ${storageRoot}`)
+      }
+      multipartAbortUrl = create.abort_url || ''
+      const partSize = Math.max(1024 * 1024, Number(create.part_size || 8 * 1024 * 1024))
+      let uploadedBytes = 0
+      let partNumber = 1
+      for (let offset = 0; offset < file.size || (file.size === 0 && partNumber === 1); offset += partSize) {
+        const end = file.size === 0 ? 0 : Math.min(offset + partSize, file.size)
+        const chunk = file.slice(offset, end)
+        const partUrl = create.upload_part_url_template.replace('{partNumber}', String(partNumber))
+        await putBlobWithProgress(partUrl, chunk, (loaded) => {
+          const total = file.size || 1
+          setOperation({ kind: 'upload', label: file.name, progress: Math.min(95, Math.round(((uploadedBytes + loaded) / total) * 95)) })
         })
-        const completed = await completeRes.json().catch(() => ({})) as MultipartCompleteResponse
-        if (!completeRes.ok) throw new Error(completed.detail || `complete upload failed: ${completeRes.status}`)
-        if (completed.path) {
-          const uploadedParent = parentPath(completed.path)
-          const uploadedParentRelPath = relPathFromAbsolute(basePath, uploadedParent)
-          const uploadedParentKey = storagePathKey(storageRoot, uploadedParentRelPath)
-          setEntriesByPath((prev) => ({
-            ...prev,
-            [uploadedParentKey]: upsertEntry(prev[uploadedParentKey] || [], {
-              name: completed.filename || file.name,
-              path: completed.path || `${uploadedParent}/${file.name}`,
-              type: 'file',
-              size: completed.size ?? file.size,
-              mtime: new Date().toISOString(),
-            }),
-          }))
-          setExpanded((prev) => new Set(prev).add(uploadedParentKey))
-        }
-        await loadPath(targetPath)
-        setOperation({ kind: 'upload', label: file.name, progress: 100 })
-        return
+        uploadedBytes += chunk.size
+        partNumber += 1
       }
-
-      if (file.size > 50 * 1024 * 1024) {
-        throw new Error('Workspace upload is limited to small files. Switch to R2 Storage for large files, or upload to R2 then copy into Workspace from Terminal.')
-      }
-      const contentBase64 = await fileToBase64(file, (progress) => {
-        setOperation({ kind: 'upload', label: file.name, progress })
+      setOperation({ kind: 'upload', label: file.name, progress: 98 })
+      const completeRes = await fetch(create.complete_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
       })
-      const uploaded = await postJsonWithUploadProgress<{ path?: string; filename?: string; size?: number; detail?: string }>(
-        `${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/upload`,
-        accessToken,
-        {
-          path: targetPath,
-          storage: storageRoot,
-          filename: file.name,
-          content_base64: contentBase64,
-          overwrite: true,
-        },
-        (progress) => setOperation({ kind: 'upload', label: file.name, progress }),
-      )
-      if (uploaded.path) {
-        const uploadedParent = parentPath(uploaded.path)
+      const completed = await completeRes.json().catch(() => ({})) as MultipartCompleteResponse
+      if (!completeRes.ok) throw new Error(completed.detail || `complete upload failed: ${completeRes.status}`)
+      if (completed.storage && completed.storage !== storageRoot) {
+        throw new Error(`complete upload returned ${completed.storage}, expected ${storageRoot}`)
+      }
+      if (completed.path) {
+        const uploadedParent = parentPath(completed.path)
         const uploadedParentRelPath = relPathFromAbsolute(basePath, uploadedParent)
         const uploadedParentKey = storagePathKey(storageRoot, uploadedParentRelPath)
         setEntriesByPath((prev) => ({
           ...prev,
           [uploadedParentKey]: upsertEntry(prev[uploadedParentKey] || [], {
-            name: uploaded.filename || file.name,
-            path: uploaded.path || `${uploadedParent}/${file.name}`,
+            name: completed.filename || file.name,
+            path: completed.path || `${uploadedParent}/${file.name}`,
             type: 'file',
-            size: uploaded.size ?? file.size,
+            size: completed.size ?? file.size,
             mtime: new Date().toISOString(),
           }),
         }))
