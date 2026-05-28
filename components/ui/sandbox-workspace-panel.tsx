@@ -225,17 +225,16 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setCurrentRelPath(requestedRelPath)
     setExpanded((prev) => new Set(prev).add(requestedKey))
     try {
-      const qs = new URLSearchParams()
-      if (requestedRelPath) qs.set('path', requestedRelPath)
-      qs.set('_', `${Date.now()}-${loadSeq}`)
-      const suffix = qs.toString() ? `?${qs.toString()}` : ''
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/list${suffix}`, {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/workspace/list`, {
+        method: 'POST',
         cache: 'no-store',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Cache-Control': 'no-store',
+          'Content-Type': 'application/json',
           Pragma: 'no-cache',
         },
+        body: JSON.stringify({ path: requestedRelPath }),
       })
       const data = await res.json().catch(() => ({})) as Partial<WorkspaceListResponse> & { detail?: string }
       if (!res.ok) throw new Error(data.detail || `workspace list failed: ${res.status}`)
