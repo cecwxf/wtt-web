@@ -177,6 +177,7 @@ function postJsonWithUploadProgress<T>(
 export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspacePanelProps) {
   const [basePath, setBasePath] = useState('')
   const [currentRelPath, setCurrentRelPath] = useState('')
+  const [currentEntries, setCurrentEntries] = useState<WorkspaceEntry[]>([])
   const [entriesByPath, setEntriesByPath] = useState<Record<string, WorkspaceEntry[]>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [loadingPath, setLoadingPath] = useState<string | null>(null)
@@ -191,7 +192,6 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
 
   const currentKey = pathKey(currentRelPath)
   const currentPath = absolutePathFor(basePath, currentRelPath)
-  const currentEntries = entriesByPath[currentKey] || []
   const busy = Boolean(operation)
 
   const postWorkspaceAction = useCallback(async (action: string, payload: unknown) => {
@@ -248,6 +248,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       setBasePath(nextBase)
       basePathRef.current = nextBase
       setCurrentRelPath(nextRelPath)
+      setCurrentEntries(nextEntries)
       setEntriesByPath((prev) => {
         const next = { ...prev, [nextKey]: nextEntries }
         if (requestedKey === nextKey) next[requestedKey] = nextEntries
@@ -263,8 +264,17 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   }, [accessToken, agentId])
 
   useEffect(() => {
+    setBasePath('')
+    basePathRef.current = ''
+    setCurrentRelPath('')
+    setCurrentEntries([])
+    setEntriesByPath({})
+    setExpanded(new Set())
+    setSelectedEntry(null)
+    setContextMenu(null)
+    setError(null)
     loadPath('')
-  }, [loadPath])
+  }, [agentId, loadPath])
 
   useEffect(() => {
     const close = () => setContextMenu(null)
