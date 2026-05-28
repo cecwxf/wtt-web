@@ -245,9 +245,8 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   const loadSeqRef = useRef(0)
   const basePathRef = useRef('')
 
-  const displayBasePath = basePath || (storageRoot === 'r2' ? '/mnt/r2' : '')
   const currentKey = storagePathKey(storageRoot, currentRelPath)
-  const currentPath = absolutePathFor(displayBasePath, currentRelPath)
+  const currentPath = absolutePathFor(basePath, currentRelPath)
   const busy = Boolean(operation)
   const rootLabel = storageRoot === 'r2' ? 'R2 Storage' : 'Workspace'
   const rootDescription = storageRoot === 'r2'
@@ -664,7 +663,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     })
   }
 
-  const rootEntry: WorkspaceEntry | null = displayBasePath ? { name: `${rootLabel} (${displayBasePath})`, path: displayBasePath, type: 'directory' } : null
+  const rootEntry: WorkspaceEntry | null = basePath ? { name: `${rootLabel} (${basePath})`, path: basePath, type: 'directory' } : null
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-3">
@@ -701,7 +700,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             <button
               type="button"
               onClick={() => handleCreateDirectory(currentRelPath)}
-              disabled={loadingPath !== null || busy || !displayBasePath}
+              disabled={loadingPath !== null || busy || !basePath}
               className="inline-flex items-center gap-1 rounded-lg border border-[#ded8ce] px-2 py-1 text-xs font-semibold text-[#5f574d] transition hover:bg-[#f4f1eb] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               <FolderPlus className="h-3.5 w-3.5" /> New Folder
@@ -709,7 +708,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             <button
               type="button"
               onClick={() => handleCreateFile(currentRelPath)}
-              disabled={loadingPath !== null || busy || !displayBasePath}
+              disabled={loadingPath !== null || busy || !basePath}
               className="inline-flex items-center gap-1 rounded-lg border border-[#ded8ce] px-2 py-1 text-xs font-semibold text-[#5f574d] transition hover:bg-[#f4f1eb] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               <FilePlus className="h-3.5 w-3.5" /> New File
@@ -725,7 +724,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             <button
               type="button"
               onClick={() => openUpload(currentRelPath)}
-              disabled={loadingPath !== null || busy || !displayBasePath}
+              disabled={loadingPath !== null || busy || !basePath}
               className="inline-flex items-center gap-1 rounded-lg bg-[#1f2328] px-2 py-1 text-xs font-semibold text-white transition hover:bg-black disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-950"
             >
               <Upload className="h-3.5 w-3.5" /> Upload
@@ -804,7 +803,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             <button
               type="button"
               onClick={() => currentRelPath ? loadPath(parentRelPath(currentRelPath)) : undefined}
-              disabled={!displayBasePath || !currentRelPath || loadingPath !== null}
+              disabled={!basePath || !currentRelPath || loadingPath !== null}
               className="rounded-md px-2 py-1 text-xs font-semibold text-[#6f665c] transition hover:bg-[#f4f1eb] disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
               Up
