@@ -663,7 +663,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     })
   }
 
-  const rootEntry: WorkspaceEntry | null = basePath ? { name: rootLabel, path: basePath, type: 'directory' } : null
+  const rootEntry: WorkspaceEntry | null = basePath ? { name: `${rootLabel} (${basePath})`, path: basePath, type: 'directory' } : null
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-3">
