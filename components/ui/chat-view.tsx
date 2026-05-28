@@ -900,6 +900,7 @@ export function ChatView({
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
+  const [terminalMaximized, setTerminalMaximized] = useState(false)
   const [manualPreviewFile, setManualPreviewFile] = useState<ConversationFile | null>(null)
   const [closedPreviewKey, setClosedPreviewKey] = useState<string | null>(null)
   const lastAutoPreviewKeyRef = useRef<string | null>(null)
@@ -2038,6 +2039,10 @@ export function ChatView({
   }, [activeTab, latestAgentPreviewFile])
 
   useEffect(() => {
+    if (activeTab !== 'terminal') setTerminalMaximized(false)
+  }, [activeTab])
+
+  useEffect(() => {
     if (!manualPreviewFile) return
     if (!conversationFiles.some((file) => file.key === manualPreviewFile.key)) {
       setManualPreviewFile(null)
@@ -2214,9 +2219,9 @@ export function ChatView({
         )}
 
         {activeTab === 'terminal' ? (
-          <div className="flex h-full min-h-[360px] w-full flex-col">
+          <div className={`${terminalMaximized ? 'fixed inset-2 z-[120] rounded-2xl border border-[#2b3a35] bg-[#0b0f14] p-2 shadow-2xl' : 'flex h-full min-h-[360px] w-full flex-col'}`}>
             {currentAgentId && accessToken ? (
-              <div className="relative min-h-[320px] flex-1 resize overflow-hidden rounded-2xl">
+              <div className={`${terminalMaximized ? 'relative h-full min-h-0 w-full overflow-hidden rounded-2xl' : 'relative min-h-[320px] flex-1 resize overflow-hidden rounded-2xl'}`}>
                 <AgentTerminalPane
                   agentId={currentAgentId}
                   agentName={workspaceAgentName || currentAgentId}
@@ -2224,8 +2229,19 @@ export function ChatView({
                   token={accessToken}
                   compact={compactUi}
                   className="h-full w-full resize overflow-hidden"
+                  actions={
+                    <button
+                      type="button"
+                      onClick={() => setTerminalMaximized((value) => !value)}
+                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-black text-slate-400 transition hover:bg-white/10 hover:text-white"
+                      title={terminalMaximized ? 'Restore terminal size' : 'Maximize terminal'}
+                    >
+                      {terminalMaximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                      {terminalMaximized ? 'Restore' : 'Max'}
+                    </button>
+                  }
                 />
-                <span className="pointer-events-none absolute bottom-1.5 right-1.5 h-5 w-5 rounded-sm border-b-2 border-r-2 border-cyan-300/70 opacity-70" />
+                {!terminalMaximized && <span className="pointer-events-none absolute bottom-1.5 right-1.5 h-5 w-5 rounded-sm border-b-2 border-r-2 border-cyan-300/70 opacity-70" />}
               </div>
             ) : (
               <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[#ded8ce] bg-white/45 text-sm text-[#8a8378] dark:border-zinc-800 dark:bg-zinc-900/45 dark:text-zinc-500">
