@@ -294,11 +294,13 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
           'Content-Type': 'application/json',
           Pragma: 'no-cache',
         },
-        body: JSON.stringify({ path: requestedRelPath, storage: storageRoot }),
+        body: JSON.stringify({ path: requestedRelPath, storage: requestedStorageRoot }),
       })
       const data = await res.json().catch(() => ({})) as Partial<WorkspaceListResponse> & { detail?: string }
       if (!res.ok) throw new Error(data.detail || `workspace list failed: ${res.status}`)
-      if (data.storage && data.storage !== requestedStorageRoot) return
+      if (data.storage && data.storage !== requestedStorageRoot) {
+        throw new Error(`workspace list returned ${data.storage}, expected ${requestedStorageRoot}`)
+      }
       const nextBase = String(data.base_path || '')
       const nextPath = String(data.path || nextBase || requestedRelPath)
       const nextRelPath = relPathFromAbsolute(nextBase, nextPath) || requestedRelPath
