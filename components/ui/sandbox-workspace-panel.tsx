@@ -394,6 +394,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     if (!file || !accessToken) return
     setOperation({ kind: 'upload', label: file.name, progress: 0 })
     setError(null)
+    let multipartAbortUrl = ''
     try {
       if (storageRoot === 'r2') {
         const create = await postWorkspaceAction('multipart/create', {
@@ -402,6 +403,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
           size: file.size,
           content_type: file.type || 'application/octet-stream',
         }) as MultipartCreateResponse
+        multipartAbortUrl = create.abort_url || ''
         const partSize = Math.max(5 * 1024 * 1024, Number(create.part_size || 32 * 1024 * 1024))
         let uploadedBytes = 0
         let partNumber = 1
@@ -482,6 +484,9 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
       await loadPath(targetPath)
       setOperation({ kind: 'upload', label: file.name, progress: 100 })
     } catch (exc) {
+      if (multipartAbortUrl) {
+        fetch(multipartAbortUrl, { method: 'POST' }).catch(() => undefined)
+      }
       setError(exc instanceof Error ? exc.message : String(exc))
     } finally {
       window.setTimeout(() => setOperation(null), 250)
