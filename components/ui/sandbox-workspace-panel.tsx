@@ -15,8 +15,11 @@ type WorkspaceEntry = {
 type WorkspaceListResponse = {
   base_path: string
   path: string
+  storage?: StorageRoot
   entries: WorkspaceEntry[]
 }
+
+type StorageRoot = 'workspace' | 'r2'
 
 type OperationState = {
   kind: 'upload' | 'download' | 'mkdir' | 'touch' | 'rename' | 'delete'
@@ -175,6 +178,7 @@ function postJsonWithUploadProgress<T>(
 }
 
 export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspacePanelProps) {
+  const [storageRoot, setStorageRoot] = useState<StorageRoot>('workspace')
   const [basePath, setBasePath] = useState('')
   const [currentRelPath, setCurrentRelPath] = useState('')
   const [currentEntries, setCurrentEntries] = useState<WorkspaceEntry[]>([])
@@ -193,6 +197,10 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
   const currentKey = pathKey(currentRelPath)
   const currentPath = absolutePathFor(basePath, currentRelPath)
   const busy = Boolean(operation)
+  const rootLabel = storageRoot === 'r2' ? 'R2 Storage' : 'Workspace'
+  const rootDescription = storageRoot === 'r2'
+    ? 'Large files stored here live on the R2 mount and are not part of the normal sandbox workspace backup.'
+    : 'Normal agent files live here and are included in sandbox backup/restore.'
 
   const postWorkspaceAction = useCallback(async (action: string, payload: unknown) => {
     if (!accessToken) throw new Error('missing access token')
@@ -202,12 +210,12 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...(payload as Record<string, unknown>), storage: storageRoot }),
     })
     const data = await res.json().catch(() => ({})) as Record<string, unknown> & { detail?: string }
     if (!res.ok) throw new Error(data.detail || `${action} failed: ${res.status}`)
     return data
-  }, [accessToken, agentId])
+  }, [accessToken, agentId, storageRoot])
 
   useEffect(() => {
     basePathRef.current = basePath
@@ -234,7 +242,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
           'Content-Type': 'application/json',
           Pragma: 'no-cache',
         },
-        body: JSON.stringify({ path: requestedRelPath }),
+        body: JSON.stringify({ path: requestedRelPath, storage: storageRoot }),
       })
       const data = await res.json().catch(() => ({})) as Partial<WorkspaceListResponse> & { detail?: string }
       if (!res.ok) throw new Error(data.detail || `workspace list failed: ${res.status}`)
@@ -260,7 +268,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     } finally {
       if (loadSeq === loadSeqRef.current) setLoadingPath(null)
     }
-  }, [accessToken, agentId])
+  }, [accessToken, agentId, storageRoot])
 
   useEffect(() => {
     setBasePath('')
@@ -273,7 +281,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setContextMenu(null)
     setError(null)
     loadPath('')
-  }, [agentId, loadPath])
+  }, [agentId, loadPath, storageRoot])
 
   useEffect(() => {
     const close = () => setContextMenu(null)
@@ -348,6 +356,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
         accessToken,
         {
           path: targetPath,
+          storage: storageRoot,
           filename: file.name,
           content_base64: contentBase64,
           overwrite: true,
@@ -543,7 +552,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     })
   }
 
-  const rootEntry: WorkspaceEntry | null = basePath ? { name: basePath.split('/').pop() || basePath, path: basePath, type: 'directory' } : null
+  const rootEntry: WorkspaceEntry | null = basePath ? { name: rootLabel, path: basePath, type: 'directory' } : null
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-3">
@@ -554,6 +563,23 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
             <p className="mt-1 truncate font-mono text-xs text-[#7b7368] dark:text-zinc-500">{currentPath || 'loading...'}</p>
           </div>
           <div className="flex items-center gap-2">
+            <div className="mr-1 inline-flex rounded-lg border border-[#ded8ce] bg-[#f8f4ed] p-0.5 dark:border-zinc-700 dark:bg-zinc-950">
+              {(['workspace', 'r2'] as StorageRoot[]).map((root) => (
+                <button
+                  key={root}
+                  type="button"
+                  onClick={() => setStorageRoot(root)}
+                  disabled={busy}
+                  className={`rounded-md px-2 py-1 text-xs font-black transition ${
+                    storageRoot === root
+                      ? 'bg-[#1f2328] text-white dark:bg-zinc-100 dark:text-zinc-950'
+                      : 'text-[#6f665c] hover:bg-white/80 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  {root === 'r2' ? 'R2 Storage' : 'Workspace'}
+                </button>
+              ))}
+            </div>
             {operation && (
               <span className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -596,7 +622,7 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
           </div>
         </div>
         <p className="mt-2 text-xs text-[#8a8378] dark:text-zinc-500">
-          Right-click folders/files for open, refresh, upload, download, create, rename, and delete operations.
+          {rootDescription} Right-click folders/files for open, refresh, upload, download, create, rename, and delete operations.
         </p>
       </div>
 
