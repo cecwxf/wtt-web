@@ -1313,11 +1313,8 @@ function FeedPageInner() {
   )
   const selectedAgent = selectedAgentId ? agents.find((agent) => agent.agent_id === selectedAgentId) : undefined
   const selectedAgentRuntime = selectedAgentId ? agentRuntimeMap?.[selectedAgentId] : undefined
-  const selectedAgentIsCloud = Boolean(
-    selectedAgent && (selectedAgent.binding_method || selectedAgent.bound_via || '') === 'cloud_trial',
-  ) || Boolean(selectedAgent?.is_cloud_sandbox || selectedAgent?.cloud_host_agent_id)
+  const selectedAgentIsCloud = Boolean(selectedAgent?.is_cloud_sandbox)
     || String(selectedAgentRuntime?.provider || '').includes('cloudflare_sandbox')
-    || Boolean(selectedAgentRuntime?.host_agent_id)
   const onlineAgentIds = useMemo(() => {
     const arr = (agentStatsRaw as Record<string, unknown>)?.online_agents as string[] | undefined
     const ids = new Set(arr ?? [])

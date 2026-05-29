@@ -933,6 +933,7 @@ export function ChatView({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevMsgCountRef = useRef(0)
   const initialScrollDoneRef = useRef(false)
+  const canUseWorkspaceTab = Boolean(currentAgentIsCloud && currentAgentId)
 
   // Slash command state
   const [slashOpen, setSlashOpen] = useState(false)
@@ -2043,6 +2044,12 @@ export function ChatView({
   }, [activeTab])
 
   useEffect(() => {
+    if (activeTab === 'workspace' && !canUseWorkspaceTab) {
+      setActiveTab('chat')
+    }
+  }, [activeTab, canUseWorkspaceTab])
+
+  useEffect(() => {
     if (!manualPreviewFile) return
     if (!conversationFiles.some((file) => file.key === manualPreviewFile.key)) {
       setManualPreviewFile(null)
@@ -2144,7 +2151,7 @@ export function ChatView({
                     currentAgentId ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-700'
                   }`} />
                 </button>
-                {currentAgentIsCloud && (
+                {canUseWorkspaceTab && (
                   <button
                     type="button"
                     onClick={() => setActiveTab('workspace')}
@@ -2191,12 +2198,12 @@ export function ChatView({
       <div
         ref={scrollRef}
         className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
-          activeTab === 'terminal' || activeTab === 'workspace'
+          activeTab === 'terminal' || (activeTab === 'workspace' && canUseWorkspaceTab)
             ? 'overflow-hidden px-3 py-3 sm:px-4'
             : 'overflow-y-auto px-4 py-3 sm:px-6'
         }`}
       >
-        {activeTab !== 'terminal' && activeTab !== 'workspace' && (
+        {activeTab !== 'terminal' && !(activeTab === 'workspace' && canUseWorkspaceTab) && (
         <div className="mb-3 flex justify-center">
           <button
             onClick={handleLoadOlder}
@@ -2249,7 +2256,7 @@ export function ChatView({
               </div>
             )}
           </div>
-        ) : activeTab === 'workspace' && currentAgentIsCloud ? (
+        ) : activeTab === 'workspace' && canUseWorkspaceTab ? (
           <SandboxWorkspacePanel agentId={currentAgentId} accessToken={accessToken} />
         ) : activeTab === 'files' ? (
           <div className="mx-auto w-full max-w-3xl">
