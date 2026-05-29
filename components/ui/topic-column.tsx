@@ -422,7 +422,6 @@ export function TopicColumn(props: TopicColumnProps) {
   )
 
   const agentFolders = useMemo<AgentFolder[]>(() => {
-    const agentById = new Map(agentOptions.map((agent) => [agent.agent_id, agent]))
     const folders = new Map<string, AgentFolder>()
 
     const ensureFolder = (key: string, label: string, subtitle: string) => {
@@ -439,25 +438,14 @@ export function TopicColumn(props: TopicColumnProps) {
 
     for (const agent of agentOptions) {
       const runtime = agentRuntimeMap?.[agent.agent_id]
-      const provider = String(runtime?.provider || '').toLowerCase()
-      const hostAgentId = cleanHostLabel(agent.cloud_host_agent_id || runtime?.host_agent_id)
-      const cloudHostId = hostAgentId || (agent.is_cloud_sandbox || provider.includes('cloudflare_sandbox') ? agent.agent_id : '')
       const runtimeHost = cleanHostLabel(runtime?.hostname)
 
-      if (cloudHostId) {
-        const hostAgent = agentById.get(cloudHostId)
-        const hostRuntime = agentRuntimeMap?.[cloudHostId]
-        const label = cleanHostLabel(hostRuntime?.hostname) || hostAgent?.display_name || cloudHostId
-        ensureFolder(`cloud:${cloudHostId}`, label, 'Cloudflare Sandbox').agents.push(agent)
-        continue
-      }
-
       if (runtimeHost) {
-        ensureFolder(`host:${runtimeHost}`, runtimeHost, zh ? '自管主机' : 'Self-managed host').agents.push(agent)
+        ensureFolder(`host:${runtimeHost}`, runtimeHost, zh ? '主机' : 'Host').agents.push(agent)
         continue
       }
 
-      ensureFolder('host:self-managed', zh ? '自管主机' : 'Self-managed', zh ? '未上报主机名' : 'No hostname reported').agents.push(agent)
+      ensureFolder('host:unknown', zh ? '未上报主机' : 'Unknown host', zh ? '无 hostname' : 'No hostname').agents.push(agent)
     }
 
     return Array.from(folders.values()).sort((a, b) => {
