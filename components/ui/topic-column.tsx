@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardList, Cloud, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardList, Cloud, Folder, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -35,6 +35,8 @@ interface AgentOption {
   display_name: string
   binding_method?: string
   bound_via?: string
+  is_cloud_sandbox?: boolean
+  cloud_host_agent_id?: string
 }
 
 export interface AgentRuntimeInfo {
@@ -274,6 +276,17 @@ function normalizeNewAgentAdapter(runtime?: AgentRuntimeInfo) {
   return ''
 }
 
+type AgentFolder = {
+  key: string
+  label: string
+  subtitle: string
+  agents: AgentOption[]
+}
+
+function cleanHostLabel(value: unknown) {
+  return String(value || '').trim()
+}
+
 export function TopicColumn(props: TopicColumnProps) {
   const {
     topics,
@@ -324,6 +337,7 @@ export function TopicColumn(props: TopicColumnProps) {
     discuss: false,
     subscriber: false,
   })
+  const [collapsedAgentFolders, setCollapsedAgentFolders] = useState<Record<string, boolean>>({})
   const { locale, t } = useI18n()
   const zh = locale === 'zh'
 
@@ -406,6 +420,54 @@ export function TopicColumn(props: TopicColumnProps) {
     () => agentOptions.some((agent) => (agent.binding_method || agent.bound_via || '') === 'cloud_trial'),
     [agentOptions],
   )
+
+  const agentFolders = useMemo<AgentFolder[]>(() => {
+    const agentById = new Map(agentOptions.map((agent) => [agent.agent_id, agent]))
+    const folders = new Map<string, AgentFolder>()
+
+    const ensureFolder = (key: string, label: string, subtitle: string) => {
+      const existing = folders.get(key)
+      if (existing) {
+        if (!existing.label && label) existing.label = label
+        if (!existing.subtitle && subtitle) existing.subtitle = subtitle
+        return existing
+      }
+      const folder = { key, label, subtitle, agents: [] as AgentOption[] }
+      folders.set(key, folder)
+      return folder
+    }
+
+    for (const agent of agentOptions) {
+      const runtime = agentRuntimeMap?.[agent.agent_id]
+      const provider = String(runtime?.provider || '').toLowerCase()
+      const hostAgentId = cleanHostLabel(agent.cloud_host_agent_id || runtime?.host_agent_id)
+      const cloudHostId = hostAgentId || (agent.is_cloud_sandbox || provider.includes('cloudflare_sandbox') ? agent.agent_id : '')
+      const runtimeHost = cleanHostLabel(runtime?.hostname)
+
+      if (cloudHostId) {
+        const hostAgent = agentById.get(cloudHostId)
+        const hostRuntime = agentRuntimeMap?.[cloudHostId]
+        const label = cleanHostLabel(hostRuntime?.hostname) || hostAgent?.display_name || cloudHostId
+        ensureFolder(`cloud:${cloudHostId}`, label, 'Cloudflare Sandbox').agents.push(agent)
+        continue
+      }
+
+      if (runtimeHost) {
+        ensureFolder(`host:${runtimeHost}`, runtimeHost, zh ? '自管主机' : 'Self-managed host').agents.push(agent)
+        continue
+      }
+
+      ensureFolder('host:self-managed', zh ? '自管主机' : 'Self-managed', zh ? '未上报主机名' : 'No hostname reported').agents.push(agent)
+    }
+
+    return Array.from(folders.values()).sort((a, b) => {
+      const selectedA = a.agents.some((agent) => agent.agent_id === selectedAgentId)
+      const selectedB = b.agents.some((agent) => agent.agent_id === selectedAgentId)
+      if (selectedA && !selectedB) return -1
+      if (!selectedA && selectedB) return 1
+      return a.label.localeCompare(b.label)
+    })
+  }, [agentOptions, agentRuntimeMap, selectedAgentId, zh])
 
   const openNewAgentModal = () => {
     const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId)
@@ -624,17 +686,40 @@ export function TopicColumn(props: TopicColumnProps) {
             </div>
           )}
 
-          {agentOptions.map((agent) => {
-            const selected = agent.agent_id === selectedAgentId
-            const online = isAgentOnline(agent.agent_id)
-            const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
-            const tone = roleTone(agent.agent_id, role)
-            const runtime = agentRuntimeMap?.[agent.agent_id]
-            const runtimeText = formatRuntime(runtime)
-            const hoverTitle = agentTooltip(agent, role, runtime)
-            const menuOpen = agentMenuFor === agent.agent_id
-
+          {agentFolders.map((folder) => {
+            const collapsed = collapsedAgentFolders[folder.key] ?? false
+            const onlineCount = folder.agents.filter((agent) => isAgentOnline(agent.agent_id)).length
             return (
+              <section key={folder.key} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setCollapsedAgentFolders((prev) => ({ ...prev, [folder.key]: !collapsed }))}
+                  className="flex w-full flex-col items-center rounded-xl border border-[#e2dacd] bg-white/65 px-1 py-1.5 text-center text-slate-500 shadow-sm transition hover:border-[#d3c8b8] hover:bg-white dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300 dark:hover:border-zinc-700"
+                  title={[folder.label, folder.subtitle].filter(Boolean).join(' · ')}
+                >
+                  <span className="flex items-center gap-1">
+                    {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    <Folder className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="mt-0.5 max-w-full truncate text-[9px] font-black leading-tight text-slate-600 dark:text-zinc-200">
+                    {folder.label}
+                  </span>
+                  <span className="mt-0.5 rounded-full bg-[#eee8dc] px-1.5 py-0.5 text-[9px] font-black leading-none text-slate-500 dark:bg-zinc-800 dark:text-zinc-300">
+                    {onlineCount}/{folder.agents.length}
+                  </span>
+                </button>
+
+                {!collapsed && folder.agents.map((agent) => {
+                  const selected = agent.agent_id === selectedAgentId
+                  const online = isAgentOnline(agent.agent_id)
+                  const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
+                  const tone = roleTone(agent.agent_id, role)
+                  const runtime = agentRuntimeMap?.[agent.agent_id]
+                  const runtimeText = formatRuntime(runtime)
+                  const hoverTitle = agentTooltip(agent, role, runtime)
+                  const menuOpen = agentMenuFor === agent.agent_id
+
+                  return (
               <div key={agent.agent_id} className="relative">
                 <button
                   type="button"
@@ -849,6 +934,9 @@ export function TopicColumn(props: TopicColumnProps) {
                   </>
                 )}
               </div>
+                  )
+                })}
+              </section>
             )
           })}
         </div>

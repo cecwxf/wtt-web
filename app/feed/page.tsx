@@ -1177,6 +1177,8 @@ function FeedPageInner() {
       unread_count: 0,
       binding_method: agent.binding_method,
       bound_via: agent.bound_via,
+      is_cloud_sandbox: agent.is_cloud_sandbox,
+      cloud_host_agent_id: agent.cloud_host_agent_id,
     }))
   }, [agents])
 

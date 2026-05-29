@@ -11,6 +11,8 @@ export interface AgentItem {
   unread_count?: number
   binding_method?: string
   bound_via?: string
+  is_cloud_sandbox?: boolean
+  cloud_host_agent_id?: string
 }
 
 export interface SubAgentTask {

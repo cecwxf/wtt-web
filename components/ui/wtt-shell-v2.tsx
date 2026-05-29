@@ -258,7 +258,14 @@ export function WttShellV2(props: WttShellV2Props) {
               onRequestDiscuss={onRequestDiscuss}
               onSelectWorkerTopic={onSelectWorkerTopic}
               pinScopeKey={selectedAgentId}
-              agentOptions={agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name }))}
+              agentOptions={agents.map((a) => ({
+                agent_id: a.agent_id,
+                display_name: a.display_name,
+                binding_method: a.binding_method,
+                bound_via: a.bound_via,
+                is_cloud_sandbox: a.is_cloud_sandbox,
+                cloud_host_agent_id: a.cloud_host_agent_id,
+              }))}
               selectedAgentId={selectedAgentId}
               onSelectAgent={onAgentChange}
               isSelectedAgentOnline={isSelectedAgentOnline}
