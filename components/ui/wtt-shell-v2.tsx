@@ -70,7 +70,7 @@ interface WttShellV2Props {
   children: ReactNode
 }
 
-type SettingsPage = 'profile' | 'membership' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
+type SettingsPage = 'profile' | 'membership' | 'binding' | 'llm-proxy' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
 export function WttShellV2(props: WttShellV2Props) {
   const {

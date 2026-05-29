@@ -9,6 +9,7 @@ import {
   Check,
   ClipboardCopy,
   CreditCard,
+  KeyRound,
   Loader2,
   Lock,
   RefreshCw,
@@ -27,6 +28,7 @@ type SettingsPage =
   | "profile"
   | "membership"
   | "binding"
+  | "llm-proxy"
   | "notifications"
   | "poll"
   | "privacy"
@@ -73,6 +75,7 @@ const PAGE_ITEMS: Array<{
   { key: "profile", labelKey: "settings.profile", icon: User },
   { key: "membership", labelKey: "settings.membership", icon: CreditCard },
   { key: "binding", labelKey: "settings.binding", icon: Bot },
+  { key: "llm-proxy", labelKey: "settings.llmProxy", icon: KeyRound },
   { key: "notifications", labelKey: "settings.notifications", icon: Bell },
   { key: "privacy", labelKey: "settings.privacy", icon: Lock },
   { key: "appearance", labelKey: "settings.appearance", icon: Brush },
@@ -122,6 +125,50 @@ type CloudAgentInfo = {
     output_tokens?: number;
     total_tokens?: number;
   };
+};
+
+type LlmProxyToken = {
+  id: string;
+  name: string;
+  agent_id?: string;
+  token_prefix: string;
+  scope: string;
+  status: string;
+  plan_id: string;
+  allowed_models?: string[];
+  monthly_token_limit?: number;
+  concurrency_limit?: number;
+  is_managed?: boolean;
+  last_used_at?: string | null;
+  created_at?: string | null;
+  usage_month?: {
+    requests?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_tokens?: number;
+    total_tokens?: number;
+  };
+  secret?: string;
+};
+
+type LlmProxyPlans = {
+  proxy_base_url?: string;
+  plans?: Array<{
+    id: string;
+    name: string;
+    monthly_token_limit?: number;
+    concurrency_limit?: number;
+    description?: string;
+  }>;
+  model_price_reference?: Array<{
+    provider: string;
+    model: string;
+    context: string;
+    input_cache_hit: string;
+    input_cache_miss: string;
+    output: string;
+    note?: string;
+  }>;
 };
 
 type SessionWithAccessToken = {
@@ -227,6 +274,16 @@ export function WttSettingsModal({
   const [billingLoading, setBillingLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
+  const [llmProxyPlans, setLlmProxyPlans] = useState<LlmProxyPlans | null>(null);
+  const [llmProxyTokens, setLlmProxyTokens] = useState<LlmProxyToken[]>([]);
+  const [llmProxyLoading, setLlmProxyLoading] = useState(false);
+  const [llmProxyCreating, setLlmProxyCreating] = useState(false);
+  const [llmProxyError, setLlmProxyError] = useState("");
+  const [llmProxyReveal, setLlmProxyReveal] = useState<LlmProxyToken | null>(null);
+  const [llmProxyTokenName, setLlmProxyTokenName] = useState("Claude/Codex external token");
+  const [llmProxyAllowedModels, setLlmProxyAllowedModels] = useState(
+    CLOUD_AGENT_FALLBACK_MODELS.map((model) => model.id).join("\n"),
+  );
 
   const accessToken = (session as SessionWithAccessToken | null)?.accessToken;
   const isPaidPlan = (billing?.entitlement?.plan === "plus" || billing?.entitlement?.plan === "pro");
@@ -282,6 +339,33 @@ export function WttSettingsModal({
     }
   }, [accessToken]);
 
+  const loadLlmProxy = useCallback(async () => {
+    if (!accessToken) return;
+    setLlmProxyLoading(true);
+    setLlmProxyError("");
+    try {
+      const [plansRes, tokensRes] = await Promise.all([
+        fetch(`${CLIENT_WTT_API_BASE}/llm-proxy/plans`, { cache: "no-store" }),
+        fetch(`${CLIENT_WTT_API_BASE}/llm-proxy/tokens`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store",
+        }),
+      ]);
+      if (plansRes.ok) setLlmProxyPlans((await plansRes.json()) as LlmProxyPlans);
+      const tokenData = await tokensRes.json().catch(() => ({}));
+      if (!tokensRes.ok) {
+        const detail = tokenData.detail;
+        setLlmProxyError(typeof detail === "string" ? detail : detail?.message || "LLM Proxy tokens 加载失败");
+        return;
+      }
+      setLlmProxyTokens(Array.isArray(tokenData.tokens) ? tokenData.tokens : []);
+    } catch {
+      setLlmProxyError(t("settings.networkError"));
+    } finally {
+      setLlmProxyLoading(false);
+    }
+  }, [accessToken, t]);
+
   useEffect(() => {
     if (activePage !== "membership") return;
     void loadBilling();
@@ -293,6 +377,12 @@ export function WttSettingsModal({
     void loadCloudModels();
     void loadCloudAgentInfo();
   }, [activePage, loadBilling, loadCloudModels, loadCloudAgentInfo]);
+
+  useEffect(() => {
+    if (activePage !== "llm-proxy") return;
+    void loadBilling();
+    void loadLlmProxy();
+  }, [activePage, loadBilling, loadLlmProxy]);
 
   // Load profile from backend
   useEffect(() => {
@@ -586,6 +676,100 @@ export function WttSettingsModal({
       setCheckoutError(t("settings.networkError"));
     } finally {
       setCheckoutLoading(null);
+    }
+  };
+
+  const buildLlmProxyEnv = (secret: string) => {
+    const base = (llmProxyPlans?.proxy_base_url || "https://www.waxbyte.com/cloud-agent-proxy").replace(/\/+$/, "");
+    return [
+      `export ANTHROPIC_BASE_URL=${base}/anthropic`,
+      `export ANTHROPIC_AUTH_TOKEN=${secret}`,
+      `export OPENAI_BASE_URL=${base}/openai/v1`,
+      `export OPENAI_API_KEY=${secret}`,
+    ].join("\n");
+  };
+
+  const handleCreateLlmProxyToken = async () => {
+    if (!accessToken) {
+      setLlmProxyError(t("settings.sessionExpired"));
+      return;
+    }
+    setLlmProxyCreating(true);
+    setLlmProxyError("");
+    setLlmProxyReveal(null);
+    try {
+      const allowedModels = llmProxyAllowedModels
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/llm-proxy/tokens`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          name: llmProxyTokenName.trim() || "Claude/Codex external token",
+          scope: "external_agent",
+          allowed_models: allowedModels,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = data.detail;
+        setLlmProxyError(typeof detail === "string" ? detail : detail?.message || "Token 创建失败");
+        return;
+      }
+      if (data.token) setLlmProxyReveal(data.token as LlmProxyToken);
+      await loadLlmProxy();
+    } catch {
+      setLlmProxyError(t("settings.networkError"));
+    } finally {
+      setLlmProxyCreating(false);
+    }
+  };
+
+  const handleRotateLlmProxyToken = async (tokenId: string) => {
+    if (!accessToken) return;
+    setLlmProxyError("");
+    setLlmProxyReveal(null);
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/llm-proxy/tokens/${encodeURIComponent(tokenId)}/rotate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setLlmProxyError(typeof data.detail === "string" ? data.detail : "Token rotate 失败");
+        return;
+      }
+      if (data.token) setLlmProxyReveal(data.token as LlmProxyToken);
+      await loadLlmProxy();
+    } catch {
+      setLlmProxyError(t("settings.networkError"));
+    }
+  };
+
+  const handleDisableLlmProxyToken = async (tokenId: string) => {
+    if (!accessToken) return;
+    setLlmProxyError("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/llm-proxy/tokens/${encodeURIComponent(tokenId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ status: "disabled" }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setLlmProxyError(typeof data.detail === "string" ? data.detail : "Token 禁用失败");
+        return;
+      }
+      await loadLlmProxy();
+    } catch {
+      setLlmProxyError(t("settings.networkError"));
     }
   };
 
@@ -1143,6 +1327,179 @@ export function WttSettingsModal({
               >
                 打开完整升级页面
               </a>
+            </div>
+          )}
+
+          {activePage === "llm-proxy" && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">LLM Proxy Token Plan</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      统一给 Claude Code / Codex 配置 WTT Host Proxy。Sandbox Agent 默认使用托管 token；外部自管机器可以复制下面的环境变量接入同一代理。
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void loadLlmProxy()}
+                    disabled={llmProxyLoading || !accessToken}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    {llmProxyLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    刷新
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                  {(llmProxyPlans?.plans || []).slice(0, 3).map((plan) => (
+                    <div key={plan.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <p className="font-semibold text-slate-800">{plan.name}</p>
+                      <p className="mt-1 text-slate-500">{(plan.monthly_token_limit || 0).toLocaleString()} tokens/月</p>
+                      <p className="mt-1 text-slate-400">并发 {plan.concurrency_limit || "-"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {llmProxyError && (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {llmProxyError}
+                </p>
+              )}
+
+              {llmProxyReveal?.secret && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-900">Token 只展示一次，请立即复制</p>
+                  <pre className="mt-3 max-h-44 overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-50">
+                    {buildLlmProxyEnv(llmProxyReveal.secret)}
+                  </pre>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => void handleCopy(llmProxyReveal.secret || "", "Token 已复制")}
+                      className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white"
+                    >
+                      <ClipboardCopy className="h-3.5 w-3.5" />
+                      复制 Token
+                    </button>
+                    <button
+                      onClick={() => void handleCopy(buildLlmProxyEnv(llmProxyReveal.secret || ""), "环境变量已复制")}
+                      className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-700"
+                    >
+                      <ClipboardCopy className="h-3.5 w-3.5" />
+                      复制 Claude/Codex 配置
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-800">创建外部 Agent Token</p>
+                <div className="mt-3 grid gap-3">
+                  <input
+                    value={llmProxyTokenName}
+                    onChange={(event) => setLlmProxyTokenName(event.target.value)}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                    placeholder="Token 名称"
+                  />
+                  <textarea
+                    value={llmProxyAllowedModels}
+                    onChange={(event) => setLlmProxyAllowedModels(event.target.value)}
+                    className="min-h-24 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-indigo-500"
+                    placeholder="允许模型，每行一个；留空表示后端默认模型集"
+                  />
+                  <button
+                    onClick={() => void handleCreateLlmProxyToken()}
+                    disabled={llmProxyCreating || !accessToken}
+                    className="inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-60"
+                  >
+                    {llmProxyCreating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    创建 Token
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-800">Token 列表</p>
+                <div className="mt-3 space-y-2">
+                  {llmProxyTokens.length === 0 && (
+                    <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                      暂无 LLM Proxy Token。
+                    </p>
+                  )}
+                  {llmProxyTokens.map((token) => (
+                    <div key={token.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {token.name}
+                            {token.is_managed && <span className="ml-2 rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] text-cyan-700">managed</span>}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {token.token_prefix}... · {token.scope} · {token.status} · {token.plan_id}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            本月 {(token.usage_month?.total_tokens || 0).toLocaleString()} / {(token.monthly_token_limit || 0).toLocaleString()} tokens，
+                            请求 {(token.usage_month?.requests || 0).toLocaleString()} 次
+                          </p>
+                          {token.allowed_models && token.allowed_models.length > 0 && (
+                            <p className="mt-1 line-clamp-2 text-xs text-slate-400">
+                              Models: {token.allowed_models.join(", ")}
+                            </p>
+                          )}
+                        </div>
+                        {!token.is_managed && (
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            <button
+                              onClick={() => void handleRotateLlmProxyToken(token.id)}
+                              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                            >
+                              Rotate
+                            </button>
+                            {token.status === "active" && (
+                              <button
+                                onClick={() => void handleDisableLlmProxyToken(token.id)}
+                                className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                              >
+                                Disable
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">模型价格参考</p>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="min-w-full text-left text-xs text-slate-600">
+                    <thead className="text-slate-400">
+                      <tr>
+                        <th className="whitespace-nowrap px-2 py-2">Provider</th>
+                        <th className="whitespace-nowrap px-2 py-2">Model</th>
+                        <th className="whitespace-nowrap px-2 py-2">Context</th>
+                        <th className="whitespace-nowrap px-2 py-2">Input Cache Hit</th>
+                        <th className="whitespace-nowrap px-2 py-2">Input Cache Miss</th>
+                        <th className="whitespace-nowrap px-2 py-2">Output</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(llmProxyPlans?.model_price_reference || []).map((row) => (
+                        <tr key={`${row.provider}:${row.model}`} className="border-t border-slate-200">
+                          <td className="px-2 py-2">{row.provider}</td>
+                          <td className="px-2 py-2 font-semibold text-slate-800">{row.model}</td>
+                          <td className="px-2 py-2">{row.context}</td>
+                          <td className="px-2 py-2">{row.input_cache_hit}</td>
+                          <td className="px-2 py-2">{row.input_cache_miss}</td>
+                          <td className="px-2 py-2">{row.output}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 

@@ -36,7 +36,7 @@ interface WttShellProps {
   children: ReactNode
 }
 
-type SettingsPage = 'profile' | 'membership' | 'binding' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
+type SettingsPage = 'profile' | 'membership' | 'binding' | 'llm-proxy' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
 const NAV_ITEMS = [
   { key: 'inbox', href: '/inbox', label: 'Inbox', icon: Home },
