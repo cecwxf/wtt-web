@@ -46,6 +46,12 @@ type MultipartCompleteResponse = {
   detail?: string
 }
 
+type DownloadCreateResponse = {
+  download_url?: string
+  filename?: string
+  detail?: string
+}
+
 interface SandboxWorkspacePanelProps {
   agentId: string
   accessToken?: string
@@ -334,6 +340,17 @@ export function SandboxWorkspacePanel({ agentId, accessToken }: SandboxWorkspace
     setOperation({ kind: 'download', label: entry.name })
     setError(null)
     try {
+      if (storageRoot === 'r2') {
+        const data = await postWorkspaceAction('download/create', { path: entry.path }) as DownloadCreateResponse
+        if (!data.download_url) throw new Error(data.detail || 'download url missing')
+        const link = document.createElement('a')
+        link.href = data.download_url
+        link.download = data.filename || entry.name
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        return
+      }
       const data = await postWorkspaceAction('download', { path: entry.path }) as { filename?: string; content_base64?: string; content_type?: string; detail?: string }
       if (!data.content_base64) throw new Error(data.detail || 'download failed')
       downloadBlob(data.filename || entry.name, data.content_base64, data.content_type)
