@@ -73,7 +73,29 @@ function shellQuote(value: string): string {
 function responseErrorMessage(data: unknown, fallback: string): string {
   if (data && typeof data === 'object') {
     const detail = (data as { detail?: unknown; message?: unknown }).detail ?? (data as { message?: unknown }).message
-    if (detail) return String(detail)
+    if (detail) return formatErrorDetail(detail, fallback)
+  }
+  return fallback
+}
+
+function formatErrorDetail(value: unknown, fallback = 'Unknown error'): string {
+  if (value == null || value === '') return fallback
+  if (typeof value === 'string') return value
+  if (value instanceof Error) return value.message || fallback
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    const parts = value.map((item) => formatErrorDetail(item, '')).filter(Boolean)
+    return parts.join('\n') || fallback
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const nested = record.message ?? record.detail ?? record.error ?? record.reason
+    if (nested) return formatErrorDetail(nested, fallback)
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return fallback
+    }
   }
   return fallback
 }
@@ -362,6 +384,7 @@ function FeedPageInner() {
     }
     return null
   })
+  const [p2pTopicByAgentId, setP2pTopicByAgentId] = useState<Record<string, string>>({})
   const setSelectedTopicId = useCallback((id: string | null) => {
     _setSelectedTopicId(id)
     try {
@@ -637,7 +660,7 @@ function FeedPageInner() {
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
-        throw new Error(payload.detail ?? `HTTP ${response.status}`)
+        throw new Error(responseErrorMessage(payload, `HTTP ${response.status}`))
       }
 
       return response.json()
@@ -1134,8 +1157,10 @@ function FeedPageInner() {
         const isDefaultP2P =
           topicType === 'p2p' &&
           !!selectedAgentId &&
-          topic.name.includes(selectedAgentId) &&
-          topic.name.includes(humanSender)
+          (
+            p2pTopicByAgentId[selectedAgentId] === topic.id ||
+            (topic.name.includes(selectedAgentId) && topic.name.includes(humanSender))
+          )
 
         return {
           topic_id: topic.id,
@@ -1166,7 +1191,7 @@ function FeedPageInner() {
       }
       return 0
     })
-  }, [subscribedTopicsRaw, selectedAgentId, session])
+  }, [subscribedTopicsRaw, selectedAgentId, session, p2pTopicByAgentId])
 
   const subscribedTopicIds = useMemo(() => topics.map(t => t.topic_id), [topics])
 
@@ -1503,8 +1528,8 @@ function FeedPageInner() {
       return
     }
     const accepted = window.confirm([
-      'Cloud Agent 会在云端共享服务器的独立 Docker 容器中运行。',
-      'Agent 运行在共享云服务器的独立 Docker 容器中，workspace 独立但不建议存放敏感信息。',
+      'Cloud Agent 会在 Cloudflare Sandbox 中运行。',
+      'Agent 运行在隔离 Sandbox 中，workspace 独立但不建议存放敏感信息。',
       '请勿进行挖矿、攻击、扫描、绕过限制等恶意操作，违规会封号。',
       '',
       '确认创建 Cloud Agent？',
@@ -1522,11 +1547,7 @@ function FeedPageInner() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const detail = data && typeof data === 'object' ? (data as { detail?: unknown }).detail : null
-        if (detail && typeof detail === 'object') {
-          throw new Error(String((detail as { message?: unknown }).message || `Cloud Agent failed (${res.status})`))
-        }
-        throw new Error(String(detail || `Cloud Agent failed (${res.status})`))
+        throw new Error(responseErrorMessage(data, `Cloud Agent failed (${res.status})`))
       }
 
       const newAgentId = String((data as { agent_id?: unknown }).agent_id || '').trim()
@@ -1558,7 +1579,9 @@ function FeedPageInner() {
     for (const agent of agents) {
       const aid = agent.agent_id
       if (p2pInitRef.current.has(aid)) continue
-      const hasP2p = topics.some(t => t.topic_type === 'p2p' && t.name.includes(aid) && t.name.includes(humanSender))
+      const existingMappedTopicId = p2pTopicByAgentId[aid]
+      const hasP2p = Boolean(existingMappedTopicId && topics.some(t => t.topic_id === existingMappedTopicId)) ||
+        topics.some(t => t.topic_type === 'p2p' && t.name.includes(aid) && t.name.includes(humanSender))
       if (hasP2p) { p2pInitRef.current.add(aid); continue }
       p2pInitRef.current.add(aid)
       // Silently create P2P topic — no visible system message
@@ -1566,10 +1589,26 @@ function FeedPageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
         body: JSON.stringify({ target_agent_id: aid, content: '[system:p2p_init]', content_type: 'text', semantic_type: 'system' }),
-      }).then(() => mutateTopics()).catch(() => {})
+      }).then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        const topicId = String((payload as { topic_id?: unknown }).topic_id || '').trim()
+        if (response.ok && topicId) {
+          setP2pTopicByAgentId((prev) => ({ ...prev, [aid]: topicId }))
+        }
+        await mutateTopics()
+      }).catch(() => {})
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agents, topics, selectedAgentId, session?.accessToken])
+  }, [agents, topics, selectedAgentId, session?.accessToken, p2pTopicByAgentId])
+
+  useEffect(() => {
+    if (!selectedAgentId || selectedTopicId) return
+    const topicId = p2pTopicByAgentId[selectedAgentId]
+    if (!topicId) return
+    if (topics.some((topic) => topic.topic_id === topicId)) {
+      setSelectedTopicId(topicId)
+    }
+  }, [p2pTopicByAgentId, selectedAgentId, selectedTopicId, setSelectedTopicId, topics])
 
   const searchParams = useSearchParams()
 

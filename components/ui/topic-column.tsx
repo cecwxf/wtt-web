@@ -652,15 +652,21 @@ export function TopicColumn(props: TopicColumnProps) {
         </div>
 
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
-          {onCreateCloudAgent && !hasCloudAgent && (
+          {onCreateCloudAgent && (
             <button
               type="button"
               onClick={() => {
                 void createCloudAgent()
               }}
               disabled={cloudAgentBusy}
-              className="flex w-full flex-col items-center justify-center rounded-xl border border-sky-300 bg-gradient-to-b from-sky-50 to-cyan-50 px-1 py-2 text-center text-[9px] font-black leading-tight text-sky-700 shadow-sm ring-1 ring-sky-100 transition hover:border-sky-400 hover:from-sky-100 hover:to-cyan-100 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-500/45 dark:from-sky-500/15 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/20 dark:hover:border-sky-400"
-              title={zh ? 'Cloud Agent 需要 Plus / Pro 账户' : 'Cloud Agent requires Plus / Pro'}
+              className={`flex w-full flex-col items-center justify-center rounded-xl border px-1 py-2 text-center text-[9px] font-black leading-tight shadow-sm ring-1 transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                hasCloudAgent
+                  ? 'border-slate-300 bg-gradient-to-b from-white to-slate-50 text-slate-600 ring-slate-100 hover:border-slate-400 hover:text-slate-800 dark:border-zinc-700 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-200 dark:ring-zinc-800 dark:hover:border-zinc-600'
+                  : 'border-sky-300 bg-gradient-to-b from-sky-50 to-cyan-50 text-sky-700 ring-sky-100 hover:border-sky-400 hover:from-sky-100 hover:to-cyan-100 hover:text-sky-800 dark:border-sky-500/45 dark:from-sky-500/15 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/20 dark:hover:border-sky-400'
+              }`}
+              title={hasCloudAgent
+                ? (zh ? '已创建 Cloud Agent；点击可查看限制提示' : 'Cloud Agent already exists; click for details')
+                : (zh ? '创建 Cloud Agent，需要 Plus / Pro 账户' : 'Create Cloud Agent, requires Plus / Pro')}
             >
               <Cloud className="mb-1 h-4 w-4" />
               <span>Cloud</span>

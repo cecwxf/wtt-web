@@ -2,6 +2,36 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 const WTT_API_URL = CLIENT_WTT_API_BASE
 
+function formatErrorDetail(value: unknown, fallback = 'Unknown error'): string {
+  if (value == null || value === '') return fallback
+  if (typeof value === 'string') return value
+  if (value instanceof Error) return value.message || fallback
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    const parts = value.map((item) => formatErrorDetail(item, '')).filter(Boolean)
+    return parts.join('\n') || fallback
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const nested = record.message ?? record.detail ?? record.error ?? record.reason
+    if (nested) return formatErrorDetail(nested, fallback)
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return fallback
+    }
+  }
+  return fallback
+}
+
+function responseErrorMessage(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object') {
+    const detail = (data as { detail?: unknown; message?: unknown }).detail ?? (data as { message?: unknown }).message
+    if (detail) return formatErrorDetail(detail, fallback)
+  }
+  return fallback
+}
+
 export interface Topic {
   id: string
   name: string
@@ -76,7 +106,7 @@ class WTTApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
-      throw new Error(error.detail || `HTTP ${response.status}`)
+      throw new Error(responseErrorMessage(error, `HTTP ${response.status}`))
     }
 
     return response.json()
@@ -127,7 +157,7 @@ class WTTApiClient {
     })
     if (!res.ok) {
       const error = await res.json().catch(() => ({ detail: 'Unknown error' }))
-      throw new Error(error.detail || `HTTP ${res.status}`)
+      throw new Error(responseErrorMessage(error, `HTTP ${res.status}`))
     }
     return res.json()
   }
