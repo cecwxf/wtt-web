@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Shield, Sparkles, Sun, Users, Waves, Zap, type LucideIcon } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -84,6 +84,8 @@ interface TopicColumnProps {
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
   onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex') => void | Promise<void>
   onCreateCloudAgent?: () => void | Promise<void>
+  onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
+  onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   onCreateGeneralTask?: () => void
@@ -362,6 +364,23 @@ function cleanHostLabel(value: unknown) {
   return String(value || '').trim()
 }
 
+function isCloudSandboxRuntime(runtime?: AgentRuntimeInfo) {
+  const provider = String(runtime?.provider || '').trim().toLowerCase()
+  return provider.startsWith('cloudflare_sandbox')
+}
+
+function cloudHostAgentIdForAgent(agent: AgentOption, runtime?: AgentRuntimeInfo) {
+  const explicitHostId = cleanHostLabel(agent.cloud_host_agent_id)
+  if (explicitHostId) return explicitHostId
+
+  const runtimeHostId = cleanHostLabel(runtime?.host_agent_id)
+  if (agent.is_cloud_sandbox || isCloudSandboxRuntime(runtime)) {
+    return runtimeHostId || agent.agent_id
+  }
+
+  return ''
+}
+
 export function TopicColumn(props: TopicColumnProps) {
   const {
     topics,
@@ -381,6 +400,8 @@ export function TopicColumn(props: TopicColumnProps) {
     onSaveAgentRole,
     onNewAgentFromHost,
     onCreateCloudAgent,
+    onSleepSandbox,
+    onWakeSandbox,
     onRenameAgent,
     onUnclaimAgent,
     onCreateGeneralTask,
@@ -390,6 +411,8 @@ export function TopicColumn(props: TopicColumnProps) {
     compactLayout = false,
   } = props
   const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
+  const [folderMenuFor, setFolderMenuFor] = useState<string | null>(null)
+  const [sandboxActionFor, setSandboxActionFor] = useState<string | null>(null)
   const [topicMenuFor, setTopicMenuFor] = useState<string | null>(null)
   const [mentionMuteByTopic, setMentionMuteByTopic] = useState<Record<string, boolean>>({})
   const [shellAgent, setShellAgent] = useState<AgentOption | null>(null)
@@ -421,6 +444,7 @@ export function TopicColumn(props: TopicColumnProps) {
     const closeMenus = () => {
       setTopicMenuFor(null)
       setAgentMenuFor(null)
+      setFolderMenuFor(null)
     }
     window.addEventListener('click', closeMenus)
     return () => window.removeEventListener('click', closeMenus)
@@ -566,6 +590,18 @@ export function TopicColumn(props: TopicColumnProps) {
       await onCreateCloudAgent()
     } finally {
       setCloudAgentBusy(false)
+    }
+  }
+
+  const runSandboxFolderAction = async (hostAgentId: string, action: 'sleep' | 'wake') => {
+    const handler = action === 'sleep' ? onSleepSandbox : onWakeSandbox
+    if (!handler || !hostAgentId) return
+    setSandboxActionFor(`${hostAgentId}:${action}`)
+    setFolderMenuFor(null)
+    try {
+      await handler(hostAgentId)
+    } finally {
+      setSandboxActionFor(null)
     }
   }
 
@@ -761,13 +797,28 @@ export function TopicColumn(props: TopicColumnProps) {
             const onlineCount = folder.agents.filter((agent) => isAgentOnline(agent.agent_id)).length
             const folderTone = hostFolderTone(folder.key)
             const FolderIcon = folderTone.Icon
+            const cloudHostIds = Array.from(new Set(folder.agents
+              .map((agent) => cloudHostAgentIdForAgent(agent, agentRuntimeMap?.[agent.agent_id]))
+              .filter(Boolean)))
+            const folderCloudHostId = cloudHostIds.length === 1 ? cloudHostIds[0] : ''
+            const folderMenuOpen = folderMenuFor === folder.key
+            const sandboxActionBusy = folderCloudHostId
+              ? sandboxActionFor === `${folderCloudHostId}:sleep` || sandboxActionFor === `${folderCloudHostId}:wake`
+              : false
             return (
               <section key={folder.key} className="space-y-1">
                 <button
                   type="button"
                   onClick={() => setCollapsedAgentFolders((prev) => ({ ...prev, [folder.key]: !collapsed }))}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    setTopicMenuFor(null)
+                    setAgentMenuFor(null)
+                    setFolderMenuFor(folder.key)
+                  }}
                   className={`flex w-full flex-col items-center rounded-2xl border px-1 py-1.5 text-center shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${folderTone.shell}`}
-                  title={[folder.label, folder.subtitle].filter(Boolean).join(' · ')}
+                  title={[folder.label, folder.subtitle, folderCloudHostId ? (zh ? '右键管理 Sandbox' : 'Right-click to manage Sandbox') : ''].filter(Boolean).join(' · ')}
                 >
                   <span className="flex items-center gap-1">
                     {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -784,6 +835,61 @@ export function TopicColumn(props: TopicColumnProps) {
                     {onlineCount}/{folder.agents.length}
                   </span>
                 </button>
+
+                {folderMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setFolderMenuFor(null)} />
+                    <div
+                      className="fixed z-50 w-56 rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-2 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+                      style={{
+                        left: 'var(--wtt-agent-rail-width)',
+                        top: 'calc(var(--wtt-topbar-height) + 1rem)',
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="px-2 pb-2">
+                        <div className="truncate text-xs font-black text-slate-700 dark:text-zinc-100" title={folder.label}>
+                          {folder.label}
+                        </div>
+                        <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-400 dark:text-zinc-500" title={folderCloudHostId || undefined}>
+                          {folderCloudHostId || (cloudHostIds.length > 1
+                            ? (zh ? '该目录包含多个 Sandbox' : 'Multiple Sandboxes in this folder')
+                            : (zh ? '非 Cloud Sandbox 目录' : 'Not a Cloud Sandbox folder'))}
+                        </div>
+                      </div>
+                      {folderCloudHostId ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={!onWakeSandbox || sandboxActionBusy}
+                            onClick={() => {
+                              void runSandboxFolderAction(folderCloudHostId, 'wake')
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-sky-700 transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-300 dark:hover:bg-sky-500/10"
+                          >
+                            <Zap className="h-4 w-4" />
+                            {zh ? '唤醒 Sandbox' : 'Wake Sandbox'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!onSleepSandbox || sandboxActionBusy}
+                            onClick={() => {
+                              void runSandboxFolderAction(folderCloudHostId, 'sleep')
+                            }}
+                            className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
+                          >
+                            <Power className="h-4 w-4" />
+                            {zh ? '休眠 Sandbox' : 'Sleep Sandbox'}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 dark:bg-zinc-800 dark:text-zinc-400">
+                          {zh ? '只有 Cloud Agent Sandbox 目录支持休眠/唤醒。' : 'Only Cloud Agent Sandbox folders support sleep/wake.'}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {!collapsed && folder.agents.map((agent) => {
                   const selected = agent.agent_id === selectedAgentId

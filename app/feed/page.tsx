@@ -1567,6 +1567,57 @@ function FeedPageInner() {
     }
   }, [agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
 
+  const runCloudSandboxAction = useCallback(async (hostAgentId: string, action: 'sleep' | 'wake') => {
+    const token = session?.accessToken as string | undefined
+    if (!token) {
+      alert(t('settings.sessionExpired'))
+      return
+    }
+
+    const cleanHostAgentId = String(hostAgentId || '').trim()
+    if (!cleanHostAgentId) {
+      alert('Cloud Sandbox host agent_id is missing')
+      return
+    }
+
+    if (action === 'sleep') {
+      const accepted = window.confirm([
+        '确认休眠这个 Cloud Sandbox？',
+        '当前运行中的 agent 进程会停止，之后可从同一菜单唤醒。',
+      ].join('\n'))
+      if (!accepted) return
+    }
+
+    try {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/${encodeURIComponent(cleanHostAgentId)}/${action}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(responseErrorMessage(data, `Cloud Sandbox ${action} failed (${res.status})`))
+      }
+
+      await loadAgents()
+      void mutateTopics()
+      window.setTimeout(() => {
+        void loadAgents()
+        void mutateTopics()
+      }, action === 'wake' ? 2500 : 1000)
+      alert(action === 'wake' ? 'Cloud Sandbox 唤醒请求已发送。' : 'Cloud Sandbox 休眠请求已发送。')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : `Cloud Sandbox ${action} failed`)
+    }
+  }, [loadAgents, mutateTopics, session?.accessToken, t])
+
+  const handleSleepSandbox = useCallback((hostAgentId: string) => {
+    return runCloudSandboxAction(hostAgentId, 'sleep')
+  }, [runCloudSandboxAction])
+
+  const handleWakeSandbox = useCallback((hostAgentId: string) => {
+    return runCloudSandboxAction(hostAgentId, 'wake')
+  }, [runCloudSandboxAction])
+
   useEffect(() => {
     setMembersOpen(false)
   }, [selectedTopicId])
@@ -2238,6 +2289,8 @@ function FeedPageInner() {
         onSaveAgentRole={handleSaveAgentRole}
         onNewAgentFromHost={handleNewAgentFromHost}
         onCreateCloudAgent={handleCreateCloudAgent}
+        onSleepSandbox={handleSleepSandbox}
+        onWakeSandbox={handleWakeSandbox}
         userToken={session?.accessToken as string | undefined}
         forceOpenSettingsPage={forceOpenSettingsPage}
         onForceOpenHandled={() => setForceOpenSettingsPage(null)}
