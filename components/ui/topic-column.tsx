@@ -735,18 +735,18 @@ export function TopicColumn(props: TopicColumnProps) {
                 void createCloudAgent()
               }}
               disabled={cloudAgentBusy}
-              className={`flex w-full flex-col items-center justify-center rounded-xl border px-1 py-2 text-center text-[9px] font-black leading-tight shadow-sm ring-1 transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                hasCloudAgent
-                  ? 'border-slate-300 bg-gradient-to-b from-white to-slate-50 text-slate-600 ring-slate-100 hover:border-slate-400 hover:text-slate-800 dark:border-zinc-700 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-200 dark:ring-zinc-800 dark:hover:border-zinc-600'
-                  : 'border-sky-300 bg-gradient-to-b from-sky-50 to-cyan-50 text-sky-700 ring-sky-100 hover:border-sky-400 hover:from-sky-100 hover:to-cyan-100 hover:text-sky-800 dark:border-sky-500/45 dark:from-sky-500/15 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/20 dark:hover:border-sky-400'
-              }`}
+              className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-300 via-sky-200 to-white px-1 py-2 text-center text-[9px] font-black leading-tight text-sky-900 shadow-sm shadow-sky-900/10 ring-1 ring-white/70 transition hover:-translate-y-0.5 hover:border-sky-300 hover:from-sky-200 hover:via-cyan-100 hover:to-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-400/45 dark:from-sky-500/35 dark:via-sky-400/20 dark:to-zinc-950 dark:text-sky-50 dark:ring-sky-200/20"
               title={hasCloudAgent
                 ? (zh ? '已创建 Cloud Agent；点击可查看限制提示' : 'Cloud Agent already exists; click for details')
                 : (zh ? '创建 Cloud Agent，需要 Plus / Pro 账户' : 'Create Cloud Agent, requires Plus / Pro')}
             >
-              <Cloud className="mb-1 h-4 w-4" />
-              <span>Cloud</span>
-              <span>Agent</span>
+              <span className="absolute -left-3 bottom-2 h-5 w-10 rounded-full bg-white/80 blur-[1px]" />
+              <span className="absolute -right-4 top-2 h-6 w-12 rounded-full bg-white/70 blur-[1px]" />
+              <span className="relative mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-white/85 text-sky-500 shadow-sm ring-1 ring-sky-100 dark:bg-white/90 dark:text-sky-600">
+                <Cloud className="h-5 w-5" />
+              </span>
+              <span className="relative">Cloud</span>
+              <span className="relative">Agent</span>
             </button>
           )}
 
@@ -767,7 +767,7 @@ export function TopicColumn(props: TopicColumnProps) {
                   type="button"
                   onClick={() => setCollapsedAgentFolders((prev) => ({ ...prev, [folder.key]: !collapsed }))}
                   className={`flex w-full flex-col items-center rounded-2xl border px-1 py-1.5 text-center shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${folderTone.shell}`}
-                  title={[folder.label, folder.subtitle, folderTone.god].filter(Boolean).join(' · ')}
+                  title={[folder.label, folder.subtitle].filter(Boolean).join(' · ')}
                 >
                   <span className="flex items-center gap-1">
                     {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -779,9 +779,6 @@ export function TopicColumn(props: TopicColumnProps) {
                   </span>
                   <span className="mt-1 max-w-full truncate text-[9px] font-black leading-tight">
                     {folder.label}
-                  </span>
-                  <span className="max-w-full truncate text-[8px] font-black uppercase tracking-[0.08em] opacity-60">
-                    {folderTone.god}
                   </span>
                   <span className={`mt-1 rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none ${folderTone.badge}`}>
                     {onlineCount}/{folder.agents.length}
