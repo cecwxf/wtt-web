@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronDown, ChevronRight, ClipboardList, Cloud, Folder, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
   buildRoleSystemPrompt,
@@ -88,6 +88,7 @@ interface TopicColumnProps {
   onUnclaimAgent?: (agentId: string) => void
   onCreateGeneralTask?: () => void
   onToggleSidebar?: () => void
+  onStartAgentResize?: (event: ReactPointerEvent) => void
   localLibrarySlot?: ReactNode
   userToken?: string
   compactLayout?: boolean
@@ -149,6 +150,29 @@ const ROLE_TONES = [
   },
 ] as const
 
+const HOST_FOLDER_TONES = [
+  {
+    shell: 'border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50 text-emerald-800 ring-emerald-100 dark:border-emerald-500/25 dark:from-emerald-500/15 dark:via-zinc-950 dark:to-teal-500/10 dark:text-emerald-100 dark:ring-emerald-500/15',
+    icon: 'bg-emerald-500 text-white shadow-emerald-900/20',
+    badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-100',
+  },
+  {
+    shell: 'border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 text-sky-800 ring-sky-100 dark:border-sky-500/25 dark:from-sky-500/15 dark:via-zinc-950 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/15',
+    icon: 'bg-sky-500 text-white shadow-sky-900/20',
+    badge: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-100',
+  },
+  {
+    shell: 'border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 text-amber-900 ring-amber-100 dark:border-amber-500/25 dark:from-amber-500/15 dark:via-zinc-950 dark:to-orange-500/10 dark:text-amber-100 dark:ring-amber-500/15',
+    icon: 'bg-amber-500 text-white shadow-amber-900/20',
+    badge: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-100',
+  },
+  {
+    shell: 'border-rose-200 bg-gradient-to-br from-rose-50 via-white to-pink-50 text-rose-800 ring-rose-100 dark:border-rose-500/25 dark:from-rose-500/15 dark:via-zinc-950 dark:to-pink-500/10 dark:text-rose-100 dark:ring-rose-500/15',
+    icon: 'bg-rose-500 text-white shadow-rose-900/20',
+    badge: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-100',
+  },
+] as const
+
 function hashText(value: string) {
   let hash = 0
   for (let index = 0; index < value.length; index += 1) {
@@ -160,6 +184,10 @@ function hashText(value: string) {
 function roleTone(agentId: string, role?: AgentRoleTemplate) {
   const key = `${role?.id || role?.label || 'agent'}:${agentId}`
   return ROLE_TONES[hashText(key) % ROLE_TONES.length] || ROLE_TONES[0]
+}
+
+function hostFolderTone(key: string) {
+  return HOST_FOLDER_TONES[hashText(key) % HOST_FOLDER_TONES.length] || HOST_FOLDER_TONES[0]
 }
 
 function agentTooltip(agent: AgentOption, role: AgentRoleTemplate, runtime?: AgentRuntimeInfo) {
@@ -310,6 +338,7 @@ export function TopicColumn(props: TopicColumnProps) {
     onUnclaimAgent,
     onCreateGeneralTask,
     onToggleSidebar,
+    onStartAgentResize,
     userToken,
     compactLayout = false,
   } = props
@@ -644,9 +673,9 @@ export function TopicColumn(props: TopicColumnProps) {
 
   return (
     <>
-      <aside className="flex w-[var(--wtt-agent-rail-width)] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#f6f3ed] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-        <div className="border-b border-[#e7e1d7] px-1.5 py-2 text-center dark:border-zinc-800">
-          <div className="truncate text-[10px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-zinc-500">
+      <aside className="flex w-[var(--wtt-agent-rail-width)] shrink-0 flex-col border-r border-[#d9cebd] bg-[radial-gradient(circle_at_30%_0%,#ffffff_0,#f7efe2_38%,#ece4d7_100%)] text-slate-800 dark:border-zinc-800 dark:bg-[radial-gradient(circle_at_30%_0%,#27272a_0,#111113_42%,#050506_100%)] dark:text-zinc-100">
+        <div className="border-b border-[#e1d6c5] px-1.5 py-2 text-center dark:border-zinc-800">
+          <div className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-400">
             Agent
           </div>
         </div>
@@ -683,22 +712,25 @@ export function TopicColumn(props: TopicColumnProps) {
           {agentFolders.map((folder) => {
             const collapsed = collapsedAgentFolders[folder.key] ?? false
             const onlineCount = folder.agents.filter((agent) => isAgentOnline(agent.agent_id)).length
+            const folderTone = hostFolderTone(folder.key)
             return (
               <section key={folder.key} className="space-y-1">
                 <button
                   type="button"
                   onClick={() => setCollapsedAgentFolders((prev) => ({ ...prev, [folder.key]: !collapsed }))}
-                  className="flex w-full flex-col items-center rounded-xl border border-[#e2dacd] bg-white/65 px-1 py-1.5 text-center text-slate-500 shadow-sm transition hover:border-[#d3c8b8] hover:bg-white dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300 dark:hover:border-zinc-700"
+                  className={`flex w-full flex-col items-center rounded-2xl border px-1 py-1.5 text-center shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${folderTone.shell}`}
                   title={[folder.label, folder.subtitle].filter(Boolean).join(' · ')}
                 >
                   <span className="flex items-center gap-1">
                     {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    <Folder className="h-3.5 w-3.5" />
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-lg shadow-sm ${folderTone.icon}`}>
+                      <Folder className="h-3.5 w-3.5" />
+                    </span>
                   </span>
-                  <span className="mt-0.5 max-w-full truncate text-[9px] font-black leading-tight text-slate-600 dark:text-zinc-200">
+                  <span className="mt-1 max-w-full truncate text-[9px] font-black leading-tight">
                     {folder.label}
                   </span>
-                  <span className="mt-0.5 rounded-full bg-[#eee8dc] px-1.5 py-0.5 text-[9px] font-black leading-none text-slate-500 dark:bg-zinc-800 dark:text-zinc-300">
+                  <span className={`mt-1 rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none ${folderTone.badge}`}>
                     {onlineCount}/{folder.agents.length}
                   </span>
                 </button>
@@ -950,6 +982,19 @@ export function TopicColumn(props: TopicColumnProps) {
           </div>
         )}
       </aside>
+
+      {onStartAgentResize && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize agent column"
+          title={zh ? '拖拽调整 Agent 栏宽度' : 'Drag to resize agents'}
+          onPointerDown={onStartAgentResize}
+          className="group relative z-10 hidden w-1.5 shrink-0 cursor-col-resize items-stretch justify-center bg-[#e1d6c5] transition hover:bg-emerald-300 dark:bg-zinc-800 dark:hover:bg-emerald-500 md:flex"
+        >
+          <span className="my-auto h-10 w-0.5 rounded-full bg-[#a99d8d] opacity-0 transition group-hover:opacity-100 dark:bg-zinc-500" />
+        </div>
+      )}
 
       <aside className="flex w-[var(--wtt-topic-rail-width)] shrink-0 flex-col border-r border-[#e3ddd2] bg-[#fbfaf7] text-slate-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
         <div className={`flex items-center justify-between border-b border-[#e7e1d7] dark:border-zinc-800 ${compactLayout ? 'px-2 py-2' : 'px-3 py-3'}`}>

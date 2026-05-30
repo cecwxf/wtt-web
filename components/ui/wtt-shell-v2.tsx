@@ -1,8 +1,8 @@
 'use client'
 
 import { Menu } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
 import { AgentRuntimeInfo, TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
@@ -72,6 +72,18 @@ interface WttShellV2Props {
 
 type SettingsPage = 'profile' | 'membership' | 'binding' | 'llm-proxy' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
+type ShellWidths = {
+  agent: number
+  topic: number
+}
+
+const DEFAULT_SHELL_WIDTHS: ShellWidths = { agent: 88, topic: 264 }
+const SHELL_WIDTH_STORAGE_KEY = 'wtt.feed.shellWidths'
+
+function clampWidth(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.round(value)))
+}
+
 export function WttShellV2(props: WttShellV2Props) {
   const {
     agents,
@@ -119,6 +131,8 @@ export function WttShellV2(props: WttShellV2Props) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('profile')
   const [createTopicOpen, setCreateTopicOpen] = useState(false)
+  const [shellWidths, setShellWidths] = useState<ShellWidths>(DEFAULT_SHELL_WIDTHS)
+  const shellWidthsRef = useRef(shellWidths)
   const { t } = useI18n()
   const viewport = useViewportClass()
 
@@ -140,6 +154,14 @@ export function WttShellV2(props: WttShellV2Props) {
     try {
       const saved = localStorage.getItem('wtt.sidebarCollapsed')
       if (saved === '1') setSidebarCollapsed(true)
+      const savedWidths = localStorage.getItem(SHELL_WIDTH_STORAGE_KEY)
+      if (savedWidths) {
+        const parsed = JSON.parse(savedWidths) as Partial<ShellWidths>
+        setShellWidths({
+          agent: clampWidth(Number(parsed.agent) || DEFAULT_SHELL_WIDTHS.agent, 64, 180),
+          topic: clampWidth(Number(parsed.topic) || DEFAULT_SHELL_WIDTHS.topic, 190, 560),
+        })
+      }
     } catch {
       // noop
     }
@@ -157,6 +179,44 @@ export function WttShellV2(props: WttShellV2Props) {
     }
   }, [sidebarCollapsed])
 
+  useEffect(() => {
+    shellWidthsRef.current = shellWidths
+    try {
+      localStorage.setItem(SHELL_WIDTH_STORAGE_KEY, JSON.stringify(shellWidths))
+    } catch {
+      // noop
+    }
+  }, [shellWidths])
+
+  const startResize = useCallback((kind: keyof ShellWidths, event: ReactPointerEvent) => {
+    if (viewport.isNarrow) return
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = shellWidthsRef.current[kind]
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX
+      const next = kind === 'agent'
+        ? clampWidth(startWidth + delta, 64, 180)
+        : clampWidth(startWidth + delta, 190, 560)
+      setShellWidths((prev) => ({ ...prev, [kind]: next }))
+    }
+
+    const onUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }, [viewport.isNarrow])
+
   const agentOptions = agents.map((agent) => ({
     id: agent.agent_id,
     agent_id: agent.agent_id,
@@ -167,9 +227,13 @@ export function WttShellV2(props: WttShellV2Props) {
   }))
 
   const isSelectedAgentOnline = onlineAgentIds?.has(selectedAgentId) ?? false
+  const shellStyle = {
+    '--wtt-agent-rail-width': `${shellWidths.agent}px`,
+    '--wtt-topic-rail-width': `${shellWidths.topic}px`,
+  } as CSSProperties
 
   return (
-    <div className="wtt-app-shell h-[100dvh] overflow-hidden bg-[#f6f3ed] text-slate-800 dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="wtt-app-shell h-[100dvh] overflow-hidden bg-[#f6f3ed] text-slate-800 dark:bg-zinc-950 dark:text-zinc-200" style={shellStyle}>
       <div className="flex h-full flex-col">
         <TopBar
           onSelectTopic={(topicId) => onTopicChange(topicId)}
@@ -283,7 +347,20 @@ export function WttShellV2(props: WttShellV2Props) {
               onToggleSidebar={() => setSidebarCollapsed(true)}
               userToken={userToken}
               compactLayout={viewport.isCompact}
+              onStartAgentResize={(event) => startResize('agent', event)}
             />
+          )}
+          {!hideTopics && !sidebarCollapsed && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize topics column"
+              title="Drag to resize topics"
+              onPointerDown={(event) => startResize('topic', event)}
+              className="group relative z-10 hidden w-1.5 shrink-0 cursor-col-resize items-stretch justify-center bg-[#e7e1d7] transition hover:bg-sky-300 dark:bg-zinc-800 dark:hover:bg-sky-500 md:flex"
+            >
+              <span className="my-auto h-10 w-0.5 rounded-full bg-[#b9ad9d] opacity-0 transition group-hover:opacity-100 dark:bg-zinc-500" />
+            </div>
           )}
 
           {!hideTopics && sidebarCollapsed && (
