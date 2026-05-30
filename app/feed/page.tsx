@@ -1602,7 +1602,7 @@ function FeedPageInner() {
         throw new Error(responseErrorMessage(data, `Cloud Sandbox ${action} failed (${res.status})`))
       }
 
-      const deadline = Date.now() + (action === 'wake' ? 150000 : 90000)
+      const deadline = Date.now() + (action === 'wake' ? 300000 : 180000)
       let lastStatus = ''
       let lastOnline = false
       while (Date.now() < deadline) {
