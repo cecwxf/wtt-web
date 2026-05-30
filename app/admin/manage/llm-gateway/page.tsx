@@ -183,6 +183,45 @@ export default function LlmGatewayAdminPage() {
     }
   }
 
+  async function directDeepSeekHealthCheck() {
+    setBusy(true)
+    try {
+      const data = await api('/llm-proxy/admin/gateway/direct-health', { method: 'POST' })
+      const direct = data.direct_deepseek || {}
+      setMessage(
+        data.ok
+          ? `Direct DeepSeek 可用：${direct.base_url || data.proxy_url || 'host proxy'}，默认模型 ${direct.default_model || 'deepseek'}`
+          : `Direct DeepSeek 不可用：${data.reason || 'upstream token/base missing'}`
+      )
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Direct DeepSeek 检查失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function switchToDirectDeepSeek() {
+    setBusy(true)
+    try {
+      const data = await api('/llm-proxy/admin/gateway/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...settings,
+          enabled: false,
+          upstream_mode: 'direct',
+          fallback_mode: 'direct',
+        }),
+      })
+      setSettings({ ...emptySettings, ...data.settings })
+      setMessage('已切换到 Direct DeepSeek 模式；当前只使用 Cloud Agent host proxy 中的 DeepSeek key。')
+      await load()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '切换 Direct DeepSeek 失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function openConsole(mode: 'embed' | 'tab') {
     setBusy(true)
     try {
@@ -280,6 +319,9 @@ export default function LlmGatewayAdminPage() {
                 <button onClick={() => void openConsole('tab')} disabled={busy} className="rounded-2xl border border-[#5d574b] px-4 py-3 text-sm font-black text-[#fffaf0] transition hover:bg-[#26231d] disabled:opacity-50">
                   新窗口打开
                 </button>
+                <button onClick={() => void switchToDirectDeepSeek()} disabled={busy} className="rounded-2xl border border-[#5d574b] px-4 py-3 text-sm font-black text-[#fffaf0] transition hover:bg-[#26231d] disabled:opacity-50 sm:col-span-2">
+                  使用当前 Direct DeepSeek 模式
+                </button>
               </div>
             </div>
           </div>
@@ -300,6 +342,7 @@ export default function LlmGatewayAdminPage() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => void load()} disabled={busy} className="control-button">刷新</button>
+              <button onClick={() => void directDeepSeekHealthCheck()} disabled={busy} className="control-button">DeepSeek 检查</button>
               <button onClick={() => void healthCheck()} disabled={busy} className="control-button primary-control">健康检查</button>
             </div>
           </div>
@@ -345,6 +388,9 @@ export default function LlmGatewayAdminPage() {
               <FieldLabel label="Sub2API private base URL">
                 <input value={settings.sub2api_base_url} onChange={(event) => setSettings((prev) => ({ ...prev, sub2api_base_url: event.target.value }))} placeholder="http://127.0.0.1:8080" className="field" />
               </FieldLabel>
+              <div className="rounded-2xl border border-[#ded2bd] bg-white px-4 py-3 text-sm leading-6 text-[#6f6658]">
+                当前只使用 DeepSeek key 时，不需要配置 Sub2API。保持 <span className="font-bold text-[#171713]">Gateway off/direct</span>，Claude Code 请求会走 Cloud Agent host proxy 的 DeepSeek Anthropic-compatible upstream。
+              </div>
               <FieldLabel label="Sub2API console URL 可选">
                 <input value={settings.sub2api_console_url} onChange={(event) => setSettings((prev) => ({ ...prev, sub2api_console_url: event.target.value }))} placeholder="留空则使用 base URL" className="field" />
               </FieldLabel>
