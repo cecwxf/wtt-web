@@ -135,6 +135,7 @@ type LlmProxyToken = {
   scope: string;
   status: string;
   plan_id: string;
+  provider_plan?: string;
   allowed_models?: string[];
   monthly_token_limit?: number;
   concurrency_limit?: number;
@@ -156,6 +157,23 @@ type LlmProxyPlans = {
   plans?: Array<{
     id: string;
     name: string;
+    adapter?: string;
+    status?: string;
+    models?: string[];
+    copy_target?: string;
+    proxy_path?: string;
+    monthly_token_limit?: number;
+    concurrency_limit?: number;
+    description?: string;
+  }>;
+  provider_plans?: Array<{
+    id: string;
+    name: string;
+    adapter?: string;
+    status?: string;
+    models?: string[];
+    copy_target?: string;
+    proxy_path?: string;
     monthly_token_limit?: number;
     concurrency_limit?: number;
     description?: string;
@@ -280,10 +298,9 @@ export function WttSettingsModal({
   const [llmProxyCreating, setLlmProxyCreating] = useState(false);
   const [llmProxyError, setLlmProxyError] = useState("");
   const [llmProxyReveal, setLlmProxyReveal] = useState<LlmProxyToken | null>(null);
-  const [llmProxyTokenName, setLlmProxyTokenName] = useState("Claude/Codex external token");
-  const [llmProxyAllowedModels, setLlmProxyAllowedModels] = useState(
-    CLOUD_AGENT_FALLBACK_MODELS.map((model) => model.id).join("\n"),
-  );
+  const [llmProxyProviderPlan, setLlmProxyProviderPlan] = useState("deepseek");
+  const [llmProxyTokenName, setLlmProxyTokenName] = useState("DeepSeek Claude Code token");
+  const [llmProxyAllowedModels, setLlmProxyAllowedModels] = useState("deepseek-v4-pro[1m]");
 
   const accessToken = (session as SessionWithAccessToken | null)?.accessToken;
   const isPaidPlan = (billing?.entitlement?.plan === "plus" || billing?.entitlement?.plan === "pro");
@@ -679,13 +696,32 @@ export function WttSettingsModal({
     }
   };
 
-  const buildLlmProxyEnv = (secret: string) => {
+  const llmProxyProviderPlans = llmProxyPlans?.provider_plans || llmProxyPlans?.plans || [];
+  const selectedLlmProxyPlan = llmProxyProviderPlans.find((plan) => plan.id === llmProxyProviderPlan) || llmProxyProviderPlans[0];
+
+  const applyLlmProxyPlan = (planId: string) => {
+    const plan = llmProxyProviderPlans.find((item) => item.id === planId);
+    setLlmProxyProviderPlan(planId);
+    if (plan?.models?.length) setLlmProxyAllowedModels(plan.models.join("\n"));
+    if (plan?.name) setLlmProxyTokenName(`${plan.name} ${plan.copy_target === "codex" ? "Codex" : "Claude Code"} token`);
+  };
+
+  const buildLlmProxyEnv = (secret: string, providerPlan = llmProxyReveal?.provider_plan || llmProxyProviderPlan) => {
     const base = (llmProxyPlans?.proxy_base_url || "https://www.waxbyte.com/cloud-agent-proxy").replace(/\/+$/, "");
+    if (providerPlan === "gpt") {
+      return [
+        "# GPT / Codex token",
+        `export OPENAI_BASE_URL=${base}/openai/v1`,
+        `export OPENAI_API_KEY=${secret}`,
+        "# Requires wtt-connect >= 0.2.23 for Codex custom provider / no websocket.",
+      ].join("\n");
+    }
+    const label = providerPlan === "claude" ? "Claude" : "DeepSeek";
     return [
+      `# ${label} / Claude Code token`,
       `export ANTHROPIC_BASE_URL=${base}/anthropic`,
       `export ANTHROPIC_AUTH_TOKEN=${secret}`,
-      `export OPENAI_BASE_URL=${base}/openai/v1`,
-      `export OPENAI_API_KEY=${secret}`,
+      "# This token is for Claude Code only. It is not a Codex/OpenAI Responses token.",
     ].join("\n");
   };
 
@@ -709,8 +745,9 @@ export function WttSettingsModal({
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          name: llmProxyTokenName.trim() || "Claude/Codex external token",
+          name: llmProxyTokenName.trim() || `${selectedLlmProxyPlan?.name || "DeepSeek"} token`,
           scope: "external_agent",
+          provider_plan: llmProxyProviderPlan,
           allowed_models: allowedModels,
         }),
       });
@@ -1335,9 +1372,9 @@ export function WttSettingsModal({
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">LLM Proxy Token Plan</p>
+                    <p className="text-sm font-semibold text-slate-800">LLM Proxy Provider Plans</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      统一给 Claude Code / Codex 配置 WTT Host Proxy。Sandbox Agent 默认使用托管 token；外部自管机器可以复制下面的环境变量接入同一代理。
+                      WTT Proxy 统一路由 DeepSeek、Claude、GPT 三类上游。当前真实可用的是 DeepSeek 套餐，只支持 Claude Code；GPT 套餐才用于 Codex。
                     </p>
                   </div>
                   <button
@@ -1351,11 +1388,16 @@ export function WttSettingsModal({
                 </div>
 
                 <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
-                  {(llmProxyPlans?.plans || []).slice(0, 3).map((plan) => (
-                    <div key={plan.id} className="rounded-lg border border-slate-200 bg-white p-3">
-                      <p className="font-semibold text-slate-800">{plan.name}</p>
-                      <p className="mt-1 text-slate-500">{(plan.monthly_token_limit || 0).toLocaleString()} tokens/月</p>
-                      <p className="mt-1 text-slate-400">并发 {plan.concurrency_limit || "-"}</p>
+                  {llmProxyProviderPlans.map((plan) => (
+                    <div key={plan.id} className={`rounded-lg border p-3 ${plan.id === "deepseek" ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-slate-800">{plan.name}</p>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${plan.status === "available" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                          {plan.status === "available" ? "可用" : "待上游 key"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-slate-500">{plan.copy_target === "codex" ? "Codex" : "Claude Code"} · {plan.proxy_path}</p>
+                      <p className="mt-1 text-slate-400">{plan.description}</p>
                     </div>
                   ))}
                 </div>
@@ -1371,7 +1413,7 @@ export function WttSettingsModal({
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-sm font-semibold text-amber-900">Token 只展示一次，请立即复制</p>
                   <pre className="mt-3 max-h-44 overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-50">
-                    {buildLlmProxyEnv(llmProxyReveal.secret)}
+                    {buildLlmProxyEnv(llmProxyReveal.secret, llmProxyReveal.provider_plan)}
                   </pre>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -1382,11 +1424,11 @@ export function WttSettingsModal({
                       复制 Token
                     </button>
                     <button
-                      onClick={() => void handleCopy(buildLlmProxyEnv(llmProxyReveal.secret || ""), "环境变量已复制")}
+                      onClick={() => void handleCopy(buildLlmProxyEnv(llmProxyReveal.secret || "", llmProxyReveal.provider_plan), "环境变量已复制")}
                       className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-700"
                     >
                       <ClipboardCopy className="h-3.5 w-3.5" />
-                      复制 Claude/Codex 配置
+                      复制 Agent 配置
                     </button>
                   </div>
                 </div>
@@ -1395,6 +1437,19 @@ export function WttSettingsModal({
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="text-sm font-semibold text-slate-800">创建外部 Agent Token</p>
                 <div className="mt-3 grid gap-3">
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {llmProxyProviderPlans.map((plan) => (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => applyLlmProxyPlan(plan.id)}
+                        className={`rounded-lg border px-3 py-2 text-left text-xs transition ${llmProxyProviderPlan === plan.id ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"}`}
+                      >
+                        <span className="block font-semibold">{plan.name}</span>
+                        <span className="mt-1 block text-[11px] opacity-80">{plan.copy_target === "codex" ? "Codex" : "Claude Code"}</span>
+                      </button>
+                    ))}
+                  </div>
                   <input
                     value={llmProxyTokenName}
                     onChange={(event) => setLlmProxyTokenName(event.target.value)}
@@ -1407,6 +1462,16 @@ export function WttSettingsModal({
                     className="min-h-24 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-indigo-500"
                     placeholder="允许模型，每行一个；留空表示后端默认模型集"
                   />
+                  {llmProxyProviderPlan !== "gpt" && (
+                    <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                      当前套餐复制的是 Claude Code 配置，不会输出 Codex/OpenAI 环境变量。
+                    </p>
+                  )}
+                  {llmProxyProviderPlan === "gpt" && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                      GPT/Codex 套餐需要 Cloud Agent 服务器配置 OpenAI Responses-compatible 上游 key；DeepSeek key 不能用于 Codex。
+                    </p>
+                  )}
                   <button
                     onClick={() => void handleCreateLlmProxyToken()}
                     disabled={llmProxyCreating || !accessToken}
