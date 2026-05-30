@@ -698,6 +698,7 @@ export function WttSettingsModal({
 
   const llmProxyProviderPlans = llmProxyPlans?.provider_plans || llmProxyPlans?.plans || [];
   const selectedLlmProxyPlan = llmProxyProviderPlans.find((plan) => plan.id === llmProxyProviderPlan) || llmProxyProviderPlans[0];
+  const selectedLlmProxyPlanAvailable = (selectedLlmProxyPlan?.status || "available") === "available";
 
   const applyLlmProxyPlan = (planId: string) => {
     const plan = llmProxyProviderPlans.find((item) => item.id === planId);
@@ -1472,9 +1473,14 @@ export function WttSettingsModal({
                       GPT/Codex 套餐需要 Cloud Agent 服务器配置 OpenAI Responses-compatible 上游 key；DeepSeek key 不能用于 Codex。
                     </p>
                   )}
+                  {!selectedLlmProxyPlanAvailable && (
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      该套餐还未配置上游 key，暂不能创建 token。
+                    </p>
+                  )}
                   <button
                     onClick={() => void handleCreateLlmProxyToken()}
-                    disabled={llmProxyCreating || !accessToken}
+                    disabled={llmProxyCreating || !accessToken || !selectedLlmProxyPlanAvailable}
                     className="inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-60"
                   >
                     {llmProxyCreating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
