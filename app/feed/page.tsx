@@ -1587,7 +1587,7 @@ function FeedPageInner() {
     if (action === 'sleep') {
       const accepted = window.confirm([
         '确认休眠这个 Cloud Sandbox？',
-        '当前运行中的 agent 进程会停止，之后可从同一菜单唤醒。',
+        '系统会允许 Cloudflare 在短暂空闲后自动休眠，之后可从同一菜单唤醒。',
       ].join('\n'))
       if (!accepted) return
     }
