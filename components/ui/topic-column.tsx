@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap, type LucideIcon } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -597,9 +597,9 @@ export function TopicColumn(props: TopicColumnProps) {
     const handler = action === 'sleep' ? onSleepSandbox : onWakeSandbox
     if (!handler || !hostAgentId) return
     setSandboxActionFor(`${hostAgentId}:${action}`)
-    setFolderMenuFor(null)
     try {
       await handler(hostAgentId)
+      setFolderMenuFor(null)
     } finally {
       setSandboxActionFor(null)
     }
@@ -802,9 +802,9 @@ export function TopicColumn(props: TopicColumnProps) {
               .filter(Boolean)))
             const folderCloudHostId = cloudHostIds.length === 1 ? cloudHostIds[0] : ''
             const folderMenuOpen = folderMenuFor === folder.key
-            const sandboxActionBusy = folderCloudHostId
-              ? sandboxActionFor === `${folderCloudHostId}:sleep` || sandboxActionFor === `${folderCloudHostId}:wake`
-              : false
+            const wakeBusy = Boolean(folderCloudHostId && sandboxActionFor === `${folderCloudHostId}:wake`)
+            const sleepBusy = Boolean(folderCloudHostId && sandboxActionFor === `${folderCloudHostId}:sleep`)
+            const sandboxActionBusy = wakeBusy || sleepBusy
             return (
               <section key={folder.key} className="space-y-1">
                 <button
@@ -867,8 +867,8 @@ export function TopicColumn(props: TopicColumnProps) {
                             }}
                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-sky-700 transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-300 dark:hover:bg-sky-500/10"
                           >
-                            <Zap className="h-4 w-4" />
-                            {zh ? '唤醒 Sandbox' : 'Wake Sandbox'}
+                            {wakeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                            {wakeBusy ? (zh ? '正在唤醒...' : 'Waking...') : (zh ? '唤醒 Sandbox' : 'Wake Sandbox')}
                           </button>
                           <button
                             type="button"
@@ -878,9 +878,16 @@ export function TopicColumn(props: TopicColumnProps) {
                             }}
                             className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
                           >
-                            <Power className="h-4 w-4" />
-                            {zh ? '休眠 Sandbox' : 'Sleep Sandbox'}
+                            {sleepBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
+                            {sleepBusy ? (zh ? '正在休眠...' : 'Sleeping...') : (zh ? '休眠 Sandbox' : 'Sleep Sandbox')}
                           </button>
+                          {sandboxActionBusy && (
+                            <div className="mt-2 rounded-xl bg-sky-50 px-3 py-2 text-[11px] font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-200">
+                              {wakeBusy
+                                ? (zh ? '正在启动 Sandbox 并等待 Agent 在线。' : 'Starting Sandbox and waiting for the agent to come online.')
+                                : (zh ? '正在停止 Sandbox 并等待 Agent 离线。' : 'Stopping Sandbox and waiting for the agent to go offline.')}
+                            </div>
+                          )}
                         </>
                       ) : (
                         <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 dark:bg-zinc-800 dark:text-zinc-400">

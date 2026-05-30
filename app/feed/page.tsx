@@ -100,6 +100,10 @@ function formatErrorDetail(value: unknown, fallback = 'Unknown error'): string {
   return fallback
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 function getHumanSender(session: unknown): string {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
   const uid = s?.userId || ''
@@ -1321,7 +1325,7 @@ function FeedPageInner() {
   }, [recentTasksRaw])
 
   // Fetch real agent capacity & stats from backend
-  const { data: agentStatsRaw } = useSWR(
+  const { data: agentStatsRaw, mutate: mutateAgentStats } = useSWR(
     session?.accessToken ? ['agent-stats', session.accessToken] : null,
     async () => {
       const r = await fetch(`${CLIENT_WTT_API_BASE}/agents/stats`, {
@@ -1598,17 +1602,49 @@ function FeedPageInner() {
         throw new Error(responseErrorMessage(data, `Cloud Sandbox ${action} failed (${res.status})`))
       }
 
+      const deadline = Date.now() + (action === 'wake' ? 150000 : 90000)
+      let lastStatus = ''
+      let lastOnline = false
+      while (Date.now() < deadline) {
+        const [stateResp, statsResp] = await Promise.all([
+          fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          }),
+          fetch(`${CLIENT_WTT_API_BASE}/agents/stats`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          }),
+        ])
+        const state = await stateResp.json().catch(() => ({}))
+        const stats = await statsResp.json().catch(() => ({}))
+        lastStatus = String((state as { status?: unknown }).status || '').toLowerCase()
+        const online = (stats as { online_agents?: unknown }).online_agents
+        lastOnline = Array.isArray(online) && online.map(String).includes(cleanHostAgentId)
+
+        void mutateAgentStats(stats, false)
+        if (action === 'wake' && lastStatus === 'running' && lastOnline) break
+        if (action === 'sleep' && ['stopped', 'sleeping'].includes(lastStatus) && !lastOnline) break
+        await delay(3000)
+      }
+
+      const completed = action === 'wake'
+        ? lastStatus === 'running' && lastOnline
+        : ['stopped', 'sleeping'].includes(lastStatus) && !lastOnline
+      if (!completed) {
+        throw new Error(action === 'wake'
+          ? `Sandbox 仍在唤醒中，最后状态：${lastStatus || 'unknown'}，在线：${lastOnline ? 'yes' : 'no'}`
+          : `Sandbox 仍在休眠中，最后状态：${lastStatus || 'unknown'}，在线：${lastOnline ? 'yes' : 'no'}`)
+      }
+
       await loadAgents()
+      void mutateAgentStats()
       void mutateTopics()
-      window.setTimeout(() => {
-        void loadAgents()
-        void mutateTopics()
-      }, action === 'wake' ? 2500 : 1000)
-      alert(action === 'wake' ? 'Cloud Sandbox 唤醒请求已发送。' : 'Cloud Sandbox 休眠请求已发送。')
+      alert(action === 'wake' ? 'Cloud Sandbox 已唤醒并在线。' : 'Cloud Sandbox 已休眠并离线。')
     } catch (error) {
       alert(error instanceof Error ? error.message : `Cloud Sandbox ${action} failed`)
     }
-  }, [loadAgents, mutateTopics, session?.accessToken, t])
+  }, [loadAgents, mutateAgentStats, mutateTopics, session?.accessToken, t])
 
   const handleSleepSandbox = useCallback((hostAgentId: string) => {
     return runCloudSandboxAction(hostAgentId, 'sleep')
