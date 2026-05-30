@@ -51,6 +51,22 @@ export interface ChatSendOptions {
   slashCommand?: string
 }
 
+export interface ChatRunStatus {
+  agentId: string
+  agentName: string
+  adapter?: string
+  model?: string
+  statusText?: string
+  statusKind?: string
+  startedAt: number
+  lines: Array<{
+    id: string
+    text: string
+    kind?: string
+    ts: number
+  }>
+}
+
 interface ModelOption {
   id: string
   label: string
@@ -337,7 +353,7 @@ interface ChatViewProps {
   onTopicCreated?: () => void
   topicMembers?: MentionableAgent[]
   topicType?: string
-  typingIndicatorText?: string | null
+  runStatus?: ChatRunStatus | null
   onRequestPrivateDiscuss?: (targetAgentId: string, targetDisplayName?: string) => Promise<void> | void
   compactUi?: boolean
   autoFocusNonce?: number
@@ -854,6 +870,75 @@ function appendRoleLabel(label: string, roleLabel?: string): string {
   return `${base}(${role})`
 }
 
+function runStatusKindLabel(kind?: string): string {
+  const k = String(kind || '').trim()
+  if (!k) return '运行'
+  if (k === 'queued') return '排队'
+  if (k === 'running') return '运行'
+  if (k === 'command') return '命令'
+  if (k === 'tool') return '工具'
+  if (k === 'web_search') return '搜索'
+  if (k === 'response') return '回复'
+  if (k === 'session') return '会话'
+  if (k === 'error') return '错误'
+  if (k === 'artifact_upload') return '文件'
+  return k.replace(/_/g, ' ')
+}
+
+function runStatusAdapterLabel(adapter?: string): string {
+  const value = String(adapter || '').trim()
+  if (value === 'claude-code') return 'Claude Code'
+  if (value === 'codex') return 'Codex'
+  return value
+}
+
+function AgentRunStatusCard({ status }: { status: ChatRunStatus }) {
+  const lines = status.lines.slice(-10)
+  const adapter = runStatusAdapterLabel(status.adapter)
+  const subtitle = [adapter, status.model].filter(Boolean).join(' · ')
+
+  return (
+    <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 w-[min(560px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-2xl shadow-[#6b4e2e]/15 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/30">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-[#b78343] border-t-transparent dark:border-amber-300 dark:border-t-transparent" />
+            <span className="truncate text-xs font-semibold text-[#3f352a] dark:text-zinc-100">
+              {status.agentName} 正在执行
+            </span>
+          </div>
+          {subtitle && (
+            <div className="mt-0.5 truncate pl-5 text-[10px] text-[#8a7a65] dark:text-zinc-400">{subtitle}</div>
+          )}
+        </div>
+        {status.statusKind && (
+          <span className="shrink-0 rounded-full border border-[#dbc6a5] bg-white/65 px-2 py-0.5 text-[10px] font-medium text-[#8b6736] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+            {runStatusKindLabel(status.statusKind)}
+          </span>
+        )}
+      </div>
+
+      <div className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
+        {lines.map((line) => (
+          <div key={line.id} className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-2 text-[11px] leading-4">
+            <span className="rounded-md bg-[#efe4d2] px-1.5 py-0.5 text-center font-medium text-[#7c613d] dark:bg-zinc-800 dark:text-zinc-400">
+              {runStatusKindLabel(line.kind)}
+            </span>
+            <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-[#4a4035] dark:text-zinc-300" title={line.text}>
+              {line.text}
+            </span>
+          </div>
+        ))}
+        {!lines.length && status.statusText && (
+          <div className="truncate font-mono text-[11px] text-[#4a4035] dark:text-zinc-300" title={status.statusText}>
+            {status.statusText}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function avatarTone(seed: string, kind: 'agent' | 'human') {
   let hash = 0
   for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0
@@ -886,7 +971,7 @@ export function ChatView({
   onTopicCreated,
   topicMembers = [],
   topicType,
-  typingIndicatorText = null,
+  runStatus = null,
   onRequestPrivateDiscuss,
   compactUi = false,
   autoFocusNonce,
@@ -2194,7 +2279,7 @@ export function ChatView({
       </div>
 
       <div className="min-h-0 flex flex-1 overflow-hidden bg-[#fbfaf7] dark:bg-zinc-950">
-        <div className="min-w-0 flex flex-1 flex-col">
+        <div className="relative min-w-0 flex flex-1 flex-col">
       <div
         ref={scrollRef}
         className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
@@ -2703,15 +2788,8 @@ export function ChatView({
         ))}
       </div>
 
-      {typingIndicatorText && (
-        <div className="mx-5 mb-2 flex items-center gap-2 text-xs text-[#8a8378] dark:text-zinc-400">
-          <span className="max-w-[220px] truncate">{typingIndicatorText}</span>
-          <div className="inline-flex items-center gap-1 rounded-full bg-[#eee8dd] px-2.5 py-1 dark:bg-zinc-800">
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8a8378] [animation-delay:0ms] dark:bg-zinc-500" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8a8378] [animation-delay:120ms] dark:bg-zinc-500" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8a8378] [animation-delay:240ms] dark:bg-zinc-500" />
-          </div>
-        </div>
+      {activeTab === 'chat' && runStatus && (
+        <AgentRunStatusCard status={runStatus} />
       )}
 
 

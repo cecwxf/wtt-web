@@ -9,7 +9,7 @@ import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
-import { ChatView, ChatMessage, ChatModelConfig, ChatSendOptions, isProgressMessage } from '@/components/ui/chat-view'
+import { ChatView, ChatMessage, ChatModelConfig, ChatSendOptions, ChatRunStatus, isProgressMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { AgentRuntimeInfo, TopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
@@ -28,12 +28,16 @@ import {
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
+const AGENT_STATUS_CARD_MAX_LINES = 14
 
 type TopicTypingState = {
   agentId: string
   agentName?: string
   statusText?: string
   statusKind?: string
+  adapter?: string
+  model?: string
+  statusLines?: ChatRunStatus['lines']
   startedAt: number
   expiresAt: number
 }
@@ -181,24 +185,49 @@ function clearTypingAfterAgentReply(
   return next
 }
 
-function parseAgentStatusContent(contentRaw: unknown): { text: string; kind?: string } | null {
-  const content = String(contentRaw ?? '').trim()
-  if (!content.startsWith('[TASK_STATUS]')) return null
-  const status = content.match(/\bstatus=([^\s]+)/)?.[1] || ''
-  const action = content.match(/\baction=([^:\s]+):([\s\S]*)$/)
-  const kind = action?.[1] || 'running'
-  const detail = (action?.[2] || '').trim()
-  if (status === 'completed') return { text: `Agent 已完成 ${kindLabel(kind)}`, kind }
-  if (status === 'failed') return { text: `Agent 执行失败：${detail || kindLabel(kind)}`, kind }
-  if (kind === 'command') return { text: `Agent 正在执行命令：${detail || 'command'}`, kind }
-  if (kind === 'tool') return { text: `Agent 正在调用工具：${detail || 'tool'}`, kind }
-  if (kind === 'web_search') return { text: `Agent 正在搜索：${detail || 'web search'}`, kind }
-  if (kind === 'response') return { text: 'Agent 正在组织回复', kind }
-  return { text: `Agent 正在执行：${detail || kindLabel(kind)}`, kind }
-}
+function appendTypingStatus(
+  existing: TopicTypingState | undefined,
+  update: {
+    agentId?: string
+    agentName?: string
+    statusText?: string
+    statusKind?: string
+    adapter?: string
+    model?: string
+    ttlMs?: number
+  },
+  now: number,
+): TopicTypingState {
+  const text = String(update.statusText || '').trim()
+  const kind = String(update.statusKind || '').trim() || undefined
+  const lines = existing?.statusLines ? [...existing.statusLines] : []
 
-function kindLabel(kind: string): string {
-  return String(kind || 'step').replace(/_/g, ' ')
+  if (text) {
+    const last = lines[lines.length - 1]
+    if (last && last.text === text && last.kind === kind) {
+      lines[lines.length - 1] = { ...last, ts: now }
+    } else {
+      lines.push({
+        id: `${now}-${lines.length}-${kind || 'status'}`,
+        text,
+        kind,
+        ts: now,
+      })
+    }
+  }
+
+  return {
+    agentId: update.agentId || existing?.agentId || '',
+    agentName: update.agentName || existing?.agentName,
+    statusText: text || existing?.statusText,
+    statusKind: kind || existing?.statusKind,
+    adapter: update.adapter || existing?.adapter,
+    model: update.model || existing?.model,
+    statusLines: lines.slice(-AGENT_STATUS_CARD_MAX_LINES),
+    startedAt: existing?.startedAt || now,
+    // Safety fallback only. Normal lifecycle is cleared by the agent reply.
+    expiresAt: now + (update.ttlMs || AGENT_TYPING_STALE_MS),
+  }
 }
 
 function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
@@ -723,19 +752,23 @@ function FeedPageInner() {
         const agentName = String(rawEvent.agent_display_name || '') || agentNameMap[agentId] || undefined
         const statusText = String(rawEvent.status_text || '').trim() || undefined
         const statusKind = String(rawEvent.status_kind || '').trim() || undefined
+        const adapter = String(rawEvent.adapter || '').trim() || undefined
+        const model = String(rawEvent.model || rawEvent.model_id || rawEvent.current_model || '').trim() || undefined
+        const ttlMsRaw = Number(rawEvent.ttl_ms || 0)
+        const ttlMs = Number.isFinite(ttlMsRaw) && ttlMsRaw > 0 ? Math.max(ttlMsRaw, 30000) : undefined
 
         const now = Date.now()
         setTypingByTopic((prev) => ({
           ...prev,
-          [topicId]: {
+          [topicId]: appendTypingStatus(prev[topicId], {
             agentId,
             agentName,
             statusText,
             statusKind,
-            startedAt: now,
-            // Safety fallback only. Normal lifecycle is cleared by the agent reply.
-            expiresAt: now + AGENT_TYPING_STALE_MS,
-          },
+            adapter,
+            model,
+            ttlMs,
+          }, now),
         }))
         return
       }
@@ -788,25 +821,6 @@ function FeedPageInner() {
       const semanticType = String((msg.message as Record<string, unknown>).semantic_type ?? '')
       const rawContent = String((msg.message as Record<string, unknown>).content ?? '')
       const cleanedContent = stripSourceMarker(rawContent)
-      const agentStatus = parseAgentStatusContent(cleanedContent)
-      if (agentStatus && incomingTopicId) {
-        const senderId = String(msg.message.sender_id || '')
-        const now = Date.now()
-        setTypingByTopic((prev) => ({
-          ...prev,
-          [incomingTopicId]: {
-            agentId: senderId,
-            agentName: (msg.message as Record<string, unknown>).sender_display_name
-              ? String((msg.message as Record<string, unknown>).sender_display_name)
-              : agentNameMap[senderId] || undefined,
-            statusText: agentStatus.text,
-            statusKind: agentStatus.kind,
-            startedAt: now,
-            expiresAt: now + 30000,
-          },
-        }))
-        return
-      }
       const displayable = shouldDisplayMessage(semanticType, cleanedContent)
 
       // Bump activity and unread counters for the topic that received the message.
@@ -1212,12 +1226,27 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
-  const selectedTopicTypingText = useMemo(() => {
+
+  const selectedTopicRunStatus = useMemo<ChatRunStatus | null>(() => {
     if (!selectedTopicId) return null
     const typing = typingByTopic[selectedTopicId]
     if (!typing) return null
     const name = typing.agentName || agentNameMap[typing.agentId] || typing.agentId || 'Agent'
-    return typing.statusText || `${name} ${t('feed.typing')}`
+    const lines = typing.statusLines?.length
+      ? typing.statusLines
+      : typing.statusText
+        ? [{ id: `${typing.startedAt}-status`, text: typing.statusText, kind: typing.statusKind, ts: typing.startedAt }]
+        : []
+    return {
+      agentId: typing.agentId,
+      agentName: name,
+      adapter: typing.adapter,
+      model: typing.model,
+      statusText: typing.statusText || `${name} ${t('feed.typing')}`,
+      statusKind: typing.statusKind,
+      startedAt: typing.startedAt,
+      lines,
+    }
   }, [selectedTopicId, typingByTopic, agentNameMap, t])
 
   // Clear stale persisted topic if it no longer exists in the topics list
@@ -2354,7 +2383,7 @@ function FeedPageInner() {
                 onTopicCreated={() => mutateTopics()}
                 topicMembers={topicMembers}
                 topicType={selectedTopic.topic_type}
-                typingIndicatorText={selectedTopicTypingText}
+                runStatus={selectedTopicRunStatus}
                 onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
                 autoFocusNonce={composerFocusNonce}
                 workspaceAgentName={selectedAgentId ? (agentNameMap[selectedAgentId] || selectedAgentId) : undefined}
