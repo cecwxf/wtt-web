@@ -1624,23 +1624,23 @@ function FeedPageInner() {
 
         void mutateAgentStats(stats, false)
         if (action === 'wake' && lastStatus === 'running' && lastOnline) break
-        if (action === 'sleep' && ['stopped', 'sleeping'].includes(lastStatus) && !lastOnline) break
+        if (action === 'sleep' && ['stopped', 'sleeping'].includes(lastStatus)) break
         await delay(3000)
       }
 
       const completed = action === 'wake'
         ? lastStatus === 'running' && lastOnline
-        : ['stopped', 'sleeping'].includes(lastStatus) && !lastOnline
+        : ['stopped', 'sleeping'].includes(lastStatus)
       if (!completed) {
         throw new Error(action === 'wake'
           ? `Sandbox 仍在唤醒中，最后状态：${lastStatus || 'unknown'}，在线：${lastOnline ? 'yes' : 'no'}`
-          : `Sandbox 仍在休眠中，最后状态：${lastStatus || 'unknown'}，在线：${lastOnline ? 'yes' : 'no'}`)
+          : `Sandbox 仍在休眠中，最后状态：${lastStatus || 'unknown'}`)
       }
 
       await loadAgents()
       void mutateAgentStats()
       void mutateTopics()
-      alert(action === 'wake' ? 'Cloud Sandbox 已唤醒并在线。' : 'Cloud Sandbox 已休眠并离线。')
+      alert(action === 'wake' ? 'Cloud Sandbox 已唤醒并在线。' : 'Cloud Sandbox 已进入休眠。')
     } catch (error) {
       alert(error instanceof Error ? error.message : `Cloud Sandbox ${action} failed`)
     }
