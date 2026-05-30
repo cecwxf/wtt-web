@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, ChevronDown, ChevronRight, ClipboardList, Cloud, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Server, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Shield, Sparkles, Sun, Users, Waves, Zap, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -152,24 +152,60 @@ const ROLE_TONES = [
 
 const HOST_FOLDER_TONES = [
   {
+    god: 'Zeus',
+    Icon: Zap,
     shell: 'border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50 text-emerald-800 ring-emerald-100 dark:border-emerald-500/25 dark:from-emerald-500/15 dark:via-zinc-950 dark:to-teal-500/10 dark:text-emerald-100 dark:ring-emerald-500/15',
-    icon: 'bg-emerald-500 text-white shadow-emerald-900/20',
+    icon: 'from-amber-300 via-yellow-500 to-orange-600 text-white shadow-amber-900/30',
     badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-100',
   },
   {
+    god: 'Poseidon',
+    Icon: Waves,
     shell: 'border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 text-sky-800 ring-sky-100 dark:border-sky-500/25 dark:from-sky-500/15 dark:via-zinc-950 dark:to-cyan-500/10 dark:text-sky-100 dark:ring-sky-500/15',
-    icon: 'bg-sky-500 text-white shadow-sky-900/20',
+    icon: 'from-cyan-300 via-sky-500 to-blue-700 text-white shadow-sky-900/30',
     badge: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-100',
   },
   {
+    god: 'Athena',
+    Icon: Shield,
     shell: 'border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 text-amber-900 ring-amber-100 dark:border-amber-500/25 dark:from-amber-500/15 dark:via-zinc-950 dark:to-orange-500/10 dark:text-amber-100 dark:ring-amber-500/15',
-    icon: 'bg-amber-500 text-white shadow-amber-900/20',
+    icon: 'from-stone-300 via-indigo-500 to-slate-800 text-white shadow-indigo-900/30',
     badge: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-100',
   },
   {
+    god: 'Aphrodite',
+    Icon: Sparkles,
     shell: 'border-rose-200 bg-gradient-to-br from-rose-50 via-white to-pink-50 text-rose-800 ring-rose-100 dark:border-rose-500/25 dark:from-rose-500/15 dark:via-zinc-950 dark:to-pink-500/10 dark:text-rose-100 dark:ring-rose-500/15',
-    icon: 'bg-rose-500 text-white shadow-rose-900/20',
+    icon: 'from-pink-300 via-rose-500 to-fuchsia-700 text-white shadow-rose-900/30',
     badge: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-100',
+  },
+  {
+    god: 'Apollo',
+    Icon: Sun,
+    shell: 'border-orange-200 bg-gradient-to-br from-orange-50 via-white to-yellow-50 text-orange-900 ring-orange-100 dark:border-orange-500/25 dark:from-orange-500/15 dark:via-zinc-950 dark:to-yellow-500/10 dark:text-orange-100 dark:ring-orange-500/15',
+    icon: 'from-yellow-200 via-orange-500 to-red-600 text-white shadow-orange-900/30',
+    badge: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-100',
+  },
+  {
+    god: 'Hermes',
+    Icon: Feather,
+    shell: 'border-violet-200 bg-gradient-to-br from-violet-50 via-white to-sky-50 text-violet-900 ring-violet-100 dark:border-violet-500/25 dark:from-violet-500/15 dark:via-zinc-950 dark:to-sky-500/10 dark:text-violet-100 dark:ring-violet-500/15',
+    icon: 'from-violet-300 via-indigo-500 to-sky-600 text-white shadow-indigo-900/30',
+    badge: 'bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-100',
+  },
+  {
+    god: 'Hephaestus',
+    Icon: Flame,
+    shell: 'border-red-200 bg-gradient-to-br from-red-50 via-white to-stone-50 text-red-900 ring-red-100 dark:border-red-500/25 dark:from-red-500/15 dark:via-zinc-950 dark:to-stone-500/10 dark:text-red-100 dark:ring-red-500/15',
+    icon: 'from-red-400 via-orange-600 to-stone-900 text-white shadow-red-900/30',
+    badge: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-100',
+  },
+  {
+    god: 'Hera',
+    Icon: Crown,
+    shell: 'border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 via-white to-purple-50 text-fuchsia-900 ring-fuchsia-100 dark:border-fuchsia-500/25 dark:from-fuchsia-500/15 dark:via-zinc-950 dark:to-purple-500/10 dark:text-fuchsia-100 dark:ring-fuchsia-500/15',
+    icon: 'from-fuchsia-300 via-purple-600 to-indigo-900 text-white shadow-purple-900/30',
+    badge: 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-500/15 dark:text-fuchsia-100',
   },
 ] as const
 
@@ -188,6 +224,17 @@ function roleTone(agentId: string, role?: AgentRoleTemplate) {
 
 function hostFolderTone(key: string) {
   return HOST_FOLDER_TONES[hashText(key) % HOST_FOLDER_TONES.length] || HOST_FOLDER_TONES[0]
+}
+
+function MythicAgentDirectoryIcon({ Icon }: { Icon: LucideIcon }) {
+  return (
+    <span className="relative flex h-7 w-7 items-center justify-center">
+      <span className="absolute inset-0 rounded-full bg-white/25 blur-[1px]" />
+      <span className="absolute inset-0 rotate-45 rounded-lg border border-white/35" />
+      <span className="absolute inset-1 rounded-full border border-white/30" />
+      <Icon className="relative h-4 w-4 drop-shadow" strokeWidth={2.5} />
+    </span>
+  )
 }
 
 function agentTooltip(agent: AgentOption, role: AgentRoleTemplate, runtime?: AgentRuntimeInfo) {
@@ -713,23 +760,28 @@ export function TopicColumn(props: TopicColumnProps) {
             const collapsed = collapsedAgentFolders[folder.key] ?? false
             const onlineCount = folder.agents.filter((agent) => isAgentOnline(agent.agent_id)).length
             const folderTone = hostFolderTone(folder.key)
+            const FolderIcon = folderTone.Icon
             return (
               <section key={folder.key} className="space-y-1">
                 <button
                   type="button"
                   onClick={() => setCollapsedAgentFolders((prev) => ({ ...prev, [folder.key]: !collapsed }))}
                   className={`flex w-full flex-col items-center rounded-2xl border px-1 py-1.5 text-center shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${folderTone.shell}`}
-                  title={[folder.label, folder.subtitle].filter(Boolean).join(' · ')}
+                  title={[folder.label, folder.subtitle, folderTone.god].filter(Boolean).join(' · ')}
                 >
                   <span className="flex items-center gap-1">
                     {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    <span className={`relative flex h-5 w-5 items-center justify-center rounded-lg shadow-sm ${folderTone.icon}`}>
-                      <Server className="h-3.5 w-3.5 opacity-90" />
-                      <Bot className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full bg-white/90 p-0.5 text-slate-700 shadow-sm dark:bg-zinc-950/90 dark:text-zinc-100" />
+                    <span className={`relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br shadow-md ring-1 ring-white/40 ${folderTone.icon}`}>
+                      <span className="absolute -left-3 top-0 h-8 w-8 rounded-full bg-white/20" />
+                      <span className="absolute -bottom-4 right-0 h-8 w-8 rounded-full bg-black/20" />
+                      <MythicAgentDirectoryIcon Icon={FolderIcon} />
                     </span>
                   </span>
                   <span className="mt-1 max-w-full truncate text-[9px] font-black leading-tight">
                     {folder.label}
+                  </span>
+                  <span className="max-w-full truncate text-[8px] font-black uppercase tracking-[0.08em] opacity-60">
+                    {folderTone.god}
                   </span>
                   <span className={`mt-1 rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none ${folderTone.badge}`}>
                     {onlineCount}/{folder.agents.length}
