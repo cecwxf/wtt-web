@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardList, Cloud, Folder, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Users } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, ClipboardList, Cloud, Hash, Lock, MessageCircle, MoreVertical, Plus, Radio, Server, Users } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -723,8 +723,9 @@ export function TopicColumn(props: TopicColumnProps) {
                 >
                   <span className="flex items-center gap-1">
                     {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-lg shadow-sm ${folderTone.icon}`}>
-                      <Folder className="h-3.5 w-3.5" />
+                    <span className={`relative flex h-5 w-5 items-center justify-center rounded-lg shadow-sm ${folderTone.icon}`}>
+                      <Server className="h-3.5 w-3.5 opacity-90" />
+                      <Bot className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full bg-white/90 p-0.5 text-slate-700 shadow-sm dark:bg-zinc-950/90 dark:text-zinc-100" />
                     </span>
                   </span>
                   <span className="mt-1 max-w-full truncate text-[9px] font-black leading-tight">
