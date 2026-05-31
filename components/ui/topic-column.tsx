@@ -286,7 +286,8 @@ function getTopicKindLabel(topic: TopicItem, zh: boolean) {
 }
 
 function getTopicDisplayName(topic: TopicItem) {
-  return topic.task_id ? stripTaskPrefix(topic.name) : topic.name
+  const name = topic.task_id ? stripTaskPrefix(topic.name) : topic.name
+  return topic.topic_type === 'p2p' ? name.replace(/^Worker:\s*/i, '') : name
 }
 
 type TopicGroupKey = 'p2p' | 'task' | 'discuss' | 'subscriber'
