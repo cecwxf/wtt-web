@@ -63,6 +63,14 @@ interface Agent {
   role_template?: Record<string, unknown>
 }
 
+interface CloudAgentState {
+  has_cloud_agent?: boolean
+  agent_id?: string
+  host_agent_id?: string
+  status?: string
+  provider?: string
+}
+
 function normalizeWttConnectAdapter(raw: unknown): 'codex' | 'claude-code' | '' {
   const value = String(raw || '').trim().toLowerCase()
   if (value === 'codex') return 'codex'
@@ -1371,6 +1379,39 @@ function FeedPageInner() {
     () => (((agentStatsRaw as Record<string, unknown>)?.runtimes || {}) as Record<string, AgentRuntimeInfo>),
     [agentStatsRaw]
   )
+  const { data: cloudAgentStateRaw, mutate: mutateCloudAgentState } = useSWR(
+    session?.accessToken ? ['cloud-agent-state', session.accessToken] : null,
+    async () => {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+        cache: 'no-store',
+      })
+      if (!r.ok) return null
+      return r.json()
+    },
+    { refreshInterval: 5000, revalidateOnFocus: true }
+  )
+  const sleepingCloudHostIds = useMemo(() => {
+    const state = (cloudAgentStateRaw || {}) as CloudAgentState
+    const status = String(state.status || '').toLowerCase()
+    const hostAgentId = String(state.host_agent_id || state.agent_id || '').trim()
+    if (!hostAgentId || !['stopping', 'sleeping', 'stopped'].includes(status)) return new Set<string>()
+    return new Set([hostAgentId])
+  }, [cloudAgentStateRaw])
+  const suppressedCloudAgentIds = useMemo(() => {
+    const ids = new Set<string>(Array.from(sleepingCloudHostIds))
+    if (ids.size === 0) return ids
+    for (const agent of agents) {
+      const hostId = String(agent.cloud_host_agent_id || '').trim()
+      if (hostId && sleepingCloudHostIds.has(hostId)) ids.add(agent.agent_id)
+      if (sleepingCloudHostIds.has(agent.agent_id)) ids.add(agent.agent_id)
+    }
+    for (const [agentId, runtime] of Object.entries(agentRuntimeMap)) {
+      const hostId = String(runtime.host_agent_id || '').trim()
+      if (hostId && sleepingCloudHostIds.has(hostId)) ids.add(agentId)
+    }
+    return ids
+  }, [agentRuntimeMap, agents, sleepingCloudHostIds])
   const selectedAgent = selectedAgentId ? agents.find((agent) => agent.agent_id === selectedAgentId) : undefined
   const selectedAgentRuntime = selectedAgentId ? agentRuntimeMap?.[selectedAgentId] : undefined
   const selectedAgentIsCloud = Boolean(selectedAgent?.is_cloud_sandbox)
@@ -1383,8 +1424,11 @@ function FeedPageInner() {
         ids.add(agentId)
       }
     }
+    for (const agentId of Array.from(suppressedCloudAgentIds)) {
+      ids.delete(agentId)
+    }
     return ids
-  }, [agentStatsRaw, agentRuntimeMap])
+  }, [agentStatsRaw, agentRuntimeMap, suppressedCloudAgentIds])
 
   const handleNewAgentFromHost = useCallback(async (hostAgentId: string, role: AgentRoleTemplate, requestedAdapter?: 'claude-code' | 'codex') => {
     const token = session?.accessToken as string | undefined
@@ -1630,6 +1674,13 @@ function FeedPageInner() {
       if (!res.ok) {
         throw new Error(responseErrorMessage(data, `Cloud Sandbox ${action} failed (${res.status})`))
       }
+      void mutateCloudAgentState((prev: CloudAgentState | null | undefined) => ({
+        ...(prev || {}),
+        has_cloud_agent: true,
+        agent_id: cleanHostAgentId,
+        status: action === 'wake' ? 'waking' : 'stopping',
+        provider: (prev || {}).provider || 'cloudflare_sandbox',
+      }), false)
 
       const deadline = Date.now() + (action === 'wake' ? 300000 : 180000)
       let lastStatus = ''
@@ -1652,6 +1703,7 @@ function FeedPageInner() {
         lastOnline = Array.isArray(online) && online.map(String).includes(cleanHostAgentId)
 
         void mutateAgentStats(stats, false)
+        void mutateCloudAgentState(state as CloudAgentState, false)
         if (action === 'wake' && lastStatus === 'running' && lastOnline) break
         if (action === 'sleep' && ['stopped', 'sleeping'].includes(lastStatus)) break
         await delay(3000)
@@ -1668,12 +1720,13 @@ function FeedPageInner() {
 
       await loadAgents()
       void mutateAgentStats()
+      void mutateCloudAgentState()
       void mutateTopics()
       alert(action === 'wake' ? 'Cloud Sandbox 已唤醒并在线。' : 'Cloud Sandbox 已进入休眠。')
     } catch (error) {
       alert(error instanceof Error ? error.message : `Cloud Sandbox ${action} failed`)
     }
-  }, [loadAgents, mutateAgentStats, mutateTopics, session?.accessToken, t])
+  }, [loadAgents, mutateAgentStats, mutateCloudAgentState, mutateTopics, session?.accessToken, t])
 
   const handleSleepSandbox = useCallback((hostAgentId: string) => {
     return runCloudSandboxAction(hostAgentId, 'sleep')
