@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video, X } from 'lucide-react'
+import { Bell, Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -2179,6 +2179,12 @@ export function ChatView({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      <style>{`
+        @keyframes wtt-cloud-billing-marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
       {dragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-indigo-50/60 dark:bg-indigo-900/30">
           <div className="rounded-xl bg-white dark:bg-zinc-800 px-6 py-4 shadow-lg border-2 border-dashed border-indigo-400">
@@ -2275,10 +2281,19 @@ export function ChatView({
           <div className="flex shrink-0 items-center gap-1">
             {showCloudBilling && (
               <div
-                className="hidden max-w-[220px] overflow-x-auto whitespace-nowrap text-right text-[10px] font-semibold leading-none text-emerald-600 [scrollbar-width:none] dark:text-emerald-300 sm:block [&::-webkit-scrollbar]:hidden"
+                className="hidden max-w-[220px] items-center gap-1 overflow-hidden rounded-full border border-emerald-200 bg-emerald-50/75 px-2 py-1 text-[10px] font-semibold leading-none text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300 sm:flex"
                 title={cloudBillingText}
               >
-                cloud agent按使用时间计费，关机后不计费。本月{cloudBillingMinutes}分钟，{cloudBillingAmount} RMB
+                <Bell className="h-3 w-3 shrink-0" />
+                <span className="min-w-0 overflow-hidden">
+                  <span
+                    className="inline-flex min-w-max gap-8 whitespace-nowrap"
+                    style={{ animation: 'wtt-cloud-billing-marquee 12s linear infinite' }}
+                  >
+                    <span>cloud agent按使用时间计费，关机后不计费。本月{cloudBillingMinutes}分钟，{cloudBillingAmount} RMB</span>
+                    <span aria-hidden="true">cloud agent按使用时间计费，关机后不计费。本月{cloudBillingMinutes}分钟，{cloudBillingAmount} RMB</span>
+                  </span>
+                </span>
               </div>
             )}
             {extraHeaderActions}
