@@ -15,6 +15,7 @@ import { useViewportClass } from '@/lib/hooks/use-viewport-class'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatSendOptions } from '@/components/ui/chat-view'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeWhiteboardFromAnswerPrompt, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
 import { gaokaoKnowledgeContextMarkdown } from '@/lib/arena/gaokao-knowledge'
@@ -266,8 +267,8 @@ function descriptionMarkdown(challenge: Challenge, locale: Locale) {
 
 function ArenaDescriptionMarkdown({ content }: { content: string }) {
   return (
-    <div className="mt-6 rounded-lg border border-gray-800 bg-[#151515] p-5 text-sm leading-7 text-gray-300">
-      <div className="max-w-none space-y-4 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_a]:text-[#3ce8e2] [&_a]:underline [&_code]:rounded [&_code]:bg-black/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_h1]:mt-2 [&_h1]:text-2xl [&_h1]:font-black [&_h1]:text-white [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-white [&_h3]:mt-5 [&_h3]:font-bold [&_h3]:text-white [&_li]:ml-5 [&_li]:list-disc [&_ol>li]:list-decimal [&_p]:leading-7 [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-gray-800 [&_pre]:bg-black/30 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-gray-200 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_svg]:mx-auto [&_svg]:my-5 [&_svg]:max-w-full [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-800 [&_td]:p-2 [&_th]:border [&_th]:border-gray-800 [&_th]:bg-gray-900 [&_th]:p-2 [&_th]:text-left">
+    <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm leading-7 text-slate-700 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">
+      <div className="max-w-none space-y-4 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_a]:text-[#009f9f] [&_a]:underline dark:[&_a]:text-[#3ce8e2] [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono dark:[&_code]:bg-black/40 [&_h1]:mt-2 [&_h1]:text-2xl [&_h1]:font-black [&_h1]:text-slate-950 dark:[&_h1]:text-white [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-slate-950 dark:[&_h2]:text-white [&_h3]:mt-5 [&_h3]:font-bold [&_h3]:text-slate-950 dark:[&_h3]:text-white [&_li]:ml-5 [&_li]:list-disc [&_ol>li]:list-decimal [&_p]:leading-7 [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-slate-200 [&_pre]:bg-slate-50 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-slate-800 dark:[&_pre]:border-gray-800 dark:[&_pre]:bg-black/30 dark:[&_pre]:text-gray-200 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_svg]:mx-auto [&_svg]:my-5 [&_svg]:max-w-full [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-200 dark:[&_td]:border-gray-800 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-100 dark:[&_th]:border-gray-800 dark:[&_th]:bg-gray-900 [&_th]:p-2 [&_th]:text-left">
         <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]}>
           {normalizeMarkdownMath(content)}
         </ReactMarkdown>
@@ -2098,7 +2099,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }
 
   if (!payload || !challenge) {
-    return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading Arena...</main>
+    return <main className="min-h-screen bg-[#f7f5f0] p-8 text-slate-900 dark:bg-[#151515] dark:text-white">Loading Arena...</main>
   }
   const challengeAccepted = submission?.status === 'accepted'
   const submissionIsOpenCL = isOpenCLProvider(submission?.judge_provider)
@@ -2119,19 +2120,20 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     : undefined
 
   return (
-    <main className="min-h-[100dvh] bg-[#151515] text-gray-100">
+    <main className="min-h-[100dvh] bg-[#f7f5f0] text-slate-900 dark:bg-[#151515] dark:text-gray-100">
       <div className="flex h-[100dvh] flex-col overflow-hidden">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-800 bg-[#151515]/95 px-3 py-2 backdrop-blur sm:px-4 sm:py-3">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-[#f7f5f0]/95 px-3 py-2 backdrop-blur dark:border-gray-800 dark:bg-[#151515]/95 sm:px-4 sm:py-3">
           <div className="flex min-w-0 items-center gap-3 sm:gap-5">
             <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">{locale === 'zh' ? 'WTT 终生学习' : 'WTT Arena'}</Link>
-            <div className="hidden items-center gap-4 text-sm text-gray-500 lg:flex">
+            <div className="hidden items-center gap-4 text-sm text-slate-500 dark:text-gray-500 lg:flex">
               <Link href="/arena" className="hover:text-[#3ce8e2]">{t.challenges}</Link>
               <span>{t.playground}</span>
               <span>{t.discuss}</span>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2 text-xs text-gray-500 sm:gap-3">
-            <button onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} className="rounded-md border border-gray-800 bg-[#202020] px-2.5 py-1 font-bold text-gray-300 hover:border-[#3ce8e2] hover:text-[#3ce8e2] sm:px-3">
+          <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500 dark:text-gray-500 sm:gap-3">
+            <ThemeToggle className="rounded-md" />
+            <button onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} className="rounded-md border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-600 hover:border-[#3ce8e2] hover:text-[#00a7a7] dark:border-gray-800 dark:bg-[#202020] dark:text-gray-300 dark:hover:border-[#3ce8e2] dark:hover:text-[#3ce8e2] sm:px-3">
               {locale === 'zh' ? 'English' : '中文'}
             </button>
             <span className="hidden rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2] md:inline">OpenCL · Mac runner</span>
@@ -2151,8 +2153,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           style={arenaLayoutStyle}
         >
           {(
-          <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
-            <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-800 bg-[#191919] px-3 py-2.5 text-sm lg:px-4 lg:py-3">
+          <section className="min-h-0 overflow-hidden rounded-lg border border-slate-200 bg-white/85 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+            <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 bg-[#fbfaf7] px-3 py-2.5 text-sm dark:border-gray-800 dark:bg-[#191919] lg:px-4 lg:py-3">
               {(isGaokaoVolunteer
                 ? [['description', t.consultation]]
                 : [
@@ -2160,7 +2162,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   ['submissions', t.submissions],
                   ['leaderboard', t.leaderboard],
                 ]).map(([id, label]) => (
-                <button key={id} onClick={() => setActiveTab(id as typeof activeTab)} className={`rounded-md px-3 py-1.5 font-medium transition-colors ${activeTab === id ? 'bg-[#3ce8e2]/10 text-[#3ce8e2]' : 'text-gray-500 hover:bg-[#252525] hover:text-gray-300'}`}>
+                <button key={id} onClick={() => setActiveTab(id as typeof activeTab)} className={`rounded-md px-3 py-1.5 font-medium transition-colors ${activeTab === id ? 'bg-[#3ce8e2]/15 text-[#008b8b] dark:text-[#3ce8e2]' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-gray-500 dark:hover:bg-[#252525] dark:hover:text-gray-300'}`}>
                   {label}
                 </button>
               ))}
@@ -2170,7 +2172,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               {activeTab === 'description' && (
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-2xl font-black tracking-tight text-white lg:text-3xl">{challenge.title}</h1>
+                    <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white lg:text-3xl">{challenge.title}</h1>
                     {challengeAccepted && (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
                         ✓ {locale === 'zh' ? '已通过' : 'Accepted'}
@@ -2179,21 +2181,21 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {isGaokaoVolunteer ? (
-                      <span className="rounded-full border border-blue-400/20 bg-blue-400/10 px-2.5 py-1 text-xs font-semibold text-blue-200">Ask 咨询</span>
+                      <span className="rounded-full border border-blue-300/50 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">Ask 咨询</span>
                     ) : (
                       <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${difficultyTone(challenge.difficulty)}`}>{formatDifficulty(challenge.difficulty)}</span>
                     )}
-                    {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-gray-800 bg-[#151515] px-2.5 py-1 text-xs text-gray-400">{tag}</span>)}
+                    {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-500 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-400">{tag}</span>)}
                   </div>
                   {isGaokaoVolunteer && (
-                    <p className="mt-4 rounded-lg border border-blue-400/20 bg-blue-400/10 p-4 text-sm leading-6 text-blue-100">{t.gaokaoIntro}</p>
+                    <p className="mt-4 rounded-lg border border-blue-300/50 bg-blue-50 p-4 text-sm leading-6 text-blue-800 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-100">{t.gaokaoIntro}</p>
                   )}
                   {!!challenge.concepts?.length && (
-                    <div className="mt-4 rounded-lg border border-gray-800 bg-[#151515] p-4">
+                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#151515]">
                       <p className="text-xs font-black uppercase tracking-[0.22em] text-[#3ce8e2]">Skillset</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {challenge.concepts.slice(0, 8).map((concept) => (
-                          <span key={concept} className="rounded-md border border-gray-800 bg-[#202020] px-2.5 py-1 text-xs text-gray-300">{concept}</span>
+                          <span key={concept} className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 dark:border-gray-800 dark:bg-[#202020] dark:text-gray-300">{concept}</span>
                         ))}
                       </div>
                     </div>
@@ -2201,29 +2203,29 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
                   <ArenaDescriptionMarkdown content={descriptionMarkdown(challenge, locale)} />
                   {challenge.source_url && (
-                    <p className="mt-3 rounded-lg border border-gray-800 bg-[#151515] px-5 py-3 text-xs leading-5 text-gray-500">
+                    <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-5 py-3 text-xs leading-5 text-slate-500 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-500">
                       Source: <a href={challenge.source_url} target="_blank" rel="noreferrer" className="text-[#3ce8e2] hover:underline">{challenge.source_name || 'LeetGPU'}</a>
                       {challenge.source_license ? ` · ${challenge.source_license}` : ''}
                     </p>
                   )}
 
                   {!isGaokaoVolunteer && <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">{t.function}</p><p className="mt-1 font-mono text-sm text-[#3ce8e2]">{challenge.function_name}</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">{t.timeLimit}</p><p className="mt-1 font-bold">{challenge.time_limit_ms}ms</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#202020] p-4"><p className="text-xs text-gray-500">{t.memory}</p><p className="mt-1 font-bold">{challenge.memory_limit_mb}MB</p></div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#202020]"><p className="text-xs text-slate-500 dark:text-gray-500">{t.function}</p><p className="mt-1 font-mono text-sm text-[#009f9f] dark:text-[#3ce8e2]">{challenge.function_name}</p></div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#202020]"><p className="text-xs text-slate-500 dark:text-gray-500">{t.timeLimit}</p><p className="mt-1 font-bold">{challenge.time_limit_ms}ms</p></div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#202020]"><p className="text-xs text-slate-500 dark:text-gray-500">{t.memory}</p><p className="mt-1 font-bold">{challenge.memory_limit_mb}MB</p></div>
                   </div>}
 
                   {challenge.description_format !== 'html' && !isGaokaoVolunteer && (
                     <div className="mt-7 space-y-4">
-                      <h2 className="text-lg font-bold text-white">{t.examples}</h2>
-                      {payload.public_cases.length === 0 && <p className="rounded-lg border border-dashed border-gray-800 bg-[#151515] p-4 text-sm leading-6 text-gray-500">{t.noExamples}</p>}
+                      <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t.examples}</h2>
+                      {payload.public_cases.length === 0 && <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-500">{t.noExamples}</p>}
                       {payload.public_cases.map((testCase, index) => (
-                        <div key={testCase.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
-                          <p className="font-semibold text-gray-300">Example {index + 1}</p>
-                          <p className="mt-3 text-xs uppercase tracking-wider text-gray-500">{t.input}</p>
-                          <code className="mt-1 block break-all rounded bg-black/30 p-3 text-gray-200">{testCase.input}</code>
-                          <p className="mt-3 text-xs uppercase tracking-wider text-gray-500">{t.expected}</p>
-                          <code className="mt-1 block rounded bg-black/30 p-3 text-gray-200">{testCase.expected_output}</code>
+                        <div key={testCase.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm dark:border-gray-800 dark:bg-[#151515]">
+                          <p className="font-semibold text-slate-700 dark:text-gray-300">Example {index + 1}</p>
+                          <p className="mt-3 text-xs uppercase tracking-wider text-slate-500 dark:text-gray-500">{t.input}</p>
+                          <code className="mt-1 block break-all rounded bg-slate-100 p-3 text-slate-800 dark:bg-black/30 dark:text-gray-200">{testCase.input}</code>
+                          <p className="mt-3 text-xs uppercase tracking-wider text-slate-500 dark:text-gray-500">{t.expected}</p>
+                          <code className="mt-1 block rounded bg-slate-100 p-3 text-slate-800 dark:bg-black/30 dark:text-gray-200">{testCase.expected_output}</code>
                         </div>
                       ))}
                     </div>
@@ -2233,24 +2235,24 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
               {activeTab === 'submissions' && (
                 <div className="space-y-3">
-                  {!submission && <p className="text-sm text-gray-500">{t.noSubmission}</p>}
+                  {!submission && <p className="text-sm text-slate-500 dark:text-gray-500">{t.noSubmission}</p>}
                   {submission && (
                     <div className="space-y-3">
                       <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone(submission.status)}`}>{submission.status} · score {submission.score}</div>
-                      <p className="text-sm text-gray-500">
-                        user <span className="font-bold text-gray-300">{submission.user_id}</span> · {passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · {runtimeLabel} {formatRuntimeMs(submission.runtime_ms)} · {memoryLabel} {submission.memory_kb || '-'}KB
+                      <p className="text-sm text-slate-500 dark:text-gray-500">
+                        user <span className="font-bold text-slate-700 dark:text-gray-300">{submission.user_id}</span> · {passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · {runtimeLabel} {formatRuntimeMs(submission.runtime_ms)} · {memoryLabel} {submission.memory_kb || '-'}KB
                       </p>
                       {submission.results.map((result, index) => (
-                        <div key={result.id} className="rounded-lg border border-gray-800 bg-[#151515] p-4 text-sm">
+                        <div key={result.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm dark:border-gray-800 dark:bg-[#151515]">
                           <div className="flex items-center justify-between">
-                            <span className="font-semibold text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
+                            <span className="font-semibold text-slate-700 dark:text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
                             <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                           </div>
-                          <p className="mt-2 text-xs text-gray-500">{runtimeLabel} {formatRuntimeMs(result.runtime_ms)} · {memoryLabel} {result.memory_kb || '-'}KB</p>
-                          {!result.is_hidden && result.input && <pre className="mt-3 whitespace-pre-wrap text-gray-400">input: {result.input}</pre>}
-                          {!result.is_hidden && result.expected_output && <pre className="mt-3 whitespace-pre-wrap text-gray-400">expected: {result.expected_output}</pre>}
-                          {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-gray-400">stdout: {displayStdout(result.stdout)}</pre>}
-                          {!result.is_hidden && result.raw_stdout && <pre className="mt-3 whitespace-pre-wrap text-xs text-gray-500">raw stdout: {result.raw_stdout}</pre>}
+                          <p className="mt-2 text-xs text-slate-500 dark:text-gray-500">{runtimeLabel} {formatRuntimeMs(result.runtime_ms)} · {memoryLabel} {result.memory_kb || '-'}KB</p>
+                          {!result.is_hidden && result.input && <pre className="mt-3 whitespace-pre-wrap text-slate-600 dark:text-gray-400">input: {result.input}</pre>}
+                          {!result.is_hidden && result.expected_output && <pre className="mt-3 whitespace-pre-wrap text-slate-600 dark:text-gray-400">expected: {result.expected_output}</pre>}
+                          {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-slate-600 dark:text-gray-400">stdout: {displayStdout(result.stdout)}</pre>}
+                          {!result.is_hidden && result.raw_stdout && <pre className="mt-3 whitespace-pre-wrap text-xs text-slate-500 dark:text-gray-500">raw stdout: {result.raw_stdout}</pre>}
                           {!result.is_hidden && result.stderr && <pre className="mt-3 whitespace-pre-wrap text-rose-300">stderr: {result.stderr}</pre>}
                           {result.error_message && <p className="mt-3 text-yellow-300">{result.error_message}</p>}
                         </div>
@@ -2263,14 +2265,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
               {activeTab === 'leaderboard' && (
                 <div className="space-y-3">
-                  {leaderboard.length === 0 && <p className="text-sm text-gray-500">{t.firstAc}</p>}
+                  {leaderboard.length === 0 && <p className="text-sm text-slate-500 dark:text-gray-500">{t.firstAc}</p>}
                   {leaderboard.map((entry, index) => (
-                    <div key={`${entry.user_id}-${entry.best_submission_id}`} className="flex items-center justify-between rounded-lg border border-gray-800 bg-[#151515] p-4">
+                    <div key={`${entry.user_id}-${entry.best_submission_id}`} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#151515]">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#252525] text-sm font-black text-[#3ce8e2]">#{index + 1}</span>
-                        <div><p className="font-bold text-white">{entry.user_id}</p><p className="text-xs text-gray-500">submits {entry.submission_count} · hint {entry.hint_count}</p></div>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-sm font-black text-[#008b8b] dark:bg-[#252525] dark:text-[#3ce8e2]">#{index + 1}</span>
+                        <div><p className="font-bold text-slate-900 dark:text-white">{entry.user_id}</p><p className="text-xs text-slate-500 dark:text-gray-500">submits {entry.submission_count} · hint {entry.hint_count}</p></div>
                       </div>
-                      <div className="text-right text-sm"><p className="font-bold text-emerald-300">AC</p><p className="text-xs text-gray-500">{formatRuntimeMs(entry.best_runtime_ms)}</p></div>
+                      <div className="text-right text-sm"><p className="font-bold text-emerald-600 dark:text-emerald-300">AC</p><p className="text-xs text-slate-500 dark:text-gray-500">{formatRuntimeMs(entry.best_runtime_ms)}</p></div>
                     </div>
                   ))}
                 </div>
@@ -2290,11 +2292,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
           {isCoding ? (
             <section className="grid min-h-0 gap-3 lg:grid-rows-[1fr_210px]">
-              <div className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
-                <div className="flex items-center justify-between gap-3 border-b border-gray-800 bg-[#191919] px-4 py-3">
+              <div className="min-h-0 overflow-hidden rounded-lg border border-slate-200 bg-white/85 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-[#fbfaf7] px-4 py-3 dark:border-gray-800 dark:bg-[#191919]">
                   <div>
-                    <p className="text-sm font-bold text-white">{sourceFilename(language)}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{sourceFilename(language)}</p>
+                    <p className="text-xs text-slate-500 dark:text-gray-500">
                       {challenge.category === 'ai-kernel' && language === 'opencl'
                         ? `Complete OpenCL host + ${challenge.function_name} · ${t.runner}`
                         : `Implement ${challenge.function_name} · ${t.runner}`}
@@ -2303,14 +2305,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   <div className="flex items-center gap-2">
                     {challenge.category === 'ai-kernel' && (
                       <>
-                        <label className="text-xs text-gray-500">{locale === 'zh' ? '环境' : 'Env'}</label>
-                        <select value={kernelEnvironment} onChange={(event) => setKernelEnvironment(event.target.value as KernelEnvironment)} className="rounded-md border border-gray-800 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]">
+                        <label className="text-xs text-slate-500 dark:text-gray-500">{locale === 'zh' ? '环境' : 'Env'}</label>
+                        <select value={kernelEnvironment} onChange={(event) => setKernelEnvironment(event.target.value as KernelEnvironment)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#101010] dark:text-gray-200">
                           <option value="macos-opencl">Mac mini · OpenCL</option>
                         </select>
                       </>
                     )}
-                    <label className="text-xs text-gray-500">{t.language}</label>
-                    <select value={language} onChange={(event) => changeLanguage(event.target.value as Language)} className="rounded-md border border-gray-800 bg-[#101010] px-3 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]">
+                    <label className="text-xs text-slate-500 dark:text-gray-500">{t.language}</label>
+                    <select value={language} onChange={(event) => changeLanguage(event.target.value as Language)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#101010] dark:text-gray-200">
                       {challenge.category === 'ai-kernel' && <option value="opencl">OpenCL C</option>}
                       {challenge.category === 'ai-kernel' && <option value="cuda">CUDA C++</option>}
                       {challenge.category === 'ai-kernel' && <option value="triton">Triton</option>}
@@ -2328,27 +2330,27 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 </div>
               </div>
 
-              <section className="overflow-y-auto rounded-lg border border-gray-800 bg-[#1e1e1e] p-4">
+              <section className="overflow-y-auto rounded-lg border border-slate-200 bg-white/85 p-4 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
                 <div className="flex items-center justify-between">
-                  <h2 className="font-bold text-white">{t.console}</h2>
+                  <h2 className="font-bold text-slate-900 dark:text-white">{t.console}</h2>
                   <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusTone(submission?.status)}`}>{submission?.status || t.notSubmitted}</span>
                 </div>
                 {submission ? (
-                  <div className="mt-4 grid gap-2 text-sm text-gray-400 sm:grid-cols-2">
-                    <p>score: <span className="text-white">{submission.score}</span></p>
-                    <p>{runtimeLabel}: <span className="text-white">{formatRuntimeMs(submission.runtime_ms)}</span></p>
-                    <p>language: <span className="text-white">{submission.language}</span></p>
-                    <p>provider: <span className="text-white">{submission.judge_provider}</span></p>
-                    <p className="sm:col-span-2 text-gray-500">{t.hidden}</p>
+                  <div className="mt-4 grid gap-2 text-sm text-slate-500 dark:text-gray-400 sm:grid-cols-2">
+                    <p>score: <span className="text-slate-900 dark:text-white">{submission.score}</span></p>
+                    <p>{runtimeLabel}: <span className="text-slate-900 dark:text-white">{formatRuntimeMs(submission.runtime_ms)}</span></p>
+                    <p>language: <span className="text-slate-900 dark:text-white">{submission.language}</span></p>
+                    <p>provider: <span className="text-slate-900 dark:text-white">{submission.judge_provider}</span></p>
+                    <p className="sm:col-span-2 text-slate-500 dark:text-gray-500">{t.hidden}</p>
                   </div>
-              ) : <p className="mt-4 text-sm text-gray-500">{locale === 'zh' ? '点击 Run & Submit 后查看 Agent 执行结果。' : 'Click Run & Submit to see Agent execution results.'}</p>}
+              ) : <p className="mt-4 text-sm text-slate-500 dark:text-gray-500">{locale === 'zh' ? '点击 Run & Submit 后查看 Agent 执行结果。' : 'Click Run & Submit to see Agent execution results.'}</p>}
               </section>
             </section>
           ) : null}
 
-          <aside className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 ${isCoding ? 'lg:col-span-2 xl:col-span-1' : ''}`}>
-            <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515] lg:min-h-[520px]">
-              <div className="dark min-h-0 flex-1">
+          <aside className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/85 p-2 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e] ${isCoding ? 'lg:col-span-2 xl:col-span-1' : ''}`}>
+            <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7] dark:border-gray-800 dark:bg-[#151515] lg:min-h-[520px]">
+              <div className="min-h-0 flex-1">
                 <ChatView
                   topicName={challenge.title || t.chatTitle}
                   topicId={arenaTopicId || undefined}
@@ -2363,9 +2365,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
                   agentRoleLabelMap={{ [ARENA_AGENT_ID]: locale === 'zh' ? 'Arena Coach' : 'Arena Coach' }}
                   emptyState={(
-                    <div className="mx-auto max-w-xl rounded-2xl border border-dashed border-[#3ce8e2]/25 bg-[#101818] p-4 text-left shadow-[0_0_28px_rgba(60,232,226,0.06)]">
+                    <div className="mx-auto max-w-xl rounded-2xl border border-dashed border-[#3ce8e2]/35 bg-[#efffff] p-4 text-left shadow-[0_0_28px_rgba(60,232,226,0.08)] dark:border-[#3ce8e2]/25 dark:bg-[#101818]">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#7de9e5]">{t.chatTitle}</p>
-                      <p className="mt-2 text-sm leading-6 text-gray-300">{t.chatIntro}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-300">{t.chatIntro}</p>
                       <div className="mt-4 grid gap-2 sm:grid-cols-3">
                         {coachActions.map((action) => (
                           <button
@@ -2373,7 +2375,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                             type="button"
                             onClick={() => runCoachAction(action)}
                             disabled={chatSending || arenaSyncing}
-                            className="rounded-xl border border-[#3ce8e2]/25 bg-[#3ce8e2]/10 px-3 py-2 text-xs font-black text-[#bffffd] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                            className="rounded-xl border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-3 py-2 text-xs font-black text-[#007f7f] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#3ce8e2]/25 dark:text-[#bffffd]"
                           >
                             {locale === 'zh' ? action.zh : action.en}
                           </button>
@@ -2389,7 +2391,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                         <select
                           value={chatMode}
                           onChange={(event) => setChatMode(event.target.value as ChatMode)}
-                          className="rounded-md border border-gray-700 bg-[#101010] px-2 py-1 font-bold text-gray-200 outline-none focus:border-[#3ce8e2]"
+                          className="rounded-md border border-slate-200 bg-white px-2 py-1 font-bold text-slate-700 outline-none focus:border-[#3ce8e2] dark:border-gray-700 dark:bg-[#101010] dark:text-gray-200"
                         >
                           {chatModes.map((mode) => (
                             <option key={mode.id} value={mode.id}>{locale === 'zh' ? mode.zh : mode.en}</option>
@@ -2402,7 +2404,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                           type="button"
                           onClick={() => runCoachAction(action)}
                           disabled={chatSending || arenaSyncing}
-                          className="rounded-md border border-[#3ce8e2]/30 bg-[#3ce8e2]/15 px-2 py-1 font-black text-[#bffffd] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-md border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-2 py-1 font-black text-[#007f7f] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:bg-[#3ce8e2]/15 dark:text-[#bffffd]"
                         >
                           {locale === 'zh' ? action.zh : action.en}
                         </button>
@@ -2424,11 +2426,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-violet-300/60"
                 />
               )}
-              <aside className="relative min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2">
+              <aside className="relative min-h-0 overflow-hidden rounded-lg border border-slate-200 bg-white/85 p-2 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
                 <button
                   type="button"
                   onClick={() => setWhiteboardVisible(false)}
-                  className="absolute right-4 top-4 z-10 rounded-full border border-gray-700 bg-black/75 px-3 py-1.5 text-xs font-black text-gray-200 shadow-lg transition hover:border-[#3ce8e2] hover:text-[#3ce8e2]"
+                  className="absolute right-4 top-4 z-10 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-black text-slate-700 shadow-lg transition hover:border-[#3ce8e2] hover:text-[#008b8b] dark:border-gray-700 dark:bg-black/75 dark:text-gray-200 dark:hover:border-[#3ce8e2] dark:hover:text-[#3ce8e2]"
                 >
                   {locale === 'zh' ? '关闭' : 'Close'}
                 </button>
