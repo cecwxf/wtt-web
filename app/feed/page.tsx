@@ -1449,6 +1449,11 @@ function FeedPageInner() {
       throw new Error('Clone Agent only supports online codex / claude-code / gemini hosts')
     }
     const adapter = requestedAdapter || hostAdapter
+    const hostAgent = agents.find((agent) => agent.agent_id === hostAgentId)
+    const hostIsCloudSandbox = Boolean(hostAgent?.is_cloud_sandbox)
+      || String(hostAgent?.cloud_host_agent_id || '').trim().length > 0
+      || String(runtime?.provider || '').toLowerCase().includes('cloudflare_sandbox')
+      || String(runtime?.host_agent_id || '').trim().length > 0
 
     const displayName = role.id === 'general'
       ? `${adapter} Agent`
@@ -1506,6 +1511,39 @@ function FeedPageInner() {
       else next[newAgentId] = role
       return next
     })
+
+    if (hostIsCloudSandbox) {
+      const modelId = adapter === hostAdapter
+        ? String(runtime?.current_model || runtime?.model_id || runtime?.model || '').trim()
+        : ''
+      const sandboxRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/sandbox/agents/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          agent_id: newAgentId,
+          agent_token: newAgentToken,
+          agent_type: adapter,
+          display_name: displayName,
+          model_id: modelId || undefined,
+          restart: false,
+        }),
+      })
+      const sandboxData = await sandboxRes.json().catch(() => ({}))
+      if (!sandboxRes.ok) {
+        throw new Error(responseErrorMessage(sandboxData, `Agent created, but sandbox start failed (${sandboxRes.status})`))
+      }
+
+      await loadAgents()
+      setSelectedAgentId(newAgentId)
+      setSelectedTopicId(null)
+      void mutateTopics()
+      window.setTimeout(() => {
+        void loadAgents()
+        void mutateTopics()
+      }, 2500)
+      alert(`Clone Agent started: ${newAgentId}`)
+      return
+    }
 
     const profile = `${newAgentId}-${adapter}`
     const cleanEnv = [
@@ -1610,7 +1648,7 @@ function FeedPageInner() {
       void mutateTopics()
     }, 2500)
     alert(`Clone Agent started: ${newAgentId}`)
-  }, [agentRuntimeMap, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
+  }, [agentRuntimeMap, agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
 
   const handleCreateCloudAgent = useCallback(async () => {
     const token = session?.accessToken as string | undefined
