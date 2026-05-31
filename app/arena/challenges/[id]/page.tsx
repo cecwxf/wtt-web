@@ -1350,6 +1350,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
+  const [whiteboardPanelWidth, setWhiteboardPanelWidth] = useState(520)
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
   const appliedWhiteboardHtmlMessageIdsRef = useRef(new Set<string>())
@@ -1364,6 +1365,26 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const handleMove = (moveEvent: PointerEvent) => {
         const available = bounds.width - 760
         setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 280, Math.max(300, available)))
+      }
+      const stop = () => {
+        window.removeEventListener('pointermove', handleMove)
+        window.removeEventListener('pointerup', stop)
+      }
+      window.addEventListener('pointermove', handleMove)
+      window.addEventListener('pointerup', stop)
+    }
+  }
+
+  function startWhiteboardResize() {
+    return (event: React.PointerEvent<HTMLDivElement>) => {
+      if (isCoding || isGaokaoVolunteer || stackedArenaLayout) return
+      event.preventDefault()
+      const startX = event.clientX
+      const startWidth = whiteboardPanelWidth
+      const bounds = layoutRef.current?.getBoundingClientRect()
+      const maxWidth = bounds ? Math.max(360, bounds.width - leftPanelWidth - 420) : 760
+      const handleMove = (moveEvent: PointerEvent) => {
+        setWhiteboardPanelWidth(clampNumber(startWidth - (moveEvent.clientX - startX), 320, Math.min(760, maxWidth)))
       }
       const stop = () => {
         window.removeEventListener('pointermove', handleMove)
@@ -2091,6 +2112,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     ? {
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftColumnWidth}px minmax(${compactArena ? 480 : 560}px, 1fr)`
+        : whiteboardVisible && whiteboardDiagram
+        ? `${leftColumnWidth}px 6px minmax(${compactArena ? 360 : 420}px, 1fr) 6px ${whiteboardPanelWidth}px`
         : `${leftColumnWidth}px 6px minmax(${compactArena ? 480 : 560}px, 1fr)`,
     }
     : undefined
@@ -2392,25 +2415,33 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           </aside>
 
           {!isCoding && !isGaokaoVolunteer && whiteboardVisible && whiteboardDiagram && (
-            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-6">
-              <div className="relative h-[min(86vh,920px)] w-full max-w-6xl overflow-hidden rounded-2xl border border-gray-700 bg-[#151515] shadow-2xl">
+            <>
+              {!stackedArenaLayout && (
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  onPointerDown={startWhiteboardResize()}
+                  className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-violet-300/60"
+                />
+              )}
+              <aside className="relative min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2">
                 <button
                   type="button"
                   onClick={() => setWhiteboardVisible(false)}
-                  className="absolute right-3 top-3 z-10 rounded-full border border-gray-700 bg-black/75 px-3 py-1.5 text-xs font-black text-gray-200 shadow-lg transition hover:border-[#3ce8e2] hover:text-[#3ce8e2]"
+                  className="absolute right-4 top-4 z-10 rounded-full border border-gray-700 bg-black/75 px-3 py-1.5 text-xs font-black text-gray-200 shadow-lg transition hover:border-[#3ce8e2] hover:text-[#3ce8e2]"
                 >
                   {locale === 'zh' ? '关闭' : 'Close'}
                 </button>
-              <AgentWhiteboard
-                challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
-                locale={locale}
-                diagram={whiteboardDiagram}
-                expanded
-                busy={whiteboardBusy || agentBusy}
-                onExplain={() => requestWhiteboardExplain(false)}
-              />
-              </div>
-            </div>
+                <AgentWhiteboard
+                  challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
+                  locale={locale}
+                  diagram={whiteboardDiagram}
+                  expanded
+                  busy={whiteboardBusy || agentBusy}
+                  onExplain={() => requestWhiteboardExplain(false)}
+                />
+              </aside>
+            </>
           )}
         </div>
       </div>
