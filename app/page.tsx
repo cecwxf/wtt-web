@@ -743,10 +743,11 @@ export default function Home() {
             <button
               type="button"
               onClick={openMembershipSettings}
-              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-800 shadow-sm hover:border-sky-300 hover:bg-sky-100"
+              className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-sky-600 px-3 py-1.5 text-xs font-black text-white shadow-sm shadow-sky-900/10 hover:bg-sky-500"
             >
               <span>{zh ? '设置' : 'Settings'}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-sky-700">{planLabel}</span>
+              <span className="text-sky-100">·</span>
+              <span className="uppercase tracking-[0.08em]">{planLabel}</span>
             </button>
             <Link href={consoleHref} className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white hover:bg-slate-800">
               {status === 'authenticated' ? (zh ? '进入工作台' : 'Console') : (zh ? '登录' : 'Login')}
