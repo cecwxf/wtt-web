@@ -1987,9 +1987,9 @@ function FeedPageInner() {
         reasoning_effort: modelConfig.reasoningEffort,
       }
     }
-    if (options?.slashType) {
-      metadata.slash_type = options.slashType
-      metadata.slash_command = options.slashCommand || content.trim().split(/\s+/, 1)[0] || content.trim()
+    if (options?.slashType || isSlashCommand) {
+      metadata.slash_type = options?.slashType || 'agent_passthrough'
+      metadata.slash_command = options?.slashCommand || content.trim().split(/\s+/, 1)[0] || content.trim()
     }
 
     if (isSlashCommand && isNonTaskDiscuss) {

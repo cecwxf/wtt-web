@@ -213,10 +213,11 @@ type SlashCommandDef = {
 }
 
 const LOCAL_SLASH_COMMANDS: SlashCommandDef[] = [
+  { cmd: '/new', desc: 'Agent · Start a fresh runtime thread/session', icon: '💬', mode: 'passthrough', family: 'generic' },
   { cmd: '/new task', desc: 'WTT · Create a general task', icon: '📋', mode: 'local', family: 'wtt' },
   { cmd: '/new code task', desc: 'WTT · Create a code task', icon: '💻', mode: 'local', family: 'wtt' },
   { cmd: '/new research task', desc: 'WTT · Create a research task', icon: '🔬', mode: 'local', family: 'wtt' },
-  { cmd: '/new session', desc: 'WTT · Start a new chat session', icon: '💬', mode: 'local', family: 'wtt' },
+  { cmd: '/new session', desc: 'Agent · Start a fresh runtime session', icon: '💬', mode: 'passthrough', family: 'generic' },
   { cmd: '/new topic', desc: 'WTT · Create a new topic', icon: '📢', mode: 'local', family: 'wtt' },
   { cmd: '/run', desc: 'WTT · Run the current task', icon: '▶️', mode: 'local', family: 'wtt' },
   { cmd: '/workers', desc: 'WTT · List workers for agent', icon: '👷', mode: 'local', family: 'wtt' },
@@ -2050,13 +2051,19 @@ export function ChatView({
         e.preventDefault()
         const selected = filteredCommands[slashIndex]
         if (selected) {
-          const mode = selected.mode ?? 'local'
-          if (mode === 'local' && LOCAL_NOARG_SLASH_COMMANDS.has(selected.cmd)) {
+          const exact = filteredCommands.find((c) => draft.trim().toLowerCase() === c.cmd.toLowerCase())
+          const command = exact || selected
+          const mode = command.mode ?? 'local'
+          if (mode === 'passthrough' && exact) {
             setDraft('')
             setSlashOpen(false)
-            executeSlashCommand(selected.cmd, '')
+            void sendPassthroughSlash(draft.trim(), { silent: true })
+          } else if (mode === 'local' && LOCAL_NOARG_SLASH_COMMANDS.has(command.cmd)) {
+            setDraft('')
+            setSlashOpen(false)
+            executeSlashCommand(command.cmd, '')
           } else {
-            setDraft(selected.cmd + ' ')
+            setDraft(command.cmd + ' ')
             setSlashOpen(false)
           }
         }
