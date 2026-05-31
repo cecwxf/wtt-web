@@ -364,6 +364,11 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
           desc: '长期保存、大文件、需要跨唤醒保留的资料建议放到 /mnt/r2；日常代码工作可在 Agent workspace 中进行。',
           icon: HardDrive,
         },
+        {
+          title: '模型使用方式',
+          desc: '内置 Claude Code 已配置使用 DeepSeek 模型；Codex 和 Gemini 需要用户自己配置 OpenAI/Gemini 模型或完成账号授权。',
+          icon: BrainCircuit,
+        },
       ]
     : [
         {
@@ -380,6 +385,11 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
           title: 'Keep important files in /mnt/r2',
           desc: 'Use /mnt/r2 for long-lived files, large assets, and data that must survive wake cycles. Keep active code work in the agent workspace.',
           icon: HardDrive,
+        },
+        {
+          title: 'Model setup',
+          desc: 'Built-in Claude Code is already configured to use DeepSeek. Codex and Gemini require the user to configure OpenAI/Gemini models or complete account authorization.',
+          icon: BrainCircuit,
         },
       ]
 
@@ -406,7 +416,7 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {rules.map((rule) => (
             <article key={rule.title} className="rounded-3xl border border-white/80 bg-white/85 p-5 shadow-sm backdrop-blur">
               <rule.icon className="mb-4 h-6 w-6 text-sky-700" />
