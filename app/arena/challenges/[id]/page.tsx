@@ -29,6 +29,27 @@ type KernelEnvironment = 'macos-opencl'
 type ChatMode = 'socratic' | 'interview_answer' | 'ask'
 type ChatMessage = { id?: string; role: 'user' | 'agent'; content: string; createdAt: string }
 
+const ARENA_SLASH_COMMANDS = [
+  { cmd: '/new', descZh: '开启新的 Agent thread/session', descEn: 'Start a fresh agent thread/session' },
+  { cmd: '/clear', descZh: '清除当前 Arena Agent 会话', descEn: 'Clear the current Arena agent session' },
+  { cmd: '/status', descZh: '查看 Agent 运行状态', descEn: 'Show agent runtime status' },
+  { cmd: '/help', descZh: '查看 Agent 支持的命令', descEn: 'Show agent slash command help' },
+  { cmd: '/compact', descZh: '压缩或重置上下文', descEn: 'Compact or reset runtime context' },
+  { cmd: '/model', descZh: '查看当前模型', descEn: 'Show current model' },
+  { cmd: '/init', descZh: '初始化项目记忆/指引', descEn: 'Initialize project guidance' },
+  { cmd: '/review', descZh: '执行代码审查', descEn: 'Run code review' },
+]
+
+function isArenaSlashMessage(value: string) {
+  const trimmed = value.trim()
+  return trimmed.startsWith('/') && !trimmed.startsWith('//')
+}
+
+function arenaSlashName(value: string) {
+  const trimmed = value.trim()
+  return trimmed.split(/\s+/, 1)[0] || trimmed
+}
+
 type ChallengePayload = {
   challenge: Challenge
   public_cases: Array<{ id: string; input: string; expected_output: string; explanation?: string }>
@@ -1423,6 +1444,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
   const appliedWhiteboardHtmlMessageIdsRef = useRef(new Set<string>())
   const autoWhiteboardSourceKeysRef = useRef(new Set<string>())
+  const arenaSlashQuery = isArenaSlashMessage(chatInput) && !chatInput.includes('\n') ? chatInput.trim().toLowerCase() : ''
+  const filteredArenaSlashCommands = useMemo(() => {
+    if (!arenaSlashQuery) return []
+    return ARENA_SLASH_COMMANDS.filter((command) => command.cmd.startsWith(arenaSlashQuery))
+  }, [arenaSlashQuery])
 
   function startPanelResize() {
     return (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1931,7 +1957,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena fallback message'))
   }
 
-  async function publishArenaRaw(topicId: string, content: string) {
+  async function publishArenaRaw(topicId: string, content: string, metadata?: Record<string, unknown>) {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
@@ -1940,6 +1966,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         content_type: 'text',
         semantic_type: 'post',
         sender_type: 'HUMAN',
+        metadata,
       }),
     })
     if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena message'))
@@ -1997,8 +2024,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string) {
     const message = (explicitMessage ?? chatInput).trim()
-    const mode = isGaokaoVolunteerChallenge(challenge) ? 'ask' : explicitMessage ? modeForExplicitIntent(intent) : chatMode
-    const effectiveIntent = intent || intentForChatMode(mode)
+    const isSlashCommand = !explicitMessage && isArenaSlashMessage(message)
+    const mode = isSlashCommand ? 'ask' : isGaokaoVolunteerChallenge(challenge) ? 'ask' : explicitMessage ? modeForExplicitIntent(intent) : chatMode
+    const effectiveIntent = isSlashCommand ? 'ask' : intent || intentForChatMode(mode)
     if (!challenge || !message || chatSending) return
     if (!session?.accessToken) {
       setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
@@ -2008,13 +2036,20 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setChatSending(true)
     try {
       const topicId = await ensureArenaSession()
-      markArenaAgentBusy(topicId, locale === 'zh' ? 'Agent 已接收消息，正在思考 / 输出' : 'Agent received the message and is thinking / writing', 'chat', 180000)
+      markArenaAgentBusy(
+        topicId,
+        isSlashCommand
+          ? (locale === 'zh' ? 'Agent 正在执行 slash command' : 'Agent is running the slash command')
+          : (locale === 'zh' ? 'Agent 已接收消息，正在思考 / 输出' : 'Agent received the message and is thinking / writing'),
+        'chat',
+        180000,
+      )
       const baselineMessages = await refreshArenaMessages(topicId)
       const baselineKeys = new Set(baselineMessages.map(chatMessageKey))
       const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
       const baselineWhiteboardHtmlIds = new Set(appliedWhiteboardHtmlMessageIdsRef.current)
-      const promptContext = arenaAgentPromptContext(challenge, locale, language, code, mode, effectiveIntent)
-      const requiresWhiteboard = !isCoding && !isGaokaoVolunteerChallenge(challenge)
+      const promptContext = isSlashCommand ? '' : arenaAgentPromptContext(challenge, locale, language, code, mode, effectiveIntent)
+      const requiresWhiteboard = !isSlashCommand && !isCoding && !isGaokaoVolunteerChallenge(challenge)
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -2034,11 +2069,27 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           submission_id: submission?.id,
           intent: effectiveIntent,
           chat_mode: mode,
+          agent_passthrough: isSlashCommand,
+          slash_type: isSlashCommand ? 'agent_passthrough' : undefined,
+          slash_command: isSlashCommand ? arenaSlashName(message) : undefined,
+          metadata: isSlashCommand ? {
+            command_scope: 'single_agent',
+            command_target_agent_id: ARENA_AGENT_ID,
+          } : undefined,
         }),
       })
       if (!response.ok) {
         if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena chat'))
-        await publishArenaFallback(topicId, message, effectiveIntent, mode)
+        if (isSlashCommand) {
+          await publishArenaRaw(topicId, message, {
+            slash_type: 'agent_passthrough',
+            slash_command: arenaSlashName(message),
+            command_scope: 'single_agent',
+            command_target_agent_id: ARENA_AGENT_ID,
+          })
+        } else {
+          await publishArenaFallback(topicId, message, effectiveIntent, mode)
+        }
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
@@ -2438,6 +2489,28 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 <div ref={chatEndRef} />
               </div>
               <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="shrink-0 border-t border-gray-800 bg-[#151515] p-3">
+                {arenaSlashQuery && (
+                  <div className="mb-2 rounded-xl border border-[#3ce8e2]/25 bg-[#0f2424] p-2 shadow-[0_0_24px_rgba(60,232,226,0.08)]">
+                    <div className="mb-1 flex items-center justify-between gap-2 px-1 text-[10px] font-black uppercase tracking-[0.22em] text-[#7de9e5]">
+                      <span>{locale === 'zh' ? 'Agent Slash Command' : 'Agent Slash Command'}</span>
+                      <span className="text-gray-500">{locale === 'zh' ? '直通 Arena Agent，不附加长上下文' : 'Passed through without Arena context'}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(filteredArenaSlashCommands.length ? filteredArenaSlashCommands : ARENA_SLASH_COMMANDS.slice(0, 6)).map((command) => (
+                        <button
+                          key={command.cmd}
+                          type="button"
+                          onClick={() => setChatInput(command.cmd)}
+                          className="rounded-lg border border-[#3ce8e2]/20 bg-black/25 px-2.5 py-1.5 text-left text-[11px] font-bold text-gray-200 transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black"
+                          title={locale === 'zh' ? command.descZh : command.descEn}
+                        >
+                          <span className="font-black text-[#8ef4f0]">{command.cmd}</span>
+                          <span className="ml-2 text-gray-500">{locale === 'zh' ? command.descZh : command.descEn}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <textarea
                   value={chatInput}
                   onChange={(event) => setChatInput(event.target.value)}
