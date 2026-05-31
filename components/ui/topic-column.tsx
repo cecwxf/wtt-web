@@ -82,7 +82,7 @@ interface TopicColumnProps {
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
-  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex') => void | Promise<void>
+  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex' | 'gemini') => void | Promise<void>
   onCreateCloudAgent?: () => void | Promise<void>
   onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
@@ -350,6 +350,7 @@ function normalizeNewAgentAdapter(runtime?: AgentRuntimeInfo) {
   const raw = String(runtime?.adapter || runtime?.kind || '').trim().toLowerCase()
   if (raw === 'codex') return 'codex'
   if (raw === 'claude' || raw === 'claude-code' || raw === 'claude_code') return 'claude-code'
+  if (raw === 'gemini' || raw === 'gemini-cli') return 'gemini'
   return ''
 }
 
@@ -466,7 +467,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [newAgentOpen, setNewAgentOpen] = useState(false)
   const [newAgentHostId, setNewAgentHostId] = useState('')
   const [newAgentRoleId, setNewAgentRoleId] = useState<AgentRoleTemplateId>('general')
-  const [newAgentAdapter, setNewAgentAdapter] = useState<'claude-code' | 'codex'>('claude-code')
+  const [newAgentAdapter, setNewAgentAdapter] = useState<'claude-code' | 'codex' | 'gemini'>('claude-code')
   const [newAgentBusy, setNewAgentBusy] = useState(false)
   const [newAgentError, setNewAgentError] = useState('')
   const [cloudAgentBusy, setCloudAgentBusy] = useState(false)
@@ -651,7 +652,7 @@ export function TopicColumn(props: TopicColumnProps) {
     const host = selectedHost || newAgentHosts[0]
     if (!host) return
     setNewAgentHostId(host.agent_id)
-    setNewAgentAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[host.agent_id]) || 'claude-code') as 'claude-code' | 'codex')
+    setNewAgentAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[host.agent_id]) || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
     setNewAgentRoleId('general')
     setNewAgentError('')
     setNewAgentOpen(true)
@@ -1402,7 +1403,7 @@ export function TopicColumn(props: TopicColumnProps) {
                 {zh ? '克隆 Agent' : 'Clone Agent'}
               </h3>
               <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
-                {zh ? '选择一个在线 Codex / Claude Code 主机和角色。系统会自动 clone 一个 agent，并在该主机上启动独立默认 workspace。' : 'Choose an online Codex / Claude Code host and role. WTT will clone an agent and start it with its own default workspace.'}
+                {zh ? '选择一个在线 Codex / Claude Code / Gemini 主机和角色。系统会自动 clone 一个 agent，并在该主机上启动独立默认 workspace。' : 'Choose an online Codex / Claude Code / Gemini host and role. WTT will clone an agent and start it with its own default workspace.'}
               </p>
             </div>
 
@@ -1413,7 +1414,7 @@ export function TopicColumn(props: TopicColumnProps) {
                 onChange={(event) => {
                   const hostId = event.target.value
                   setNewAgentHostId(hostId)
-                  setNewAgentAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[hostId]) || 'claude-code') as 'claude-code' | 'codex')
+                  setNewAgentAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[hostId]) || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
                 }}
                 disabled={newAgentBusy}
                 className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
@@ -1437,6 +1438,7 @@ export function TopicColumn(props: TopicColumnProps) {
                 {([
                   ['claude-code', 'Claude Code'],
                   ['codex', 'Codex'],
+                  ['gemini', 'Gemini'],
                 ] as const).map(([id, label]) => {
                   const active = newAgentAdapter === id
                   return (

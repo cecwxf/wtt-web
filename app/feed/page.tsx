@@ -77,10 +77,13 @@ interface CloudAgentState {
   }
 }
 
-function normalizeWttConnectAdapter(raw: unknown): 'codex' | 'claude-code' | '' {
+type WttConnectAdapter = 'codex' | 'claude-code' | 'gemini'
+
+function normalizeWttConnectAdapter(raw: unknown): WttConnectAdapter | '' {
   const value = String(raw || '').trim().toLowerCase()
   if (value === 'codex') return 'codex'
   if (value === 'claude' || value === 'claude-code' || value === 'claude_code') return 'claude-code'
+  if (value === 'gemini' || value === 'gemini-cli') return 'gemini'
   return ''
 }
 
@@ -1436,16 +1439,16 @@ function FeedPageInner() {
     return ids
   }, [agentStatsRaw, agentRuntimeMap, suppressedCloudAgentIds])
 
-  const handleNewAgentFromHost = useCallback(async (hostAgentId: string, role: AgentRoleTemplate, requestedAdapter?: 'claude-code' | 'codex') => {
+  const handleNewAgentFromHost = useCallback(async (hostAgentId: string, role: AgentRoleTemplate, requestedAdapter?: WttConnectAdapter) => {
     const token = session?.accessToken as string | undefined
     if (!token) throw new Error(t('settings.sessionExpired'))
 
     const runtime = agentRuntimeMap[hostAgentId]
     const hostAdapter = normalizeWttConnectAdapter(runtime?.adapter || runtime?.kind)
     if (!hostAdapter) {
-      throw new Error('Clone Agent only supports online codex / claude-code hosts')
+      throw new Error('Clone Agent only supports online codex / claude-code / gemini hosts')
     }
-    const adapter = requestedAdapter === 'codex' ? 'codex' : 'claude-code'
+    const adapter = requestedAdapter || hostAdapter
 
     const displayName = role.id === 'general'
       ? `${adapter} Agent`
@@ -1457,6 +1460,7 @@ function FeedPageInner() {
       body: JSON.stringify({
         display_name: displayName,
         platform: adapter,
+        start_cloud_child: false,
       }),
     })
     const provisionData = await provisionRes.json().catch(() => ({}))
