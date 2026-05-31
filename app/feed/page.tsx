@@ -1547,7 +1547,7 @@ function FeedPageInner() {
       'fi',
     ].join('\n')
 
-    const shellRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/shell/run`, {
+    const shellRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/shell/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -1560,7 +1560,35 @@ function FeedPageInner() {
       throw new Error(responseErrorMessage(shellData, `Agent created, but host shell failed (${shellRes.status})`))
     }
 
-    const result = (shellData as { result?: Record<string, unknown> }).result || {}
+    const jobId = String((shellData as { job_id?: unknown }).job_id || '').trim()
+    if (!jobId) {
+      throw new Error('Agent created, but host shell job did not return a job id')
+    }
+
+    let jobData = shellData as Record<string, unknown>
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 135_000) {
+      const status = String(jobData.status || '').toLowerCase()
+      if (status === 'done' || status === 'error' || status === 'timeout') break
+      await delay(1500)
+      const pollRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/shell/jobs/${encodeURIComponent(jobId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      })
+      const nextJobData = await pollRes.json().catch(() => ({}))
+      if (!pollRes.ok) {
+        throw new Error(responseErrorMessage(nextJobData, `Agent created, but host shell job polling failed (${pollRes.status})`))
+      }
+      jobData = nextJobData as Record<string, unknown>
+    }
+
+    const jobStatus = String(jobData.status || '').toLowerCase()
+    if (jobStatus !== 'done') {
+      const error = String(jobData.error || '').trim()
+      throw new Error(`Agent created, but host shell job ${jobStatus || 'did not finish'}${error ? `: ${error}` : ''}`)
+    }
+
+    const result = (jobData as { result?: Record<string, unknown> }).result || {}
     const exitCode = Number(result.exit_code ?? result.exitCode ?? 0)
     if (exitCode !== 0) {
       const stderr = String(result.stderr || '').trim()
