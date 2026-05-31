@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 import { motion } from 'framer-motion'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowRight,
   BookOpen,
@@ -20,8 +22,22 @@ import {
   UsersRound,
   Workflow,
 } from 'lucide-react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
 import { WttLogo } from '@/components/ui/wtt-logo'
+
+type SettingsPage = 'profile' | 'membership' | 'binding' | 'llm-proxy' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
+
+type BillingMe = {
+  entitlement?: {
+    plan?: string
+  }
+}
+
+const WttSettingsModal = dynamic(
+  () => import('@/components/ui/wtt-settings-modal').then((mod) => mod.WttSettingsModal),
+  { ssr: false },
+)
 
 const productPillars = [
   {
@@ -523,12 +539,55 @@ function AiWorkspaceSoftmaxExample({ zh }: { zh: boolean }) {
 }
 
 export default function Home() {
-  const { status } = useSession()
+  const { data: session, status } = useSession()
   const { locale, setLocale } = useI18n()
   const zh = locale === 'zh'
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>('membership')
+  const [billingPlan, setBillingPlan] = useState<'free' | 'plus' | 'pro'>('free')
   const consoleHref = status === 'authenticated' ? '/feed' : '/login'
   const protectedHref = (href: string) => status === 'authenticated' ? href : `/login?callbackUrl=${encodeURIComponent(href)}`
   const arenaHref = protectedHref('/arena')
+  const accessToken = (session as { accessToken?: string } | null)?.accessToken
+  const planLabel = useMemo(() => {
+    if (billingPlan === 'pro') return 'Pro'
+    if (billingPlan === 'plus') return 'Plus'
+    return 'Free'
+  }, [billingPlan])
+
+  useEffect(() => {
+    if (status !== 'authenticated' || !accessToken) {
+      setBillingPlan('free')
+      return
+    }
+
+    let cancelled = false
+    fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: BillingMe | null) => {
+        if (cancelled) return
+        const plan = String(data?.entitlement?.plan || 'free').toLowerCase()
+        setBillingPlan(plan === 'pro' ? 'pro' : plan === 'plus' ? 'plus' : 'free')
+      })
+      .catch(() => {
+        if (!cancelled) setBillingPlan('free')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, status])
+
+  const openMembershipSettings = () => {
+    if (status !== 'authenticated') {
+      window.location.href = '/login'
+      return
+    }
+    setSettingsPage('membership')
+    setSettingsOpen(true)
+  }
 
   const topicTypes = [
     {
@@ -680,6 +739,14 @@ export default function Home() {
               className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-600 hover:border-slate-400"
             >
               {zh ? 'EN' : '中文'}
+            </button>
+            <button
+              type="button"
+              onClick={openMembershipSettings}
+              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-800 shadow-sm hover:border-sky-300 hover:bg-sky-100"
+            >
+              <span>{zh ? '设置' : 'Settings'}</span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-sky-700">{planLabel}</span>
             </button>
             <Link href={consoleHref} className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white hover:bg-slate-800">
               {status === 'authenticated' ? (zh ? '进入工作台' : 'Console') : (zh ? '登录' : 'Login')}
@@ -966,6 +1033,14 @@ wtt-connect status all`}</pre>
           WTT · {zh ? '分布式 Agent 架构' : 'Distributed agent architecture'}
         </footer>
       </div>
+      <WttSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        activePage={settingsPage}
+        onPageChange={setSettingsPage}
+        agents={[]}
+        selectedAgentId=""
+      />
     </main>
   )
 }
