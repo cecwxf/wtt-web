@@ -4,8 +4,11 @@ import { Bell, Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { formatTime, formatDateGroup } from '@/lib/time'
+import { normalizeMarkdownMath } from '@/lib/markdown-math'
 import {
   parseRichBlocks,
   proxyMediaUrl,
@@ -406,6 +409,16 @@ const LOCAL_NOARG_SLASH_COMMANDS = new Set([
 ])
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+
+function MarkdownWithMath({ children, className }: { children: string; className?: string }) {
+  return (
+    <div className={className}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+        {normalizeMarkdownMath(children)}
+      </ReactMarkdown>
+    </div>
+  )
+}
 
 /**
  * Detect progress/status messages that should be hidden from the Talk feed.
@@ -973,7 +986,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
                 <p className="text-xs text-red-500">预览加载失败：{textError}</p>
               ) : ['md', 'markdown', 'mdx'].includes(ext) ? (
                 <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+                  <MarkdownWithMath>{text}</MarkdownWithMath>
                 </div>
               ) : (
                 <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">{text}</pre>
@@ -2662,7 +2675,7 @@ export function ChatView({
                           switch (block.kind) {
                             case 'html': return <div key={bi} dangerouslySetInnerHTML={{ __html: block.html }} />
                             case 'plain': return <p key={bi} className="whitespace-pre-wrap">{block.text}</p>
-                            case 'markdown': return <ReactMarkdown key={bi} remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+                            case 'markdown': return <MarkdownWithMath key={bi}>{block.text}</MarkdownWithMath>
                             case 'image': return <img key={bi} src={block.url} alt="" className="max-h-[200px] rounded-lg my-2" loading="lazy" />
                             default: return null
                           }
@@ -2901,9 +2914,9 @@ export function ChatView({
                               }
                               if (block.kind === 'markdown') {
                                 return (
-                                  <div key={bi} className="prose prose-sm max-w-none prose-slate">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
-                                  </div>
+                                  <MarkdownWithMath key={bi} className="prose prose-sm max-w-none prose-slate [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden">
+                                    {block.text}
+                                  </MarkdownWithMath>
                                 )
                               }
                               if (block.kind === 'link') {

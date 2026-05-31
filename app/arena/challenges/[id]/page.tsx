@@ -14,7 +14,7 @@ import { useAgentId } from '@/lib/hooks/use-agent-id'
 import { useViewportClass } from '@/lib/hooks/use-viewport-class'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
-import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
+import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatSendOptions } from '@/components/ui/chat-view'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeWhiteboardFromAnswerPrompt, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
 import { gaokaoKnowledgeContextMarkdown } from '@/lib/arena/gaokao-knowledge'
@@ -1788,28 +1788,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
   const arenaTypingActive = !!arenaTyping && arenaTyping.topicId === arenaTopicId
   const agentBusy = arenaTypingActive || chatSending || arenaSyncing || whiteboardBusy
-  const agentBusyLabel = arenaSyncing
-    ? t.chatSyncing
-    : arenaTypingActive
-    ? arenaTyping.statusText || `${arenaTyping.agentName || 'Agent'} ${locale === 'zh' ? '正在输入...' : 'is typing...'}`
-    : whiteboardBusy
-    ? t.whiteboardWorking
-    : t.chatWorking
-  const arenaRunStatus = useMemo<ChatRunStatus | null>(() => {
-    if (!agentBusy) return null
-    const now = Date.now()
-    const startedAt = arenaTyping?.startedAt || now
-    const text = agentBusyLabel
-    return {
-      agentId: arenaTyping?.agentId || ARENA_AGENT_ID,
-      agentName: arenaTyping?.agentName || (locale === 'zh' ? 'Arena Coach' : 'Arena Coach'),
-      adapter: 'arena',
-      statusText: text,
-      statusKind: arenaTyping?.statusKind || (whiteboardBusy ? 'whiteboard' : chatSending ? 'chat' : arenaSyncing ? 'syncing' : 'running'),
-      startedAt,
-      lines: [{ id: `${startedAt}:${text}`, text, kind: arenaTyping?.statusKind || 'arena', ts: now }],
-    }
-  }, [agentBusy, agentBusyLabel, arenaSyncing, arenaTyping, chatSending, locale, whiteboardBusy])
 
   useEffect(() => {
     if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
@@ -2431,7 +2409,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   wsConnected={Boolean(arenaTopicId && session?.accessToken)}
                   accessToken={session?.accessToken || undefined}
                   topicType="p2p"
-                  runStatus={arenaRunStatus}
                   compactUi
                   currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
                   agentRoleLabelMap={{ [ARENA_AGENT_ID]: locale === 'zh' ? 'Arena Coach' : 'Arena Coach' }}
