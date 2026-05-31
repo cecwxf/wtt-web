@@ -202,7 +202,7 @@ function writeStoredModelPref(key: string, pref: ModelPref): void {
 }
 
 type SlashCommandMode = 'local' | 'passthrough'
-type SlashCommandFamily = 'wtt' | 'codex' | 'claude-code' | 'generic'
+type SlashCommandFamily = 'wtt' | 'codex' | 'claude-code' | 'gemini' | 'generic'
 
 type SlashCommandDef = {
   cmd: string
@@ -228,22 +228,71 @@ const GENERIC_AGENT_COMMANDS: SlashCommandDef[] = [
   { cmd: '/help', desc: 'Agent · Help', icon: '❓', mode: 'passthrough', family: 'generic' },
   { cmd: '/status', desc: 'Agent · Runtime status', icon: '📊', mode: 'passthrough', family: 'generic' },
   { cmd: '/model', desc: 'Agent · Show/switch model', icon: '🤖', mode: 'passthrough', family: 'generic' },
+  { cmd: '/new', desc: 'Agent · New session/thread', icon: '💬', mode: 'passthrough', family: 'generic' },
+  { cmd: '/clear', desc: 'Agent · Clear session/thread', icon: '🧹', mode: 'passthrough', family: 'generic' },
   { cmd: '/compact', desc: 'Agent · Compact context', icon: '🗜️', mode: 'passthrough', family: 'generic' },
 ]
 
 const CODEX_SLASH_COMMANDS: SlashCommandDef[] = [
+  { cmd: '/agent', desc: 'Codex · Configure/switch agent', icon: '🧩', mode: 'passthrough', family: 'codex' },
+  { cmd: '/apps', desc: 'Codex · Browse apps/connectors', icon: '🔌', mode: 'passthrough', family: 'codex' },
+  { cmd: '/plugins', desc: 'Codex · Browse/manage plugins', icon: '🧰', mode: 'passthrough', family: 'codex' },
+  { cmd: '/hooks', desc: 'Codex · View/manage hooks', icon: '🪝', mode: 'passthrough', family: 'codex' },
   { cmd: '/help', desc: 'Codex · Help', icon: '❓', mode: 'passthrough', family: 'codex' },
   { cmd: '/status', desc: 'Codex · Session/runtime status', icon: '📊', mode: 'passthrough', family: 'codex' },
   { cmd: '/model', desc: 'Codex · Show/switch model', icon: '🤖', mode: 'passthrough', family: 'codex' },
+  { cmd: '/fast', desc: 'Codex · Toggle/check Fast tier', icon: '⚡', mode: 'passthrough', family: 'codex' },
+  { cmd: '/plan', desc: 'Codex · Switch to plan mode', icon: '🗺️', mode: 'passthrough', family: 'codex' },
+  { cmd: '/goal', desc: 'Codex · Set/view/clear goal', icon: '🎯', mode: 'passthrough', family: 'codex' },
+  { cmd: '/personality', desc: 'Codex · Set response style', icon: '🎭', mode: 'passthrough', family: 'codex' },
   { cmd: '/approvals', desc: 'Codex · Approval policy', icon: '✅', mode: 'passthrough', family: 'codex' },
+  { cmd: '/permissions', desc: 'Codex · Approval/sandbox permissions', icon: '🛡️', mode: 'passthrough', family: 'codex' },
+  { cmd: '/approve', desc: 'Codex · Retry auto-review denial', icon: '☑️', mode: 'passthrough', family: 'codex' },
   { cmd: '/review', desc: 'Codex · Review current changes', icon: '🔎', mode: 'passthrough', family: 'codex' },
   { cmd: '/init', desc: 'Codex · Inspect project and create guidance', icon: '🧭', mode: 'passthrough', family: 'codex' },
   { cmd: '/compact', desc: 'Codex · Compact conversation context', icon: '🗜️', mode: 'passthrough', family: 'codex' },
   { cmd: '/clear', desc: 'Codex · Clear current conversation view', icon: '🧹', mode: 'passthrough', family: 'codex' },
+  { cmd: '/new', desc: 'Codex · Start a fresh conversation', icon: '💬', mode: 'passthrough', family: 'codex' },
+  { cmd: '/resume', desc: 'Codex · Resume saved conversation', icon: '↩️', mode: 'passthrough', family: 'codex' },
+  { cmd: '/fork', desc: 'Codex · Fork current conversation', icon: '🍴', mode: 'passthrough', family: 'codex' },
+  { cmd: '/side', desc: 'Codex · Ephemeral side conversation', icon: '🧵', mode: 'passthrough', family: 'codex' },
   { cmd: '/diff', desc: 'Codex · Show pending diff', icon: '📄', mode: 'passthrough', family: 'codex' },
+  { cmd: '/mention', desc: 'Codex · Attach file/folder', icon: '📎', mode: 'passthrough', family: 'codex' },
+  { cmd: '/mcp', desc: 'Codex · List MCP tools', icon: '🔗', mode: 'passthrough', family: 'codex' },
+  { cmd: '/memories', desc: 'Codex · Configure memories', icon: '🧠', mode: 'passthrough', family: 'codex' },
+  { cmd: '/skills', desc: 'Codex · Browse/use skills', icon: '🧪', mode: 'passthrough', family: 'codex' },
+  { cmd: '/ps', desc: 'Codex · Show background terminals', icon: '🖥️', mode: 'passthrough', family: 'codex' },
+  { cmd: '/stop', desc: 'Codex · Stop background terminals', icon: '⏹️', mode: 'passthrough', family: 'codex' },
+  { cmd: '/clean', desc: 'Codex · Alias for /stop', icon: '🧽', mode: 'passthrough', family: 'codex' },
+  { cmd: '/copy', desc: 'Codex · Copy latest response', icon: '📋', mode: 'passthrough', family: 'codex' },
+  { cmd: '/raw', desc: 'Codex · Toggle raw scrollback', icon: '⌨️', mode: 'passthrough', family: 'codex' },
+  { cmd: '/debug-config', desc: 'Codex · Config diagnostics', icon: '🩺', mode: 'passthrough', family: 'codex' },
+  { cmd: '/statusline', desc: 'Codex · Configure status line', icon: '📟', mode: 'passthrough', family: 'codex' },
+  { cmd: '/title', desc: 'Codex · Configure terminal title', icon: '🏷️', mode: 'passthrough', family: 'codex' },
+  { cmd: '/theme', desc: 'Codex · Choose theme', icon: '🎨', mode: 'passthrough', family: 'codex' },
+  { cmd: '/experimental', desc: 'Codex · Experimental features', icon: '🧬', mode: 'passthrough', family: 'codex' },
+  { cmd: '/ide', desc: 'Codex · IDE integration', icon: '🧱', mode: 'passthrough', family: 'codex' },
+  { cmd: '/keymap', desc: 'Codex · Keyboard shortcuts', icon: '⌘', mode: 'passthrough', family: 'codex' },
+  { cmd: '/vim', desc: 'Codex · Vim mode', icon: '📝', mode: 'passthrough', family: 'codex' },
+  { cmd: '/sandbox-add-read-dir', desc: 'Codex · Add read-only sandbox dir', icon: '📂', mode: 'passthrough', family: 'codex' },
+  { cmd: '/feedback', desc: 'Codex · Send feedback/diagnostics', icon: '💬', mode: 'passthrough', family: 'codex' },
+  { cmd: '/logout', desc: 'Codex · Sign out', icon: '🚪', mode: 'passthrough', family: 'codex' },
+  { cmd: '/exit', desc: 'Codex · Exit CLI', icon: '🚪', mode: 'passthrough', family: 'codex' },
+  { cmd: '/quit', desc: 'Codex · Exit CLI', icon: '🚪', mode: 'passthrough', family: 'codex' },
 ]
 
 const CLAUDE_CODE_SLASH_COMMANDS: SlashCommandDef[] = [
+  { cmd: '/add-dir', desc: 'Claude Code · Add working directory', icon: '📁', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/agents', desc: 'Claude Code · Manage agents', icon: '🧑‍🚀', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/autofix-pr', desc: 'Claude Code · Auto-fix PR feedback', icon: '🛠️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/background', desc: 'Claude Code · Run in background', icon: '🌙', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/bg', desc: 'Claude Code · Alias for /background', icon: '🌙', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/batch', desc: 'Claude Code · Parallel batch workflow', icon: '🧬', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/branch', desc: 'Claude Code · Branch conversation', icon: '🌿', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/fork', desc: 'Claude Code · Alias for /branch', icon: '🍴', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/btw', desc: 'Claude Code · Side question', icon: '💭', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/chrome', desc: 'Claude Code · Chrome settings', icon: '🌐', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/claude-api', desc: 'Claude Code · Claude API reference/migration', icon: '📚', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/help', desc: 'Claude Code · Help', icon: '❓', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/status', desc: 'Claude Code · Session status', icon: '📊', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/model', desc: 'Claude Code · Show/switch model', icon: '🤖', mode: 'passthrough', family: 'claude-code' },
@@ -251,11 +300,98 @@ const CLAUDE_CODE_SLASH_COMMANDS: SlashCommandDef[] = [
   { cmd: '/permissions', desc: 'Claude Code · Manage permissions', icon: '🛡️', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/init', desc: 'Claude Code · Create/update CLAUDE.md', icon: '🧭', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/review', desc: 'Claude Code · Review code changes', icon: '🔎', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/code-review', desc: 'Claude Code · Review diff with levels/fix', icon: '🧾', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/security-review', desc: 'Claude Code · Security review', icon: '🔐', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/diff', desc: 'Claude Code · Interactive diff', icon: '📄', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/context', desc: 'Claude Code · Context usage', icon: '🧮', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/compact', desc: 'Claude Code · Compact context', icon: '🗜️', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/clear', desc: 'Claude Code · Clear conversation view', icon: '🧹', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/reset', desc: 'Claude Code · Alias for /clear', icon: '🧹', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/new', desc: 'Claude Code · Alias for /clear', icon: '💬', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/memory', desc: 'Claude Code · Manage memory files', icon: '🧠', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/mcp', desc: 'Claude Code · Manage MCP', icon: '🔗', mode: 'passthrough', family: 'claude-code' },
   { cmd: '/cost', desc: 'Claude Code · Show usage/cost', icon: '💳', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/usage', desc: 'Claude Code · Usage/cost stats', icon: '💳', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/stats', desc: 'Claude Code · Alias for /usage', icon: '📈', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/effort', desc: 'Claude Code · Reasoning effort', icon: '🧠', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/plan', desc: 'Claude Code · Enter plan mode', icon: '🗺️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/goal', desc: 'Claude Code · Set/view/clear goal', icon: '🎯', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/resume', desc: 'Claude Code · Resume conversation', icon: '↩️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/continue', desc: 'Claude Code · Alias for /resume', icon: '↩️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/rewind', desc: 'Claude Code · Rewind checkpoint', icon: '⏪', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/checkpoint', desc: 'Claude Code · Alias for /rewind', icon: '⏪', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/undo', desc: 'Claude Code · Alias for /rewind', icon: '↩️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/tasks', desc: 'Claude Code · Background tasks', icon: '📋', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/bashes', desc: 'Claude Code · Alias for /tasks', icon: '🖥️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/run', desc: 'Claude Code · Run/drive app', icon: '▶️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/verify', desc: 'Claude Code · Verify app change', icon: '✅', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/simplify', desc: 'Claude Code · Cleanup review', icon: '🧹', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/skills', desc: 'Claude Code · List/manage skills', icon: '🧪', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/reload-skills', desc: 'Claude Code · Reload skills', icon: '🔄', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/plugin', desc: 'Claude Code · Manage plugins', icon: '🧰', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/reload-plugins', desc: 'Claude Code · Reload plugins', icon: '🔄', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/hooks', desc: 'Claude Code · Hooks', icon: '🪝', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/doctor', desc: 'Claude Code · Diagnose install/settings', icon: '🩺', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/debug', desc: 'Claude Code · Debug logging', icon: '🐞', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/export', desc: 'Claude Code · Export conversation', icon: '📤', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/copy', desc: 'Claude Code · Copy response', icon: '📋', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/feedback', desc: 'Claude Code · Feedback/bug/share', icon: '💬', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/bug', desc: 'Claude Code · Alias for /feedback', icon: '🐞', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/share', desc: 'Claude Code · Alias for /feedback', icon: '📤', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/login', desc: 'Claude Code · Sign in', icon: '🔐', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/logout', desc: 'Claude Code · Sign out', icon: '🚪', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/theme', desc: 'Claude Code · Theme', icon: '🎨', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/statusline', desc: 'Claude Code · Status line', icon: '📟', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/terminal-setup', desc: 'Claude Code · Terminal keybindings', icon: '⌨️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/tui', desc: 'Claude Code · Terminal UI renderer', icon: '🖥️', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/vim', desc: 'Claude Code · Vim mode legacy', icon: '📝', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/exit', desc: 'Claude Code · Exit/detach', icon: '🚪', mode: 'passthrough', family: 'claude-code' },
+  { cmd: '/quit', desc: 'Claude Code · Alias for /exit', icon: '🚪', mode: 'passthrough', family: 'claude-code' },
+]
+
+const GEMINI_SLASH_COMMANDS: SlashCommandDef[] = [
+  { cmd: '/about', desc: 'Gemini · Version info', icon: 'ℹ️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/agents', desc: 'Gemini · Manage subagents', icon: '🧑‍🚀', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/auth', desc: 'Gemini · Change auth method', icon: '🔐', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/bug', desc: 'Gemini · File issue', icon: '🐞', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/chat', desc: 'Gemini · Alias for /resume', icon: '💬', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/clear', desc: 'Gemini · Clear visible history', icon: '🧹', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/commands', desc: 'Gemini · Custom commands', icon: '⌘', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/compress', desc: 'Gemini · Compress context', icon: '🗜️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/copy', desc: 'Gemini · Copy last output', icon: '📋', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/directory', desc: 'Gemini · Workspace directories', icon: '📁', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/dir', desc: 'Gemini · Alias for /directory', icon: '📁', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/docs', desc: 'Gemini · Open docs', icon: '📚', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/editor', desc: 'Gemini · Editor integration', icon: '✏️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/extensions', desc: 'Gemini · Manage extensions', icon: '🧩', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/help', desc: 'Gemini · Help', icon: '❓', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/?', desc: 'Gemini · Alias for /help', icon: '❓', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/hooks', desc: 'Gemini · Manage hooks', icon: '🪝', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/ide', desc: 'Gemini · IDE integration', icon: '🧱', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/init', desc: 'Gemini · Create/update GEMINI.md', icon: '🧭', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/mcp', desc: 'Gemini · Manage MCP servers', icon: '🔗', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/memory', desc: 'Gemini · Inspect/refresh memory', icon: '🧠', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/model', desc: 'Gemini · Model configuration', icon: '🤖', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/permissions', desc: 'Gemini · Trust and permissions', icon: '🛡️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/plan', desc: 'Gemini · Plan mode', icon: '🗺️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/policies', desc: 'Gemini · Active policies', icon: '📜', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/privacy', desc: 'Gemini · Privacy notice', icon: '🔏', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/quit', desc: 'Gemini · Exit CLI', icon: '🚪', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/exit', desc: 'Gemini · Alias for /quit', icon: '🚪', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/restore', desc: 'Gemini · Restore checkpoint', icon: '⏪', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/rewind', desc: 'Gemini · Rewind history', icon: '↩️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/resume', desc: 'Gemini · Resume/manage sessions', icon: '↩️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/settings', desc: 'Gemini · Settings editor', icon: '⚙️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/shells', desc: 'Gemini · Background shells', icon: '🖥️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/bashes', desc: 'Gemini · Alias for /shells', icon: '🖥️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/setup-github', desc: 'Gemini · GitHub Actions setup', icon: '🐙', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/skills', desc: 'Gemini · Manage skills', icon: '🧪', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/stats', desc: 'Gemini · Session stats', icon: '📈', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/terminal-setup', desc: 'Gemini · Multiline keybindings', icon: '⌨️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/theme', desc: 'Gemini · Theme', icon: '🎨', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/tools', desc: 'Gemini · Available tools', icon: '🛠️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/upgrade', desc: 'Gemini · Upgrade Code Assist', icon: '⬆️', mode: 'passthrough', family: 'gemini' },
+  { cmd: '/vim', desc: 'Gemini · Vim mode', icon: '📝', mode: 'passthrough', family: 'gemini' },
 ]
 
 const LOCAL_NOARG_SLASH_COMMANDS = new Set([
@@ -1536,7 +1672,9 @@ export function ChatView({
       ? CODEX_SLASH_COMMANDS
       : activeAgentAdapter === 'claude-code'
         ? CLAUDE_CODE_SLASH_COMMANDS
-        : GENERIC_AGENT_COMMANDS
+        : activeAgentAdapter === 'gemini'
+          ? GEMINI_SLASH_COMMANDS
+          : GENERIC_AGENT_COMMANDS
     const deduped = new Map<string, SlashCommandDef>()
     for (const command of [...LOCAL_SLASH_COMMANDS, ...runtimeCommands]) {
       deduped.set(command.cmd, command)
@@ -1568,6 +1706,13 @@ export function ChatView({
             { label: 'Review', cmd: '/review' },
             { label: 'Compact', cmd: '/compact' },
           ]
+        : activeAgentAdapter === 'gemini'
+          ? [
+              { label: 'Gemini Stats', cmd: '/stats' },
+              { label: 'Init', cmd: '/init' },
+              { label: 'Tools', cmd: '/tools' },
+              { label: 'Compress', cmd: '/compress' },
+            ]
         : [
             { label: 'Status', cmd: '/status' },
             { label: 'Help', cmd: '/help' },
@@ -3151,9 +3296,11 @@ export function ChatView({
                           ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-300'
                           : c.family === 'claude-code'
                             ? 'bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-300'
-                            : 'bg-slate-100 text-slate-500 dark:bg-zinc-700 dark:text-zinc-300'
+                            : c.family === 'gemini'
+                              ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-300'
+                              : 'bg-slate-100 text-slate-500 dark:bg-zinc-700 dark:text-zinc-300'
                     }`}>
-                      {c.family === 'wtt' ? 'WTT' : c.family === 'claude-code' ? 'Claude' : c.family === 'codex' ? 'Codex' : 'Agent'}
+                      {c.family === 'wtt' ? 'WTT' : c.family === 'claude-code' ? 'Claude' : c.family === 'codex' ? 'Codex' : c.family === 'gemini' ? 'Gemini' : 'Agent'}
                     </span>
                   )}
                   <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500">{c.desc}</span>

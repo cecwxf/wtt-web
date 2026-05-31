@@ -30,14 +30,29 @@ type ChatMode = 'socratic' | 'interview_answer' | 'ask'
 type ChatMessage = { id?: string; role: 'user' | 'agent'; content: string; createdAt: string }
 
 const ARENA_SLASH_COMMANDS = [
+  { cmd: '/help', descZh: '查看 Agent 支持的命令', descEn: 'Show agent slash command help' },
+  { cmd: '/status', descZh: '查看 Agent 运行状态', descEn: 'Show agent runtime status' },
+  { cmd: '/model', descZh: '查看当前模型', descEn: 'Show current model' },
   { cmd: '/new', descZh: '开启新的 Agent thread/session', descEn: 'Start a fresh agent thread/session' },
   { cmd: '/clear', descZh: '清除当前 Arena Agent 会话', descEn: 'Clear the current Arena agent session' },
-  { cmd: '/status', descZh: '查看 Agent 运行状态', descEn: 'Show agent runtime status' },
-  { cmd: '/help', descZh: '查看 Agent 支持的命令', descEn: 'Show agent slash command help' },
   { cmd: '/compact', descZh: '压缩或重置上下文', descEn: 'Compact or reset runtime context' },
-  { cmd: '/model', descZh: '查看当前模型', descEn: 'Show current model' },
   { cmd: '/init', descZh: '初始化项目记忆/指引', descEn: 'Initialize project guidance' },
   { cmd: '/review', descZh: '执行代码审查', descEn: 'Run code review' },
+  { cmd: '/diff', descZh: '查看当前 git diff', descEn: 'Show current git diff' },
+  { cmd: '/permissions', descZh: '查看权限/沙箱模式', descEn: 'Show permissions and sandbox mode' },
+  { cmd: '/approvals', descZh: '查看审批/沙箱模式', descEn: 'Show approval and sandbox mode' },
+  { cmd: '/plan', descZh: 'Codex TUI 原生命令：计划模式', descEn: 'Codex TUI command: plan mode' },
+  { cmd: '/goal', descZh: 'Codex TUI 原生命令：目标管理', descEn: 'Codex TUI command: goal management' },
+  { cmd: '/resume', descZh: 'Codex TUI 原生命令：恢复会话', descEn: 'Codex TUI command: resume session' },
+  { cmd: '/fork', descZh: 'Codex TUI 原生命令：分叉会话', descEn: 'Codex TUI command: fork session' },
+  { cmd: '/side', descZh: 'Codex TUI 原生命令：临时侧聊', descEn: 'Codex TUI command: side conversation' },
+  { cmd: '/mcp', descZh: 'Codex TUI 原生命令：MCP 工具', descEn: 'Codex TUI command: MCP tools' },
+  { cmd: '/skills', descZh: 'Codex TUI 原生命令：技能', descEn: 'Codex TUI command: skills' },
+  { cmd: '/memories', descZh: 'Codex TUI 原生命令：记忆', descEn: 'Codex TUI command: memories' },
+  { cmd: '/ps', descZh: 'Codex TUI 原生命令：后台终端', descEn: 'Codex TUI command: background terminals' },
+  { cmd: '/stop', descZh: 'Codex TUI 原生命令：停止后台终端', descEn: 'Codex TUI command: stop background terminals' },
+  { cmd: '/theme', descZh: 'Codex TUI 原生命令：主题', descEn: 'Codex TUI command: theme' },
+  { cmd: '/debug-config', descZh: 'Codex 配置诊断', descEn: 'Codex config diagnostics' },
 ]
 
 function isArenaSlashMessage(value: string) {
