@@ -199,6 +199,12 @@ const coachActions: CoachAction[] = [
   },
 ]
 
+const chatModes: Array<{ id: ChatMode; zh: string; en: string }> = [
+  { id: 'socratic', zh: '苏格拉底', en: 'Socratic' },
+  { id: 'interview_answer', zh: '面试回答', en: 'Interview' },
+  { id: 'ask', zh: 'Ask', en: 'Ask' },
+]
+
 function decodeHtmlEntities(value: string) {
   return value
     .replace(/&#(\d+);/g, (_match, code: string) => String.fromCharCode(Number(code)))
@@ -2354,6 +2360,19 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   )}
                   extraHeaderActions={(
                     <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5 text-[10px]">
+                      {isGaokaoVolunteer ? (
+                        <span className="rounded-md border border-blue-400/30 bg-blue-400/10 px-2 py-1 font-black text-blue-200">Ask</span>
+                      ) : (
+                        <select
+                          value={chatMode}
+                          onChange={(event) => setChatMode(event.target.value as ChatMode)}
+                          className="rounded-md border border-gray-700 bg-[#101010] px-2 py-1 font-bold text-gray-200 outline-none focus:border-[#3ce8e2]"
+                        >
+                          {chatModes.map((mode) => (
+                            <option key={mode.id} value={mode.id}>{locale === 'zh' ? mode.zh : mode.en}</option>
+                          ))}
+                        </select>
+                      )}
                       {coachActions.map((action) => (
                         <button
                           key={action.intent}
