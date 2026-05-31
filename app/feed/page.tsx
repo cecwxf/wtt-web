@@ -69,6 +69,12 @@ interface CloudAgentState {
   host_agent_id?: string
   status?: string
   provider?: string
+  sandbox_billing?: {
+    active_minutes?: number
+    estimated_rmb?: number
+    currency?: string
+    pricing_note?: string
+  }
 }
 
 function normalizeWttConnectAdapter(raw: unknown): 'codex' | 'claude-code' | '' {
@@ -2403,6 +2409,7 @@ function FeedPageInner() {
         agentRoleMap={agentRoleMap}
         agentRoleTemplateMap={agentRoleTemplateMap}
         agentRuntimeMap={agentRuntimeMap}
+        cloudSandboxBilling={(cloudAgentStateRaw as CloudAgentState | null | undefined)?.sandbox_billing ?? null}
         onAssignAgentRole={handleAssignAgentRole}
         onSaveAgentRole={handleSaveAgentRole}
         onNewAgentFromHost={handleNewAgentFromHost}

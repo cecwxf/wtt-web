@@ -62,6 +62,13 @@ export interface AgentRuntimeInfo {
   last_heartbeat_secs_ago?: number
 }
 
+export interface CloudSandboxBilling {
+  active_minutes?: number
+  estimated_rmb?: number
+  currency?: string
+  pricing_note?: string
+}
+
 interface TopicColumnProps {
   topics: TopicItem[]
   selectedTopicId: string | null
@@ -80,6 +87,7 @@ interface TopicColumnProps {
   agentRoleMap?: Record<string, string>
   agentRoleTemplateMap?: Record<string, AgentRoleTemplate>
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
+  cloudSandboxBilling?: CloudSandboxBilling | null
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
   onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex') => void | Promise<void>
@@ -98,6 +106,13 @@ interface TopicColumnProps {
 
 function agentInitial(name: string) {
   return (name.trim()[0] || 'A').toUpperCase()
+}
+
+function formatCloudBillingAmount(value: unknown) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount <= 0) return '¥0.0000'
+  if (amount < 0.01) return `¥${amount.toFixed(4)}`
+  return `¥${amount.toFixed(2)}`
 }
 
 const ROLE_TONES = [
@@ -443,6 +458,7 @@ export function TopicColumn(props: TopicColumnProps) {
     agentRoleMap,
     agentRoleTemplateMap,
     agentRuntimeMap,
+    cloudSandboxBilling,
     onAssignAgentRole,
     onSaveAgentRole,
     onNewAgentFromHost,
@@ -894,6 +910,12 @@ export function TopicColumn(props: TopicColumnProps) {
             const wakeBusy = Boolean(folderCloudHostId && sandboxActionFor === `${folderCloudHostId}:wake`)
             const sleepBusy = Boolean(folderCloudHostId && sandboxActionFor === `${folderCloudHostId}:sleep`)
             const sandboxActionBusy = wakeBusy || sleepBusy
+            const showCloudBilling = Boolean(folderCloudHostId && cloudSandboxBilling)
+            const billingMinutes = Math.max(0, Math.round(Number(cloudSandboxBilling?.active_minutes || 0)))
+            const billingAmount = formatCloudBillingAmount(cloudSandboxBilling?.estimated_rmb)
+            const billingText = zh
+              ? `cloud agent按照使用时间进行计费，关机后不再计费。本月使用时间共${billingMinutes}分钟，花费${billingAmount} RMB`
+              : `Cloud Agent is billed by active time; powered off is not billed. This month: ${billingMinutes} min, ${billingAmount} RMB`
             return (
               <section key={folder.key} className="space-y-1">
                 <button
@@ -923,6 +945,16 @@ export function TopicColumn(props: TopicColumnProps) {
                   <span className={`mt-1 rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none ${folderTone.badge}`}>
                     {onlineCount}/{folder.agents.length}
                   </span>
+                  {showCloudBilling && (
+                    <span
+                      className="mt-1 max-w-full rounded-lg bg-emerald-50/90 px-1 py-0.5 text-[8px] font-black leading-tight text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/25"
+                      title={billingText}
+                    >
+                      {zh ? `本月${billingMinutes}分钟` : `${billingMinutes} min`}
+                      <br />
+                      {billingAmount} RMB
+                    </span>
+                  )}
                 </button>
 
                 {folderMenuOpen && (
@@ -945,6 +977,11 @@ export function TopicColumn(props: TopicColumnProps) {
                             ? (zh ? '该目录包含多个 Sandbox' : 'Multiple Sandboxes in this folder')
                             : (zh ? '非 Cloud Sandbox 目录' : 'Not a Cloud Sandbox folder'))}
                         </div>
+                        {showCloudBilling && (
+                          <div className="mt-2 rounded-xl bg-emerald-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/20">
+                            {billingText}
+                          </div>
+                        )}
                       </div>
                       {folderCloudHostId ? (
                         <>
