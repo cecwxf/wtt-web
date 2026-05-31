@@ -102,7 +102,7 @@ function mergeWhiteboardDiagram(previous: WhiteboardDiagram | null, next: Whiteb
   }
 }
 
-const ARENA_AGENT_ID = 'agent-16a45cf0dd8b'
+const ARENA_AGENT_ID = 'agent-65d869bb6fa1'
 
 type ArenaSession = { accessToken?: string; userId?: string; user?: { name?: string | null; email?: string | null } | null }
 
@@ -320,7 +320,7 @@ const copy = {
     function: '函数', timeLimit: '时间限制', memory: '内存', examples: '样例', input: '输入', expected: '期望输出',
     language: '语言', run: '交给 Agent 运行并提交', judging: 'Agent 运行中...', console: '运行结果', notSubmitted: '未提交', hidden: '隐藏测试已脱敏',
     noSubmission: '提交后会在这里看到真实 Agent/Runner 判题结果。历史提交会持久化到 WTT 后端。', firstAc: '暂无 AC 记录，拿下首个榜单位置。',
-    agentTitle: 'Agent 对话', agentRole: '固定使用 Codex 终生学习 Coach：agent-16a45cf0dd8b。所有登录用户都可使用，不需要 claim 该 Agent。',
+    agentTitle: 'Agent 对话', agentRole: '固定使用 Codex 终生学习 Coach：agent-65d869bb6fa1。所有登录用户都可使用，不需要 claim 该 Agent。',
     agentWaiting: '直接在下面和 Agent 对话。', openFull: '打开完整提交 →',
     chatTitle: '终生学习 Coach', chatIntro: '真实 WTT Agent 会话；Agent 会读取终生学习题库长期记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录后可对话。', chatSyncing: '正在连接固定终生学习 Agent...',
     chatWorking: 'Agent 正在思考 / 输出中', whiteboardWorking: 'Agent 正在生成白板',
@@ -335,7 +335,7 @@ const copy = {
     function: 'Function', timeLimit: 'Time Limit', memory: 'Memory', examples: 'Examples', input: 'Input', expected: 'Expected',
     language: 'Language', run: 'Run & Submit via Agent', judging: 'Agent running...', console: 'Console', notSubmitted: 'not_submitted', hidden: 'Hidden tests are redacted.',
     noSubmission: 'Submit once to see the real Agent/Runner verdict. Submissions are persisted in the WTT backend.', firstAc: 'No accepted run yet. Take the first spot.',
-    agentTitle: 'Agent Chat', agentRole: 'Fixed Codex Arena Coach: agent-16a45cf0dd8b. Every signed-in user can use it without claiming this Agent.',
+    agentTitle: 'Agent Chat', agentRole: 'Fixed Codex Arena Coach: agent-65d869bb6fa1. Every signed-in user can use it without claiming this Agent.',
     agentWaiting: 'Chat with the Agent below.', openFull: 'Open full submission →',
     chatTitle: 'Arena Coach', chatIntro: 'Real WTT Agent session. The Agent reads persistent Arena question-bank memory plus the current challenge context.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.', chatLogin: 'Sign in to chat.', chatSyncing: 'Connecting fixed Arena Agent...',
     chatWorking: 'Agent is thinking / writing', whiteboardWorking: 'Agent is generating the whiteboard',
