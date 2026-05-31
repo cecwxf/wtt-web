@@ -2275,11 +2275,10 @@ export function ChatView({
           <div className="flex shrink-0 items-center gap-1">
             {showCloudBilling && (
               <div
-                className="hidden max-w-[280px] text-right text-[10px] font-semibold leading-snug text-emerald-600 dark:text-emerald-300 sm:block"
+                className="hidden max-w-[220px] overflow-x-auto whitespace-nowrap text-right text-[10px] font-semibold leading-none text-emerald-600 [scrollbar-width:none] dark:text-emerald-300 sm:block [&::-webkit-scrollbar]:hidden"
                 title={cloudBillingText}
               >
-                <div>cloud agent按照使用时间进行计费，关机后不再计费。</div>
-                <div>本月使用时间共{cloudBillingMinutes}分钟，花费{cloudBillingAmount} RMB</div>
+                cloud agent按使用时间计费，关机后不计费。本月{cloudBillingMinutes}分钟，{cloudBillingAmount} RMB
               </div>
             )}
             {extraHeaderActions}
