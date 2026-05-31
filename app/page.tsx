@@ -8,9 +8,12 @@ import {
   BookOpen,
   BrainCircuit,
   CheckCircle2,
+  Cloud,
   GraduationCap,
+  HardDrive,
   MessageSquareText,
   PenTool,
+  Power,
   Sparkles,
   TerminalSquare,
   Trophy,
@@ -343,6 +346,80 @@ function RuoshuiSquareNetwork({ zh }: { zh: boolean }) {
   )
 }
 
+function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
+  const rules = zh
+    ? [
+        {
+          title: '只在开机时计费',
+          desc: 'Cloud Agent 开机、唤醒、运行中会按使用时间累计费用；用户主动关机后停止累计运行费用。',
+          icon: Power,
+        },
+        {
+          title: '当前默认 Basic Sandbox',
+          desc: '1/4 vCPU、1 GiB 内存、4 GB 磁盘；当前最终价格为 ¥0.38 / 小时。',
+          icon: Cloud,
+        },
+        {
+          title: '重要文件放 /mnt/r2',
+          desc: '长期保存、大文件、需要跨唤醒保留的资料建议放到 /mnt/r2；日常代码工作可在 Agent workspace 中进行。',
+          icon: HardDrive,
+        },
+      ]
+    : [
+        {
+          title: 'Billed only while powered on',
+          desc: 'Cloud Agent usage is metered while starting, waking, or running. Powering off stops runtime billing.',
+          icon: Power,
+        },
+        {
+          title: 'Default Basic Sandbox',
+          desc: '1/4 vCPU, 1 GiB memory, 4 GB disk. The current final price is RMB 0.38/hour.',
+          icon: Cloud,
+        },
+        {
+          title: 'Keep important files in /mnt/r2',
+          desc: 'Use /mnt/r2 for long-lived files, large assets, and data that must survive wake cycles. Keep active code work in the agent workspace.',
+          icon: HardDrive,
+        },
+      ]
+
+  return (
+    <section className="mt-12 overflow-hidden rounded-[2rem] border border-sky-200 bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.45),transparent_34%),linear-gradient(135deg,#f8fafc,#ecfeff_50%,#fff7ed)] p-6 shadow-xl shadow-sky-900/10">
+      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-sky-700">
+            <Cloud className="h-4 w-4" />
+            Cloud Agent Billing
+          </div>
+          <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">
+            {zh ? 'Cloud Agent 按开机使用时间计费，关机后不再计费' : 'Cloud Agent is billed by powered-on runtime; powered-off time is not billed'}
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
+            {zh
+              ? '首页价格说明当前默认资源规格和最终单价；每个 Cloud Agent 在聊天栏会显示本月已使用分钟数和费用。R2 存储、网络请求或后续套餐调整可能单独影响实际成本。'
+              : 'Homepage pricing explains the current default resource profile and final rate. Each Cloud Agent chat shows this month’s runtime minutes and cost. R2 storage, network requests, and future plan changes may affect the final cost.'}
+          </p>
+          <div className="mt-5 inline-flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm font-black text-slate-900">
+            <span>{zh ? '当前默认单价' : 'Current default rate'}</span>
+            <span className="rounded-full bg-sky-600 px-3 py-1 text-white">{zh ? '¥0.38 / 小时' : 'RMB 0.38 / hour'}</span>
+            <span className="text-xs font-bold text-slate-500">{zh ? '以运行中统计为准' : 'runtime meter is authoritative'}</span>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          {rules.map((rule) => (
+            <article key={rule.title} className="rounded-3xl border border-white/80 bg-white/85 p-5 shadow-sm backdrop-blur">
+              <rule.icon className="mb-4 h-6 w-6 text-sky-700" />
+              <h3 className="text-sm font-black text-slate-950">{rule.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{rule.desc}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function AiWorkspaceSoftmaxExample({ zh }: { zh: boolean }) {
   const agents = zh
     ? [
@@ -650,6 +727,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <CloudAgentBillingExplainer zh={zh} />
 
         <section className="mt-16 grid gap-4 md:grid-cols-3">
           {productPillars.map((pillar) => (
