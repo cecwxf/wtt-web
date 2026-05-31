@@ -1659,8 +1659,8 @@ function FeedPageInner() {
 
     if (action === 'sleep') {
       const accepted = window.confirm([
-        '确认休眠这个 Cloud Sandbox？',
-        '系统会允许 Cloudflare 在短暂空闲后自动休眠，之后可从同一菜单唤醒。',
+        '确认关机这个 Cloud Sandbox？',
+        '系统会允许 Cloudflare 在短暂空闲后停止计费，之后可从同一菜单开机。',
       ].join('\n'))
       if (!accepted) return
     }
@@ -1714,15 +1714,15 @@ function FeedPageInner() {
         : ['stopped', 'sleeping'].includes(lastStatus)
       if (!completed) {
         throw new Error(action === 'wake'
-          ? `Sandbox 仍在唤醒中，最后状态：${lastStatus || 'unknown'}，在线：${lastOnline ? 'yes' : 'no'}`
-          : `Sandbox 仍在休眠中，最后状态：${lastStatus || 'unknown'}`)
+          ? `Sandbox 仍在开机中，最后状态：${lastStatus || 'unknown'}，在线：${lastOnline ? 'yes' : 'no'}`
+          : `Sandbox 仍在关机中，最后状态：${lastStatus || 'unknown'}`)
       }
 
       await loadAgents()
       void mutateAgentStats()
       void mutateCloudAgentState()
       void mutateTopics()
-      alert(action === 'wake' ? 'Cloud Sandbox 已唤醒并在线。' : 'Cloud Sandbox 已进入休眠。')
+      alert(action === 'wake' ? 'Cloud Sandbox 已开机并在线。' : 'Cloud Sandbox 已关机。')
     } catch (error) {
       alert(error instanceof Error ? error.message : `Cloud Sandbox ${action} failed`)
     }

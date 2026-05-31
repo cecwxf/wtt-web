@@ -957,7 +957,7 @@ export function TopicColumn(props: TopicColumnProps) {
                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-sky-700 transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-300 dark:hover:bg-sky-500/10"
                           >
                             {wakeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                            {wakeBusy ? (zh ? '正在唤醒...' : 'Waking...') : (zh ? '唤醒 Sandbox' : 'Wake Sandbox')}
+                            {wakeBusy ? (zh ? '正在开机...' : 'Powering on...') : (zh ? '开机 Sandbox' : 'Power On Sandbox')}
                           </button>
                           <button
                             type="button"
@@ -968,19 +968,19 @@ export function TopicColumn(props: TopicColumnProps) {
                             className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
                           >
                             {sleepBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-                            {sleepBusy ? (zh ? '正在休眠...' : 'Sleeping...') : (zh ? '休眠 Sandbox' : 'Sleep Sandbox')}
+                            {sleepBusy ? (zh ? '正在关机...' : 'Powering off...') : (zh ? '关机 Sandbox' : 'Power Off Sandbox')}
                           </button>
                           {sandboxActionBusy && (
                             <div className="mt-2 rounded-xl bg-sky-50 px-3 py-2 text-[11px] font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-200">
                               {wakeBusy
-                                ? (zh ? '正在启动 Sandbox 并等待 Agent 在线。' : 'Starting Sandbox and waiting for the agent to come online.')
-                                : (zh ? '正在停止 Sandbox 并等待 Agent 离线。' : 'Stopping Sandbox and waiting for the agent to go offline.')}
+                                ? (zh ? '正在开机 Sandbox 并等待 Agent 在线。' : 'Powering on Sandbox and waiting for the agent to come online.')
+                                : (zh ? '正在关机 Sandbox 并等待 Agent 离线。' : 'Powering off Sandbox and waiting for the agent to go offline.')}
                             </div>
                           )}
                         </>
                       ) : (
                         <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 dark:bg-zinc-800 dark:text-zinc-400">
-                          {zh ? '只有 Cloud Agent Sandbox 目录支持休眠/唤醒。' : 'Only Cloud Agent Sandbox folders support sleep/wake.'}
+                          {zh ? '只有 Cloud Agent Sandbox 目录支持开机/关机。' : 'Only Cloud Agent Sandbox folders support power on/off.'}
                         </div>
                       )}
                     </div>
