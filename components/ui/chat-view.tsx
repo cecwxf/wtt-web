@@ -86,6 +86,7 @@ interface CurrentAgentRuntimeInfo {
   model_id?: string
   current_model?: string
   reasoning_effort?: string
+  thinking_mode?: string
   last_heartbeat_secs_ago?: number
 }
 
@@ -101,12 +102,10 @@ const FALLBACK_MODELS: ModelOption[] = [
 
 function mergeModelOptions(models: ModelOption[]): ModelOption[] {
   const merged = new Map<string, ModelOption>()
-  const supportedIds = new Set(FALLBACK_MODELS.map((model) => model.id))
 
   for (const model of FALLBACK_MODELS) merged.set(model.id, model)
   for (const model of models) {
     if (!model?.id) continue
-    if (!supportedIds.has(model.id)) continue
     merged.set(model.id, {
       ...model,
       supports_reasoning: model.supports_reasoning ?? true,
@@ -124,17 +123,27 @@ function normalizeRuntimeModelId(raw: unknown): string {
   if (value === 'deepseek-v4-pro') return DEFAULT_MODEL_ID
   if (value === 'deepseek-v4-pro[1m]') return value
   if (value.startsWith('anthropic/') || value.startsWith('openai-codex/') || value.startsWith('openai/')) return value
+  if (value.startsWith('google/') || value.startsWith('gemini-')) return value
   if (value.startsWith('claude-')) return `anthropic/${value}`
   if (value.startsWith('gpt-')) return `openai-codex/${value}`
   return value
+}
+
+function normalizeRuntimeEffort(runtime?: CurrentAgentRuntimeInfo): ModelPref['effort'] | undefined {
+  const raw = String(runtime?.reasoning_effort || runtime?.thinking_mode || '').trim().toLowerCase()
+  if (!raw) return undefined
+  if (['off', 'none', 'disabled', 'false', '0'].includes(raw)) return 'off'
+  if (['low', 'minimal'].includes(raw)) return 'low'
+  if (['medium', 'normal', 'auto'].includes(raw)) return 'medium'
+  if (['high', 'full', 'max', 'maximum', 'xhigh'].includes(raw)) return 'high'
+  return undefined
 }
 
 function runtimeModelPref(runtime?: CurrentAgentRuntimeInfo): Partial<ModelPref> | null {
   if (!runtime) return null
   if (typeof runtime.last_heartbeat_secs_ago === 'number' && runtime.last_heartbeat_secs_ago > 90) return null
   const model = normalizeRuntimeModelId(runtime.current_model || runtime.model_id || runtime.model)
-  const effortRaw = String(runtime.reasoning_effort || '').trim().toLowerCase()
-  const effort = ['off', 'low', 'medium', 'high'].includes(effortRaw) ? effortRaw as ModelPref['effort'] : undefined
+  const effort = normalizeRuntimeEffort(runtime)
   if (!model && !effort) return null
   return {
     ...(model ? { model } : {}),
@@ -142,14 +151,26 @@ function runtimeModelPref(runtime?: CurrentAgentRuntimeInfo): Partial<ModelPref>
   }
 }
 
-function normalizeAgentAdapter(runtime?: CurrentAgentRuntimeInfo): 'claude-code' | 'codex' | 'generic' {
+function normalizeAgentAdapter(runtime?: CurrentAgentRuntimeInfo): 'claude-code' | 'codex' | 'gemini' | 'generic' {
   const raw = String(runtime?.adapter || '').trim().toLowerCase()
   if (raw === 'codex' || raw.includes('codex')) return 'codex'
   if (raw === 'claude-code' || raw === 'claude' || raw.includes('claude')) return 'claude-code'
+  if (raw === 'gemini' || raw.includes('gemini')) return 'gemini'
   const model = normalizeRuntimeModelId(runtime?.current_model || runtime?.model_id || runtime?.model).toLowerCase()
+  if (model.startsWith('google/') || model.startsWith('gemini-') || model.includes('gemini')) return 'gemini'
   if (model.startsWith('openai-codex/') || model.startsWith('openai/') || model.includes('gpt')) return 'codex'
   if (model.startsWith('anthropic/') || model.includes('claude') || model.includes('deepseek')) return 'claude-code'
   return 'generic'
+}
+
+function labelForRuntimeModel(modelId: string, adapter: ReturnType<typeof normalizeAgentAdapter>): string {
+  const raw = String(modelId || '').trim()
+  if (!raw) return ''
+  const short = raw.replace(/^anthropic\//, '').replace(/^openai-codex\//, '').replace(/^openai\//, '').replace(/^google\//, '')
+  if (adapter === 'gemini' || short.toLowerCase().includes('gemini')) return `Gemini ${short.replace(/^gemini[-_]?/i, '')}`
+  if (adapter === 'codex') return short.toLowerCase().includes('gpt') ? short.toUpperCase() : `Codex ${short}`
+  if (adapter === 'claude-code') return short.toLowerCase().includes('claude') ? short : `Claude ${short}`
+  return short
 }
 
 type ModelPref = { model: string; effort: 'off' | 'low' | 'medium' | 'high' }
@@ -1173,8 +1194,20 @@ export function ChatView({
   const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
   const currentRuntimePref = runtimeModelPref(currentAgentRuntime)
   const activeAgentAdapter = normalizeAgentAdapter(currentAgentRuntime)
+  const modelOptions = useMemo(() => {
+    const runtimeModel = currentRuntimePref?.model
+    const dynamicModels = runtimeModel
+      ? [{
+          id: runtimeModel,
+          label: labelForRuntimeModel(runtimeModel, activeAgentAdapter),
+          supports_reasoning: true,
+        }]
+      : []
+    return mergeModelOptions([...availableModels, ...dynamicModels])
+  }, [availableModels, currentRuntimePref?.model, activeAgentAdapter])
   const activeAgentLabel = activeAgentAdapter === 'codex' ? 'Codex'
     : activeAgentAdapter === 'claude-code' ? 'Claude Code'
+      : activeAgentAdapter === 'gemini' ? 'Gemini'
       : 'Agent'
   const showCloudBilling = Boolean(currentAgentIsCloud && cloudSandboxBilling)
   const cloudBillingMinutes = Math.max(0, Math.round(Number(cloudSandboxBilling?.active_minutes || 0)))
@@ -1340,7 +1373,7 @@ export function ChatView({
     const inMemory = modelPrefsByTopicRef.current[topicPreferenceKey]
     const persisted = readStoredModelPref(topicPreferenceKey)
     const saved = inMemory ?? persisted
-    const runtimeModel = currentRuntimePref?.model && availableModels.some((m) => m.id === currentRuntimePref.model)
+    const runtimeModel = currentRuntimePref?.model && modelOptions.some((m) => m.id === currentRuntimePref.model)
       ? currentRuntimePref.model
       : ''
 
@@ -1349,13 +1382,13 @@ export function ChatView({
       || ((taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off')
 
     let preferredModel = runtimeModel || saved?.model
-    if (!preferredModel || !availableModels.some((m) => m.id === preferredModel)) {
+    if (!preferredModel || !modelOptions.some((m) => m.id === preferredModel)) {
       preferredModel = activeAgentAdapter === 'codex' ? DEFAULT_CODEX_MODEL_ID : DEFAULT_MODEL_ID
     }
 
     setSelectedModel(preferredModel)
     setReasoningEffort(preferredEffort)
-  }, [topicPreferenceKey, taskType, availableModels, currentRuntimePref?.model, currentRuntimePref?.effort, activeAgentAdapter])
+  }, [topicPreferenceKey, taskType, modelOptions, currentRuntimePref?.model, currentRuntimePref?.effort, activeAgentAdapter])
 
   useEffect(() => {
     const pref: ModelPref = {
@@ -1381,9 +1414,9 @@ export function ChatView({
     const model = String(latestWithHint.model_hint || '').trim()
     const effort = latestWithHint.reasoning_hint
 
-    const nextModel = model && availableModels.some((m) => m.id === model)
+    const nextModel = model && modelOptions.some((m) => m.id === model)
       ? model
-      : (availableModels.some((m) => m.id === selectedModel) ? selectedModel : DEFAULT_MODEL_ID)
+      : (modelOptions.some((m) => m.id === selectedModel) ? selectedModel : DEFAULT_MODEL_ID)
     const nextEffort: ModelPref['effort'] = effort || reasoningEffort
 
     if (nextModel) setSelectedModel(nextModel)
@@ -1393,7 +1426,7 @@ export function ChatView({
     modelPrefsByTopicRef.current[topicPreferenceKey] = pref
     writeStoredModelPref(topicPreferenceKey, pref)
     messageHintAppliedRef.current[topicPreferenceKey] = latestWithHint.message_id
-  }, [messages, topicPreferenceKey, availableModels, selectedModel, reasoningEffort])
+  }, [messages, topicPreferenceKey, modelOptions, selectedModel, reasoningEffort])
 
   // Hydrate from current worker model config so picker reflects active worker settings.
   useEffect(() => {
@@ -1422,9 +1455,9 @@ export function ChatView({
 
         if (cancelled) return
 
-        const nextModel = model && availableModels.some((m) => m.id === model)
+        const nextModel = model && modelOptions.some((m) => m.id === model)
           ? model
-          : (availableModels.some((m) => m.id === selectedModel) ? selectedModel : DEFAULT_MODEL_ID)
+          : (modelOptions.some((m) => m.id === selectedModel) ? selectedModel : DEFAULT_MODEL_ID)
         const nextEffort: ModelPref['effort'] = effort || reasoningEffort
 
         if (nextModel) setSelectedModel(nextModel)
@@ -1444,7 +1477,7 @@ export function ChatView({
     return () => {
       cancelled = true
     }
-  }, [topicId, currentAgentId, accessToken, topicPreferenceKey, availableModels, selectedModel, reasoningEffort])
+  }, [topicId, currentAgentId, accessToken, topicPreferenceKey, modelOptions, selectedModel, reasoningEffort])
 
   // Close model menu on click outside
   useEffect(() => {
@@ -2998,12 +3031,12 @@ export function ChatView({
                 title="Select model"
               >
                 <span>🤖</span>
-                <span className="font-medium max-w-[140px] truncate">{availableModels.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+                <span className="font-medium max-w-[140px] truncate">{modelOptions.find(m => m.id === selectedModel)?.label || selectedModel}</span>
                 <span className="text-slate-400">▾</span>
               </button>
               {modelMenuOpen && (
                 <div className="absolute bottom-full left-0 mb-1 z-50 min-w-[220px] max-h-[240px] overflow-y-auto rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
-                  {availableModels.map(m => (
+                  {modelOptions.map(m => (
                     <button
                       key={m.id}
                       onMouseDown={e => e.preventDefault()}
