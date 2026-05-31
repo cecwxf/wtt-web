@@ -77,6 +77,12 @@ interface CloudAgentState {
   }
 }
 
+type BillingMe = {
+  entitlement?: {
+    plan?: string
+  }
+}
+
 type WttConnectAdapter = 'codex' | 'claude-code' | 'gemini'
 
 function normalizeWttConnectAdapter(raw: unknown): WttConnectAdapter | '' {
@@ -1400,6 +1406,23 @@ function FeedPageInner() {
     },
     { refreshInterval: 5000, revalidateOnFocus: true }
   )
+  const { data: billingRaw } = useSWR(
+    session?.accessToken ? ['billing-me', session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!response.ok) return null
+      return response.json() as Promise<BillingMe>
+    },
+    { refreshInterval: 5 * 60_000, revalidateOnFocus: true }
+  )
+  const planLabel = useMemo(() => {
+    const plan = String(billingRaw?.entitlement?.plan || 'free').toLowerCase()
+    if (plan === 'pro') return 'Pro'
+    if (plan === 'plus') return 'Plus'
+    return 'Free'
+  }, [billingRaw?.entitlement?.plan])
   const sleepingCloudHostIds = useMemo(() => {
     const state = (cloudAgentStateRaw || {}) as CloudAgentState
     const status = String(state.status || '').toLowerCase()
@@ -2486,6 +2509,7 @@ function FeedPageInner() {
         onSleepSandbox={handleSleepSandbox}
         onWakeSandbox={handleWakeSandbox}
         userToken={session?.accessToken as string | undefined}
+        planLabel={planLabel}
         forceOpenSettingsPage={forceOpenSettingsPage}
         onForceOpenHandled={() => setForceOpenSettingsPage(null)}
       >

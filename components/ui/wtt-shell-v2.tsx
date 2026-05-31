@@ -67,6 +67,7 @@ interface WttShellV2Props {
   onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
   userToken?: string
+  planLabel?: string
   forceOpenSettingsPage?: SettingsPage | null
   onForceOpenHandled?: () => void
   children: ReactNode
@@ -116,6 +117,7 @@ export function WttShellV2(props: WttShellV2Props) {
     hideTopics = false,
     hideCreateTopic = false,
     userToken,
+    planLabel = 'Free',
     forceOpenSettingsPage,
     onForceOpenHandled,
     onlineAgentIds,
@@ -256,9 +258,13 @@ export function WttShellV2(props: WttShellV2Props) {
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-800 px-3 py-2 text-sm text-slate-500 dark:text-zinc-300 transition hover:text-slate-900 dark:hover:text-zinc-100"
+                className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-black text-sky-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-100 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-950/60"
+                title="Settings"
               >
                 <Menu className="h-4 w-4" />
+                <span className="hidden sm:inline">设置</span>
+                <span className="text-sky-500 dark:text-sky-400">·</span>
+                <span className="uppercase tracking-[0.08em]">{planLabel}</span>
               </button>
 
               {menuOpen && (
