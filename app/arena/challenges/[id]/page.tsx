@@ -175,14 +175,6 @@ function explainPromptEn(challenge: Challenge) {
   return `Explain "${title}". Focus: ${focus} Cover the core concepts, reasoning path, edge cases, and checks specific to this problem.`
 }
 
-function introPromptZh(challenge: Challenge) {
-  return `请先介绍这道题「${challenge.title}」。请说明题目在考什么、输入输出或业务场景是什么、核心概念是什么，以及我应该从哪几个步骤开始思考。暂时不要直接给完整答案。`
-}
-
-function introPromptEn(challenge: Challenge) {
-  return `Introduce this challenge "${challenge.title}". Explain what it tests, the input/output or business scenario, the core concepts, and the first steps I should think through. Do not give the full answer yet.`
-}
-
 const coachActions: CoachAction[] = [
   {
     intent: 'ask_hint',
@@ -204,30 +196,6 @@ const coachActions: CoachAction[] = [
     en: 'Transfer',
     promptZh: (challenge) => `基于「${challenge.title}」的考察重点“${extractChallengeFocus(challenge)}”和我的当前状态，请推荐下一道练习题或迁移方向，并说明为什么。`,
     promptEn: (challenge) => `Based on "${challenge.title}", this focus: ${extractChallengeFocus(challenge)}, and my current state, recommend the next practice problem or transfer direction and explain why.`,
-  },
-]
-
-const chatModes: Array<{ id: ChatMode; zh: string; en: string; hintZh: string; hintEn: string }> = [
-  {
-    id: 'socratic',
-    zh: '苏格拉底',
-    en: 'Socratic',
-    hintZh: 'Agent 先追问和点拨，推动你自己推理。',
-    hintEn: 'The Agent asks guiding questions and nudges your reasoning.',
-  },
-  {
-    id: 'interview_answer',
-    zh: '面试回答',
-    en: 'Interview',
-    hintZh: '你输入答案，Agent 评分、点评并补全。',
-    hintEn: 'You answer; the Agent scores, critiques, and supplements it.',
-  },
-  {
-    id: 'ask',
-    zh: 'Ask',
-    en: 'Ask',
-    hintZh: '直接问答，Agent 给出清晰答案。',
-    hintEn: 'Direct Q&A with a clear answer.',
   },
 ]
 
@@ -1230,20 +1198,6 @@ function isGaokaoVolunteerChallenge(challenge?: Challenge | null) {
   return challenge?.category === 'gaokao-volunteer'
 }
 
-function stageLabel(stage: string | undefined, locale: Locale) {
-  const labels: Record<string, { zh: string; en: string }> = {
-    diagnose: { zh: '诊断', en: 'Diagnose' },
-    hint: { zh: '提示', en: 'Hint' },
-    attempt: { zh: '尝试', en: 'Attempt' },
-    debug: { zh: 'Debug', en: 'Debug' },
-    explain: { zh: '讲解', en: 'Explain' },
-    follow_up: { zh: '追问', en: 'Follow-up' },
-    recommend: { zh: '推荐', en: 'Recommend' },
-  }
-  const row = labels[stage || 'diagnose'] || labels.diagnose
-  return locale === 'zh' ? row.zh : row.en
-}
-
 function arenaChallengeContext(challenge: Challenge, locale: Locale, language: Language, code: string) {
   const gaokaoKnowledge = isGaokaoVolunteerChallenge(challenge)
     ? `\n[Gaokao Local Knowledge]\n${gaokaoKnowledgeContextMarkdown()}\n[/Gaokao Local Knowledge]\n`
@@ -1381,16 +1335,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [chatMode, setChatMode] = useState<ChatMode>('socratic')
   const [chatSending, setChatSending] = useState(false)
   const [arenaTopicByKey, setArenaTopicByKey] = useState<Record<string, string>>({})
-  const [arenaSessionState, setArenaSessionState] = useState<ArenaSessionState | null>(null)
+  const [, setArenaSessionState] = useState<ArenaSessionState | null>(null)
   const [, setArenaProfile] = useState<ArenaUserProfile | null>(null)
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
   const [whiteboardDiagram, setWhiteboardDiagram] = useState<WhiteboardDiagram | null>(null)
-  const [whiteboardExpanded, setWhiteboardExpanded] = useState(false)
+  const [whiteboardVisible, setWhiteboardVisible] = useState(false)
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
-  const [chatPanelWidth, setChatPanelWidth] = useState<number | null>(null)
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
   const appliedWhiteboardHtmlMessageIdsRef = useRef(new Set<string>())
@@ -1405,30 +1358,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const handleMove = (moveEvent: PointerEvent) => {
         const available = bounds.width - 760
         setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 280, Math.max(300, available)))
-      }
-      const stop = () => {
-        window.removeEventListener('pointermove', handleMove)
-        window.removeEventListener('pointerup', stop)
-      }
-      window.addEventListener('pointermove', handleMove)
-      window.addEventListener('pointerup', stop)
-    }
-  }
-
-  function startChatWhiteboardResize() {
-    return (event: React.PointerEvent<HTMLDivElement>) => {
-      if (isCoding || isGaokaoVolunteer || stackedArenaLayout) return
-      event.preventDefault()
-      const chatPanel = event.currentTarget.previousElementSibling as HTMLElement | null
-      const whiteboardPanel = event.currentTarget.nextElementSibling as HTMLElement | null
-      const chatBounds = chatPanel?.getBoundingClientRect()
-      const whiteboardBounds = whiteboardPanel?.getBoundingClientRect()
-      if (!chatBounds || !whiteboardBounds) return
-      const left = chatBounds.left
-      const right = whiteboardBounds.right
-      const handleMove = (moveEvent: PointerEvent) => {
-        const maxChatWidth = Math.max(360, right - left - 360)
-        setChatPanelWidth(clampNumber(moveEvent.clientX - left, 360, maxChatWidth))
       }
       const stop = () => {
         window.removeEventListener('pointermove', handleMove)
@@ -1758,7 +1687,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setArenaSessionState(null)
     setArenaProfile(null)
     setWhiteboardDiagram(null)
-    setWhiteboardExpanded(false)
+    setWhiteboardVisible(false)
     appliedWhiteboardMessageIdsRef.current.clear()
     autoWhiteboardSourceKeysRef.current.clear()
   }, [arenaSessionKey])
@@ -1783,11 +1712,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const t = copy[locale]
   const isCoding = challenge?.challenge_type === 'coding'
   const isGaokaoVolunteer = isGaokaoVolunteerChallenge(challenge)
-  const availableChatModes = isGaokaoVolunteer ? chatModes.filter((mode) => mode.id === 'ask') : chatModes
-  const currentChatMode = availableChatModes.find((mode) => mode.id === chatMode) || availableChatModes[0]
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
   const arenaTypingActive = !!arenaTyping && arenaTyping.topicId === arenaTopicId
   const agentBusy = arenaTypingActive || chatSending || arenaSyncing || whiteboardBusy
+
+  useEffect(() => {
+    if (whiteboardDiagram && !isCoding && !isGaokaoVolunteer) setWhiteboardVisible(true)
+  }, [isCoding, isGaokaoVolunteer, whiteboardDiagram])
 
   useEffect(() => {
     if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
@@ -2139,12 +2070,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     sendAgentChat(action.intent, message)
   }
 
-  function runIntroAction() {
-    if (!challenge) return
-    const message = locale === 'zh' ? introPromptZh(challenge) : introPromptEn(challenge)
-    sendAgentChat('ask', message)
-  }
-
   if (!payload || !challenge) {
     return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading Arena...</main>
   }
@@ -2155,16 +2080,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const stackedArenaLayout = !isCoding && viewport.isNarrow
   const compactArena = viewport.isCompact && !viewport.isNarrow
   const leftColumnWidth = compactArena ? clampNumber(Math.round(leftPanelWidth * 0.88), 280, 330) : leftPanelWidth
-  const chatColumnMin = compactArena ? 300 : 360
-  const whiteboardColumnMin = compactArena ? 320 : 360
 
   const arenaLayoutStyle = !isCoding && !stackedArenaLayout
     ? {
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftColumnWidth}px minmax(${compactArena ? 480 : 560}px, 1fr)`
-        : whiteboardExpanded
-        ? `${chatPanelWidth ? `minmax(${chatColumnMin}px, ${chatPanelWidth}px)` : `minmax(${chatColumnMin}px, 0.92fr)`} 6px minmax(${whiteboardColumnMin}px, 1.08fr)`
-        : `${leftColumnWidth}px 6px ${chatPanelWidth ? `minmax(${chatColumnMin}px, ${chatPanelWidth}px)` : `minmax(${chatColumnMin}px, 0.94fr)`} 6px minmax(${whiteboardColumnMin}px, 1.06fr)`,
+        : `${leftColumnWidth}px 6px minmax(${compactArena ? 480 : 560}px, 1fr)`,
     }
     : undefined
 
@@ -2200,7 +2121,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           }`}
           style={arenaLayoutStyle}
         >
-          {(isCoding || !whiteboardExpanded) && (
+          {(
           <section className="min-h-0 overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
             <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-800 bg-[#191919] px-3 py-2.5 text-sm lg:px-4 lg:py-3">
               {(isGaokaoVolunteer
@@ -2329,7 +2250,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           </section>
           )}
 
-          {!isCoding && !isGaokaoVolunteer && !whiteboardExpanded && !stackedArenaLayout && (
+          {!isCoding && !isGaokaoVolunteer && !stackedArenaLayout && (
             <div
               role="separator"
               aria-orientation="vertical"
@@ -2417,15 +2338,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#7de9e5]">{t.chatTitle}</p>
                       <p className="mt-2 text-sm leading-6 text-gray-300">{t.chatIntro}</p>
                       <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                        <button
-                          type="button"
-                          onClick={runIntroAction}
-                          disabled={chatSending || arenaSyncing}
-                          className="rounded-xl border border-[#3ce8e2]/25 bg-[#3ce8e2]/10 px-3 py-2 text-xs font-black text-[#bffffd] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {locale === 'zh' ? '介绍题目' : 'Introduce'}
-                        </button>
-                        {coachActions.slice(0, 2).map((action) => (
+                        {coachActions.map((action) => (
                           <button
                             key={action.intent}
                             type="button"
@@ -2441,30 +2354,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   )}
                   extraHeaderActions={(
                     <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5 text-[10px]">
-                      <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2 py-0.5 font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>
-                      <span className="rounded-full border border-gray-700 bg-black/20 px-2 py-0.5 font-bold text-gray-300">
-                        {t.stage}: {stageLabel(arenaSessionState?.stage, locale)}
-                        {arenaSessionState ? ` · hint ${arenaSessionState.hint_level}` : ''}
-                        {` · ${t.mastery} ${Math.round((arenaSessionState?.mastery_estimate || 0) * 100)}%`}
-                      </span>
-                      <span className="min-w-0 max-w-[260px] truncate text-gray-500" title={locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}>
-                        {locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}
-                      </span>
-                      <label className="font-bold text-gray-500">{t.mode}</label>
-                      {isGaokaoVolunteer ? (
-                        <span className="rounded-md border border-blue-400/30 bg-blue-400/10 px-2 py-1 font-black text-blue-200">Ask</span>
-                      ) : (
-                        <select
-                          value={chatMode}
-                          onChange={(event) => setChatMode(event.target.value as ChatMode)}
-                          className="rounded-md border border-gray-700 bg-[#101010] px-2 py-1 font-bold text-gray-200 outline-none focus:border-[#3ce8e2]"
-                        >
-                          {availableChatModes.map((mode) => (
-                            <option key={mode.id} value={mode.id}>{locale === 'zh' ? mode.zh : mode.en}</option>
-                          ))}
-                        </select>
-                      )}
-                      {!isGaokaoVolunteer && coachActions.map((action) => (
+                      {coachActions.map((action) => (
                         <button
                           key={action.intent}
                           type="button"
@@ -2482,34 +2372,25 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </div>
           </aside>
 
-          {!isCoding && !isGaokaoVolunteer && !stackedArenaLayout && (
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              onPointerDown={startChatWhiteboardResize()}
-              className="-mx-1 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-violet-300/60"
-            />
-          )}
-
-          {!isCoding && !isGaokaoVolunteer && (
-            <div className="grid min-h-0 min-w-0 gap-2 lg:grid-rows-[auto_1fr]">
-              {!whiteboardExpanded && (
-              <section className="overflow-hidden rounded-lg border border-violet-400/20 bg-[#1e1e1e] px-3 py-2">
-                <div className="flex min-w-0 items-center gap-3">
-                  <p className="shrink-0 text-[11px] font-black uppercase tracking-[0.18em] text-violet-300">{t.interviewMode}</p>
-                  <p className="min-w-0 truncate text-xs text-gray-400">{t.interviewHint}</p>
-                </div>
-              </section>
-              )}
+          {!isCoding && !isGaokaoVolunteer && whiteboardVisible && whiteboardDiagram && (
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-6">
+              <div className="relative h-[min(86vh,920px)] w-full max-w-6xl overflow-hidden rounded-2xl border border-gray-700 bg-[#151515] shadow-2xl">
+                <button
+                  type="button"
+                  onClick={() => setWhiteboardVisible(false)}
+                  className="absolute right-3 top-3 z-10 rounded-full border border-gray-700 bg-black/75 px-3 py-1.5 text-xs font-black text-gray-200 shadow-lg transition hover:border-[#3ce8e2] hover:text-[#3ce8e2]"
+                >
+                  {locale === 'zh' ? '关闭' : 'Close'}
+                </button>
               <AgentWhiteboard
                 challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
                 locale={locale}
                 diagram={whiteboardDiagram}
-                expanded={whiteboardExpanded}
+                expanded
                 busy={whiteboardBusy || agentBusy}
                 onExplain={() => requestWhiteboardExplain(false)}
-                onToggleExpand={() => setWhiteboardExpanded((value) => !value)}
               />
+              </div>
             </div>
           )}
         </div>
