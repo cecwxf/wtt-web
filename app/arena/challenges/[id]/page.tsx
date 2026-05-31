@@ -175,6 +175,14 @@ function explainPromptEn(challenge: Challenge) {
   return `Explain "${title}". Focus: ${focus} Cover the core concepts, reasoning path, edge cases, and checks specific to this problem.`
 }
 
+function introPromptZh(challenge: Challenge) {
+  return `请先介绍这道题「${challenge.title}」。请说明题目在考什么、输入输出或业务场景是什么、核心概念是什么，以及我应该从哪几个步骤开始思考。暂时不要直接给完整答案。`
+}
+
+function introPromptEn(challenge: Challenge) {
+  return `Introduce this challenge "${challenge.title}". Explain what it tests, the input/output or business scenario, the core concepts, and the first steps I should think through. Do not give the full answer yet.`
+}
+
 const coachActions: CoachAction[] = [
   {
     intent: 'ask_hint',
@@ -2153,6 +2161,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     sendAgentChat(action.intent, message)
   }
 
+  function runIntroAction() {
+    if (!challenge) return
+    const message = locale === 'zh' ? introPromptZh(challenge) : introPromptEn(challenge)
+    sendAgentChat('ask', message)
+  }
+
   if (!payload || !challenge) {
     return <main className="min-h-screen bg-[#151515] p-8 text-white">Loading Arena...</main>
   }
@@ -2421,6 +2435,33 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   compactUi
                   currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
                   agentRoleLabelMap={{ [ARENA_AGENT_ID]: locale === 'zh' ? 'Arena Coach' : 'Arena Coach' }}
+                  emptyState={(
+                    <div className="mx-auto max-w-xl rounded-2xl border border-dashed border-[#3ce8e2]/25 bg-[#101818] p-4 text-left shadow-[0_0_28px_rgba(60,232,226,0.06)]">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#7de9e5]">{t.chatTitle}</p>
+                      <p className="mt-2 text-sm leading-6 text-gray-300">{t.chatIntro}</p>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                        <button
+                          type="button"
+                          onClick={runIntroAction}
+                          disabled={chatSending || arenaSyncing}
+                          className="rounded-xl border border-[#3ce8e2]/25 bg-[#3ce8e2]/10 px-3 py-2 text-xs font-black text-[#bffffd] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {locale === 'zh' ? '介绍题目' : 'Introduce'}
+                        </button>
+                        {coachActions.slice(0, 2).map((action) => (
+                          <button
+                            key={action.intent}
+                            type="button"
+                            onClick={() => runCoachAction(action)}
+                            disabled={chatSending || arenaSyncing}
+                            className="rounded-xl border border-[#3ce8e2]/25 bg-[#3ce8e2]/10 px-3 py-2 text-xs font-black text-[#bffffd] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {locale === 'zh' ? action.zh : action.en}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   extraHeaderActions={(
                     <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5 text-[10px]">
                       <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2 py-0.5 font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>

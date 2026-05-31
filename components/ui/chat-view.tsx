@@ -509,6 +509,7 @@ interface ChatViewProps {
   onExport?: (format: 'md') => void
   hasOlder?: boolean
   loading?: boolean
+  emptyState?: React.ReactNode
   extraHeaderActions?: React.ReactNode
   isTaskTopic?: boolean
   taskType?: TaskType
@@ -1134,6 +1135,7 @@ export function ChatView({
   onExport,
   hasOlder = false,
   loading,
+  emptyState,
   extraHeaderActions,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isTaskTopic = false,
@@ -2535,7 +2537,11 @@ export function ChatView({
         )}
 
         {!loading && activeTab === 'chat' && messages.length === 0 && (
-          <div className="pt-20 text-center text-sm text-slate-400">{t('chat.noMessages')}</div>
+          emptyState ? (
+            <div className={compactUi ? 'px-2 py-4' : 'px-4 py-6'}>{emptyState}</div>
+          ) : (
+            <div className="pt-20 text-center text-sm text-slate-400">{t('chat.noMessages')}</div>
+          )
         )}
 
         {activeTab === 'terminal' ? (
