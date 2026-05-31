@@ -360,6 +360,8 @@ type AgentFolder = {
   agents: AgentOption[]
 }
 
+const AGENT_RUNTIME_HOST_CACHE_KEY = 'wtt:last-agent-runtime-hosts:v1'
+
 function cleanHostLabel(value: unknown) {
   return String(value || '').trim()
 }
@@ -379,6 +381,51 @@ function cloudHostAgentIdForAgent(agent: AgentOption, runtime?: AgentRuntimeInfo
   }
 
   return ''
+}
+
+function hasRuntimeHostIdentity(runtime?: AgentRuntimeInfo) {
+  return Boolean(
+    cleanHostLabel(runtime?.hostname) ||
+    cleanHostLabel(runtime?.host_agent_id) ||
+    cleanHostLabel(runtime?.provider) ||
+    cleanHostLabel(runtime?.workdir),
+  )
+}
+
+function runtimeHostSnapshot(runtime: AgentRuntimeInfo): AgentRuntimeInfo {
+  return {
+    kind: runtime.kind,
+    adapter: runtime.adapter,
+    model: runtime.model,
+    model_id: runtime.model_id,
+    current_model: runtime.current_model,
+    reasoning_effort: runtime.reasoning_effort,
+    workdir: runtime.workdir,
+    workdir_name: runtime.workdir_name,
+    hostname: runtime.hostname,
+    platform: runtime.platform,
+    provider: runtime.provider,
+    host_agent_id: runtime.host_agent_id,
+    workspace_path: runtime.workspace_path,
+    git: runtime.git,
+  }
+}
+
+function mergeRuntimeWithCachedHost(live?: AgentRuntimeInfo, cached?: AgentRuntimeInfo): AgentRuntimeInfo | undefined {
+  if (!live) return cached
+  if (!cached) return live
+  return {
+    ...cached,
+    ...live,
+    hostname: cleanHostLabel(live.hostname) || cached.hostname,
+    platform: cleanHostLabel(live.platform) || cached.platform,
+    provider: cleanHostLabel(live.provider) || cached.provider,
+    host_agent_id: cleanHostLabel(live.host_agent_id) || cached.host_agent_id,
+    workdir: cleanHostLabel(live.workdir) || cached.workdir,
+    workdir_name: cleanHostLabel(live.workdir_name) || cached.workdir_name,
+    workspace_path: cleanHostLabel(live.workspace_path) || cached.workspace_path,
+    git: live.git || cached.git,
+  }
 }
 
 export function TopicColumn(props: TopicColumnProps) {
@@ -439,6 +486,48 @@ export function TopicColumn(props: TopicColumnProps) {
   const [collapsedAgentFolders, setCollapsedAgentFolders] = useState<Record<string, boolean>>({})
   const { locale, t } = useI18n()
   const zh = locale === 'zh'
+  const [runtimeHostCache, setRuntimeHostCache] = useState<Record<string, AgentRuntimeInfo>>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(AGENT_RUNTIME_HOST_CACHE_KEY) || '{}')
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, AgentRuntimeInfo> : {}
+    } catch {
+      return {}
+    }
+  })
+
+  useEffect(() => {
+    if (!agentRuntimeMap || Object.keys(agentRuntimeMap).length === 0) return
+    setRuntimeHostCache((prev) => {
+      let changed = false
+      const next = { ...prev }
+
+      for (const [agentId, runtime] of Object.entries(agentRuntimeMap)) {
+        if (!runtime || !hasRuntimeHostIdentity(runtime)) continue
+        const snapshot = runtimeHostSnapshot(runtime)
+        if (JSON.stringify(next[agentId] || {}) === JSON.stringify(snapshot)) continue
+        next[agentId] = snapshot
+        changed = true
+      }
+
+      if (!changed) return prev
+      try {
+        window.localStorage.setItem(AGENT_RUNTIME_HOST_CACHE_KEY, JSON.stringify(next))
+      } catch {
+        // localStorage quota or privacy mode should not break the agent list.
+      }
+      return next
+    })
+  }, [agentRuntimeMap])
+
+  const displayRuntimeMap = useMemo(() => {
+    const merged: Record<string, AgentRuntimeInfo> = { ...runtimeHostCache }
+    for (const [agentId, runtime] of Object.entries(agentRuntimeMap || {})) {
+      const mergedRuntime = mergeRuntimeWithCachedHost(runtime, runtimeHostCache[agentId])
+      if (mergedRuntime) merged[agentId] = mergedRuntime
+    }
+    return merged
+  }, [agentRuntimeMap, runtimeHostCache])
 
   useEffect(() => {
     const closeMenus = () => {
@@ -537,7 +626,7 @@ export function TopicColumn(props: TopicColumnProps) {
     }
 
     for (const agent of agentOptions) {
-      const runtime = agentRuntimeMap?.[agent.agent_id]
+      const runtime = displayRuntimeMap?.[agent.agent_id]
       const runtimeHost = cleanHostLabel(runtime?.hostname)
 
       if (runtimeHost) {
@@ -555,7 +644,7 @@ export function TopicColumn(props: TopicColumnProps) {
       if (!selectedA && selectedB) return 1
       return a.label.localeCompare(b.label)
     })
-  }, [agentOptions, agentRuntimeMap, selectedAgentId, zh])
+  }, [agentOptions, displayRuntimeMap, selectedAgentId, zh])
 
   const openNewAgentModal = () => {
     const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId)
@@ -798,7 +887,7 @@ export function TopicColumn(props: TopicColumnProps) {
             const folderTone = hostFolderTone(folder.key)
             const FolderIcon = folderTone.Icon
             const cloudHostIds = Array.from(new Set(folder.agents
-              .map((agent) => cloudHostAgentIdForAgent(agent, agentRuntimeMap?.[agent.agent_id]))
+              .map((agent) => cloudHostAgentIdForAgent(agent, displayRuntimeMap?.[agent.agent_id]))
               .filter(Boolean)))
             const folderCloudHostId = cloudHostIds.length === 1 ? cloudHostIds[0] : ''
             const folderMenuOpen = folderMenuFor === folder.key
@@ -903,7 +992,7 @@ export function TopicColumn(props: TopicColumnProps) {
                   const online = isAgentOnline(agent.agent_id)
                   const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
                   const tone = roleTone(agent.agent_id, role)
-                  const runtime = agentRuntimeMap?.[agent.agent_id]
+                  const runtime = displayRuntimeMap?.[agent.agent_id]
                   const runtimeText = formatRuntime(runtime)
                   const hoverTitle = agentTooltip(agent, role, runtime)
                   const menuOpen = agentMenuFor === agent.agent_id
@@ -950,7 +1039,7 @@ export function TopicColumn(props: TopicColumnProps) {
                     {runtimeText && (
                       <span
                         className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400 dark:text-zinc-500"
-                        title={agentRuntimeMap?.[agent.agent_id]?.workdir || runtimeText}
+                        title={displayRuntimeMap?.[agent.agent_id]?.workdir || runtimeText}
                       >
                         {runtimeText}
                       </span>
@@ -1330,7 +1419,7 @@ export function TopicColumn(props: TopicColumnProps) {
                 className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
               >
                 {newAgentHosts.map((agent) => {
-                  const runtime = agentRuntimeMap?.[agent.agent_id]
+                  const runtime = displayRuntimeMap?.[agent.agent_id]
                   const adapter = normalizeNewAgentAdapter(runtime)
                   const hostLabel = [agent.display_name || agent.agent_id, adapter, runtime?.hostname].filter(Boolean).join(' · ')
                   return (
@@ -1428,7 +1517,7 @@ export function TopicColumn(props: TopicColumnProps) {
         <AgentTerminalModal
           agentId={shellAgent.agent_id}
           agentName={shellAgent.display_name || shellAgent.agent_id}
-          workdir={agentRuntimeMap?.[shellAgent.agent_id]?.workdir}
+          workdir={displayRuntimeMap?.[shellAgent.agent_id]?.workdir}
           token={userToken}
           onClose={() => setShellAgent(null)}
         />
