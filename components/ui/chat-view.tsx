@@ -67,6 +67,13 @@ export interface ChatRunStatus {
   }>
 }
 
+export interface CloudSandboxBilling {
+  active_minutes?: number
+  estimated_rmb?: number
+  currency?: string
+  pricing_note?: string
+}
+
 interface ModelOption {
   id: string
   label: string
@@ -359,6 +366,7 @@ interface ChatViewProps {
   autoFocusNonce?: number
   currentAgentRuntime?: CurrentAgentRuntimeInfo
   currentAgentIsCloud?: boolean
+  cloudSandboxBilling?: CloudSandboxBilling | null
   workspaceAgentName?: string
   workspaceWorkdir?: string
   agentRoleLabelMap?: Record<string, string>
@@ -892,6 +900,13 @@ function runStatusAdapterLabel(adapter?: string): string {
   return value
 }
 
+function formatCloudBillingAmount(value: unknown) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount <= 0) return '¥0.0000'
+  if (amount < 0.01) return `¥${amount.toFixed(4)}`
+  return `¥${amount.toFixed(2)}`
+}
+
 function AgentRunStatusCard({ status }: { status: ChatRunStatus }) {
   const lines = status.lines.slice(-10)
   const adapter = runStatusAdapterLabel(status.adapter)
@@ -977,6 +992,7 @@ export function ChatView({
   autoFocusNonce,
   currentAgentRuntime,
   currentAgentIsCloud = false,
+  cloudSandboxBilling = null,
   workspaceAgentName,
   workspaceWorkdir,
   agentRoleLabelMap = {},
@@ -1160,6 +1176,10 @@ export function ChatView({
   const activeAgentLabel = activeAgentAdapter === 'codex' ? 'Codex'
     : activeAgentAdapter === 'claude-code' ? 'Claude Code'
       : 'Agent'
+  const showCloudBilling = Boolean(currentAgentIsCloud && cloudSandboxBilling)
+  const cloudBillingMinutes = Math.max(0, Math.round(Number(cloudSandboxBilling?.active_minutes || 0)))
+  const cloudBillingAmount = formatCloudBillingAmount(cloudSandboxBilling?.estimated_rmb)
+  const cloudBillingText = `cloud agent按照使用时间进行计费，关机后不再计费。本月使用时间共${cloudBillingMinutes}分钟，花费${cloudBillingAmount} RMB`
 
   const filteredMembers = useMemo(() => {
     if (!mentionQuery) return topicMembers
@@ -2253,6 +2273,15 @@ export function ChatView({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            {showCloudBilling && (
+              <div
+                className="hidden max-w-[280px] text-right text-[10px] font-semibold leading-snug text-emerald-600 dark:text-emerald-300 sm:block"
+                title={cloudBillingText}
+              >
+                <div>cloud agent按照使用时间进行计费，关机后不再计费。</div>
+                <div>本月使用时间共{cloudBillingMinutes}分钟，花费{cloudBillingAmount} RMB</div>
+              </div>
+            )}
             {extraHeaderActions}
             <div className="relative">
               <button

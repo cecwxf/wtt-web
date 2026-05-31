@@ -2409,7 +2409,6 @@ function FeedPageInner() {
         agentRoleMap={agentRoleMap}
         agentRoleTemplateMap={agentRoleTemplateMap}
         agentRuntimeMap={agentRuntimeMap}
-        cloudSandboxBilling={(cloudAgentStateRaw as CloudAgentState | null | undefined)?.sandbox_billing ?? null}
         onAssignAgentRole={handleAssignAgentRole}
         onSaveAgentRole={handleSaveAgentRole}
         onNewAgentFromHost={handleNewAgentFromHost}
@@ -2450,6 +2449,7 @@ function FeedPageInner() {
                 workspaceWorkdir={selectedAgentId ? agentRuntimeMap?.[selectedAgentId]?.workdir : undefined}
                 currentAgentRuntime={selectedAgentRuntime}
                 currentAgentIsCloud={selectedAgentIsCloud}
+                cloudSandboxBilling={selectedAgentIsCloud ? ((cloudAgentStateRaw as CloudAgentState | null | undefined)?.sandbox_billing ?? null) : null}
                 agentRoleLabelMap={agentRoleLabelMap}
                 compactUi
                 extraHeaderActions={

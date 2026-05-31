@@ -4,7 +4,7 @@ import { Menu } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
-import { AgentRuntimeInfo, CloudSandboxBilling, TopicColumn, TopicItem } from './topic-column'
+import { AgentRuntimeInfo, TopicColumn, TopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
@@ -60,7 +60,6 @@ interface WttShellV2Props {
   agentRoleMap?: Record<string, string>
   agentRoleTemplateMap?: Record<string, AgentRoleTemplate>
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
-  cloudSandboxBilling?: CloudSandboxBilling | null
   onAssignAgentRole?: (agentId: string, roleId: string) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
   onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate) => void | Promise<void>
@@ -123,7 +122,6 @@ export function WttShellV2(props: WttShellV2Props) {
     agentRoleMap,
     agentRoleTemplateMap,
     agentRuntimeMap,
-    cloudSandboxBilling,
     onAssignAgentRole,
     onSaveAgentRole,
     onNewAgentFromHost,
@@ -343,7 +341,6 @@ export function WttShellV2(props: WttShellV2Props) {
               agentRoleMap={agentRoleMap}
               agentRoleTemplateMap={agentRoleTemplateMap}
               agentRuntimeMap={agentRuntimeMap}
-              cloudSandboxBilling={cloudSandboxBilling}
               onAssignAgentRole={onAssignAgentRole}
               onSaveAgentRole={onSaveAgentRole}
               onNewAgentFromHost={onNewAgentFromHost}
