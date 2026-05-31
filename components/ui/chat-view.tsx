@@ -898,7 +898,7 @@ function AgentRunStatusCard({ status }: { status: ChatRunStatus }) {
   const subtitle = [adapter, status.model].filter(Boolean).join(' · ')
 
   return (
-    <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 w-[min(560px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-2xl shadow-[#6b4e2e]/15 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/30">
+    <div className="mx-4 mb-2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25 sm:mx-6">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -918,7 +918,7 @@ function AgentRunStatusCard({ status }: { status: ChatRunStatus }) {
         )}
       </div>
 
-      <div className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
+      <div className="max-h-32 space-y-1.5 overflow-y-auto pr-1">
         {lines.map((line) => (
           <div key={line.id} className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-2 text-[11px] leading-4">
             <span className="rounded-md bg-[#efe4d2] px-1.5 py-0.5 text-center font-medium text-[#7c613d] dark:bg-zinc-800 dark:text-zinc-400">
@@ -2279,7 +2279,7 @@ export function ChatView({
       </div>
 
       <div className="min-h-0 flex flex-1 overflow-hidden bg-[#fbfaf7] dark:bg-zinc-950">
-        <div className="relative min-w-0 flex flex-1 flex-col">
+        <div className="min-w-0 flex flex-1 flex-col">
       <div
         ref={scrollRef}
         className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
