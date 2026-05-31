@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import ReactMarkdown from 'react-markdown'
-import katex from 'katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -15,6 +14,7 @@ import { useAgentId } from '@/lib/hooks/use-agent-id'
 import { useViewportClass } from '@/lib/hooks/use-viewport-class'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
+import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeWhiteboardFromAnswerPrompt, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
 import { gaokaoKnowledgeContextMarkdown } from '@/lib/arena/gaokao-knowledge'
@@ -27,33 +27,6 @@ type Locale = 'zh' | 'en'
 type Language = 'opencl' | 'cuda' | 'triton' | 'cpp' | 'python' | 'c'
 type KernelEnvironment = 'macos-opencl'
 type ChatMode = 'socratic' | 'interview_answer' | 'ask'
-type ChatMessage = { id?: string; role: 'user' | 'agent'; content: string; createdAt: string }
-
-const ARENA_SLASH_COMMANDS = [
-  { cmd: '/help', descZh: '查看 Agent 支持的命令', descEn: 'Show agent slash command help' },
-  { cmd: '/status', descZh: '查看 Agent 运行状态', descEn: 'Show agent runtime status' },
-  { cmd: '/model', descZh: '查看当前模型', descEn: 'Show current model' },
-  { cmd: '/new', descZh: '开启新的 Agent thread/session', descEn: 'Start a fresh agent thread/session' },
-  { cmd: '/clear', descZh: '清除当前 Arena Agent 会话', descEn: 'Clear the current Arena agent session' },
-  { cmd: '/compact', descZh: '压缩或重置上下文', descEn: 'Compact or reset runtime context' },
-  { cmd: '/init', descZh: '初始化项目记忆/指引', descEn: 'Initialize project guidance' },
-  { cmd: '/review', descZh: '执行代码审查', descEn: 'Run code review' },
-  { cmd: '/diff', descZh: '查看当前 git diff', descEn: 'Show current git diff' },
-  { cmd: '/permissions', descZh: '查看权限/沙箱模式', descEn: 'Show permissions and sandbox mode' },
-  { cmd: '/approvals', descZh: '查看审批/沙箱模式', descEn: 'Show approval and sandbox mode' },
-  { cmd: '/plan', descZh: 'Codex TUI 原生命令：计划模式', descEn: 'Codex TUI command: plan mode' },
-  { cmd: '/goal', descZh: 'Codex TUI 原生命令：目标管理', descEn: 'Codex TUI command: goal management' },
-  { cmd: '/resume', descZh: 'Codex TUI 原生命令：恢复会话', descEn: 'Codex TUI command: resume session' },
-  { cmd: '/fork', descZh: 'Codex TUI 原生命令：分叉会话', descEn: 'Codex TUI command: fork session' },
-  { cmd: '/side', descZh: 'Codex TUI 原生命令：临时侧聊', descEn: 'Codex TUI command: side conversation' },
-  { cmd: '/mcp', descZh: 'Codex TUI 原生命令：MCP 工具', descEn: 'Codex TUI command: MCP tools' },
-  { cmd: '/skills', descZh: 'Codex TUI 原生命令：技能', descEn: 'Codex TUI command: skills' },
-  { cmd: '/memories', descZh: 'Codex TUI 原生命令：记忆', descEn: 'Codex TUI command: memories' },
-  { cmd: '/ps', descZh: 'Codex TUI 原生命令：后台终端', descEn: 'Codex TUI command: background terminals' },
-  { cmd: '/stop', descZh: 'Codex TUI 原生命令：停止后台终端', descEn: 'Codex TUI command: stop background terminals' },
-  { cmd: '/theme', descZh: 'Codex TUI 原生命令：主题', descEn: 'Codex TUI command: theme' },
-  { cmd: '/debug-config', descZh: 'Codex 配置诊断', descEn: 'Codex config diagnostics' },
-]
 
 function isArenaSlashMessage(value: string) {
   const trimmed = value.trim()
@@ -71,26 +44,7 @@ type ChallengePayload = {
   submissions: Array<Omit<Submission, 'code' | 'results'>>
 }
 
-type TopicMessage = { id?: string; message_id?: string; sender_type?: string; sender_id?: string; semantic_type?: string; content?: string; timestamp?: string; created_at?: string }
-
-function reactText(children: unknown): string {
-  if (typeof children === 'string' || typeof children === 'number') return String(children)
-  if (Array.isArray(children)) return children.map(reactText).join('')
-  if (children && typeof children === 'object' && 'props' in children) {
-    return reactText((children as { props?: { children?: unknown } }).props?.children)
-  }
-  return ''
-}
-
-function renderBareLatexFormula(value: string) {
-  const formula = value.trim()
-  if (!/^\\[A-Za-z]+/.test(formula) || !/(?:=|<|>|\\leq?|\\geq?|\\neq|\\approx|\\sim|\\to)/.test(formula)) return null
-  try {
-    return katex.renderToString(formula, { displayMode: true, throwOnError: false, strict: false, trust: false })
-  } catch {
-    return null
-  }
-}
+type TopicMessage = { id?: string; message_id?: string; topic_id?: string; sender_type?: string; sender_id?: string; sender_display_name?: string; semantic_type?: string; content?: string; timestamp?: string; created_at?: string }
 
 function formatRuntimeMs(value?: number) {
   if (value === undefined || value === null) return '-'
@@ -268,26 +222,6 @@ const chatModes: Array<{ id: ChatMode; zh: string; en: string; hintZh: string; h
     hintEn: 'Direct Q&A with a clear answer.',
   },
 ]
-
-function ArenaChatMarkdown({ content }: { content: string }) {
-  return (
-    <div className="max-w-none text-sm leading-6 text-gray-300 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_a]:text-[#3ce8e2] [&_a]:underline [&_code]:rounded [&_code]:bg-black/30 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-gray-100 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-black [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-black [&_h3]:mb-1.5 [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_ol>li]:list-decimal [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-gray-700 [&_td]:p-2 [&_th]:border [&_th]:border-gray-700 [&_th]:bg-gray-800 [&_th]:p-2 [&_th]:text-left">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        components={{
-          p({ children }) {
-            const html = renderBareLatexFormula(reactText(children))
-            if (html) return <div className="katex-display overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />
-            return <p>{children}</p>
-          },
-        }}
-      >
-        {normalizeMarkdownMath(content)}
-      </ReactMarkdown>
-    </div>
-  )
-}
 
 function decodeHtmlEntities(value: string) {
   return value
@@ -1302,16 +1236,6 @@ function stageLabel(stage: string | undefined, locale: Locale) {
   return locale === 'zh' ? row.zh : row.en
 }
 
-function TypingDots() {
-  return (
-    <span className="inline-flex items-center gap-1" aria-hidden="true">
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#3ce8e2] [animation-delay:-0.2s]" />
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#3ce8e2] [animation-delay:-0.1s]" />
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#3ce8e2]" />
-    </span>
-  )
-}
-
 function arenaChallengeContext(challenge: Challenge, locale: Locale, language: Language, code: string) {
   const gaokaoKnowledge = isGaokaoVolunteerChallenge(challenge)
     ? `\n[Gaokao Local Knowledge]\n${gaokaoKnowledgeContextMarkdown()}\n[/Gaokao Local Knowledge]\n`
@@ -1401,7 +1325,7 @@ function modeForExplicitIntent(intent?: ArenaTeachingIntent): ChatMode {
   return 'ask'
 }
 
-function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMessage[] {
+function topicMessagesToChat(messages: TopicMessage[], agentId: string): FeedChatMessage[] {
   return (messages || [])
     .filter((message) => {
       const semantic = String(message.semantic_type || '').toLowerCase()
@@ -1414,14 +1338,20 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): ChatMes
       if (content.includes('[whiteboard_render_request:auto]')) return false
       return !!stripWhiteboardPayload(stripSourceBlock(content))
     })
-    .map((message) => {
+    .map((message, index) => {
       const senderType = String(message.sender_type || '').toUpperCase()
       const senderId = String(message.sender_id || '')
+      const isAgent = senderType === 'AGENT' || senderId === agentId
+      const timestamp = message.timestamp || message.created_at || new Date().toISOString()
       return {
-        id: message.id || message.message_id,
-        role: senderType === 'AGENT' || senderId === agentId ? 'agent' : 'user',
+        message_id: message.id || message.message_id || `${timestamp}:${index}`,
+        topic_id: message.topic_id,
+        sender_id: senderId || (isAgent ? agentId : 'arena-user'),
+        sender_display_name: message.sender_display_name || (isAgent ? 'Arena Coach' : undefined),
+        sender_type: isAgent ? 'agent' : 'human',
         content: stripWhiteboardPayload(stripSourceBlock(String(message.content || ''))),
-        createdAt: message.timestamp || message.created_at || new Date().toISOString(),
+        timestamp,
+        semantic_type: String(message.semantic_type || 'post'),
       }
     })
 }
@@ -1439,8 +1369,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [submitting, setSubmitting] = useState(false)
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
+  const [chatMessages, setChatMessages] = useState<FeedChatMessage[]>([])
   const [chatMode, setChatMode] = useState<ChatMode>('socratic')
   const [chatSending, setChatSending] = useState(false)
   const [arenaTopicByKey, setArenaTopicByKey] = useState<Record<string, string>>({})
@@ -1455,15 +1384,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
   const [chatPanelWidth, setChatPanelWidth] = useState<number | null>(null)
   const layoutRef = useRef<HTMLDivElement | null>(null)
-  const chatEndRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
   const appliedWhiteboardHtmlMessageIdsRef = useRef(new Set<string>())
   const autoWhiteboardSourceKeysRef = useRef(new Set<string>())
-  const arenaSlashQuery = isArenaSlashMessage(chatInput) && !chatInput.includes('\n') ? chatInput.trim().toLowerCase() : ''
-  const filteredArenaSlashCommands = useMemo(() => {
-    if (!arenaSlashQuery) return []
-    return ARENA_SLASH_COMMANDS.filter((command) => command.cmd.startsWith(arenaSlashQuery))
-  }, [arenaSlashQuery])
 
   function startPanelResize() {
     return (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1640,7 +1563,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }
 
   const refreshArenaMessages = async (topicId = arenaTopicId) => {
-    if (!topicId || !session?.accessToken || !challenge) return [] as ChatMessage[]
+    if (!topicId || !session?.accessToken || !challenge) return [] as FeedChatMessage[]
     const rows = await fetchArenaMessageRows(topicId)
     const mapped = topicMessagesToChat(rows, ARENA_AGENT_ID)
     applyLatestWhiteboardFromRows(rows)
@@ -1648,16 +1571,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return mapped
   }
 
-  function chatMessageKey(message: ChatMessage) {
-    return message.id || `${message.role}:${message.createdAt}:${message.content.length}`
+  function chatMessageKey(message: FeedChatMessage) {
+    return message.message_id || `${message.sender_type}:${message.timestamp}:${message.content.length}`
   }
 
-  function hasNewAgentMessage(messages: ChatMessage[], baselineKeys: Set<string>) {
-    return messages.some((message) => message.role === 'agent' && !baselineKeys.has(chatMessageKey(message)))
+  function hasNewAgentMessage(messages: FeedChatMessage[], baselineKeys: Set<string>) {
+    return messages.some((message) => message.sender_type === 'agent' && !baselineKeys.has(chatMessageKey(message)))
   }
 
-  function latestNewAgentMessage(messages: ChatMessage[], baselineKeys: Set<string>) {
-    return [...messages].reverse().find((message) => message.role === 'agent' && !baselineKeys.has(chatMessageKey(message)))
+  function latestNewAgentMessage(messages: FeedChatMessage[], baselineKeys: Set<string>) {
+    return [...messages].reverse().find((message) => message.sender_type === 'agent' && !baselineKeys.has(chatMessageKey(message)))
   }
 
   function sleep(ms: number) {
@@ -1675,6 +1598,20 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       startedAt: now,
       expiresAt: now + ttlMs,
     })
+  }
+
+  function localArenaAgentMessage(content: string): FeedChatMessage {
+    const timestamp = new Date().toISOString()
+    return {
+      message_id: `arena-local:${timestamp}:${Math.random().toString(36).slice(2)}`,
+      topic_id: arenaTopicId || undefined,
+      sender_id: ARENA_AGENT_ID,
+      sender_display_name: locale === 'zh' ? 'Arena Coach' : 'Arena Coach',
+      sender_type: 'agent',
+      content,
+      timestamp,
+      semantic_type: 'post',
+    }
   }
 
   async function waitForArenaAgentMessage(topicId: string, baselineKeys: Set<string>, timeoutMs = 180000) {
@@ -1850,14 +1787,25 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     : whiteboardBusy
     ? t.whiteboardWorking
     : t.chatWorking
+  const arenaRunStatus = useMemo<ChatRunStatus | null>(() => {
+    if (!agentBusy) return null
+    const now = Date.now()
+    const startedAt = arenaTyping?.startedAt || now
+    const text = agentBusyLabel
+    return {
+      agentId: arenaTyping?.agentId || ARENA_AGENT_ID,
+      agentName: arenaTyping?.agentName || (locale === 'zh' ? 'Arena Coach' : 'Arena Coach'),
+      adapter: 'arena',
+      statusText: text,
+      statusKind: arenaTyping?.statusKind || (whiteboardBusy ? 'whiteboard' : chatSending ? 'chat' : arenaSyncing ? 'syncing' : 'running'),
+      startedAt,
+      lines: [{ id: `${startedAt}:${text}`, text, kind: arenaTyping?.statusKind || 'arena', ts: now }],
+    }
+  }, [agentBusy, agentBusyLabel, arenaSyncing, arenaTyping, chatSending, locale, whiteboardBusy])
 
   useEffect(() => {
     if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
   }, [chatMode, isGaokaoVolunteer])
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [chatMessages.length, agentBusy, whiteboardBusy])
 
   function changeLanguage(next: Language) {
     setLanguage(next)
@@ -1987,7 +1935,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena message'))
   }
 
-  async function requestAutoWhiteboardFromAnswer(topicId: string, answerMessage: ChatMessage, sourceUserMessage: string) {
+  async function requestAutoWhiteboardFromAnswer(topicId: string, answerMessage: FeedChatMessage, sourceUserMessage: string) {
     if (!challenge || whiteboardBusy || isCoding || isGaokaoVolunteerChallenge(challenge)) return
     const sourceKey = chatMessageKey(answerMessage)
     if (autoWhiteboardSourceKeysRef.current.has(sourceKey)) return
@@ -2019,7 +1967,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           intent: 'whiteboard',
           mode: 'whiteboard_auto',
           whiteboard_step_mode: false,
-          source_message_id: answerMessage.id,
+          source_message_id: answerMessage.message_id,
         }),
       })
       if (!response.ok) {
@@ -2037,17 +1985,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
   }
 
-  async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string) {
-    const message = (explicitMessage ?? chatInput).trim()
-    const isSlashCommand = !explicitMessage && isArenaSlashMessage(message)
-    const mode = isSlashCommand ? 'ask' : isGaokaoVolunteerChallenge(challenge) ? 'ask' : explicitMessage ? modeForExplicitIntent(intent) : chatMode
+  async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string, modelConfig?: ChatModelConfig, _replyTo?: string, options?: ChatSendOptions) {
+    const message = (explicitMessage || '').trim()
+    const isSlashCommand = options?.slashType === 'agent_passthrough' || isArenaSlashMessage(message)
+    const mode = isSlashCommand ? 'ask' : isGaokaoVolunteerChallenge(challenge) ? 'ask' : intent ? modeForExplicitIntent(intent) : chatMode
     const effectiveIntent = isSlashCommand ? 'ask' : intent || intentForChatMode(mode)
     if (!challenge || !message || chatSending) return
     if (!session?.accessToken) {
-      setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
+      setChatMessages((prev) => [...prev, localArenaAgentMessage(t.chatLogin)])
       return
     }
-    if (!explicitMessage) setChatInput('')
     setChatSending(true)
     try {
       const topicId = await ensureArenaSession()
@@ -2086,11 +2033,23 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           chat_mode: mode,
           agent_passthrough: isSlashCommand,
           slash_type: isSlashCommand ? 'agent_passthrough' : undefined,
-          slash_command: isSlashCommand ? arenaSlashName(message) : undefined,
-          metadata: isSlashCommand ? {
+          slash_command: isSlashCommand ? (options?.slashCommand || arenaSlashName(message)) : undefined,
+          model_config: modelConfig ? {
+            model: modelConfig.model,
+            reasoning_effort: modelConfig.reasoningEffort,
+          } : undefined,
+          metadata: {
+            ...(isSlashCommand ? {
             command_scope: 'single_agent',
             command_target_agent_id: ARENA_AGENT_ID,
-          } : undefined,
+            } : {}),
+            ...(modelConfig ? {
+              model_config: {
+                model: modelConfig.model,
+                reasoning_effort: modelConfig.reasoningEffort,
+              },
+            } : {}),
+          },
         }),
       })
       if (!response.ok) {
@@ -2098,7 +2057,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         if (isSlashCommand) {
           await publishArenaRaw(topicId, message, {
             slash_type: 'agent_passthrough',
-            slash_command: arenaSlashName(message),
+            slash_command: options?.slashCommand || arenaSlashName(message),
             command_scope: 'single_agent',
             command_target_agent_id: ARENA_AGENT_ID,
           })
@@ -2121,7 +2080,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
       await refreshArenaState().catch(() => undefined)
     } catch (error) {
-      setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
+      setChatMessages((prev) => [...prev, localArenaAgentMessage(`${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`)])
     } finally {
       setChatSending(false)
     }
@@ -2130,12 +2089,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   async function requestWhiteboardExplain(stepMode = false) {
     if (!challenge || whiteboardBusy) return
     setWhiteboardDiagram(null)
-    const latestAgentAnswer = [...chatMessages].reverse().find((message) => message.role === 'agent' && message.content.trim())
+    const latestAgentAnswer = [...chatMessages].reverse().find((message) => message.sender_type === 'agent' && message.content.trim())
     const message = latestAgentAnswer
       ? makeWhiteboardFromAnswerPrompt(challenge, locale, latestAgentAnswer.content)
       : makeWhiteboardPrompt(challenge, locale, stepMode)
     if (!session?.accessToken) {
-      setChatMessages((prev) => [...prev, { role: 'agent', content: t.chatLogin, createdAt: new Date().toISOString() }])
+      setChatMessages((prev) => [...prev, localArenaAgentMessage(t.chatLogin)])
       return
     }
     setWhiteboardBusy(true)
@@ -2177,11 +2136,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 240000, true)
       await refreshArenaState().catch(() => undefined)
     } catch (error) {
-      setChatMessages((prev) => [...prev, { role: 'agent', content: `${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`, createdAt: new Date().toISOString() }])
+      setChatMessages((prev) => [...prev, localArenaAgentMessage(`${t.chatFallback}${error instanceof Error ? ` (${error.message})` : ''}`)])
     } finally {
       setWhiteboardBusy(false)
       setChatSending(false)
     }
+  }
+
+  async function handleArenaChatSend(content: string, modelConfig?: ChatModelConfig, replyTo?: string, options?: ChatSendOptions) {
+    await sendAgentChat(undefined, content, modelConfig, replyTo, options)
   }
 
   function runCoachAction(action: CoachAction) {
@@ -2443,118 +2406,61 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
           <aside className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e] p-2 ${isCoding ? 'lg:col-span-2 xl:col-span-1' : ''}`}>
             <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-800 bg-[#151515] lg:min-h-[520px]">
-              <div className="border-b border-gray-800 px-3 py-2">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-black text-white">{t.chatTitle}</h3>
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
-                      {t.stage}: <span className="font-bold text-gray-300">{stageLabel(arenaSessionState?.stage, locale)}</span>
-                      {arenaSessionState ? ` · hint ${arenaSessionState.hint_level}` : ''}
-                      {` · ${t.mastery} ${Math.round((arenaSessionState?.mastery_estimate || 0) * 100)}%`}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {agentBusy && (
-                      <span className="inline-flex items-center gap-2 rounded-full border border-[#3ce8e2]/30 bg-[#3ce8e2]/10 px-2.5 py-1 text-[11px] font-black text-[#bffffd]">
-                        <TypingDots />
-                        {agentBusyLabel}
+              <div className="dark min-h-0 flex-1">
+                <ChatView
+                  topicName={challenge.title || t.chatTitle}
+                  topicId={arenaTopicId || undefined}
+                  messages={chatMessages}
+                  currentAgentId={ARENA_AGENT_ID}
+                  onSendMessage={handleArenaChatSend}
+                  loading={arenaSyncing && chatMessages.length === 0}
+                  wsConnected={Boolean(arenaTopicId && session?.accessToken)}
+                  accessToken={session?.accessToken || undefined}
+                  topicType="p2p"
+                  runStatus={arenaRunStatus}
+                  compactUi
+                  currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
+                  agentRoleLabelMap={{ [ARENA_AGENT_ID]: locale === 'zh' ? 'Arena Coach' : 'Arena Coach' }}
+                  extraHeaderActions={(
+                    <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5 text-[10px]">
+                      <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2 py-0.5 font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>
+                      <span className="rounded-full border border-gray-700 bg-black/20 px-2 py-0.5 font-bold text-gray-300">
+                        {t.stage}: {stageLabel(arenaSessionState?.stage, locale)}
+                        {arenaSessionState ? ` · hint ${arenaSessionState.hint_level}` : ''}
+                        {` · ${t.mastery} ${Math.round((arenaSessionState?.mastery_estimate || 0) * 100)}%`}
                       </span>
-                    )}
-                    <span className="rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-2.5 py-1 text-[11px] font-bold text-[#3ce8e2]">{ARENA_AGENT_ID}</span>
-                  </div>
-                </div>
-                {!isGaokaoVolunteer && <div className="mt-2 grid grid-cols-3 gap-1.5">
-                  {coachActions.map((action) => (
-                    <button
-                      key={action.intent}
-                      type="button"
-                      onClick={() => runCoachAction(action)}
-                      disabled={chatSending || arenaSyncing}
-                      className="rounded-md border border-[#3ce8e2]/30 bg-[#3ce8e2]/15 px-2 py-1.5 text-[11px] font-black text-[#bffffd] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {locale === 'zh' ? action.zh : action.en}
-                    </button>
-                  ))}
-                </div>}
-              </div>
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-                {chatMessages.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-gray-800 bg-[#101010] p-3 text-xs leading-5 text-gray-500">{t.chatIntro}</div>
-                )}
-                {chatMessages.map((message, index) => (
-                  <div key={`${message.createdAt}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm leading-6 ${message.role === 'user' ? 'bg-[#3ce8e2] text-black' : 'border border-gray-800 bg-[#202020] text-gray-300'}`}>
-                      {message.role === 'agent' ? <ArenaChatMarkdown content={message.content} /> : <span className="whitespace-pre-wrap break-words">{message.content}</span>}
-                    </div>
-                  </div>
-                ))}
-                {agentBusy && (
-                  <div className="flex justify-start">
-                    <div className="max-w-[88%] rounded-2xl border border-[#3ce8e2]/25 bg-[#102727] px-3 py-2 text-sm leading-6 text-[#dffffe] shadow-[0_0_24px_rgba(60,232,226,0.08)]">
-                      <div className="flex items-center gap-2 font-black">
-                        <TypingDots />
-                        <span>{agentBusyLabel}</span>
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-[#8bcfcc]">
-                        {locale === 'zh' ? '请求已发送，等待 Agent 返回并同步到对话。' : 'Request sent. Waiting for the Agent response to sync into chat.'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-              <form onSubmit={(event) => { event.preventDefault(); sendAgentChat() }} className="shrink-0 border-t border-gray-800 bg-[#151515] p-3">
-                {arenaSlashQuery && (
-                  <div className="mb-2 rounded-xl border border-[#3ce8e2]/25 bg-[#0f2424] p-2 shadow-[0_0_24px_rgba(60,232,226,0.08)]">
-                    <div className="mb-1 flex items-center justify-between gap-2 px-1 text-[10px] font-black uppercase tracking-[0.22em] text-[#7de9e5]">
-                      <span>{locale === 'zh' ? 'Agent Slash Command' : 'Agent Slash Command'}</span>
-                      <span className="text-gray-500">{locale === 'zh' ? '直通 Arena Agent，不附加长上下文' : 'Passed through without Arena context'}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(filteredArenaSlashCommands.length ? filteredArenaSlashCommands : ARENA_SLASH_COMMANDS.slice(0, 6)).map((command) => (
-                        <button
-                          key={command.cmd}
-                          type="button"
-                          onClick={() => setChatInput(command.cmd)}
-                          className="rounded-lg border border-[#3ce8e2]/20 bg-black/25 px-2.5 py-1.5 text-left text-[11px] font-bold text-gray-200 transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black"
-                          title={locale === 'zh' ? command.descZh : command.descEn}
+                      <span className="min-w-0 max-w-[260px] truncate text-gray-500" title={locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}>
+                        {locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}
+                      </span>
+                      <label className="font-bold text-gray-500">{t.mode}</label>
+                      {isGaokaoVolunteer ? (
+                        <span className="rounded-md border border-blue-400/30 bg-blue-400/10 px-2 py-1 font-black text-blue-200">Ask</span>
+                      ) : (
+                        <select
+                          value={chatMode}
+                          onChange={(event) => setChatMode(event.target.value as ChatMode)}
+                          className="rounded-md border border-gray-700 bg-[#101010] px-2 py-1 font-bold text-gray-200 outline-none focus:border-[#3ce8e2]"
                         >
-                          <span className="font-black text-[#8ef4f0]">{command.cmd}</span>
-                          <span className="ml-2 text-gray-500">{locale === 'zh' ? command.descZh : command.descEn}</span>
+                          {availableChatModes.map((mode) => (
+                            <option key={mode.id} value={mode.id}>{locale === 'zh' ? mode.zh : mode.en}</option>
+                          ))}
+                        </select>
+                      )}
+                      {!isGaokaoVolunteer && coachActions.map((action) => (
+                        <button
+                          key={action.intent}
+                          type="button"
+                          onClick={() => runCoachAction(action)}
+                          disabled={chatSending || arenaSyncing}
+                          className="rounded-md border border-[#3ce8e2]/30 bg-[#3ce8e2]/15 px-2 py-1 font-black text-[#bffffd] transition-colors hover:border-[#3ce8e2] hover:bg-[#3ce8e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {locale === 'zh' ? action.zh : action.en}
                         </button>
                       ))}
                     </div>
-                  </div>
-                )}
-                <textarea
-                  value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendAgentChat() }}
-                  placeholder={t.chatPlaceholder}
-                  rows={4}
-                  className="min-h-[72px] w-full resize-y rounded-md border border-gray-800 bg-[#101010] p-3 text-sm leading-6 text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#3ce8e2] lg:min-h-[96px]"
+                  )}
                 />
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
-                  <span className="min-w-0 flex-1 truncate">{locale === 'zh' ? currentChatMode.hintZh : currentChatMode.hintEn}</span>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <label className="text-xs font-bold text-gray-500">{t.mode}</label>
-                    {isGaokaoVolunteer ? (
-                      <span className="rounded-md border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-xs font-black text-blue-200">Ask</span>
-                    ) : (
-                    <select
-                      value={chatMode}
-                      onChange={(event) => setChatMode(event.target.value as ChatMode)}
-                      className="rounded-md border border-gray-800 bg-[#101010] px-2 py-2 text-xs font-bold text-gray-200 outline-none focus:border-[#3ce8e2]"
-                    >
-                      {availableChatModes.map((mode) => (
-                        <option key={mode.id} value={mode.id}>{locale === 'zh' ? mode.zh : mode.en}</option>
-                      ))}
-                    </select>
-                    )}
-                    <button type="submit" disabled={!chatInput.trim() || chatSending || arenaSyncing} className="min-w-[96px] shrink-0 rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{t.chatSend}</button>
-                  </div>
-                </div>
-              </form>
+              </div>
             </div>
           </aside>
 
