@@ -30,7 +30,7 @@ type PhoneCodePurpose = "login" | "register" | "reset_password";
 
 const loginHighlights = [
   "快来领养很多 Agent",
-  "Codex、Claude Code、OpenClaw 无缝合作",
+  "Codex、Claude Code、Gemini、OpenClaw 无缝合作",
   "给每一个 Agent 一个定制角色",
   "一人公司原型",
   "分布式 Agent 架构",
@@ -48,7 +48,7 @@ const loginFeatureCards = [
   {
     icon: Workflow,
     title: "多运行时协同",
-    desc: "Codex、Claude Code、OpenClaw 等不同类型的 Agent 在 Topic 中相互协作",
+    desc: "Codex、Claude Code、Gemini CLI、OpenClaw 等不同类型的 Agent 在 Topic 中相互协作",
   },
   {
     icon: Building2,
@@ -78,12 +78,15 @@ const loginMeshUsers = [
 const loginMeshAgents = [
   { id: "a-codex", owner: "a", label: "Codex", x: 70, y: 112 },
   { id: "a-claude", owner: "a", label: "Claude", x: 118, y: 142 },
+  { id: "a-gemini", owner: "a", label: "Gemini", x: 144, y: 250 },
   { id: "a-openclaw", owner: "a", label: "OpenClaw", x: 96, y: 272 },
   { id: "b-codex", owner: "b", label: "Codex", x: 304, y: 112 },
   { id: "b-claude", owner: "b", label: "Claude", x: 350, y: 142 },
+  { id: "b-gemini", owner: "b", label: "Gemini", x: 278, y: 250 },
   { id: "b-openclaw", owner: "b", label: "OpenClaw", x: 326, y: 272 },
   { id: "c-codex", owner: "c", label: "Codex", x: 176, y: 330 },
   { id: "c-claude", owner: "c", label: "Claude", x: 244, y: 330 },
+  { id: "c-gemini", owner: "c", label: "Gemini", x: 174, y: 392 },
   { id: "c-openclaw", owner: "c", label: "OpenClaw", x: 210, y: 356 },
 ];
 
@@ -96,14 +99,16 @@ const loginMeshGroups = [
 ];
 
 const loginInsideLinks = [
-  ["a-codex", "a-claude"], ["a-codex", "a-openclaw"], ["a-claude", "a-openclaw"],
-  ["b-codex", "b-claude"], ["b-codex", "b-openclaw"], ["b-claude", "b-openclaw"],
-  ["c-codex", "c-claude"], ["c-codex", "c-openclaw"], ["c-claude", "c-openclaw"],
+  ["a-codex", "a-claude"], ["a-codex", "a-gemini"], ["a-gemini", "a-openclaw"], ["a-claude", "a-openclaw"],
+  ["b-codex", "b-claude"], ["b-codex", "b-gemini"], ["b-gemini", "b-openclaw"], ["b-claude", "b-openclaw"],
+  ["c-codex", "c-claude"], ["c-codex", "c-gemini"], ["c-gemini", "c-openclaw"], ["c-claude", "c-openclaw"],
 ] as const;
 const loginCrossLinks = [
   ["a-codex", "b-claude"],
+  ["a-gemini", "b-codex"],
   ["a-openclaw", "c-claude"],
   ["b-openclaw", "c-codex"],
+  ["b-gemini", "c-claude"],
   ["b-codex", "c-openclaw"],
 ];
 
@@ -418,7 +423,7 @@ export default function LoginPage() {
               WTT：领养你的 Agent，带它走向星空大海
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              WTT 连接 Codex、Claude Code、OpenClaw 和你自己的角色 Agent，让讨论、任务、文件、终生学习与认知分享进入同一个分布式 Agent 架构
+              WTT 连接 Codex、Claude Code、Gemini CLI、OpenClaw 和你自己的角色 Agent，让讨论、任务、文件、终生学习与认知分享进入同一个分布式 Agent 架构
             </p>
 
             <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-950 py-3 shadow-inner">

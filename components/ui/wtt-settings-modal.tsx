@@ -890,6 +890,48 @@ export function WttSettingsModal({
     ].join("\n");
   };
 
+  const buildWttConnectCommand = (
+    adapter: "codex" | "claude-code" | "gemini",
+    agentId: string,
+    agentToken: string,
+  ) => {
+    const aid = shellQuote(agentId);
+    const tok = shellQuote(agentToken);
+    const setup = adapter === "gemini"
+      ? [
+          "# Gemini CLI uses Google OAuth. Run this once on the agent host if Gemini is not authenticated:",
+          "gemini",
+          "",
+        ]
+      : [];
+    return [
+      `# WTT ${adapter} agent binding`,
+      "npm install -g wtt-connect",
+      ...setup,
+      `wtt-connect up ${adapter} ${aid} ${tok}`,
+      "",
+      "# verify",
+      `wtt-connect status ${agentId}-${adapter}`,
+      `wtt-connect logs ${agentId}-${adapter} --lines 100`,
+    ].join("\n");
+  };
+
+  const buildAllWttConnectCommands = (agentId: string, agentToken: string) => [
+    buildWttConnectCommand("codex", agentId, agentToken),
+    "",
+    buildWttConnectCommand("claude-code", agentId, agentToken),
+    "",
+    buildWttConnectCommand("gemini", agentId, agentToken),
+  ].join("\n");
+
+  const shellQuote = (value: string) => `'${String(value).replace(/'/g, `'\\''`)}'`;
+
+  const wttConnectAdapters = [
+    { id: "codex" as const, label: "Codex" },
+    { id: "claude-code" as const, label: "Claude Code" },
+    { id: "gemini" as const, label: "Gemini CLI" },
+  ];
+
   const createMobileLoginQr = async () => {
     const token = session?.accessToken as string | undefined;
     if (!token) {
@@ -1819,34 +1861,91 @@ export function WttSettingsModal({
               </div>
 
               {pluginCommandCreds && (
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-                  <p className="text-sm font-semibold text-indigo-800">
-                    {t("settings.pluginCmdTitle")}
-                  </p>
-                  <p className="mt-1 text-xs text-indigo-600">
-                    {t("settings.pluginCmdDesc")}
-                  </p>
-                  <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-indigo-200 bg-white p-3 text-[11px] leading-5 text-slate-700">
-                    {buildPluginCommand(
-                      pluginCommandCreds.agent_id,
-                      pluginCommandCreds.agent_token,
-                    )}
-                  </pre>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+                    <p className="text-sm font-semibold text-teal-900">
+                      wtt-connect 一键绑定 Codex / Claude Code / Gemini
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-teal-700">
+                      在 Agent 所在主机复制执行对应命令即可绑定。Codex、Claude Code、Gemini 默认以全权限模式启动，不再弹任务确认；Gemini 需要先在本机完成 Google OAuth 授权。
+                    </p>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                      {wttConnectAdapters.map((adapter) => (
+                        <div key={adapter.id} className="rounded-lg border border-teal-200 bg-white p-3">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-xs font-black text-teal-900">{adapter.label}</p>
+                            <button
+                              onClick={() =>
+                                handleCopy(
+                                  buildWttConnectCommand(
+                                    adapter.id,
+                                    pluginCommandCreds.agent_id,
+                                    pluginCommandCreds.agent_token,
+                                  ),
+                                  `${adapter.label} wtt-connect command copied`,
+                                )
+                              }
+                              className="inline-flex items-center gap-1 rounded border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-700 hover:bg-teal-100"
+                            >
+                              <ClipboardCopy className="h-3 w-3" />
+                              复制
+                            </button>
+                          </div>
+                          <pre className="max-h-52 overflow-auto rounded-md border border-slate-100 bg-slate-950 p-2 text-[10px] leading-4 text-teal-100">
+                            {buildWttConnectCommand(
+                              adapter.id,
+                              pluginCommandCreds.agent_id,
+                              pluginCommandCreds.agent_token,
+                            )}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
                     <button
                       onClick={() =>
                         handleCopy(
-                          buildPluginCommand(
+                          buildAllWttConnectCommands(
                             pluginCommandCreds.agent_id,
                             pluginCommandCreds.agent_token,
                           ),
-                          t("settings.pluginCmdCopied"),
+                          "All wtt-connect commands copied",
                         )
                       }
-                      className="rounded border border-indigo-200 bg-white px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
+                      className="mt-3 rounded border border-teal-200 bg-white px-2 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-100"
                     >
-                      {t("settings.copyPluginCmd")}
+                      复制全部 wtt-connect 命令
                     </button>
+                  </div>
+
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                    <p className="text-sm font-semibold text-indigo-800">
+                      {t("settings.pluginCmdTitle")}
+                    </p>
+                    <p className="mt-1 text-xs text-indigo-600">
+                      {t("settings.pluginCmdDesc")}
+                    </p>
+                    <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-indigo-200 bg-white p-3 text-[11px] leading-5 text-slate-700">
+                      {buildPluginCommand(
+                        pluginCommandCreds.agent_id,
+                        pluginCommandCreds.agent_token,
+                      )}
+                    </pre>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        onClick={() =>
+                          handleCopy(
+                            buildPluginCommand(
+                              pluginCommandCreds.agent_id,
+                              pluginCommandCreds.agent_token,
+                            ),
+                            t("settings.pluginCmdCopied"),
+                          )
+                        }
+                        className="rounded border border-indigo-200 bg-white px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
+                      >
+                        {t("settings.copyPluginCmd")}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
