@@ -896,10 +896,12 @@ export function TopicColumn(props: TopicColumnProps) {
             const wakeBusy = Boolean(folderCloudHostId && sandboxActionFor === `${folderCloudHostId}:wake`)
             const sleepBusy = Boolean(folderCloudHostId && sandboxActionFor === `${folderCloudHostId}:sleep`)
             const sandboxActionBusy = wakeBusy || sleepBusy
+            const folderSelected = folder.agents.some((agent) => agent.agent_id === selectedAgentId)
             return (
               <section key={folder.key} className="space-y-1">
                 <button
                   type="button"
+                  aria-current={folderSelected ? 'true' : undefined}
                   onClick={() => setCollapsedAgentFolders((prev) => ({ ...prev, [folder.key]: !collapsed }))}
                   onContextMenu={(event) => {
                     event.preventDefault()
@@ -908,12 +910,24 @@ export function TopicColumn(props: TopicColumnProps) {
                     setAgentMenuFor(null)
                     setFolderMenuFor(folder.key)
                   }}
-                  className={`flex w-full flex-col items-center rounded-2xl border px-1 py-1.5 text-center shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${folderTone.shell}`}
+                  className={`relative flex w-full flex-col items-center rounded-2xl border px-1 py-1.5 text-center shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${
+                    folderSelected
+                      ? `scale-[1.02] border-slate-900 shadow-[0_0_0_2px_rgba(15,23,42,0.22),0_12px_24px_rgba(15,23,42,0.16)] ring-2 ring-slate-900/70 dark:border-sky-200 dark:shadow-[0_0_0_2px_rgba(125,211,252,0.32),0_12px_24px_rgba(14,165,233,0.22)] dark:ring-sky-200/80 ${folderTone.shell}`
+                      : folderTone.shell
+                  }`}
                   title={[folder.label, folder.subtitle, folderCloudHostId ? (zh ? '右键管理 Sandbox' : 'Right-click to manage Sandbox') : ''].filter(Boolean).join(' · ')}
                 >
+                  {folderSelected && (
+                    <>
+                      <span className="absolute -left-1 top-2 h-[calc(100%-1rem)] w-1.5 rounded-full bg-slate-900 shadow-sm dark:bg-sky-200" />
+                      <span className="absolute right-1 top-1 rounded-full bg-slate-900 px-1 py-0.5 text-[7px] font-black uppercase leading-none tracking-[0.08em] text-white shadow-sm dark:bg-sky-200 dark:text-slate-950">
+                        Host
+                      </span>
+                    </>
+                  )}
                   <span className="flex items-center gap-1">
                     {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    <span className={`relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br shadow-md ring-1 ring-white/40 ${folderTone.icon}`}>
+                    <span className={`relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br shadow-md ${folderSelected ? 'ring-2 ring-slate-950/80 dark:ring-white/90' : 'ring-1 ring-white/40'} ${folderTone.icon}`}>
                       <span className="absolute -left-3 top-0 h-8 w-8 rounded-full bg-white/20" />
                       <span className="absolute -bottom-4 right-0 h-8 w-8 rounded-full bg-black/20" />
                       <MythicAgentDirectoryIcon Icon={FolderIcon} />
@@ -1013,11 +1027,16 @@ export function TopicColumn(props: TopicColumnProps) {
                   title={hoverTitle}
                   className={`group flex w-full flex-col items-center justify-center rounded-xl border px-1 py-1.5 text-center transition ${
                     selected
-                      ? tone.selected
+                      ? `${tone.selected} relative scale-[1.06] border-slate-950 shadow-[0_0_0_2px_rgba(15,23,42,0.22),0_10px_20px_rgba(15,23,42,0.18)] ring-2 ring-slate-950/75 dark:border-cyan-200 dark:shadow-[0_0_0_2px_rgba(103,232,249,0.28),0_10px_20px_rgba(8,145,178,0.22)] dark:ring-cyan-200/80`
                       : `border-transparent bg-white/55 dark:bg-zinc-900/60 ${tone.idle}`
                   }`}
                 >
-                  <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black shadow-sm ring-2 ${tone.avatar} ${tone.ring}`}>
+                  {selected && (
+                    <span className="absolute -right-1 -top-1 z-10 rounded-full bg-slate-950 px-1 py-0.5 text-[7px] font-black uppercase leading-none tracking-[0.08em] text-white shadow-sm dark:bg-cyan-200 dark:text-slate-950">
+                      Active
+                    </span>
+                  )}
+                  <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black shadow-sm ring-2 ${tone.avatar} ${selected ? 'ring-slate-950/80 dark:ring-white/90' : tone.ring}`}>
                     {agentInitial(agent.display_name)}
                     <span
                       className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#f6f3ed] dark:border-zinc-950 ${
