@@ -29,6 +29,7 @@ import {
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
 const AGENT_STATUS_CARD_MAX_LINES = 14
+const AGENT_STATUS_COMPLETE_HOLD_MS = 4500
 
 type TopicTypingState = {
   agentId: string
@@ -203,9 +204,16 @@ function clearTypingAfterAgentReply(
     if (Number.isFinite(messageTime) && messageTime + 2000 < existing.startedAt) return prev
   }
 
-  const next = { ...prev }
-  delete next[topicId]
-  return next
+  const now = Date.now()
+  return {
+    ...prev,
+    [topicId]: appendTypingStatus(existing, {
+      agentId: agentId || existing.agentId,
+      statusText: 'Agent 已回复',
+      statusKind: 'response',
+      ttlMs: AGENT_STATUS_COMPLETE_HOLD_MS,
+    }, now),
+  }
 }
 
 function appendTypingStatus(

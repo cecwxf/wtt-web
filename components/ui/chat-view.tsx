@@ -1240,14 +1240,17 @@ function formatCloudBillingAmount(value: unknown) {
   return `¥${amount.toFixed(2)}`
 }
 
-function AgentRunStatusCard({ status }: { status: ChatRunStatus }) {
+function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatus; floating?: boolean }) {
   const lines = status.lines.slice(-10)
   const adapter = runStatusAdapterLabel(status.adapter)
   const subtitle = [adapter, status.model].filter(Boolean).join(' · ')
   const wsIssue = status.wsState === 'disconnected'
+  const shellClass = floating
+    ? 'rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-2xl shadow-[#6b4e2e]/15 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/30'
+    : 'mx-4 mb-2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25 sm:mx-6'
 
   return (
-    <div className="mx-4 mb-2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25 sm:mx-6">
+    <div className={shellClass}>
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -2751,7 +2754,7 @@ export function ChatView({
       </div>
 
       <div className="min-h-0 flex flex-1 overflow-hidden bg-[#fbfaf7] dark:bg-zinc-950">
-        <div className="min-w-0 flex flex-1 flex-col">
+        <div className="relative min-w-0 flex flex-1 flex-col">
       <div
         ref={scrollRef}
         className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
@@ -3291,7 +3294,15 @@ export function ChatView({
       </div>
 
       {activeTab === 'chat' && runStatus && (
-        <AgentRunStatusCard status={runStatus} />
+        <div
+          className={`pointer-events-none absolute inset-x-3 z-40 sm:inset-x-6 ${
+            composerExpanded ? 'bottom-[54vh]' : compactUi ? 'bottom-[84px]' : 'bottom-[124px]'
+          }`}
+        >
+          <div className="pointer-events-auto mx-auto max-w-3xl">
+            <AgentRunStatusCard status={runStatus} floating />
+          </div>
+        </div>
       )}
 
 
