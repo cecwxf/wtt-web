@@ -1564,7 +1564,7 @@ function FeedPageInner() {
       if (!r.ok) return null
       return r.json()
     },
-    { refreshInterval: 5000, revalidateOnFocus: true }
+    { refreshInterval: wsState === 'connected' ? 30000 : 10000, revalidateOnFocus: false, dedupingInterval: 10000 }
   )
   const maxSubAgents = (agentStatsRaw as Record<string, unknown>)?.max_sub_agents as number | undefined ?? 20
   const agentStats = (agentStatsRaw as Record<string, unknown>)?.agents as Record<string, { total: number; active: number; done: number; todo: number }> | undefined
@@ -1582,7 +1582,7 @@ function FeedPageInner() {
       if (!r.ok) return null
       return r.json()
     },
-    { refreshInterval: 5000, revalidateOnFocus: true }
+    { refreshInterval: wsState === 'connected' ? 30000 : 10000, revalidateOnFocus: false, dedupingInterval: 10000 }
   )
   const { data: billingRaw } = useSWR(
     session?.accessToken ? ['billing-me', session.accessToken] : null,
@@ -1593,7 +1593,7 @@ function FeedPageInner() {
       if (!response.ok) return null
       return response.json() as Promise<BillingMe>
     },
-    { refreshInterval: 5 * 60_000, revalidateOnFocus: true }
+    { refreshInterval: 5 * 60_000, revalidateOnFocus: false, dedupingInterval: 60_000 }
   )
   const planLabel = useMemo(() => {
     const plan = String(billingRaw?.entitlement?.plan || 'free').toLowerCase()
