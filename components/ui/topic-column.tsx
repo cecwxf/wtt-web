@@ -238,11 +238,11 @@ function hostFolderTone(key: string) {
 
 function MythicAgentDirectoryIcon({ Icon }: { Icon: LucideIcon }) {
   return (
-    <span className="relative flex h-7 w-7 items-center justify-center">
+    <span className="relative flex h-9 w-9 items-center justify-center">
       <span className="absolute inset-0 rounded-full bg-white/25 blur-[1px]" />
       <span className="absolute inset-0 rotate-45 rounded-lg border border-white/35" />
       <span className="absolute inset-1 rounded-full border border-white/30" />
-      <Icon className="relative h-4 w-4 drop-shadow" strokeWidth={2.5} />
+      <Icon className="relative h-5 w-5 drop-shadow" strokeWidth={2.5} />
     </span>
   )
 }
@@ -897,14 +897,14 @@ export function TopicColumn(props: TopicColumnProps) {
               className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-300 via-sky-200 to-white px-1 py-2 text-center text-[9px] font-black leading-tight text-sky-900 shadow-sm shadow-sky-900/10 ring-1 ring-white/70 transition hover:-translate-y-0.5 hover:border-sky-300 hover:from-sky-200 hover:via-cyan-100 hover:to-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-400/45 dark:from-sky-500/35 dark:via-sky-400/20 dark:to-zinc-950 dark:text-sky-50 dark:ring-sky-200/20"
               title={hasCloudAgent
                 ? (zh ? '已创建 Cloud Agent；点击可查看限制提示' : 'Cloud Agent already exists; click for details')
-                : (zh ? '创建 Cloud Agent，需要 Plus / Pro 账户' : 'Create Cloud Agent, requires Plus / Pro')}
+                : (zh ? '新建 Agent，需要 Plus / Pro 账户' : 'New Agent, requires Plus / Pro')}
             >
               <span className="absolute -left-3 bottom-2 h-5 w-10 rounded-full bg-white/80 blur-[1px]" />
               <span className="absolute -right-4 top-2 h-6 w-12 rounded-full bg-white/70 blur-[1px]" />
               <span className="relative mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-white/85 text-sky-500 shadow-sm ring-1 ring-sky-100 dark:bg-white/90 dark:text-sky-600">
                 <Cloud className="h-5 w-5" />
               </span>
-              <span className="relative">Cloud</span>
+              <span className="relative">{zh ? '新建' : 'New'}</span>
               <span className="relative">Agent</span>
             </button>
           )}
@@ -959,9 +959,9 @@ export function TopicColumn(props: TopicColumnProps) {
                   )}
                   <span className="flex items-center gap-1">
                     {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    <span className={`relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br shadow-md ${folderSelected ? 'ring-2 ring-slate-950/80 dark:ring-white/90' : 'ring-1 ring-white/40'} ${folderTone.icon}`}>
-                      <span className="absolute -left-3 top-0 h-8 w-8 rounded-full bg-white/20" />
-                      <span className="absolute -bottom-4 right-0 h-8 w-8 rounded-full bg-black/20" />
+                    <span className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-[1.35rem] bg-gradient-to-br shadow-lg ${folderSelected ? 'ring-2 ring-slate-950/80 dark:ring-white/90' : 'ring-1 ring-white/40'} ${folderTone.icon}`}>
+                      <span className="absolute -left-3 top-0 h-10 w-10 rounded-full bg-white/20" />
+                      <span className="absolute -bottom-5 right-0 h-10 w-10 rounded-full bg-black/20" />
                       <MythicAgentDirectoryIcon Icon={FolderIcon} />
                     </span>
                   </span>
@@ -1068,7 +1068,7 @@ export function TopicColumn(props: TopicColumnProps) {
                       Active
                     </span>
                   )}
-                  <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black shadow-sm ring-2 ${tone.avatar} ${selected ? 'ring-slate-950/80 dark:ring-white/90' : tone.ring}`}>
+                  <span className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[10px] font-black shadow-sm ring-2 ${tone.avatar} ${selected ? 'ring-slate-950/80 dark:ring-white/90' : tone.ring}`}>
                     {agentInitial(agent.display_name)}
                     <span
                       className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#f6f3ed] dark:border-zinc-950 ${
