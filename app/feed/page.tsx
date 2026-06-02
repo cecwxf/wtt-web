@@ -2146,7 +2146,8 @@ function FeedPageInner() {
         reasoning_effort: modelConfig.reasoningEffort,
       }
     }
-    if (selectedAgentIsCloud) {
+    const selectedCloudAgentOnline = selectedAgentId ? onlineAgentIds.has(selectedAgentId) : false
+    if (selectedAgentIsCloud && selectedCloudAgentOnline) {
       metadata.cloud_no_auto_wake = true
     }
     if (options?.slashType || isSlashCommand) {

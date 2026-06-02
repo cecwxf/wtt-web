@@ -738,12 +738,13 @@ function ThumbnailImage({ url, isMine }: { url: string; isMine: boolean }) {
 }
 
 function VideoAttachmentCard({ url, filename, isMine }: { url: string; filename?: string; isMine: boolean }) {
+  const mediaUrl = proxyMediaUrl(url)
   const fallback = filenameFromFileUrl(url)
   const fname = filename || fallback || 'video'
   return (
     <div className={`overflow-hidden rounded-xl border text-sm shadow-sm ${isMine ? 'border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20' : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800'}`}>
       <video controls preload="metadata" playsInline className="max-h-80 w-full bg-black">
-        <source src={url} />
+        <source src={mediaUrl} />
       </video>
       <div className="flex items-center gap-3 p-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-600">
@@ -754,10 +755,10 @@ function VideoAttachmentCard({ url, filename, isMine }: { url: string; filename?
           <span className={`block text-xs ${isMine ? 'text-indigo-400' : 'text-slate-400'}`}>VIDEO · 可播放 / 打开 / 下载</span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
-          <a href={url} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          <a href={mediaUrl} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
             打开
           </a>
-          <a href={url} download={fname} className="rounded-md bg-cyan-600 px-2 py-1 text-xs font-semibold text-white hover:bg-cyan-500">
+          <a href={mediaUrl} download={fname} className="rounded-md bg-cyan-600 px-2 py-1 text-xs font-semibold text-white hover:bg-cyan-500">
             下载
           </a>
         </span>
@@ -796,6 +797,7 @@ function fileMeta(nameOrUrl: string, fallbackUrl?: string) {
 }
 
 function FileAttachmentCard({ url, filename, isMine, onPreview }: { url: string; filename?: string; isMine: boolean; onPreview?: () => void }) {
+  const fileUrl = proxyMediaUrl(url)
   const fallback = url.split('/').pop() || 'file'
   const fname = filename || fallback
   const meta = fileMeta(fname || url, url)
@@ -818,10 +820,10 @@ function FileAttachmentCard({ url, filename, isMine, onPreview }: { url: string;
             预览
           </button>
         )}
-        <a href={url} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+        <a href={fileUrl} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
           打开
         </a>
-        <a href={url} download={fname} className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-500">
+        <a href={fileUrl} download={fname} className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-500">
           下载
         </a>
       </span>
@@ -2981,6 +2983,7 @@ export function ChatView({
                         if (hasPreviewText && docFileIdx >= 0) {
                           const fileBlock = blocks[docFileIdx] as { kind: 'file'; url: string; filename?: string }
                           const fname = fileBlock.filename || fileBlock.url.split('/').pop() || 'file'
+                          const fileUrl = proxyMediaUrl(fileBlock.url)
                           const isMdFile = /\.md(\?|$)/i.test(fname) || /\.md(\?|$)/i.test(fileBlock.url)
                           const previewText = blocks
                             .slice(0, docFileIdx)
@@ -2994,7 +2997,7 @@ export function ChatView({
                                 <p className="text-[13px] leading-relaxed text-slate-600 line-clamp-4">{previewText}</p>
                               </div>
                               <a
-                                href={fileBlock.url}
+                                href={fileUrl}
                                 download={fname}
                                 className="flex items-center gap-3 border-t border-slate-100 dark:border-zinc-700 bg-slate-50/80 dark:bg-zinc-800/80 px-4 py-2.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-zinc-700"
                               >
@@ -3024,6 +3027,7 @@ export function ChatView({
                               }
                               if (block.kind === 'file') {
                                 const url = block.url
+                                const proxiedUrl = proxyMediaUrl(url)
                                 const fname = block.filename || url.split('/').pop() || 'file'
                                 const previewFile: ConversationFile = {
                                   key: `${message.message_id}:${url}`,
@@ -3040,7 +3044,7 @@ export function ChatView({
                                 if (isPdf) {
                                   return (
                                     <div key={bi} className="space-y-1">
-                                      <iframe src={url} title={fname} className="h-80 w-full rounded-lg border border-slate-200" />
+                                      <iframe src={proxiedUrl} title={fname} className="h-80 w-full rounded-lg border border-slate-200" />
                                       <FileAttachmentCard url={url} filename={fname} isMine={isMine} onPreview={previewAction} />
                                     </div>
                                   )
