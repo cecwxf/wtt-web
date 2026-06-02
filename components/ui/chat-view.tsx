@@ -1226,7 +1226,7 @@ function AgentRunStatusCard({ status }: { status: ChatRunStatus }) {
   const lines = status.lines.slice(-10)
   const adapter = runStatusAdapterLabel(status.adapter)
   const subtitle = [adapter, status.model].filter(Boolean).join(' · ')
-  const wsIssue = status.wsState && status.wsState !== 'connected'
+  const wsIssue = status.wsState === 'disconnected'
 
   return (
     <div className="mx-4 mb-2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25 sm:mx-6">
@@ -1252,7 +1252,7 @@ function AgentRunStatusCard({ status }: { status: ChatRunStatus }) {
       <div className="max-h-32 space-y-1.5 overflow-y-auto pr-1">
         {wsIssue && (
           <div className="rounded-lg border border-amber-300/70 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
-            WebSocket {status.wsState === 'connecting' ? '正在连接' : '已断开'}，实时执行状态可能无法刷新
+            WebSocket 已断开，实时执行状态可能无法刷新
           </div>
         )}
         {lines.map((line) => (
