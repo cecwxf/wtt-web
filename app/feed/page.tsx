@@ -292,6 +292,31 @@ function statusKindFromTypingEvent(record: Record<string, unknown>): string | un
   return eventString(record, ['status_kind', 'statusKind', 'kind', 'event_kind', 'eventKind', 'phase', 'type', 'status']) || undefined
 }
 
+function statusFromProgressMessage(contentRaw: unknown): { text: string; kind: string } | null {
+  const content = String(contentRaw || '').trim()
+  if (!content.startsWith('[TASK_STATUS]')) return null
+  const action = content.match(/\baction=([^\n\r]+)/)?.[1]?.trim() || ''
+  const status = content.match(/\bstatus=([^\s\n\r]+)/)?.[1]?.trim() || ''
+  if (!action && !status) return null
+
+  const [group, detail = ''] = action.split(/:(.+)/)
+  const kind = group || status || 'running'
+  if (group === 'session') {
+    if (detail.includes('thread.started') || detail.includes('turn.started')) {
+      return { text: 'Codex 会话已启动', kind: 'session' }
+    }
+    if (detail.includes('completed')) return { text: 'Codex 会话已完成', kind: 'session' }
+    return { text: `Codex 会话状态：${detail || status}`, kind: 'session' }
+  }
+  if (group === 'response') {
+    const output = detail.trim()
+    return { text: output ? `Codex 输出：${output.slice(0, 120)}` : 'Codex 正在输出', kind: 'response' }
+  }
+  if (group === 'command') return { text: `Codex 执行命令：${detail || status}`, kind: 'command' }
+  if (group === 'tool') return { text: `Codex 调用工具：${detail || status}`, kind: 'tool' }
+  return { text: `Agent 状态：${action || status}`, kind }
+}
+
 function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
   const name = String(topic.name || '').trim()
   const description = String(topic.description || '').trim()
@@ -430,6 +455,16 @@ function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[]
   }
 
   return normalized
+}
+
+function feedRows(raw: unknown): Record<string, unknown>[] {
+  if (!raw || typeof raw !== 'object') return []
+  const rows = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { messages?: unknown[] }).messages)
+      ? (raw as { messages: unknown[] }).messages
+      : []
+  return rows.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === 'object'))
 }
 
 export default function FeedPageWrapper() {
@@ -895,6 +930,7 @@ function FeedPageInner() {
       const rawContent = String((msg.message as Record<string, unknown>).content ?? '')
       const cleanedContent = stripSourceMarker(rawContent)
       const displayable = shouldDisplayMessage(semanticType, cleanedContent)
+      const progressStatus = statusFromProgressMessage(cleanedContent)
 
       // Bump activity and unread counters for the topic that received the message.
       const { raw, mutate: mutateSubs } = subscribedTopicsRef.current
@@ -920,6 +956,30 @@ function FeedPageInner() {
       }
 
       if (incomingTopicId !== selectedTopicId) return
+      if (progressStatus) {
+        const senderId = String(msg.message.sender_id || '')
+        const senderDisplayName = (msg.message as Record<string, unknown>).sender_display_name
+          ? String((msg.message as Record<string, unknown>).sender_display_name)
+          : agentNameMap[senderId] || undefined
+        const senderType = normalizeSenderType((msg.message as Record<string, unknown>).sender_type, senderId, knownAgentIds, senderDisplayName)
+        if (senderType === 'agent') {
+          const now = Date.now()
+          setTypingByTopic((prev) => {
+            const existing = prev[incomingTopicId]
+            if (!existing) return prev
+            return {
+              ...prev,
+              [incomingTopicId]: appendTypingStatus(existing, {
+                agentId: senderId || existing.agentId,
+                agentName: senderDisplayName || existing.agentName,
+                statusText: progressStatus.text,
+                statusKind: progressStatus.kind,
+                ttlMs: 60000,
+              }, now),
+            }
+          })
+        }
+      }
       if (!displayable) return
 
       const senderId = String(msg.message.sender_id || 'unknown')
@@ -1118,14 +1178,38 @@ function FeedPageInner() {
         setTypingByTopic((prev) => {
           const existing = prev[selectedTopicId]
           if (!existing) return prev
+          const progressRows = feedRows(feedRaw)
+          let nextState = existing
+          for (const row of progressRows) {
+            const rowTopicId = String(row.topic_id ?? '')
+            if (rowTopicId && rowTopicId !== selectedTopicId) continue
+            const senderId = String(row.sender_id ?? '')
+            const senderDisplayName = row.sender_display_name ? String(row.sender_display_name) : agentNameMap[senderId] || undefined
+            const senderType = normalizeSenderType(row.sender_type, senderId, knownAgentIds, senderDisplayName)
+            if (senderType !== 'agent') continue
+            if (existing.agentId && senderId && senderId !== existing.agentId) continue
+            const rowTime = new Date(String(row.timestamp ?? row.created_at ?? '')).getTime()
+            if (!Number.isFinite(rowTime) || rowTime + 2000 < existing.startedAt) continue
+            const progress = statusFromProgressMessage(stripSourceMarker(String(row.content ?? '')))
+            if (!progress) continue
+            nextState = appendTypingStatus(nextState, {
+              agentId: senderId || nextState.agentId,
+              agentName: senderDisplayName || nextState.agentName,
+              statusText: progress.text,
+              statusKind: progress.kind,
+              ttlMs: 60000,
+            }, Math.max(Date.now(), rowTime))
+          }
           const baselineIds = typingBaselineAgentMessageIdsRef.current[selectedTopicId]
           const reply = normalized.find((m) => (
             m.sender_type === 'agent' &&
-            (!existing.agentId || m.sender_id === existing.agentId) &&
+            (!nextState.agentId || m.sender_id === nextState.agentId) &&
             (!baselineIds || !baselineIds.has(m.message_id)) &&
-            new Date(m.timestamp).getTime() + 2000 >= existing.startedAt
+            new Date(m.timestamp).getTime() + 2000 >= nextState.startedAt
           ))
-          if (!reply) return prev
+          if (!reply) {
+            return nextState === existing ? prev : { ...prev, [selectedTopicId]: nextState }
+          }
           delete typingBaselineAgentMessageIdsRef.current[selectedTopicId]
           return clearTypingAfterAgentReply(prev, selectedTopicId, reply.sender_id, reply.timestamp)
         })
@@ -1135,7 +1219,7 @@ function FeedPageInner() {
     return () => {
       cancelled = true
     }
-  }, [feedRaw, selectedTopicId, knownAgentIds, decryptMessagesForDisplay])
+  }, [feedRaw, selectedTopicId, knownAgentIds, decryptMessagesForDisplay, agentNameMap])
 
   // Enrich messages: replace raw agent_id fallback with display_name from agentNameMap
   const enrichedMessages = useMemo(() => {
