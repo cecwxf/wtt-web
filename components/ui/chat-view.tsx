@@ -607,6 +607,7 @@ type CloudSandboxPreview = {
   key: string
   url: string
   title?: string
+  snapshotUrl?: string
   artifactUrl?: string
   messageId: string
   senderId: string
@@ -903,6 +904,7 @@ function extractCloudSandboxPreviews(message: ChatMessage): CloudSandboxPreview[
       key: `${message.message_id}:${url}`,
       url,
       title: block.title,
+      snapshotUrl: block.snapshotUrl,
       artifactUrl: block.artifactUrl,
       messageId: message.message_id,
       senderId: message.sender_id,
@@ -1119,60 +1121,44 @@ function CloudSandboxPreviewCard({ preview, onOpen }: { preview: CloudSandboxPre
 function CloudPreviewSidePanel({ preview, onClose }: { preview: CloudSandboxPreview; onClose: () => void }) {
   const title = preview.title || 'Cloud Sandbox Preview'
   const label = senderLabelText(preview.senderName, preview.senderId) || preview.senderId
+  const frameUrl = preview.snapshotUrl || preview.url
   return (
-    <aside className="hidden w-[340px] shrink-0 border-l border-sky-100 bg-[linear-gradient(180deg,#f0f9ff_0%,#ffffff_46%,#f8fafc_100%)] dark:border-sky-500/20 dark:bg-[linear-gradient(180deg,rgba(8,47,73,.58)_0%,rgba(9,9,11,.98)_46%,rgba(24,24,27,1)_100%)] md:flex lg:w-[420px] xl:w-[500px]">
+    <aside className="hidden w-[360px] shrink-0 border-l border-[#e5e0d8] bg-white/95 dark:border-zinc-800 dark:bg-zinc-950/95 md:flex lg:w-[460px] xl:w-[560px]">
       <div className="flex min-h-0 w-full flex-col">
-        <div className="border-b border-sky-100 px-4 py-3 dark:border-sky-500/20">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 dark:bg-sky-500/10 dark:text-sky-200">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.9)]" />
-                Cloud Agent Preview
-              </p>
-              <h3 className="mt-2 truncate text-sm font-black text-slate-950 dark:text-zinc-50">{title}</h3>
-              <p className="mt-0.5 truncate text-[11px] text-slate-500 dark:text-zinc-500">
-                {label} · {formatTime(preview.timestamp)}
-              </p>
-            </div>
+        <div className="flex items-center justify-between gap-3 border-b border-[#eee9df] px-3 py-2 dark:border-zinc-800">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-[#1f2328] dark:text-zinc-100">{title}</p>
+            <p className="mt-0.5 truncate text-[11px] text-[#8a8378] dark:text-zinc-500">
+              Cloud Preview · {label} · {formatTime(preview.timestamp)}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <a href={frameUrl} target="_blank" rel="noreferrer" className="rounded-md border border-[#ded8ce] bg-[#fbfaf7] px-2 py-1 text-xs font-semibold text-[#615d55] transition hover:border-sky-300 hover:text-sky-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+              新窗口
+            </a>
+            {preview.artifactUrl && (
+              <a href={preview.artifactUrl} target="_blank" rel="noreferrer" className="rounded-md border border-[#ded8ce] bg-[#fbfaf7] px-2 py-1 text-xs font-semibold text-[#615d55] transition hover:border-sky-300 hover:text-sky-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                artifact
+              </a>
+            )}
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-sky-100 hover:text-slate-900 dark:text-zinc-500 dark:hover:bg-sky-500/10 dark:hover:text-zinc-100"
+              className="rounded-lg p-1.5 text-[#8a8378] transition hover:bg-[#f4f1eb] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
               aria-label="Close preview"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="mt-3 flex items-center gap-2">
-            <a href={preview.url} target="_blank" rel="noreferrer" className="rounded-md bg-slate-950 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white">
-              打开预览
-            </a>
-            {preview.artifactUrl && (
-              <a href={preview.artifactUrl} target="_blank" rel="noreferrer" className="rounded-md border border-sky-200 bg-white px-2.5 py-1 text-xs font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-500/30 dark:bg-zinc-950 dark:text-sky-200 dark:hover:bg-sky-500/10">
-                打开 artifact
-              </a>
-            )}
-          </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          <div className="rounded-3xl border border-sky-100 bg-white p-4 shadow-[0_18px_50px_rgba(14,116,144,0.12)] dark:border-sky-500/20 dark:bg-zinc-950">
-            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[radial-gradient(circle_at_35%_30%,#ffffff_0%,#bae6fd_42%,#38bdf8_100%)] text-xl shadow-inner">
-              ☁
-            </div>
-            <p className="text-sm font-black text-slate-950 dark:text-zinc-50">预览已在右侧栏准备好</p>
-            <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-zinc-400">
-              这里不再内嵌 iframe，也不做 snapshot fallback。Cloud Agent 返回的是 live preview URL，点击下方链接会在新窗口打开真实预览。
-            </p>
-            <a
-              href={preview.url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-4 block break-all rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800 underline decoration-sky-300 underline-offset-2 transition hover:border-sky-300 hover:bg-sky-100 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200"
-            >
-              {preview.url}
-            </a>
-          </div>
+        <div className="min-h-0 flex-1 bg-[#f7f5f0] p-2 dark:bg-zinc-950">
+          <iframe
+            src={frameUrl}
+            title={title}
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+            className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900"
+          />
         </div>
       </div>
     </aside>
@@ -3209,6 +3195,7 @@ export function ChatView({
                                   key: `${message.message_id}:${block.url}`,
                                   url: block.url,
                                   title: block.title,
+                                  snapshotUrl: block.snapshotUrl,
                                   artifactUrl: block.artifactUrl,
                                   messageId: message.message_id,
                                   senderId: message.sender_id,
