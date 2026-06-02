@@ -1321,6 +1321,8 @@ function FeedPageInner() {
     {
       // WS updates topic activity; keep low-frequency polling as safety net.
       refreshInterval: wsState === 'connected' ? 60000 : 10000,
+      revalidateOnFocus: false,
+      dedupingInterval: 10000,
     }
   )
 
@@ -1358,7 +1360,7 @@ function FeedPageInner() {
       if (!res.ok) return []
       return res.json()
     },
-    { refreshInterval: wsState === 'connected' ? 120000 : 30000 }
+    { refreshInterval: wsState === 'connected' ? 120000 : 30000, revalidateOnFocus: false, dedupingInterval: 30000 }
   )
   const pendingP2pCount = Array.isArray(p2pRequests) ? p2pRequests.length : 0
 
@@ -1478,7 +1480,7 @@ function FeedPageInner() {
       if (!response.ok) return []
       return response.json()
     },
-    { refreshInterval: 0 }
+    { refreshInterval: 0, revalidateOnFocus: false, dedupingInterval: 30000 }
   )
 
   const topicMembers = useMemo(() => {
@@ -1517,7 +1519,7 @@ function FeedPageInner() {
       if (!r.ok) return []
       return r.json()
     },
-    { refreshInterval: wsState === 'connected' ? 120000 : 30000 }
+    { refreshInterval: wsState === 'connected' ? 120000 : 30000, revalidateOnFocus: false, dedupingInterval: 30000 }
   )
 
   const selectedTopicTaskId = useMemo(() => {
