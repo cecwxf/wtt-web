@@ -253,6 +253,30 @@ function appendTypingStatus(
   }
 }
 
+function eventString(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key]
+    if (value != null && String(value).trim()) return String(value).trim()
+  }
+  return ''
+}
+
+function statusTextFromTypingEvent(record: Record<string, unknown>): string | undefined {
+  const direct = eventString(record, ['status_text', 'statusText', 'message', 'detail', 'text'])
+  if (direct) return direct
+  const command = eventString(record, ['command', 'cmd'])
+  if (command) return `执行命令：${command}`
+  const tool = eventString(record, ['tool', 'tool_name', 'name'])
+  if (tool) return `调用工具：${tool}`
+  const phase = eventString(record, ['phase', 'stage'])
+  if (phase) return `阶段：${phase}`
+  return undefined
+}
+
+function statusKindFromTypingEvent(record: Record<string, unknown>): string | undefined {
+  return eventString(record, ['status_kind', 'statusKind', 'kind', 'event_kind', 'phase']) || undefined
+}
+
 function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
   const name = String(topic.name || '').trim()
   const description = String(topic.description || '').trim()
@@ -784,8 +808,8 @@ function FeedPageInner() {
 
         const agentId = String(rawEvent.agent_id || '')
         const agentName = String(rawEvent.agent_display_name || '') || agentNameMap[agentId] || undefined
-        const statusText = String(rawEvent.status_text || '').trim() || undefined
-        const statusKind = String(rawEvent.status_kind || '').trim() || undefined
+        const statusText = statusTextFromTypingEvent(rawEvent)
+        const statusKind = statusKindFromTypingEvent(rawEvent)
         const adapter = String(rawEvent.adapter || '').trim() || undefined
         const model = String(rawEvent.model || rawEvent.model_id || rawEvent.current_model || '').trim() || undefined
         const ttlMsRaw = Number(rawEvent.ttl_ms || 0)
