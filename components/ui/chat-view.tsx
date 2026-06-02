@@ -926,7 +926,8 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
   const fname = file.filename || filenameFromFileUrl(file.url)
   const label = senderLabelText(file.senderName, file.senderId) || file.senderId
   const isTextLike = TEXT_PREVIEW_EXTS.has(ext)
-  const absoluteUrl = absoluteBrowserUrl(file.url)
+  const previewUrl = proxyMediaUrl(file.url)
+  const absoluteUrl = absoluteBrowserUrl(previewUrl)
   const canUseOfficeViewer = /^https?:\/\//i.test(absoluteUrl) && OFFICE_PREVIEW_EXTS.has(ext)
 
   useEffect(() => {
@@ -935,7 +936,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
     setTextError('')
     if (!isTextLike) return
     setLoadingText(true)
-    fetch(file.url)
+    fetch(previewUrl, { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error(`${res.status}`)
         return res.text()
@@ -952,7 +953,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
     return () => {
       cancelled = true
     }
-  }, [file.url, isTextLike])
+  }, [isTextLike, previewUrl])
 
   return (
     <aside className="hidden w-[340px] shrink-0 border-l border-[#e5e0d8] bg-white/90 dark:border-zinc-800 dark:bg-zinc-950/95 md:flex lg:w-[380px] xl:w-[440px]">
@@ -976,10 +977,10 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
             </button>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <a href={file.url} target="_blank" rel="noreferrer" className="rounded-md border border-[#ded8ce] bg-[#fbfaf7] px-2.5 py-1 text-xs font-semibold text-[#615d55] transition hover:border-indigo-300 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            <a href={previewUrl} target="_blank" rel="noreferrer" className="rounded-md border border-[#ded8ce] bg-[#fbfaf7] px-2.5 py-1 text-xs font-semibold text-[#615d55] transition hover:border-indigo-300 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
               打开
             </a>
-            <a href={file.url} download={fname} className="rounded-md bg-[#1f2328] px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-[#343a40] dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-300">
+            <a href={previewUrl} download={fname} className="rounded-md bg-[#1f2328] px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-[#343a40] dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-300">
               下载
             </a>
           </div>
@@ -987,10 +988,10 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
 
         <div className="min-h-0 flex-1 overflow-hidden p-3">
           {ext === 'pdf' && (
-            <iframe src={file.url} title={fname} className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900" />
+            <iframe src={previewUrl} title={fname} className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900" />
           )}
           {HTML_PREVIEW_EXTS.has(ext) && (
-            <iframe src={file.url} title={fname} sandbox="allow-same-origin allow-scripts allow-forms allow-popups" className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900" />
+            <iframe src={previewUrl} title={fname} sandbox="allow-same-origin allow-scripts allow-forms allow-popups" className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900" />
           )}
           {isTextLike && (
             <div className="h-full overflow-auto rounded-xl border border-[#eee9df] bg-[#fbfaf7] p-4 text-sm leading-6 text-[#283038] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">

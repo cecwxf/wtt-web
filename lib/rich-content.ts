@@ -19,8 +19,19 @@ export function proxyMediaUrl(url: string): string {
   const raw = String(url || '').trim()
   if (!raw) return raw
 
-  if (raw.startsWith(DEFAULT_WTT_API_ORIGIN)) {
-    return raw.replace(DEFAULT_WTT_API_ORIGIN, CLIENT_WTT_API_BASE)
+  const knownWttOrigins = Array.from(new Set([
+    DEFAULT_WTT_API_ORIGIN.replace(/\/+$/, ''),
+    'https://www.waxbyte.com',
+    'https://waxbyte.com',
+    'http://170.106.109.4:8000',
+    'http://170.106.109.4',
+  ].filter(Boolean)))
+
+  for (let i = 0; i < knownWttOrigins.length; i += 1) {
+    const origin = knownWttOrigins[i]
+    if (raw.startsWith(`${origin}/`)) {
+      return raw.replace(origin, CLIENT_WTT_API_BASE)
+    }
   }
 
   const localBackend = raw.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//)
@@ -28,7 +39,7 @@ export function proxyMediaUrl(url: string): string {
     return raw.replace(localBackend[0], CLIENT_WTT_API_BASE + '/')
   }
 
-  if (/^\/?media\//i.test(raw)) {
+  if (/^\/?(?:media|artifacts)\//i.test(raw)) {
     return `${CLIENT_WTT_API_BASE}/${raw.replace(/^\/+/, '')}`
   }
 
