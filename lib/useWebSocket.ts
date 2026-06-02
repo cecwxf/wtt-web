@@ -50,6 +50,36 @@ function nextRequestId(): string {
   return `ws-${++_reqCounter}-${Date.now().toString(36)}`
 }
 
+function isInternalWsUrl(input: string): boolean {
+  try {
+    const host = new URL(input).hostname
+    return (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host) ||
+      /^170\.106\./.test(host)
+    )
+  } catch {
+    return false
+  }
+}
+
+function resolveRuntimeWsUrl(input: string): string {
+  const raw = String(input || '').trim()
+  if (
+    typeof window === 'undefined' ||
+    window.location.protocol !== 'https:' ||
+    !raw.startsWith('ws://')
+  ) {
+    return raw
+  }
+  if (isInternalWsUrl(raw)) return 'wss://www.waxbyte.com'
+  return raw.replace(/^ws:/, 'wss:')
+}
+
 export function useWebSocket({
   url,
   enabled = true,
@@ -94,17 +124,15 @@ export function useWebSocket({
   const connect = useCallback(() => {
     if (!enabled || !url || !mountedRef.current) return
 
-    // Block ws:// from HTTPS pages (browsers reject mixed content)
-    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('ws://')) {
-      return
-    }
+    const runtimeUrl = resolveRuntimeWsUrl(url)
+    if (!runtimeUrl) return
 
     cleanup()
     setState('connecting')
 
     let ws: WebSocket
     try {
-      ws = new WebSocket(url)
+      ws = new WebSocket(runtimeUrl)
     } catch {
       // Construction can throw for invalid URLs or mixed-content
       setState('disconnected')
