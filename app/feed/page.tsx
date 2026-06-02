@@ -253,28 +253,43 @@ function appendTypingStatus(
   }
 }
 
+function collectNestedRecords(value: unknown, out: Record<string, unknown>[] = [], depth = 0): Record<string, unknown>[] {
+  if (!value || typeof value !== 'object' || depth > 3) return out
+  const record = value as Record<string, unknown>
+  out.push(record)
+  for (const key of ['payload', 'data', 'event', 'item', 'message', 'delta', 'metadata', 'detail']) {
+    collectNestedRecords(record[key], out, depth + 1)
+  }
+  return out
+}
+
 function eventString(record: Record<string, unknown>, keys: string[]): string {
+  const records = collectNestedRecords(record)
   for (const key of keys) {
-    const value = record[key]
-    if (value != null && String(value).trim()) return String(value).trim()
+    for (const source of records) {
+      const value = source[key]
+      if (value == null) continue
+      if (typeof value === 'string' && value.trim()) return value.trim()
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    }
   }
   return ''
 }
 
 function statusTextFromTypingEvent(record: Record<string, unknown>): string | undefined {
-  const direct = eventString(record, ['status_text', 'statusText', 'message', 'detail', 'text'])
+  const direct = eventString(record, ['status_text', 'statusText', 'activity_text', 'activityText', 'message', 'detail', 'text', 'summary', 'description', 'progress'])
   if (direct) return direct
-  const command = eventString(record, ['command', 'cmd'])
+  const command = eventString(record, ['command', 'cmd', 'shell_command'])
   if (command) return `执行命令：${command}`
-  const tool = eventString(record, ['tool', 'tool_name', 'name'])
+  const tool = eventString(record, ['tool', 'tool_name', 'toolName', 'name'])
   if (tool) return `调用工具：${tool}`
-  const phase = eventString(record, ['phase', 'stage'])
+  const phase = eventString(record, ['phase', 'stage', 'step', 'status'])
   if (phase) return `阶段：${phase}`
   return undefined
 }
 
 function statusKindFromTypingEvent(record: Record<string, unknown>): string | undefined {
-  return eventString(record, ['status_kind', 'statusKind', 'kind', 'event_kind', 'phase']) || undefined
+  return eventString(record, ['status_kind', 'statusKind', 'kind', 'event_kind', 'eventKind', 'phase', 'type', 'status']) || undefined
 }
 
 function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
@@ -1303,12 +1318,12 @@ function FeedPageInner() {
       agentName: name,
       adapter: typing.adapter,
       model: typing.model,
-      statusText: typing.statusText || `${name} ${t('feed.typing')}`,
+      statusText: typing.statusText || '等待 Agent 状态更新',
       statusKind: typing.statusKind,
       startedAt: typing.startedAt,
       lines,
     }
-  }, [selectedTopicId, typingByTopic, agentNameMap, t])
+  }, [selectedTopicId, typingByTopic, agentNameMap])
 
   // Clear stale persisted topic if it no longer exists in the topics list
   useEffect(() => {
@@ -2016,12 +2031,13 @@ function FeedPageInner() {
       const now = Date.now()
       return {
         ...prev,
-        [topicIdForSend]: {
+        [topicIdForSend]: appendTypingStatus(prev[topicIdForSend], {
           agentId: agentIdForSend,
           agentName: agentNameMap[agentIdForSend] || undefined,
-          startedAt: now,
-          expiresAt: now + AGENT_TYPING_STALE_MS,
-        },
+          statusText: '消息已发送，等待 Agent 接收',
+          statusKind: 'queued',
+          ttlMs: AGENT_TYPING_STALE_MS,
+        }, now),
       }
     })
 
