@@ -1065,9 +1065,28 @@ function CloudSandboxPreviewCard({
               {viewMode === 'snapshot' ? 'Snapshot Preview' : 'Cloud Agent Preview'}
             </div>
             <p className="truncate text-sm font-black text-slate-900 dark:text-zinc-50">{displayTitle}</p>
-            <a href={activeUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[11px] text-sky-700 underline decoration-sky-300 underline-offset-2 dark:text-sky-300">
-              {activeUrl}
-            </a>
+            <div className="mt-2 space-y-1.5">
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="group flex min-w-0 items-center gap-2 rounded-xl border border-sky-200/70 bg-white/70 px-2.5 py-1.5 text-[11px] shadow-sm transition hover:border-sky-300 hover:bg-white dark:border-sky-500/20 dark:bg-zinc-950/55 dark:hover:border-sky-400/40"
+              >
+                <span className="shrink-0 rounded-full bg-sky-600 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-white">Live</span>
+                <span className="truncate font-semibold text-sky-800 underline decoration-sky-300 underline-offset-2 group-hover:text-sky-950 dark:text-sky-200 dark:group-hover:text-sky-100">{url}</span>
+              </a>
+              {snapshotUrl && (
+                <a
+                  href={snapshotUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex min-w-0 items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1.5 text-[11px] shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-950/30 dark:hover:border-emerald-400/40"
+                >
+                  <span className="shrink-0 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-white">Snapshot</span>
+                  <span className="truncate font-semibold text-emerald-800 underline decoration-emerald-300 underline-offset-2 group-hover:text-emerald-950 dark:text-emerald-200 dark:group-hover:text-emerald-100">{snapshotUrl}</span>
+                </a>
+              )}
+            </div>
             {liveFailed && hasSnapshot && (
               <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                 Live preview 暂不可用，已切换到持久快照。
