@@ -573,8 +573,9 @@ interface UrlPreview {
 }
 
 interface CachedPreview {
-  data: UrlPreview
+  data?: UrlPreview
   fetchedAt: number
+  failedAt?: number
 }
 
 type ParsedTask = {
@@ -1271,6 +1272,8 @@ export function ChatView({
   const messageHintAppliedRef = useRef<Record<string, string>>({})
   const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
+  const previewCacheRef = useRef<Record<string, CachedPreview>>({})
+  const previewInflightRef = useRef<Set<string>>(new Set())
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [fileAccept, setFileAccept] = useState<string>('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -2063,7 +2066,7 @@ export function ChatView({
         for (const [url, item] of Object.entries(parsed)) {
           if (!item || typeof item !== 'object') continue
           const maybeCached = item as CachedPreview
-          if (typeof maybeCached.fetchedAt === 'number' && maybeCached.data) {
+          if (typeof maybeCached.fetchedAt === 'number' && (maybeCached.data || maybeCached.failedAt)) {
             normalized[url] = maybeCached
           } else {
             normalized[url] = { data: item as UrlPreview, fetchedAt: Date.now() }
@@ -2077,6 +2080,7 @@ export function ChatView({
   }, [])
 
   useEffect(() => {
+    previewCacheRef.current = previewCache
     try {
       const entries = Object.entries(previewCache)
       // cap size to avoid unbounded growth
@@ -2320,16 +2324,20 @@ export function ChatView({
 
   useEffect(() => {
     const TTL_MS = 24 * 60 * 60 * 1000
+    const FAIL_TTL_MS = 60 * 60 * 1000
     const now = Date.now()
     const urls = new Set<string>()
+    const cache = previewCacheRef.current
     for (const m of messages) {
       const blocks = parseRichBlocks(m.content || '')
       for (const block of blocks) {
         const candidateUrl = block.kind === 'link' ? block.url : undefined
         if (candidateUrl) {
-          const cached = previewCache[candidateUrl]
-          const isFresh = cached && now - cached.fetchedAt < TTL_MS
-          if (!isFresh) urls.add(candidateUrl)
+          const cached = cache[candidateUrl]
+          const isFresh = cached?.data && now - cached.fetchedAt < TTL_MS
+          const failedRecently = cached?.failedAt && now - cached.failedAt < FAIL_TTL_MS
+          const inflight = previewInflightRef.current.has(candidateUrl)
+          if (!isFresh && !failedRecently && !inflight) urls.add(candidateUrl)
         }
       }
     }
@@ -2338,19 +2346,35 @@ export function ChatView({
     let cancelled = false
     ;(async () => {
       for (const url of Array.from(urls)) {
+        previewInflightRef.current.add(url)
         try {
           const r = await fetch(`${CLIENT_WTT_API_BASE}/preview/url`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url }),
           })
-          if (!r.ok) continue
+          if (!r.ok) {
+            if (!cancelled) {
+              setPreviewCache((prev) => ({
+                ...prev,
+                [url]: { fetchedAt: Date.now(), failedAt: Date.now() },
+              }))
+            }
+            continue
+          }
           const j = await r.json()
           if (!cancelled) {
             setPreviewCache((prev) => ({ ...prev, [url]: { data: j, fetchedAt: Date.now() } }))
           }
         } catch {
-          // ignore preview fetch failures
+          if (!cancelled) {
+            setPreviewCache((prev) => ({
+              ...prev,
+              [url]: { fetchedAt: Date.now(), failedAt: Date.now() },
+            }))
+          }
+        } finally {
+          previewInflightRef.current.delete(url)
         }
       }
     })()
@@ -2358,7 +2382,7 @@ export function ChatView({
     return () => {
       cancelled = true
     }
-  }, [messages, previewCache])
+  }, [messages])
 
   // Filter out status-stream messages (TASK_REQUEST, SYSTEM, NOTIFICATION)
   // and intermediate task stream cards (TASK_RUN / TASK_STATUS)
