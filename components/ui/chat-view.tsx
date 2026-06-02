@@ -1118,10 +1118,75 @@ function CloudSandboxPreviewCard({ preview, onOpen }: { preview: CloudSandboxPre
   )
 }
 
-function CloudPreviewSidePanel({ preview, onClose }: { preview: CloudSandboxPreview; onClose: () => void }) {
+function CloudPreviewSidePanel({
+  preview,
+  onClose,
+  agentId,
+  accessToken,
+}: {
+  preview: CloudSandboxPreview
+  onClose: () => void
+  agentId?: string
+  accessToken?: string
+}) {
   const title = preview.title || 'Cloud Sandbox Preview'
   const label = senderLabelText(preview.senderName, preview.senderId) || preview.senderId
-  const frameUrl = preview.snapshotUrl || preview.url
+  const initialFrameUrl = preview.snapshotUrl || preview.url
+  const [frameUrl, setFrameUrl] = useState(initialFrameUrl)
+  const [restartStatus, setRestartStatus] = useState<'idle' | 'starting' | 'live' | 'snapshot' | 'failed'>('idle')
+
+  useEffect(() => {
+    setFrameUrl(initialFrameUrl)
+    setRestartStatus('idle')
+  }, [initialFrameUrl, preview.key])
+
+  useEffect(() => {
+    if (!agentId || !accessToken || !preview.url) return
+    let cancelled = false
+    setRestartStatus('starting')
+    fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/${encodeURIComponent(agentId)}/preview/restart`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: preview.url }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(String(data.detail || data.message || res.statusText || res.status))
+        return data as { preview_url?: string; url?: string }
+      })
+      .then((data) => {
+        if (cancelled) return
+        const liveUrl = String(data.preview_url || data.url || '').trim()
+        if (liveUrl) {
+          setFrameUrl(liveUrl)
+          setRestartStatus('live')
+        } else {
+          setRestartStatus(preview.snapshotUrl ? 'snapshot' : 'failed')
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setFrameUrl(preview.snapshotUrl || preview.url)
+        setRestartStatus(preview.snapshotUrl ? 'snapshot' : 'failed')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, agentId, preview.key, preview.snapshotUrl, preview.url])
+
+  const statusText = restartStatus === 'starting'
+    ? '正在启动 live preview'
+    : restartStatus === 'live'
+      ? 'Live preview'
+      : restartStatus === 'snapshot'
+        ? 'Live 不可用，显示 snapshot'
+        : restartStatus === 'failed'
+          ? 'Live preview 启动失败'
+          : preview.snapshotUrl ? 'Snapshot preview' : 'Live preview'
+
   return (
     <aside className="hidden w-[360px] shrink-0 border-l border-[#e5e0d8] bg-white/95 dark:border-zinc-800 dark:bg-zinc-950/95 md:flex lg:w-[460px] xl:w-[560px]">
       <div className="flex min-h-0 w-full flex-col">
@@ -1129,7 +1194,7 @@ function CloudPreviewSidePanel({ preview, onClose }: { preview: CloudSandboxPrev
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-[#1f2328] dark:text-zinc-100">{title}</p>
             <p className="mt-0.5 truncate text-[11px] text-[#8a8378] dark:text-zinc-500">
-              Cloud Preview · {label} · {formatTime(preview.timestamp)}
+              {statusText} · {label} · {formatTime(preview.timestamp)}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -3749,7 +3814,12 @@ export function ChatView({
         </div>
         </div>
         {activeTab !== 'workspace' && sideCloudPreview && (
-          <CloudPreviewSidePanel preview={sideCloudPreview} onClose={closeFilePreview} />
+          <CloudPreviewSidePanel
+            preview={sideCloudPreview}
+            onClose={closeFilePreview}
+            agentId={currentAgentId}
+            accessToken={accessToken}
+          />
         )}
         {activeTab !== 'workspace' && !sideCloudPreview && sidePreviewFile && (
           <DocumentSidePreview file={sidePreviewFile} onClose={closeFilePreview} />
