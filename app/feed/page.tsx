@@ -674,6 +674,17 @@ function FeedPageInner() {
   }, [agents])
 
   const knownAgentIds = useMemo(() => new Set(agents.map((a) => a.agent_id)), [agents])
+  const cloudSandboxAgentIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const agent of agents) {
+      const hostId = String(agent.cloud_host_agent_id || '').trim()
+      if (agent.is_cloud_sandbox || hostId) {
+        ids.add(agent.agent_id)
+        if (hostId) ids.add(hostId)
+      }
+    }
+    return ids
+  }, [agents])
 
   const agentRoleLabelMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -1090,12 +1101,15 @@ function FeedPageInner() {
   // Enrich messages: replace raw agent_id fallback with display_name from agentNameMap
   const enrichedMessages = useMemo(() => {
     return allMessages.map(m => {
-      if (m.sender_display_name && m.sender_display_name !== m.sender_id) return m
       const name = agentNameMap[m.sender_id]
-      if (name) return { ...m, sender_display_name: name }
-      return m
+      const isCloud = cloudSandboxAgentIds.has(m.sender_id)
+      if (m.sender_display_name && m.sender_display_name !== m.sender_id) {
+        return m.is_cloud_sandbox === isCloud ? m : { ...m, is_cloud_sandbox: isCloud }
+      }
+      if (name) return { ...m, sender_display_name: name, is_cloud_sandbox: isCloud }
+      return m.is_cloud_sandbox === isCloud ? m : { ...m, is_cloud_sandbox: isCloud }
     })
-  }, [allMessages, agentNameMap])
+  }, [allMessages, agentNameMap, cloudSandboxAgentIds])
 
   const loadOlderMessages = useCallback(async () => {
     if (!selectedTopicId || loadingOlder || allMessages.length === 0) return

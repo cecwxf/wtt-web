@@ -42,6 +42,7 @@ export interface ChatMessage {
   model_hint?: string
   reasoning_hint?: 'off' | 'low' | 'medium' | 'high'
   reply_to?: string
+  is_cloud_sandbox?: boolean
 }
 
 export interface ChatModelConfig {
@@ -1018,6 +1019,64 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
   )
 }
 
+function CloudSandboxPreviewCard({
+  url,
+  title,
+  expanded,
+  onToggle,
+}: {
+  url: string
+  title?: string
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const displayTitle = title || 'Cloud Sandbox Preview'
+  return (
+    <div className="overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm ring-1 ring-sky-100/70 dark:border-sky-500/30 dark:bg-zinc-950 dark:ring-sky-500/10">
+      <div className="bg-gradient-to-r from-sky-50 via-cyan-50 to-emerald-50 px-3.5 py-3 dark:from-sky-500/10 dark:via-cyan-500/10 dark:to-emerald-500/10">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 shadow-sm dark:bg-zinc-900/80 dark:text-sky-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.9)]" />
+              Cloud Agent Preview
+            </div>
+            <p className="truncate text-sm font-black text-slate-900 dark:text-zinc-50">{displayTitle}</p>
+            <a href={url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[11px] text-sky-700 underline decoration-sky-300 underline-offset-2 dark:text-sky-300">
+              {url}
+            </a>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onToggle}
+              className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-bold text-sky-800 transition hover:bg-sky-100 dark:border-sky-500/30 dark:bg-zinc-950 dark:text-sky-200 dark:hover:bg-sky-500/10"
+            >
+              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {expanded ? '收起' : '内嵌预览'}
+            </button>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+            >
+              打开
+            </a>
+          </div>
+        </div>
+      </div>
+      {expanded && (
+        <iframe
+          src={url}
+          title={displayTitle}
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+          className="h-[420px] w-full bg-white dark:bg-zinc-950 md:h-[520px]"
+        />
+      )}
+    </div>
+  )
+}
+
 function avatarInitial(name?: string, fallback = '?'): string {
   const n = String(name || '').trim()
   if (!n) return fallback
@@ -1201,6 +1260,7 @@ export function ChatView({
   const messageHintAppliedRef = useRef<Record<string, string>>({})
   const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
+  const [expandedCloudPreviews, setExpandedCloudPreviews] = useState<Record<string, boolean>>({})
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [fileAccept, setFileAccept] = useState<string>('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -2974,24 +3034,23 @@ export function ChatView({
                                 )
                               }
                               if (block.kind === 'cloud_preview') {
+                                if (!message.is_cloud_sandbox) {
+                                  return (
+                                    <a key={bi} href={block.url} target="_blank" rel="noreferrer" className="block text-indigo-500 underline break-all">
+                                      {block.title || block.url}
+                                    </a>
+                                  )
+                                }
+                                const previewKey = `${message.message_id}:${block.url}`
+                                const expanded = Boolean(expandedCloudPreviews[previewKey])
                                 return (
-                                  <div key={bi} className="overflow-hidden rounded-xl border border-sky-200 bg-white shadow-sm dark:border-sky-500/30 dark:bg-zinc-900">
-                                    <div className="flex items-center justify-between gap-2 border-b border-sky-100 bg-sky-50 px-3 py-2 dark:border-sky-500/20 dark:bg-sky-500/10">
-                                      <div className="min-w-0">
-                                        <p className="truncate text-xs font-black text-sky-900 dark:text-sky-100">{block.title || 'Sandbox Preview'}</p>
-                                        <a href={block.url} target="_blank" rel="noreferrer" className="block truncate text-[10px] text-sky-600 underline dark:text-sky-300">{block.url}</a>
-                                      </div>
-                                      <a href={block.url} target="_blank" rel="noreferrer" className="shrink-0 rounded-md border border-sky-200 bg-white px-2 py-1 text-[10px] font-bold text-sky-700 transition hover:bg-sky-100 dark:border-sky-500/30 dark:bg-zinc-950 dark:text-sky-200 dark:hover:bg-sky-500/10">
-                                        Open
-                                      </a>
-                                    </div>
-                                    <iframe
-                                      src={block.url}
-                                      title={block.title || 'Sandbox Preview'}
-                                      sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-                                      className="h-[360px] w-full bg-white dark:bg-zinc-950"
-                                    />
-                                  </div>
+                                  <CloudSandboxPreviewCard
+                                    key={bi}
+                                    url={block.url}
+                                    title={block.title}
+                                    expanded={expanded}
+                                    onToggle={() => setExpandedCloudPreviews((prev) => ({ ...prev, [previewKey]: !expanded }))}
+                                  />
                                 )
                               }
                               // HTML content (from Tiptap editor)

@@ -275,7 +275,7 @@ export function parseRichBlocks(content: string): ParsedRichBlock[] {
     return [{ kind: 'preview', title, desc, url, image }]
   }
 
-  const cloudPreviewJson = c.match(/^\{[\s\S]*"type"\s*:\s*"(?:preview_url|cloud_preview|sandbox_preview)"[\s\S]*\}$/i)
+  const cloudPreviewJson = c.match(/^\{[\s\S]*(?:"type"\s*:\s*"(?:preview_url|cloud_preview|sandbox_preview)"|"preview_url"\s*:)[\s\S]*\}$/i)
   if (cloudPreviewJson) {
     try {
       const data = JSON.parse(c) as { url?: unknown; preview_url?: unknown; title?: unknown }
