@@ -1043,7 +1043,7 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
   const { url, title } = preview
   const displayTitle = title || 'Preview'
   const [iframeUrl, setIframeUrl] = useState(url)
-  const [status, setStatus] = useState<'restoring' | 'ready' | 'error'>(() => accessToken ? 'restoring' : 'ready')
+  const [status, setStatus] = useState<'idle' | 'restoring' | 'ready' | 'error'>('idle')
   const [errorText, setErrorText] = useState('')
 
   const restartPreview = useCallback(async () => {
@@ -1078,10 +1078,6 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
     }
   }, [accessToken, preview.senderId, url])
 
-  useEffect(() => {
-    restartPreview()
-  }, [restartPreview])
-
   return (
     <div className="overflow-hidden rounded-2xl border border-sky-200/80 bg-white shadow-[0_12px_32px_rgba(14,116,144,0.12)] ring-1 ring-sky-100/60 dark:border-sky-500/25 dark:bg-zinc-950 dark:shadow-black/25 dark:ring-sky-500/10">
       <div className="relative overflow-hidden bg-[linear-gradient(135deg,#ecfeff_0%,#f8fafc_56%,#ecfdf5_100%)] px-3 py-2 dark:bg-[linear-gradient(135deg,rgba(8,47,73,.62),rgba(24,24,27,.95)_62%,rgba(6,78,59,.36))]">
@@ -1109,7 +1105,7 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
               className="rounded-md bg-white/75 px-2 py-1 text-[11px] font-bold text-sky-800 transition hover:bg-white dark:bg-zinc-900/80 dark:text-sky-200 dark:hover:bg-zinc-800"
               title="重新激活 sandbox preview"
             >
-              刷新
+              恢复
             </button>
             <button
               type="button"
@@ -1124,7 +1120,21 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
         </div>
       </div>
       <div className="h-[300px] border-t border-sky-100 bg-slate-100/70 p-1.5 dark:border-sky-500/10 dark:bg-zinc-900/70 sm:h-[340px]">
-        {status === 'restoring' ? (
+        {status === 'idle' ? (
+          <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white p-5 text-center shadow-inner dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="max-w-sm">
+              <p className="text-sm font-bold text-slate-900 dark:text-zinc-50">Cloud Sandbox Preview</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-zinc-400">为避免旧预览自动唤醒 sandbox，需要查看 live preview 时再手动恢复。</p>
+              <button
+                type="button"
+                onClick={restartPreview}
+                className="mt-3 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-sky-500"
+              >
+                恢复预览
+              </button>
+            </div>
+          </div>
+        ) : status === 'restoring' ? (
           <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white text-xs font-semibold text-sky-700 shadow-inner dark:border-zinc-800 dark:bg-zinc-950 dark:text-sky-200">
             正在恢复 Sandbox Preview...
           </div>
