@@ -1577,7 +1577,7 @@ function FeedPageInner() {
   const { data: cloudAgentStateRaw, mutate: mutateCloudAgentState } = useSWR(
     session?.accessToken ? ['cloud-agent-state', session.accessToken] : null,
     async () => {
-      const r = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me`, {
+      const r = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me?live=false`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
         cache: 'no-store',
       })
@@ -1978,7 +1978,7 @@ function FeedPageInner() {
       let lastOnline = false
       while (Date.now() < deadline) {
         const [stateResp, statsResp] = await Promise.all([
-          fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me`, {
+          fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me?live=false`, {
             headers: { Authorization: `Bearer ${token}` },
             cache: 'no-store',
           }),
