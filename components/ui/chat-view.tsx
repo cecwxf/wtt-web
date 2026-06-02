@@ -1392,7 +1392,7 @@ export function ChatView({
   const [terminalMaximized, setTerminalMaximized] = useState(false)
   const [manualPreviewFile, setManualPreviewFile] = useState<ConversationFile | null>(null)
   const [manualCloudPreview, setManualCloudPreview] = useState<CloudSandboxPreview | null>(null)
-  const [closedPreviewKey, setClosedPreviewKey] = useState<string | null>(null)
+  const [closedPreviewKeys, setClosedPreviewKeys] = useState<Set<string>>(() => new Set())
   const lastAutoPreviewKeyRef = useRef<string | null>(null)
   const [sending, setSending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
@@ -2577,13 +2577,16 @@ export function ChatView({
   }, [cloudSandboxPreviews])
 
   const latestAutoSidePreview = useMemo(() => {
-    const file = latestAgentPreviewFile && latestAgentPreviewFile.key !== closedPreviewKey ? latestAgentPreviewFile : null
-    const cloud = latestCloudSandboxPreview && latestCloudSandboxPreview.key !== closedPreviewKey ? latestCloudSandboxPreview : null
+    const file = latestAgentPreviewFile && !closedPreviewKeys.has(latestAgentPreviewFile.key) ? latestAgentPreviewFile : null
+    const cloud = latestCloudSandboxPreview && !closedPreviewKeys.has(latestCloudSandboxPreview.key) ? latestCloudSandboxPreview : null
     if (file && cloud) {
       const fileTime = new Date(file.timestamp).getTime()
       const cloudTime = new Date(cloud.timestamp).getTime()
-      // Same-response artifacts should prefer document preview over live cloud preview.
-      if (Number.isFinite(fileTime) && Number.isFinite(cloudTime) && cloudTime > fileTime) {
+      // Cloud sandbox responses can include both a snapshot artifact and a live URL; prefer the live preview.
+      if (file.messageId === cloud.messageId) {
+        return { kind: 'cloud' as const, preview: cloud }
+      }
+      if (Number.isFinite(fileTime) && Number.isFinite(cloudTime) && cloudTime >= fileTime) {
         return { kind: 'cloud' as const, preview: cloud }
       }
       return { kind: 'file' as const, file }
@@ -2591,7 +2594,7 @@ export function ChatView({
     if (file) return { kind: 'file' as const, file }
     if (cloud) return { kind: 'cloud' as const, preview: cloud }
     return null
-  }, [closedPreviewKey, latestAgentPreviewFile, latestCloudSandboxPreview])
+  }, [closedPreviewKeys, latestAgentPreviewFile, latestCloudSandboxPreview])
 
   const sideCloudPreview = manualCloudPreview || (
     !manualPreviewFile && latestAutoSidePreview?.kind === 'cloud' ? latestAutoSidePreview.preview : null
@@ -2635,24 +2638,51 @@ export function ChatView({
   }, [cloudSandboxPreviews, manualCloudPreview])
 
   const openFilePreview = useCallback((file: ConversationFile) => {
+    setClosedPreviewKeys((prev) => {
+      if (!prev.has(file.key)) return prev
+      const next = new Set(prev)
+      next.delete(file.key)
+      return next
+    })
     setManualPreviewFile(file)
     setManualCloudPreview(null)
-    setClosedPreviewKey(null)
   }, [])
 
   const openCloudPreview = useCallback((preview: CloudSandboxPreview) => {
+    setClosedPreviewKeys((prev) => {
+      if (!prev.has(preview.key)) return prev
+      const next = new Set(prev)
+      next.delete(preview.key)
+      return next
+    })
     setManualCloudPreview(preview)
     setManualPreviewFile(null)
-    setClosedPreviewKey(null)
     if (activeTab === 'terminal' || activeTab === 'workspace') setActiveTab('chat')
   }, [activeTab])
 
   const closeFilePreview = useCallback(() => {
-    if (sideCloudPreview) setClosedPreviewKey(sideCloudPreview.key)
-    else if (sidePreviewFile) setClosedPreviewKey(sidePreviewFile.key)
+    const messageId = sideCloudPreview?.messageId || sidePreviewFile?.messageId
+    const keysToClose = new Set<string>()
+    if (sideCloudPreview) keysToClose.add(sideCloudPreview.key)
+    if (sidePreviewFile) keysToClose.add(sidePreviewFile.key)
+    if (messageId) {
+      for (const preview of cloudSandboxPreviews) {
+        if (preview.messageId === messageId) keysToClose.add(preview.key)
+      }
+      for (const file of conversationFiles) {
+        if (file.messageId === messageId) keysToClose.add(file.key)
+      }
+    }
+    if (keysToClose.size > 0) {
+      setClosedPreviewKeys((prev) => {
+        const next = new Set(prev)
+        for (const key of keysToClose) next.add(key)
+        return next
+      })
+    }
     setManualPreviewFile(null)
     setManualCloudPreview(null)
-  }, [sideCloudPreview, sidePreviewFile])
+  }, [cloudSandboxPreviews, conversationFiles, sideCloudPreview, sidePreviewFile])
 
   return (
     <div
