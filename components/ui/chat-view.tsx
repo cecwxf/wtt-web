@@ -1244,7 +1244,6 @@ function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatu
   const lines = status.lines.slice(-10)
   const adapter = runStatusAdapterLabel(status.adapter)
   const subtitle = [adapter, status.model].filter(Boolean).join(' · ')
-  const wsIssue = status.wsState === 'disconnected'
   const shellClass = floating
     ? 'rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-2xl shadow-[#6b4e2e]/15 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/30'
     : 'mx-4 mb-2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25 sm:mx-6'
@@ -1271,11 +1270,6 @@ function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatu
       </div>
 
       <div className="max-h-32 space-y-1.5 overflow-y-auto pr-1">
-        {wsIssue && (
-          <div className="rounded-lg border border-amber-300/70 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
-            WebSocket 已断开，实时执行状态可能无法刷新
-          </div>
-        )}
         {lines.map((line) => (
           <div key={line.id} className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-2 text-[11px] leading-4">
             <span className="rounded-md bg-[#efe4d2] px-1.5 py-0.5 text-center font-medium text-[#7c613d] dark:bg-zinc-800 dark:text-zinc-400">
@@ -3299,7 +3293,7 @@ export function ChatView({
             composerExpanded ? 'bottom-[54vh]' : compactUi ? 'bottom-[84px]' : 'bottom-[124px]'
           }`}
         >
-          <div className="pointer-events-auto mx-auto max-w-3xl">
+          <div className="pointer-events-auto w-full max-w-2xl">
             <AgentRunStatusCard status={runStatus} floating />
           </div>
         </div>
