@@ -1366,15 +1366,23 @@ export function ChatView({
   const cloudBillingAmount = formatCloudBillingAmount(cloudSandboxBilling?.estimated_rmb)
   const cloudBillingText = `cloud agent按照使用时间进行计费，关机后不再计费。本月使用时间共${cloudBillingMinutes}分钟，花费${cloudBillingAmount} RMB`
 
+  const mentionCandidates = useMemo(() => {
+    const shouldShowAll = topicType === 'discussion' || topicType === 'collaborative'
+    const allOption: MentionableAgent[] = shouldShowAll
+      ? [{ agent_id: '__all__', display_name: 'all', roleLabel: '所有成员' }]
+      : []
+    return [...allOption, ...topicMembers]
+  }, [topicMembers, topicType])
+
   const filteredMembers = useMemo(() => {
-    if (!mentionQuery) return topicMembers
+    if (!mentionQuery) return mentionCandidates
     const q = mentionQuery.toLowerCase()
-    return topicMembers.filter(m =>
+    return mentionCandidates.filter(m =>
       m.display_name.toLowerCase().includes(q) ||
       m.agent_id.toLowerCase().includes(q) ||
       String(m.roleLabel || '').toLowerCase().includes(q)
     )
-  }, [topicMembers, mentionQuery])
+  }, [mentionCandidates, mentionQuery])
 
   const roleLabelForAgent = useCallback((agentId?: string) => {
     if (!agentId) return ''
@@ -1749,7 +1757,7 @@ export function ChatView({
 
     // @mention detection: find @ followed by word characters near cursor
     const textarea = textareaRef.current
-    if (textarea && topicMembers.length > 0) {
+    if (textarea && mentionCandidates.length > 0) {
       const cursorPos = textarea.selectionStart
       const textUpToCursor = value.slice(0, cursorPos)
       const atMatch = textUpToCursor.match(/@([\w\-.]*)$/)
@@ -1764,14 +1772,14 @@ export function ChatView({
         setMentionStartPos(-1)
       }
     }
-  }, [topicMembers])
+  }, [mentionCandidates])
 
   const insertMention = useCallback((member: MentionableAgent) => {
     const textarea = textareaRef.current
     if (!textarea || mentionStartPos < 0) return
     const before = draft.slice(0, mentionStartPos)
     const after = draft.slice(textarea.selectionStart)
-    const mention = `@${member.display_name} `
+    const mention = member.agent_id === '__all__' ? '@all ' : `@${member.display_name} `
     const newDraft = before + mention + after
     setDraft(newDraft)
     setMentionOpen(false)
@@ -2962,6 +2970,27 @@ export function ChatView({
                                     <p className="text-xs font-semibold text-slate-700">{block.title || 'Link Preview'}</p>
                                     {block.desc && <p className="mt-1 text-xs text-slate-500">{block.desc}</p>}
                                     {block.url && <a href={block.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-indigo-500 underline break-all">{block.url}</a>}
+                                  </div>
+                                )
+                              }
+                              if (block.kind === 'cloud_preview') {
+                                return (
+                                  <div key={bi} className="overflow-hidden rounded-xl border border-sky-200 bg-white shadow-sm dark:border-sky-500/30 dark:bg-zinc-900">
+                                    <div className="flex items-center justify-between gap-2 border-b border-sky-100 bg-sky-50 px-3 py-2 dark:border-sky-500/20 dark:bg-sky-500/10">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-xs font-black text-sky-900 dark:text-sky-100">{block.title || 'Sandbox Preview'}</p>
+                                        <a href={block.url} target="_blank" rel="noreferrer" className="block truncate text-[10px] text-sky-600 underline dark:text-sky-300">{block.url}</a>
+                                      </div>
+                                      <a href={block.url} target="_blank" rel="noreferrer" className="shrink-0 rounded-md border border-sky-200 bg-white px-2 py-1 text-[10px] font-bold text-sky-700 transition hover:bg-sky-100 dark:border-sky-500/30 dark:bg-zinc-950 dark:text-sky-200 dark:hover:bg-sky-500/10">
+                                        Open
+                                      </a>
+                                    </div>
+                                    <iframe
+                                      src={block.url}
+                                      title={block.title || 'Sandbox Preview'}
+                                      sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+                                      className="h-[360px] w-full bg-white dark:bg-zinc-950"
+                                    />
                                   </div>
                                 )
                               }

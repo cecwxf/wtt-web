@@ -1740,6 +1740,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const t = copy[locale]
   const isCoding = challenge?.challenge_type === 'coding'
   const isGaokaoVolunteer = isGaokaoVolunteerChallenge(challenge)
+  const isInterviewPractice = Boolean(challenge?.challenge_type === 'qa' && challenge?.category.endsWith('-interview'))
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
   const arenaTypingActive = !!arenaTyping && arenaTyping.topicId === arenaTopicId
   const agentBusy = arenaTypingActive || chatSending || arenaSyncing || whiteboardBusy
@@ -1751,6 +1752,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   useEffect(() => {
     if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
   }, [chatMode, isGaokaoVolunteer])
+
+  useEffect(() => {
+    if ((isGaokaoVolunteer || isInterviewPractice) && activeTab !== 'description') setActiveTab('description')
+  }, [activeTab, isGaokaoVolunteer, isInterviewPractice])
 
   function changeLanguage(next: Language) {
     setLanguage(next)
@@ -2155,8 +2160,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           {(
           <section className="min-h-0 overflow-hidden rounded-lg border border-slate-200 bg-white/85 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
             <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 bg-[#fbfaf7] px-3 py-2.5 text-sm dark:border-gray-800 dark:bg-[#191919] lg:px-4 lg:py-3">
-              {(isGaokaoVolunteer
-                ? [['description', t.consultation]]
+              {(isGaokaoVolunteer || isInterviewPractice
+                ? [['description', isGaokaoVolunteer ? t.consultation : t.description]]
                 : [
                   ['description', t.description],
                   ['submissions', t.submissions],
@@ -2172,7 +2177,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               {activeTab === 'description' && (
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white lg:text-3xl">{challenge.title}</h1>
+                    <h1 className="text-xl font-black tracking-tight text-slate-950 dark:text-white lg:text-2xl">{challenge.title}</h1>
                     {challengeAccepted && (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
                         ✓ {locale === 'zh' ? '已通过' : 'Accepted'}

@@ -39,6 +39,14 @@ interface AgentOption {
   cloud_host_agent_id?: string
 }
 
+export type CloudAgentCreateOptions = {
+  adapter: 'claude-code' | 'codex' | 'gemini'
+  model: string
+  providerPlan: 'deepseek' | 'claude' | 'gpt' | 'gemini'
+  apiKey?: string
+  displayName?: string
+}
+
 export interface AgentRuntimeInfo {
   kind?: string
   adapter?: string
@@ -83,7 +91,7 @@ interface TopicColumnProps {
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
   onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex' | 'gemini') => void | Promise<void>
-  onCreateCloudAgent?: () => void | Promise<void>
+  onCreateCloudAgent?: (options?: CloudAgentCreateOptions) => void | Promise<void>
   onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
   onRenameAgent?: (agentId: string, currentName: string) => void
@@ -471,6 +479,11 @@ export function TopicColumn(props: TopicColumnProps) {
   const [newAgentAdapter, setNewAgentAdapter] = useState<'claude-code' | 'codex' | 'gemini'>('claude-code')
   const [newAgentBusy, setNewAgentBusy] = useState(false)
   const [newAgentError, setNewAgentError] = useState('')
+  const [cloudCreateOpen, setCloudCreateOpen] = useState(false)
+  const [cloudCreateAdapter, setCloudCreateAdapter] = useState<'claude-code' | 'codex' | 'gemini'>('claude-code')
+  const [cloudCreateApiKey, setCloudCreateApiKey] = useState('')
+  const [cloudCreateDisplayName, setCloudCreateDisplayName] = useState('Cloud Agent')
+  const [cloudCreateError, setCloudCreateError] = useState('')
   const [cloudAgentBusy, setCloudAgentBusy] = useState(false)
   const [roleEditor, setRoleEditor] = useState<{
     agentId: string
@@ -674,11 +687,29 @@ export function TopicColumn(props: TopicColumnProps) {
     }
   }
 
+  const cloudCreateProviderPlan = cloudCreateAdapter === 'claude-code' ? 'deepseek' : cloudCreateAdapter === 'codex' ? 'gpt' : 'gemini'
+  const cloudCreateModel = cloudCreateAdapter === 'claude-code'
+    ? 'deepseek-v4-pro[1m]'
+    : cloudCreateAdapter === 'codex'
+      ? 'codex-configured-by-user'
+      : 'gemini-configured-by-user'
+
   const createCloudAgent = async () => {
     if (!onCreateCloudAgent || cloudAgentBusy) return
+    setCloudCreateError('')
     setCloudAgentBusy(true)
     try {
-      await onCreateCloudAgent()
+      await onCreateCloudAgent({
+        adapter: cloudCreateAdapter,
+        model: cloudCreateModel,
+        providerPlan: cloudCreateProviderPlan,
+        apiKey: cloudCreateApiKey.trim() || undefined,
+        displayName: cloudCreateDisplayName.trim() || 'Cloud Agent',
+      })
+      setCloudCreateOpen(false)
+      setCloudCreateApiKey('')
+    } catch (error) {
+      setCloudCreateError(error instanceof Error ? error.message : (zh ? 'Cloud Agent 创建失败' : 'Cloud Agent creation failed'))
     } finally {
       setCloudAgentBusy(false)
     }
@@ -859,7 +890,8 @@ export function TopicColumn(props: TopicColumnProps) {
             <button
               type="button"
               onClick={() => {
-                void createCloudAgent()
+                setCloudCreateError('')
+                setCloudCreateOpen(true)
               }}
               disabled={cloudAgentBusy}
               className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-300 via-sky-200 to-white px-1 py-2 text-center text-[9px] font-black leading-tight text-sky-900 shadow-sm shadow-sky-900/10 ring-1 ring-white/70 transition hover:-translate-y-0.5 hover:border-sky-300 hover:from-sky-200 hover:via-cyan-100 hover:to-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-400/45 dark:from-sky-500/35 dark:via-sky-400/20 dark:to-zinc-950 dark:text-sky-50 dark:ring-sky-200/20"
@@ -1482,7 +1514,7 @@ export function TopicColumn(props: TopicColumnProps) {
 
             <div>
               <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '角色' : 'Role'}</div>
-              <div className="grid max-h-[42vh] gap-2 overflow-y-auto sm:grid-cols-2">
+              <div className="grid max-h-[34vh] gap-2 overflow-y-auto sm:grid-cols-3">
                 {AGENT_ROLE_TEMPLATES.map((template) => {
                   const active = template.id === newAgentRoleId
                   return (
@@ -1498,7 +1530,7 @@ export function TopicColumn(props: TopicColumnProps) {
                       }`}
                     >
                       <span className="block truncate text-sm font-black" title={template.label}>{template.label}</span>
-                      <span className="mt-0.5 block line-clamp-2 text-xs opacity-75" title={template.description}>{template.description}</span>
+                      <span className="mt-0.5 block line-clamp-2 text-[11px] leading-4 opacity-75" title={template.description}>{template.description}</span>
                     </button>
                   )
                 })}
@@ -1529,6 +1561,110 @@ export function TopicColumn(props: TopicColumnProps) {
                 className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-black text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {newAgentBusy ? (zh ? '创建中...' : 'Creating...') : (zh ? '创建并启动' : 'Create & Start')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cloudCreateOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mb-4">
+              <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">
+                {zh ? '创建 Cloud Agent' : 'Create Cloud Agent'}
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
+                {zh
+                  ? '每个用户只有一个 Cloud Sandbox。需要更多 Agent 时，请用 Clone Agent 功能，它们会运行在同一个 Sandbox 的不同 workspace。'
+                  : 'Each user has one Cloud Sandbox. Use Clone Agent for more agents; they run in the same Sandbox with separate workspaces.'}
+              </p>
+            </div>
+
+            <label className="mb-3 block">
+              <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '显示名称' : 'Display name'}</span>
+              <input
+                value={cloudCreateDisplayName}
+                onChange={(event) => setCloudCreateDisplayName(event.target.value)}
+                disabled={cloudAgentBusy}
+                className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </label>
+
+            <div className="mb-3">
+              <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '默认运行时' : 'Runtime'}</div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {([
+                  ['claude-code', 'DeepSeek + Claude Code', zh ? '默认推荐，每小时另加 ¥0.5。' : 'Default. Adds ¥0.5/hour.'],
+                  ['gemini', 'Gemini', zh ? '可填 Key，也可创建后在终端登录/配置。' : 'Optional key, or configure in terminal later.'],
+                  ['codex', 'Codex', zh ? '可填 OpenAI Key，也可创建后在终端登录/配置。' : 'Optional OpenAI key, or configure in terminal later.'],
+                ] as const).map(([id, label, desc]) => {
+                  const active = cloudCreateAdapter === id
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      disabled={cloudAgentBusy}
+                      onClick={() => setCloudCreateAdapter(id)}
+                      className={`rounded-xl border px-3 py-2 text-left transition ${
+                        active
+                          ? 'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-400/45 dark:bg-sky-500/15 dark:text-sky-100'
+                          : 'border-[#eee6da] bg-white/70 text-slate-600 hover:border-[#ded6c8] hover:bg-[#f3eee5] dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <span className="block text-xs font-black">{label}</span>
+                      <span className="mt-1 block text-[10px] leading-4 opacity-75">{desc}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <label className="mb-3 block">
+              <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">
+                {zh ? 'API Key（可选）' : 'API Key (optional)'}
+              </span>
+              <input
+                value={cloudCreateApiKey}
+                onChange={(event) => setCloudCreateApiKey(event.target.value)}
+                disabled={cloudAgentBusy}
+                type="password"
+                autoComplete="off"
+                placeholder={zh ? '不填则创建后在 Terminal 中配置/登录' : 'Leave empty to configure/login in Terminal later'}
+                className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </label>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+              {zh
+                ? '计费提示：Cloud Sandbox 按开机使用时间计费，关机不计费。默认 DeepSeek + Claude Code 套餐包含模型代理成本，每小时额外 ¥0.5。'
+                : 'Billing: Cloud Sandbox is billed while powered on; powered off is not billed. Default DeepSeek + Claude Code includes model proxy cost and adds ¥0.5/hour.'}
+            </div>
+
+            {cloudCreateError && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                {cloudCreateError}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCloudCreateOpen(false)}
+                disabled={cloudAgentBusy}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                {zh ? '取消' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void createCloudAgent()
+                }}
+                disabled={cloudAgentBusy}
+                className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {cloudAgentBusy ? (zh ? '创建中...' : 'Creating...') : (zh ? '确认创建' : 'Create')}
               </button>
             </div>
           </div>

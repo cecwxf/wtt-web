@@ -215,6 +215,7 @@ export type ParsedRichBlock =
   | { kind: 'link'; url: string }
   | { kind: 'markdown'; text: string }
   | { kind: 'preview'; title?: string; desc?: string; url?: string; image?: string }
+  | { kind: 'cloud_preview'; url: string; title?: string }
 
 function classifyUrl(rawUrl: string): ParsedRichBlock {
   const raw = trimUrlTail(rawUrl)
@@ -241,6 +242,8 @@ function classifyLine(line: string): ParsedRichBlock {
   if (fileMatch) return { kind: 'file', url: proxyMediaUrl(trimUrlTail(fileMatch[2])), filename: fileMatch[1] || undefined }
   const linkMatch = c.match(/^\[link\]\(([^)]+)\)$/i)
   if (linkMatch) return { kind: 'link', url: proxyMediaUrl(trimUrlTail(linkMatch[1])) }
+  const cloudPreviewMatch = c.match(/^\[(?:preview_url|cloud_preview|sandbox_preview)(?::([^\]]*))?\]\((https?:\/\/[^)]+)\)$/i)
+  if (cloudPreviewMatch) return { kind: 'cloud_preview', title: cloudPreviewMatch[1] || undefined, url: trimUrlTail(cloudPreviewMatch[2]) }
 
   const plainUrl = c.match(/^(https?:\/\/\S+|\/?media\/\S+)$/i)
   if (plainUrl) {
@@ -270,6 +273,19 @@ export function parseRichBlocks(content: string): ParsedRichBlock[] {
     const url = (c.match(/URL:\s*(https?:\/\/\S+)/i)?.[1] || '').trim()
     const image = proxyMediaUrl((c.match(/Image:\s*(https?:\/\/\S+)/i)?.[1] || '').trim())
     return [{ kind: 'preview', title, desc, url, image }]
+  }
+
+  const cloudPreviewJson = c.match(/^\{[\s\S]*"type"\s*:\s*"(?:preview_url|cloud_preview|sandbox_preview)"[\s\S]*\}$/i)
+  if (cloudPreviewJson) {
+    try {
+      const data = JSON.parse(c) as { url?: unknown; preview_url?: unknown; title?: unknown }
+      const url = String(data.url || data.preview_url || '').trim()
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return [{ kind: 'cloud_preview', url, title: String(data.title || 'Sandbox Preview') }]
+      }
+    } catch {
+      // fall through to normal rendering
+    }
   }
 
   // Tiptap HTML with images — preserve HTML rendering

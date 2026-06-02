@@ -11,7 +11,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { ChatView, ChatMessage, ChatModelConfig, ChatSendOptions, ChatRunStatus, isProgressMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
-import { AgentRuntimeInfo, TopicItem } from '@/components/ui/topic-column'
+import { AgentRuntimeInfo, TopicItem, type CloudAgentCreateOptions } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 import type { ContentFormat } from '@/components/ui/content-editor'
 import type { EditorTopic } from '@/components/ui/markdown-editor'
@@ -1673,7 +1673,7 @@ function FeedPageInner() {
     alert(`Clone Agent started: ${newAgentId}`)
   }, [agentRuntimeMap, agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
 
-  const handleCreateCloudAgent = useCallback(async () => {
+  const handleCreateCloudAgent = useCallback(async (options?: CloudAgentCreateOptions) => {
     const token = session?.accessToken as string | undefined
     if (!token) {
       alert(t('settings.sessionExpired'))
@@ -1703,13 +1703,17 @@ function FeedPageInner() {
       alert('暂时无法校验会员状态，请稍后重试。')
       return
     }
+    const adapterLabel = options?.adapter === 'codex' ? 'Codex' : options?.adapter === 'gemini' ? 'Gemini' : 'DeepSeek + Claude Code'
     const accepted = window.confirm([
       'Cloud Agent 会在 Cloudflare Sandbox 中运行。',
+      '每个用户只有一个 Cloud Sandbox；需要更多 Agent 请使用 Clone Agent，它们会运行在同一个 Sandbox 中。',
+      `默认运行时：${adapterLabel}`,
+      options?.adapter === 'claude-code' ? 'DeepSeek + Claude Code 每小时额外 ¥0.5。' : 'API Key 可选；不填可创建后在 Terminal 中配置/登录。',
       'Agent 运行在隔离 Sandbox 中，workspace 独立但不建议存放敏感信息。',
       '请勿进行挖矿、攻击、扫描、绕过限制等恶意操作，违规会封号。',
       '',
       '确认创建 Cloud Agent？',
-    ].join('\n'))
+    ].filter(Boolean).join('\n'))
     if (!accepted) return
 
     try {
@@ -1718,7 +1722,15 @@ function FeedPageInner() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           accepted_terms: true,
-          display_name: 'Cloud Agent',
+          display_name: options?.displayName || 'Cloud Agent',
+          agent_type: options?.adapter || 'claude-code',
+          adapter: options?.adapter || 'claude-code',
+          provider_plan: options?.providerPlan || 'deepseek',
+          default_model: options?.model || 'deepseek-v4-pro[1m]',
+          model: options?.model || 'deepseek-v4-pro[1m]',
+          api_key: options?.apiKey || undefined,
+          llm_api_key: options?.apiKey || undefined,
+          pricing_addon_rmb_per_hour: options?.adapter === 'claude-code' ? 0.5 : 0,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -1986,6 +1998,9 @@ function FeedPageInner() {
         model: modelConfig.model,
         reasoning_effort: modelConfig.reasoningEffort,
       }
+    }
+    if (selectedAgentIsCloud) {
+      metadata.cloud_no_auto_wake = true
     }
     if (options?.slashType || isSlashCommand) {
       metadata.slash_type = options?.slashType || 'agent_passthrough'

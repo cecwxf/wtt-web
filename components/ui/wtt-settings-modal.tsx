@@ -634,6 +634,12 @@ export function WttSettingsModal({
         body: JSON.stringify({
           accepted_terms: true,
           display_name: provisionDisplayName.trim() || "Cloud Agent",
+          agent_type: "claude-code",
+          adapter: "claude-code",
+          provider_plan: "deepseek",
+          default_model: "deepseek-v4-pro[1m]",
+          model: "deepseek-v4-pro[1m]",
+          pricing_addon_rmb_per_hour: 0.5,
         }),
       });
 
@@ -1625,7 +1631,7 @@ export function WttSettingsModal({
                       Cloud Agent
                     </p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Plus 可用 50 次连续请求 / 500 次月请求；Pro 可用 100 次连续请求 / 1500 次月请求。每个账号只能创建一个 Cloud Agent。
+                      默认 DeepSeek + Claude Code；每小时额外 ¥0.5。每个账号只有一个 Cloud Sandbox，可通过 Clone Agent 在同一 Sandbox 中运行多个 Agent。
                     </p>
                   </div>
                   <a
@@ -1637,7 +1643,7 @@ export function WttSettingsModal({
                 </div>
                 {!hasCloudAgentRecord && (
                   <p className="mt-3 rounded-lg border border-cyan-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
-                    Cloud Agent 不在创建时固定模型。创建后可直接在聊天栏模型菜单切换，OpenAI/Codex 模型走 Codex runtime，Claude/DeepSeek 类模型走 Claude Code runtime。
+                    默认创建 DeepSeek + Claude Code。Gemini/Codex 可在 Feed 左侧 Cloud Agent 创建弹窗中选择，也可以创建后在 Terminal 中配置 API Key 或登录。
                   </p>
                 )}
                 {hasCloudAgentRecord && (

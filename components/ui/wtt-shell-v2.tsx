@@ -4,7 +4,7 @@ import { Menu } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
-import { AgentRuntimeInfo, TopicColumn, TopicItem } from './topic-column'
+import { AgentRuntimeInfo, TopicColumn, TopicItem, type CloudAgentCreateOptions } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
@@ -62,8 +62,8 @@ interface WttShellV2Props {
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: string) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
-  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate) => void | Promise<void>
-  onCreateCloudAgent?: () => void | Promise<void>
+  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex' | 'gemini') => void | Promise<void>
+  onCreateCloudAgent?: (options?: CloudAgentCreateOptions) => void | Promise<void>
   onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
   userToken?: string
