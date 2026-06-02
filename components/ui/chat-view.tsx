@@ -11,6 +11,7 @@ import { formatTime, formatDateGroup } from '@/lib/time'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
 import {
   parseRichBlocks,
+  publicMediaUrl,
   proxyMediaUrl,
   summarizeForReply,
   toThumbnailUrl,
@@ -930,8 +931,9 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
   const label = senderLabelText(file.senderName, file.senderId) || file.senderId
   const isTextLike = TEXT_PREVIEW_EXTS.has(ext)
   const previewUrl = proxyMediaUrl(file.url)
-  const absoluteUrl = absoluteBrowserUrl(previewUrl)
-  const canUseOfficeViewer = /^https?:\/\//i.test(absoluteUrl) && OFFICE_PREVIEW_EXTS.has(ext)
+  const officeUrl = publicMediaUrl(file.url)
+  const absoluteOfficeUrl = absoluteBrowserUrl(officeUrl)
+  const canUseOfficeViewer = /^https?:\/\//i.test(absoluteOfficeUrl) && OFFICE_PREVIEW_EXTS.has(ext)
 
   useEffect(() => {
     let cancelled = false
@@ -1014,7 +1016,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
           {OFFICE_PREVIEW_EXTS.has(ext) && (
             canUseOfficeViewer ? (
               <iframe
-                src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteUrl)}`}
+                src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteOfficeUrl)}`}
                 title={fname}
                 className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900"
               />

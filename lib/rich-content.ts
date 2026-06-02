@@ -1,5 +1,7 @@
 import { CLIENT_WTT_API_BASE, DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 
+const PUBLIC_WTT_API_ORIGIN = 'https://www.waxbyte.com'
+
 export function stripSourceMarker(text: string): string {
   return String(text || '')
     .replace(/┌─\s*来源标识[\s\S]*?└[^\n]*\n?/g, '')
@@ -41,6 +43,37 @@ export function proxyMediaUrl(url: string): string {
 
   if (/^\/?(?:media|artifacts)\//i.test(raw)) {
     return `${CLIENT_WTT_API_BASE}/${raw.replace(/^\/+/, '')}`
+  }
+
+  return raw
+}
+
+export function publicMediaUrl(url: string): string {
+  const raw = String(url || '').trim()
+  if (!raw) return raw
+
+  const clientBase = CLIENT_WTT_API_BASE.replace(/\/+$/, '')
+  if (raw.startsWith(`${clientBase}/`)) {
+    return `${PUBLIC_WTT_API_ORIGIN}${raw.slice(clientBase.length)}`
+  }
+
+  if (/^\/?(?:media|artifacts)\//i.test(raw)) {
+    return `${PUBLIC_WTT_API_ORIGIN}/${raw.replace(/^\/+/, '')}`
+  }
+
+  const knownWttOrigins = Array.from(new Set([
+    DEFAULT_WTT_API_ORIGIN.replace(/\/+$/, ''),
+    'https://www.waxbyte.com',
+    'https://waxbyte.com',
+    'http://170.106.109.4:8000',
+    'http://170.106.109.4',
+  ].filter(Boolean)))
+
+  for (let i = 0; i < knownWttOrigins.length; i += 1) {
+    const origin = knownWttOrigins[i]
+    if (raw.startsWith(`${origin}/`)) {
+      return `${PUBLIC_WTT_API_ORIGIN}${raw.slice(origin.length)}`
+    }
   }
 
   return raw

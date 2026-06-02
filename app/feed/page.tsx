@@ -30,6 +30,7 @@ const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
 const AGENT_STATUS_CARD_MAX_LINES = 14
 const AGENT_STATUS_COMPLETE_HOLD_MS = 4500
+const TOPIC_MESSAGES_CACHE_TTL_MS = 10 * 60 * 1000
 
 type TopicTypingState = {
   agentId: string
@@ -85,6 +86,32 @@ type BillingMe = {
 }
 
 type WttConnectAdapter = 'codex' | 'claude-code' | 'gemini'
+
+function topicMessagesCacheKey(topicId?: string | null, agentId?: string | null): string {
+  return `wtt:topic-messages:v1:${topicId || ''}:${agentId || ''}`
+}
+
+function readCachedTopicMessages(topicId?: string | null, agentId?: string | null): unknown[] | undefined {
+  if (typeof window === 'undefined' || !topicId || !agentId) return undefined
+  try {
+    const raw = window.sessionStorage.getItem(topicMessagesCacheKey(topicId, agentId))
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw) as { ts?: number; data?: unknown }
+    if (!parsed?.ts || Date.now() - parsed.ts > TOPIC_MESSAGES_CACHE_TTL_MS) return undefined
+    return Array.isArray(parsed.data) ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function writeCachedTopicMessages(topicId?: string | null, agentId?: string | null, data?: unknown): void {
+  if (typeof window === 'undefined' || !topicId || !agentId || !Array.isArray(data)) return
+  try {
+    window.sessionStorage.setItem(topicMessagesCacheKey(topicId, agentId), JSON.stringify({ ts: Date.now(), data }))
+  } catch {
+    // Ignore quota/private-mode storage failures.
+  }
+}
 
 function normalizeWttConnectAdapter(raw: unknown): WttConnectAdapter | '' {
   const value = String(raw || '').trim().toLowerCase()
@@ -818,6 +845,11 @@ function FeedPageInner() {
       // WS-first: disable regular polling when websocket is healthy.
       // Keep 5s fallback only while WS is disconnected/unhealthy.
       refreshInterval: wsConnectedForPoll ? 0 : 5000,
+      dedupingInterval: 10000,
+      revalidateOnFocus: false,
+      keepPreviousData: true,
+      fallbackData: readCachedTopicMessages(selectedTopicId, selectedAgentId),
+      onSuccess: (data) => writeCachedTopicMessages(selectedTopicId, selectedAgentId, data),
     }
   )
 
