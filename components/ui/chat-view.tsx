@@ -2525,33 +2525,39 @@ export function ChatView({
     return null
   }, [cloudSandboxPreviews])
 
-  const sidePreviewFile = manualPreviewFile || (
-    latestAgentPreviewFile && latestAgentPreviewFile.key !== closedPreviewKey ? latestAgentPreviewFile : null
-  )
+  const latestAutoSidePreview = useMemo(() => {
+    const file = latestAgentPreviewFile && latestAgentPreviewFile.key !== closedPreviewKey ? latestAgentPreviewFile : null
+    const cloud = latestCloudSandboxPreview && latestCloudSandboxPreview.key !== closedPreviewKey ? latestCloudSandboxPreview : null
+    if (file && cloud) {
+      const fileTime = new Date(file.timestamp).getTime()
+      const cloudTime = new Date(cloud.timestamp).getTime()
+      // Same-response artifacts should prefer document preview over live cloud preview.
+      if (Number.isFinite(fileTime) && Number.isFinite(cloudTime) && cloudTime > fileTime) {
+        return { kind: 'cloud' as const, preview: cloud }
+      }
+      return { kind: 'file' as const, file }
+    }
+    if (file) return { kind: 'file' as const, file }
+    if (cloud) return { kind: 'cloud' as const, preview: cloud }
+    return null
+  }, [closedPreviewKey, latestAgentPreviewFile, latestCloudSandboxPreview])
+
   const sideCloudPreview = manualCloudPreview || (
-    latestCloudSandboxPreview && latestCloudSandboxPreview.key !== closedPreviewKey ? latestCloudSandboxPreview : null
+    !manualPreviewFile && latestAutoSidePreview?.kind === 'cloud' ? latestAutoSidePreview.preview : null
+  )
+  const sidePreviewFile = manualPreviewFile || (
+    !manualCloudPreview && latestAutoSidePreview?.kind === 'file' ? latestAutoSidePreview.file : null
   )
 
   useEffect(() => {
-    if (!latestAgentPreviewFile) return
-    if (latestCloudSandboxPreview && latestCloudSandboxPreview.key !== closedPreviewKey) return
-    if (lastAutoPreviewKeyRef.current === latestAgentPreviewFile.key) return
-    lastAutoPreviewKeyRef.current = latestAgentPreviewFile.key
+    if (!latestAutoSidePreview) return
+    const key = latestAutoSidePreview.kind === 'file' ? latestAutoSidePreview.file.key : latestAutoSidePreview.preview.key
+    if (lastAutoPreviewKeyRef.current === key) return
+    lastAutoPreviewKeyRef.current = key
     setManualPreviewFile(null)
     setManualCloudPreview(null)
-    setClosedPreviewKey(null)
     if (activeTab === 'terminal' || activeTab === 'workspace') setActiveTab('chat')
-  }, [activeTab, closedPreviewKey, latestAgentPreviewFile, latestCloudSandboxPreview])
-
-  useEffect(() => {
-    if (!latestCloudSandboxPreview) return
-    if (lastAutoPreviewKeyRef.current === latestCloudSandboxPreview.key) return
-    lastAutoPreviewKeyRef.current = latestCloudSandboxPreview.key
-    setManualPreviewFile(null)
-    setManualCloudPreview(null)
-    setClosedPreviewKey(null)
-    if (activeTab === 'terminal' || activeTab === 'workspace') setActiveTab('chat')
-  }, [activeTab, latestCloudSandboxPreview])
+  }, [activeTab, latestAutoSidePreview])
 
   useEffect(() => {
     if (activeTab !== 'terminal') setTerminalMaximized(false)
