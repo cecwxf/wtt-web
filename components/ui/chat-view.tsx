@@ -1037,62 +1037,48 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
 
 function CloudSandboxPreviewCard({ preview, onClose }: { preview: CloudSandboxPreview; onClose: () => void }) {
   const { url, title } = preview
-  const displayTitle = title || 'Cloud Sandbox Preview'
+  const displayTitle = title || 'Preview'
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-sky-200/80 bg-white shadow-[0_18px_50px_rgba(14,116,144,0.14)] ring-1 ring-sky-100/70 dark:border-sky-500/30 dark:bg-zinc-950 dark:shadow-black/30 dark:ring-sky-500/10">
-      <div className="relative overflow-hidden bg-[radial-gradient(circle_at_15%_15%,rgba(125,211,252,.55),transparent_32%),linear-gradient(135deg,#ecfeff_0%,#f0f9ff_42%,#ecfdf5_100%)] px-4 py-3 dark:bg-[radial-gradient(circle_at_15%_15%,rgba(14,165,233,.24),transparent_34%),linear-gradient(135deg,rgba(8,47,73,.7),rgba(24,24,27,.95)_58%,rgba(6,78,59,.45))]">
-        <div className="pointer-events-none absolute right-4 top-3 h-16 w-16 rounded-full bg-white/45 blur-2xl dark:bg-sky-300/10" />
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 shadow-sm dark:bg-zinc-900/80 dark:text-sky-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.9)]" />
-              Cloud Agent Preview
-            </div>
-            <p className="truncate text-sm font-black text-slate-900 dark:text-zinc-50">{displayTitle}</p>
-            <div className="mt-2 space-y-1.5">
-              <a
-                href={url}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex min-w-0 items-center gap-2 rounded-xl border border-sky-200/70 bg-white/70 px-2.5 py-1.5 text-[11px] shadow-sm transition hover:border-sky-300 hover:bg-white dark:border-sky-500/20 dark:bg-zinc-950/55 dark:hover:border-sky-400/40"
-              >
-                <span className="shrink-0 rounded-full bg-sky-600 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-white">Live</span>
-                <span className="truncate font-semibold text-sky-800 underline decoration-sky-300 underline-offset-2 group-hover:text-sky-950 dark:text-sky-200 dark:group-hover:text-sky-100">{url}</span>
-              </a>
-            </div>
+    <div className="overflow-hidden rounded-2xl border border-sky-200/80 bg-white shadow-[0_12px_32px_rgba(14,116,144,0.12)] ring-1 ring-sky-100/60 dark:border-sky-500/25 dark:bg-zinc-950 dark:shadow-black/25 dark:ring-sky-500/10">
+      <div className="relative overflow-hidden bg-[linear-gradient(135deg,#ecfeff_0%,#f8fafc_56%,#ecfdf5_100%)] px-3 py-2 dark:bg-[linear-gradient(135deg,rgba(8,47,73,.62),rgba(24,24,27,.95)_62%,rgba(6,78,59,.36))]">
+        <div className="pointer-events-none absolute right-3 top-1.5 h-10 w-10 rounded-full bg-white/45 blur-xl dark:bg-sky-300/10" />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-sky-700 shadow-sm dark:bg-zinc-900/80 dark:text-sky-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.85)]" />
+              Cloud Preview
+            </span>
+            <p className="truncate text-xs font-bold text-slate-900 dark:text-zinc-50">{displayTitle}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="relative z-10 flex shrink-0 items-center gap-1">
             <a
               href={url}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+              className="rounded-md bg-slate-950 px-2 py-1 text-[11px] font-bold text-white transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
             >
               打开
             </a>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-sky-800 transition hover:bg-white/70 hover:text-red-500 dark:text-sky-200 dark:hover:bg-zinc-900"
+              className="rounded-md p-1 text-sky-800 transition hover:bg-white/70 hover:text-red-500 dark:text-sky-200 dark:hover:bg-zinc-900"
               aria-label="Close cloud preview"
               title="关闭预览并停止 sandbox 端 preview 服务"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       </div>
-      <div className="h-[360px] border-t border-sky-100 bg-slate-100/70 p-2 dark:border-sky-500/10 dark:bg-zinc-900/70">
+      <div className="h-[300px] border-t border-sky-100 bg-slate-100/70 p-1.5 dark:border-sky-500/10 dark:bg-zinc-900/70 sm:h-[340px]">
         <iframe
           src={url}
           title={displayTitle}
           sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-          className="h-full w-full rounded-2xl border border-white bg-white shadow-inner dark:border-zinc-800 dark:bg-zinc-950"
+          className="h-full w-full rounded-xl border border-white bg-white shadow-inner dark:border-zinc-800 dark:bg-zinc-950"
         />
-      </div>
-      <div className="border-t border-sky-100 bg-sky-50/60 px-4 py-2 text-[11px] text-slate-600 dark:border-sky-500/10 dark:bg-sky-950/20 dark:text-zinc-400">
-        Cloud Sandbox live preview。关闭卡片会停止 sandbox 端该端口服务；历史文档、PDF、静态 HTML 仍使用右侧预览栏。
       </div>
     </div>
   )
@@ -1160,20 +1146,20 @@ function formatCloudBillingAmount(value: unknown) {
 }
 
 function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatus; floating?: boolean }) {
-  const lines = status.lines.slice(-10)
+  const lines = status.lines.slice(floating ? -6 : -10)
   const adapter = runStatusAdapterLabel(status.adapter)
   const subtitle = [adapter, status.model].filter(Boolean).join(' · ')
   const shellClass = floating
-    ? 'rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-2xl shadow-[#6b4e2e]/15 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/30'
+    ? 'rounded-xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-2 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25'
     : 'mx-4 mb-2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25 sm:mx-6'
 
   return (
     <div className={shellClass}>
-      <div className="mb-2 flex items-start justify-between gap-3">
+      <div className="mb-1.5 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="h-3 w-3 animate-spin rounded-full border-2 border-[#b78343] border-t-transparent dark:border-amber-300 dark:border-t-transparent" />
-            <span className="truncate text-xs font-semibold text-[#3f352a] dark:text-zinc-100">
+            <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-[#b78343] border-t-transparent dark:border-amber-300 dark:border-t-transparent" />
+            <span className="truncate text-[11px] font-semibold text-[#3f352a] dark:text-zinc-100">
               {status.agentName} 正在执行
             </span>
           </div>
@@ -1182,15 +1168,15 @@ function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatu
           )}
         </div>
         {status.statusKind && (
-          <span className="shrink-0 rounded-full border border-[#dbc6a5] bg-white/65 px-2 py-0.5 text-[10px] font-medium text-[#8b6736] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          <span className="shrink-0 rounded-full border border-[#dbc6a5] bg-white/65 px-1.5 py-0.5 text-[10px] font-medium text-[#8b6736] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {runStatusKindLabel(status.statusKind)}
           </span>
         )}
       </div>
 
-      <div className="max-h-32 space-y-1.5 overflow-y-auto pr-1">
+      <div className={`${floating ? 'max-h-24' : 'max-h-32'} space-y-1 overflow-y-auto pr-1`}>
         {lines.map((line) => (
-          <div key={line.id} className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-2 text-[11px] leading-4">
+          <div key={line.id} className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-1.5 text-[10.5px] leading-4">
             <span className="rounded-md bg-[#efe4d2] px-1.5 py-0.5 text-center font-medium text-[#7c613d] dark:bg-zinc-800 dark:text-zinc-400">
               {runStatusKindLabel(line.kind)}
             </span>
@@ -3202,19 +3188,6 @@ export function ChatView({
         ))}
       </div>
 
-      {activeTab === 'chat' && runStatus && (
-        <div
-          className={`pointer-events-none absolute inset-x-3 z-40 sm:inset-x-6 ${
-            composerExpanded ? 'bottom-[54vh]' : compactUi ? 'bottom-[84px]' : 'bottom-[124px]'
-          }`}
-        >
-          <div className="pointer-events-auto w-full max-w-2xl">
-            <AgentRunStatusCard status={runStatus} floating />
-          </div>
-        </div>
-      )}
-
-
       {agentCardOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4" onClick={() => setAgentCardOpen(false)}>
           <div
@@ -3355,6 +3328,12 @@ export function ChatView({
       )}
 
       <div className="border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
+        {activeTab === 'chat' && runStatus && !composerExpanded && (
+          <div className="mb-2 max-w-xl">
+            <AgentRunStatusCard status={runStatus} floating />
+          </div>
+        )}
+
         {/* Slash command result display */}
         {slashResult && (
           <div className="mb-2 max-h-20 overflow-auto rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 px-2 py-1 text-[11px] text-slate-700 dark:text-zinc-300 whitespace-pre-wrap font-mono">
