@@ -779,7 +779,7 @@ function FeedPageInner() {
   )
 
   // WebSocket for real-time messages
-  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
+  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=web` : ''
   const subscribedTopicsRef = useRef<{ raw: unknown[] | null; mutate: (data?: unknown, revalidate?: boolean) => void }>({ raw: null, mutate: () => {} })
   const decryptMessageForDisplay = useCallback(async (message: ChatMessage): Promise<ChatMessage> => {
     if (!message.encrypted) return message
@@ -1318,12 +1318,13 @@ function FeedPageInner() {
       agentName: name,
       adapter: typing.adapter,
       model: typing.model,
+      wsState,
       statusText: typing.statusText || '等待 Agent 状态更新',
       statusKind: typing.statusKind,
       startedAt: typing.startedAt,
       lines,
     }
-  }, [selectedTopicId, typingByTopic, agentNameMap])
+  }, [selectedTopicId, typingByTopic, agentNameMap, wsState])
 
   // Clear stale persisted topic if it no longer exists in the topics list
   useEffect(() => {
