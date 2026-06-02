@@ -888,33 +888,6 @@ function extractConversationFiles(message: ChatMessage): ConversationFile[] {
   return files
 }
 
-function extractCloudSandboxPreviews(message: ChatMessage): CloudSandboxPreview[] {
-  if (!message.is_cloud_sandbox) return []
-  const previews: CloudSandboxPreview[] = []
-  const localSeen = new Set<string>()
-  const { body: cleanContent } = stripMetaBlocks(message.content || '')
-  const { body: actionCleanBody } = extractActionQuickButtons(cleanContent)
-  const blocks = parseRichBlocks(actionCleanBody)
-  for (const block of blocks) {
-    if (block.kind !== 'cloud_preview') continue
-    const url = trimUrlTail(String(block.url || '').trim())
-    if (!url || localSeen.has(url)) continue
-    localSeen.add(url)
-    previews.push({
-      key: `${message.message_id}:${url}`,
-      url,
-      title: block.title,
-      snapshotUrl: block.snapshotUrl,
-      artifactUrl: block.artifactUrl,
-      messageId: message.message_id,
-      senderId: message.sender_id,
-      senderName: message.sender_display_name,
-      timestamp: message.timestamp,
-    })
-  }
-  return previews
-}
-
 function previewExt(file: Pick<ConversationFile, 'url' | 'filename'>): string {
   return fileMeta(file.filename || '', file.url).ext
 }
@@ -1059,13 +1032,13 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
   )
 }
 
-function CloudSandboxPreviewCard({ preview, onOpen }: { preview: CloudSandboxPreview; onOpen: () => void }) {
-  const { url, artifactUrl, title } = preview
+function CloudSandboxPreviewCard({ preview, onClose }: { preview: CloudSandboxPreview; onClose: () => void }) {
+  const { url, title } = preview
   const displayTitle = title || 'Cloud Sandbox Preview'
 
   return (
     <div className="overflow-hidden rounded-3xl border border-sky-200/80 bg-white shadow-[0_18px_50px_rgba(14,116,144,0.14)] ring-1 ring-sky-100/70 dark:border-sky-500/30 dark:bg-zinc-950 dark:shadow-black/30 dark:ring-sky-500/10">
-      <div className="relative overflow-hidden bg-[radial-gradient(circle_at_15%_15%,rgba(125,211,252,.55),transparent_32%),linear-gradient(135deg,#ecfeff_0%,#f0f9ff_42%,#ecfdf5_100%)] px-4 py-3.5 dark:bg-[radial-gradient(circle_at_15%_15%,rgba(14,165,233,.24),transparent_34%),linear-gradient(135deg,rgba(8,47,73,.7),rgba(24,24,27,.95)_58%,rgba(6,78,59,.45))]">
+      <div className="relative overflow-hidden bg-[radial-gradient(circle_at_15%_15%,rgba(125,211,252,.55),transparent_32%),linear-gradient(135deg,#ecfeff_0%,#f0f9ff_42%,#ecfdf5_100%)] px-4 py-3 dark:bg-[radial-gradient(circle_at_15%_15%,rgba(14,165,233,.24),transparent_34%),linear-gradient(135deg,rgba(8,47,73,.7),rgba(24,24,27,.95)_58%,rgba(6,78,59,.45))]">
         <div className="pointer-events-none absolute right-4 top-3 h-16 w-16 rounded-full bg-white/45 blur-2xl dark:bg-sky-300/10" />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1087,14 +1060,6 @@ function CloudSandboxPreviewCard({ preview, onOpen }: { preview: CloudSandboxPre
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onOpen}
-              className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-bold text-sky-800 transition hover:bg-sky-100 dark:border-sky-500/30 dark:bg-zinc-950 dark:text-sky-200 dark:hover:bg-sky-500/10"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-              右侧预览
-            </button>
             <a
               href={url}
               target="_blank"
@@ -1103,130 +1068,30 @@ function CloudSandboxPreviewCard({ preview, onOpen }: { preview: CloudSandboxPre
             >
               打开
             </a>
-          </div>
-        </div>
-      </div>
-      {artifactUrl && (
-        <div className="border-t border-sky-100 bg-sky-50/60 px-4 py-2 text-[11px] text-slate-600 dark:border-sky-500/10 dark:bg-sky-950/20 dark:text-zinc-400">
-          历史产物已保存：
-          <a href={artifactUrl} target="_blank" rel="noreferrer" className="ml-1 font-semibold text-sky-700 underline dark:text-sky-300">
-            打开 artifact
-          </a>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CloudPreviewSidePanel({
-  preview,
-  onClose,
-  agentId,
-  accessToken,
-}: {
-  preview: CloudSandboxPreview
-  onClose: () => void
-  agentId?: string
-  accessToken?: string
-}) {
-  const title = preview.title || 'Cloud Sandbox Preview'
-  const label = senderLabelText(preview.senderName, preview.senderId) || preview.senderId
-  const initialFrameUrl = preview.snapshotUrl || preview.url
-  const [frameUrl, setFrameUrl] = useState(initialFrameUrl)
-  const [restartStatus, setRestartStatus] = useState<'idle' | 'starting' | 'live' | 'snapshot' | 'failed'>('idle')
-
-  useEffect(() => {
-    setFrameUrl(initialFrameUrl)
-    setRestartStatus('idle')
-  }, [initialFrameUrl, preview.key])
-
-  useEffect(() => {
-    if (!agentId || !accessToken || !preview.url) return
-    let cancelled = false
-    setRestartStatus('starting')
-    fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/${encodeURIComponent(agentId)}/preview/restart`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url: preview.url }),
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(String(data.detail || data.message || res.statusText || res.status))
-        return data as { preview_url?: string; url?: string }
-      })
-      .then((data) => {
-        if (cancelled) return
-        const liveUrl = String(data.preview_url || data.url || '').trim()
-        if (liveUrl) {
-          setFrameUrl(liveUrl)
-          setRestartStatus('live')
-        } else {
-          setRestartStatus(preview.snapshotUrl ? 'snapshot' : 'failed')
-        }
-      })
-      .catch(() => {
-        if (cancelled) return
-        setFrameUrl(preview.snapshotUrl || preview.url)
-        setRestartStatus(preview.snapshotUrl ? 'snapshot' : 'failed')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [accessToken, agentId, preview.key, preview.snapshotUrl, preview.url])
-
-  const statusText = restartStatus === 'starting'
-    ? '正在启动 live preview'
-    : restartStatus === 'live'
-      ? 'Live preview'
-      : restartStatus === 'snapshot'
-        ? 'Live 不可用，显示 snapshot'
-        : restartStatus === 'failed'
-          ? 'Live preview 启动失败'
-          : preview.snapshotUrl ? 'Snapshot preview' : 'Live preview'
-
-  return (
-    <aside className="hidden w-[360px] shrink-0 border-l border-[#e5e0d8] bg-white/95 dark:border-zinc-800 dark:bg-zinc-950/95 md:flex lg:w-[460px] xl:w-[560px]">
-      <div className="flex min-h-0 w-full flex-col">
-        <div className="flex items-center justify-between gap-3 border-b border-[#eee9df] px-3 py-2 dark:border-zinc-800">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[#1f2328] dark:text-zinc-100">{title}</p>
-            <p className="mt-0.5 truncate text-[11px] text-[#8a8378] dark:text-zinc-500">
-              {statusText} · {label} · {formatTime(preview.timestamp)}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <a href={frameUrl} target="_blank" rel="noreferrer" className="rounded-md border border-[#ded8ce] bg-[#fbfaf7] px-2 py-1 text-xs font-semibold text-[#615d55] transition hover:border-sky-300 hover:text-sky-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-              新窗口
-            </a>
-            {preview.artifactUrl && (
-              <a href={preview.artifactUrl} target="_blank" rel="noreferrer" className="rounded-md border border-[#ded8ce] bg-[#fbfaf7] px-2 py-1 text-xs font-semibold text-[#615d55] transition hover:border-sky-300 hover:text-sky-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                artifact
-              </a>
-            )}
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-[#8a8378] transition hover:bg-[#f4f1eb] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              aria-label="Close preview"
+              className="rounded-lg p-1.5 text-sky-800 transition hover:bg-white/70 hover:text-red-500 dark:text-sky-200 dark:hover:bg-zinc-900"
+              aria-label="Close cloud preview"
+              title="关闭预览并停止 sandbox 端 preview 服务"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
-
-        <div className="min-h-0 flex-1 bg-[#f7f5f0] p-2 dark:bg-zinc-950">
-          <iframe
-            src={frameUrl}
-            title={title}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-            className="h-full w-full rounded-xl border border-[#eee9df] bg-white dark:border-zinc-800 dark:bg-zinc-900"
-          />
-        </div>
       </div>
-    </aside>
+      <div className="h-[360px] border-t border-sky-100 bg-slate-100/70 p-2 dark:border-sky-500/10 dark:bg-zinc-900/70">
+        <iframe
+          src={url}
+          title={displayTitle}
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+          className="h-full w-full rounded-2xl border border-white bg-white shadow-inner dark:border-zinc-800 dark:bg-zinc-950"
+        />
+      </div>
+      <div className="border-t border-sky-100 bg-sky-50/60 px-4 py-2 text-[11px] text-slate-600 dark:border-sky-500/10 dark:bg-sky-950/20 dark:text-zinc-400">
+        Cloud Sandbox live preview。关闭卡片会停止 sandbox 端该端口服务；历史文档、PDF、静态 HTML 仍使用右侧预览栏。
+      </div>
+    </div>
   )
 }
 
@@ -1391,8 +1256,8 @@ export function ChatView({
   const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
   const [terminalMaximized, setTerminalMaximized] = useState(false)
   const [manualPreviewFile, setManualPreviewFile] = useState<ConversationFile | null>(null)
-  const [manualCloudPreview, setManualCloudPreview] = useState<CloudSandboxPreview | null>(null)
   const [closedPreviewKeys, setClosedPreviewKeys] = useState<Set<string>>(() => new Set())
+  const [closedCloudPreviewKeys, setClosedCloudPreviewKeys] = useState<Set<string>>(() => new Set())
   const lastAutoPreviewKeyRef = useRef<string | null>(null)
   const [sending, setSending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
@@ -2547,19 +2412,6 @@ export function ChatView({
     return out
   }, [messages])
 
-  const cloudSandboxPreviews = useMemo(() => {
-    const seen = new Set<string>()
-    const out: CloudSandboxPreview[] = []
-    for (const message of messages) {
-      for (const preview of extractCloudSandboxPreviews(message)) {
-        if (seen.has(preview.key)) continue
-        seen.add(preview.key)
-        out.push(preview)
-      }
-    }
-    return out
-  }, [messages])
-
   const latestAgentPreviewFile = useMemo(() => {
     for (let i = conversationFiles.length - 1; i >= 0; i--) {
       const file = conversationFiles[i]
@@ -2568,48 +2420,22 @@ export function ChatView({
     return null
   }, [conversationFiles])
 
-  const latestCloudSandboxPreview = useMemo(() => {
-    for (let i = cloudSandboxPreviews.length - 1; i >= 0; i--) {
-      const preview = cloudSandboxPreviews[i]
-      if (preview.senderId) return preview
-    }
-    return null
-  }, [cloudSandboxPreviews])
-
   const latestAutoSidePreview = useMemo(() => {
     const file = latestAgentPreviewFile && !closedPreviewKeys.has(latestAgentPreviewFile.key) ? latestAgentPreviewFile : null
-    const cloud = latestCloudSandboxPreview && !closedPreviewKeys.has(latestCloudSandboxPreview.key) ? latestCloudSandboxPreview : null
-    if (file && cloud) {
-      const fileTime = new Date(file.timestamp).getTime()
-      const cloudTime = new Date(cloud.timestamp).getTime()
-      // Cloud sandbox responses can include both a snapshot artifact and a live URL; prefer the live preview.
-      if (file.messageId === cloud.messageId) {
-        return { kind: 'cloud' as const, preview: cloud }
-      }
-      if (Number.isFinite(fileTime) && Number.isFinite(cloudTime) && cloudTime >= fileTime) {
-        return { kind: 'cloud' as const, preview: cloud }
-      }
-      return { kind: 'file' as const, file }
-    }
     if (file) return { kind: 'file' as const, file }
-    if (cloud) return { kind: 'cloud' as const, preview: cloud }
     return null
-  }, [closedPreviewKeys, latestAgentPreviewFile, latestCloudSandboxPreview])
+  }, [closedPreviewKeys, latestAgentPreviewFile])
 
-  const sideCloudPreview = manualCloudPreview || (
-    !manualPreviewFile && latestAutoSidePreview?.kind === 'cloud' ? latestAutoSidePreview.preview : null
-  )
   const sidePreviewFile = manualPreviewFile || (
-    !manualCloudPreview && latestAutoSidePreview?.kind === 'file' ? latestAutoSidePreview.file : null
+    latestAutoSidePreview?.kind === 'file' ? latestAutoSidePreview.file : null
   )
 
   useEffect(() => {
     if (!latestAutoSidePreview) return
-    const key = latestAutoSidePreview.kind === 'file' ? latestAutoSidePreview.file.key : latestAutoSidePreview.preview.key
+    const key = latestAutoSidePreview.file.key
     if (lastAutoPreviewKeyRef.current === key) return
     lastAutoPreviewKeyRef.current = key
     setManualPreviewFile(null)
-    setManualCloudPreview(null)
     if (activeTab === 'terminal' || activeTab === 'workspace') setActiveTab('chat')
   }, [activeTab, latestAutoSidePreview])
 
@@ -2630,13 +2456,6 @@ export function ChatView({
     }
   }, [conversationFiles, manualPreviewFile])
 
-  useEffect(() => {
-    if (!manualCloudPreview) return
-    if (!cloudSandboxPreviews.some((preview) => preview.key === manualCloudPreview.key)) {
-      setManualCloudPreview(null)
-    }
-  }, [cloudSandboxPreviews, manualCloudPreview])
-
   const openFilePreview = useCallback((file: ConversationFile) => {
     setClosedPreviewKeys((prev) => {
       if (!prev.has(file.key)) return prev
@@ -2645,30 +2464,13 @@ export function ChatView({
       return next
     })
     setManualPreviewFile(file)
-    setManualCloudPreview(null)
   }, [])
 
-  const openCloudPreview = useCallback((preview: CloudSandboxPreview) => {
-    setClosedPreviewKeys((prev) => {
-      if (!prev.has(preview.key)) return prev
-      const next = new Set(prev)
-      next.delete(preview.key)
-      return next
-    })
-    setManualCloudPreview(preview)
-    setManualPreviewFile(null)
-    if (activeTab === 'terminal' || activeTab === 'workspace') setActiveTab('chat')
-  }, [activeTab])
-
   const closeFilePreview = useCallback(() => {
-    const messageId = sideCloudPreview?.messageId || sidePreviewFile?.messageId
+    const messageId = sidePreviewFile?.messageId
     const keysToClose = new Set<string>()
-    if (sideCloudPreview) keysToClose.add(sideCloudPreview.key)
     if (sidePreviewFile) keysToClose.add(sidePreviewFile.key)
     if (messageId) {
-      for (const preview of cloudSandboxPreviews) {
-        if (preview.messageId === messageId) keysToClose.add(preview.key)
-      }
       for (const file of conversationFiles) {
         if (file.messageId === messageId) keysToClose.add(file.key)
       }
@@ -2676,13 +2478,32 @@ export function ChatView({
     if (keysToClose.size > 0) {
       setClosedPreviewKeys((prev) => {
         const next = new Set(prev)
-        for (const key of keysToClose) next.add(key)
+        Array.from(keysToClose).forEach((key) => next.add(key))
         return next
       })
     }
     setManualPreviewFile(null)
-    setManualCloudPreview(null)
-  }, [cloudSandboxPreviews, conversationFiles, sideCloudPreview, sidePreviewFile])
+  }, [conversationFiles, sidePreviewFile])
+
+  const closeCloudPreviewCard = useCallback((preview: CloudSandboxPreview) => {
+    setClosedCloudPreviewKeys((prev) => {
+      if (prev.has(preview.key)) return prev
+      const next = new Set(prev)
+      next.add(preview.key)
+      return next
+    })
+    if (!currentAgentId || !accessToken) return
+    fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/${encodeURIComponent(currentAgentId)}/preview/stop`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: preview.url }),
+    }).catch((error) => {
+      console.warn('failed to stop cloud preview', error)
+    })
+  }, [accessToken, currentAgentId])
 
   return (
     <div
@@ -3297,11 +3118,12 @@ export function ChatView({
                                   senderName: message.sender_display_name,
                                   timestamp: message.timestamp,
                                 }
+                                if (closedCloudPreviewKeys.has(preview.key)) return null
                                 return (
                                   <CloudSandboxPreviewCard
                                     key={bi}
                                     preview={preview}
-                                    onOpen={() => openCloudPreview(preview)}
+                                    onClose={() => closeCloudPreviewCard(preview)}
                                   />
                                 )
                               }
@@ -3843,15 +3665,7 @@ export function ChatView({
         )}
         </div>
         </div>
-        {activeTab !== 'workspace' && sideCloudPreview && (
-          <CloudPreviewSidePanel
-            preview={sideCloudPreview}
-            onClose={closeFilePreview}
-            agentId={currentAgentId}
-            accessToken={accessToken}
-          />
-        )}
-        {activeTab !== 'workspace' && !sideCloudPreview && sidePreviewFile && (
+        {activeTab !== 'workspace' && sidePreviewFile && (
           <DocumentSidePreview file={sidePreviewFile} onClose={closeFilePreview} />
         )}
       </div>
