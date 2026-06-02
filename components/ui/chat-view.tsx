@@ -1021,31 +1021,78 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
 
 function CloudSandboxPreviewCard({
   url,
+  snapshotUrl,
+  artifactUrl,
   title,
   expanded,
   onToggle,
 }: {
   url: string
+  snapshotUrl?: string
+  artifactUrl?: string
   title?: string
   expanded: boolean
   onToggle: () => void
 }) {
   const displayTitle = title || 'Cloud Sandbox Preview'
+  const [viewMode, setViewMode] = useState<'live' | 'snapshot'>('live')
+  const [liveFailed, setLiveFailed] = useState(false)
+  const hasSnapshot = Boolean(snapshotUrl)
+  const activeUrl = viewMode === 'snapshot' && snapshotUrl ? snapshotUrl : url
+
+  useEffect(() => {
+    setViewMode('live')
+    setLiveFailed(false)
+  }, [url, snapshotUrl])
+
+  useEffect(() => {
+    if (!expanded || !hasSnapshot || viewMode !== 'live') return
+    const timer = window.setTimeout(() => {
+      setLiveFailed(true)
+      setViewMode('snapshot')
+    }, 9000)
+    return () => window.clearTimeout(timer)
+  }, [expanded, hasSnapshot, viewMode, url])
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm ring-1 ring-sky-100/70 dark:border-sky-500/30 dark:bg-zinc-950 dark:ring-sky-500/10">
-      <div className="bg-gradient-to-r from-sky-50 via-cyan-50 to-emerald-50 px-3.5 py-3 dark:from-sky-500/10 dark:via-cyan-500/10 dark:to-emerald-500/10">
+    <div className="overflow-hidden rounded-3xl border border-sky-200/80 bg-white shadow-[0_18px_50px_rgba(14,116,144,0.14)] ring-1 ring-sky-100/70 dark:border-sky-500/30 dark:bg-zinc-950 dark:shadow-black/30 dark:ring-sky-500/10">
+      <div className="relative overflow-hidden bg-[radial-gradient(circle_at_15%_15%,rgba(125,211,252,.55),transparent_32%),linear-gradient(135deg,#ecfeff_0%,#f0f9ff_42%,#ecfdf5_100%)] px-4 py-3.5 dark:bg-[radial-gradient(circle_at_15%_15%,rgba(14,165,233,.24),transparent_34%),linear-gradient(135deg,rgba(8,47,73,.7),rgba(24,24,27,.95)_58%,rgba(6,78,59,.45))]">
+        <div className="pointer-events-none absolute right-4 top-3 h-16 w-16 rounded-full bg-white/45 blur-2xl dark:bg-sky-300/10" />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 shadow-sm dark:bg-zinc-900/80 dark:text-sky-200">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.9)]" />
-              Cloud Agent Preview
+              {viewMode === 'snapshot' ? 'Snapshot Preview' : 'Cloud Agent Preview'}
             </div>
             <p className="truncate text-sm font-black text-slate-900 dark:text-zinc-50">{displayTitle}</p>
-            <a href={url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[11px] text-sky-700 underline decoration-sky-300 underline-offset-2 dark:text-sky-300">
-              {url}
+            <a href={activeUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[11px] text-sky-700 underline decoration-sky-300 underline-offset-2 dark:text-sky-300">
+              {activeUrl}
             </a>
+            {liveFailed && hasSnapshot && (
+              <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                Live preview 暂不可用，已切换到持久快照。
+              </p>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            {hasSnapshot && (
+              <div className="flex rounded-lg border border-sky-200 bg-white/80 p-0.5 shadow-sm dark:border-sky-500/30 dark:bg-zinc-950/70">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('live')}
+                  className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${viewMode === 'live' ? 'bg-sky-600 text-white shadow-sm' : 'text-sky-800 hover:bg-sky-50 dark:text-sky-200 dark:hover:bg-sky-500/10'}`}
+                >
+                  Live
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('snapshot')}
+                  className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${viewMode === 'snapshot' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-800 hover:bg-emerald-50 dark:text-emerald-200 dark:hover:bg-emerald-500/10'}`}
+                >
+                  Snapshot
+                </button>
+              </div>
+            )}
             <button
               type="button"
               onClick={onToggle}
@@ -1055,7 +1102,7 @@ function CloudSandboxPreviewCard({
               {expanded ? '收起' : '内嵌预览'}
             </button>
             <a
-              href={url}
+              href={activeUrl}
               target="_blank"
               rel="noreferrer"
               className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
@@ -1065,11 +1112,28 @@ function CloudSandboxPreviewCard({
           </div>
         </div>
       </div>
+      {artifactUrl && (
+        <div className="border-t border-sky-100 bg-sky-50/60 px-4 py-2 text-[11px] text-slate-600 dark:border-sky-500/10 dark:bg-sky-950/20 dark:text-zinc-400">
+          历史产物已保存：
+          <a href={artifactUrl} target="_blank" rel="noreferrer" className="ml-1 font-semibold text-sky-700 underline dark:text-sky-300">
+            打开 artifact
+          </a>
+        </div>
+      )}
       {expanded && (
         <iframe
-          src={url}
+          src={activeUrl}
           title={displayTitle}
           sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+          onLoad={() => {
+            if (viewMode === 'live') setLiveFailed(false)
+          }}
+          onError={() => {
+            if (hasSnapshot) {
+              setLiveFailed(true)
+              setViewMode('snapshot')
+            }
+          }}
           className="h-[420px] w-full bg-white dark:bg-zinc-950 md:h-[520px]"
         />
       )}
@@ -3047,6 +3111,8 @@ export function ChatView({
                                   <CloudSandboxPreviewCard
                                     key={bi}
                                     url={block.url}
+                                    snapshotUrl={block.snapshotUrl}
+                                    artifactUrl={block.artifactUrl}
                                     title={block.title}
                                     expanded={expanded}
                                     onToggle={() => setExpandedCloudPreviews((prev) => ({ ...prev, [previewKey]: !expanded }))}
