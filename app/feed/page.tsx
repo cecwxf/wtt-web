@@ -71,6 +71,12 @@ interface CloudAgentState {
   host_agent_id?: string
   status?: string
   provider?: string
+  children?: Record<string, unknown>
+  child_agents?: Array<{ agent_id?: string } | string>
+  orchestrator_status?: {
+    children?: Record<string, unknown>
+    child_agents?: Array<{ agent_id?: string } | string>
+  } | null
   sandbox_billing?: {
     active_minutes?: number
     estimated_rmb?: number
@@ -86,6 +92,31 @@ type BillingMe = {
 }
 
 type WttConnectAdapter = 'codex' | 'claude-code' | 'gemini'
+
+function cloudSandboxExpectedAgentIds(state: CloudAgentState | Record<string, unknown> | null | undefined, hostAgentId: string) {
+  const ids = new Set<string>()
+  const host = String(hostAgentId || '').trim()
+  if (host) ids.add(host)
+  const record = (state || {}) as CloudAgentState
+  const addChildAgents = (items: CloudAgentState['child_agents']) => {
+    if (!Array.isArray(items)) return
+    for (const item of items) {
+      const id = typeof item === 'string' ? item : String(item?.agent_id || '')
+      if (id.trim()) ids.add(id.trim())
+    }
+  }
+  const addChildren = (children?: Record<string, unknown>) => {
+    if (!children || typeof children !== 'object') return
+    for (const id of Object.keys(children)) {
+      if (id.trim()) ids.add(id.trim())
+    }
+  }
+  addChildren(record.children)
+  addChildAgents(record.child_agents)
+  addChildren(record.orchestrator_status?.children)
+  addChildAgents(record.orchestrator_status?.child_agents)
+  return Array.from(ids)
+}
 
 function topicMessagesCacheKey(topicId?: string | null, agentId?: string | null): string {
   return `wtt:topic-messages:v1:${topicId || ''}:${agentId || ''}`
@@ -1976,6 +2007,8 @@ function FeedPageInner() {
       const deadline = Date.now() + (action === 'wake' ? 300000 : 180000)
       let lastStatus = ''
       let lastOnline = false
+      let lastMissingAgents: string[] = []
+      let lastExpectedAgents: string[] = [cleanHostAgentId]
       while (Date.now() < deadline) {
         const [stateResp, statsResp] = await Promise.all([
           fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/me?live=false`, {
@@ -1991,7 +2024,16 @@ function FeedPageInner() {
         const stats = await statsResp.json().catch(() => ({}))
         lastStatus = String((state as { status?: unknown }).status || '').toLowerCase()
         const online = (stats as { online_agents?: unknown }).online_agents
-        lastOnline = Array.isArray(online) && online.map(String).includes(cleanHostAgentId)
+        const onlineIds = new Set(Array.isArray(online) ? online.map(String) : [])
+        const expectedIds = new Set(cloudSandboxExpectedAgentIds(state as CloudAgentState, cleanHostAgentId))
+        for (const agent of agents) {
+          if (String(agent.cloud_host_agent_id || '').trim() === cleanHostAgentId || agent.agent_id === cleanHostAgentId) {
+            expectedIds.add(agent.agent_id)
+          }
+        }
+        lastExpectedAgents = Array.from(expectedIds)
+        lastMissingAgents = lastExpectedAgents.filter((agentId) => !onlineIds.has(agentId))
+        lastOnline = lastExpectedAgents.length > 0 && lastMissingAgents.length === 0
 
         void mutateAgentStats(stats, false)
         void mutateCloudAgentState(state as CloudAgentState, false)
@@ -2005,7 +2047,7 @@ function FeedPageInner() {
         : ['stopped', 'sleeping'].includes(lastStatus)
       if (!completed) {
         throw new Error(action === 'wake'
-          ? `Sandbox 仍在开机中，最后状态：${lastStatus || 'unknown'}，在线：${lastOnline ? 'yes' : 'no'}`
+          ? `Sandbox 仍在开机中，最后状态：${lastStatus || 'unknown'}，已等待 ${lastExpectedAgents.length} 个 Agent，未上线：${lastMissingAgents.slice(0, 6).join(', ') || 'unknown'}`
           : `Sandbox 仍在关机中，最后状态：${lastStatus || 'unknown'}`)
       }
 
@@ -2013,11 +2055,11 @@ function FeedPageInner() {
       void mutateAgentStats()
       void mutateCloudAgentState()
       void mutateTopics()
-      alert(action === 'wake' ? 'Cloud Sandbox 已开机并在线。' : 'Cloud Sandbox 已关机。')
+      alert(action === 'wake' ? `Cloud Sandbox 已开机，${lastExpectedAgents.length} 个 Agent 已在线。` : 'Cloud Sandbox 已关机。')
     } catch (error) {
       alert(error instanceof Error ? error.message : `Cloud Sandbox ${action} failed`)
     }
-  }, [loadAgents, mutateAgentStats, mutateCloudAgentState, mutateTopics, session?.accessToken, t])
+  }, [agents, loadAgents, mutateAgentStats, mutateCloudAgentState, mutateTopics, session?.accessToken, t])
 
   const handleSleepSandbox = useCallback((hostAgentId: string) => {
     return runCloudSandboxAction(hostAgentId, 'sleep')
