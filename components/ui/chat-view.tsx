@@ -874,6 +874,7 @@ function extractConversationFiles(message: ChatMessage): ConversationFile[] {
   const { body: cleanContent } = stripMetaBlocks(message.content || '')
   const { body: actionCleanBody } = extractActionQuickButtons(cleanContent)
   const blocks = parseRichBlocks(actionCleanBody)
+  if (blocks.some((block) => block.kind === 'cloud_preview')) return files
   for (const block of blocks) {
     if (block.kind === 'file' || block.kind === 'video' || block.kind === 'audio') addFile(block.url, block.filename)
   }
