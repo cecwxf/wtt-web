@@ -47,14 +47,6 @@ type ChallengePayload = {
 
 type TopicMessage = { id?: string; message_id?: string; topic_id?: string; sender_type?: string; sender_id?: string; sender_display_name?: string; semantic_type?: string; content?: string; timestamp?: string; created_at?: string }
 
-function formatRuntimeMs(value?: number) {
-  if (value === undefined || value === null) return '-'
-  if (value === 0) return '0ms'
-  if (Math.abs(value) < 1) return `${value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}ms`
-  if (Number.isInteger(value)) return `${value}ms`
-  return `${value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}ms`
-}
-
 function displayStdout(stdout?: string) {
   const text = (stdout || '').trim()
   const pattern = /(?:^|\n)\s*output\s*=\s*([^\n]+)\s*/g
@@ -285,14 +277,10 @@ function isSubmissionTerminal(submission?: Submission | null) {
   return Boolean(submission && submission.status !== 'pending' && submission.status !== 'judging' && submission.judge_provider !== 'pending')
 }
 
-function isOpenCLProvider(provider?: string) {
-  return provider === 'agent-mac-opencl-kernel' || Boolean(provider?.startsWith('remote-opencl-'))
-}
-
 const copy = {
   zh: {
     challenges: '题库', playground: '训练场', discuss: '讨论', runner: 'Agent Runner 执行', description: '题目', submissions: '提交', leaderboard: '排行榜',
-    function: '函数', timeLimit: '时间限制', memory: '内存', examples: '样例', input: '输入', expected: '期望输出',
+    examples: '样例', input: '输入', expected: '期望输出',
     language: '语言', run: '交给 Agent 运行并提交', judging: 'Agent 运行中...', console: '运行结果', notSubmitted: '未提交', hidden: '隐藏测试已脱敏',
     noSubmission: '提交后会在这里看到真实 Agent/Runner 判题结果。历史提交会持久化到 WTT 后端。', firstAc: '暂无 AC 记录，拿下首个榜单位置。',
     agentTitle: 'Agent 对话', agentRole: '固定使用 Codex 终生学习 Coach：agent-65d869bb6fa1。所有登录用户都可使用，不需要 claim 该 Agent。',
@@ -301,13 +289,13 @@ const copy = {
     chatWorking: 'Agent 正在思考 / 输出中', whiteboardWorking: 'Agent 正在生成白板',
     mode: '模式',
     coachFlow: '教学编排', growth: '成长档案', weak: '薄弱点', next: '下一题', mastery: '掌握度', stage: '阶段',
-    aiDesc: 'AI Kernel 题默认使用完整 OpenCL C 程序：包含 platform/device 选择、program build、kernel arg、enqueue、readback 和 JSON 输出。提交后由 agent-mac-opencl-kernel 在 Mac mini 上编译运行 example/hidden case，并返回时间和 kernel memory；CUDA C++ / Triton 作为目标语言保留给远程硬件 runner。',
+    aiDesc: 'AI Kernel 题默认使用完整 OpenCL C 程序：包含 platform/device 选择、program build、kernel arg、enqueue、readback 和 JSON 输出。提交后由 agent-mac-opencl-kernel 在 Mac mini 上编译运行 example/hidden case，并返回判题结果；CUDA C++ / Triton 作为目标语言保留给远程硬件 runner。',
     interviewMode: 'AI 面试练习模式', interviewHint: '开放式面试题，直接在右侧和终生学习 Coach 练习结构化回答。', noExamples: '这是一道开放式面试题，无固定样例；请用右侧 Agent 对话练习结构化回答。',
     consultation: '咨询说明', gaokaoIntro: '高考志愿 Ask 咨询。不是刷题 Problem；请直接输入省份、科类/选科、分数、位次、专业兴趣和城市偏好。',
   },
   en: {
     challenges: 'Challenges', playground: 'Playground', discuss: 'Discuss', runner: 'Agent Runner', description: 'Description', submissions: 'Submissions', leaderboard: 'Leaderboard',
-    function: 'Function', timeLimit: 'Time Limit', memory: 'Memory', examples: 'Examples', input: 'Input', expected: 'Expected',
+    examples: 'Examples', input: 'Input', expected: 'Expected',
     language: 'Language', run: 'Run & Submit via Agent', judging: 'Agent running...', console: 'Console', notSubmitted: 'not_submitted', hidden: 'Hidden tests are redacted.',
     noSubmission: 'Submit once to see the real Agent/Runner verdict. Submissions are persisted in the WTT backend.', firstAc: 'No accepted run yet. Take the first spot.',
     agentTitle: 'Agent Chat', agentRole: 'Fixed Codex Arena Coach: agent-65d869bb6fa1. Every signed-in user can use it without claiming this Agent.',
@@ -316,7 +304,7 @@ const copy = {
     chatWorking: 'Agent is thinking / writing', whiteboardWorking: 'Agent is generating the whiteboard',
     mode: 'Mode',
     coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
-    aiDesc: 'AI Kernel challenge. Complete OpenCL C programs are the default: platform/device selection, program build, kernel args, enqueue, readback, and JSON output. The agent-mac-opencl-kernel skill compiles and runs example/hidden cases on the Mac mini and reports runtime plus kernel memory; CUDA C++ / Triton remain target languages for remote hardware runners.',
+    aiDesc: 'AI Kernel challenge. Complete OpenCL C programs are the default: platform/device selection, program build, kernel args, enqueue, readback, and JSON output. The agent-mac-opencl-kernel skill compiles and runs example/hidden cases on the Mac mini and reports judge results; CUDA C++ / Triton remain target languages for remote hardware runners.',
     interviewMode: 'AI interview practice mode', interviewHint: 'Open-ended interview prompt. Practice a structured answer with Arena Coach on the right.', noExamples: 'This is an open-ended interview prompt with no fixed examples. Practice a structured answer with the Agent on the right.',
     consultation: 'Consultation', gaokaoIntro: 'Gaokao volunteer Ask consultation. This is not a problem; describe province, subject track, score, rank, interests, and city preferences.',
   },
@@ -2107,9 +2095,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return <main className="min-h-screen bg-[#f7f5f0] p-8 text-slate-900 dark:bg-[#151515] dark:text-white">Loading Arena...</main>
   }
   const challengeAccepted = submission?.status === 'accepted'
-  const submissionIsOpenCL = isOpenCLProvider(submission?.judge_provider)
-  const runtimeLabel = submissionIsOpenCL ? 'kernel runtime' : 'runtime'
-  const memoryLabel = submissionIsOpenCL ? 'kernel memory' : 'memory'
   const stackedArenaLayout = !isCoding && viewport.isNarrow
   const compactArena = viewport.isCompact && !viewport.isNarrow
   const leftColumnWidth = compactArena ? clampNumber(Math.round(leftPanelWidth * 0.88), 280, 330) : leftPanelWidth
@@ -2214,12 +2199,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     </p>
                   )}
 
-                  {!isGaokaoVolunteer && <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#202020]"><p className="text-xs text-slate-500 dark:text-gray-500">{t.function}</p><p className="mt-1 font-mono text-sm text-[#009f9f] dark:text-[#3ce8e2]">{challenge.function_name}</p></div>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#202020]"><p className="text-xs text-slate-500 dark:text-gray-500">{t.timeLimit}</p><p className="mt-1 font-bold">{challenge.time_limit_ms}ms</p></div>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#202020]"><p className="text-xs text-slate-500 dark:text-gray-500">{t.memory}</p><p className="mt-1 font-bold">{challenge.memory_limit_mb}MB</p></div>
-                  </div>}
-
                   {challenge.description_format !== 'html' && !isGaokaoVolunteer && (
                     <div className="mt-7 space-y-4">
                       <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t.examples}</h2>
@@ -2245,7 +2224,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     <div className="space-y-3">
                       <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone(submission.status)}`}>{submission.status} · score {submission.score}</div>
                       <p className="text-sm text-slate-500 dark:text-gray-500">
-                        user <span className="font-bold text-slate-700 dark:text-gray-300">{submission.user_id}</span> · {passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider} · {runtimeLabel} {formatRuntimeMs(submission.runtime_ms)} · {memoryLabel} {submission.memory_kb || '-'}KB
+                        user <span className="font-bold text-slate-700 dark:text-gray-300">{submission.user_id}</span> · {passedCount}/{submission.results.length} executed tests accepted · provider {submission.judge_provider}
                       </p>
                       {submission.results.map((result, index) => (
                         <div key={result.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm dark:border-gray-800 dark:bg-[#151515]">
@@ -2253,7 +2232,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                             <span className="font-semibold text-slate-700 dark:text-gray-300">{result.is_hidden ? `Hidden Test #${index + 1}` : `Public Test #${index + 1}`}</span>
                             <span className={result.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'}>{result.status}</span>
                           </div>
-                          <p className="mt-2 text-xs text-slate-500 dark:text-gray-500">{runtimeLabel} {formatRuntimeMs(result.runtime_ms)} · {memoryLabel} {result.memory_kb || '-'}KB</p>
                           {!result.is_hidden && result.input && <pre className="mt-3 whitespace-pre-wrap text-slate-600 dark:text-gray-400">input: {result.input}</pre>}
                           {!result.is_hidden && result.expected_output && <pre className="mt-3 whitespace-pre-wrap text-slate-600 dark:text-gray-400">expected: {result.expected_output}</pre>}
                           {!result.is_hidden && result.stdout && <pre className="mt-3 whitespace-pre-wrap text-slate-600 dark:text-gray-400">stdout: {displayStdout(result.stdout)}</pre>}
@@ -2277,7 +2255,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-sm font-black text-[#008b8b] dark:bg-[#252525] dark:text-[#3ce8e2]">#{index + 1}</span>
                         <div><p className="font-bold text-slate-900 dark:text-white">{entry.user_id}</p><p className="text-xs text-slate-500 dark:text-gray-500">submits {entry.submission_count} · hint {entry.hint_count}</p></div>
                       </div>
-                      <div className="text-right text-sm"><p className="font-bold text-emerald-600 dark:text-emerald-300">AC</p><p className="text-xs text-slate-500 dark:text-gray-500">{formatRuntimeMs(entry.best_runtime_ms)}</p></div>
+                      <div className="text-right text-sm"><p className="font-bold text-emerald-600 dark:text-emerald-300">AC</p><p className="text-xs text-slate-500 dark:text-gray-500">{entry.submission_count} submits</p></div>
                     </div>
                   ))}
                 </div>
@@ -2343,7 +2321,6 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 {submission ? (
                   <div className="mt-4 grid gap-2 text-sm text-slate-500 dark:text-gray-400 sm:grid-cols-2">
                     <p>score: <span className="text-slate-900 dark:text-white">{submission.score}</span></p>
-                    <p>{runtimeLabel}: <span className="text-slate-900 dark:text-white">{formatRuntimeMs(submission.runtime_ms)}</span></p>
                     <p>language: <span className="text-slate-900 dark:text-white">{submission.language}</span></p>
                     <p>provider: <span className="text-slate-900 dark:text-white">{submission.judge_provider}</span></p>
                     <p className="sm:col-span-2 text-slate-500 dark:text-gray-500">{t.hidden}</p>
