@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ArenaNav } from '@/components/arena/arena-nav'
 import { listChallenges } from '@/lib/arena/store'
 import { childSections, rootArenaSections, sectionStats } from '@/lib/arena/sections'
 
@@ -27,41 +28,40 @@ export default function ArenaPage() {
   ].includes(challenge.slug))
 
   return (
-    <main className="min-h-[100dvh] bg-[#151515] text-white">
+    <main className="min-h-[100dvh] bg-[#f7f5f0] text-slate-950 dark:bg-[#151515] dark:text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-[-18rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#3ce8e2]/10 blur-3xl" />
-        <div className="absolute bottom-[-16rem] right-[-12rem] h-[32rem] w-[32rem] rounded-full bg-violet-500/10 blur-3xl" />
+        <div className="absolute left-1/2 top-[-18rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#3ce8e2]/20 blur-3xl dark:bg-[#3ce8e2]/10" />
+        <div className="absolute bottom-[-16rem] right-[-12rem] h-[32rem] w-[32rem] rounded-full bg-sky-300/20 blur-3xl dark:bg-violet-500/10" />
       </div>
 
       <section className="relative mx-auto max-w-7xl px-3 py-6 sm:px-5 sm:py-8 lg:px-8 lg:py-10">
-        <nav className="mb-10 flex flex-wrap items-center justify-between gap-3 sm:mb-14 lg:mb-20">
-          <Link href="/arena" className="bg-gradient-to-r from-[#3ce8e2] via-[#00b3b3] to-[#3ce8e2] bg-clip-text text-2xl font-black tracking-tight text-transparent sm:text-3xl">
-            WTT 终生学习
-          </Link>
-          <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-400 sm:gap-4 lg:gap-5">
+        <ArenaNav
+          right={(
+            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500 dark:text-gray-400 sm:gap-4 lg:gap-5">
             <a href="#sections" className="hidden transition-colors hover:text-[#3ce8e2] sm:inline">学习板块</a>
             <a href="#featured" className="hidden transition-colors hover:text-[#3ce8e2] sm:inline">推荐入口</a>
             <Link href="/feed" className="transition-colors hover:text-[#3ce8e2]">讨论</Link>
             <Link href="/arena/sections/ai-kernel" className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-3 py-2 text-xs font-black text-black transition-opacity hover:opacity-90 sm:px-4 sm:text-sm">
               进入 AI Kernel
             </Link>
-          </div>
-        </nav>
+            </div>
+          )}
+        />
 
         <div className="mb-10 text-center sm:mb-12 lg:mb-16">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#3ce8e2] sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.26em]">
             先选板块 · 再进入题目 · Agent Runner / Coach
           </div>
-          <h1 className="mx-auto max-w-5xl text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl xl:text-7xl">
+          <h1 className="mx-auto max-w-5xl text-4xl font-black tracking-tight text-slate-950 dark:text-white sm:text-5xl lg:text-6xl xl:text-7xl">
             终生学习：面试、学科、AI Kernel 与志愿咨询
           </h1>
-          <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-gray-400 sm:mt-6 lg:text-lg lg:leading-8">
+          <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-slate-600 dark:text-gray-400 sm:mt-6 lg:text-lg lg:leading-8">
             技术板块覆盖 AI Kernel、系统、硬件、芯片、固件、RTOS 和编程训练；教育板块按小学、初中、高中组织学科练习；高考志愿板块提供院校、专业、位次和就业方向咨询。
           </p>
           <div className="mt-6 grid gap-3 text-center sm:mt-8 sm:grid-cols-3 lg:mt-10">
-            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-4 lg:p-5"><p className="text-2xl font-black text-[#3ce8e2] sm:text-3xl">{total}</p><p className="mt-1 text-xs text-gray-500 sm:text-sm">题目与咨询</p></div>
-            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-4 lg:p-5"><p className="text-2xl font-black text-cyan-300 sm:text-3xl">{technologyCount}</p><p className="mt-1 text-xs text-gray-500 sm:text-sm">技术训练</p></div>
-            <div className="rounded-lg border border-gray-800 bg-[#1b1b1b] p-4 lg:p-5"><p className="text-2xl font-black text-amber-300 sm:text-3xl">{educationCount}</p><p className="mt-1 text-xs text-gray-500 sm:text-sm">学科学习</p></div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:p-5"><p className="text-2xl font-black text-[#008f8f] dark:text-[#3ce8e2] sm:text-3xl">{total}</p><p className="mt-1 text-xs text-slate-500 dark:text-gray-500 sm:text-sm">题目与咨询</p></div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:p-5"><p className="text-2xl font-black text-cyan-600 dark:text-cyan-300 sm:text-3xl">{technologyCount}</p><p className="mt-1 text-xs text-slate-500 dark:text-gray-500 sm:text-sm">技术训练</p></div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:p-5"><p className="text-2xl font-black text-amber-600 dark:text-amber-300 sm:text-3xl">{educationCount}</p><p className="mt-1 text-xs text-slate-500 dark:text-gray-500 sm:text-sm">学科学习</p></div>
           </div>
         </div>
 
@@ -71,7 +71,7 @@ export default function ArenaPage() {
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#3ce8e2]">Learning Boards</p>
               <h2 className="mt-2 text-2xl font-black sm:text-3xl">选择训练板块</h2>
             </div>
-            <p className="text-xs text-gray-500 sm:text-sm">板块 → 题目列表 → 题目详情 / Agent 对话</p>
+            <p className="text-xs text-slate-500 dark:text-gray-500 sm:text-sm">板块 → 题目列表 → 题目详情 / Agent 对话</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-5">
             {sections.map((section) => {
@@ -79,20 +79,20 @@ export default function ArenaPage() {
               const childCount = childSections(section.slug).length
               const isTutorial = section.slug === 'claude-code-tutorial' || section.slug === 'codex-tutorial'
               return (
-                <Link key={section.slug} href={section.href} className="group overflow-hidden rounded-2xl border border-gray-800 bg-[#1b1b1b] p-5 transition hover:-translate-y-1 hover:border-[#3ce8e2]/40 hover:bg-[#202020] lg:p-6">
+                <Link key={section.slug} href={section.href} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-[#3ce8e2]/50 hover:bg-[#f9fffe] dark:border-gray-800 dark:bg-[#1b1b1b] dark:hover:border-[#3ce8e2]/40 dark:hover:bg-[#202020] lg:p-6">
                   <div className={`mb-5 h-1.5 w-24 rounded-full bg-gradient-to-r ${section.accent}`} />
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">{section.eyebrow}</p>
-                  <h3 className="mt-3 text-2xl font-black text-white group-hover:text-[#3ce8e2]">{section.titleZh}</h3>
-                  <p className="mt-4 min-h-[54px] text-sm leading-6 text-gray-400 lg:min-h-[72px]">{section.descriptionZh}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">{section.eyebrow}</p>
+                  <h3 className="mt-3 text-2xl font-black text-slate-950 group-hover:text-[#008f8f] dark:text-white dark:group-hover:text-[#3ce8e2]">{section.titleZh}</h3>
+                  <p className="mt-4 min-h-[54px] text-sm leading-6 text-slate-600 dark:text-gray-400 lg:min-h-[72px]">{section.descriptionZh}</p>
                   <div className="mt-6 grid grid-cols-4 gap-2 text-center text-xs">
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className="text-lg font-black text-white">{isTutorial ? childCount : stats.total}</p><p className="text-gray-500">{isTutorial ? '章' : '题'}</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-cyan-300' : difficultyTone('easy')}`}>{isTutorial ? '官方' : stats.easy}</p><p className="text-gray-500">{isTutorial ? 'Docs' : 'Easy'}</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-yellow-300' : difficultyTone('medium')}`}>{isTutorial ? '中文' : stats.medium}</p><p className="text-gray-500">{isTutorial ? 'CN' : 'Med'}</p></div>
-                    <div className="rounded-lg border border-gray-800 bg-[#151515] p-3"><p className={`text-lg font-black ${isTutorial ? 'text-emerald-300' : difficultyTone('hard')}`}>{isTutorial ? '实践' : stats.hard}</p><p className="text-gray-500">{isTutorial ? '命令' : 'Hard'}</p></div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-slate-950 dark:text-white">{isTutorial ? childCount : stats.total}</p><p className="text-slate-500 dark:text-gray-500">{isTutorial ? '章' : '题'}</p></div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className={`text-lg font-black ${isTutorial ? 'text-cyan-600 dark:text-cyan-300' : difficultyTone('easy')}`}>{isTutorial ? '官方' : stats.easy}</p><p className="text-slate-500 dark:text-gray-500">{isTutorial ? 'Docs' : 'Easy'}</p></div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className={`text-lg font-black ${isTutorial ? 'text-yellow-600 dark:text-yellow-300' : difficultyTone('medium')}`}>{isTutorial ? '中文' : stats.medium}</p><p className="text-slate-500 dark:text-gray-500">{isTutorial ? 'CN' : 'Med'}</p></div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className={`text-lg font-black ${isTutorial ? 'text-emerald-600 dark:text-emerald-300' : difficultyTone('hard')}`}>{isTutorial ? '实践' : stats.hard}</p><p className="text-slate-500 dark:text-gray-500">{isTutorial ? '命令' : 'Hard'}</p></div>
                   </div>
                   <div className="mt-6 flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Sources: {section.sources.slice(0, 2).map((item) => item.label).join(' / ')}</span>
-                    <span className="font-black text-[#3ce8e2]">进入 →</span>
+                    <span className="text-slate-500 dark:text-gray-500">Sources: {section.sources.slice(0, 2).map((item) => item.label).join(' / ')}</span>
+                    <span className="font-black text-[#008f8f] dark:text-[#3ce8e2]">进入 →</span>
                   </div>
                 </Link>
               )
@@ -107,31 +107,31 @@ export default function ArenaPage() {
                 <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#3ce8e2]">Featured</p>
                 <h2 className="mt-2 text-3xl font-black">推荐入口</h2>
               </div>
-              <p className="text-sm text-gray-500">快速打开代表性题目</p>
+              <p className="text-sm text-slate-500 dark:text-gray-500">快速打开代表性题目</p>
             </div>
-            <div className="overflow-hidden rounded-lg border border-gray-800 bg-[#1e1e1e]">
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
               {featured.map((challenge, index) => (
-                <Link key={challenge.id} href={`/arena/challenges/${challenge.slug}`} className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-gray-800/70 px-4 py-3 transition-colors last:border-b-0 hover:bg-[#252525] md:grid-cols-[minmax(0,1fr)_90px_96px] lg:px-5 lg:py-4">
+                <Link key={challenge.id} href={`/arena/challenges/${challenge.slug}`} className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200 px-4 py-3 transition-colors last:border-b-0 hover:bg-[#efffff] dark:border-gray-800/70 dark:hover:bg-[#252525] md:grid-cols-[minmax(0,1fr)_90px_96px] lg:px-5 lg:py-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm text-gray-500">{String(index + 1).padStart(2, '0')}</span>
-                      <h3 className="truncate text-base font-bold text-white group-hover:text-[#3ce8e2]">{challenge.title}</h3>
+                      <span className="font-mono text-sm text-slate-400 dark:text-gray-500">{String(index + 1).padStart(2, '0')}</span>
+                      <h3 className="truncate text-base font-bold text-slate-950 group-hover:text-[#008f8f] dark:text-white dark:group-hover:text-[#3ce8e2]">{challenge.title}</h3>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 pl-9">
-                      {challenge.tags.slice(0, 3).map((tag) => <span key={tag} className="rounded bg-[#151515] px-2 py-0.5 text-xs text-gray-400">{tag}</span>)}
+                      {challenge.tags.slice(0, 3).map((tag) => <span key={tag} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-[#151515] dark:text-gray-400">{tag}</span>)}
                     </div>
                   </div>
-                  <span className="hidden text-sm font-bold capitalize text-gray-300 md:inline">{challenge.difficulty}</span>
-                  <span className="text-right text-sm font-semibold text-[#3ce8e2]">Open →</span>
+                  <span className="hidden text-sm font-bold capitalize text-slate-500 dark:text-gray-300 md:inline">{challenge.difficulty}</span>
+                  <span className="text-right text-sm font-semibold text-[#008f8f] dark:text-[#3ce8e2]">Open →</span>
                 </Link>
               ))}
             </div>
           </div>
 
           <aside className="space-y-4">
-            <div className="rounded-lg border border-gray-800 bg-[#1e1e1e] p-5">
-              <h3 className="font-bold text-white">板块说明</h3>
-              <ul className="mt-3 space-y-3 text-sm text-gray-400">
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+              <h3 className="font-bold text-slate-950 dark:text-white">板块说明</h3>
+              <ul className="mt-3 space-y-3 text-sm text-slate-600 dark:text-gray-400">
                 <li>• 技术板块：AI Kernel、AI 面试、系统、芯片、硬件、固件、RTOS、编程和工程基础训练。</li>
                 <li>• 教育板块：小学、初中、高中学科练习，支持学习 Coach、答题点评和白板讲解。</li>
                 <li>• 高考志愿板块：围绕院校层次、分数线、位次、专业方向、城市和就业路径进行咨询。</li>
