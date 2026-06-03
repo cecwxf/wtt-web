@@ -1044,9 +1044,11 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
   const displayTitle = title || 'Preview'
   const [iframeUrl, setIframeUrl] = useState(url)
   const [status, setStatus] = useState<'idle' | 'restoring' | 'ready' | 'error'>('idle')
+  const [expanded, setExpanded] = useState(false)
   const [errorText, setErrorText] = useState('')
 
   const restartPreview = useCallback(async () => {
+    setExpanded(true)
     if (!accessToken || !preview.senderId) {
       setIframeUrl(url)
       setStatus('ready')
@@ -1101,6 +1103,23 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
             </a>
             <button
               type="button"
+              onClick={() => {
+                if (expanded) {
+                  setExpanded(false)
+                  return
+                }
+                if (status === 'ready') {
+                  setExpanded(true)
+                  return
+                }
+                restartPreview()
+              }}
+              className="rounded-md bg-white/75 px-2 py-1 text-[11px] font-bold text-sky-800 transition hover:bg-white dark:bg-zinc-900/80 dark:text-sky-200 dark:hover:bg-zinc-800"
+            >
+              {expanded ? '折叠' : '预览'}
+            </button>
+            <button
+              type="button"
               onClick={restartPreview}
               className="rounded-md bg-white/75 px-2 py-1 text-[11px] font-bold text-sky-800 transition hover:bg-white dark:bg-zinc-900/80 dark:text-sky-200 dark:hover:bg-zinc-800"
               title="重新激活 sandbox preview"
@@ -1119,48 +1138,36 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
           </div>
         </div>
       </div>
-      <div className="h-[300px] border-t border-sky-100 bg-slate-100/70 p-1.5 dark:border-sky-500/10 dark:bg-zinc-900/70 sm:h-[340px]">
-        {status === 'idle' ? (
-          <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white p-5 text-center shadow-inner dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="max-w-sm">
-              <p className="text-sm font-bold text-slate-900 dark:text-zinc-50">Cloud Sandbox Preview</p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-zinc-400">为避免旧预览自动唤醒 sandbox，需要查看 live preview 时再手动恢复。</p>
-              <button
-                type="button"
-                onClick={restartPreview}
-                className="mt-3 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-sky-500"
-              >
-                恢复预览
-              </button>
+      {expanded && (
+        <div className="h-[300px] border-t border-sky-100 bg-slate-100/70 p-1.5 dark:border-sky-500/10 dark:bg-zinc-900/70 sm:h-[340px]">
+          {status === 'restoring' ? (
+            <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white text-xs font-semibold text-sky-700 shadow-inner dark:border-zinc-800 dark:bg-zinc-950 dark:text-sky-200">
+              正在恢复 Sandbox Preview...
             </div>
-          </div>
-        ) : status === 'restoring' ? (
-          <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white text-xs font-semibold text-sky-700 shadow-inner dark:border-zinc-800 dark:bg-zinc-950 dark:text-sky-200">
-            正在恢复 Sandbox Preview...
-          </div>
-        ) : status === 'error' ? (
-          <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white p-5 text-center shadow-inner dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="max-w-sm">
-              <p className="text-sm font-bold text-slate-900 dark:text-zinc-50">Preview 暂不可用</p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-zinc-400">{errorText || 'Sandbox runtime 未激活或本地 preview server 未运行。'}</p>
-              <button
-                type="button"
-                onClick={restartPreview}
-                className="mt-3 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-sky-500"
-              >
-                重新恢复
-              </button>
+          ) : status === 'error' ? (
+            <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white p-5 text-center shadow-inner dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="max-w-sm">
+                <p className="text-sm font-bold text-slate-900 dark:text-zinc-50">Preview 暂不可用</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-zinc-400">{errorText || 'Sandbox runtime 未激活或本地 preview server 未运行。'}</p>
+                <button
+                  type="button"
+                  onClick={restartPreview}
+                  className="mt-3 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-sky-500"
+                >
+                  重新恢复
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <iframe
-            src={iframeUrl}
-            title={displayTitle}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-            className="h-full w-full rounded-xl border border-white bg-white shadow-inner dark:border-zinc-800 dark:bg-zinc-950"
-          />
-        )}
-      </div>
+          ) : (
+            <iframe
+              src={iframeUrl}
+              title={displayTitle}
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+              className="h-full w-full rounded-xl border border-white bg-white shadow-inner dark:border-zinc-800 dark:bg-zinc-950"
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }
