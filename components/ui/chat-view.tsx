@@ -98,6 +98,7 @@ interface CurrentAgentRuntimeInfo {
 
 const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
 const DEFAULT_CODEX_MODEL_ID = 'openai-codex/gpt-5.5'
+const DEFAULT_GEMINI_MODEL_ID = 'gemini-3.1-pro-preview'
 
 const FALLBACK_MODELS: ModelOption[] = [
   { id: DEFAULT_MODEL_ID, label: 'DeepSeek V4 Pro', supports_reasoning: true },
@@ -167,6 +168,46 @@ function normalizeAgentAdapter(runtime?: CurrentAgentRuntimeInfo): 'claude-code'
   if (model.startsWith('openai-codex/') || model.startsWith('openai/') || model.includes('gpt')) return 'codex'
   if (model.startsWith('anthropic/') || model.includes('claude') || model.includes('deepseek')) return 'claude-code'
   return 'generic'
+}
+
+function defaultModelForAdapter(adapter: ReturnType<typeof normalizeAgentAdapter>): string {
+  if (adapter === 'codex') return DEFAULT_CODEX_MODEL_ID
+  if (adapter === 'gemini') return DEFAULT_GEMINI_MODEL_ID
+  return DEFAULT_MODEL_ID
+}
+
+function isModelAllowedForAdapter(modelId: string, adapter: ReturnType<typeof normalizeAgentAdapter>): boolean {
+  const model = String(modelId || '').trim().toLowerCase()
+  if (!model || adapter === 'generic') return true
+  if (adapter === 'codex') {
+    return model.startsWith('openai-codex/')
+      || model.startsWith('openai/')
+      || model.startsWith('gpt-')
+      || /^o[1-9]/.test(model)
+      || model.includes('codex')
+  }
+  if (adapter === 'gemini') {
+    return model.startsWith('google/')
+      || model.startsWith('gemini-')
+      || model.includes('gemini')
+  }
+  if (adapter === 'claude-code') {
+    return model.startsWith('anthropic/')
+      || model.startsWith('claude')
+      || model.startsWith('deepseek/')
+      || model.startsWith('deepseek')
+      || model.startsWith('moonshot/')
+      || model.startsWith('kimi')
+  }
+  return true
+}
+
+function filterModelsForAdapter(models: ModelOption[], adapter: ReturnType<typeof normalizeAgentAdapter>): ModelOption[] {
+  const filtered = models.filter((model) => isModelAllowedForAdapter(model.id, adapter))
+  if (filtered.length) return filtered
+  const fallback = defaultModelForAdapter(adapter)
+  const existing = FALLBACK_MODELS.find((model) => model.id === fallback)
+  return existing ? [existing] : [{ id: fallback, label: fallback, supports_reasoning: true }]
 }
 
 function labelForRuntimeModel(modelId: string, adapter: ReturnType<typeof normalizeAgentAdapter>): string {
@@ -1461,7 +1502,9 @@ export function ChatView({
   const currentRuntimePref = runtimeModelPref(currentAgentRuntime)
   const activeAgentAdapter = normalizeAgentAdapter(currentAgentRuntime)
   const modelOptions = useMemo(() => {
-    const runtimeModel = currentRuntimePref?.model
+    const runtimeModel = currentRuntimePref?.model && isModelAllowedForAdapter(currentRuntimePref.model, activeAgentAdapter)
+      ? currentRuntimePref.model
+      : ''
     const dynamicModels = runtimeModel
       ? [{
           id: runtimeModel,
@@ -1469,7 +1512,7 @@ export function ChatView({
           supports_reasoning: true,
         }]
       : []
-    return mergeModelOptions([...availableModels, ...dynamicModels])
+    return filterModelsForAdapter(mergeModelOptions([...availableModels, ...dynamicModels]), activeAgentAdapter)
   }, [availableModels, currentRuntimePref?.model, activeAgentAdapter])
   const activeAgentLabel = activeAgentAdapter === 'codex' ? 'Codex'
     : activeAgentAdapter === 'claude-code' ? 'Claude Code'
@@ -1647,7 +1690,9 @@ export function ChatView({
     const inMemory = modelPrefsByTopicRef.current[topicPreferenceKey]
     const persisted = readStoredModelPref(topicPreferenceKey)
     const saved = inMemory ?? persisted
-    const runtimeModel = currentRuntimePref?.model && modelOptions.some((m) => m.id === currentRuntimePref.model)
+    const runtimeModel = currentRuntimePref?.model
+      && isModelAllowedForAdapter(currentRuntimePref.model, activeAgentAdapter)
+      && modelOptions.some((m) => m.id === currentRuntimePref.model)
       ? currentRuntimePref.model
       : ''
 
@@ -1656,8 +1701,8 @@ export function ChatView({
       || ((taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off')
 
     let preferredModel = runtimeModel || saved?.model
-    if (!preferredModel || !modelOptions.some((m) => m.id === preferredModel)) {
-      preferredModel = activeAgentAdapter === 'codex' ? DEFAULT_CODEX_MODEL_ID : DEFAULT_MODEL_ID
+    if (!preferredModel || !isModelAllowedForAdapter(preferredModel, activeAgentAdapter) || !modelOptions.some((m) => m.id === preferredModel)) {
+      preferredModel = defaultModelForAdapter(activeAgentAdapter)
     }
 
     setSelectedModel(preferredModel)
@@ -1688,9 +1733,9 @@ export function ChatView({
     const model = String(latestWithHint.model_hint || '').trim()
     const effort = latestWithHint.reasoning_hint
 
-    const nextModel = model && modelOptions.some((m) => m.id === model)
+    const nextModel = model && isModelAllowedForAdapter(model, activeAgentAdapter) && modelOptions.some((m) => m.id === model)
       ? model
-      : (modelOptions.some((m) => m.id === selectedModel) ? selectedModel : DEFAULT_MODEL_ID)
+      : (isModelAllowedForAdapter(selectedModel, activeAgentAdapter) && modelOptions.some((m) => m.id === selectedModel) ? selectedModel : defaultModelForAdapter(activeAgentAdapter))
     const nextEffort: ModelPref['effort'] = effort || reasoningEffort
 
     if (nextModel) setSelectedModel(nextModel)
@@ -1700,7 +1745,7 @@ export function ChatView({
     modelPrefsByTopicRef.current[topicPreferenceKey] = pref
     writeStoredModelPref(topicPreferenceKey, pref)
     messageHintAppliedRef.current[topicPreferenceKey] = latestWithHint.message_id
-  }, [messages, topicPreferenceKey, modelOptions, selectedModel, reasoningEffort])
+  }, [messages, topicPreferenceKey, modelOptions, selectedModel, reasoningEffort, activeAgentAdapter])
 
   // Hydrate from current worker model config so picker reflects active worker settings.
   useEffect(() => {
@@ -1729,9 +1774,9 @@ export function ChatView({
 
         if (cancelled) return
 
-        const nextModel = model && modelOptions.some((m) => m.id === model)
+        const nextModel = model && isModelAllowedForAdapter(model, activeAgentAdapter) && modelOptions.some((m) => m.id === model)
           ? model
-          : (modelOptions.some((m) => m.id === selectedModel) ? selectedModel : DEFAULT_MODEL_ID)
+          : (isModelAllowedForAdapter(selectedModel, activeAgentAdapter) && modelOptions.some((m) => m.id === selectedModel) ? selectedModel : defaultModelForAdapter(activeAgentAdapter))
         const nextEffort: ModelPref['effort'] = effort || reasoningEffort
 
         if (nextModel) setSelectedModel(nextModel)
@@ -1751,7 +1796,7 @@ export function ChatView({
     return () => {
       cancelled = true
     }
-  }, [topicId, currentAgentId, accessToken, topicPreferenceKey, modelOptions, selectedModel, reasoningEffort])
+  }, [topicId, currentAgentId, accessToken, topicPreferenceKey, modelOptions, selectedModel, reasoningEffort, activeAgentAdapter])
 
   // Close model menu on click outside
   useEffect(() => {
@@ -2172,9 +2217,12 @@ export function ChatView({
       }
     }
 
-    const modelConfig: ChatModelConfig = { model: selectedModel, reasoningEffort }
+    const sendModel = isModelAllowedForAdapter(selectedModel, activeAgentAdapter)
+      ? selectedModel
+      : defaultModelForAdapter(activeAgentAdapter)
+    const modelConfig: ChatModelConfig = { model: sendModel, reasoningEffort }
 
-    lastSentConfigRef.current = { model: selectedModel, effort: reasoningEffort }
+    lastSentConfigRef.current = { model: sendModel, effort: reasoningEffort }
     if (isFirstMessage) setIsFirstMessage(false)
 
     setSending(true)
