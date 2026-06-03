@@ -28,7 +28,7 @@ body {
    limited height, so the app shell uses variables instead of hard-coded rails. */
 .wtt-app-shell {
   --wtt-topbar-height: 54px;
-  --wtt-agent-rail-width: 88px;
+  --wtt-agent-rail-width: 112px;
   --wtt-topic-rail-width: 264px;
   --wtt-shell-density-scale: 1;
 }
@@ -36,7 +36,7 @@ body {
 @media (max-width: 1439px), (max-height: 849px) {
   .wtt-app-shell {
     --wtt-topbar-height: 50px;
-    --wtt-agent-rail-width: 78px;
+    --wtt-agent-rail-width: 104px;
     --wtt-topic-rail-width: 246px;
     --wtt-shell-density-scale: 0.92;
   }
@@ -44,14 +44,14 @@ body {
 
 @media (max-width: 1279px) {
   .wtt-app-shell {
-    --wtt-agent-rail-width: 64px;
+    --wtt-agent-rail-width: 96px;
     --wtt-topic-rail-width: 224px;
   }
 }
 
 @media (min-width: 1800px) and (min-height: 900px) {
   .wtt-app-shell {
-    --wtt-agent-rail-width: 96px;
+    --wtt-agent-rail-width: 116px;
     --wtt-topic-rail-width: 288px;
   }
 }

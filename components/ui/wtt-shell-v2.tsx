@@ -80,7 +80,7 @@ type ShellWidths = {
   topic: number
 }
 
-const DEFAULT_SHELL_WIDTHS: ShellWidths = { agent: 88, topic: 264 }
+const DEFAULT_SHELL_WIDTHS: ShellWidths = { agent: 112, topic: 264 }
 const SHELL_WIDTH_STORAGE_KEY = 'wtt.feed.shellWidths'
 
 function clampWidth(value: number, min: number, max: number) {
@@ -164,7 +164,7 @@ export function WttShellV2(props: WttShellV2Props) {
       if (savedWidths) {
         const parsed = JSON.parse(savedWidths) as Partial<ShellWidths>
         setShellWidths({
-          agent: clampWidth(Number(parsed.agent) || DEFAULT_SHELL_WIDTHS.agent, 64, 180),
+          agent: clampWidth(Number(parsed.agent) || DEFAULT_SHELL_WIDTHS.agent, 104, 200),
           topic: clampWidth(Number(parsed.topic) || DEFAULT_SHELL_WIDTHS.topic, 190, 560),
         })
       }
@@ -205,7 +205,7 @@ export function WttShellV2(props: WttShellV2Props) {
     const onMove = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientX - startX
       const next = kind === 'agent'
-        ? clampWidth(startWidth + delta, 64, 180)
+        ? clampWidth(startWidth + delta, 104, 200)
         : clampWidth(startWidth + delta, 190, 560)
       setShellWidths((prev) => ({ ...prev, [kind]: next }))
     }

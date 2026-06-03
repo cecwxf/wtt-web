@@ -1037,26 +1037,26 @@ export function TopicColumn(props: TopicColumnProps) {
                     setAgentMenuFor(agent.agent_id)
                   }}
                   title={hoverTitle}
-                  className={`group flex w-full flex-col items-center justify-center rounded-xl border px-1 py-1.5 text-center transition ${
+                  className={`group flex w-full flex-col items-center justify-center rounded-lg border px-1 py-1 text-center transition ${
                     selected
-                      ? `${tone.selected} relative scale-[1.06] border-slate-950 shadow-[0_0_0_2px_rgba(15,23,42,0.22),0_10px_20px_rgba(15,23,42,0.18)] ring-2 ring-slate-950/75 dark:border-cyan-200 dark:shadow-[0_0_0_2px_rgba(103,232,249,0.28),0_10px_20px_rgba(8,145,178,0.22)] dark:ring-cyan-200/80`
+                      ? `${tone.selected} relative scale-[1.03] border-slate-950 shadow-[0_0_0_1px_rgba(15,23,42,0.18),0_6px_14px_rgba(15,23,42,0.14)] ring-2 ring-slate-950/65 dark:border-cyan-200 dark:shadow-[0_0_0_1px_rgba(103,232,249,0.22),0_6px_14px_rgba(8,145,178,0.18)] dark:ring-cyan-200/70`
                       : `border-transparent bg-white/55 dark:bg-zinc-900/60 ${tone.idle}`
                   }`}
                 >
                   {selected && (
-                    <span className="absolute -right-1 -top-1 z-10 rounded-full bg-slate-950 px-1 py-0.5 text-[7px] font-black uppercase leading-none tracking-[0.08em] text-white shadow-sm dark:bg-cyan-200 dark:text-slate-950">
+                    <span className="absolute -right-1 -top-1 z-10 rounded-full bg-slate-950 px-1 py-0.5 text-[6px] font-black uppercase leading-none tracking-[0.08em] text-white shadow-sm dark:bg-cyan-200 dark:text-slate-950">
                       Active
                     </span>
                   )}
-                  <span className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[10px] font-black shadow-sm ring-2 ${tone.avatar} ${selected ? 'ring-slate-950/80 dark:ring-white/90' : tone.ring}`}>
+                  <span className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[8px] font-black shadow-sm ring-1 ${tone.avatar} ${selected ? 'ring-slate-950/75 dark:ring-white/80' : tone.ring}`}>
                     {agentInitial(agent.display_name)}
                     <span
-                      className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#f6f3ed] dark:border-zinc-950 ${
+                      className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-[#f6f3ed] dark:border-zinc-950 ${
                         online ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-600'
                       }`}
                     />
                   </span>
-                  <span className={`mt-1 max-w-full truncate text-[9px] font-black leading-none ${tone.label}`} title={hoverTitle}>
+                  <span className={`mt-0.5 max-w-full truncate text-[8px] font-black leading-none ${tone.label}`} title={hoverTitle}>
                     {role.shortLabel}
                   </span>
 
