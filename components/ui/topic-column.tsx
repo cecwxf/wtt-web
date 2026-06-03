@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap, type LucideIcon } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -234,17 +234,6 @@ function roleTone(agentId: string, role?: AgentRoleTemplate) {
 
 function hostFolderTone(key: string) {
   return HOST_FOLDER_TONES[hashText(key) % HOST_FOLDER_TONES.length] || HOST_FOLDER_TONES[0]
-}
-
-function MythicAgentDirectoryIcon({ Icon }: { Icon: LucideIcon }) {
-  return (
-    <span className="relative flex h-9 w-9 items-center justify-center">
-      <span className="absolute inset-0 rounded-full bg-white/25 blur-[1px]" />
-      <span className="absolute inset-0 rotate-45 rounded-lg border border-white/35" />
-      <span className="absolute inset-1 rounded-full border border-white/30" />
-      <Icon className="relative h-5 w-5 drop-shadow" strokeWidth={2.5} />
-    </span>
-  )
 }
 
 function agentTooltip(agent: AgentOption, role: AgentRoleTemplate, runtime?: AgentRuntimeInfo) {
@@ -919,7 +908,6 @@ export function TopicColumn(props: TopicColumnProps) {
             const collapsed = collapsedAgentFolders[folder.key] ?? false
             const onlineCount = folder.agents.filter((agent) => isAgentOnline(agent.agent_id)).length
             const folderTone = hostFolderTone(folder.key)
-            const FolderIcon = folderTone.Icon
             const cloudHostIds = Array.from(new Set(folder.agents
               .map((agent) => cloudHostAgentIdForAgent(agent, displayRuntimeMap?.[agent.agent_id]))
               .filter(Boolean)))
@@ -942,33 +930,29 @@ export function TopicColumn(props: TopicColumnProps) {
                     setAgentMenuFor(null)
                     setFolderMenuFor(folder.key)
                   }}
-                  className={`relative flex w-full flex-col items-center rounded-2xl border px-1 py-1.5 text-center shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${
+                  className={`group relative flex w-full items-center gap-1.5 overflow-hidden rounded-xl border px-1.5 py-1.5 text-left shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${
                     folderSelected
-                      ? `scale-[1.02] border-slate-900 shadow-[0_0_0_2px_rgba(15,23,42,0.22),0_12px_24px_rgba(15,23,42,0.16)] ring-2 ring-slate-900/70 dark:border-sky-200 dark:shadow-[0_0_0_2px_rgba(125,211,252,0.32),0_12px_24px_rgba(14,165,233,0.22)] dark:ring-sky-200/80 ${folderTone.shell}`
+                      ? `scale-[1.01] border-slate-900 shadow-[0_0_0_2px_rgba(15,23,42,0.18),0_8px_18px_rgba(15,23,42,0.14)] ring-2 ring-slate-900/60 dark:border-sky-200 dark:shadow-[0_0_0_2px_rgba(125,211,252,0.28),0_8px_18px_rgba(14,165,233,0.18)] dark:ring-sky-200/75 ${folderTone.shell}`
                       : folderTone.shell
                   }`}
                   title={[folder.label, folder.subtitle, folderCloudHostId ? (zh ? '右键管理 Sandbox' : 'Right-click to manage Sandbox') : ''].filter(Boolean).join(' · ')}
                 >
+                  <span className={`absolute inset-y-1 left-0 w-1 rounded-r-full bg-gradient-to-b ${folderTone.icon}`} />
                   {folderSelected && (
-                    <>
-                      <span className="absolute -left-1 top-2 h-[calc(100%-1rem)] w-1.5 rounded-full bg-slate-900 shadow-sm dark:bg-sky-200" />
-                      <span className="absolute right-1 top-1 rounded-full bg-slate-900 px-1 py-0.5 text-[7px] font-black uppercase leading-none tracking-[0.08em] text-white shadow-sm dark:bg-sky-200 dark:text-slate-950">
-                        Host
-                      </span>
-                    </>
+                    <span className="absolute inset-0 bg-white/28 dark:bg-white/[0.04]" />
                   )}
-                  <span className="flex items-center gap-1">
-                    {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    <span className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-[1.35rem] bg-gradient-to-br shadow-lg ${folderSelected ? 'ring-2 ring-slate-950/80 dark:ring-white/90' : 'ring-1 ring-white/40'} ${folderTone.icon}`}>
-                      <span className="absolute -left-3 top-0 h-10 w-10 rounded-full bg-white/20" />
-                      <span className="absolute -bottom-5 right-0 h-10 w-10 rounded-full bg-black/20" />
-                      <MythicAgentDirectoryIcon Icon={FolderIcon} />
+                  <span className="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-white/55 text-slate-700 shadow-sm ring-1 ring-white/60 dark:bg-zinc-950/45 dark:text-zinc-200 dark:ring-white/10">
+                    {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="relative z-10 min-w-0 flex-1">
+                    <span className="block truncate text-[10px] font-black leading-tight" title={folder.label}>
+                      {folder.label}
+                    </span>
+                    <span className="block truncate text-[8px] font-bold uppercase tracking-[0.08em] opacity-55">
+                      {folder.subtitle || (zh ? '主机' : 'Host')}
                     </span>
                   </span>
-                  <span className="mt-1 max-w-full truncate text-[9px] font-black leading-tight">
-                    {folder.label}
-                  </span>
-                  <span className={`mt-1 rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none ${folderTone.badge}`}>
+                  <span className={`relative z-10 shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none ${folderTone.badge}`}>
                     {onlineCount}/{folder.agents.length}
                   </span>
                 </button>
