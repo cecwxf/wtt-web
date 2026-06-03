@@ -1082,66 +1082,53 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
 
 function CloudSandboxPreviewCard({
   preview,
-  onOpen,
   onClose,
 }: {
   preview: CloudSandboxPreview
-  onOpen: (preview: CloudSandboxPreview) => Promise<string>
-  onClose: (activeUrl?: string) => void
+  onClose: () => void
 }) {
   const { url, title } = preview
   const displayTitle = title || 'Preview'
-  const [expanded, setExpanded] = useState(false)
-  const [liveUrl, setLiveUrl] = useState('')
-  const [opening, setOpening] = useState(false)
   const [error, setError] = useState('')
 
-  const handleOpen = useCallback(async () => {
-    if (opening) return
-    setOpening(true)
+  const handleOpen = useCallback(() => {
     setError('')
-    try {
-      const nextUrl = await onOpen(preview)
-      setLiveUrl(nextUrl || url)
-      setExpanded(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setOpening(false)
+    const popup = window.open(url, '_blank', 'noopener,noreferrer')
+    if (!popup) {
+      setError('浏览器阻止了新窗口，请允许弹窗后重试。')
     }
-  }, [onOpen, opening, preview, url])
+  }, [url])
 
   const handleClose = useCallback(() => {
-    onClose(liveUrl || url)
-  }, [liveUrl, onClose, url])
+    onClose()
+  }, [onClose])
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-sky-200/80 bg-white shadow-[0_12px_32px_rgba(14,116,144,0.12)] ring-1 ring-sky-100/60 dark:border-sky-500/25 dark:bg-zinc-950 dark:shadow-black/25 dark:ring-sky-500/10">
-      <div className="relative overflow-hidden bg-[linear-gradient(135deg,#ecfeff_0%,#f8fafc_56%,#ecfdf5_100%)] px-3 py-2 dark:bg-[linear-gradient(135deg,rgba(8,47,73,.62),rgba(24,24,27,.95)_62%,rgba(6,78,59,.36))]">
-        <div className="pointer-events-none absolute right-3 top-1.5 h-10 w-10 rounded-full bg-white/45 blur-xl dark:bg-sky-300/10" />
+    <div className="overflow-hidden rounded-xl border border-sky-200/80 bg-white shadow-[0_8px_22px_rgba(14,116,144,0.10)] ring-1 ring-sky-100/60 dark:border-sky-500/25 dark:bg-zinc-950 dark:shadow-black/25 dark:ring-sky-500/10">
+      <div className="relative overflow-hidden bg-[linear-gradient(135deg,#ecfeff_0%,#f8fafc_58%,#ecfdf5_100%)] px-2.5 py-1.5 dark:bg-[linear-gradient(135deg,rgba(8,47,73,.62),rgba(24,24,27,.95)_62%,rgba(6,78,59,.36))]">
+        <div className="pointer-events-none absolute right-3 top-1 h-8 w-8 rounded-full bg-white/45 blur-xl dark:bg-sky-300/10" />
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-sky-700 shadow-sm dark:bg-zinc-900/80 dark:text-sky-200">
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-sky-700 shadow-sm dark:bg-zinc-900/80 dark:text-sky-200">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.85)]" />
               Cloud Preview
             </span>
-            <p className="truncate text-xs font-bold text-slate-900 dark:text-zinc-50">{displayTitle}</p>
+            <p className="truncate text-[11px] font-bold text-slate-900 dark:text-zinc-50">{displayTitle}</p>
           </div>
           <div className="relative z-10 flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={handleOpen}
-              disabled={opening}
-              className="rounded-md bg-slate-950 px-2 py-1 text-[11px] font-bold text-white transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+              className="rounded-md bg-slate-950 px-2 py-0.5 text-[10px] font-bold text-white transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
             >
-              {opening ? '打开中...' : expanded ? '重新打开' : '打开'}
+              打开
             </button>
             <button
               type="button"
               onClick={handleClose}
-              className="rounded-md p-1 text-sky-800 transition hover:bg-white/70 hover:text-red-500 dark:text-sky-200 dark:hover:bg-zinc-900"
+              className="rounded-md p-0.5 text-sky-800 transition hover:bg-white/70 hover:text-red-500 dark:text-sky-200 dark:hover:bg-zinc-900"
               aria-label="Close cloud preview"
-              title="关闭预览并停止 sandbox 端 preview 服务"
+              title="隐藏预览卡片"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -1151,16 +1138,6 @@ function CloudSandboxPreviewCard({
       {error && (
         <div className="border-t border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-500/20 dark:bg-red-950/30 dark:text-red-300">
           {error}
-        </div>
-      )}
-      {expanded && liveUrl && (
-        <div className="border-t border-sky-100 bg-slate-50 p-2 dark:border-sky-500/20 dark:bg-zinc-900">
-          <iframe
-            src={liveUrl}
-            title={displayTitle}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-            className="h-[360px] w-full rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-          />
         </div>
       )}
     </div>
@@ -2587,46 +2564,14 @@ export function ChatView({
     setManualPreviewFile(null)
   }, [conversationFiles, sidePreviewFile])
 
-  const openCloudPreviewCard = useCallback(async (preview: CloudSandboxPreview): Promise<string> => {
-    const targetAgentId = preview.senderId || currentAgentId
-    if (!targetAgentId || !accessToken) throw new Error('缺少 Cloud Agent 权限，无法打开预览')
-    const res = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/${encodeURIComponent(targetAgentId)}/preview/restart`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url: preview.url, name: preview.title || 'Cloud Preview' }),
-    })
-    const data = await res.json().catch(() => ({})) as { preview_url?: string; url?: string; detail?: string; error?: string }
-    if (!res.ok) {
-      throw new Error(data.detail || data.error || `打开预览失败 (${res.status})`)
-    }
-    const nextUrl = String(data.preview_url || data.url || '').trim()
-    if (!nextUrl) throw new Error('打开预览失败：Worker 没有返回 preview_url')
-    return nextUrl
-  }, [accessToken, currentAgentId])
-
-  const closeCloudPreviewCard = useCallback((preview: CloudSandboxPreview, activeUrl?: string) => {
+  const closeCloudPreviewCard = useCallback((preview: CloudSandboxPreview) => {
     setClosedCloudPreviewKeys((prev) => {
       if (prev.has(preview.key)) return prev
       const next = new Set(prev)
       next.add(preview.key)
       return next
     })
-    const targetAgentId = preview.senderId || currentAgentId
-    if (!targetAgentId || !accessToken) return
-    fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/${encodeURIComponent(targetAgentId)}/preview/stop`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url: activeUrl || preview.url }),
-    }).catch((error) => {
-      console.warn('failed to stop cloud preview', error)
-    })
-  }, [accessToken, currentAgentId])
+  }, [])
 
   return (
     <div
@@ -3248,8 +3193,7 @@ export function ChatView({
                                   <CloudSandboxPreviewCard
                                     key={bi}
                                     preview={preview}
-                                    onOpen={openCloudPreviewCard}
-                                    onClose={(activeUrl) => closeCloudPreviewCard(preview, activeUrl)}
+                                    onClose={() => closeCloudPreviewCard(preview)}
                                   />
                                 )
                               }
