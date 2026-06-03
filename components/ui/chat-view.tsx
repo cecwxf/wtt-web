@@ -1039,46 +1039,9 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
   )
 }
 
-function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: CloudSandboxPreview; accessToken?: string; onClose: () => void }) {
+function CloudSandboxPreviewCard({ preview, onClose }: { preview: CloudSandboxPreview; onClose: () => void }) {
   const { url, title } = preview
   const displayTitle = title || 'Preview'
-  const [iframeUrl, setIframeUrl] = useState(url)
-  const [status, setStatus] = useState<'idle' | 'restoring' | 'ready' | 'error'>('idle')
-  const [expanded, setExpanded] = useState(false)
-  const [errorText, setErrorText] = useState('')
-
-  const restartPreview = useCallback(async () => {
-    setExpanded(true)
-    if (!accessToken || !preview.senderId) {
-      setIframeUrl(url)
-      setStatus('ready')
-      return
-    }
-    setStatus('restoring')
-    setErrorText('')
-    try {
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/${encodeURIComponent(preview.senderId)}/preview/restart`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        const detail = typeof data?.detail === 'string' ? data.detail : (typeof data?.error === 'string' ? data.error : res.statusText)
-        throw new Error(detail || `HTTP ${res.status}`)
-      }
-      const nextUrl = String(data?.preview_url || data?.url || url).trim()
-      setIframeUrl(nextUrl || url)
-      setStatus('ready')
-    } catch (error) {
-      setIframeUrl(url)
-      setStatus('error')
-      setErrorText(error instanceof Error ? error.message : String(error))
-    }
-  }, [accessToken, preview.senderId, url])
 
   return (
     <div className="overflow-hidden rounded-2xl border border-sky-200/80 bg-white shadow-[0_12px_32px_rgba(14,116,144,0.12)] ring-1 ring-sky-100/60 dark:border-sky-500/25 dark:bg-zinc-950 dark:shadow-black/25 dark:ring-sky-500/10">
@@ -1094,38 +1057,13 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
           </div>
           <div className="relative z-10 flex shrink-0 items-center gap-1">
             <a
-              href={iframeUrl}
+              href={url}
               target="_blank"
               rel="noreferrer"
               className="rounded-md bg-slate-950 px-2 py-1 text-[11px] font-bold text-white transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
             >
               打开
             </a>
-            <button
-              type="button"
-              onClick={() => {
-                if (expanded) {
-                  setExpanded(false)
-                  return
-                }
-                if (status === 'ready') {
-                  setExpanded(true)
-                  return
-                }
-                restartPreview()
-              }}
-              className="rounded-md bg-white/75 px-2 py-1 text-[11px] font-bold text-sky-800 transition hover:bg-white dark:bg-zinc-900/80 dark:text-sky-200 dark:hover:bg-zinc-800"
-            >
-              {expanded ? '折叠' : '预览'}
-            </button>
-            <button
-              type="button"
-              onClick={restartPreview}
-              className="rounded-md bg-white/75 px-2 py-1 text-[11px] font-bold text-sky-800 transition hover:bg-white dark:bg-zinc-900/80 dark:text-sky-200 dark:hover:bg-zinc-800"
-              title="重新激活 sandbox preview"
-            >
-              恢复
-            </button>
             <button
               type="button"
               onClick={onClose}
@@ -1138,36 +1076,6 @@ function CloudSandboxPreviewCard({ preview, accessToken, onClose }: { preview: C
           </div>
         </div>
       </div>
-      {expanded && (
-        <div className="h-[300px] border-t border-sky-100 bg-slate-100/70 p-1.5 dark:border-sky-500/10 dark:bg-zinc-900/70 sm:h-[340px]">
-          {status === 'restoring' ? (
-            <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white text-xs font-semibold text-sky-700 shadow-inner dark:border-zinc-800 dark:bg-zinc-950 dark:text-sky-200">
-              正在恢复 Sandbox Preview...
-            </div>
-          ) : status === 'error' ? (
-            <div className="flex h-full items-center justify-center rounded-xl border border-white bg-white p-5 text-center shadow-inner dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="max-w-sm">
-                <p className="text-sm font-bold text-slate-900 dark:text-zinc-50">Preview 暂不可用</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-zinc-400">{errorText || 'Sandbox runtime 未激活或本地 preview server 未运行。'}</p>
-                <button
-                  type="button"
-                  onClick={restartPreview}
-                  className="mt-3 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-sky-500"
-                >
-                  重新恢复
-                </button>
-              </div>
-            </div>
-          ) : (
-            <iframe
-              src={iframeUrl}
-              title={displayTitle}
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-              className="h-full w-full rounded-xl border border-white bg-white shadow-inner dark:border-zinc-800 dark:bg-zinc-950"
-            />
-          )}
-        </div>
-      )}
     </div>
   )
 }
@@ -3226,7 +3134,6 @@ export function ChatView({
                                   <CloudSandboxPreviewCard
                                     key={bi}
                                     preview={preview}
-                                    accessToken={accessToken}
                                     onClose={() => closeCloudPreviewCard(preview)}
                                   />
                                 )
