@@ -14,7 +14,7 @@ import { useAgentId } from '@/lib/hooks/use-agent-id'
 import { useViewportClass } from '@/lib/hooks/use-viewport-class'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
-import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatSendOptions } from '@/components/ui/chat-view'
+import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeWhiteboardFromAnswerPrompt, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
@@ -59,7 +59,18 @@ function displayStdout(stdout?: string) {
   return (output || text).trim()
 }
 
-type ArenaTypingState = { topicId: string; agentId: string; agentName?: string; statusText?: string; statusKind?: string; startedAt: number; expiresAt: number }
+const ARENA_STATUS_CARD_MAX_LINES = 14
+
+type ArenaTypingState = {
+  topicId: string
+  agentId: string
+  agentName?: string
+  statusText?: string
+  statusKind?: string
+  statusLines?: ChatRunStatus['lines']
+  startedAt: number
+  expiresAt: number
+}
 
 function parseAgentStatusContent(contentRaw: unknown): { text: string; kind?: string } | null {
   const content = String(contentRaw ?? '').trim()
@@ -75,6 +86,48 @@ function parseAgentStatusContent(contentRaw: unknown): { text: string; kind?: st
   if (kind === 'web_search') return { text: `Agent 正在搜索：${detail || 'web search'}`, kind }
   if (kind === 'response') return { text: 'Agent 正在组织回复', kind }
   return { text: `Agent 正在执行：${detail || kind.replace(/_/g, ' ')}`, kind }
+}
+
+function appendArenaTypingStatus(
+  existing: ArenaTypingState | null,
+  update: {
+    topicId: string
+    agentId?: string
+    agentName?: string
+    statusText?: string
+    statusKind?: string
+    ttlMs?: number
+  },
+  now = Date.now(),
+): ArenaTypingState {
+  const text = String(update.statusText || '').trim()
+  const kind = String(update.statusKind || '').trim() || undefined
+  const lines = existing?.topicId === update.topicId && existing.statusLines ? [...existing.statusLines] : []
+
+  if (text) {
+    const last = lines[lines.length - 1]
+    if (last && last.text === text && last.kind === kind) {
+      lines[lines.length - 1] = { ...last, ts: now }
+    } else {
+      lines.push({
+        id: `${now}-${lines.length}-${kind || 'status'}`,
+        text,
+        kind,
+        ts: now,
+      })
+    }
+  }
+
+  return {
+    topicId: update.topicId,
+    agentId: update.agentId || (existing?.topicId === update.topicId ? existing.agentId : '') || ARENA_AGENT_ID,
+    agentName: update.agentName || (existing?.topicId === update.topicId ? existing.agentName : undefined),
+    statusText: text || (existing?.topicId === update.topicId ? existing.statusText : undefined),
+    statusKind: kind || (existing?.topicId === update.topicId ? existing.statusKind : undefined),
+    statusLines: lines.slice(-ARENA_STATUS_CARD_MAX_LINES),
+    startedAt: existing?.topicId === update.topicId ? existing.startedAt : now,
+    expiresAt: now + (update.ttlMs || 180000),
+  }
 }
 
 function diagramHasHtml(diagram?: WhiteboardDiagram | null) {
@@ -1541,16 +1594,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }
 
   function markArenaAgentBusy(topicId: string, statusText: string, statusKind = 'running', ttlMs = 180000) {
-    const now = Date.now()
-    setArenaTyping({
+    setArenaTyping((prev) => appendArenaTypingStatus(prev, {
       topicId,
       agentId: ARENA_AGENT_ID,
       agentName: locale === 'zh' ? '终生学习 Coach' : 'Arena Coach',
       statusText,
       statusKind,
-      startedAt: now,
-      expiresAt: now + ttlMs,
-    })
+      ttlMs,
+    }))
   }
 
   function localArenaAgentMessage(content: string): FeedChatMessage {
@@ -1631,16 +1682,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
       const ttlMsRaw = Number(rawEvent.ttl_ms)
       const ttlMs = Number.isFinite(ttlMsRaw) ? Math.max(1500, Math.min(120000, ttlMsRaw)) : 30000
-      const now = Date.now()
-      setArenaTyping({
+      setArenaTyping((prev) => appendArenaTypingStatus(prev, {
         topicId,
         agentId: String(rawEvent.agent_id || ARENA_AGENT_ID),
         agentName: String(rawEvent.agent_display_name || '') || undefined,
         statusText: String(rawEvent.status_text || '').trim() || undefined,
         statusKind: String(rawEvent.status_kind || '').trim() || undefined,
-        startedAt: now,
-        expiresAt: now + ttlMs,
-      })
+        ttlMs,
+      }))
       return
     }
 
@@ -1652,16 +1701,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     const senderId = String(msg.message.sender_id || '')
     const agentStatus = parseAgentStatusContent(String(msg.message.content || ''))
     if (agentStatus && (senderType === 'AGENT' || senderId === ARENA_AGENT_ID)) {
-      const now = Date.now()
-      setArenaTyping({
+      setArenaTyping((prev) => appendArenaTypingStatus(prev, {
         topicId: incomingTopicId,
         agentId: senderId || ARENA_AGENT_ID,
         agentName: String((msg.message as Record<string, unknown>).sender_display_name || '') || undefined,
         statusText: agentStatus.text,
         statusKind: agentStatus.kind,
-        startedAt: now,
-        expiresAt: now + 30000,
-      })
+        ttlMs: 30000,
+      }))
       return
     }
     if (senderType === 'AGENT' || senderId === ARENA_AGENT_ID) {
@@ -1678,7 +1725,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     void refreshArenaState()
   }
 
-  useWebSocket({
+  const { state: arenaWsState } = useWebSocket({
     url: session?.accessToken ? `${WS_BASE_URL}/ws/${ARENA_AGENT_ID}` : '',
     enabled: !!arenaTopicId && !!session?.accessToken,
     token: session?.accessToken || undefined,
@@ -1732,6 +1779,25 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
   const arenaTypingActive = !!arenaTyping && arenaTyping.topicId === arenaTopicId
   const agentBusy = arenaTypingActive || chatSending || arenaSyncing || whiteboardBusy
+  const arenaRunStatus = useMemo<ChatRunStatus | null>(() => {
+    if (!arenaTyping || arenaTyping.topicId !== arenaTopicId) return null
+    const lines = arenaTyping.statusLines?.length
+      ? arenaTyping.statusLines
+      : arenaTyping.statusText
+        ? [{ id: `${arenaTyping.startedAt}-status`, text: arenaTyping.statusText, kind: arenaTyping.statusKind, ts: arenaTyping.startedAt }]
+        : []
+    return {
+      agentId: arenaTyping.agentId || ARENA_AGENT_ID,
+      agentName: arenaTyping.agentName || (locale === 'zh' ? '终生学习 Coach' : 'Arena Coach'),
+      adapter: 'codex',
+      model: 'arena-coach',
+      wsState: arenaWsState,
+      statusText: arenaTyping.statusText || (locale === 'zh' ? '等待 Agent 状态更新' : 'Waiting for Agent status'),
+      statusKind: arenaTyping.statusKind,
+      startedAt: arenaTyping.startedAt,
+      lines,
+    }
+  }, [arenaTopicId, arenaTyping, arenaWsState, locale])
 
   useEffect(() => {
     if (whiteboardDiagram && !isCoding && !isGaokaoVolunteer) setWhiteboardVisible(true)
@@ -2343,6 +2409,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   wsConnected={Boolean(arenaTopicId && session?.accessToken)}
                   accessToken={session?.accessToken || undefined}
                   topicType="p2p"
+                  runStatus={arenaRunStatus}
                   compactUi
                   currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
                   agentRoleLabelMap={{ [ARENA_AGENT_ID]: locale === 'zh' ? 'Arena Coach' : 'Arena Coach' }}
