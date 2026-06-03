@@ -917,6 +917,7 @@ export function TopicColumn(props: TopicColumnProps) {
             const sleepBusy = Boolean(folderCloudHostId && sandboxActionFor === `${folderCloudHostId}:sleep`)
             const sandboxActionBusy = wakeBusy || sleepBusy
             const folderSelected = folder.agents.some((agent) => agent.agent_id === selectedAgentId)
+            const folderInitial = (folder.label.trim()[0] || '?').toUpperCase()
             return (
               <section key={folder.key} className="space-y-1">
                 <button
@@ -930,7 +931,7 @@ export function TopicColumn(props: TopicColumnProps) {
                     setAgentMenuFor(null)
                     setFolderMenuFor(folder.key)
                   }}
-                  className={`group relative flex w-full items-center gap-1.5 overflow-hidden rounded-xl border px-1.5 py-1.5 text-left shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${
+                  className={`group relative flex w-full items-center gap-1 overflow-hidden rounded-xl border px-1 py-1.5 text-left shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${
                     folderSelected
                       ? `scale-[1.01] border-slate-900 shadow-[0_0_0_2px_rgba(15,23,42,0.18),0_8px_18px_rgba(15,23,42,0.14)] ring-2 ring-slate-900/60 dark:border-sky-200 dark:shadow-[0_0_0_2px_rgba(125,211,252,0.28),0_8px_18px_rgba(14,165,233,0.18)] dark:ring-sky-200/75 ${folderTone.shell}`
                       : folderTone.shell
@@ -941,18 +942,13 @@ export function TopicColumn(props: TopicColumnProps) {
                   {folderSelected && (
                     <span className="absolute inset-0 bg-white/28 dark:bg-white/[0.04]" />
                   )}
-                  <span className="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-white/55 text-slate-700 shadow-sm ring-1 ring-white/60 dark:bg-zinc-950/45 dark:text-zinc-200 dark:ring-white/10">
-                    {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  <span className="relative z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md bg-white/55 text-slate-700 shadow-sm ring-1 ring-white/60 dark:bg-zinc-950/45 dark:text-zinc-200 dark:ring-white/10">
+                    {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   </span>
-                  <span className="relative z-10 min-w-0 flex-1">
-                    <span className="block truncate text-[10px] font-black leading-tight" title={folder.label}>
-                      {folder.label}
-                    </span>
-                    <span className="block truncate text-[8px] font-bold uppercase tracking-[0.08em] opacity-55">
-                      {folder.subtitle || (zh ? '主机' : 'Host')}
-                    </span>
+                  <span className={`relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-black leading-none ring-1 ring-white/60 ${folderTone.icon}`}>
+                    {folderInitial}
                   </span>
-                  <span className={`relative z-10 shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none ${folderTone.badge}`}>
+                  <span className={`relative z-10 min-w-0 flex-1 truncate rounded-full px-1 py-0.5 text-center text-[8px] font-black leading-none ${folderTone.badge}`}>
                     {onlineCount}/{folder.agents.length}
                   </span>
                 </button>
