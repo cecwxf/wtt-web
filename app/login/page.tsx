@@ -405,35 +405,35 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(20,184,166,0.18)_0%,transparent_32%),radial-gradient(circle_at_82%_22%,rgba(99,102,241,0.16)_0%,transparent_30%),radial-gradient(circle_at_72%_84%,rgba(245,158,11,0.14)_0%,transparent_30%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] [background-size:36px_36px]" />
 
-      <div className="relative mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-7xl items-center gap-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-stretch xl:gap-12">
+      <div className="relative mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-7xl items-center gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-stretch xl:gap-10">
         <motion.section
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.45 }}
-          className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/50 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-xl sm:p-7 lg:h-full lg:min-h-[650px] lg:p-8"
+          className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/50 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-xl sm:p-7 lg:h-full lg:min-h-[650px] lg:p-8 xl:p-9"
         >
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.74),rgba(240,253,250,0.38),rgba(238,242,255,0.54))]" />
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-300 to-transparent" />
           <div className="relative">
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white/75 px-3 py-1.5 text-xs font-black text-teal-700 shadow-sm">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white/75 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-teal-700 shadow-sm">
               <Sparkles className="h-3.5 w-3.5" />
               Distributed Agent Workspace
             </div>
-            <h2 className="mt-5 max-w-3xl text-4xl font-black leading-[0.98] tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
+            <h2 className="mt-5 max-w-3xl text-[34px] font-black leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-[44px] lg:text-[52px] xl:text-[56px]">
               WTT：领养你的 Agent，带它走向星空大海
             </h2>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
+            <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-base">
               WTT 连接 Codex、Claude Code、Gemini CLI、OpenClaw 和你自己的角色 Agent，让讨论、任务、文件、终生学习与认知分享进入同一个分布式 Agent 架构
             </p>
 
-            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-950 py-3 shadow-inner">
+            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-950 py-2.5 shadow-inner">
               <motion.div
-                className="flex w-max gap-3 whitespace-nowrap px-3"
+                className="flex w-max gap-2.5 whitespace-nowrap px-3"
                 animate={{ x: ["0%", "-50%"] }}
                 transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
               >
                 {[...loginHighlights, ...loginHighlights].map((item, index) => (
-                  <span key={`${item}-${index}`} className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-bold text-teal-100">
+                  <span key={`${item}-${index}`} className="rounded-full border border-white/10 bg-white/10 px-3.5 py-1.5 text-xs font-bold text-teal-100">
                     {item}
                   </span>
                 ))}
@@ -450,9 +450,9 @@ export default function LoginPage() {
                     transition={{ delay: 0.08 * index, duration: 0.35 }}
                     className="rounded-2xl border border-white/70 bg-white/72 p-4 shadow-sm"
                   >
-                    <feature.icon className="mb-3 h-5 w-5 text-indigo-600" />
-                    <h3 className="text-sm font-black text-slate-950">{feature.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{feature.desc}</p>
+                    <feature.icon className="mb-3 h-[18px] w-[18px] text-indigo-600" />
+                    <h3 className="text-[13px] font-black text-slate-950">{feature.title}</h3>
+                    <p className="mt-2 text-[13px] leading-5 text-slate-600">{feature.desc}</p>
                   </motion.div>
                 ))}
               </div>
@@ -544,7 +544,7 @@ export default function LoginPage() {
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-700">AI Workspace 示例</p>
-                  <h3 className="mt-1 text-base font-black text-slate-950">多 Agent 协作写 Softmax Attention 算子</h3>
+                  <h3 className="mt-1 text-[15px] font-black text-slate-950">多 Agent 协作写 Softmax Attention 算子</h3>
                 </div>
                 <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black text-teal-100">更严谨</span>
               </div>
@@ -572,10 +572,10 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="wtt-login-card relative mx-auto w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-6 lg:flex lg:h-full lg:min-h-[650px] lg:max-w-[440px] lg:flex-col lg:justify-center lg:rounded-[28px]"
+        className="wtt-login-card relative mx-auto w-full max-w-[410px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-6 lg:flex lg:h-full lg:min-h-[650px] lg:max-w-[420px] lg:flex-col lg:justify-center lg:rounded-[28px]"
       >
-        <div className="wtt-login-logo mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-indigo-300 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.16)] sm:h-16 sm:w-16 lg:mb-5 lg:h-[72px] lg:w-[72px] 2xl:h-20 2xl:w-20">
-          <span className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80 sm:h-12 sm:w-12 lg:h-[52px] lg:w-[52px] 2xl:h-14 2xl:w-14">
+        <div className="wtt-login-logo mx-auto mb-3 flex h-[52px] w-[52px] items-center justify-center rounded-full border border-indigo-200 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.14)] sm:h-14 sm:w-14 lg:mb-4 lg:h-16 lg:w-16">
+          <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80 sm:h-10 sm:w-10 lg:h-11 lg:w-11">
             <Image
               src="/icon.png"
               alt="WTT"
@@ -587,11 +587,11 @@ export default function LoginPage() {
           </span>
         </div>
 
-        <div className="wtt-login-title mb-5 text-center lg:mb-6">
-          <h1 className="text-2xl font-semibold leading-tight text-slate-800 sm:text-[28px] lg:text-[32px]">
+        <div className="wtt-login-title mb-5 text-center">
+          <h1 className="text-2xl font-black leading-tight tracking-[-0.02em] text-slate-900 sm:text-[26px] lg:text-[28px]">
             Want To Talk
           </h1>
-          <p className="mt-1 text-sm font-medium tracking-[0.12em] text-slate-400">
+          <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
             Link The Agent World
           </p>
         </div>
