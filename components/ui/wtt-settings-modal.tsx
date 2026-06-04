@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import {
+  Activity,
   Bot,
   Bell,
   Brush,
@@ -12,6 +13,7 @@ import {
   KeyRound,
   Loader2,
   Lock,
+  ExternalLink,
   RefreshCw,
   Save,
   Smartphone,
@@ -29,6 +31,7 @@ type SettingsPage =
   | "membership"
   | "binding"
   | "llm-proxy"
+  | "metrics"
   | "notifications"
   | "poll"
   | "privacy"
@@ -76,6 +79,7 @@ const PAGE_ITEMS: Array<{
   { key: "membership", labelKey: "settings.membership", icon: CreditCard },
   { key: "binding", labelKey: "settings.binding", icon: Bot },
   { key: "llm-proxy", labelKey: "settings.llmProxy", icon: KeyRound },
+  { key: "metrics", labelKey: "settings.metrics", icon: Activity },
   { key: "notifications", labelKey: "settings.notifications", icon: Bell },
   { key: "privacy", labelKey: "settings.privacy", icon: Lock },
   { key: "appearance", labelKey: "settings.appearance", icon: Brush },
@@ -303,6 +307,16 @@ export function WttSettingsModal({
   const [llmProxyAllowedModels, setLlmProxyAllowedModels] = useState("deepseek-v4-pro[1m]");
 
   const accessToken = (session as SessionWithAccessToken | null)?.accessToken;
+  const canViewMetrics = useMemo(() => {
+    const values = [session?.user?.name, session?.user?.email]
+      .map((value) => (value || "").trim().toLowerCase())
+      .filter(Boolean);
+    return values.some((value) => value === "saiph" || value.split("@", 1)[0] === "saiph");
+  }, [session?.user?.email, session?.user?.name]);
+  const visiblePageItems = useMemo(
+    () => PAGE_ITEMS.filter((item) => item.key !== "metrics" || canViewMetrics),
+    [canViewMetrics],
+  );
   const isPaidPlan = (billing?.entitlement?.plan === "plus" || billing?.entitlement?.plan === "pro");
   const hasCloudAgentRecord = hasCloudAgent || Boolean(cloudAgentInfo?.has_cloud_agent);
   const cloudAgentModelLabel = useMemo(() => {
@@ -1061,7 +1075,7 @@ export function WttSettingsModal({
             </p>
           </div>
           <nav className="p-2">
-            {PAGE_ITEMS.map((item) => {
+            {visiblePageItems.map((item) => {
               const Icon = item.icon;
               const active = activePage === item.key;
               return (
@@ -1087,7 +1101,7 @@ export function WttSettingsModal({
             <div>
               <h2 className="text-xl font-semibold text-slate-800">
                 {t(
-                  PAGE_ITEMS.find((item) => item.key === activePage)
+                  visiblePageItems.find((item) => item.key === activePage)
                     ?.labelKey || "settings.titleFallback",
                 )}
               </h2>
@@ -1115,7 +1129,7 @@ export function WttSettingsModal({
               onChange={(e) => onPageChange(e.target.value as SettingsPage)}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500"
             >
-              {PAGE_ITEMS.map((item) => (
+              {visiblePageItems.map((item) => (
                 <option key={item.key} value={item.key}>
                   {t(item.labelKey)}
                 </option>
@@ -1618,6 +1632,35 @@ export function WttSettingsModal({
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activePage === "metrics" && canViewMetrics && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+                    <Activity className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      WTT Metrics
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      仅 saiph 和管理员可访问。页面展示后端资源、数据库连接、Topic、Message、Task 和 Agent 概况。
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href="/admin/metrics"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  打开 Metrics 页面
+                  <ExternalLink className="h-4 w-4" />
+                </a>
               </div>
             </div>
           )}
