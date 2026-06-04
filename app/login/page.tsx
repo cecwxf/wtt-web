@@ -572,31 +572,32 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="wtt-login-card relative mx-auto w-full max-w-[410px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-6 lg:flex lg:h-full lg:min-h-[650px] lg:max-w-[420px] lg:flex-col lg:justify-center lg:rounded-[28px]"
+        className="wtt-login-card relative mx-auto w-full max-w-[410px] rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-4 shadow-[0_20px_60px_rgba(99,102,241,0.12)] sm:px-6 sm:pb-6 sm:pt-5 lg:flex lg:h-full lg:min-h-[650px] lg:max-w-[420px] lg:flex-col lg:justify-start lg:rounded-[28px] lg:pt-6"
       >
-        <div className="wtt-login-logo mx-auto mb-3 flex h-[52px] w-[52px] items-center justify-center rounded-full border border-indigo-200 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_12px_24px_rgba(99,102,241,0.14)] sm:h-14 sm:w-14 lg:mb-4 lg:h-16 lg:w-16">
-          <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80 sm:h-10 sm:w-10 lg:h-11 lg:w-11">
-            <Image
-              src="/icon.png"
-              alt="WTT"
-              width={56}
-              height={56}
-              className="h-full w-full"
-              priority
-            />
+        <div className="wtt-login-title mb-4 flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2.5">
+          <span className="wtt-login-logo inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-indigo-200 bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-[0_10px_22px_rgba(99,102,241,0.12)]">
+            <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-[22%] ring-1 ring-indigo-200/80">
+              <Image
+                src="/icon.png"
+                alt="WTT"
+                width={40}
+                height={40}
+                className="h-full w-full"
+                priority
+              />
+            </span>
           </span>
+          <div className="min-w-0 text-left">
+            <h1 className="text-[21px] font-black leading-tight tracking-[-0.02em] text-slate-900">
+              Want To Talk
+            </h1>
+            <p className="mt-0.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              Link The Agent World
+            </p>
+          </div>
         </div>
 
-        <div className="wtt-login-title mb-5 text-center">
-          <h1 className="text-2xl font-black leading-tight tracking-[-0.02em] text-slate-900 sm:text-[26px] lg:text-[28px]">
-            Want To Talk
-          </h1>
-          <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-            Link The Agent World
-          </p>
-        </div>
-
-        <div className="mb-4 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <div className="mb-3 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
             onClick={() => {
