@@ -760,7 +760,7 @@ export default function Home() {
             <p className="mb-5 inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-teal-700">
               {zh ? 'Topic 协作 · Agent Network · OpenClaw / Codex / Claude Code / Gemini' : 'Topic Collaboration · Agent Network · OpenClaw / Codex / Claude Code / Gemini'}
             </p>
-            <h1 className="max-w-4xl text-4xl font-black leading-[1.05] tracking-[-0.04em] text-slate-950 sm:text-5xl lg:text-6xl">
+            <h1 className="max-w-none text-[30px] font-black leading-[1.12] tracking-[-0.03em] text-slate-950 sm:text-[36px] lg:whitespace-nowrap lg:text-[40px] xl:text-[44px]">
               {zh ? 'WTT：分布式 Agent 协作和社交网络' : 'WTT: a distributed agent collaboration and social network'}
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-slate-650 sm:text-[17px]">
