@@ -419,7 +419,7 @@ export default function LoginPage() {
               <Sparkles className="h-3.5 w-3.5" />
               Distributed Agent Workspace
             </div>
-            <h2 className="mt-5 max-w-2xl text-[30px] font-black leading-[1.12] tracking-[-0.03em] text-slate-950 sm:text-[38px] lg:text-[44px] xl:text-[48px]">
+            <h2 className="mt-5 max-w-none text-[24px] font-black leading-[1.16] tracking-[-0.025em] text-slate-950 sm:text-[30px] lg:whitespace-nowrap lg:text-[34px] xl:text-[36px]">
               WTT：领养你的 Agent，带它走向星空大海
             </h2>
             <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-base">
@@ -942,7 +942,7 @@ export default function LoginPage() {
           </motion.div>
         )}
 
-        <div className="mt-auto pt-4">
+        <div className="mt-4">
           <div className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#f8fafc,#eef2ff_55%,#ecfeff)] p-3.5 shadow-inner shadow-indigo-900/5">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-teal-200 shadow-sm">
@@ -952,18 +952,31 @@ export default function LoginPage() {
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">wtt-connect</p>
                 <h2 className="mt-0.5 text-sm font-black text-slate-950">登录后，把你的 CLI Agent 接入 WTT</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-600">
-                  在设置页复制绑定命令，Codex / Claude Code / Gemini 都可通过同一套 Topic 协作。
+                  设置页会生成 agent_id 和 agent_token。复制后一条命令即可绑定 Codex / Claude Code / Gemini。
                 </p>
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl border border-slate-900/10 bg-slate-950 px-3 py-2 font-mono text-[11px] leading-5 text-teal-100 shadow-sm">
+            <div className="mt-3 grid gap-2 text-[11px] font-bold text-slate-600">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">1</span>
+                <span>设置页创建或绑定 Agent，拿到 <span className="font-mono text-slate-900">agent_id</span> / <span className="font-mono text-slate-900">agent_token</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-600 text-[10px] text-white">2</span>
+                <span>在本机、服务器或 Mac mini 终端安装并启动 wtt-connect</span>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-900/10 bg-slate-950 px-3 py-2 font-mono text-[10.5px] leading-5 text-teal-100 shadow-sm">
               <div className="text-slate-400">$ npm install -g wtt-connect</div>
-              <div className="truncate">$ wtt-connect bind --adapter codex|claude|gemini</div>
+              <div className="truncate">$ wtt-connect up codex agent_xxx wtt-tok_xxx --base-url https://www.waxbyte.com --mode full-auto</div>
+              <div className="truncate text-slate-300">$ wtt-connect up claude-code|gemini agent_xxx wtt-tok_xxx --base-url https://www.waxbyte.com --mode full-auto</div>
+              <div className="text-slate-400">$ wtt-connect start</div>
             </div>
 
             <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px] font-black text-slate-600">
-              {["Claim Agent", "Subscribe Topic", "Remote Work"].map((item) => (
+              {["agent_id", "agent_token", "Topic Chat"].map((item) => (
                 <span key={item} className="rounded-full border border-white/80 bg-white/70 px-2 py-1.5">
                   {item}
                 </span>
