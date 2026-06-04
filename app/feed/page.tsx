@@ -152,6 +152,14 @@ function normalizeWttConnectAdapter(raw: unknown): WttConnectAdapter | '' {
   return ''
 }
 
+function adapterDisplayName(raw: unknown): string {
+  const adapter = normalizeWttConnectAdapter(raw)
+  if (adapter === 'codex') return 'Codex'
+  if (adapter === 'claude-code') return 'Claude Code'
+  if (adapter === 'gemini') return 'Gemini'
+  return 'Agent'
+}
+
 function shellQuote(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`
 }
@@ -358,7 +366,7 @@ function statusKindFromTypingEvent(record: Record<string, unknown>): string | un
   return eventString(record, ['status_kind', 'statusKind', 'kind', 'event_kind', 'eventKind', 'phase', 'type', 'status']) || undefined
 }
 
-function statusFromProgressMessage(contentRaw: unknown): { text: string; kind: string } | null {
+function statusFromProgressMessage(contentRaw: unknown, adapterRaw?: unknown): { text: string; kind: string } | null {
   const content = String(contentRaw || '').trim()
   if (!content.startsWith('[TASK_STATUS]')) return null
   const action = content.match(/\baction=([^\n\r]+)/)?.[1]?.trim() || ''
@@ -367,19 +375,20 @@ function statusFromProgressMessage(contentRaw: unknown): { text: string; kind: s
 
   const [group, detail = ''] = action.split(/:(.+)/)
   const kind = group || status || 'running'
+  const actor = adapterDisplayName(adapterRaw)
   if (group === 'session') {
     if (detail.includes('thread.started') || detail.includes('turn.started')) {
-      return { text: 'Codex 会话已启动', kind: 'session' }
+      return { text: `${actor} 会话已启动`, kind: 'session' }
     }
-    if (detail.includes('completed')) return { text: 'Codex 会话已完成', kind: 'session' }
-    return { text: `Codex 会话状态：${detail || status}`, kind: 'session' }
+    if (detail.includes('completed')) return { text: `${actor} 会话已完成`, kind: 'session' }
+    return { text: `${actor} 会话状态：${detail || status}`, kind: 'session' }
   }
   if (group === 'response') {
     const output = detail.trim()
-    return { text: output ? `Codex 输出：${output.slice(0, 120)}` : 'Codex 正在输出', kind: 'response' }
+    return { text: output ? `${actor} 输出：${output.slice(0, 120)}` : `${actor} 正在输出`, kind: 'response' }
   }
-  if (group === 'command') return { text: `Codex 执行命令：${detail || status}`, kind: 'command' }
-  if (group === 'tool') return { text: `Codex 调用工具：${detail || status}`, kind: 'tool' }
+  if (group === 'command') return { text: `${actor} 执行命令：${detail || status}`, kind: 'command' }
+  if (group === 'tool') return { text: `${actor} 调用工具：${detail || status}`, kind: 'tool' }
   return { text: `Agent 状态：${action || status}`, kind }
 }
 
@@ -1001,7 +1010,6 @@ function FeedPageInner() {
       const rawContent = String((msg.message as Record<string, unknown>).content ?? '')
       const cleanedContent = stripSourceMarker(rawContent)
       const displayable = shouldDisplayMessage(semanticType, cleanedContent)
-      const progressStatus = statusFromProgressMessage(cleanedContent)
 
       // Bump activity and unread counters for the topic that received the message.
       const { raw, mutate: mutateSubs } = subscribedTopicsRef.current
@@ -1027,7 +1035,7 @@ function FeedPageInner() {
       }
 
       if (incomingTopicId !== selectedTopicId) return
-      if (progressStatus) {
+      if (cleanedContent.trim().startsWith('[TASK_STATUS]')) {
         const senderId = String(msg.message.sender_id || '')
         const senderDisplayName = (msg.message as Record<string, unknown>).sender_display_name
           ? String((msg.message as Record<string, unknown>).sender_display_name)
@@ -1038,6 +1046,8 @@ function FeedPageInner() {
           setTypingByTopic((prev) => {
             const existing = prev[incomingTopicId]
             if (!existing) return prev
+            const progressStatus = statusFromProgressMessage(cleanedContent, existing.adapter)
+            if (!progressStatus) return prev
             return {
               ...prev,
               [incomingTopicId]: appendTypingStatus(existing, {
@@ -1045,6 +1055,7 @@ function FeedPageInner() {
                 agentName: senderDisplayName || existing.agentName,
                 statusText: progressStatus.text,
                 statusKind: progressStatus.kind,
+                adapter: existing.adapter,
                 ttlMs: 60000,
               }, now),
             }
@@ -1261,13 +1272,14 @@ function FeedPageInner() {
             if (existing.agentId && senderId && senderId !== existing.agentId) continue
             const rowTime = new Date(String(row.timestamp ?? row.created_at ?? '')).getTime()
             if (!Number.isFinite(rowTime) || rowTime + 2000 < existing.startedAt) continue
-            const progress = statusFromProgressMessage(stripSourceMarker(String(row.content ?? '')))
+            const progress = statusFromProgressMessage(stripSourceMarker(String(row.content ?? '')), nextState.adapter)
             if (!progress) continue
             nextState = appendTypingStatus(nextState, {
               agentId: senderId || nextState.agentId,
               agentName: senderDisplayName || nextState.agentName,
               statusText: progress.text,
               statusKind: progress.kind,
+              adapter: nextState.adapter,
               ttlMs: 60000,
             }, Math.max(Date.now(), rowTime))
           }
