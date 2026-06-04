@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, RefreshCw, Shield, Sparkles, Sun, Users, Waves, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -97,6 +97,7 @@ interface TopicColumnProps {
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   onCreateGeneralTask?: () => void
+  onRefresh?: () => void | Promise<void>
   onToggleSidebar?: () => void
   onStartAgentResize?: (event: ReactPointerEvent) => void
   localLibrarySlot?: ReactNode
@@ -451,6 +452,7 @@ export function TopicColumn(props: TopicColumnProps) {
     onRenameAgent,
     onUnclaimAgent,
     onCreateGeneralTask,
+    onRefresh,
     onToggleSidebar,
     onStartAgentResize,
     userToken,
@@ -474,6 +476,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [cloudCreateDisplayName, setCloudCreateDisplayName] = useState('Cloud Agent')
   const [cloudCreateError, setCloudCreateError] = useState('')
   const [cloudAgentBusy, setCloudAgentBusy] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [roleEditor, setRoleEditor] = useState<{
     agentId: string
     sourceRole?: AgentRoleTemplate
@@ -1300,6 +1303,20 @@ export function TopicColumn(props: TopicColumnProps) {
                 title={zh ? '新建任务' : 'New task'}
               >
                 <Plus className="h-4 w-4" />
+              </button>
+            )}
+            {onRefresh && (
+              <button
+                type="button"
+                disabled={refreshing}
+                onClick={() => {
+                  setRefreshing(true)
+                  Promise.resolve(onRefresh()).finally(() => setRefreshing(false))
+                }}
+                className="rounded-lg border border-[#ded6c8] bg-white/80 p-1.5 text-slate-500 transition hover:bg-white hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                title={zh ? '刷新 Topic 和 Agent 在线状态' : 'Refresh topics and agent status'}
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
             )}
             {onToggleSidebar && (

@@ -1351,9 +1351,9 @@ function FeedPageInner() {
     },
     {
       // WS updates topic activity; keep low-frequency polling as safety net.
-      refreshInterval: wsState === 'connected' ? 60000 : 10000,
-      revalidateOnFocus: false,
-      dedupingInterval: 10000,
+      refreshInterval: wsState === 'connected' ? 15000 : 5000,
+      revalidateOnFocus: true,
+      dedupingInterval: 3000,
     }
   )
 
@@ -1391,7 +1391,7 @@ function FeedPageInner() {
       if (!res.ok) return []
       return res.json()
     },
-    { refreshInterval: wsState === 'connected' ? 120000 : 30000, revalidateOnFocus: false, dedupingInterval: 30000 }
+    { refreshInterval: wsState === 'connected' ? 60000 : 15000, revalidateOnFocus: true, dedupingInterval: 5000 }
   )
   const pendingP2pCount = Array.isArray(p2pRequests) ? p2pRequests.length : 0
 
@@ -1550,7 +1550,7 @@ function FeedPageInner() {
       if (!r.ok) return []
       return r.json()
     },
-    { refreshInterval: wsState === 'connected' ? 120000 : 30000, revalidateOnFocus: false, dedupingInterval: 30000 }
+    { refreshInterval: wsState === 'connected' ? 60000 : 15000, revalidateOnFocus: true, dedupingInterval: 5000 }
   )
 
   const selectedTopicTaskId = useMemo(() => {
@@ -1597,7 +1597,7 @@ function FeedPageInner() {
       if (!r.ok) return null
       return r.json()
     },
-    { refreshInterval: wsState === 'connected' ? 30000 : 10000, revalidateOnFocus: false, dedupingInterval: 10000 }
+    { refreshInterval: wsState === 'connected' ? 10000 : 5000, revalidateOnFocus: true, dedupingInterval: 3000 }
   )
   const maxSubAgents = (agentStatsRaw as Record<string, unknown>)?.max_sub_agents as number | undefined ?? 20
   const agentStats = (agentStatsRaw as Record<string, unknown>)?.agents as Record<string, { total: number; active: number; done: number; todo: number }> | undefined
@@ -1615,8 +1615,26 @@ function FeedPageInner() {
       if (!r.ok) return null
       return r.json()
     },
-    { refreshInterval: wsState === 'connected' ? 30000 : 10000, revalidateOnFocus: false, dedupingInterval: 10000 }
+    { refreshInterval: wsState === 'connected' ? 15000 : 5000, revalidateOnFocus: true, dedupingInterval: 3000 }
   )
+
+  const handleSidebarRefresh = useCallback(async () => {
+    await Promise.allSettled([
+      loadAgents(),
+      mutateTopics(),
+      mutateAgentStats(),
+      mutateCloudAgentState(),
+      mutateP2pRequests(),
+      mutateRecentTasks(),
+    ])
+  }, [loadAgents, mutateAgentStats, mutateCloudAgentState, mutateP2pRequests, mutateRecentTasks, mutateTopics])
+
+  useEffect(() => {
+    if (!selectedAgentId) return
+    void mutateAgentStats()
+    void mutateCloudAgentState()
+  }, [mutateAgentStats, mutateCloudAgentState, selectedAgentId])
+
   const { data: billingRaw } = useSWR(
     session?.accessToken ? ['billing-me', session.accessToken] : null,
     async () => {
@@ -2726,7 +2744,7 @@ function FeedPageInner() {
         onOpenKnowledgeRoot={handleOpenKnowledgeRoot}
         onCreateGeneralTask={handleCreateGeneralTask}
         onLogout={() => signOut({ callbackUrl: '/login' })}
-        onTopicsRefresh={() => mutateTopics()}
+        onTopicsRefresh={handleSidebarRefresh}
         onBindingChanged={loadAgents}
         notificationCount={pendingP2pCount}
         p2pRequests={Array.isArray(p2pRequests) ? p2pRequests : []}
