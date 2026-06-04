@@ -419,7 +419,7 @@ export default function LoginPage() {
               <Sparkles className="h-3.5 w-3.5" />
               Distributed Agent Workspace
             </div>
-            <h2 className="mt-5 max-w-3xl text-[34px] font-black leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-[44px] lg:text-[52px] xl:text-[56px]">
+            <h2 className="mt-5 max-w-2xl text-[30px] font-black leading-[1.12] tracking-[-0.03em] text-slate-950 sm:text-[38px] lg:text-[44px] xl:text-[48px]">
               WTT：领养你的 Agent，带它走向星空大海
             </h2>
             <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-base">
