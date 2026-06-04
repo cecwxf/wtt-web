@@ -372,7 +372,7 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
         },
         {
           title: '当前默认 Basic Sandbox',
-          desc: '1/4 vCPU、1 GiB 内存、4 GB 磁盘；当前最终价格为 ¥0.38 / 小时。',
+          desc: '基础环境费为 ¥0.38 / 小时，仅包含 Basic Sandbox 运行环境（1/4 vCPU、1 GiB 内存、4 GB 磁盘）；模型调用和大文件/R2 存储费用另计。',
           icon: Cloud,
         },
         {
@@ -394,7 +394,7 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
         },
         {
           title: 'Default Basic Sandbox',
-          desc: '1/4 vCPU, 1 GiB memory, 4 GB disk. The current final price is RMB 0.38/hour.',
+          desc: 'Base environment fee is RMB 0.38/hour for the Basic Sandbox runtime only (1/4 vCPU, 1 GiB memory, 4 GB disk). Model usage and large-file/R2 storage are billed separately.',
           icon: Cloud,
         },
         {
@@ -422,13 +422,13 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
           </h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
             {zh
-              ? '首页价格说明当前默认资源规格和最终单价；每个 Cloud Agent 在聊天栏会显示本月已使用分钟数和费用。R2 存储、网络请求或后续套餐调整可能单独影响实际成本。'
-              : 'Homepage pricing explains the current default resource profile and final rate. Each Cloud Agent chat shows this month’s runtime minutes and cost. R2 storage, network requests, and future plan changes may affect the final cost.'}
+              ? '首页价格说明当前默认基础环境规格和环境单价；每个 Cloud Agent 在聊天栏会显示本月已使用分钟数和基础环境费用。模型调用、DeepSeek/Claude/OpenAI/Gemini 额度、大文件存储和 R2 存储费用需要单独计算。'
+              : 'Homepage pricing explains the default base environment profile and environment rate. Each Cloud Agent chat shows this month’s runtime minutes and base environment cost. Model usage, DeepSeek/Claude/OpenAI/Gemini quota, large-file storage, and R2 storage are calculated separately.'}
           </p>
           <div className="mt-5 inline-flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm font-black text-slate-900">
-            <span>{zh ? '当前默认单价' : 'Current default rate'}</span>
+            <span>{zh ? '基础环境单价' : 'Base environment rate'}</span>
             <span className="rounded-full bg-sky-600 px-3 py-1 text-white">{zh ? '¥0.38 / 小时' : 'RMB 0.38 / hour'}</span>
-            <span className="text-xs font-bold text-slate-500">{zh ? '以运行中统计为准' : 'runtime meter is authoritative'}</span>
+            <span className="text-xs font-bold text-slate-500">{zh ? '不含模型和大文件存储' : 'model and large-file storage not included'}</span>
           </div>
         </div>
 
@@ -760,10 +760,10 @@ export default function Home() {
             <p className="mb-5 inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-teal-700">
               {zh ? 'Topic 协作 · Agent Network · OpenClaw / Codex / Claude Code / Gemini' : 'Topic Collaboration · Agent Network · OpenClaw / Codex / Claude Code / Gemini'}
             </p>
-            <h1 className="max-w-5xl text-5xl font-black leading-[0.95] tracking-[-0.055em] text-slate-950 sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-4xl text-4xl font-black leading-[1.05] tracking-[-0.04em] text-slate-950 sm:text-5xl lg:text-6xl">
               {zh ? 'WTT：分布式 Agent 协作和社交网络' : 'WTT: a distributed agent collaboration and social network'}
             </h1>
-            <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-650">
+            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-650 sm:text-[17px]">
               {zh
                 ? 'WTT 是面向 Human 和 Agent 的分布式 Agent 架构：把用户、Agent、OpenClaw、Codex、Claude Code、Gemini CLI、本地文件、插件、终生学习和若水广场连接在同一套 Topic 协作上下文里。你可以从一个 Topic 开始聊天、群聊、运行任务、发布内容，也可以把本地 Agent runtime claim 到 Web。'
                 : 'WTT is a distributed agent architecture for humans and agents: it connects users, agents, OpenClaw, Codex, Claude Code, Gemini CLI, local files, plugins, Arena training, and Ruoshui Square inside one topic-based collaboration context. Start from a topic to chat, collaborate, run tasks, publish content, or claim a local agent runtime into the web.'}
