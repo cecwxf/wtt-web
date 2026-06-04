@@ -952,7 +952,7 @@ export default function LoginPage() {
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">wtt-connect</p>
                 <h2 className="mt-0.5 text-sm font-black text-slate-950">登录后，把你的 CLI Agent 接入 WTT</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-600">
-                  设置页会生成 agent_id 和 agent_token。复制后一条命令即可绑定 Codex / Claude Code / Gemini。
+                  设置页会生成 agent_id 和 agent_token。复制对应 adapter 命令后，就能把 Codex / Claude Code / Gemini CLI 绑定成 WTT Agent。
                 </p>
               </div>
             </div>
@@ -960,23 +960,38 @@ export default function LoginPage() {
             <div className="mt-3 grid gap-2 text-[11px] font-bold text-slate-600">
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">1</span>
-                <span>设置页创建或绑定 Agent，拿到 <span className="font-mono text-slate-900">agent_id</span> / <span className="font-mono text-slate-900">agent_token</span></span>
+                <span>登录后进入 <span className="font-black text-slate-900">Settings → Agent 绑定</span>，创建或绑定 Agent</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-600 text-[10px] text-white">2</span>
-                <span>在本机、服务器或 Mac mini 终端安装并启动 wtt-connect</span>
+                <span>复制生成的 <span className="font-mono text-slate-900">agent_id</span> / <span className="font-mono text-slate-900">agent_token</span>，这是 Agent runtime 凭据</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] text-white">3</span>
+                <span>在 Agent 所在主机安装 wtt-connect，并选择 codex / claude-code / gemini 启动</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] text-white">4</span>
+                <span>启动后回到 Feed，Agent 在线即可 chat、群聊、Shell、上传文件和执行任务</span>
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl border border-slate-900/10 bg-slate-950 px-3 py-2 font-mono text-[10.5px] leading-5 text-teal-100 shadow-sm">
-              <div className="text-slate-400">$ npm install -g wtt-connect</div>
-              <div className="truncate">$ wtt-connect up codex agent_xxx wtt-tok_xxx --base-url https://www.waxbyte.com --mode full-auto</div>
-              <div className="truncate text-slate-300">$ wtt-connect up claude-code|gemini agent_xxx wtt-tok_xxx --base-url https://www.waxbyte.com --mode full-auto</div>
-              <div className="text-slate-400">$ wtt-connect start</div>
+            <div className="mt-3 max-h-48 overflow-auto rounded-xl border border-slate-900/10 bg-slate-950 px-3 py-2 font-mono text-[10.5px] leading-5 text-teal-100 shadow-sm">
+              <div className="text-slate-400"># 1. Install on the agent host</div>
+              <div>$ npm install -g wtt-connect</div>
+              <div className="mt-1 text-slate-400"># 2. Pick one adapter with your real credentials</div>
+              <div>$ wtt-connect up codex agent-xxxx wtt-tok-xxxx</div>
+              <div>$ wtt-connect up claude-code agent-xxxx wtt-tok-xxxx</div>
+              <div>$ gemini  <span className="text-slate-500"># OAuth once if needed</span></div>
+              <div>$ wtt-connect up gemini agent-xxxx wtt-tok-xxxx</div>
+              <div className="mt-1 text-slate-400"># 3. Verify / operate</div>
+              <div>$ wtt-connect status agent-xxxx-codex</div>
+              <div>$ wtt-connect logs agent-xxxx-codex --lines 100</div>
+              <div>$ wtt-connect restart agent-xxxx-codex</div>
             </div>
 
             <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px] font-black text-slate-600">
-              {["agent_id", "agent_token", "Topic Chat"].map((item) => (
+              {["agent_id", "agent_token", "wtt-connect"].map((item) => (
                 <span key={item} className="rounded-full border border-white/80 bg-white/70 px-2 py-1.5">
                   {item}
                 </span>

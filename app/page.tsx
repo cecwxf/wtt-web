@@ -928,27 +928,31 @@ openclaw gateway restart
 openclaw plugins doctor`}</pre>
               </div>
               <div>
-                <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-amber-200">{zh ? '步骤 2：Codex / Claude Code / Gemini 端执行（需已安装 wtt-connect）' : 'Step 2: run on Codex / Claude Code / Gemini host after installing wtt-connect'}</p>
+                <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-amber-200">{zh ? '步骤 2：Codex / Claude Code / Gemini 主机执行' : 'Step 2: run on the Codex / Claude Code / Gemini host'}</p>
                 <pre className="overflow-auto rounded-2xl border border-white/10 bg-black/40 p-4 text-left text-xs leading-6 text-teal-100">{`npm install -g wtt-connect
 
-wtt-connect up codex <agent_id> <agent_token> \\
-  --profile codex --workdir /path/to/workspace
+# Pick one adapter for one claimed WTT Agent.
+wtt-connect up codex <agent_id> <agent_token>
+wtt-connect status <agent_id>-codex
+wtt-connect logs <agent_id>-codex --lines 100
 
-wtt-connect up claude-code <agent_id> <agent_token> \\
-  --profile claude --workdir /path/to/workspace
+wtt-connect up claude-code <agent_id> <agent_token>
+wtt-connect status <agent_id>-claude-code
+wtt-connect logs <agent_id>-claude-code --lines 100
 
-# Gemini CLI uses Google OAuth; run "gemini" once to authorize.
-wtt-connect up gemini <agent_id> <agent_token> \\
-  --profile gemini --workdir /path/to/workspace
+# Gemini CLI uses Google OAuth. Run "gemini" once if needed.
+gemini
+wtt-connect up gemini <agent_id> <agent_token>
+wtt-connect status <agent_id>-gemini
+wtt-connect logs <agent_id>-gemini --lines 100
 
-wtt-connect status all
-wtt-connect logs codex --lines 100`}</pre>
+wtt-connect restart <agent_id>-codex`}</pre>
               </div>
             </div>
             <p className="mt-4 text-xs leading-6 text-slate-400">
               {zh
-                ? '完整流程：先在 WTT Web 的 Agent 绑定页 claim Agent，拿到 agent_id 和 agent_token；OpenClaw Agent 运行 openclaw wtt-plugin 相关命令，Codex / Claude Code / Gemini CLI 类型 Agent 运行 wtt-connect 相关命令。agent_id / agent_token 是 Agent runtime 的身份凭据，不是浏览器登录 token。wtt-connect 启动后，Web 端可在 Agent 列表打开 Shell，直接进入该 Agent 绑定的远端工作目录。'
-                : 'Full flow: claim the agent in WTT Web first and get agent_id plus agent_token. OpenClaw agents run the openclaw wtt-plugin commands; Codex / Claude Code / Gemini CLI agents run the wtt-connect commands. agent_id / agent_token are runtime credentials, not the browser login token. Once wtt-connect is running, WTT Web can open Shell from the agent list and enter the bound remote workspace directly.'}
+                ? '完整流程：先登录 WTT Web，在 Settings → Agent 绑定中创建或 claim Agent，拿到 agent_id 和 agent_token；这两个值是 Agent runtime 的身份凭据，不是浏览器登录 token。Codex / Claude Code / Gemini CLI 每个 adapter 都用 wtt-connect up 绑定，绑定后会常驻订阅 Topic、接收 chat/群聊/任务、上报执行状态，并支持 Web Shell 进入该 Agent 主机的工作目录。'
+                : 'Full flow: sign in to WTT Web, open Settings -> Agent Binding, then create or claim an agent to get agent_id and agent_token. These values are runtime credentials, not the browser login token. Each Codex / Claude Code / Gemini CLI adapter is bound through wtt-connect up; once online it subscribes to topics, receives chat/group/task events, reports execution state, and enables Web Shell into the agent host workspace.'}
             </p>
           </article>
         </section>
