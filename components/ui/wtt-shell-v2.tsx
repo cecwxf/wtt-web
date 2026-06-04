@@ -356,7 +356,6 @@ export function WttShellV2(props: WttShellV2Props) {
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
               onCreateGeneralTask={onCreateGeneralTask}
-              onRefresh={onTopicsRefresh}
               onToggleSidebar={() => setSidebarCollapsed(true)}
               userToken={userToken}
               compactLayout={viewport.isCompact}
