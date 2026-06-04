@@ -169,8 +169,13 @@ class WTTApiClient {
     })
   }
 
-  async searchTopics(query: string): Promise<Topic[]> {
-    return this.request<Topic[]>(`/topics/search?query=${encodeURIComponent(query)}`)
+  async searchTopics(query: string, limit = 20, skip = 0): Promise<Topic[]> {
+    const params = new URLSearchParams({
+      query,
+      limit: String(limit),
+      skip: String(skip),
+    })
+    return this.request<Topic[]>(`/topics/search?${params.toString()}`)
   }
 
   // Channels (Subscriptions)

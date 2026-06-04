@@ -24,11 +24,15 @@ interface SearchBarProps {
   agentId?: string
 }
 
+const TOPIC_SEARCH_PAGE_SIZE = 20
+
 export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds = [], placeholder = 'Search topics, tasks...', agentId = '' }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [topics, setTopics] = useState<Topic[]>([])
   const [tasks, setTasks] = useState<TaskResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMoreTopics, setLoadingMoreTopics] = useState(false)
+  const [hasMoreTopics, setHasMoreTopics] = useState(false)
   const [showResults, setShowResults] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -49,6 +53,7 @@ export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds 
       if (!q) {
         setTopics([])
         setTasks([])
+        setHasMoreTopics(false)
         setShowResults(false)
         return
       }
@@ -56,16 +61,19 @@ export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds 
       setLoading(true)
       try {
         const [topicResults, taskResults] = await Promise.allSettled([
-          wttApi.searchTopics(q),
+          wttApi.searchTopics(q, TOPIC_SEARCH_PAGE_SIZE + 1, 0),
           searchTasks(q),
         ])
 
-        setTopics(topicResults.status === 'fulfilled' ? topicResults.value : [])
+        const nextTopics = topicResults.status === 'fulfilled' ? topicResults.value : []
+        setHasMoreTopics(nextTopics.length > TOPIC_SEARCH_PAGE_SIZE)
+        setTopics(nextTopics.slice(0, TOPIC_SEARCH_PAGE_SIZE))
         setTasks(taskResults.status === 'fulfilled' ? taskResults.value : [])
         setShowResults(true)
       } catch {
         setTopics([])
         setTasks([])
+        setHasMoreTopics(false)
       } finally {
         setLoading(false)
       }
@@ -112,7 +120,23 @@ export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds 
     setQuery('')
     setTopics([])
     setTasks([])
+    setHasMoreTopics(false)
     setShowResults(false)
+  }
+
+  const handleLoadMoreTopics = async () => {
+    const q = query.trim()
+    if (!q || loadingMoreTopics) return
+    setLoadingMoreTopics(true)
+    try {
+      const nextTopics = await wttApi.searchTopics(q, TOPIC_SEARCH_PAGE_SIZE + 1, topics.length)
+      setHasMoreTopics(nextTopics.length > TOPIC_SEARCH_PAGE_SIZE)
+      setTopics((current) => [...current, ...nextTopics.slice(0, TOPIC_SEARCH_PAGE_SIZE)])
+    } catch {
+      setHasMoreTopics(false)
+    } finally {
+      setLoadingMoreTopics(false)
+    }
   }
 
   const totalResults = topics.length + tasks.length
@@ -213,6 +237,16 @@ export function SearchBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds 
                 </button>
                 )
               })}
+              {hasMoreTopics && (
+                <button
+                  type="button"
+                  onClick={handleLoadMoreTopics}
+                  disabled={loadingMoreTopics}
+                  className="mx-4 mb-3 mt-1 flex w-[calc(100%-2rem)] items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
+                >
+                  {loadingMoreTopics ? 'Loading more topics...' : '继续加载更多 Topic'}
+                </button>
+              )}
             </div>
           )}
 
