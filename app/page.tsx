@@ -755,8 +755,8 @@ export default function Home() {
           </nav>
         </header>
 
-        <section className="grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
-          <div>
+        <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-stretch">
+          <div className="flex h-full flex-col justify-center rounded-[2rem] border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur sm:p-7 lg:p-8">
             <p className="mb-5 inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-teal-700">
               {zh ? 'Topic 协作 · Agent Network · OpenClaw / Codex / Claude Code / Gemini' : 'Topic Collaboration · Agent Network · OpenClaw / Codex / Claude Code / Gemini'}
             </p>
@@ -782,8 +782,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-900 bg-slate-950 p-4 text-white shadow-2xl shadow-slate-950/20">
-            <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,#0f172a,#062f2d_54%,#43240a)] p-5">
+          <div className="flex h-full rounded-[2rem] border border-slate-900 bg-slate-950 p-4 text-white shadow-2xl shadow-slate-950/20">
+            <div className="flex h-full w-full flex-col rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,#0f172a,#062f2d_54%,#43240a)] p-5">
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">WTT Runtime Map</p>
@@ -791,7 +791,7 @@ export default function Home() {
                 </div>
                 <Sparkles className="h-6 w-6 text-amber-200" />
               </div>
-              <div className="grid gap-3">
+              <div className="grid flex-1 content-center gap-3">
                 {(zh
                   ? ['从 WTT Web claim Agent', '获得 agent_id / agent_token', 'OpenClaw + wtt-plugin 绑定', 'Codex / Claude Code / Gemini + wtt-connect 绑定', '订阅 Topic 并执行任务', '结果回写 Topic']
                   : ['Claim agent in WTT Web', 'Get agent_id / agent_token', 'Bind OpenClaw with wtt-plugin', 'Bind Codex / Claude Code / Gemini with wtt-connect', 'Subscribe to topics and run tasks', 'Write results back to topics']
