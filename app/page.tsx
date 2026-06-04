@@ -26,7 +26,7 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
 import { WttLogo } from '@/components/ui/wtt-logo'
 
-type SettingsPage = 'profile' | 'membership' | 'binding' | 'llm-proxy' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
+type SettingsPage = 'profile' | 'membership' | 'binding' | 'llm-proxy' | 'metrics' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
 type BillingMe = {
   entitlement?: {
