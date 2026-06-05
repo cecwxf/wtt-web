@@ -771,9 +771,6 @@ function FeedPageInner() {
     topicId: string
   } | null>(null)
 
-  const sessionUserId = (session as { userId?: string } | null | undefined)?.userId || ''
-  const sessionUserEmail = session?.user?.email || ''
-
   const loadAgents = useCallback(async () => {
     try {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
@@ -840,15 +837,6 @@ function FeedPageInner() {
         }
       }
 
-      if (list.length === 0 && typeof window !== 'undefined') {
-        const identity = String(sessionUserId || sessionUserEmail || 'anonymous')
-        const guideKey = `wtt_claim_agent_guide_shown:${identity}`
-        if (!localStorage.getItem(guideKey)) {
-          localStorage.setItem(guideKey, '1')
-          setForceOpenSettingsPage('binding')
-        }
-      }
-
       const fallback = list[0]
 
       if (fallback) {
@@ -863,7 +851,7 @@ function FeedPageInner() {
     } catch {
       // Keep page resilient
     }
-  }, [selectedAgentId, session?.accessToken, sessionUserEmail, sessionUserId, setSelectedAgentId])
+  }, [selectedAgentId, session?.accessToken, setSelectedAgentId])
 
   // Lookup map: agent_id → display_name (for enriching chat messages)
   const agentNameMap = useMemo(() => {
@@ -2853,23 +2841,28 @@ function FeedPageInner() {
             ) : (
               <div className="flex h-full flex-col items-center justify-center text-slate-400 px-4">
                 {agents.length === 0 ? (
-                  <div className="w-full max-w-xl rounded-2xl border border-indigo-200 bg-white/80 p-6 text-center shadow-sm">
-                    <p className="text-xl font-semibold text-slate-800">欢迎使用 WTT 👋</p>
-                    <p className="mt-2 text-sm text-slate-600">
-                      首次登录需要先 Claim 一个 Agent，完成后才能创建和参与话题。
+                  <div className="w-full max-w-xl rounded-3xl border border-sky-200 bg-white/85 p-6 text-center shadow-sm shadow-sky-900/5 dark:border-sky-500/25 dark:bg-zinc-900/80">
+                    <p className="text-xl font-black text-slate-900 dark:text-zinc-100">欢迎使用 WTT</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-zinc-300">
+                      开始前需要先添加一个 Agent。请使用左侧 Agent 栏顶部入口，选择“绑定已有 Agent”或“新建 Agent”。
                     </p>
-                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left text-xs text-slate-600">
-                      <p>步骤：</p>
-                      <p>1) 打开右上角菜单 → Agent Binding</p>
-                      <p>2) 点击 Claim New（或 Claim Existing）</p>
-                      <p>3) 绑定成功后即可开始使用</p>
+                    <div className="mt-4 grid gap-3 text-left sm:grid-cols-2">
+                      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-3 dark:border-emerald-500/25 dark:bg-emerald-500/10">
+                        <p className="text-sm font-black text-emerald-800 dark:text-emerald-100">绑定已有 Agent</p>
+                        <p className="mt-1 text-xs leading-5 text-emerald-700/80 dark:text-emerald-100/75">
+                          在你自己的电脑、服务器或 Mac mini 上运行 wtt-connect，把本地 Agent 接入 WTT。
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-sky-100 bg-sky-50/80 p-3 dark:border-sky-500/25 dark:bg-sky-500/10">
+                        <p className="text-sm font-black text-sky-800 dark:text-sky-100">新建云端 Agent</p>
+                        <p className="mt-1 text-xs leading-5 text-sky-700/80 dark:text-sky-100/75">
+                          Pro 用户可创建 Cloud Sandbox Agent；后续可在同一 Sandbox 内 Clone 更多 Agent。
+                        </p>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => setForceOpenSettingsPage('binding')}
-                      className="mt-4 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
-                    >
-                      立即去 Claim Agent
-                    </button>
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold leading-5 text-slate-500 dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-400">
+                      左侧栏上方的绿色按钮用于绑定已有 Agent，蓝色云按钮用于新建云端 Agent。
+                    </div>
                   </div>
                 ) : (
                   <>
