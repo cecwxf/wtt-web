@@ -27,7 +27,7 @@ export default function MobileSettingsPage() {
   const token = session?.accessToken as string | undefined
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.replace('/login?callbackUrl=/mobile/settings')
+    if (status === 'unauthenticated') router.replace('/mobile/login?callbackUrl=/mobile/settings')
   }, [router, status])
 
   const { data: billing } = useSWR(
@@ -89,7 +89,7 @@ export default function MobileSettingsPage() {
         </a>
 
         <button
-          onClick={() => signOut({ callbackUrl: '/login?callbackUrl=/mobile/feed' })}
+          onClick={() => signOut({ callbackUrl: '/mobile/login?callbackUrl=/mobile/feed' })}
           className="flex w-full items-center justify-center gap-2 rounded-3xl bg-slate-950 p-4 text-sm font-black text-white shadow-sm"
         >
           <LogOut className="h-4 w-4" />

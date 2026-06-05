@@ -6,13 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bot, ChevronDown, Clock3, LogOut, Menu, MessageSquare, Search, Send, Settings, X, Zap } from 'lucide-react'
+import { Bot, Camera, ChevronDown, Clock3, LocateFixed, LogOut, Menu, MessageSquare, Paperclip, Search, Send, Settings, X, Zap } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
 const COMPLETE_HOLD_MS = 4500
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 type AgentRecord = {
   agent_id: string
@@ -84,6 +85,13 @@ type BillingMe = {
     monthly_count?: number
     blocked_until?: string | null
   }
+}
+
+type PendingAsset = {
+  url: string
+  filename: string
+  kind: 'image' | 'audio' | 'video' | 'file'
+  token: string
 }
 
 function authHeaders(token?: string): HeadersInit {
@@ -224,15 +232,21 @@ export default function MobileFeedPage() {
   const [selectedTopicId, setSelectedTopicId] = useState('')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [selectorOpen, setSelectorOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [attachOpen, setAttachOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
   const [typingByTopic, setTypingByTopic] = useState<Record<string, TypingState>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.replace('/login?callbackUrl=/mobile/feed')
+      router.replace('/mobile/login?callbackUrl=/mobile/feed')
     }
   }, [router, status])
 
@@ -416,10 +430,12 @@ export default function MobileFeedPage() {
   }, [search, topics])
 
   const sendMessage = useCallback(async () => {
-    const content = draft.trim()
+    const attachmentContent = pendingAssets.map((asset) => asset.token).join('\n\n')
+    const content = [draft.trim(), attachmentContent].filter(Boolean).join('\n\n')
     if (!content || !token || !selectedAgentId || !selectedTopicId || sending) return
     setSending(true)
     setDraft('')
+    setPendingAssets([])
     const now = Date.now()
     setTypingByTopic((prev) => ({
       ...prev,
@@ -460,7 +476,82 @@ export default function MobileFeedPage() {
     } finally {
       setSending(false)
     }
-  }, [draft, mutateMessages, mutateTopics, selectedAgent, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token])
+  }, [draft, mutateMessages, mutateTopics, pendingAssets, selectedAgent, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token])
+
+  const uploadAsset = useCallback(async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      alert(`文件过大，最大 100MB，当前 ${(file.size / (1024 * 1024)).toFixed(1)}MB`)
+      return
+    }
+    setUploading(true)
+    setUploadProgress(0)
+    try {
+      const sign = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, mime_type: file.type || 'application/octet-stream', size: file.size }),
+      })
+      if (!sign.ok) throw new Error(await sign.text())
+      const signed = await sign.json()
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) setUploadProgress(Math.round((event.loaded / event.total) * 90))
+        })
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve()
+          else reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`))
+        })
+        xhr.addEventListener('error', () => reject(new Error('Upload failed')))
+        xhr.open('PUT', `${CLIENT_WTT_API_BASE}${signed.upload_url}`)
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+        xhr.send(file)
+      })
+      setUploadProgress(95)
+      const commit = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upload_token: signed.upload_token }),
+      })
+      if (!commit.ok) throw new Error(await commit.text())
+      const asset = await commit.json()
+      const isImage = file.type.startsWith('image/')
+      const isAudio = file.type.startsWith('audio/')
+      const isVideo = file.type.startsWith('video/')
+      const kind: PendingAsset['kind'] = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'file'
+      const token = isImage
+        ? `![${file.name}](${asset.url})`
+        : isAudio
+          ? `[audio:${file.name}](${asset.url})`
+          : isVideo
+            ? `[video:${file.name}](${asset.url})`
+            : `[file:${file.name}](${asset.url})`
+      setPendingAssets((prev) => [...prev, { url: asset.url, filename: file.name, kind, token }])
+      setUploadProgress(100)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '上传失败')
+    } finally {
+      setUploading(false)
+      setUploadProgress(null)
+    }
+  }, [])
+
+  const insertLocation = useCallback(() => {
+    setAttachOpen(false)
+    if (!navigator.geolocation) {
+      alert('当前设备不支持定位')
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        const token = `[location](https://maps.google.com/?q=${latitude},${longitude})`
+        setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
+      },
+      (error) => alert(`定位失败：${error.message || 'permission denied'}`),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+    )
+  }, [])
 
   if (status === 'loading') {
     return <div className="flex min-h-[100dvh] items-center justify-center bg-[#f8f3ea] text-sm font-bold text-slate-500">Loading WTT...</div>
@@ -530,7 +621,51 @@ export default function MobileFeedPage() {
         </div>
 
         <footer className="shrink-0 border-t border-[#e5dac8] bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {pendingAssets.length > 0 && (
+            <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+              {pendingAssets.map((asset, index) => (
+                <div key={`${asset.url}-${index}`} className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2">
+                  {asset.kind === 'image' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={asset.url} alt="" className="h-10 w-10 rounded-xl object-cover" />
+                  ) : (
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-[10px] font-black text-sky-700">FILE</span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-black text-slate-800">{asset.filename}</span>
+                    <span className="block text-[10px] font-bold uppercase text-slate-400">{asset.kind}</span>
+                  </span>
+                  <button onClick={() => setPendingAssets((prev) => prev.filter((_, i) => i !== index))} className="rounded-full bg-white p-1 text-slate-400">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {uploading && (
+            <div className="mb-2 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700">
+              正在上传 {uploadProgress ?? 0}%
+            </div>
+          )}
           <div className="flex items-end gap-2 rounded-3xl border border-slate-200 bg-slate-50 p-2">
+            <div className="relative">
+              <button onClick={() => setAttachOpen((v) => !v)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm">
+                <Paperclip className="h-4 w-4" />
+              </button>
+              {attachOpen && (
+                <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs font-black text-slate-700 shadow-xl">
+                  <button onClick={() => { setAttachOpen(false); fileInputRef.current?.click() }} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                    <Paperclip className="h-4 w-4" /> 文件/图片
+                  </button>
+                  <button onClick={() => { setAttachOpen(false); cameraInputRef.current?.click() }} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                    <Camera className="h-4 w-4" /> 拍照
+                  </button>
+                  <button onClick={insertLocation} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                    <LocateFixed className="h-4 w-4" /> 发送位置
+                  </button>
+                </div>
+              )}
+            </div>
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -546,11 +681,34 @@ export default function MobileFeedPage() {
             />
             <button
               onClick={() => void sendMessage()}
-              disabled={!draft.trim() || sending || !selectedTopicId}
+              disabled={(!draft.trim() && pendingAssets.length === 0) || sending || uploading || !selectedTopicId}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-600 text-white shadow-sm disabled:bg-slate-300"
             >
               <Send className="h-4 w-4" />
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,audio/*,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx,.xls,.xlsx,application/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void uploadAsset(file)
+                event.currentTarget.value = ''
+              }}
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void uploadAsset(file)
+                event.currentTarget.value = ''
+              }}
+            />
           </div>
         </footer>
       </section>
@@ -632,7 +790,7 @@ export default function MobileFeedPage() {
             </div>
             <a href="/feed" className="block rounded-3xl border border-slate-200 bg-white p-4 text-sm font-black text-slate-900">打开完整 Web Feed</a>
             <a href="/mobile/settings" className="block rounded-3xl border border-slate-200 bg-white p-4 text-sm font-black text-slate-900">移动端设置页</a>
-            <button onClick={() => signOut({ callbackUrl: '/login?callbackUrl=/mobile/feed' })} className="flex w-full items-center justify-center gap-2 rounded-3xl bg-slate-950 p-4 text-sm font-black text-white">
+            <button onClick={() => signOut({ callbackUrl: '/mobile/login?callbackUrl=/mobile/feed' })} className="flex w-full items-center justify-center gap-2 rounded-3xl bg-slate-950 p-4 text-sm font-black text-white">
               <LogOut className="h-4 w-4" />
               退出登录
             </button>
