@@ -366,46 +366,46 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
   const rules = zh
     ? [
         {
-          title: '只在开机时计费',
-          desc: 'Cloud Agent 开机、唤醒、运行中会按使用时间累计费用；用户主动关机后停止累计运行费用。',
+          title: 'Pro 每月 500 次',
+          desc: 'Cloud Agent 请求按次数计入 Pro 额度：每月共 500 次，P2P、任务 Topic、群聊中明确 @ 云端 Agent 的请求都会计入。',
+          icon: CheckCircle2,
+        },
+        {
+          title: '连续不超过 30 次',
+          desc: '连续请求窗口内最多 30 次；达到上限后会提示限流，3 小时窗口重置后解除限制，请求次数从 1 重新开始。',
           icon: Power,
         },
         {
-          title: '当前默认 Basic Sandbox',
-          desc: '基础环境费为 ¥0.38 / 小时，仅包含 Basic Sandbox 运行环境（1/4 vCPU、1 GiB 内存、4 GB 磁盘）；模型调用和大文件/R2 存储费用另计。',
-          icon: Cloud,
-        },
-        {
-          title: '重要文件放 /mnt/r2',
-          desc: '长期保存、大文件、需要跨唤醒保留的资料建议放到 /mnt/r2；日常代码工作可在 Agent workspace 中进行。',
-          icon: HardDrive,
-        },
-        {
           title: '模型使用方式',
-          desc: '内置 Claude Code 已配置使用 DeepSeek 模型；Pro 用户 DeepSeek + Claude Code 额度为 30 次连续请求、本月共 500 次。Codex 和 Gemini 需要用户自己配置 OpenAI/Gemini 模型或完成账号授权。',
+          desc: '默认 Claude Code 使用 DeepSeek 模型；Codex 和 Gemini 需要用户在云端 Terminal 中配置自己的 OpenAI/Gemini Key 或完成账号授权。',
           icon: BrainCircuit,
+        },
+        {
+          title: 'Preview URL',
+          desc: '云端 Agent 可把本地 dev server 暴露为 Preview URL，生成完整的、全球可访问、可分享的预览链接，用于 HTML、应用原型和可视化结果。',
+          icon: Sparkles,
         },
       ]
     : [
         {
-          title: 'Billed only while powered on',
-          desc: 'Cloud Agent usage is metered while starting, waking, or running. Powering off stops runtime billing.',
+          title: '500 requests per month',
+          desc: 'Cloud Agent requests are counted against the Pro quota: 500 per month. P2P, task topics, and group messages that explicitly @ a Cloud Agent are included.',
+          icon: CheckCircle2,
+        },
+        {
+          title: '30 continuous requests',
+          desc: 'A continuous window allows up to 30 requests. After the limit is reached, the rate limit is lifted when the 3-hour window resets, and counting starts again from 1.',
           icon: Power,
         },
         {
-          title: 'Default Basic Sandbox',
-          desc: 'Base environment fee is RMB 0.38/hour for the Basic Sandbox runtime only (1/4 vCPU, 1 GiB memory, 4 GB disk). Model usage and large-file/R2 storage are billed separately.',
-          icon: Cloud,
-        },
-        {
-          title: 'Keep important files in /mnt/r2',
-          desc: 'Use /mnt/r2 for long-lived files, large assets, and data that must survive wake cycles. Keep active code work in the agent workspace.',
-          icon: HardDrive,
-        },
-        {
           title: 'Model setup',
-          desc: 'Built-in Claude Code is already configured to use DeepSeek. Pro includes 30 continuous DeepSeek + Claude Code requests and 500 total requests per month. Codex and Gemini require the user to configure OpenAI/Gemini models or complete account authorization.',
+          desc: 'Claude Code uses DeepSeek by default. Codex and Gemini require users to configure their own OpenAI/Gemini keys or complete account authorization in the cloud Terminal.',
           icon: BrainCircuit,
+        },
+        {
+          title: 'Preview URL',
+          desc: 'Cloud Agents can expose a local dev server as a Preview URL: a complete, globally reachable, shareable link for HTML pages, app prototypes, and visual outputs.',
+          icon: Sparkles,
         },
       ]
 
@@ -415,20 +415,21 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-sky-700">
             <Cloud className="h-4 w-4" />
-            Cloud Agent Billing
+            Cloud Agent Pro
           </div>
           <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">
-            {zh ? 'Cloud Agent 按开机使用时间计费，关机后不再计费' : 'Cloud Agent is billed by powered-on runtime; powered-off time is not billed'}
+            {zh ? 'Cloud Agent 按请求额度使用：500 次/月，连续 30 次后 3 小时重置' : 'Cloud Agent uses request quota: 500/month, 30 continuous requests, reset after 3 hours'}
           </h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
             {zh
-              ? '首页价格说明当前默认基础环境规格和环境单价；每个 Cloud Agent 在聊天栏会显示本月已使用分钟数和基础环境费用。模型调用、DeepSeek/Claude/OpenAI/Gemini 额度、大文件存储和 R2 存储费用需要单独计算。'
-              : 'Homepage pricing explains the default base environment profile and environment rate. Each Cloud Agent chat shows this month’s runtime minutes and base environment cost. Model usage, DeepSeek/Claude/OpenAI/Gemini quota, large-file storage, and R2 storage are calculated separately.'}
+              ? 'Pro 用户可直接创建云端 Agent。系统会统计 Cloud Agent 请求次数：每月 500 次，连续窗口最多 30 次；触发限流后等待 3 小时窗口重置即可继续使用。云端 Agent 还支持生成全球可访问的 Preview URL，适合展示 Agent 生成的网页、动画、图表和应用原型。'
+              : 'Pro users can create hosted Cloud Agents directly. WTT tracks Cloud Agent request count: 500 per month, up to 30 in a continuous window; after rate limit, usage resumes when the 3-hour window resets. Cloud Agents can also generate globally reachable Preview URLs for pages, animations, charts, and app prototypes.'}
           </p>
           <div className="mt-5 inline-flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm font-black text-slate-900">
-            <span>{zh ? '基础环境单价' : 'Base environment rate'}</span>
-            <span className="rounded-full bg-sky-600 px-3 py-1 text-white">{zh ? '¥0.38 / 小时' : 'RMB 0.38 / hour'}</span>
-            <span className="text-xs font-bold text-slate-500">{zh ? '不含模型和大文件存储' : 'model and large-file storage not included'}</span>
+            <span>{zh ? 'Pro Cloud Agent 额度' : 'Pro Cloud Agent quota'}</span>
+            <span className="rounded-full bg-sky-600 px-3 py-1 text-white">{zh ? '500 次 / 月' : '500 / month'}</span>
+            <span className="rounded-full bg-slate-950 px-3 py-1 text-white">{zh ? '连续 30 次' : '30 continuous'}</span>
+            <span className="text-xs font-bold text-slate-500">{zh ? '3 小时后窗口重置' : '3-hour window reset'}</span>
           </div>
         </div>
 
