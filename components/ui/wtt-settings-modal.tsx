@@ -106,6 +106,16 @@ type BillingMe = {
   };
 };
 
+type CheckoutSession = {
+  provider?: string;
+  order_id?: string;
+  plan?: PlanId;
+  amount_cny?: string;
+  pay_url?: string;
+  qrcode_url?: string | null;
+  expires_at?: string;
+};
+
 type CloudModelOption = {
   id: string;
   label: string;
@@ -296,6 +306,8 @@ export function WttSettingsModal({
   const [billingLoading, setBillingLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
+  const [checkoutSession, setCheckoutSession] = useState<CheckoutSession | null>(null);
+  const [checkoutStatus, setCheckoutStatus] = useState("");
   const [llmProxyPlans, setLlmProxyPlans] = useState<LlmProxyPlans | null>(null);
   const [llmProxyTokens, setLlmProxyTokens] = useState<LlmProxyToken[]>([]);
   const [llmProxyLoading, setLlmProxyLoading] = useState(false);
@@ -401,6 +413,36 @@ export function WttSettingsModal({
     if (activePage !== "membership") return;
     void loadBilling();
   }, [activePage, loadBilling]);
+
+  useEffect(() => {
+    if (!accessToken || !checkoutSession?.order_id) return;
+    let cancelled = false;
+    const pollOrder = async () => {
+      try {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/orders/${encodeURIComponent(checkoutSession.order_id || "")}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        if (response.ok) {
+          setCheckoutStatus(String(data.status || "pending"));
+          if (data.status === "paid") {
+            setCheckoutSession(null);
+            await loadBilling();
+          }
+        }
+      } catch {
+        if (!cancelled) setCheckoutStatus("polling");
+      }
+    };
+    void pollOrder();
+    const timer = window.setInterval(() => void pollOrder(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [accessToken, checkoutSession?.order_id, loadBilling]);
 
   useEffect(() => {
     if (activePage !== "binding") return;
@@ -706,6 +748,11 @@ export function WttSettingsModal({
       if (!response.ok || !data.url) {
         const detail = data.detail;
         setCheckoutError(typeof detail === "string" ? detail : detail?.message || "创建支付链接失败");
+        return;
+      }
+      if (data.provider === "xunhupay" && data.order_id) {
+        setCheckoutSession(data as CheckoutSession);
+        setCheckoutStatus("pending");
         return;
       }
       window.location.href = data.url;
@@ -1336,7 +1383,7 @@ export function WttSettingsModal({
                   <div>
                     <p className="text-sm font-semibold text-slate-800">账户升级</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Plus / Pro 可申请云 Agent，并解锁技术面试和教育板块。国内用户走单次支付，海外用户可使用订阅。
+                      Plus / Pro 可申请云 Agent，并解锁技术面试和教育板块。当前统一使用月度支付，支付成功后开通 1 个月。
                     </p>
                   </div>
                   <button
@@ -1377,6 +1424,48 @@ export function WttSettingsModal({
                 </p>
               )}
 
+              {checkoutSession && (
+                <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">迅虎支付</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {checkoutSession.plan?.toUpperCase()} · ¥{checkoutSession.amount_cny || "-"} · 状态：{checkoutStatus || "pending"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutSession(null)}
+                      className="rounded-full border border-slate-200 p-1.5 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                    {checkoutSession.qrcode_url ? (
+                      <img src={checkoutSession.qrcode_url} alt="支付二维码" className="h-32 w-32 rounded-lg border border-slate-200 bg-white p-1" />
+                    ) : checkoutSession.pay_url ? (
+                      <div className="rounded-lg border border-slate-200 bg-white p-2">
+                        <QRCodeSVG value={checkoutSession.pay_url} size={112} />
+                      </div>
+                    ) : null}
+                    <div className="space-y-2 text-xs text-slate-500">
+                      <p>支付成功后会自动刷新权益；请勿关闭当前账号登录状态。</p>
+                      {checkoutSession.pay_url && (
+                        <a
+                          href={checkoutSession.pay_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-2 font-semibold text-white transition hover:bg-indigo-600"
+                        >
+                          打开支付页 <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
                   { plan: "plus" as const, name: "Plus", price: "¥20/月", window: "50 次连续请求", monthly: "500 次/月" },
@@ -1406,15 +1495,7 @@ export function WttSettingsModal({
                         className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-60"
                       >
                         {checkoutLoading === `${item.plan}:one_time` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        国内单次支付
-                      </button>
-                      <button
-                        onClick={() => void handleCheckout(item.plan, "subscription")}
-                        disabled={checkoutLoading !== null || !accessToken}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
-                      >
-                        {checkoutLoading === `${item.plan}:subscription` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        海外订阅
+                        立即支付，开通 1 个月
                       </button>
                     </div>
                   </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, ExternalLink, Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CLIENT_WTT_API_BASE } from "@/lib/api/base-url";
 
@@ -24,6 +24,16 @@ type BillingMe = {
     monthly_count?: number;
     blocked_until?: string | null;
   };
+};
+
+type CheckoutSession = {
+  provider?: string;
+  order_id?: string;
+  plan?: PlanId;
+  amount_cny?: string;
+  pay_url?: string;
+  qrcode_url?: string | null;
+  expires_at?: string;
 };
 
 type SessionWithAccessToken = {
@@ -61,6 +71,8 @@ export default function UpgradePage() {
   const [billing, setBilling] = useState<BillingMe | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkoutKey, setCheckoutKey] = useState<string | null>(null);
+  const [checkoutSession, setCheckoutSession] = useState<CheckoutSession | null>(null);
+  const [checkoutStatus, setCheckoutStatus] = useState<string>("");
   const [error, setError] = useState("");
   const token = (session as SessionWithAccessToken | null)?.accessToken;
   const currentPlan = billing?.entitlement?.plan || "free";
@@ -72,30 +84,55 @@ export default function UpgradePage() {
     return `${usage.monthly_count || 0}/${limits.monthly_limit || 0} monthly, ${usage.window_count || 0}/${limits.window_limit || 0} current window`;
   }, [billing]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (!token) {
-        setLoading(status === "loading");
-        return;
-      }
-      setLoading(true);
-      try {
-        const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const data = (await response.json().catch(() => ({}))) as BillingMe;
-        if (!cancelled) setBilling(data);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  async function loadBilling() {
+    if (!token) {
+      setLoading(status === "loading");
+      return;
     }
-    void load();
+    setLoading(true);
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = (await response.json().catch(() => ({}))) as BillingMe;
+      setBilling(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadBilling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, token]);
+
+  useEffect(() => {
+    if (!token || !checkoutSession?.order_id) return;
+    let cancelled = false;
+    const poll = async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/orders/${encodeURIComponent(checkoutSession.order_id || "")}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (cancelled) return;
+      if (response.ok) {
+        setCheckoutStatus(String(data.status || ""));
+        if (data.status === "paid") {
+          setCheckoutSession(null);
+          await loadBilling();
+        }
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 3000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
-  }, [status, token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutSession?.order_id, token]);
 
   async function startCheckout(plan: PlanId, billingMode: BillingMode) {
     if (!token) {
@@ -122,6 +159,11 @@ export default function UpgradePage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.url) {
         setError(typeof data.detail === "string" ? data.detail : data.detail?.message || "无法创建支付链接。");
+        return;
+      }
+      if (data.provider === "xunhupay" && data.order_id) {
+        setCheckoutSession(data as CheckoutSession);
+        setCheckoutStatus("pending");
         return;
       }
       window.location.href = data.url;
@@ -165,6 +207,36 @@ export default function UpgradePage() {
         )}
         {error && <div className="mb-6 rounded-xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-100">{error}</div>}
 
+        {checkoutSession && (
+          <div className="mb-6 rounded-2xl border border-[#3ce8e2]/30 bg-[#102524] p-5 shadow-2xl shadow-black/20">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#3ce8e2]">Xunhupay Checkout</p>
+                <h2 className="mt-2 text-2xl font-black">扫码或打开链接完成支付</h2>
+                <p className="mt-2 text-sm text-gray-300">
+                  {checkoutSession.plan?.toUpperCase()} · ¥{checkoutSession.amount_cny || "-"} · 状态：{checkoutStatus || "pending"}
+                </p>
+              </div>
+              <button onClick={() => setCheckoutSession(null)} className="rounded-full border border-white/10 p-2 text-gray-300 hover:bg-white/10">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+              {checkoutSession.qrcode_url && (
+                <img src={checkoutSession.qrcode_url} alt="支付二维码" className="h-44 w-44 rounded-xl border border-white/10 bg-white p-2" />
+              )}
+              <div className="space-y-3 text-sm text-gray-300">
+                <p>支付成功后会自动刷新会员状态；如果没有自动刷新，可以稍后点“刷新权益”。</p>
+                {checkoutSession.pay_url && (
+                  <a href={checkoutSession.pay_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-md bg-[#3ce8e2] px-4 py-2 font-black text-black hover:opacity-90">
+                    打开支付页 <ExternalLink className="h-4 w-4" />
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-5 md:grid-cols-2">
           {plans.map((plan) => (
             <section key={plan.id} className="rounded-2xl border border-gray-800 bg-[#1b1b1b] p-6">
@@ -192,15 +264,7 @@ export default function UpgradePage() {
                   className="inline-flex items-center justify-center gap-2 rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {checkoutKey === `${plan.id}:one_time` && <Loader2 className="h-4 w-4 animate-spin" />}
-                  国内单次支付
-                </button>
-                <button
-                  onClick={() => void startCheckout(plan.id, "subscription")}
-                  disabled={checkoutKey !== null || status !== "authenticated"}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-700 bg-[#151515] px-4 py-2 text-sm font-bold text-gray-200 hover:border-[#3ce8e2] hover:text-[#3ce8e2] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {checkoutKey === `${plan.id}:subscription` && <Loader2 className="h-4 w-4 animate-spin" />}
-                  海外订阅
+                  立即支付，开通 1 个月
                 </button>
               </div>
             </section>
