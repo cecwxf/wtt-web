@@ -116,6 +116,36 @@ type CheckoutSession = {
   expires_at?: string;
 };
 
+type AgentOperationJob = {
+  job_id?: string;
+  status?: string;
+  phase?: string;
+  result?: Record<string, unknown>;
+  error_message?: string;
+};
+
+function settingsDelay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function settingsErrorMessage(data: unknown, fallback: string): string {
+  if (!data || typeof data !== "object") return fallback;
+  const detail = (data as { detail?: unknown; message?: unknown }).detail ?? (data as { message?: unknown }).message;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object") {
+    const nested = (detail as { message?: unknown; detail?: unknown; error?: unknown }).message
+      ?? (detail as { detail?: unknown }).detail
+      ?? (detail as { error?: unknown }).error;
+    if (typeof nested === "string") return nested;
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 type CloudModelOption = {
   id: string;
   label: string;
@@ -649,6 +679,48 @@ export function WttSettingsModal({
     }
   };
 
+  const submitCloudAgentCreateJob = async (payload: Record<string, unknown>): Promise<AgentOperationJob> => {
+    if (!accessToken) throw new Error(t("settings.sessionExpired"));
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/agent-operations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        operation_type: "cloud_agent_create",
+        idempotency_key: "cloud-agent-create",
+        payload,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(settingsErrorMessage(data, `Cloud Agent operation failed (${response.status})`));
+    }
+    const jobId = String((data as AgentOperationJob).job_id || "").trim();
+    if (!jobId) throw new Error("Cloud Agent operation did not return a job id");
+    let job = data as AgentOperationJob;
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 240_000) {
+      const status = String(job.status || "").toLowerCase();
+      if (status === "succeeded") return job;
+      if (status === "failed" || status === "timeout" || status === "cancelled") {
+        throw new Error(job.error_message || `Cloud Agent operation ${status}`);
+      }
+      await settingsDelay(1500);
+      const poll = await fetch(`${CLIENT_WTT_API_BASE}/agent-operations/${encodeURIComponent(jobId)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const next = await poll.json().catch(() => ({}));
+      if (!poll.ok) {
+        throw new Error(settingsErrorMessage(next, `Cloud Agent operation polling failed (${poll.status})`));
+      }
+      job = next as AgentOperationJob;
+    }
+    throw new Error("Cloud Agent operation is still running; refresh the Agent list to check progress.");
+  };
+
   const handleClaimCloudAgent = async () => {
     if (!accessToken) {
       setCloudClaimError(t("settings.sessionExpired"));
@@ -681,13 +753,7 @@ export function WttSettingsModal({
         return;
       }
 
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/claim`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
+      const job = await submitCloudAgentCreateJob({
           accepted_terms: true,
           display_name: provisionDisplayName.trim() || "Cloud Agent",
           agent_type: "claude-code",
@@ -696,26 +762,14 @@ export function WttSettingsModal({
           default_model: "deepseek-v4-pro[1m]",
           model: "deepseek-v4-pro[1m]",
           pricing_addon_rmb_per_hour: 0.5,
-        }),
       });
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const detail = data.detail;
-        setCloudClaimError(
-          typeof detail === "string"
-            ? detail
-            : detail?.message || "Cloud Agent 申请失败，请确认账号已升级 Pro。",
-        );
-        return;
-      }
-
-      setCloudClaimSuccess(`Cloud Agent 已开通：${data.agent_id || ""}`);
+      setCloudClaimSuccess(`Cloud Agent 已开通：${String(job.result?.agent_id || "")}`);
       void loadBilling();
       void loadCloudAgentInfo();
       onBindingChanged?.();
-    } catch {
-      setCloudClaimError(t("settings.networkError"));
+    } catch (error) {
+      setCloudClaimError(error instanceof Error ? error.message : t("settings.networkError"));
     } finally {
       setCloudClaiming(false);
     }

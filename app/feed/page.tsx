@@ -93,6 +93,15 @@ type BillingMe = {
 
 type WttConnectAdapter = 'codex' | 'claude-code' | 'gemini'
 
+type AgentOperationJob = {
+  job_id?: string
+  operation_type?: string
+  status?: string
+  phase?: string
+  result?: Record<string, unknown>
+  error_message?: string
+}
+
 function cloudSandboxExpectedAgentIds(state: CloudAgentState | Record<string, unknown> | null | undefined, hostAgentId: string) {
   const ids = new Set<string>()
   const host = String(hostAgentId || '').trim()
@@ -160,10 +169,6 @@ function adapterDisplayName(raw: unknown): string {
   return 'Agent'
 }
 
-function shellQuote(value: string): string {
-  return `'${String(value).replace(/'/g, `'\\''`)}'`
-}
-
 function responseErrorMessage(data: unknown, fallback: string): string {
   if (data && typeof data === 'object') {
     const detail = (data as { detail?: unknown; message?: unknown }).detail ?? (data as { message?: unknown }).message
@@ -196,6 +201,14 @@ function formatErrorDetail(value: unknown, fallback = 'Unknown error'): string {
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function newClientOperationId(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
 }
 
 function getHumanSender(session: unknown): string {
@@ -1711,6 +1724,50 @@ function FeedPageInner() {
     return ids
   }, [agentStatsRaw, agentRuntimeMap, suppressedCloudAgentIds])
 
+  const submitAgentOperation = useCallback(async (
+    operationType: 'cloud_agent_create' | 'cloud_sandbox_clone' | 'local_host_clone',
+    payload: Record<string, unknown>,
+    idempotencyKey?: string,
+  ): Promise<AgentOperationJob> => {
+    const token = session?.accessToken as string | undefined
+    if (!token) throw new Error(t('settings.sessionExpired'))
+    const createRes = await fetch(`${CLIENT_WTT_API_BASE}/agent-operations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        operation_type: operationType,
+        idempotency_key: idempotencyKey,
+        payload,
+      }),
+    })
+    const createData = await createRes.json().catch(() => ({}))
+    if (!createRes.ok) {
+      throw new Error(responseErrorMessage(createData, `Agent operation failed (${createRes.status})`))
+    }
+    const jobId = String((createData as AgentOperationJob).job_id || '').trim()
+    if (!jobId) throw new Error('Agent operation did not return a job id')
+    let job = createData as AgentOperationJob
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 240_000) {
+      const status = String(job.status || '').toLowerCase()
+      if (status === 'succeeded') return job
+      if (status === 'failed' || status === 'timeout' || status === 'cancelled') {
+        throw new Error(job.error_message || `Agent operation ${status}`)
+      }
+      await delay(1500)
+      const pollRes = await fetch(`${CLIENT_WTT_API_BASE}/agent-operations/${encodeURIComponent(jobId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      })
+      const pollData = await pollRes.json().catch(() => ({}))
+      if (!pollRes.ok) {
+        throw new Error(responseErrorMessage(pollData, `Agent operation polling failed (${pollRes.status})`))
+      }
+      job = pollData as AgentOperationJob
+    }
+    throw new Error('Agent operation is still running; refresh the Agent list to check progress.')
+  }, [session?.accessToken, t])
+
   const handleNewAgentFromHost = useCallback(async (hostAgentId: string, role: AgentRoleTemplate, requestedAdapter?: WttConnectAdapter) => {
     const token = session?.accessToken as string | undefined
     if (!token) throw new Error(t('settings.sessionExpired'))
@@ -1731,184 +1788,24 @@ function FeedPageInner() {
       ? `${adapter} Agent`
       : (role.shortLabel || role.label || `${adapter} Agent`)
 
-    const provisionRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/provision`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
+    const modelId = hostIsCloudSandbox && adapter === hostAdapter
+      ? String(runtime?.current_model || runtime?.model_id || runtime?.model || '').trim()
+      : ''
+    const job = await submitAgentOperation(
+      hostIsCloudSandbox ? 'cloud_sandbox_clone' : 'local_host_clone',
+      {
+        host_agent_id: hostAgentId,
+        adapter,
         display_name: displayName,
-        platform: adapter,
-        start_cloud_child: false,
-      }),
-    })
-    const provisionData = await provisionRes.json().catch(() => ({}))
-    if (!provisionRes.ok) {
-      throw new Error(responseErrorMessage(provisionData, `Provision failed (${provisionRes.status})`))
-    }
-
-    const newAgentId = String((provisionData as { agent_id?: unknown }).agent_id || '').trim()
-    const newAgentToken = String((provisionData as { agent_token?: unknown }).agent_token || '').trim()
-    if (!newAgentId || !newAgentToken) {
-      throw new Error('Provision succeeded but did not return agent credentials')
-    }
-
-    const rolePayload = {
-      display_name: displayName,
-      role_template_id: role.id === 'general' ? '' : role.id,
-      role_template: role.id === 'general' ? {} : serializeAgentRoleTemplate(role),
-    }
-    const profileRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(newAgentId)}/profile`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(rolePayload),
-    })
-    const profileData = await profileRes.json().catch(() => ({}))
-    if (!profileRes.ok) {
-      throw new Error(responseErrorMessage(profileData, `Agent role update failed (${profileRes.status})`))
-    }
-
-    setAgentRoleMap((prev) => {
-      const next = { ...prev }
-      if (role.id === 'general') delete next[newAgentId]
-      else next[newAgentId] = role.id
-      try {
-        localStorage.setItem('wtt:feed-agent-role-map', JSON.stringify(next))
-      } catch {
-        // ignore local storage failures
-      }
-      return next
-    })
-    setAgentRoleTemplateMap((prev) => {
-      const next = { ...prev }
-      if (role.id === 'general') delete next[newAgentId]
-      else next[newAgentId] = role
-      return next
-    })
-
-    if (hostIsCloudSandbox) {
-      const modelId = adapter === hostAdapter
-        ? String(runtime?.current_model || runtime?.model_id || runtime?.model || '').trim()
-        : ''
-      const sandboxRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/sandbox/agents/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          agent_id: newAgentId,
-          agent_token: newAgentToken,
-          agent_type: adapter,
-          display_name: displayName,
-          model_id: modelId || undefined,
-          restart: false,
-        }),
-      })
-      const sandboxData = await sandboxRes.json().catch(() => ({}))
-      if (!sandboxRes.ok) {
-        throw new Error(responseErrorMessage(sandboxData, `Agent created, but sandbox start failed (${sandboxRes.status})`))
-      }
-
-      await loadAgents()
-      setSelectedAgentId(newAgentId)
-      setSelectedTopicId(null)
-      void mutateTopics()
-      window.setTimeout(() => {
-        void loadAgents()
-        void mutateTopics()
-      }, 2500)
-      alert(`Clone Agent started: ${newAgentId}`)
-      return
-    }
-
-    const profile = `${newAgentId}-${adapter}`
-    const cleanEnv = [
-      'env',
-      '-u WTT_BASE_URL',
-      '-u WTT_WS_URL',
-      '-u WTT_AGENT_ID',
-      '-u WTT_TOKEN',
-      '-u WTT_AGENT_TOKEN',
-      '-u WTT_HTTP_TOKEN',
-      '-u WTT_CONNECT_CONFIG',
-      '-u WTT_CONNECT_ENV_FILE',
-      '-u WTT_CONNECT_ADAPTER',
-      '-u WTT_CONNECT_ADAPTERS',
-      '-u WTT_CONNECT_WORKDIR',
-      '-u WTT_CONNECT_STATE_DIR',
-      '-u WTT_CONNECT_STORE_FILE',
-      '-u WTT_CONNECT_ARTIFACT_DIR',
-      '-u WTT_CONNECT_INBOX_DIR',
-      '-u WTT_CONNECT_MODE',
-    ].join(' ')
-    const upCommand = [
-      cleanEnv,
-      'wtt-connect up',
-      shellQuote(adapter),
-      shellQuote(newAgentId),
-      shellQuote(newAgentToken),
-      '--profile "$PROFILE"',
-      '--base-url "$BASE_URL"',
-      '--mode full-auto',
-      '--yes',
-    ].join(' ')
-    const command = [
-      'BASE_URL="${WTT_BASE_URL:-https://www.waxbyte.com}"',
-      `PROFILE=${shellQuote(profile)}`,
-      'LOG_DIR="${HOME:-/tmp}/.wtt-connect"',
-      'mkdir -p "$LOG_DIR"',
-      'if systemctl --user show-environment >/dev/null 2>&1; then',
-      `  ${upCommand}`,
-      'else',
-      `  ${upCommand} --no-start`,
-      `  nohup ${cleanEnv} wtt-connect start --profile "$PROFILE" > "$LOG_DIR/$PROFILE.nohup.log" 2>&1 &`,
-      'fi',
-    ].join('\n')
-
-    const shellRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/shell/jobs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        command,
-        timeout_seconds: 120,
-      }),
-    })
-    const shellData = await shellRes.json().catch(() => ({}))
-    if (!shellRes.ok) {
-      throw new Error(responseErrorMessage(shellData, `Agent created, but host shell failed (${shellRes.status})`))
-    }
-
-    const jobId = String((shellData as { job_id?: unknown }).job_id || '').trim()
-    if (!jobId) {
-      throw new Error('Agent created, but host shell job did not return a job id')
-    }
-
-    let jobData = shellData as Record<string, unknown>
-    const startedAt = Date.now()
-    while (Date.now() - startedAt < 135_000) {
-      const status = String(jobData.status || '').toLowerCase()
-      if (status === 'done' || status === 'error' || status === 'timeout') break
-      await delay(1500)
-      const pollRes = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(hostAgentId)}/shell/jobs/${encodeURIComponent(jobId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      })
-      const nextJobData = await pollRes.json().catch(() => ({}))
-      if (!pollRes.ok) {
-        throw new Error(responseErrorMessage(nextJobData, `Agent created, but host shell job polling failed (${pollRes.status})`))
-      }
-      jobData = nextJobData as Record<string, unknown>
-    }
-
-    const jobStatus = String(jobData.status || '').toLowerCase()
-    if (jobStatus !== 'done') {
-      const error = String(jobData.error || '').trim()
-      throw new Error(`Agent created, but host shell job ${jobStatus || 'did not finish'}${error ? `: ${error}` : ''}`)
-    }
-
-    const result = (jobData as { result?: Record<string, unknown> }).result || {}
-    const exitCode = Number(result.exit_code ?? result.exitCode ?? 0)
-    if (exitCode !== 0) {
-      const stderr = String(result.stderr || '').trim()
-      const stdout = String(result.stdout || '').trim()
-      const detail = [stderr, stdout].filter(Boolean).join('\n').slice(-1200)
-      throw new Error(`Agent created, but wtt-connect up exited ${exitCode}${detail ? `:\n${detail}` : ''}`)
+        model_id: modelId || undefined,
+        role_template_id: role.id === 'general' ? '' : role.id,
+        role_template: role.id === 'general' ? {} : serializeAgentRoleTemplate(role),
+        client_operation_id: newClientOperationId(),
+      },
+    )
+    const newAgentId = String(job.result?.agent_id || '').trim()
+    if (!newAgentId) {
+      throw new Error('Clone operation succeeded but did not return agent_id')
     }
 
     await loadAgents()
@@ -1920,7 +1817,7 @@ function FeedPageInner() {
       void mutateTopics()
     }, 2500)
     alert(`Clone Agent started: ${newAgentId}`)
-  }, [agentRuntimeMap, agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
+  }, [agentRuntimeMap, agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, submitAgentOperation, t])
 
   const handleCreateCloudAgent = useCallback(async (options?: CloudAgentCreateOptions) => {
     const token = session?.accessToken as string | undefined
@@ -1977,10 +1874,9 @@ function FeedPageInner() {
     if (!accepted) return
 
     try {
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/cloud-agents/claim`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
+      const job = await submitAgentOperation(
+        'cloud_agent_create',
+        {
           accepted_terms: true,
           display_name: options?.displayName || 'Cloud Agent',
           agent_type: options?.adapter || 'claude-code',
@@ -1991,14 +1887,11 @@ function FeedPageInner() {
           api_key: options?.apiKey || undefined,
           llm_api_key: options?.apiKey || undefined,
           pricing_addon_rmb_per_hour: options?.adapter === 'claude-code' ? 0.5 : 0,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(responseErrorMessage(data, `Cloud Agent failed (${res.status})`))
-      }
+        },
+        'cloud-agent-create',
+      )
 
-      const newAgentId = String((data as { agent_id?: unknown }).agent_id || '').trim()
+      const newAgentId = String(job.result?.agent_id || '').trim()
       await loadAgents()
       if (newAgentId) {
         setSelectedAgentId(newAgentId)
@@ -2013,7 +1906,7 @@ function FeedPageInner() {
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Cloud Agent failed')
     }
-  }, [agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, t])
+  }, [agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, submitAgentOperation, t])
 
   const runCloudSandboxAction = useCallback(async (hostAgentId: string, action: 'sleep' | 'wake') => {
     const token = session?.accessToken as string | undefined
