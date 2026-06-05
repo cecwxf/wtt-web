@@ -630,6 +630,7 @@ function FeedPageInner() {
   const { t } = useI18n()
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
+  const [agentsLoaded, setAgentsLoaded] = useState(false)
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
   const [agentRoleMap, setAgentRoleMap] = useState<Record<string, string>>({})
   const [agentRoleTemplateMap, setAgentRoleTemplateMap] = useState<Record<string, AgentRoleTemplate>>({})
@@ -850,6 +851,8 @@ function FeedPageInner() {
       }
     } catch {
       // Keep page resilient
+    } finally {
+      setAgentsLoaded(true)
     }
   }, [selectedAgentId, session?.accessToken, setSelectedAgentId])
 
@@ -2736,7 +2739,11 @@ function FeedPageInner() {
                 </div>
               </div>
             )}
-            {selectedTopicId && selectedTopic ? (
+            {!agentsLoaded ? (
+              <div className="flex h-full flex-col items-center justify-center px-4 text-sm font-semibold text-slate-400 dark:text-zinc-500">
+                正在加载 Agent...
+              </div>
+            ) : selectedTopicId && selectedTopic && agents.length > 0 ? (
               <div className="min-h-0 flex-1">
                 <ChatView
                 topicName={selectedTopic.name}
