@@ -151,10 +151,6 @@ function buildWttConnectCommand(adapter: WttConnectAdapterId, agentId: string, a
   ].join('\n')
 }
 
-function buildAllWttConnectCommands(agentId: string, agentToken: string) {
-  return WTT_CONNECT_ADAPTERS.map((adapter) => buildWttConnectCommand(adapter.id, agentId, agentToken)).join('\n\n')
-}
-
 const ROLE_TONES = [
   {
     avatar: 'bg-sky-500 text-white',
@@ -524,6 +520,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [cloudAgentBusy, setCloudAgentBusy] = useState(false)
   const [bindAgentOpen, setBindAgentOpen] = useState(false)
   const [bindAgentDisplayName, setBindAgentDisplayName] = useState('')
+  const [bindAgentAdapter, setBindAgentAdapter] = useState<WttConnectAdapterId>('codex')
   const [bindAgentBusy, setBindAgentBusy] = useState(false)
   const [bindAgentError, setBindAgentError] = useState('')
   const [bindAgentCopied, setBindAgentCopied] = useState('')
@@ -760,6 +757,7 @@ export function TopicColumn(props: TopicColumnProps) {
 
   const openBindAgentModal = () => {
     setBindAgentDisplayName('')
+    setBindAgentAdapter('codex')
     setBindAgentError('')
     setBindAgentCopied('')
     setBindAgentCreds(null)
@@ -1620,7 +1618,7 @@ export function TopicColumn(props: TopicColumnProps) {
                     {zh ? '选择 Codex / Claude Code / Gemini 启动' : 'Choose Codex / Claude Code / Gemini'}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
-                    {zh ? '点击上方按钮生成凭证后，会出现三套可复制命令。' : 'After generating credentials, three copyable commands will appear.'}
+                    {zh ? '一个 Agent 只能绑定一个 adapter。生成凭证后选择其中一种命令执行。' : 'One Agent can bind to only one adapter. After generating credentials, choose exactly one command to run.'}
                   </p>
                 </div>
               </div>
@@ -1637,45 +1635,64 @@ export function TopicColumn(props: TopicColumnProps) {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void copyBindCommand(buildAllWttConnectCommands(bindAgentCreds.agent_id, bindAgentCreds.agent_token), zh ? '全部命令已复制' : 'All commands copied')}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:bg-emerald-500/15"
-                  >
-                    <ClipboardCopy className="h-3.5 w-3.5" />
-                    {zh ? '复制全部命令' : 'Copy all commands'}
-                  </button>
-                  {bindAgentCopied && (
-                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">{bindAgentCopied}</span>
-                  )}
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                  {zh
+                    ? '注意：一个 agent_id/token 只能启动一个 adapter。请选择 Codex、Claude Code 或 Gemini 中的一个，不要同时执行多个启动命令。'
+                    : 'Note: one agent_id/token should start one adapter only. Choose Codex, Claude Code, or Gemini. Do not run multiple startup commands for the same agent.'}
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-3">
                   {WTT_CONNECT_ADAPTERS.map((adapter) => {
-                    const command = buildWttConnectCommand(adapter.id, bindAgentCreds.agent_id, bindAgentCreds.agent_token)
+                    const active = bindAgentAdapter === adapter.id
                     return (
-                      <div key={adapter.id} className="rounded-2xl border border-[#eee6da] bg-white/80 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70">
-                        <div className="mb-2 flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-black text-slate-900 dark:text-zinc-100">{adapter.label}</p>
-                            <p className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-zinc-400">{adapter.note}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void copyBindCommand(command, `${adapter.label} ${zh ? '命令已复制' : 'command copied'}`)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                          >
-                            <ClipboardCopy className="h-3 w-3" />
-                            {zh ? '复制' : 'Copy'}
-                          </button>
-                        </div>
-                        <pre className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-3 text-[10px] leading-4 text-emerald-100 dark:border-zinc-800">
-                          {command}
-                        </pre>
-                      </div>
+                      <button
+                        key={adapter.id}
+                        type="button"
+                        onClick={() => {
+                          setBindAgentAdapter(adapter.id)
+                          setBindAgentCopied('')
+                        }}
+                        className={`rounded-2xl border p-3 text-left transition ${
+                          active
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-100 dark:border-emerald-400/50 dark:bg-emerald-500/15 dark:text-emerald-100 dark:ring-emerald-500/20'
+                            : 'border-[#eee6da] bg-white/80 text-slate-600 hover:border-emerald-200 hover:bg-emerald-50/60 dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10'
+                        }`}
+                      >
+                        <span className="block text-sm font-black">{adapter.label}</span>
+                        <span className="mt-1 block text-[11px] leading-4 opacity-75">{adapter.note}</span>
+                      </button>
                     )
                   })}
+                </div>
+
+                <div className="rounded-2xl border border-[#eee6da] bg-white/80 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-black text-slate-900 dark:text-zinc-100">
+                        {WTT_CONNECT_ADAPTERS.find((adapter) => adapter.id === bindAgentAdapter)?.label}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-zinc-400">
+                        {zh ? '只复制并执行这一条命令。' : 'Copy and run this command only.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void copyBindCommand(
+                        buildWttConnectCommand(bindAgentAdapter, bindAgentCreds.agent_id, bindAgentCreds.agent_token),
+                        `${WTT_CONNECT_ADAPTERS.find((adapter) => adapter.id === bindAgentAdapter)?.label || bindAgentAdapter} ${zh ? '命令已复制' : 'command copied'}`,
+                      )}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:bg-emerald-500/15"
+                    >
+                      <ClipboardCopy className="h-3.5 w-3.5" />
+                      {zh ? '复制命令' : 'Copy command'}
+                    </button>
+                  </div>
+                  {bindAgentCopied && (
+                    <p className="mb-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">{bindAgentCopied}</p>
+                  )}
+                  <pre className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-3 text-[10px] leading-4 text-emerald-100 dark:border-zinc-800">
+                    {buildWttConnectCommand(bindAgentAdapter, bindAgentCreds.agent_id, bindAgentCreds.agent_token)}
+                  </pre>
                 </div>
               </div>
             )}
