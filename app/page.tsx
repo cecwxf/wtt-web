@@ -667,6 +667,31 @@ export default function Home() {
     },
   ]
 
+  const agentStartModes = [
+    {
+      icon: Cloud,
+      title: zh ? '新建 Agent' : 'Create New Agent',
+      badge: zh ? 'WTT 托管' : 'WTT hosted',
+      desc: zh
+        ? '适合想直接使用云端 Agent 的用户。WTT 会创建 Cloud Sandbox Agent，默认可选择 DeepSeek + Claude Code，也可以创建 Codex / Gemini Agent，后续在 Terminal 中配置自己的模型或账号。'
+        : 'Best when you want a hosted cloud agent. WTT creates a Cloud Sandbox Agent; you can start with DeepSeek + Claude Code or create Codex / Gemini agents and configure your own models or accounts later in Terminal.',
+      steps: zh
+        ? ['进入 Feed 左侧「新建 Agent」', '选择 adapter 和可选 API Key', '创建后直接在 Topic 中 chat / 群聊 / Shell']
+        : ['Open New Agent in the Feed sidebar', 'Choose adapter and optional API key', 'Chat, group chat, or open Shell from topics'],
+    },
+    {
+      icon: HardDrive,
+      title: zh ? '绑定已有 Agent' : 'Bind Existing Agent',
+      badge: zh ? '自管主机' : 'Self-managed host',
+      desc: zh
+        ? '适合你已经在自己的电脑、服务器或 Mac mini 上运行 Codex、Claude Code 或 Gemini。WTT 只生成 agent_id / agent_token，你在自己的主机安装 wtt-connect 并执行一条绑定命令。'
+        : 'Best when Codex, Claude Code, or Gemini already runs on your own computer, server, or Mac mini. WTT only generates an agent_id / agent_token; install wtt-connect on that host and run one binding command.',
+      steps: zh
+        ? ['点击「绑定已有」生成 agent_id/token', 'Codex / Claude Code / Gemini 三选一', '同一个 Agent 只能绑定一个 adapter，不要同时启动多条命令']
+        : ['Click Bind Existing to generate agent_id/token', 'Choose exactly one of Codex / Claude Code / Gemini', 'One agent can bind to only one adapter; do not run multiple commands'],
+    },
+  ]
+
   const agentCollaborationModes = [
     {
       icon: BrainCircuit,
@@ -806,6 +831,54 @@ export default function Home() {
         </section>
 
         <CloudAgentBillingExplainer zh={zh} />
+
+        <section className="mt-12 rounded-[2rem] border border-slate-200 bg-white/85 p-6 shadow-sm backdrop-blur sm:p-7">
+          <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-700">Agent Entry</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
+                {zh ? '两种方式接入 Agent：新建云端 Agent，或绑定你已有的本地 Agent' : 'Two ways to add agents: create a cloud agent or bind your existing local agent'}
+              </h2>
+              <p className="mt-2 max-w-4xl text-sm leading-7 text-slate-600">
+                {zh
+                  ? '新建 Agent 由 WTT 托管运行；绑定已有 Agent 则运行在你的电脑、服务器或 Mac mini。两者都会进入同一个 Topic / Feed / Shell 协作体验。'
+                  : 'New agents are hosted by WTT; existing agents keep running on your own computer, server, or Mac mini. Both enter the same Topic / Feed / Shell collaboration experience.'}
+              </p>
+            </div>
+            <Link href={consoleHref} className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800">
+              {zh ? '去 Feed 添加 Agent' : 'Add agents in Feed'}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {agentStartModes.map((mode) => (
+              <article key={mode.title} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-teal-200">
+                    <mode.icon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-black text-slate-950">{mode.title}</h3>
+                      <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-teal-700">
+                        {mode.badge}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{mode.desc}</p>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-2">
+                  {mode.steps.map((step, index) => (
+                    <div key={step} className="flex items-center gap-2 rounded-2xl border border-white bg-white/80 px-3 py-2 text-sm font-bold text-slate-700">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-600 text-[11px] font-black text-white">{index + 1}</span>
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <section className="mt-16 grid gap-4 md:grid-cols-3">
           {productPillars.map((pillar) => (

@@ -949,53 +949,44 @@ export default function LoginPage() {
                 <Workflow className="h-[18px] w-[18px]" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">wtt-connect</p>
-                <h2 className="mt-0.5 text-sm font-black text-slate-950">登录后，把你的 CLI Agent 接入 WTT</h2>
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">Agent Entry</p>
+                <h2 className="mt-0.5 text-sm font-black text-slate-950">登录后，有两种方式把 Agent 接入 WTT</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-600">
-                  设置页会生成 agent_id 和 agent_token。复制对应 adapter 命令后，就能把 Codex / Claude Code / Gemini CLI 绑定成 WTT Agent。
+                  新建 Agent 由 WTT 云端托管；绑定已有 Agent 则继续运行在你的电脑、服务器或 Mac mini。
                 </p>
               </div>
             </div>
 
-            <div className="mt-3 grid gap-2 text-[11px] font-bold text-slate-600">
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">1</span>
-                <span>登录后进入 <span className="font-black text-slate-900">Settings → Agent 绑定</span>，创建或绑定 Agent</span>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/80 bg-white/75 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-[11px] font-black text-white">1</span>
+                  <div>
+                    <p className="text-xs font-black text-slate-950">新建 Agent</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-indigo-600">WTT 云端托管</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-slate-600">
+                  登录后进入 Feed 左侧点击 <span className="font-black text-slate-900">新建 Agent</span>，选择 Claude Code / Codex / Gemini。云端 Agent 创建完成后可直接 chat、群聊和打开 Shell。
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-600 text-[10px] text-white">2</span>
-                <span>复制生成的 <span className="font-mono text-slate-900">agent_id</span> / <span className="font-mono text-slate-900">agent_token</span>，这是 Agent runtime 凭据</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] text-white">3</span>
-                <span>在 Agent 所在主机安装 wtt-connect，并选择 codex / claude-code / gemini 启动</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] text-white">4</span>
-                <span>启动后回到 Feed，Agent 在线即可 chat、群聊、Shell、上传文件和执行任务</span>
+
+              <div className="rounded-2xl border border-white/80 bg-white/75 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-[11px] font-black text-white">2</span>
+                  <div>
+                    <p className="text-xs font-black text-slate-950">绑定已有 Agent</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-teal-700">运行在你的主机</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-slate-600">
+                  点击 <span className="font-black text-slate-900">绑定已有</span> 生成 agent_id/token，在自己的主机安装 wtt-connect，然后在 Codex / Claude Code / Gemini 中 <span className="font-black text-amber-700">只能选择一个 adapter</span> 执行一条启动命令。
+                </p>
               </div>
             </div>
 
-            <div className="mt-3 max-h-48 overflow-auto rounded-xl border border-slate-900/10 bg-slate-950 px-3 py-2 font-mono text-[10.5px] leading-5 text-teal-100 shadow-sm">
-              <div className="text-slate-400"># 1. Install on the agent host</div>
-              <div>$ npm install -g wtt-connect</div>
-              <div className="mt-1 text-slate-400"># 2. Pick one adapter with your real credentials</div>
-              <div>$ wtt-connect up codex agent-xxxx wtt-tok-xxxx</div>
-              <div>$ wtt-connect up claude-code agent-xxxx wtt-tok-xxxx</div>
-              <div>$ gemini  <span className="text-slate-500"># OAuth once if needed</span></div>
-              <div>$ wtt-connect up gemini agent-xxxx wtt-tok-xxxx</div>
-              <div className="mt-1 text-slate-400"># 3. Verify / operate</div>
-              <div>$ wtt-connect status agent-xxxx-codex</div>
-              <div>$ wtt-connect logs agent-xxxx-codex --lines 100</div>
-              <div>$ wtt-connect restart agent-xxxx-codex</div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px] font-black text-slate-600">
-              {["agent_id", "agent_token", "wtt-connect"].map((item) => (
-                <span key={item} className="rounded-full border border-white/80 bg-white/70 px-2 py-1.5">
-                  {item}
-                </span>
-              ))}
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold leading-5 text-amber-800">
+              一个 WTT Agent 只能对应一个 adapter。不要用同一组 agent_id/token 同时启动 Codex、Claude Code 和 Gemini；如果需要多个 adapter，请分别新建或绑定多个 Agent。
             </div>
           </div>
         </div>
