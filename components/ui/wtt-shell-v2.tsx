@@ -355,6 +355,7 @@ export function WttShellV2(props: WttShellV2Props) {
               onWakeSandbox={onWakeSandbox}
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
+              onBindingChanged={onBindingChanged}
               onCreateGeneralTask={onCreateGeneralTask}
               onToggleSidebar={() => setSidebarCollapsed(true)}
               userToken={userToken}

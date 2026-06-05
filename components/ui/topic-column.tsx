@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardCopy, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -11,6 +11,7 @@ import {
 } from '@/lib/agent-role-templates'
 import { AgentTerminalModal } from '@/components/ui/agent-terminal-modal'
 import { useI18n } from '@/lib/i18n-provider'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
 
 export interface TopicItem {
@@ -96,6 +97,7 @@ interface TopicColumnProps {
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
+  onBindingChanged?: () => void | Promise<void>
   onCreateGeneralTask?: () => void
   onToggleSidebar?: () => void
   onStartAgentResize?: (event: ReactPointerEvent) => void
@@ -106,6 +108,51 @@ interface TopicColumnProps {
 
 function agentInitial(name: string) {
   return (name.trim()[0] || 'A').toUpperCase()
+}
+
+type WttConnectAdapterId = 'codex' | 'claude-code' | 'gemini'
+
+type ProvisionedWttConnectAgent = {
+  agent_id: string
+  agent_token: string
+}
+
+const WTT_CONNECT_ADAPTERS: Array<{ id: WttConnectAdapterId; label: string; note: string }> = [
+  { id: 'codex', label: 'Codex', note: '使用 Codex CLI，本机登录 ChatGPT/OpenAI 后启动。' },
+  { id: 'claude-code', label: 'Claude Code', note: '使用 Claude Code，可走本机订阅或 WTT LLM Proxy。' },
+  { id: 'gemini', label: 'Gemini CLI', note: 'Gemini 通常需要先在该主机完成 Google OAuth。' },
+]
+
+function shellQuote(value: string) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`
+}
+
+function buildWttConnectCommand(adapter: WttConnectAdapterId, agentId: string, agentToken: string) {
+  const aid = shellQuote(agentId)
+  const tok = shellQuote(agentToken)
+  const authHint = adapter === 'gemini'
+    ? [
+        '# 如果 Gemini 还没有授权，先运行一次：',
+        'gemini',
+        '',
+      ]
+    : []
+  return [
+    '# Step 1: install / update wtt-connect',
+    'npm install -g wtt-connect',
+    '',
+    ...authHint,
+    `# Step 2: start ${adapter} agent`,
+    `wtt-connect up ${adapter} ${aid} ${tok}`,
+    '',
+    '# verify',
+    `wtt-connect status ${agentId}-${adapter}`,
+    `wtt-connect logs ${agentId}-${adapter} --lines 100`,
+  ].join('\n')
+}
+
+function buildAllWttConnectCommands(agentId: string, agentToken: string) {
+  return WTT_CONNECT_ADAPTERS.map((adapter) => buildWttConnectCommand(adapter.id, agentId, agentToken)).join('\n\n')
 }
 
 const ROLE_TONES = [
@@ -450,6 +497,7 @@ export function TopicColumn(props: TopicColumnProps) {
     onWakeSandbox,
     onRenameAgent,
     onUnclaimAgent,
+    onBindingChanged,
     onCreateGeneralTask,
     onToggleSidebar,
     onStartAgentResize,
@@ -474,6 +522,12 @@ export function TopicColumn(props: TopicColumnProps) {
   const [cloudCreateDisplayName, setCloudCreateDisplayName] = useState('Cloud Agent')
   const [cloudCreateError, setCloudCreateError] = useState('')
   const [cloudAgentBusy, setCloudAgentBusy] = useState(false)
+  const [bindAgentOpen, setBindAgentOpen] = useState(false)
+  const [bindAgentDisplayName, setBindAgentDisplayName] = useState('')
+  const [bindAgentBusy, setBindAgentBusy] = useState(false)
+  const [bindAgentError, setBindAgentError] = useState('')
+  const [bindAgentCopied, setBindAgentCopied] = useState('')
+  const [bindAgentCreds, setBindAgentCreds] = useState<ProvisionedWttConnectAgent | null>(null)
   const [roleEditor, setRoleEditor] = useState<{
     agentId: string
     sourceRole?: AgentRoleTemplate
@@ -704,6 +758,63 @@ export function TopicColumn(props: TopicColumnProps) {
     }
   }
 
+  const openBindAgentModal = () => {
+    setBindAgentDisplayName('')
+    setBindAgentError('')
+    setBindAgentCopied('')
+    setBindAgentCreds(null)
+    setBindAgentOpen(true)
+  }
+
+  const createSelfManagedAgentBinding = async () => {
+    if (!userToken) {
+      setBindAgentError(zh ? '登录已过期，请重新登录。' : 'Session expired. Please sign in again.')
+      return
+    }
+    setBindAgentBusy(true)
+    setBindAgentError('')
+    setBindAgentCopied('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/provision`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${userToken}`,
+        },
+        body: JSON.stringify({
+          display_name: bindAgentDisplayName.trim() || 'Self-managed Agent',
+          platform: 'openclaw',
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const detail = typeof data.detail === 'string' ? data.detail : ''
+        throw new Error(detail || (zh ? '生成绑定凭证失败。' : 'Failed to generate binding credentials.'))
+      }
+      const agentId = String(data.agent_id || '').trim()
+      const agentToken = String(data.agent_token || '').trim()
+      if (!agentId || !agentToken) {
+        throw new Error(zh ? '后端未返回 agent_id 或 token。' : 'Backend did not return agent_id or token.')
+      }
+      setBindAgentCreds({ agent_id: agentId, agent_token: agentToken })
+      void onBindingChanged?.()
+    } catch (error) {
+      setBindAgentError(error instanceof Error ? error.message : (zh ? '生成绑定凭证失败。' : 'Failed to generate binding credentials.'))
+    } finally {
+      setBindAgentBusy(false)
+    }
+  }
+
+  const copyBindCommand = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setBindAgentCopied(label)
+      window.setTimeout(() => setBindAgentCopied(''), 1800)
+    } catch {
+      setBindAgentError(zh ? '复制失败，请手动复制命令。' : 'Copy failed. Please copy manually.')
+    }
+  }
+
   const runSandboxFolderAction = async (hostAgentId: string, action: 'sleep' | 'wake') => {
     const handler = action === 'sleep' ? onSleepSandbox : onWakeSandbox
     if (!handler || !hostAgentId) return
@@ -897,6 +1008,19 @@ export function TopicColumn(props: TopicColumnProps) {
               <span className="relative">Agent</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={openBindAgentModal}
+            className="flex w-full flex-col items-center justify-center rounded-2xl border border-emerald-200 bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-emerald-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-md dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:ring-emerald-500/10 dark:hover:bg-emerald-500/15"
+            title={zh ? '生成 agent_id/token，并在自己的主机上启动 wtt-connect' : 'Generate agent_id/token and run wtt-connect on your own host'}
+          >
+            <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-sm ring-1 ring-emerald-200 dark:bg-emerald-400/15 dark:text-emerald-200 dark:ring-emerald-400/25">
+              <Radio className="h-4 w-4" />
+            </span>
+            <span>{zh ? '绑定已有' : 'Bind'}</span>
+            <span>Agent</span>
+          </button>
 
           {agentOptions.length === 0 && (
             <div className="rounded-xl border border-dashed border-[#ded6c8] bg-white/55 p-2 text-center text-[10px] text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
@@ -1423,6 +1547,138 @@ export function TopicColumn(props: TopicColumnProps) {
                 {zh ? '保存并同步' : 'Save'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {bindAgentOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
+          <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-emerald-200 bg-[#fffdf8] p-4 shadow-2xl dark:border-emerald-500/30 dark:bg-zinc-900">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">
+                  {zh ? '绑定已有 Agent' : 'Bind Existing Agent'}
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
+                  {zh
+                    ? '生成一组 agent_id 和 token，然后在你自己的电脑、服务器或 Mac mini 上复制执行 wtt-connect 命令。'
+                    : 'Generate an agent_id/token pair, then run one wtt-connect command on your own computer, server, or Mac mini.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBindAgentOpen(false)}
+                disabled={bindAgentBusy}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                {zh ? '关闭' : 'Close'}
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={bindAgentDisplayName}
+                  onChange={(event) => setBindAgentDisplayName(event.target.value)}
+                  disabled={bindAgentBusy || Boolean(bindAgentCreds)}
+                  placeholder={zh ? 'Agent 显示名（可选）' : 'Agent display name (optional)'}
+                  className="min-w-0 flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400 disabled:opacity-60 dark:border-emerald-500/30 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => void createSelfManagedAgentBinding()}
+                  disabled={bindAgentBusy || Boolean(bindAgentCreds)}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {bindAgentBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {bindAgentCreds
+                    ? (zh ? '凭证已生成' : 'Credentials created')
+                    : bindAgentBusy
+                      ? (zh ? '生成中...' : 'Creating...')
+                      : (zh ? '生成 agent_id / token' : 'Generate agent_id / token')}
+                </button>
+              </div>
+              {bindAgentError && (
+                <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                  {bindAgentError}
+                </div>
+              )}
+            </div>
+
+            {!bindAgentCreds ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-[#eee6da] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+                  <p className="text-xs font-black text-slate-700 dark:text-zinc-200">{zh ? '第一步' : 'Step 1'}</p>
+                  <p className="mt-1 text-sm font-black text-slate-900 dark:text-zinc-100">npm install -g wtt-connect</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
+                    {zh ? '在要运行 Agent 的那台主机上安装。' : 'Run this on the host where the Agent should live.'}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-[#eee6da] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+                  <p className="text-xs font-black text-slate-700 dark:text-zinc-200">{zh ? '第二步' : 'Step 2'}</p>
+                  <p className="mt-1 text-sm font-black text-slate-900 dark:text-zinc-100">
+                    {zh ? '选择 Codex / Claude Code / Gemini 启动' : 'Choose Codex / Claude Code / Gemini'}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
+                    {zh ? '点击上方按钮生成凭证后，会出现三套可复制命令。' : 'After generating credentials, three copyable commands will appear.'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl border border-emerald-100 bg-white p-3 dark:border-emerald-500/20 dark:bg-zinc-950/70">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-emerald-600 dark:text-emerald-300">agent_id</p>
+                    <code className="mt-1 block break-all text-xs font-semibold text-slate-800 dark:text-zinc-100">{bindAgentCreds.agent_id}</code>
+                  </div>
+                  <div className="rounded-xl border border-emerald-100 bg-white p-3 dark:border-emerald-500/20 dark:bg-zinc-950/70">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-emerald-600 dark:text-emerald-300">agent_token</p>
+                    <code className="mt-1 block break-all text-xs font-semibold text-slate-800 dark:text-zinc-100">{bindAgentCreds.agent_token}</code>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void copyBindCommand(buildAllWttConnectCommands(bindAgentCreds.agent_id, bindAgentCreds.agent_token), zh ? '全部命令已复制' : 'All commands copied')}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:bg-emerald-500/15"
+                  >
+                    <ClipboardCopy className="h-3.5 w-3.5" />
+                    {zh ? '复制全部命令' : 'Copy all commands'}
+                  </button>
+                  {bindAgentCopied && (
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">{bindAgentCopied}</span>
+                  )}
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {WTT_CONNECT_ADAPTERS.map((adapter) => {
+                    const command = buildWttConnectCommand(adapter.id, bindAgentCreds.agent_id, bindAgentCreds.agent_token)
+                    return (
+                      <div key={adapter.id} className="rounded-2xl border border-[#eee6da] bg-white/80 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70">
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-black text-slate-900 dark:text-zinc-100">{adapter.label}</p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-zinc-400">{adapter.note}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void copyBindCommand(command, `${adapter.label} ${zh ? '命令已复制' : 'command copied'}`)}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          >
+                            <ClipboardCopy className="h-3 w-3" />
+                            {zh ? '复制' : 'Copy'}
+                          </button>
+                        </div>
+                        <pre className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-3 text-[10px] leading-4 text-emerald-100 dark:border-zinc-800">
+                          {command}
+                        </pre>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
