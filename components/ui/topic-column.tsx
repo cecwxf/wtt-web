@@ -1027,7 +1027,7 @@ export function TopicColumn(props: TopicColumnProps) {
           )}
 
           {agentFolders.map((folder) => {
-            const collapsed = collapsedAgentFolders[folder.key] ?? false
+            const collapsed = collapsedAgentFolders[folder.key] ?? true
             const onlineCount = folder.agents.filter((agent) => isAgentOnline(agent.agent_id)).length
             const folderTone = hostFolderTone(folder.key)
             const cloudHostIds = Array.from(new Set(folder.agents
