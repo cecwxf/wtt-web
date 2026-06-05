@@ -128,6 +128,23 @@ function settingsDelay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+async function settingsFetchJsonWithTimeout(input: string, init: RequestInit, timeoutMs = 25_000): Promise<{ response: Response; data: unknown }> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(input, { ...init, signal: controller.signal });
+    const data = await response.json().catch(() => ({}));
+    return { response, data };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 function settingsErrorMessage(data: unknown, fallback: string): string {
   if (!data || typeof data !== "object") return fallback;
   const detail = (data as { detail?: unknown; message?: unknown }).detail ?? (data as { message?: unknown }).message;
@@ -681,7 +698,7 @@ export function WttSettingsModal({
 
   const submitCloudAgentCreateJob = async (payload: Record<string, unknown>): Promise<AgentOperationJob> => {
     if (!accessToken) throw new Error(t("settings.sessionExpired"));
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/agent-operations`, {
+    const { response, data } = await settingsFetchJsonWithTimeout(`${CLIENT_WTT_API_BASE}/agent-operations`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -693,7 +710,6 @@ export function WttSettingsModal({
         payload,
       }),
     });
-    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(settingsErrorMessage(data, `Cloud Agent operation failed (${response.status})`));
     }
@@ -708,11 +724,10 @@ export function WttSettingsModal({
         throw new Error(job.error_message || `Cloud Agent operation ${status}`);
       }
       await settingsDelay(1500);
-      const poll = await fetch(`${CLIENT_WTT_API_BASE}/agent-operations/${encodeURIComponent(jobId)}`, {
+      const { response: poll, data: next } = await settingsFetchJsonWithTimeout(`${CLIENT_WTT_API_BASE}/agent-operations/${encodeURIComponent(jobId)}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
         cache: "no-store",
       });
-      const next = await poll.json().catch(() => ({}));
       if (!poll.ok) {
         throw new Error(settingsErrorMessage(next, `Cloud Agent operation polling failed (${poll.status})`));
       }

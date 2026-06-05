@@ -203,6 +203,23 @@ function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+async function fetchJsonWithTimeout(input: string, init: RequestInit, timeoutMs = 25_000): Promise<{ response: Response; data: unknown }> {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(input, { ...init, signal: controller.signal })
+    const data = await response.json().catch(() => ({}))
+    return { response, data }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`)
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
 function newClientOperationId(): string {
   try {
     return crypto.randomUUID()
@@ -1731,7 +1748,7 @@ function FeedPageInner() {
   ): Promise<AgentOperationJob> => {
     const token = session?.accessToken as string | undefined
     if (!token) throw new Error(t('settings.sessionExpired'))
-    const createRes = await fetch(`${CLIENT_WTT_API_BASE}/agent-operations`, {
+    const { response: createRes, data: createData } = await fetchJsonWithTimeout(`${CLIENT_WTT_API_BASE}/agent-operations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -1740,7 +1757,6 @@ function FeedPageInner() {
         payload,
       }),
     })
-    const createData = await createRes.json().catch(() => ({}))
     if (!createRes.ok) {
       throw new Error(responseErrorMessage(createData, `Agent operation failed (${createRes.status})`))
     }
@@ -1755,11 +1771,10 @@ function FeedPageInner() {
         throw new Error(job.error_message || `Agent operation ${status}`)
       }
       await delay(1500)
-      const pollRes = await fetch(`${CLIENT_WTT_API_BASE}/agent-operations/${encodeURIComponent(jobId)}`, {
+      const { response: pollRes, data: pollData } = await fetchJsonWithTimeout(`${CLIENT_WTT_API_BASE}/agent-operations/${encodeURIComponent(jobId)}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       })
-      const pollData = await pollRes.json().catch(() => ({}))
       if (!pollRes.ok) {
         throw new Error(responseErrorMessage(pollData, `Agent operation polling failed (${pollRes.status})`))
       }
