@@ -82,12 +82,32 @@ interface CloudAgentState {
     estimated_rmb?: number
     currency?: string
     pricing_note?: string
+    cloud_agent_usage?: {
+      window_count?: number
+      monthly_count?: number
+      blocked_until?: string | null
+    }
+    entitlement?: {
+      limits?: {
+        window_limit?: number
+        monthly_limit?: number
+      }
+    }
   }
 }
 
 type BillingMe = {
   entitlement?: {
     plan?: string
+    limits?: {
+      window_limit?: number
+      monthly_limit?: number
+    }
+  }
+  cloud_agent_usage?: {
+    window_count?: number
+    monthly_count?: number
+    blocked_until?: string | null
   }
 }
 
@@ -2756,7 +2776,11 @@ function FeedPageInner() {
                 workspaceWorkdir={selectedAgentId ? agentRuntimeMap?.[selectedAgentId]?.workdir : undefined}
                 currentAgentRuntime={selectedAgentRuntime}
                 currentAgentIsCloud={selectedAgentIsCloud}
-                cloudSandboxBilling={selectedAgentIsCloud ? ((cloudAgentStateRaw as CloudAgentState | null | undefined)?.sandbox_billing ?? null) : null}
+                cloudSandboxBilling={selectedAgentIsCloud ? {
+                  ...(((cloudAgentStateRaw as CloudAgentState | null | undefined)?.sandbox_billing) || {}),
+                  cloud_agent_usage: billingRaw?.cloud_agent_usage,
+                  entitlement: billingRaw?.entitlement,
+                } : null}
                 agentRoleLabelMap={agentRoleLabelMap}
                 compactUi
                 extraHeaderActions={

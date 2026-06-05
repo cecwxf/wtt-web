@@ -78,6 +78,17 @@ export interface CloudSandboxBilling {
   estimated_rmb?: number
   currency?: string
   pricing_note?: string
+  cloud_agent_usage?: {
+    window_count?: number
+    monthly_count?: number
+    blocked_until?: string | null
+  }
+  entitlement?: {
+    limits?: {
+      window_limit?: number
+      monthly_limit?: number
+    }
+  }
 }
 
 interface ModelOption {
@@ -1198,11 +1209,16 @@ function runStatusAdapterLabel(adapter?: string): string {
   return value
 }
 
-function formatCloudBillingAmount(value: unknown) {
-  const amount = Number(value)
-  if (!Number.isFinite(amount) || amount <= 0) return '¥0.0000'
-  if (amount < 0.01) return `¥${amount.toFixed(4)}`
-  return `¥${amount.toFixed(2)}`
+function cloudAgentQuotaText(billing?: CloudSandboxBilling | null) {
+  const usage = billing?.cloud_agent_usage
+  const limits = billing?.entitlement?.limits
+  const monthlyLimit = Number(limits?.monthly_limit || 500)
+  const windowLimit = Number(limits?.window_limit || 30)
+  const monthlyCount = Number(usage?.monthly_count || 0)
+  const windowCount = Number(usage?.window_count || 0)
+  const blockedUntil = String(usage?.blocked_until || '').trim()
+  const resetText = blockedUntil ? `限制中，恢复时间 ${blockedUntil}` : '连续窗口 3 小时后重置'
+  return `Cloud Agent 按 request 额度计算：本月 ${monthlyCount}/${monthlyLimit} 次，连续 ${windowCount}/${windowLimit} 次，${resetText}`
 }
 
 function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatus; floating?: boolean }) {
@@ -1495,10 +1511,8 @@ export function ChatView({
     : activeAgentAdapter === 'claude-code' ? 'Claude Code'
       : activeAgentAdapter === 'gemini' ? 'Gemini'
       : 'Agent'
-  const showCloudBilling = Boolean(currentAgentIsCloud && cloudSandboxBilling)
-  const cloudBillingMinutes = Math.max(0, Math.round(Number(cloudSandboxBilling?.active_minutes || 0)))
-  const cloudBillingAmount = formatCloudBillingAmount(cloudSandboxBilling?.estimated_rmb)
-  const cloudBillingText = `cloud agent按照使用时间进行计费，关机后不再计费。本月使用时间共${cloudBillingMinutes}分钟，花费${cloudBillingAmount} RMB`
+  const showCloudBilling = Boolean(currentAgentIsCloud)
+  const cloudBillingText = cloudAgentQuotaText(cloudSandboxBilling)
 
   const mentionCandidates = useMemo(() => {
     const shouldShowAll = topicType === 'discussion' || topicType === 'collaborative'
@@ -2692,8 +2706,8 @@ export function ChatView({
                     className="inline-flex min-w-max gap-8 whitespace-nowrap"
                     style={{ animation: 'wtt-cloud-billing-marquee 12s linear infinite' }}
                   >
-                    <span>cloud agent按使用时间计费，关机后不计费。本月{cloudBillingMinutes}分钟，{cloudBillingAmount} RMB</span>
-                    <span aria-hidden="true">cloud agent按使用时间计费，关机后不计费。本月{cloudBillingMinutes}分钟，{cloudBillingAmount} RMB</span>
+                    <span>{cloudBillingText}</span>
+                    <span aria-hidden="true">{cloudBillingText}</span>
                   </span>
                 </span>
               </div>
