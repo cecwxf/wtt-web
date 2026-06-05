@@ -707,7 +707,7 @@ function FeedPageInner() {
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false)
   const [inviteAgentId, setInviteAgentId] = useState('')
   const [invitingMember, setInvitingMember] = useState(false)
-  const [forceOpenSettingsPage, setForceOpenSettingsPage] = useState<'binding' | 'profile' | null>(null)
+  const [forceOpenSettingsPage, setForceOpenSettingsPage] = useState<'binding' | 'profile' | 'membership' | null>(null)
   const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
@@ -1661,9 +1661,17 @@ function FeedPageInner() {
   const planLabel = useMemo(() => {
     const plan = String(billingRaw?.entitlement?.plan || 'free').toLowerCase()
     if (plan === 'pro') return 'Pro'
-    if (plan === 'plus') return 'Plus'
     return 'Free'
   }, [billingRaw?.entitlement?.plan])
+  const hasCloudAgentRecord = useMemo(
+    () => agents.some((agent) => (
+      (agent.binding_method || agent.bound_via || '') === 'cloud_trial'
+      || agent.is_cloud_sandbox
+      || Boolean(agent.cloud_host_agent_id)
+    )),
+    [agents],
+  )
+  const cloudAgentNeedsRenewal = hasCloudAgentRecord && String(billingRaw?.entitlement?.plan || 'free').toLowerCase() !== 'pro'
   const sleepingCloudHostIds = useMemo(() => {
     const state = (cloudAgentStateRaw || {}) as CloudAgentState
     const status = String(state.status || '').toLowerCase()
@@ -1920,10 +1928,6 @@ function FeedPageInner() {
       alert(t('settings.sessionExpired'))
       return
     }
-    if (agents.some((agent) => (agent.binding_method || agent.bound_via || '') === 'cloud_trial')) {
-      alert('该账号已经创建过 Cloud Agent，每个账号只能创建一个。')
-      return
-    }
     try {
       const billingRes = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1932,8 +1936,23 @@ function FeedPageInner() {
       if (billingRes.ok) {
         const billing = await billingRes.json().catch(() => ({}))
         const plan = String((billing as { entitlement?: { plan?: unknown } }).entitlement?.plan || 'free')
-        if (plan !== 'plus' && plan !== 'pro') {
-          alert('Cloud Agent 需要升级为 Plus / Pro 账户后才能使用。请到 设置中心 > 账户升级 开通。')
+        const alreadyHasCloudAgent = agents.some((agent) => (
+          (agent.binding_method || agent.bound_via || '') === 'cloud_trial'
+          || agent.is_cloud_sandbox
+          || Boolean(agent.cloud_host_agent_id)
+        ))
+        if (alreadyHasCloudAgent && plan !== 'pro') {
+          alert('你已经创建过 Cloud Agent，但当前 Pro 会员已到期。请到 设置中心 > 账户升级 续费后继续使用。')
+          setForceOpenSettingsPage('membership')
+          return
+        }
+        if (alreadyHasCloudAgent) {
+          alert('该账号已经创建过 Cloud Agent，每个账号只能创建一个。')
+          return
+        }
+        if (plan !== 'pro') {
+          alert('Cloud Agent 需要升级为 Pro 账户后才能使用。请到 设置中心 > 账户升级 开通。')
+          setForceOpenSettingsPage('membership')
           return
         }
       } else {
@@ -2784,9 +2803,26 @@ function FeedPageInner() {
       >
         <div className="flex h-full">
           {/* Main content area */}
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            {cloudAgentNeedsRenewal && (
+              <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    你已经创建过 Cloud Agent，但当前 Pro 会员已到期。续费后可继续使用云端 Agent、技术面试、教育和高考板块。
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setForceOpenSettingsPage('membership')}
+                    className="rounded-full border border-amber-300 bg-white px-3 py-1 text-[11px] font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100 dark:hover:bg-amber-400/20"
+                  >
+                    立即续费
+                  </button>
+                </div>
+              </div>
+            )}
             {selectedTopicId && selectedTopic ? (
-              <ChatView
+              <div className="min-h-0 flex-1">
+                <ChatView
                 topicName={selectedTopic.name}
                 topicId={selectedTopic.topic_id}
                 taskId={selectedTopicTaskId}
@@ -2880,7 +2916,8 @@ function FeedPageInner() {
                     </div>
                   ) : undefined
                 }
-              />
+                />
+              </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center text-slate-400 px-4">
                 {agents.length === 0 ? (

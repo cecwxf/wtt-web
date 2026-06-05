@@ -6,7 +6,7 @@ import { Check, ExternalLink, Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CLIENT_WTT_API_BASE } from "@/lib/api/base-url";
 
-type PlanId = "plus" | "pro";
+type PlanId = "pro";
 type BillingMode = "one_time" | "subscription";
 
 type BillingMe = {
@@ -49,20 +49,12 @@ const plans: Array<{
   features: string[];
 }> = [
   {
-    id: "plus",
-    name: "Plus",
-    price: "¥20 / 月",
-    requestWindow: "连续 50 次请求后限流",
-    requestMonthly: "每月 500 次云 Agent 请求",
-    features: ["可申请云 Agent", "开放技术面试板块", "开放教育板块", "3 小时后重置连续请求额度"],
-  },
-  {
     id: "pro",
     name: "Pro",
     price: "¥30 / 月",
     requestWindow: "连续 100 次请求后限流",
     requestMonthly: "每月 1500 次云 Agent 请求",
-    features: ["可申请云 Agent", "更高云 Agent 请求额度", "开放技术面试板块", "开放教育板块"],
+    features: ["可申请云 Agent", "开放技术面试板块", "开放教育板块", "开放高考板块", "更高云 Agent 请求额度"],
   },
 ];
 
@@ -76,6 +68,7 @@ export default function UpgradePage() {
   const [error, setError] = useState("");
   const token = (session as SessionWithAccessToken | null)?.accessToken;
   const currentPlan = billing?.entitlement?.plan || "free";
+  const isPro = currentPlan === "pro";
 
   const usageText = useMemo(() => {
     const limits = billing?.entitlement?.limits;
@@ -139,6 +132,10 @@ export default function UpgradePage() {
       setError("请先登录后再升级。");
       return;
     }
+    if (isPro) {
+      setError("当前账号已经是 Pro 会员，无需重复支付。");
+      return;
+    }
     const key = `${plan}:${billingMode}`;
     setCheckoutKey(key);
     setError("");
@@ -184,9 +181,9 @@ export default function UpgradePage() {
 
         <header className="mb-8">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-[#3ce8e2]">WTT Membership</p>
-          <h1 className="mt-4 text-4xl font-black tracking-tight md:text-6xl">升级 Plus / Pro</h1>
+          <h1 className="mt-4 text-4xl font-black tracking-tight md:text-6xl">升级 Pro</h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-400">
-            普通用户可继续使用 Claude Code、Codex 教程和自有 Agent 绑定。Plus / Pro 开放云 Agent、技术面试板块和教育板块。
+            Free 用户可继续使用自有 Agent 绑定。Pro 开放云 Agent、技术面试板块、教育板块和高考板块。
           </p>
         </header>
 
@@ -203,6 +200,11 @@ export default function UpgradePage() {
         {status !== "authenticated" && (
           <div className="mb-6 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
             请先登录 WTT 账号，再创建支付链接。
+          </div>
+        )}
+        {isPro && (
+          <div className="mb-6 rounded-xl border border-emerald-300/30 bg-emerald-300/10 p-4 text-sm text-emerald-100">
+            当前账号已是 Pro 会员，有效期内无需重复支付。
           </div>
         )}
         {error && <div className="mb-6 rounded-xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-100">{error}</div>}
@@ -237,7 +239,7 @@ export default function UpgradePage() {
           </div>
         )}
 
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-1">
           {plans.map((plan) => (
             <section key={plan.id} className="rounded-2xl border border-gray-800 bg-[#1b1b1b] p-6">
               <div className="flex items-start justify-between gap-4">
@@ -257,16 +259,22 @@ export default function UpgradePage() {
                   </p>
                 ))}
               </div>
-              <div className="mt-6 grid gap-3">
-                <button
-                  onClick={() => void startCheckout(plan.id, "one_time")}
-                  disabled={checkoutKey !== null || status !== "authenticated"}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {checkoutKey === `${plan.id}:one_time` && <Loader2 className="h-4 w-4 animate-spin" />}
-                  立即支付，开通 1 个月
-                </button>
-              </div>
+              {!isPro ? (
+                <div className="mt-6 grid gap-3">
+                  <button
+                    onClick={() => void startCheckout(plan.id, "one_time")}
+                    disabled={checkoutKey !== null || status !== "authenticated"}
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {checkoutKey === `${plan.id}:one_time` && <Loader2 className="h-4 w-4 animate-spin" />}
+                    立即支付，开通 1 个月
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-6 rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm font-bold text-emerald-100">
+                  Pro 已开通
+                </div>
+              )}
             </section>
           ))}
         </div>

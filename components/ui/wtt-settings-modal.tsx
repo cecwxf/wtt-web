@@ -87,7 +87,7 @@ const PAGE_ITEMS: Array<{
 ];
 
 type BillingMode = "one_time" | "subscription";
-type PlanId = "plus" | "pro";
+type PlanId = "pro";
 
 type BillingMe = {
   entitlement?: {
@@ -329,7 +329,7 @@ export function WttSettingsModal({
     () => PAGE_ITEMS.filter((item) => item.key !== "metrics" || canViewMetrics),
     [canViewMetrics],
   );
-  const isPaidPlan = (billing?.entitlement?.plan === "plus" || billing?.entitlement?.plan === "pro");
+  const isPaidPlan = billing?.entitlement?.plan === "pro";
   const hasCloudAgentRecord = hasCloudAgent || Boolean(cloudAgentInfo?.has_cloud_agent);
   const cloudAgentModelLabel = useMemo(() => {
     const modelId = cloudAgentInfo?.model_id || "";
@@ -669,11 +669,11 @@ export function WttSettingsModal({
           const nextBilling = (await response.json()) as BillingMe;
           setBilling(nextBilling);
           const plan = nextBilling.entitlement?.plan;
-          paid = plan === "plus" || plan === "pro";
+          paid = plan === "pro";
         }
       }
       if (!paid) {
-        setCloudClaimError("Cloud Agent 需要升级为 Plus / Pro 账户后才能使用。");
+        setCloudClaimError("Cloud Agent 需要升级为 Pro 账户后才能使用。");
         return;
       }
       if (hasCloudAgentRecord) {
@@ -705,7 +705,7 @@ export function WttSettingsModal({
         setCloudClaimError(
           typeof detail === "string"
             ? detail
-            : detail?.message || "Cloud Agent 申请失败，请确认账号已升级 Plus / Pro。",
+            : detail?.message || "Cloud Agent 申请失败，请确认账号已升级 Pro。",
         );
         return;
       }
@@ -724,6 +724,10 @@ export function WttSettingsModal({
   const handleCheckout = async (plan: PlanId, billingMode: BillingMode) => {
     if (!accessToken) {
       setCheckoutError(t("settings.sessionExpired"));
+      return;
+    }
+    if (isPaidPlan) {
+      setCheckoutError("当前账号已经是 Pro 会员，无需重复支付。");
       return;
     }
 
@@ -1383,7 +1387,7 @@ export function WttSettingsModal({
                   <div>
                     <p className="text-sm font-semibold text-slate-800">账户升级</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Plus / Pro 可申请云 Agent，并解锁技术面试和教育板块。当前统一使用月度支付，支付成功后开通 1 个月。
+                      Pro 可申请云 Agent，并解锁技术面试、教育和高考板块。当前统一使用月度支付，支付成功后开通 1 个月。
                     </p>
                   </div>
                   <button
@@ -1422,6 +1426,12 @@ export function WttSettingsModal({
                 <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
                   {checkoutError}
                 </p>
+              )}
+
+              {hasCloudAgentRecord && !isPaidPlan && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  你已经创建过 Cloud Agent，但当前 Pro 会员已到期。请续费后继续使用云端 Agent、技术面试、教育和高考板块。
+                </div>
               )}
 
               {checkoutSession && (
@@ -1466,9 +1476,14 @@ export function WttSettingsModal({
                 </div>
               )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              {isPaidPlan && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                  当前账号已是 Pro 会员，有效期内无需重复支付。
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-1">
                 {[
-                  { plan: "plus" as const, name: "Plus", price: "¥20/月", window: "50 次连续请求", monthly: "500 次/月" },
                   { plan: "pro" as const, name: "Pro", price: "¥30/月", window: "100 次连续请求", monthly: "1500 次/月" },
                 ].map((item) => (
                   <div key={item.plan} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -1486,18 +1501,24 @@ export function WttSettingsModal({
                     <div className="mt-3 space-y-1 text-xs text-slate-500">
                       <p>{item.window}</p>
                       <p>{item.monthly}</p>
-                      <p>云 Agent + 技术面试 + 教育板块</p>
+                      <p>云 Agent + 技术面试 + 教育板块 + 高考板块</p>
                     </div>
-                    <div className="mt-4 grid gap-2">
-                      <button
-                        onClick={() => void handleCheckout(item.plan, "one_time")}
-                        disabled={checkoutLoading !== null || !accessToken}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-60"
-                      >
-                        {checkoutLoading === `${item.plan}:one_time` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        立即支付，开通 1 个月
-                      </button>
-                    </div>
+                    {!isPaidPlan ? (
+                      <div className="mt-4 grid gap-2">
+                        <button
+                          onClick={() => void handleCheckout(item.plan, "one_time")}
+                          disabled={checkoutLoading !== null || !accessToken}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-60"
+                        >
+                          {checkoutLoading === `${item.plan}:one_time` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          立即支付，开通 1 个月
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
+                        Pro 已开通
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

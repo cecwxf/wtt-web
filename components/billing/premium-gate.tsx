@@ -20,8 +20,8 @@ type SessionWithAccessToken = {
 
 export function PremiumGate({
   children,
-  title = "Plus / Pro 专属板块",
-  description = "普通用户可继续使用 Claude Code、Codex 和 AI Kernel 教程；技术面试与教育板块需要升级后进入。",
+  title = "Pro 专属板块",
+  description = "普通用户可继续使用自有 Agent；技术面试、教育和高考板块需要升级 Pro 后进入。",
 }: {
   children: ReactNode;
   title?: string;
@@ -49,7 +49,7 @@ export function PremiumGate({
         const data = (await response.json().catch(() => ({}))) as BillingMe;
         if (!cancelled) {
           const plan = data.entitlement?.plan;
-          setAllowed(Boolean(data.entitlement?.can_access_learning || plan === "plus" || plan === "pro"));
+          setAllowed(Boolean(data.entitlement?.can_access_learning || plan === "pro"));
         }
       } catch {
         if (!cancelled) setAllowed(false);
@@ -84,10 +84,8 @@ export function PremiumGate({
             </div>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-gray-400">{description}</p>
             <div className="mt-5 flex flex-wrap gap-2 text-xs text-gray-400">
-              <span className="rounded-full border border-gray-700 px-3 py-1">Plus: ¥20/月</span>
               <span className="rounded-full border border-gray-700 px-3 py-1">Pro: ¥30/月</span>
-              <span className="rounded-full border border-gray-700 px-3 py-1">国内单次支付</span>
-              <span className="rounded-full border border-gray-700 px-3 py-1">海外订阅</span>
+              <span className="rounded-full border border-gray-700 px-3 py-1">月度支付</span>
             </div>
           </div>
           <Link

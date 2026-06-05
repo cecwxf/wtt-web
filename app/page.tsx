@@ -544,14 +544,13 @@ export default function Home() {
   const zh = locale === 'zh'
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('membership')
-  const [billingPlan, setBillingPlan] = useState<'free' | 'plus' | 'pro'>('free')
+  const [billingPlan, setBillingPlan] = useState<'free' | 'pro'>('free')
   const consoleHref = status === 'authenticated' ? '/feed' : '/login'
   const protectedHref = (href: string) => status === 'authenticated' ? href : `/login?callbackUrl=${encodeURIComponent(href)}`
   const arenaHref = protectedHref('/arena')
   const accessToken = (session as { accessToken?: string } | null)?.accessToken
   const planLabel = useMemo(() => {
     if (billingPlan === 'pro') return 'Pro'
-    if (billingPlan === 'plus') return 'Plus'
     return 'Free'
   }, [billingPlan])
 
@@ -569,7 +568,7 @@ export default function Home() {
       .then((data: BillingMe | null) => {
         if (cancelled) return
         const plan = String(data?.entitlement?.plan || 'free').toLowerCase()
-        setBillingPlan(plan === 'pro' ? 'pro' : plan === 'plus' ? 'plus' : 'free')
+        setBillingPlan(plan === 'pro' ? 'pro' : 'free')
       })
       .catch(() => {
         if (!cancelled) setBillingPlan('free')
