@@ -52,8 +52,8 @@ const plans: Array<{
     id: "pro",
     name: "Pro",
     price: "¥30 / 月",
-    requestWindow: "连续 100 次请求后限流",
-    requestMonthly: "每月 1500 次云 Agent 请求",
+    requestWindow: "连续 30 次请求后限流",
+    requestMonthly: "每月 500 次云 Agent 请求",
     features: ["可申请云 Agent", "开放技术面试板块", "开放教育板块", "开放高考板块", "更高云 Agent 请求额度"],
   },
 ];

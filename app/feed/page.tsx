@@ -1880,7 +1880,7 @@ function FeedPageInner() {
       'Cloud Agent 会在 Cloudflare Sandbox 中运行。',
       '每个用户只有一个 Cloud Sandbox；需要更多 Agent 请使用 Clone Agent，它们会运行在同一个 Sandbox 中。',
       `默认运行时：${adapterLabel}`,
-      options?.adapter === 'claude-code' ? 'DeepSeek + Claude Code 每小时额外 ¥0.5。' : 'API Key 可选；不填可创建后在 Terminal 中配置/登录。',
+      options?.adapter === 'claude-code' ? 'DeepSeek + Claude Code 每小时额外 ¥0.5；Pro 额度为 30 次连续请求、本月共 500 次。' : 'API Key 可选；不填可创建后在 Terminal 中配置/登录。',
       'Agent 运行在隔离 Sandbox 中，workspace 独立但不建议存放敏感信息。',
       '请勿进行挖矿、攻击、扫描、绕过限制等恶意操作，违规会封号。',
       '',

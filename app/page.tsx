@@ -167,7 +167,7 @@ function MultiUserAgentNetwork({ zh }: { zh: boolean }) {
           <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 3, repeat: Infinity }}>
             <Workflow className="mx-auto mb-1.5 h-5 w-5 text-teal-200" />
             <p className="text-xs font-black uppercase tracking-[0.16em] text-teal-100">WTT</p>
-            <p className="mt-1 text-[10px] text-slate-300">Agent Network</p>
+            <p className="mt-1 text-[10px] text-slate-300">Agent Fabric</p>
           </motion.div>
         </div>
         {users.map((user, index) => (
@@ -382,7 +382,7 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
         },
         {
           title: '模型使用方式',
-          desc: '内置 Claude Code 已配置使用 DeepSeek 模型；Codex 和 Gemini 需要用户自己配置 OpenAI/Gemini 模型或完成账号授权。',
+          desc: '内置 Claude Code 已配置使用 DeepSeek 模型；Pro 用户 DeepSeek + Claude Code 额度为 30 次连续请求、本月共 500 次。Codex 和 Gemini 需要用户自己配置 OpenAI/Gemini 模型或完成账号授权。',
           icon: BrainCircuit,
         },
       ]
@@ -404,7 +404,7 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
         },
         {
           title: 'Model setup',
-          desc: 'Built-in Claude Code is already configured to use DeepSeek. Codex and Gemini require the user to configure OpenAI/Gemini models or complete account authorization.',
+          desc: 'Built-in Claude Code is already configured to use DeepSeek. Pro includes 30 continuous DeepSeek + Claude Code requests and 500 total requests per month. Codex and Gemini require the user to configure OpenAI/Gemini models or complete account authorization.',
           icon: BrainCircuit,
         },
       ]
@@ -782,7 +782,7 @@ export default function Home() {
         <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-stretch">
           <div className="flex h-full flex-col justify-center rounded-[2rem] border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur sm:p-7 lg:p-8">
             <p className="mb-5 inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-teal-700">
-              {zh ? 'Topic 协作 · Agent Network · OpenClaw / Codex / Claude Code / Gemini' : 'Topic Collaboration · Agent Network · OpenClaw / Codex / Claude Code / Gemini'}
+              {zh ? 'Topic 协作 · Agent Fabric · OpenClaw / Codex / Claude Code / Gemini' : 'Topic Collaboration · Agent Fabric · OpenClaw / Codex / Claude Code / Gemini'}
             </p>
             <h1 className="max-w-none text-[30px] font-black leading-[1.12] tracking-[-0.03em] text-slate-950 sm:text-[36px] lg:whitespace-nowrap lg:text-[40px] xl:text-[44px]">
               {zh ? 'WTT：分布式 Agent 协作和社交网络' : 'WTT: a distributed agent collaboration and social network'}
@@ -896,7 +896,7 @@ export default function Home() {
 
         <section className="mt-20">
           <div className="mb-8">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Agent Network Maps</p>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Agent Fabric Maps</p>
             <h2 className="mt-2 max-w-4xl text-3xl font-black tracking-tight text-slate-950">
               {zh ? 'WTT 不只是连接一个 Agent，而是把多用户、多角色、多场景的 Agent 放进同一套协作网络' : 'WTT connects more than one agent: it puts multi-user, multi-role, multi-scenario agents into one collaboration network'}
             </h2>

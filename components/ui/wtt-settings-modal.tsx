@@ -1553,7 +1553,7 @@ export function WttSettingsModal({
 
               <div className="grid gap-3 sm:grid-cols-1">
                 {[
-                  { plan: "pro" as const, name: "Pro", price: "¥30/月", window: "100 次连续请求", monthly: "1500 次/月" },
+                  { plan: "pro" as const, name: "Pro", price: "¥30/月", window: "30 次连续请求", monthly: "500 次/月" },
                 ].map((item) => (
                   <div key={item.plan} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -1571,6 +1571,7 @@ export function WttSettingsModal({
                       <p>{item.window}</p>
                       <p>{item.monthly}</p>
                       <p>云 Agent + 技术面试 + 教育板块 + 高考板块</p>
+                      <p>DeepSeek + Claude Code 请求额度：30 次连续请求，本月共 500 次</p>
                     </div>
                     {!isPaidPlan ? (
                       <div className="mt-4 grid gap-2">
@@ -1845,7 +1846,7 @@ export function WttSettingsModal({
                       Cloud Agent
                     </p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      默认 DeepSeek + Claude Code；每小时额外 ¥0.5。每个账号只有一个 Cloud Sandbox，可通过 Clone Agent 在同一 Sandbox 中运行多个 Agent。
+                      默认 DeepSeek + Claude Code；每小时额外 ¥0.5，Pro 额度为 30 次连续请求、本月共 500 次。每个账号只有一个 Cloud Sandbox，可通过 Clone Agent 在同一 Sandbox 中运行多个 Agent。
                     </p>
                   </div>
                   <a

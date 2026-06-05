@@ -1848,7 +1848,7 @@ export function TopicColumn(props: TopicColumnProps) {
               <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '默认运行时' : 'Runtime'}</div>
               <div className="grid gap-2 sm:grid-cols-3">
                 {([
-                  ['claude-code', 'DeepSeek + Claude Code', zh ? '默认推荐，每小时另加 ¥0.5。' : 'Default. Adds ¥0.5/hour.'],
+                  ['claude-code', 'DeepSeek + Claude Code', zh ? '默认推荐，每小时另加 ¥0.5；Pro 含 30 次连续请求、500 次/月。' : 'Default. Adds ¥0.5/hour; Pro includes 30 continuous requests and 500/month.'],
                   ['gemini', 'Gemini', zh ? '可填 Key，也可创建后在终端登录/配置。' : 'Optional key, or configure in terminal later.'],
                   ['codex', 'Codex', zh ? '可填 OpenAI Key，也可创建后在终端登录/配置。' : 'Optional OpenAI key, or configure in terminal later.'],
                 ] as const).map(([id, label, desc]) => {
@@ -1890,8 +1890,8 @@ export function TopicColumn(props: TopicColumnProps) {
 
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
               {zh
-                ? '计费提示：Cloud Sandbox 按开机使用时间计费，关机不计费。默认 DeepSeek + Claude Code 套餐包含模型代理成本，每小时额外 ¥0.5。'
-                : 'Billing: Cloud Sandbox is billed while powered on; powered off is not billed. Default DeepSeek + Claude Code includes model proxy cost and adds ¥0.5/hour.'}
+                ? '计费提示：Cloud Sandbox 按开机使用时间计费，关机不计费。默认 DeepSeek + Claude Code 套餐包含模型代理成本，每小时额外 ¥0.5，Pro 额度为 30 次连续请求、本月共 500 次。'
+                : 'Billing: Cloud Sandbox is billed while powered on; powered off is not billed. Default DeepSeek + Claude Code includes model proxy cost, adds ¥0.5/hour, and Pro includes 30 continuous requests and 500/month.'}
             </div>
 
             {cloudCreateError && (
