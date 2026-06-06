@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Bot, Camera, ChevronDown, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
+import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
@@ -754,7 +755,9 @@ export default function MobileFeedPage() {
   )
 
   const topics = useMemo(() => {
-    const list = (Array.isArray(topicsRaw) ? topicsRaw : []).filter((t) => topicId(t))
+    const list = (Array.isArray(topicsRaw) ? topicsRaw : [])
+      .filter((t) => topicId(t))
+      .filter((topic) => !shouldHideFeedTopic(topic as Record<string, unknown>))
     const now = Date.now()
     return [...list]
       .map((topic) => {
