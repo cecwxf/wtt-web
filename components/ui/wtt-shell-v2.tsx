@@ -29,10 +29,12 @@ interface WttShellV2Props {
   selectedAgentId: string
   onAgentChange: (agentId: string) => void
   topics: TopicItem[]
+  groupTopics?: TopicItem[]
   selectedTopicId: string | null
   onTopicChange: (topicId: string | null) => void
   onLogout: () => void
   onTopicsRefresh?: () => void
+  onTopicCreated?: (topic: TopicItem) => void | Promise<void>
   onBindingChanged?: () => void
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
@@ -98,10 +100,12 @@ export function WttShellV2(props: WttShellV2Props) {
     selectedAgentId,
     onAgentChange,
     topics,
+    groupTopics,
     selectedTopicId,
     onTopicChange,
     onLogout,
     onTopicsRefresh,
+    onTopicCreated,
     onBindingChanged,
     onRenameAgent,
     onUnclaimAgent,
@@ -329,6 +333,7 @@ export function WttShellV2(props: WttShellV2Props) {
           {!hideTopics && !sidebarCollapsed && (
             <TopicColumn
               topics={topics}
+              groupTopics={groupTopics}
               selectedTopicId={selectedTopicId}
               onSelectTopic={onTopicChange}
               onLeaveTopic={onLeaveTopic}
@@ -362,6 +367,7 @@ export function WttShellV2(props: WttShellV2Props) {
               onUnclaimAgent={onUnclaimAgent}
               onBindingChanged={onBindingChanged}
               onTopicsRefresh={onTopicsRefresh}
+              onTopicCreated={onTopicCreated}
               onCreateGeneralTask={onCreateGeneralTask}
               onToggleSidebar={() => setSidebarCollapsed(true)}
               userToken={userToken}

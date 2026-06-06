@@ -29,6 +29,7 @@ export interface TopicItem {
   last_activity_at?: string
   description?: string
   creator_agent_id?: string
+  member_agent_ids?: string[]
 }
 
 interface AgentOption {
@@ -73,6 +74,7 @@ export interface AgentRuntimeInfo {
 
 interface TopicColumnProps {
   topics: TopicItem[]
+  groupTopics?: TopicItem[]
   selectedTopicId: string | null
   onSelectTopic: (topicId: string | null) => void
   onLeaveTopic?: (topicId: string) => void
@@ -104,6 +106,7 @@ interface TopicColumnProps {
   onUnclaimAgent?: (agentId: string) => void
   onBindingChanged?: () => void | Promise<void>
   onTopicsRefresh?: () => void | Promise<void>
+  onTopicCreated?: (topic: TopicItem) => void | Promise<void>
   onCreateGeneralTask?: () => void
   onToggleSidebar?: () => void
   onStartAgentResize?: (event: ReactPointerEvent) => void
@@ -636,6 +639,7 @@ function mergeRuntimeWithCachedHost(live?: AgentRuntimeInfo, cached?: AgentRunti
 export function TopicColumn(props: TopicColumnProps) {
   const {
     topics,
+    groupTopics = [],
     selectedTopicId,
     onSelectTopic,
     onLeaveTopic,
@@ -658,6 +662,7 @@ export function TopicColumn(props: TopicColumnProps) {
     onUnclaimAgent,
     onBindingChanged,
     onTopicsRefresh,
+    onTopicCreated,
     onCreateGeneralTask,
     onToggleSidebar,
     onStartAgentResize,
@@ -717,6 +722,7 @@ export function TopicColumn(props: TopicColumnProps) {
     discuss: false,
     subscriber: false,
   })
+  const [groupTopicsCollapsed, setGroupTopicsCollapsed] = useState(false)
   const [collapsedAgentFolders, setCollapsedAgentFolders] = useState<Record<string, boolean>>({})
   const { locale, t } = useI18n()
   const zh = locale === 'zh'
@@ -1037,11 +1043,23 @@ export function TopicColumn(props: TopicColumnProps) {
     try {
       const creator = selectedIds.includes(selectedAgentId) ? selectedAgentId : selectedIds[0]
       const topicId = await createPrivateDiscussionTopic(name, description, creator)
+      const optimisticTopic: TopicItem = {
+        topic_id: topicId,
+        name,
+        description,
+        topic_type: 'discussion',
+        unread_count: 0,
+        can_delete: true,
+        creator_agent_id: creator,
+        member_agent_ids: selectedIds,
+        last_activity_at: new Date().toISOString(),
+      }
       const memberIds = selectedIds.filter((id) => id !== creator)
       for (let index = 0; index < memberIds.length; index += 1) {
         setGroupProgress(`${zh ? '正在加入成员' : 'Adding member'} ${index + 1}/${memberIds.length}: ${memberIds[index]}`)
         await joinAgentToTopic(topicId, memberIds[index])
       }
+      await onTopicCreated?.(optimisticTopic)
       setGroupProgress(zh ? '正在刷新 Topic 列表...' : 'Refreshing topic list...')
       await onTopicsRefresh?.()
       onSelectTopic(topicId)
@@ -1096,11 +1114,23 @@ export function TopicColumn(props: TopicColumnProps) {
         ...template.workflow.map((step, index) => `${index + 1}. ${step}`),
       ].join('\n')
       const topicId = await createPrivateDiscussionTopic(name, description, createdAgentIds[0])
+      const optimisticTopic: TopicItem = {
+        topic_id: topicId,
+        name,
+        description,
+        topic_type: 'discussion',
+        unread_count: 0,
+        can_delete: true,
+        creator_agent_id: createdAgentIds[0],
+        member_agent_ids: createdAgentIds,
+        last_activity_at: new Date().toISOString(),
+      }
       const memberIds = createdAgentIds.slice(1)
       for (let index = 0; index < memberIds.length; index += 1) {
         setTeamProgress(`${zh ? '正在加入团队成员' : 'Adding team member'} ${index + 1}/${memberIds.length}: ${memberIds[index]}`)
         await joinAgentToTopic(topicId, memberIds[index])
       }
+      await onTopicCreated?.(optimisticTopic)
       setTeamProgress(zh ? '正在刷新 Agent 和 Topic 列表...' : 'Refreshing agents and topics...')
       await onBindingChanged?.()
       await onTopicsRefresh?.()
@@ -1202,6 +1232,24 @@ export function TopicColumn(props: TopicColumnProps) {
     return order
       .map((group) => ({ group, items: byGroup.get(group) || [] }))
   }, [topics])
+
+  const agentRailGroupTopics = useMemo(() => {
+    const seen = new Set<string>()
+    return groupTopics
+      .filter((topic) => ['discussion', 'collaborative'].includes(topic.topic_type) && !topic.task_id)
+      .filter((topic) => {
+        if (seen.has(topic.topic_id)) return false
+        seen.add(topic.topic_id)
+        return true
+      })
+      .sort((a, b) => {
+        const unreadDiff = Number(b.unread_count || 0) - Number(a.unread_count || 0)
+        if (unreadDiff !== 0) return unreadDiff
+        const at = a.last_activity_at ? new Date(a.last_activity_at).getTime() : 0
+        const bt = b.last_activity_at ? new Date(b.last_activity_at).getTime() : 0
+        return bt - at
+      })
+  }, [groupTopics])
 
   const renderTopicRow = (topic: TopicItem) => {
     const selected = topic.topic_id === selectedTopicId
@@ -1333,9 +1381,13 @@ export function TopicColumn(props: TopicColumnProps) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
-          {onCreateCloudAgent && (
-            <button
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-1.5">
+          <section className="space-y-1.5">
+            <div className="px-1 text-[8px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">
+              {zh ? '功能' : 'Actions'}
+            </div>
+            {onCreateCloudAgent && (
+              <button
               type="button"
               onClick={() => {
                 setCloudCreateError('')
@@ -1354,9 +1406,9 @@ export function TopicColumn(props: TopicColumnProps) {
               </span>
               <span className="relative truncate">{zh ? '新建 Agent' : 'New Agent'}</span>
             </button>
-          )}
+            )}
 
-          <button
+            <button
             type="button"
             onClick={openBindAgentModal}
             className="flex w-full items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-2 py-1.5 text-left text-[10px] font-black leading-tight text-emerald-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-md dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:ring-emerald-500/10 dark:hover:bg-emerald-500/15"
@@ -1368,7 +1420,7 @@ export function TopicColumn(props: TopicColumnProps) {
             <span className="truncate">{zh ? '绑定已有 Agent' : 'Bind Agent'}</span>
           </button>
 
-          <button
+            <button
             type="button"
             onClick={openGroupModal}
             className="flex w-full items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50/75 px-2 py-1.5 text-left text-[10px] font-black leading-tight text-amber-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 hover:shadow-md dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100 dark:ring-amber-500/10 dark:hover:bg-amber-500/15"
@@ -1380,7 +1432,7 @@ export function TopicColumn(props: TopicColumnProps) {
             <span className="truncate">{zh ? '新建群聊' : 'New Group'}</span>
           </button>
 
-          <button
+            <button
             type="button"
             onClick={openTeamModal}
             disabled={!onNewAgentFromHost || newAgentHosts.length === 0}
@@ -1392,12 +1444,20 @@ export function TopicColumn(props: TopicColumnProps) {
             </span>
             <span className="truncate">{zh ? '新建团队' : 'New Team'}</span>
           </button>
+          </section>
+
+          <div className="h-px bg-gradient-to-r from-transparent via-[#d8ccbb] to-transparent dark:via-zinc-700" />
 
           {agentOptions.length === 0 && (
             <div className="rounded-xl border border-dashed border-[#ded6c8] bg-white/55 p-2 text-center text-[10px] text-slate-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
               {zh ? '无 Agent' : 'No agents'}
             </div>
           )}
+
+          <section className="space-y-1.5">
+            <div className="px-1 text-[8px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">
+              Agent
+            </div>
 
           {agentFolders.map((folder) => {
             const collapsed = collapsedAgentFolders[folder.key] ?? true
@@ -1745,6 +1805,72 @@ export function TopicColumn(props: TopicColumnProps) {
               </section>
             )
           })}
+          </section>
+
+          <div className="h-px bg-gradient-to-r from-transparent via-[#d8ccbb] to-transparent dark:via-zinc-700" />
+
+          <section className="space-y-1.5">
+            <button
+              type="button"
+              onClick={() => setGroupTopicsCollapsed((prev) => !prev)}
+              className="flex w-full items-center gap-1.5 rounded-xl border border-indigo-100 bg-indigo-50/80 px-1.5 py-1.5 text-left text-indigo-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-100 dark:border-indigo-500/25 dark:bg-indigo-500/10 dark:text-indigo-100"
+            >
+              {groupTopicsCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/75 text-indigo-600 shadow-sm ring-1 ring-indigo-100 dark:bg-indigo-400/15 dark:text-indigo-200 dark:ring-indigo-400/20">
+                <MessageCircle className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[10px] font-black">
+                {zh ? '群聊' : 'Groups'}
+              </span>
+              <span className="rounded-full bg-white/75 px-1.5 py-0.5 text-[9px] font-black dark:bg-zinc-950/45">
+                {agentRailGroupTopics.length}
+              </span>
+            </button>
+
+            {!groupTopicsCollapsed && (
+              <div className="space-y-1">
+                {agentRailGroupTopics.length > 0 ? (
+                  agentRailGroupTopics.map((topic) => {
+                    const selected = topic.topic_id === selectedTopicId
+                    const unread = Number(topic.unread_count || 0)
+                    return (
+                      <button
+                        key={topic.topic_id}
+                        type="button"
+                        onClick={() => {
+                          const memberIds = topic.member_agent_ids || []
+                          if (memberIds.length > 0 && selectedAgentId && !memberIds.includes(selectedAgentId)) {
+                            onSelectAgent?.(memberIds[0])
+                          }
+                          onSelectTopic(topic.topic_id)
+                        }}
+                        title={topic.name}
+                        className={`relative flex w-full flex-col rounded-lg border px-1.5 py-1.5 text-left transition ${
+                          selected
+                            ? 'border-indigo-300 bg-indigo-100 text-indigo-950 shadow-sm ring-1 ring-indigo-200 dark:border-indigo-300/50 dark:bg-indigo-500/20 dark:text-indigo-50 dark:ring-indigo-300/25'
+                            : 'border-transparent bg-white/45 text-slate-600 hover:border-indigo-100 hover:bg-indigo-50/75 dark:bg-zinc-900/45 dark:text-zinc-300 dark:hover:border-indigo-500/20 dark:hover:bg-indigo-500/10'
+                        }`}
+                      >
+                        <span className="truncate text-[9px] font-black leading-tight">{topic.name}</span>
+                        <span className="mt-0.5 truncate text-[8px] font-bold leading-tight opacity-60">
+                          {getTopicKindLabel(topic, zh)}
+                        </span>
+                        {unread > 0 && (
+                          <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1 py-0.5 text-[8px] font-black leading-none text-white">
+                            {unread > 99 ? '99+' : unread}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })
+                ) : (
+                  <div className="rounded-lg border border-dashed border-[#ded6c8] bg-white/45 px-2 py-2 text-center text-[9px] font-semibold text-slate-400 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500">
+                    {zh ? '暂无群聊' : 'No groups'}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         </div>
 
         {newAgentHosts.length > 0 && (

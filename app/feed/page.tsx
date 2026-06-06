@@ -485,6 +485,61 @@ function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
   return false
 }
 
+type RawTopicRecord = {
+  id?: string
+  topic_id?: string
+  name?: string
+  description?: string
+  type?: string
+  topic_type?: string
+  my_role?: string
+  task_id?: string
+  runner_agent_id?: string
+  task_type?: string
+  task_mode?: string
+  exec_mode?: string
+  last_activity_at?: string
+  creator_agent_id?: string
+  unread_count?: number
+  member_agent_ids?: string[]
+}
+
+function mapRawTopicToItem(
+  topic: RawTopicRecord,
+  options?: { selectedAgentId?: string; humanSender?: string; p2pTopicByAgentId?: Record<string, string> },
+): TopicItem {
+  const topicId = String(topic.id || topic.topic_id || '').trim()
+  const topicType = String(topic.type || topic.topic_type || 'discussion').toLowerCase() as TopicItem['topic_type']
+  const selectedAgentId = options?.selectedAgentId || ''
+  const humanSender = options?.humanSender || ''
+  const p2pTopicByAgentId = options?.p2pTopicByAgentId || {}
+  const isDefaultP2P =
+    topicType === 'p2p' &&
+    !!selectedAgentId &&
+    (
+      p2pTopicByAgentId[selectedAgentId] === topicId ||
+      (String(topic.name || '').includes(selectedAgentId) && String(topic.name || '').includes(humanSender))
+    )
+
+  return {
+    topic_id: topicId,
+    name: String(topic.name || topicId || 'Topic'),
+    topic_type: topicType,
+    unread_count: Number(topic.unread_count || 0),
+    can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
+    task_id: topic.task_id,
+    task_type: topic.task_type ? String(topic.task_type) : undefined,
+    task_mode: topic.task_mode ? String(topic.task_mode) : undefined,
+    exec_mode: topic.exec_mode ? String(topic.exec_mode) : undefined,
+    runner_agent_id: topic.runner_agent_id,
+    is_default_p2p: isDefaultP2P,
+    last_activity_at: topic.last_activity_at || '',
+    description: topic.description,
+    creator_agent_id: topic.creator_agent_id,
+    member_agent_ids: Array.isArray(topic.member_agent_ids) ? topic.member_agent_ids.map(String).filter(Boolean) : undefined,
+  }
+}
+
 function collectTopicSearchText(value: unknown, depth = 0): string {
   if (value == null || depth > 3) return ''
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
@@ -1410,6 +1465,24 @@ function FeedPageInner() {
     }
   )
 
+  const { data: groupTopicsRaw, mutate: mutateGroupTopics } = useSWR(
+    session?.accessToken ? ['my-group-topics', session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/my-groups`, {
+        headers: {
+          Authorization: `Bearer ${session?.accessToken}`,
+        },
+      })
+      if (!response.ok) return []
+      return response.json()
+    },
+    {
+      refreshInterval: wsState === 'connected' ? 60000 : 30000,
+      revalidateOnFocus: true,
+      dedupingInterval: 5000,
+    },
+  )
+
   // Keep ref in sync for WS handler (avoids circular dependency)
   useEffect(() => {
     subscribedTopicsRef.current = { raw: subscribedTopicsRaw ?? null, mutate: mutateTopics }
@@ -1453,36 +1526,10 @@ function FeedPageInner() {
     const humanSender = getHumanSender(session)
 
     const mapped = subscribedTopicsRaw
-      .filter((topic: { name: string; description?: string; origin_type?: string; originType?: string; creator_agent_id?: string }) => {
+      .filter((topic: RawTopicRecord & { origin_type?: string; originType?: string }) => {
         return !shouldHideFeedTopic(topic as Record<string, unknown>)
       })
-      .map((topic: { id: string; name: string; description?: string; type?: string; my_role?: string; task_id?: string; runner_agent_id?: string; task_type?: string; task_mode?: string; exec_mode?: string; last_activity_at?: string; creator_agent_id?: string }) => {
-        const topicType = ((topic.type || 'discussion').toLowerCase()) as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
-        const isDefaultP2P =
-          topicType === 'p2p' &&
-          !!selectedAgentId &&
-          (
-            p2pTopicByAgentId[selectedAgentId] === topic.id ||
-            (topic.name.includes(selectedAgentId) && topic.name.includes(humanSender))
-          )
-
-        return {
-          topic_id: topic.id,
-          name: topic.name,
-          topic_type: topicType,
-          unread_count: Number((topic as Record<string, unknown>).unread_count || 0),
-          can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
-          task_id: topic.task_id,
-          task_type: topic.task_type ? String(topic.task_type) : undefined,
-          task_mode: topic.task_mode ? String(topic.task_mode) : undefined,
-          exec_mode: topic.exec_mode ? String(topic.exec_mode) : undefined,
-          runner_agent_id: topic.runner_agent_id,
-          is_default_p2p: isDefaultP2P,
-          last_activity_at: topic.last_activity_at || '',
-          description: topic.description,
-          creator_agent_id: topic.creator_agent_id,
-        }
-      })
+      .map((topic: RawTopicRecord) => mapRawTopicToItem(topic, { selectedAgentId, humanSender, p2pTopicByAgentId }))
 
     return mapped.sort((a, b) => {
       // Default P2P always pinned at top
@@ -1496,6 +1543,26 @@ function FeedPageInner() {
       return 0
     })
   }, [subscribedTopicsRaw, selectedAgentId, session, p2pTopicByAgentId])
+
+  const groupTopics = useMemo<TopicItem[]>(() => {
+    if (!Array.isArray(groupTopicsRaw)) return []
+    const seen = new Set<string>()
+    return groupTopicsRaw
+      .filter((topic: RawTopicRecord & { origin_type?: string; originType?: string }) => !shouldHideFeedTopic(topic as Record<string, unknown>))
+      .map((topic: RawTopicRecord) => mapRawTopicToItem(topic))
+      .filter((topic) => {
+        if (!topic.topic_id || seen.has(topic.topic_id)) return false
+        seen.add(topic.topic_id)
+        return true
+      })
+      .sort((a, b) => {
+        const unreadDiff = Number(b.unread_count || 0) - Number(a.unread_count || 0)
+        if (unreadDiff !== 0) return unreadDiff
+        const at = a.last_activity_at ? new Date(a.last_activity_at).getTime() : 0
+        const bt = b.last_activity_at ? new Date(b.last_activity_at).getTime() : 0
+        return bt - at
+      })
+  }, [groupTopicsRaw])
 
   const subscribedTopicIds = useMemo(() => topics.map(t => t.topic_id), [topics])
 
@@ -1511,7 +1578,7 @@ function FeedPageInner() {
     }))
   }, [agents])
 
-  const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId)
+  const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId) || groupTopics.find((t) => t.topic_id === selectedTopicId)
 
   const selectedTopicRunStatus = useMemo<ChatRunStatus | null>(() => {
     if (!selectedTopicId) return null
@@ -1538,10 +1605,15 @@ function FeedPageInner() {
 
   // Clear stale persisted topic if it no longer exists in the topics list
   useEffect(() => {
-    if (selectedTopicId && Array.isArray(subscribedTopicsRaw) && !topics.some(t => t.topic_id === selectedTopicId)) {
+    if (
+      selectedTopicId &&
+      Array.isArray(subscribedTopicsRaw) &&
+      !topics.some(t => t.topic_id === selectedTopicId) &&
+      !groupTopics.some(t => t.topic_id === selectedTopicId)
+    ) {
       setSelectedTopicId(null)
     }
-  }, [topics, selectedTopicId, setSelectedTopicId, subscribedTopicsRaw])
+  }, [groupTopics, topics, selectedTopicId, setSelectedTopicId, subscribedTopicsRaw])
 
   const selectedTopicTaskHint = useMemo(() => {
     const direct = selectedTopic?.task_id
@@ -1675,12 +1747,13 @@ function FeedPageInner() {
     await Promise.allSettled([
       loadAgents(),
       mutateTopics(),
+      mutateGroupTopics(),
       mutateAgentStats(),
       mutateCloudAgentState(),
       mutateP2pRequests(),
       mutateRecentTasks(),
     ])
-  }, [loadAgents, mutateAgentStats, mutateCloudAgentState, mutateP2pRequests, mutateRecentTasks, mutateTopics])
+  }, [loadAgents, mutateAgentStats, mutateCloudAgentState, mutateGroupTopics, mutateP2pRequests, mutateRecentTasks, mutateTopics])
 
   useEffect(() => {
     if (!selectedAgentId) return
@@ -2655,6 +2728,33 @@ function FeedPageInner() {
     [topics],
   )
 
+  const handleTopicCreated = useCallback(async (topic: TopicItem) => {
+    const rawTopic = {
+      id: topic.topic_id,
+      name: topic.name,
+      description: topic.description,
+      type: topic.topic_type,
+      my_role: topic.can_delete ? 'owner' : 'member',
+      creator_agent_id: topic.creator_agent_id,
+      member_agent_ids: topic.member_agent_ids,
+      last_activity_at: topic.last_activity_at || new Date().toISOString(),
+      unread_count: topic.unread_count || 0,
+    }
+    const prependUnique = (prev: unknown) => {
+      if (!Array.isArray(prev)) return [rawTopic]
+      const exists = prev.some((item) => {
+        const row = item as Record<string, unknown>
+        return String(row.id || row.topic_id || '') === topic.topic_id
+      })
+      return exists ? prev : [rawTopic, ...prev]
+    }
+    await Promise.all([
+      mutateTopics(prependUnique, false),
+      mutateGroupTopics(prependUnique, false),
+    ])
+    setSelectedTopicId(topic.topic_id)
+  }, [mutateGroupTopics, mutateTopics, setSelectedTopicId])
+
   const handleTopicChange = useCallback((topicId: string | null) => {
     setSelectedTopicId(topicId)
     if (!topicId) return
@@ -2690,6 +2790,7 @@ function FeedPageInner() {
         selectedAgentId={selectedAgentId}
         onAgentChange={(id) => { setSelectedAgentId(id); setSelectedTopicId(null) }}
         topics={topics}
+        groupTopics={groupTopics}
         selectedTopicId={selectedTopicId}
         onTopicChange={handleTopicChange}
         onRenameAgent={handleRenameAgent}
@@ -2705,6 +2806,7 @@ function FeedPageInner() {
         onCreateGeneralTask={handleCreateGeneralTask}
         onLogout={() => signOut({ callbackUrl: '/login' })}
         onTopicsRefresh={handleSidebarRefresh}
+        onTopicCreated={handleTopicCreated}
         onBindingChanged={loadAgents}
         notificationCount={pendingP2pCount}
         p2pRequests={Array.isArray(p2pRequests) ? p2pRequests : []}
