@@ -474,6 +474,13 @@ export function WttSettingsModal({
   }, [activePage, loadBilling]);
 
   useEffect(() => {
+    if (!accessToken) return;
+    if (!["membership", "binding", "llm-proxy"].includes(activePage)) return;
+    const timer = window.setInterval(() => void loadBilling(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [accessToken, activePage, loadBilling]);
+
+  useEffect(() => {
     if (!accessToken || !checkoutSession?.order_id) return;
     let cancelled = false;
     const pollOrder = async () => {

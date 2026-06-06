@@ -1817,16 +1817,17 @@ function FeedPageInner() {
     void mutateCloudAgentState()
   }, [mutateAgentStats, mutateCloudAgentState, selectedAgentId])
 
-  const { data: billingRaw } = useSWR(
+  const { data: billingRaw, mutate: mutateBilling } = useSWR(
     session?.accessToken ? ['billing-me', session.accessToken] : null,
     async () => {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
+        cache: 'no-store',
       })
       if (!response.ok) return null
       return response.json() as Promise<BillingMe>
     },
-    { refreshInterval: 5 * 60_000, revalidateOnFocus: false, dedupingInterval: 60_000 }
+    { refreshInterval: 30_000, revalidateOnFocus: true, dedupingInterval: 5_000 }
   )
   const planLabel = useMemo(() => {
     const plan = String(billingRaw?.entitlement?.plan || 'free').toLowerCase()
@@ -2460,6 +2461,7 @@ function FeedPageInner() {
     }
 
     mutate()
+    void mutateBilling()
   }
 
   const exportPlaintextTopicMarkdown = async () => {
