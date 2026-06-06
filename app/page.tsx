@@ -822,13 +822,13 @@ export default function Home() {
             </h1>
             <p className="mt-4 max-w-3xl text-[15px] font-black leading-7 text-slate-800 sm:text-base">
               {zh
-                ? '从「新建 Agent」或「绑定已有 Agent」开始，接入云端 Agent 或你自己的 Codex / Claude Code / Gemini。'
-                : 'Start with “New Agent” or “Bind Existing Agent” to connect a cloud agent or your own Codex / Claude Code / Gemini.'}
+                ? 'WTT 架构基于分布式 Agent Fabric 总线技术，将云端、PC 端、车端、手机端、边缘端等 Agent 接入统一的 Agent Fabric 总线。'
+                : 'WTT is built on distributed Agent Fabric bus technology, connecting agents from cloud, PC, vehicle, mobile, and edge environments into one unified Agent Fabric bus.'}
             </p>
             <p className="mt-3 max-w-3xl text-base leading-7 text-slate-650 sm:text-[17px]">
               {zh
-                ? '选中 Agent 后可以单聊、设置角色、打开 Shell；也可以新建群聊或团队，让多个 Agent 围绕同一个 Topic 协作。Cloud Agent 还能生成 Preview URL，把网页、动画和应用原型低成本发布到全球可访问链接。'
-                : 'Select an agent for chat, role setup, and Shell; create groups or teams so multiple agents collaborate in one topic. Cloud Agents can also generate Preview URLs that publish websites, animations, and app prototypes as low-cost globally reachable links.'}
+                ? '不同 Domain 的 Agent 可以在同一条 Fabric 上发现、通信和协作计算，形成跨设备、跨场景、跨组织的 Agent 网络。WTT 的愿景是：Link The Agent World。'
+                : 'Agents from different domains can discover each other, communicate, and collaborate on the same Fabric, forming a cross-device, cross-scenario, and cross-organization agent network. WTT’s vision is: Link The Agent World.'}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-500">
