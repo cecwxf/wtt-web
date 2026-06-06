@@ -694,6 +694,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [groupDesc, setGroupDesc] = useState('')
   const [groupAgentIds, setGroupAgentIds] = useState<string[]>([])
   const [groupBusy, setGroupBusy] = useState(false)
+  const [groupProgress, setGroupProgress] = useState('')
   const [groupError, setGroupError] = useState('')
   const [teamOpen, setTeamOpen] = useState(false)
   const [teamTemplateId, setTeamTemplateId] = useState(TEAM_TEMPLATES[0]?.id || '')
@@ -958,6 +959,7 @@ export function TopicColumn(props: TopicColumnProps) {
     setGroupDesc(zh ? '由多个已绑定 Agent 组成的协作群聊。' : 'A collaboration topic with selected bound agents.')
     setGroupAgentIds(defaults)
     setGroupError('')
+    setGroupProgress('')
     setGroupOpen(true)
   }
 
@@ -981,12 +983,6 @@ export function TopicColumn(props: TopicColumnProps) {
           ? prev
           : [...prev, agentId]
     ))
-  }
-
-  const joinAgentsToTopicSequentially = async (topicId: string, agentIds: string[]) => {
-    for (const agentId of agentIds) {
-      await joinAgentToTopic(topicId, agentId)
-    }
   }
 
   const joinAgentToTopic = async (topicId: string, agentId: string) => {
@@ -1037,10 +1033,16 @@ export function TopicColumn(props: TopicColumnProps) {
     }
     setGroupBusy(true)
     setGroupError('')
+    setGroupProgress(zh ? '正在创建群聊 Topic...' : 'Creating group topic...')
     try {
       const creator = selectedIds.includes(selectedAgentId) ? selectedAgentId : selectedIds[0]
       const topicId = await createPrivateDiscussionTopic(name, description, creator)
-      await joinAgentsToTopicSequentially(topicId, selectedIds.filter((id) => id !== creator))
+      const memberIds = selectedIds.filter((id) => id !== creator)
+      for (let index = 0; index < memberIds.length; index += 1) {
+        setGroupProgress(`${zh ? '正在加入成员' : 'Adding member'} ${index + 1}/${memberIds.length}: ${memberIds[index]}`)
+        await joinAgentToTopic(topicId, memberIds[index])
+      }
+      setGroupProgress(zh ? '正在刷新 Topic 列表...' : 'Refreshing topic list...')
       await onTopicsRefresh?.()
       onSelectTopic(topicId)
       setGroupOpen(false)
@@ -1048,6 +1050,7 @@ export function TopicColumn(props: TopicColumnProps) {
       setGroupError(error instanceof Error ? error.message : (zh ? '创建群聊失败。' : 'Failed to create group chat.'))
     } finally {
       setGroupBusy(false)
+      setGroupProgress('')
     }
   }
 
@@ -1093,7 +1096,12 @@ export function TopicColumn(props: TopicColumnProps) {
         ...template.workflow.map((step, index) => `${index + 1}. ${step}`),
       ].join('\n')
       const topicId = await createPrivateDiscussionTopic(name, description, createdAgentIds[0])
-      await joinAgentsToTopicSequentially(topicId, createdAgentIds.slice(1))
+      const memberIds = createdAgentIds.slice(1)
+      for (let index = 0; index < memberIds.length; index += 1) {
+        setTeamProgress(`${zh ? '正在加入团队成员' : 'Adding team member'} ${index + 1}/${memberIds.length}: ${memberIds[index]}`)
+        await joinAgentToTopic(topicId, memberIds[index])
+      }
+      setTeamProgress(zh ? '正在刷新 Agent 和 Topic 列表...' : 'Refreshing agents and topics...')
       await onBindingChanged?.()
       await onTopicsRefresh?.()
       onSelectTopic(topicId)
@@ -2045,6 +2053,12 @@ export function TopicColumn(props: TopicColumnProps) {
                 {groupError}
               </div>
             )}
+            {groupProgress && (
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+                <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+                <span>{groupProgress}</span>
+              </div>
+            )}
 
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
@@ -2240,8 +2254,9 @@ export function TopicColumn(props: TopicColumnProps) {
                 )}
 
                 {teamProgress && (
-                  <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
-                    {teamProgress}
+                  <div className="flex items-start gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-semibold leading-5 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
+                    <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+                    <span>{teamProgress}</span>
                   </div>
                 )}
                 {teamError && (
