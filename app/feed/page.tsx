@@ -1794,7 +1794,12 @@ function FeedPageInner() {
     throw new Error('Agent operation is still running; refresh the Agent list to check progress.')
   }, [session?.accessToken, t])
 
-  const handleNewAgentFromHost = useCallback(async (hostAgentId: string, role: AgentRoleTemplate, requestedAdapter?: WttConnectAdapter) => {
+  const handleNewAgentFromHost = useCallback(async (
+    hostAgentId: string,
+    role: AgentRoleTemplate,
+    requestedAdapter?: WttConnectAdapter,
+    options?: { select?: boolean; alert?: boolean },
+  ) => {
     const token = session?.accessToken as string | undefined
     if (!token) throw new Error(t('settings.sessionExpired'))
 
@@ -1835,14 +1840,19 @@ function FeedPageInner() {
     }
 
     await loadAgents()
-    setSelectedAgentId(newAgentId)
-    setSelectedTopicId(null)
+    if (options?.select !== false) {
+      setSelectedAgentId(newAgentId)
+      setSelectedTopicId(null)
+    }
     void mutateTopics()
     window.setTimeout(() => {
       void loadAgents()
       void mutateTopics()
     }, 2500)
-    alert(`Clone Agent started: ${newAgentId}`)
+    if (options?.alert !== false) {
+      alert(`Clone Agent started: ${newAgentId}`)
+    }
+    return newAgentId
   }, [agentRuntimeMap, agents, loadAgents, mutateTopics, session?.accessToken, setSelectedAgentId, setSelectedTopicId, submitAgentOperation, t])
 
   const handleCreateCloudAgent = useCallback(async (options?: CloudAgentCreateOptions) => {

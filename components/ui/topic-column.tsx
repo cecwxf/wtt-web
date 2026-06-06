@@ -91,13 +91,19 @@ interface TopicColumnProps {
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: AgentRoleTemplateId) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
-  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex' | 'gemini') => void | Promise<void>
+  onNewAgentFromHost?: (
+    hostAgentId: string,
+    role: AgentRoleTemplate,
+    adapter: 'claude-code' | 'codex' | 'gemini',
+    options?: { select?: boolean; alert?: boolean },
+  ) => string | void | Promise<string | void>
   onCreateCloudAgent?: (options?: CloudAgentCreateOptions) => void | Promise<void>
   onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
   onRenameAgent?: (agentId: string, currentName: string) => void
   onUnclaimAgent?: (agentId: string) => void
   onBindingChanged?: () => void | Promise<void>
+  onTopicsRefresh?: () => void | Promise<void>
   onCreateGeneralTask?: () => void
   onToggleSidebar?: () => void
   onStartAgentResize?: (event: ReactPointerEvent) => void
@@ -121,6 +127,91 @@ const WTT_CONNECT_ADAPTERS: Array<{ id: WttConnectAdapterId; label: string; note
   { id: 'codex', label: 'Codex', note: '使用 Codex CLI，本机登录 ChatGPT/OpenAI 后启动。' },
   { id: 'claude-code', label: 'Claude Code', note: '使用 Claude Code，可走本机订阅或 WTT LLM Proxy。' },
   { id: 'gemini', label: 'Gemini CLI', note: 'Gemini 通常需要先在该主机完成 Google OAuth。' },
+]
+
+type TeamTemplate = {
+  id: string
+  title: string
+  titleEn: string
+  description: string
+  descriptionEn: string
+  roles: AgentRoleTemplateId[]
+  workflow: string[]
+}
+
+const TEAM_TEMPLATES: TeamTemplate[] = [
+  {
+    id: 'paper-research',
+    title: '论文研究团队',
+    titleEn: 'Paper Research Team',
+    description: '适合读论文、找证据、复现实验和形成研究综述。',
+    descriptionEn: 'For reading papers, checking evidence, reproducing ideas, and writing research summaries.',
+    roles: ['research', 'engineering', 'qa', 'media_creator', 'product'],
+    workflow: ['研究员收集论文和事实证据', '研发 Agent 梳理方法与可复现路径', '测试 Agent 检查实验风险和验证方案', '写作 Agent 形成综述/报告', '产品 Agent 提炼应用场景和下一步'],
+  },
+  {
+    id: 'rd',
+    title: '研发团队',
+    titleEn: 'R&D Team',
+    description: '适合从需求到架构、实现、测试和上线复盘。',
+    descriptionEn: 'For product requirements, architecture, implementation, testing, and release review.',
+    roles: ['product', 'engineering', 'designer', 'qa', 'operator'],
+    workflow: ['产品 Agent 明确需求和验收标准', '设计 Agent 给出交互/视觉方向', '研发 Agent 拆解架构和实现', '测试 Agent 输出回归矩阵', '运营 Agent 规划上线和数据复盘'],
+  },
+  {
+    id: 'coding',
+    title: 'Coding 团队',
+    titleEn: 'Coding Team',
+    description: '适合代码实现、debug、review、测试和交付。',
+    descriptionEn: 'For implementation, debugging, code review, testing, and delivery.',
+    roles: ['engineering', 'qa', 'research', 'product', 'ceo'],
+    workflow: ['产品 Agent 定义任务边界', '研发 Agent 实现核心代码', '研究 Agent 查资料和技术选型', '测试 Agent 跑测试和找边界', '总经理 Agent 汇总进度、风险和下一步'],
+  },
+  {
+    id: 'writing',
+    title: '写作团队',
+    titleEn: 'Writing Team',
+    description: '适合文章、脚本、商业文案和长内容生产。',
+    descriptionEn: 'For articles, scripts, copywriting, and long-form content production.',
+    roles: ['media_creator', 'research', 'designer', 'operator', 'sales'],
+    workflow: ['研究 Agent 收集素材和事实', '自媒体 Agent 设计选题/标题/脚本', '设计 Agent 建议视觉表达', '运营 Agent 规划发布节奏', '销售 Agent 优化转化话术'],
+  },
+  {
+    id: 'product-growth',
+    title: '产品增长团队',
+    titleEn: 'Product Growth Team',
+    description: '适合产品定位、增长实验、用户运营和商业化。',
+    descriptionEn: 'For product positioning, growth experiments, user operations, and monetization.',
+    roles: ['product', 'operator', 'sales', 'finance', 'investor'],
+    workflow: ['产品 Agent 明确用户和功能策略', '运营 Agent 设计增长实验', '销售 Agent 验证价值主张', '财务 Agent 测算成本收益', '投资人 Agent 评估市场空间和壁垒'],
+  },
+  {
+    id: 'legal-compliance',
+    title: '法律合规团队',
+    titleEn: 'Legal & Compliance Team',
+    description: '适合合同、隐私、商业风险和证据整理。',
+    descriptionEn: 'For contracts, privacy, business risk, and evidence planning.',
+    roles: ['lawyer', 'finance', 'product', 'ceo', 'research'],
+    workflow: ['律师 Agent 梳理法律关系和风险', '财务 Agent 评估成本和赔付暴露', '产品 Agent 调整流程和提示', '研究 Agent 补充监管/案例材料', '总经理 Agent 制定决策和执行节奏'],
+  },
+  {
+    id: 'medical-health',
+    title: '医疗健康团队',
+    titleEn: 'Medical Health Team',
+    description: '适合健康资料整理、就诊准备和风险提示。',
+    descriptionEn: 'For health information summaries, clinic preparation, and risk warnings.',
+    roles: ['doctor', 'research', 'teacher', 'operator'],
+    workflow: ['医生 Agent 识别风险信号和就诊准备', '研究 Agent 补充资料来源和边界', '教师 Agent 用易懂方式解释概念', '运营 Agent 整理长期跟踪清单'],
+  },
+  {
+    id: 'architecture',
+    title: '建筑方案团队',
+    titleEn: 'Architecture Planning Team',
+    description: '适合空间规划、材料风格、预算和施工约束。',
+    descriptionEn: 'For space planning, materials, budget, and construction constraints.',
+    roles: ['architect', 'designer', 'finance', 'qa', 'product'],
+    workflow: ['建筑师 Agent 明确空间和结构约束', '设计师 Agent 给出风格和体验方向', '财务 Agent 控制造价', '测试 Agent 检查施工/安全风险', '产品 Agent 对齐用户生活场景'],
+  },
 ]
 
 function shellQuote(value: string) {
@@ -494,6 +585,7 @@ export function TopicColumn(props: TopicColumnProps) {
     onRenameAgent,
     onUnclaimAgent,
     onBindingChanged,
+    onTopicsRefresh,
     onCreateGeneralTask,
     onToggleSidebar,
     onStartAgentResize,
@@ -525,6 +617,20 @@ export function TopicColumn(props: TopicColumnProps) {
   const [bindAgentError, setBindAgentError] = useState('')
   const [bindAgentCopied, setBindAgentCopied] = useState('')
   const [bindAgentCreds, setBindAgentCreds] = useState<ProvisionedWttConnectAgent | null>(null)
+  const [groupOpen, setGroupOpen] = useState(false)
+  const [groupName, setGroupName] = useState('')
+  const [groupDesc, setGroupDesc] = useState('')
+  const [groupAgentIds, setGroupAgentIds] = useState<string[]>([])
+  const [groupBusy, setGroupBusy] = useState(false)
+  const [groupError, setGroupError] = useState('')
+  const [teamOpen, setTeamOpen] = useState(false)
+  const [teamTemplateId, setTeamTemplateId] = useState(TEAM_TEMPLATES[0]?.id || '')
+  const [teamName, setTeamName] = useState(TEAM_TEMPLATES[0]?.title || '')
+  const [teamHostId, setTeamHostId] = useState('')
+  const [teamAdapter, setTeamAdapter] = useState<'claude-code' | 'codex' | 'gemini'>('claude-code')
+  const [teamBusy, setTeamBusy] = useState(false)
+  const [teamProgress, setTeamProgress] = useState('')
+  const [teamError, setTeamError] = useState('')
   const [roleEditor, setRoleEditor] = useState<{
     agentId: string
     sourceRole?: AgentRoleTemplate
@@ -660,6 +766,10 @@ export function TopicColumn(props: TopicColumnProps) {
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentOptions, agentRuntimeMap, onlineAgentIds, selectedAgentId, isSelectedAgentOnline, onNewAgentFromHost])
+  const selectedTeamTemplate = useMemo(
+    () => TEAM_TEMPLATES.find((template) => template.id === teamTemplateId) || TEAM_TEMPLATES[0],
+    [teamTemplateId],
+  )
   const hasCloudAgent = useMemo(
     () => agentOptions.some((agent) => (agent.binding_method || agent.bound_via || '') === 'cloud_trial'),
     [agentOptions],
@@ -762,6 +872,141 @@ export function TopicColumn(props: TopicColumnProps) {
     setBindAgentCopied('')
     setBindAgentCreds(null)
     setBindAgentOpen(true)
+  }
+
+  const openGroupModal = () => {
+    const defaults = selectedAgentId ? [selectedAgentId] : agentOptions.slice(0, 3).map((agent) => agent.agent_id)
+    setGroupName(zh ? '新的 Agent 群聊' : 'New Agent Group')
+    setGroupDesc(zh ? '由多个已绑定 Agent 组成的协作群聊。' : 'A collaboration topic with selected bound agents.')
+    setGroupAgentIds(defaults)
+    setGroupError('')
+    setGroupOpen(true)
+  }
+
+  const openTeamModal = () => {
+    const template = selectedTeamTemplate || TEAM_TEMPLATES[0]
+    const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId) || newAgentHosts[0]
+    setTeamTemplateId(template.id)
+    setTeamName(zh ? template.title : template.titleEn)
+    setTeamHostId(selectedHost?.agent_id || '')
+    setTeamAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[selectedHost?.agent_id || '']) || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
+    setTeamProgress('')
+    setTeamError('')
+    setTeamOpen(true)
+  }
+
+  const toggleGroupAgent = (agentId: string) => {
+    setGroupAgentIds((prev) => (
+      prev.includes(agentId)
+        ? prev.filter((id) => id !== agentId)
+        : [...prev, agentId]
+    ))
+  }
+
+  const joinAgentToTopic = async (topicId: string, agentId: string) => {
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/join?agent_id=${encodeURIComponent(agentId)}`, {
+      method: 'POST',
+      headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+    })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      const detail = typeof data.detail === 'string' ? data.detail : ''
+      throw new Error(detail || `Failed to add ${agentId} to topic`)
+    }
+  }
+
+  const createPrivateDiscussionTopic = async (name: string, description: string, creatorAgentId: string) => {
+    const topic = await wttApi.createTopic({
+      name,
+      description,
+      type: 'discussion',
+      visibility: 'private',
+      join_method: 'invite_only',
+      creator_agent_id: creatorAgentId,
+    }, userToken)
+    const topicId = String((topic as unknown as { topic_id?: string; id?: string }).topic_id || topic.id || '').trim()
+    if (!topicId) throw new Error(zh ? '后端未返回 Topic ID。' : 'Backend did not return topic id.')
+    return topicId
+  }
+
+  const createGroupChat = async () => {
+    const selectedIds = Array.from(new Set(groupAgentIds)).filter(Boolean)
+    if (!userToken) {
+      setGroupError(zh ? '登录已过期，请重新登录。' : 'Session expired. Please sign in again.')
+      return
+    }
+    if (selectedIds.length === 0) {
+      setGroupError(zh ? '至少选择一个 Agent。' : 'Select at least one Agent.')
+      return
+    }
+    const name = groupName.trim()
+    const description = groupDesc.trim() || (zh ? 'Agent 群聊。' : 'Agent group chat.')
+    if (!name) {
+      setGroupError(zh ? '请输入群聊名称。' : 'Please enter a group name.')
+      return
+    }
+    setGroupBusy(true)
+    setGroupError('')
+    try {
+      const creator = selectedIds.includes(selectedAgentId) ? selectedAgentId : selectedIds[0]
+      const topicId = await createPrivateDiscussionTopic(name, description, creator)
+      await Promise.all(selectedIds.filter((id) => id !== creator).map((agentId) => joinAgentToTopic(topicId, agentId)))
+      await onTopicsRefresh?.()
+      onSelectTopic(topicId)
+      setGroupOpen(false)
+    } catch (error) {
+      setGroupError(error instanceof Error ? error.message : (zh ? '创建群聊失败。' : 'Failed to create group chat.'))
+    } finally {
+      setGroupBusy(false)
+    }
+  }
+
+  const createTeamFromTemplate = async () => {
+    const template = selectedTeamTemplate
+    if (!template || !onNewAgentFromHost) return
+    if (!userToken) {
+      setTeamError(zh ? '登录已过期，请重新登录。' : 'Session expired. Please sign in again.')
+      return
+    }
+    if (!teamHostId) {
+      setTeamError(zh ? '请选择一个在线主机。' : 'Choose an online host.')
+      return
+    }
+    const name = teamName.trim() || (zh ? template.title : template.titleEn)
+    const roles = template.roles.slice(0, 5).map((roleId) => getAgentRoleTemplate(roleId))
+    setTeamBusy(true)
+    setTeamError('')
+    setTeamProgress(zh ? '开始创建团队 Agent...' : 'Creating team agents...')
+    try {
+      const createdAgentIds: string[] = []
+      for (let index = 0; index < roles.length; index += 1) {
+        const role = roles[index]
+        setTeamProgress(`${zh ? '正在创建' : 'Creating'} ${index + 1}/${roles.length}: ${role.label}`)
+        const newAgentId = await onNewAgentFromHost(teamHostId, role, teamAdapter, { select: false, alert: false })
+        const normalizedId = String(newAgentId || '').trim()
+        if (!normalizedId) throw new Error(`${zh ? 'Clone 未返回 agent_id' : 'Clone did not return agent_id'}: ${role.label}`)
+        createdAgentIds.push(normalizedId)
+      }
+
+      setTeamProgress(zh ? '正在创建团队 Topic...' : 'Creating team topic...')
+      const description = [
+        zh ? template.description : template.descriptionEn,
+        '',
+        zh ? '团队工作流：' : 'Team workflow:',
+        ...template.workflow.map((step, index) => `${index + 1}. ${step}`),
+      ].join('\n')
+      const topicId = await createPrivateDiscussionTopic(name, description, createdAgentIds[0])
+      await Promise.all(createdAgentIds.slice(1).map((agentId) => joinAgentToTopic(topicId, agentId)))
+      await onBindingChanged?.()
+      await onTopicsRefresh?.()
+      onSelectTopic(topicId)
+      setTeamOpen(false)
+    } catch (error) {
+      setTeamError(error instanceof Error ? error.message : (zh ? '创建团队失败。' : 'Failed to create team.'))
+    } finally {
+      setTeamBusy(false)
+      setTeamProgress('')
+    }
   }
 
   const createSelfManagedAgentBinding = async () => {
@@ -1018,6 +1263,31 @@ export function TopicColumn(props: TopicColumnProps) {
             </span>
             <span>{zh ? '绑定已有' : 'Bind'}</span>
             <span>Agent</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openGroupModal}
+            className="flex w-full flex-col items-center justify-center rounded-2xl border border-amber-200 bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-amber-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:shadow-md dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100 dark:ring-amber-500/10 dark:hover:bg-amber-500/15"
+            title={zh ? '选择已绑定 Agent，直接创建一个群聊 Topic' : 'Select bound agents and create a group topic'}
+          >
+            <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-600 shadow-sm ring-1 ring-amber-200 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-400/25">
+              <Users className="h-4 w-4" />
+            </span>
+            <span>{zh ? '新建群聊' : 'New Group'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openTeamModal}
+            disabled={!onNewAgentFromHost || newAgentHosts.length === 0}
+            className="flex w-full flex-col items-center justify-center rounded-2xl border border-fuchsia-200 bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-fuchsia-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/10 dark:text-fuchsia-100 dark:ring-fuchsia-500/10 dark:hover:bg-fuchsia-500/15"
+            title={zh ? '选择团队模板，在在线主机中 clone 多个专业 Agent 并创建协作群聊' : 'Choose a team template, clone role agents on an online host, and create a collaboration topic'}
+          >
+            <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-fuchsia-100 text-fuchsia-600 shadow-sm ring-1 ring-fuchsia-200 dark:bg-fuchsia-400/15 dark:text-fuchsia-200 dark:ring-fuchsia-400/25">
+              <Crown className="h-4 w-4" />
+            </span>
+            <span>{zh ? '新建团队' : 'New Team'}</span>
           </button>
 
           {agentOptions.length === 0 && (
@@ -1544,6 +1814,278 @@ export function TopicColumn(props: TopicColumnProps) {
               >
                 {zh ? '保存并同步' : 'Save'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {groupOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-amber-200 bg-[#fffdf8] p-4 shadow-2xl dark:border-amber-500/30 dark:bg-zinc-900">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">{zh ? '新建群聊' : 'New Group Chat'}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
+                  {zh ? '选择你已绑定在各个主机上的 Agent，直接创建一个私有协作 Topic。' : 'Select your bound agents across hosts and create a private collaboration topic.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGroupOpen(false)}
+                disabled={groupBusy}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                {zh ? '关闭' : 'Close'}
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '群聊名称' : 'Group name'}</span>
+                <input
+                  value={groupName}
+                  onChange={(event) => setGroupName(event.target.value)}
+                  disabled={groupBusy}
+                  className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '说明' : 'Description'}</span>
+                <input
+                  value={groupDesc}
+                  onChange={(event) => setGroupDesc(event.target.value)}
+                  disabled={groupBusy}
+                  className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '选择 Agent' : 'Select agents'}</span>
+                <button
+                  type="button"
+                  onClick={() => setGroupAgentIds(agentOptions.map((agent) => agent.agent_id))}
+                  disabled={groupBusy || agentOptions.length === 0}
+                  className="text-xs font-black text-amber-700 transition hover:text-amber-500 disabled:opacity-50 dark:text-amber-300"
+                >
+                  {zh ? '全选' : 'Select all'}
+                </button>
+              </div>
+              <div className="grid max-h-[38vh] gap-2 overflow-y-auto sm:grid-cols-2">
+                {agentOptions.map((agent) => {
+                  const checked = groupAgentIds.includes(agent.agent_id)
+                  const runtime = displayRuntimeMap?.[agent.agent_id]
+                  const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
+                  return (
+                    <button
+                      key={agent.agent_id}
+                      type="button"
+                      disabled={groupBusy}
+                      onClick={() => toggleGroupAgent(agent.agent_id)}
+                      className={`rounded-xl border px-3 py-2 text-left transition ${
+                        checked
+                          ? 'border-amber-300 bg-amber-50 text-amber-900 ring-2 ring-amber-100 dark:border-amber-500/45 dark:bg-amber-500/15 dark:text-amber-100 dark:ring-amber-500/20'
+                          : 'border-[#eee6da] bg-white/70 text-slate-600 hover:border-amber-200 hover:bg-amber-50/60 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-300 dark:hover:border-amber-500/30 dark:hover:bg-amber-500/10'
+                      }`}
+                    >
+                      <span className="block truncate text-sm font-black">{agent.display_name || agent.agent_id}</span>
+                      <span className="mt-1 block truncate text-[11px] leading-4 opacity-75">
+                        {role.shortLabel} · {runtime?.hostname || (zh ? '未知主机' : 'Unknown host')}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {groupError && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                {groupError}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setGroupOpen(false)}
+                disabled={groupBusy}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                {zh ? '取消' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void createGroupChat()}
+                disabled={groupBusy || groupAgentIds.length === 0 || !groupName.trim()}
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-3 py-2 text-sm font-black text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {groupBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+                {groupBusy ? (zh ? '创建中...' : 'Creating...') : (zh ? '创建群聊' : 'Create group')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {teamOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
+          <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-fuchsia-200 bg-[#fffdf8] p-4 shadow-2xl dark:border-fuchsia-500/30 dark:bg-zinc-900">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">{zh ? '新建团队' : 'New Team'}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
+                  {zh ? '选择团队模板后，系统会在同一主机 clone 最多 5 个专业 Agent，并创建一个协作群聊。' : 'Choose a template. WTT clones up to 5 role agents on one host and creates a collaboration topic.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTeamOpen(false)}
+                disabled={teamBusy}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                {zh ? '关闭' : 'Close'}
+              </button>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div>
+                <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '团队模板' : 'Team template'}</div>
+                <div className="grid max-h-[42vh] gap-2 overflow-y-auto sm:grid-cols-2">
+                  {TEAM_TEMPLATES.map((template) => {
+                    const active = template.id === teamTemplateId
+                    const roleNames = template.roles.slice(0, 5).map((roleId) => getAgentRoleTemplate(roleId).shortLabel).join(' / ')
+                    return (
+                      <button
+                        key={template.id}
+                        type="button"
+                        disabled={teamBusy}
+                        onClick={() => {
+                          setTeamTemplateId(template.id)
+                          setTeamName(zh ? template.title : template.titleEn)
+                        }}
+                        className={`rounded-2xl border p-3 text-left transition ${
+                          active
+                            ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-900 ring-2 ring-fuchsia-100 dark:border-fuchsia-500/45 dark:bg-fuchsia-500/15 dark:text-fuchsia-100 dark:ring-fuchsia-500/20'
+                            : 'border-[#eee6da] bg-white/70 text-slate-600 hover:border-fuchsia-200 hover:bg-fuchsia-50/60 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-300 dark:hover:border-fuchsia-500/30 dark:hover:bg-fuchsia-500/10'
+                        }`}
+                      >
+                        <span className="block text-sm font-black">{zh ? template.title : template.titleEn}</span>
+                        <span className="mt-1 block line-clamp-2 text-[11px] leading-4 opacity-75">{zh ? template.description : template.descriptionEn}</span>
+                        <span className="mt-2 block truncate text-[10px] font-black uppercase tracking-wide opacity-60">{roleNames}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '团队名称' : 'Team name'}</span>
+                  <input
+                    value={teamName}
+                    onChange={(event) => setTeamName(event.target.value)}
+                    disabled={teamBusy}
+                    className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-fuchsia-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '运行主机' : 'Host'}</span>
+                  <select
+                    value={teamHostId}
+                    onChange={(event) => {
+                      const hostId = event.target.value
+                      setTeamHostId(hostId)
+                      setTeamAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[hostId]) || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
+                    }}
+                    disabled={teamBusy || newAgentHosts.length === 0}
+                    className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-fuchsia-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  >
+                    {newAgentHosts.length === 0 ? (
+                      <option value="">{zh ? '没有在线可 clone 主机' : 'No online clone host'}</option>
+                    ) : newAgentHosts.map((agent) => {
+                      const runtime = displayRuntimeMap?.[agent.agent_id]
+                      const adapter = normalizeNewAgentAdapter(runtime)
+                      return (
+                        <option key={agent.agent_id} value={agent.agent_id}>
+                          {[agent.display_name || agent.agent_id, adapter, runtime?.hostname].filter(Boolean).join(' · ')}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </label>
+
+                <div>
+                  <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">Adapter</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      ['claude-code', 'Claude'],
+                      ['codex', 'Codex'],
+                      ['gemini', 'Gemini'],
+                    ] as const).map(([id, label]) => {
+                      const active = teamAdapter === id
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          disabled={teamBusy}
+                          onClick={() => setTeamAdapter(id)}
+                          className={`rounded-xl border px-2 py-2 text-xs font-black transition ${
+                            active
+                              ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-800 dark:border-fuchsia-500/45 dark:bg-fuchsia-500/15 dark:text-fuchsia-100'
+                              : 'border-[#eee6da] bg-white/70 text-slate-600 hover:bg-[#f3eee5] dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {selectedTeamTemplate && (
+                  <div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/70 p-3 text-xs leading-5 text-fuchsia-900 dark:border-fuchsia-500/20 dark:bg-fuchsia-500/10 dark:text-fuchsia-100">
+                    <p className="font-black">{zh ? '工作流' : 'Workflow'}</p>
+                    <div className="mt-1 space-y-1">
+                      {selectedTeamTemplate.workflow.map((step, index) => (
+                        <p key={step}>{index + 1}. {step}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {teamProgress && (
+                  <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
+                    {teamProgress}
+                  </div>
+                )}
+                {teamError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                    {teamError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTeamOpen(false)}
+                    disabled={teamBusy}
+                    className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  >
+                    {zh ? '取消' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void createTeamFromTemplate()}
+                    disabled={teamBusy || !teamHostId || !teamName.trim() || !onNewAgentFromHost}
+                    className="inline-flex items-center gap-2 rounded-xl bg-fuchsia-600 px-3 py-2 text-sm font-black text-white transition hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {teamBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {teamBusy ? (zh ? '创建中...' : 'Creating...') : (zh ? '创建团队' : 'Create team')}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

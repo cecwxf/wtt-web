@@ -62,7 +62,12 @@ interface WttShellV2Props {
   agentRuntimeMap?: Record<string, AgentRuntimeInfo>
   onAssignAgentRole?: (agentId: string, roleId: string) => void
   onSaveAgentRole?: (agentId: string, role: AgentRoleTemplate) => void
-  onNewAgentFromHost?: (hostAgentId: string, role: AgentRoleTemplate, adapter: 'claude-code' | 'codex' | 'gemini') => void | Promise<void>
+  onNewAgentFromHost?: (
+    hostAgentId: string,
+    role: AgentRoleTemplate,
+    adapter: 'claude-code' | 'codex' | 'gemini',
+    options?: { select?: boolean; alert?: boolean },
+  ) => string | void | Promise<string | void>
   onCreateCloudAgent?: (options?: CloudAgentCreateOptions) => void | Promise<void>
   onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
@@ -356,6 +361,7 @@ export function WttShellV2(props: WttShellV2Props) {
               onRenameAgent={onRenameAgent}
               onUnclaimAgent={onUnclaimAgent}
               onBindingChanged={onBindingChanged}
+              onTopicsRefresh={onTopicsRefresh}
               onCreateGeneralTask={onCreateGeneralTask}
               onToggleSidebar={() => setSidebarCollapsed(true)}
               userToken={userToken}
