@@ -145,6 +145,18 @@ async function settingsFetchJsonWithTimeout(input: string, init: RequestInit, ti
   }
 }
 
+function isRetryableSettingsOperationStatus(status: number): boolean {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function isRetryableSettingsOperationError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return message.includes("timed out") || message.includes("failed to fetch") || message.includes("network");
+  }
+  return false;
+}
+
 function settingsErrorMessage(data: unknown, fallback: string): string {
   if (!data || typeof data !== "object") return fallback;
   const detail = (data as { detail?: unknown; message?: unknown }).detail ?? (data as { message?: unknown }).message;
@@ -698,18 +710,43 @@ export function WttSettingsModal({
 
   const submitCloudAgentCreateJob = async (payload: Record<string, unknown>): Promise<AgentOperationJob> => {
     if (!accessToken) throw new Error(t("settings.sessionExpired"));
-    const { response, data } = await settingsFetchJsonWithTimeout(`${CLIENT_WTT_API_BASE}/agent-operations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        operation_type: "cloud_agent_create",
-        idempotency_key: "cloud-agent-create",
-        payload,
-      }),
+    let response: Response | null = null;
+    let data: unknown = null;
+    let lastCreateError: unknown = null;
+    const operationBody = JSON.stringify({
+      operation_type: "cloud_agent_create",
+      idempotency_key: "cloud-agent-create",
+      payload,
     });
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const result = await settingsFetchJsonWithTimeout(`${CLIENT_WTT_API_BASE}/agent-operations`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: operationBody,
+        });
+        response = result.response;
+        data = result.data;
+        if (response.ok || !isRetryableSettingsOperationStatus(response.status) || attempt === 2) {
+          break;
+        }
+      } catch (error) {
+        lastCreateError = error;
+        if (!isRetryableSettingsOperationError(error) || attempt === 2) {
+          throw error;
+        }
+      }
+      await settingsDelay(650 * (attempt + 1));
+    }
+
+    if (!response) {
+      if (lastCreateError instanceof Error) throw lastCreateError;
+      throw new Error("Cloud Agent operation request failed");
+    }
     if (!response.ok) {
       throw new Error(settingsErrorMessage(data, `Cloud Agent operation failed (${response.status})`));
     }

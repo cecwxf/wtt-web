@@ -240,6 +240,18 @@ async function fetchJsonWithTimeout(input: string, init: RequestInit, timeoutMs 
   }
 }
 
+function isRetryableOperationStatus(status: number): boolean {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+}
+
+function isRetryableOperationError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    return message.includes('timed out') || message.includes('failed to fetch') || message.includes('network')
+  }
+  return false
+}
+
 function newClientOperationId(): string {
   try {
     return crypto.randomUUID()
@@ -1845,15 +1857,41 @@ function FeedPageInner() {
   ): Promise<AgentOperationJob> => {
     const token = session?.accessToken as string | undefined
     if (!token) throw new Error(t('settings.sessionExpired'))
-    const { response: createRes, data: createData } = await fetchJsonWithTimeout(`${CLIENT_WTT_API_BASE}/agent-operations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        operation_type: operationType,
-        idempotency_key: idempotencyKey,
-        payload,
-      }),
+
+    let createRes: Response | null = null
+    let createData: unknown = null
+    let lastCreateError: unknown = null
+    const operationBody = JSON.stringify({
+      operation_type: operationType,
+      idempotency_key: idempotencyKey,
+      payload,
     })
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const result = await fetchJsonWithTimeout(`${CLIENT_WTT_API_BASE}/agent-operations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: operationBody,
+        })
+        createRes = result.response
+        createData = result.data
+        if (createRes.ok || !isRetryableOperationStatus(createRes.status) || attempt === 2) {
+          break
+        }
+      } catch (error) {
+        lastCreateError = error
+        if (!isRetryableOperationError(error) || attempt === 2) {
+          throw error
+        }
+      }
+      await delay(650 * (attempt + 1))
+    }
+
+    if (!createRes) {
+      if (lastCreateError instanceof Error) throw lastCreateError
+      throw new Error('Agent operation request failed')
+    }
     if (!createRes.ok) {
       throw new Error(responseErrorMessage(createData, `Agent operation failed (${createRes.status})`))
     }
