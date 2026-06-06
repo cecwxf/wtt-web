@@ -419,7 +419,15 @@ function childText(children: React.ReactNode): string {
   return ''
 }
 
-function MobileMarkdownLink({ href, children }: { href?: string; children?: React.ReactNode }) {
+function MobileMarkdownLink({
+  href,
+  children,
+  onImageOpen,
+}: {
+  href?: string
+  children?: React.ReactNode
+  onImageOpen: (url: string, label: string) => void
+}) {
   const url = String(href || '')
   const label = childText(children)
   const meta = mobileFileMeta(label, url)
@@ -428,11 +436,16 @@ function MobileMarkdownLink({ href, children }: { href?: string; children?: Reac
       const imageUrl = proxyMediaUrl(url)
       const thumbUrl = toThumbnailUrl(url)
       return (
-        <a href={imageUrl} target="_blank" rel="noreferrer" className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white align-top shadow-sm">
+        <button
+          type="button"
+          onClick={() => onImageOpen(imageUrl, meta.name)}
+          className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left align-top shadow-sm"
+          aria-label={`查看原图 ${meta.name}`}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={thumbUrl} alt={meta.name} className="h-24 w-36 bg-slate-100 object-cover" loading="lazy" />
           <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500">{meta.name}</span>
-        </a>
+        </button>
       )
     }
     const fileUrl = proxyMediaUrl(url)
@@ -450,16 +463,30 @@ function MobileMarkdownLink({ href, children }: { href?: string; children?: Reac
   )
 }
 
-function MobileMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+function MobileMarkdownImage({
+  src,
+  alt,
+  onImageOpen,
+}: {
+  src?: string
+  alt?: string
+  onImageOpen: (url: string, label: string) => void
+}) {
   const url = String(src || '')
   const imageUrl = proxyMediaUrl(url)
   const thumbUrl = toThumbnailUrl(url)
+  const label = alt || filenameFromUrl(imageUrl) || 'image'
   return (
-    <a href={imageUrl} target="_blank" rel="noreferrer" className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white align-top shadow-sm">
+    <button
+      type="button"
+      onClick={() => onImageOpen(imageUrl, label)}
+      className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left align-top shadow-sm"
+      aria-label={`查看原图 ${label}`}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={thumbUrl} alt={alt || ''} className="h-24 w-36 bg-slate-100 object-cover" loading="lazy" />
-      {alt && <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500">{alt}</span>}
-    </a>
+      <img src={thumbUrl} alt={label} className="h-24 w-36 bg-slate-100 object-cover" loading="lazy" />
+      {label && <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500">{label}</span>}
+    </button>
   )
 }
 
@@ -651,6 +678,7 @@ export default function MobileFeedPage() {
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionStartPos, setMentionStartPos] = useState(-1)
   const [isAndroidWebView, setIsAndroidWebView] = useState(false)
+  const [imagePreview, setImagePreview] = useState<{ url: string; label: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const pendingCreatedTopicIdRef = useRef('')
@@ -728,6 +756,21 @@ export default function MobileFeedPage() {
     setSelectedHost('')
     setSelectorOpen(true)
   }, [])
+
+  const openImagePreview = useCallback((url: string, label: string) => {
+    const imageUrl = proxyMediaUrl(url)
+    if (!imageUrl) return
+    setImagePreview({ url: imageUrl, label: label || filenameFromUrl(imageUrl) || 'image' })
+  }, [])
+
+  const mobileMarkdownComponents = useMemo(() => ({
+    a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+      <MobileMarkdownLink href={href} onImageOpen={openImagePreview}>{children}</MobileMarkdownLink>
+    ),
+    img: ({ src, alt }: { src?: string; alt?: string }) => (
+      <MobileMarkdownImage src={src} alt={alt} onImageOpen={openImagePreview} />
+    ),
+  }), [openImagePreview])
 
   const { data: agentsRaw } = useSWR(
     token ? ['mobile-agents', token] : null,
@@ -1722,7 +1765,7 @@ export default function MobileFeedPage() {
                         <div className="prose prose-sm max-w-none break-words prose-p:my-1 prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:bg-slate-950 prose-pre:text-slate-100">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
-                            components={{ a: MobileMarkdownLink, img: MobileMarkdownImage }}
+                            components={mobileMarkdownComponents}
                           >
                             {cleanContent || message.content}
                           </ReactMarkdown>
@@ -1781,8 +1824,10 @@ export default function MobileFeedPage() {
               {pendingAssets.map((asset, index) => (
                 <div key={`${asset.url}-${index}`} className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2">
                   {asset.kind === 'image' ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={toThumbnailUrl(asset.url)} alt="" className="h-10 w-10 rounded-xl object-cover" />
+                    <button type="button" onClick={() => openImagePreview(asset.url, asset.filename)} className="shrink-0 rounded-xl" aria-label={`查看原图 ${asset.filename}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={toThumbnailUrl(asset.url)} alt={asset.filename} className="h-10 w-10 rounded-xl object-cover" />
+                    </button>
                   ) : (
                     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[10px] font-semibold text-slate-700">FILE</span>
                   )}
@@ -1959,6 +2004,30 @@ export default function MobileFeedPage() {
           </div>
         </footer>
       </section>
+
+      {imagePreview && (
+        <div
+          className="fixed inset-0 z-[80] flex flex-col bg-black/95 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-white"
+          role="dialog"
+          aria-label="图片预览"
+        >
+          <div className="mb-3 flex h-12 shrink-0 items-center gap-3">
+            <div className="min-w-0 flex-1 truncate text-sm font-semibold">{imagePreview.label}</div>
+            <button
+              type="button"
+              onClick={() => setImagePreview(null)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
+              aria-label="关闭图片预览"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={imagePreview.url} alt={`${imagePreview.label} 原图`} className="max-h-full max-w-full rounded-xl object-contain" />
+          </div>
+        </div>
+      )}
 
       {selectorOpen && (
         <MobileSheet title={selectorTitle} onClose={() => closeSheet('selector')}>

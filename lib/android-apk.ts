@@ -1,5 +1,5 @@
-export const ANDROID_APK_VERSION = '1.0.7'
-export const ANDROID_APK_VERSION_CODE = 8
+export const ANDROID_APK_VERSION = '1.0.8'
+export const ANDROID_APK_VERSION_CODE = 9
 export const ANDROID_APK_ABI = 'arm64-v8a'
 export const ANDROID_APK_HREF = '/downloads/wtt-android-latest.apk'
 

@@ -344,6 +344,12 @@ test('mobile chat renders image messages as thumbnails', async ({ page }) => {
   await expect(image).toBeVisible()
   await expect(image).toHaveAttribute('src', /\/api\/wtt\/media\/screenshot\.jpg\?variant=thumb/)
   await expect(image).toHaveClass(/h-24/)
+
+  await image.click()
+  await expect(page.getByRole('dialog', { name: '图片预览' })).toBeVisible()
+  await expect(page.locator('img[alt="screenshot.jpg 原图"]')).toHaveAttribute('src', /\/api\/wtt\/media\/screenshot\.jpg$/)
+  await page.getByRole('button', { name: '关闭图片预览' }).click()
+  await expect(page.getByRole('dialog', { name: '图片预览' })).toBeHidden()
 })
 
 test('mobile composer uploads image attachments with thumbnail preview', async ({ page }) => {
@@ -365,6 +371,10 @@ test('mobile composer uploads image attachments with thumbnail preview', async (
 
   await expect(page.getByText('photo.jpg')).toBeVisible()
   await expect(page.locator('footer img[src*="/api/wtt/media/photo.jpg?variant=thumb"]')).toBeVisible()
+  await page.locator('footer img[src*="/api/wtt/media/photo.jpg?variant=thumb"]').click()
+  await expect(page.getByRole('dialog', { name: '图片预览' })).toBeVisible()
+  await expect(page.locator('img[alt="photo.jpg 原图"]')).toHaveAttribute('src', /\/api\/wtt\/media\/photo\.jpg$/)
+  await page.getByRole('button', { name: '关闭图片预览' }).click()
   await page.locator('textarea').fill('with image')
   await page.getByLabel('发送消息').click()
 
