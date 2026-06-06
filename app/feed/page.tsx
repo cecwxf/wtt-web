@@ -1796,7 +1796,9 @@ function FeedPageInner() {
     )),
     [agents],
   )
-  const cloudAgentNeedsRenewal = hasCloudAgentRecord && String(billingRaw?.entitlement?.plan || 'free').toLowerCase() !== 'pro'
+  const billingPlan = String(billingRaw?.entitlement?.plan || '').toLowerCase()
+  const billingLoaded = Boolean(billingRaw?.entitlement)
+  const cloudAgentNeedsRenewal = billingLoaded && hasCloudAgentRecord && billingPlan !== 'pro'
   const sleepingCloudHostIds = useMemo(() => {
     const state = (cloudAgentStateRaw || {}) as CloudAgentState
     const status = String(state.status || '').toLowerCase()
