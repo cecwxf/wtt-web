@@ -475,6 +475,28 @@ type RawTopicRecord = {
   member_agent_ids?: string[]
 }
 
+const OPTIMISTIC_TASK_TITLE_TTL_MS = 30 * 60 * 1000
+
+type OptimisticTaskTitle = {
+  title: string
+  expiresAt: number
+}
+
+function isDefaultTaskTitle(topic?: { name?: string; task_id?: string } | null): boolean {
+  const name = String(topic?.name || '').trim()
+  if (!topic?.task_id) return false
+  return !name || name === 'New Task' || /^TASK-[a-f0-9]{8}$/i.test(name) || /^TASK-[a-f0-9]{8}\s+New Task$/i.test(name)
+}
+
+function titleFromFirstMessage(content: string): string {
+  const line = String(content || '')
+    .split('\n')
+    .map((item) => item.replace(/\[[^\]]+\]\([^)]+\)/g, '').trim())
+    .find(Boolean)
+  if (!line) return 'New Task'
+  return line.length > 36 ? `${line.slice(0, 34)}...` : line
+}
+
 function mapRawTopicToItem(
   topic: RawTopicRecord,
   options?: { selectedAgentId?: string; humanSender?: string; p2pTopicByAgentId?: Record<string, string> },
@@ -684,6 +706,7 @@ function FeedPageInner() {
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [optimisticTaskTitles, setOptimisticTaskTitles] = useState<Record<string, OptimisticTaskTitle>>({})
 
   useEffect(() => {
     try {
@@ -1510,7 +1533,14 @@ function FeedPageInner() {
       .filter((topic: RawTopicRecord & { origin_type?: string; originType?: string }) => {
         return !shouldHideFeedTopic(topic as Record<string, unknown>)
       })
-      .map((topic: RawTopicRecord) => mapRawTopicToItem(topic, { selectedAgentId, humanSender, p2pTopicByAgentId }))
+      .map((topic: RawTopicRecord) => {
+        const mappedTopic = mapRawTopicToItem(topic, { selectedAgentId, humanSender, p2pTopicByAgentId })
+        const optimistic = optimisticTaskTitles[mappedTopic.topic_id]
+        if (optimistic && optimistic.expiresAt > Date.now() && isDefaultTaskTitle(mappedTopic)) {
+          return { ...mappedTopic, name: optimistic.title }
+        }
+        return mappedTopic
+      })
 
     return mapped.sort((a, b) => {
       // Default P2P always pinned at top
@@ -1523,7 +1553,19 @@ function FeedPageInner() {
       }
       return 0
     })
-  }, [subscribedTopicsRaw, selectedAgentId, session, p2pTopicByAgentId])
+  }, [subscribedTopicsRaw, selectedAgentId, session, p2pTopicByAgentId, optimisticTaskTitles])
+
+  useEffect(() => {
+    if (!Object.keys(optimisticTaskTitles).length) return
+    const now = Date.now()
+    let changed = false
+    const next: Record<string, OptimisticTaskTitle> = {}
+    for (const [topicId, value] of Object.entries(optimisticTaskTitles)) {
+      if (value.expiresAt > now) next[topicId] = value
+      else changed = true
+    }
+    if (changed) setOptimisticTaskTitles(next)
+  }, [optimisticTaskTitles, subscribedTopicsRaw])
 
   const groupTopics = useMemo<TopicItem[]>(() => {
     if (!Array.isArray(groupTopicsRaw)) return []
@@ -2257,6 +2299,8 @@ function FeedPageInner() {
 
       const topicId = String(real?.topic_id || '')
       if (topicId) {
+        const taskId = String(real?.id || real?.task_id || '').trim()
+        if (taskId) pendingRenameTaskRef.current = { taskId, topicId }
         setSelectedTopicId(topicId)
         setPendingComposerFocusTopicId(topicId)
       } else {
@@ -2363,11 +2407,38 @@ function FeedPageInner() {
           ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
         }),
       })
-      // Force topic list refresh so auto-renamed title appears immediately
-      if (sendResp.ok) {
-        pendingRenameTaskRef.current = null
-        await mutateTopics()
+      if (!sendResp.ok) {
+        const data = await sendResp.json().catch(() => null) as { detail?: unknown } | null
+        const detail = data?.detail
+        const message = typeof detail === 'string'
+          ? detail
+          : detail && typeof detail === 'object' && 'message' in detail
+            ? String((detail as { message?: unknown }).message || '')
+            : `发送失败 (${sendResp.status})`
+        setTypingByTopic((prev) => {
+          const next = { ...prev }
+          delete next[topicIdForSend]
+          return next
+        })
+        alert(message)
+        return
       }
+      // Force topic list refresh so auto-renamed title appears immediately
+      if (pendingRenameTaskRef.current?.topicId === topicIdForSend) {
+        const optimisticTitle = titleFromFirstMessage(content)
+        if (optimisticTitle !== 'New Task') {
+          setOptimisticTaskTitles((current) => ({
+            ...current,
+            [topicIdForSend]: {
+              title: optimisticTitle,
+              expiresAt: Date.now() + OPTIMISTIC_TASK_TITLE_TTL_MS,
+            },
+          }))
+        }
+        pendingRenameTaskRef.current = null
+      }
+      await mutateTopics()
+      window.setTimeout(() => void mutateTopics(), 3500)
     } else {
       // Regular topic — use publishMessage (may include worker persona context)
       let outboundContent = augmentedContent
