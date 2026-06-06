@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bot, Camera, ChevronDown, ClipboardList, Clock3, FolderTree, Hash, LocateFixed, Lock, LogOut, Menu, MessageSquare, Paperclip, Radio, Search, Send, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
+import { Bot, Camera, ChevronDown, ClipboardList, Clock3, FolderTree, Hash, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
@@ -184,6 +184,27 @@ function topicKindLabel(topic?: TopicRecord | null): string {
     default:
       return '群聊'
   }
+}
+
+function compactId(value: string, prefixLength = 10, suffixLength = 4): string {
+  const text = String(value || '').trim()
+  if (text.length <= prefixLength + suffixLength + 1) return text
+  return `${text.slice(0, prefixLength)}…${text.slice(-suffixLength)}`
+}
+
+function compactAgentName(agent?: AgentRecord | null): string {
+  const name = displayName(agent)
+  if (/^agent-[a-f0-9]{10,}$/i.test(name)) return compactId(name, 9, 4)
+  return name
+}
+
+function compactTopicTitle(topic?: TopicRecord | null): string {
+  const name = String(topic?.name || '').trim()
+  if (!name) return '选择 Topic'
+  const taskMatch = /^TASK-[a-f0-9]{8}\s+(.+)$/i.exec(name)
+  if (taskMatch?.[1]) return taskMatch[1].trim()
+  if (/^TASK-[a-f0-9]{8}$/i.test(name)) return 'New Task'
+  return name
 }
 
 function topicIcon(topic?: TopicRecord | null) {
@@ -491,6 +512,7 @@ export default function MobileFeedPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const sheetHistoryRef = useRef(false)
   const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
+  const searchInteractiveRef = useRef(false)
 
   const openFilePicker = useCallback((input: HTMLInputElement | null) => {
     if (!input) return
@@ -531,6 +553,7 @@ export default function MobileFeedPage() {
       window.history.pushState({ wttMobileSheet: true }, '')
       sheetHistoryRef.current = true
     }
+    if (!selectorOpen) searchInteractiveRef.current = false
   }, [selectorOpen, settingsOpen])
 
   useEffect(() => {
@@ -1046,8 +1069,6 @@ export default function MobileFeedPage() {
           return [optimisticTopic, ...list]
         }, false)
         setSelectedTopicId(id)
-        window.setTimeout(() => composerRef.current?.focus(), 80)
-        window.setTimeout(() => composerRef.current?.focus(), 260)
         window.setTimeout(() => {
           if (pendingCreatedTopicIdRef.current === id) pendingCreatedTopicIdRef.current = ''
         }, 8000)
@@ -1226,17 +1247,17 @@ export default function MobileFeedPage() {
     <main className="flex h-[100dvh] overflow-hidden bg-white text-[#0d0d0d] antialiased">
       <section className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3">
-          <button onClick={() => setSelectorOpen(true)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100">
-            <Menu className="h-5 w-5" />
+          <button onClick={() => setSelectorOpen(true)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="选择 Agent / Topic">
+            <FolderTree className="h-5 w-5" />
           </button>
           <button onClick={() => setSelectorOpen(true)} className="min-w-0 flex-1 text-left">
             <div className="flex min-w-0 items-center gap-2">
               <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500" />
-              <div className="truncate text-[15px] font-semibold leading-5">{selectedTopic?.name || '选择 Topic'}</div>
+              <div className="truncate text-[15px] font-semibold leading-5">{compactTopicTitle(selectedTopic)}</div>
             </div>
             <div className="flex items-center gap-1 truncate text-[11px] font-medium text-slate-500">
               <span className={`h-2 w-2 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className="truncate">{selectedAgent ? displayName(selectedAgent) : '选择 Agent'}</span>
+              <span className="truncate">{selectedAgent ? compactAgentName(selectedAgent) : '选择 Agent'}</span>
               {selectedTopicMeta && <span className="truncate">· {selectedTopicMeta}</span>}
               <ChevronDown className="h-3 w-3" />
             </div>
@@ -1266,7 +1287,7 @@ export default function MobileFeedPage() {
             <Users className="h-4 w-4 shrink-0 text-slate-600" />
             <span className="shrink-0 text-[11px] font-semibold text-slate-700">群聊</span>
             {selectedTopicMembers.slice(0, 8).map((member) => {
-              const label = member.display_name || member.agent_id
+              const label = member.display_name || compactId(member.agent_id, 9, 4)
               return (
                 <span key={member.agent_id} className="max-w-32 shrink-0 truncate rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-600">
                   {label}
@@ -1452,27 +1473,38 @@ export default function MobileFeedPage() {
 
       {selectorOpen && (
         <MobileSheet title="选择 Agent / Topic" onClose={() => closeSheet('selector')}>
-          <div className="sticky top-0 z-10 bg-white pb-3">
-            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+          <div className="sticky top-0 z-10 bg-white pb-2">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
               <Search className="h-4 w-4 text-slate-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索 Agent / Topic / 群聊" className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none" />
+              <input
+                value={search}
+                onPointerDown={() => {
+                  searchInteractiveRef.current = true
+                }}
+                onFocus={(event) => {
+                  if (!searchInteractiveRef.current) event.currentTarget.blur()
+                }}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="搜索 Agent / Topic / 群聊"
+                className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none"
+              />
             </div>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <section>
-              <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
+              <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
                 <FolderTree className="h-4 w-4" />
                 主机目录
                 <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{agents.length}</span>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {groupedAgents.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs font-medium text-slate-400">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-400">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
                 ) : groupedAgents.map((group) => {
                   const online = group.rows.filter((a) => onlineAgents.has(a.agent_id)).length
                   return (
-                    <section key={group.host} className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
-                      <div className="mb-2 flex items-center justify-between px-2 text-xs font-semibold text-slate-500">
+                    <section key={group.host} className="rounded-xl border border-slate-200 bg-slate-50 p-1.5">
+                      <div className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold text-slate-500">
                         <span className="min-w-0 truncate">{group.host}</span>
                         <span className="shrink-0">{online}/{group.rows.length}</span>
                       </div>
@@ -1487,11 +1519,11 @@ export default function MobileFeedPage() {
                                 setSelectedAgentId(agent.agent_id)
                                 setSelectedTopicId('')
                               }}
-                              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium ${active ? 'bg-[#0d0d0d] text-white' : 'bg-white text-slate-700'}`}
+                              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium ${active ? 'bg-[#0d0d0d] text-white' : 'bg-white text-slate-700'}`}
                             >
                               <Bot className="h-4 w-4 shrink-0" />
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate">{displayName(agent)}</span>
+                                <span className="block truncate">{compactAgentName(agent)}</span>
                                 {runtimeLine(runtime) && <span className={`block truncate text-[10px] font-semibold ${active ? 'text-white/70' : 'text-slate-400'}`}>{runtimeLine(runtime)}</span>}
                               </span>
                               <span className={`h-2 w-2 rounded-full ${onlineAgents.has(agent.agent_id) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
@@ -1505,21 +1537,21 @@ export default function MobileFeedPage() {
               </div>
             </section>
             <section>
-              <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
+              <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
                 <MessageSquare className="h-4 w-4" />
                 Topics
                 <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{filteredTopics.length}</span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {(['p2p', 'task', 'group', 'subscriber'] as TopicGroupKey[]).map((groupKey) => {
                   const items = groupedTopics[groupKey]
                   const meta = topicGroupMeta(groupKey)
                   const GroupIcon = meta.Icon
                   if (items.length === 0 && search.trim()) return null
                   return (
-                    <div key={groupKey} className="rounded-2xl border border-slate-200 bg-white p-2">
-                      <div className="mb-2 flex items-center gap-2 px-2 text-xs font-semibold text-slate-500">
-                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${meta.tone}`}>
+                    <div key={groupKey} className="rounded-xl border border-slate-200 bg-white p-1.5">
+                      <div className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-slate-500">
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${meta.tone}`}>
                           <GroupIcon className="h-3.5 w-3.5" />
                           {meta.label}
                         </span>
@@ -1539,14 +1571,14 @@ export default function MobileFeedPage() {
                                 setSelectedTopicId(id)
                                 closeSheet('selector')
                               }}
-                              className={`w-full rounded-xl border p-3 text-left ${id === selectedTopicId ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-slate-50'}`}
+                              className={`w-full rounded-lg border px-3 py-2 text-left ${id === selectedTopicId ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-slate-50'}`}
                             >
                               <div className="flex items-center gap-2">
                                 <TopicIcon className="h-4 w-4 shrink-0 text-slate-600" />
-                                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{topic.name || id}</span>
+                                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
                                 {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
                               </div>
-                              <div className="mt-1 line-clamp-2 text-xs font-medium leading-5 text-slate-500">
+                              <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500">
                                 {topic.description || topicKindLabel(topic)}
                               </div>
                             </button>
@@ -1699,15 +1731,15 @@ function EmptyCard({
 function MobileSheet({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-[2px]">
-      <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-hidden rounded-t-[1.5rem] bg-white shadow-2xl">
+      <div className="absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-hidden rounded-t-[1.25rem] bg-white shadow-2xl">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200" />
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
           <p className="text-base font-semibold text-slate-900">{title}</p>
           <button onClick={onClose} className="rounded-full bg-slate-100 p-2 text-slate-600" aria-label="关闭">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[calc(88dvh-4rem)] overflow-y-auto bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
+        <div className="max-h-[calc(92dvh-3.75rem)] overflow-y-auto bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{children}</div>
       </div>
     </div>
   )
