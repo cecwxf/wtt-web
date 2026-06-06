@@ -129,6 +129,8 @@ const WTT_CONNECT_ADAPTERS: Array<{ id: WttConnectAdapterId; label: string; note
   { id: 'gemini', label: 'Gemini CLI', note: 'Gemini 通常需要先在该主机完成 Google OAuth。' },
 ]
 
+const MAX_GROUP_AGENTS = 30
+
 type TeamTemplate = {
   id: string
   title: string
@@ -899,8 +901,16 @@ export function TopicColumn(props: TopicColumnProps) {
     setGroupAgentIds((prev) => (
       prev.includes(agentId)
         ? prev.filter((id) => id !== agentId)
-        : [...prev, agentId]
+        : prev.length >= MAX_GROUP_AGENTS
+          ? prev
+          : [...prev, agentId]
     ))
+  }
+
+  const joinAgentsToTopicSequentially = async (topicId: string, agentIds: string[]) => {
+    for (const agentId of agentIds) {
+      await joinAgentToTopic(topicId, agentId)
+    }
   }
 
   const joinAgentToTopic = async (topicId: string, agentId: string) => {
@@ -939,6 +949,10 @@ export function TopicColumn(props: TopicColumnProps) {
       setGroupError(zh ? '至少选择一个 Agent。' : 'Select at least one Agent.')
       return
     }
+    if (selectedIds.length > MAX_GROUP_AGENTS) {
+      setGroupError(zh ? `一次群聊最多选择 ${MAX_GROUP_AGENTS} 个 Agent。` : `Select up to ${MAX_GROUP_AGENTS} agents for one group.`)
+      return
+    }
     const name = groupName.trim()
     const description = groupDesc.trim() || (zh ? 'Agent 群聊。' : 'Agent group chat.')
     if (!name) {
@@ -950,7 +964,7 @@ export function TopicColumn(props: TopicColumnProps) {
     try {
       const creator = selectedIds.includes(selectedAgentId) ? selectedAgentId : selectedIds[0]
       const topicId = await createPrivateDiscussionTopic(name, description, creator)
-      await Promise.all(selectedIds.filter((id) => id !== creator).map((agentId) => joinAgentToTopic(topicId, agentId)))
+      await joinAgentsToTopicSequentially(topicId, selectedIds.filter((id) => id !== creator))
       await onTopicsRefresh?.()
       onSelectTopic(topicId)
       setGroupOpen(false)
@@ -996,7 +1010,7 @@ export function TopicColumn(props: TopicColumnProps) {
         ...template.workflow.map((step, index) => `${index + 1}. ${step}`),
       ].join('\n')
       const topicId = await createPrivateDiscussionTopic(name, description, createdAgentIds[0])
-      await Promise.all(createdAgentIds.slice(1).map((agentId) => joinAgentToTopic(topicId, agentId)))
+      await joinAgentsToTopicSequentially(topicId, createdAgentIds.slice(1))
       await onBindingChanged?.()
       await onTopicsRefresh?.()
       onSelectTopic(topicId)
@@ -1865,13 +1879,18 @@ export function TopicColumn(props: TopicColumnProps) {
                 <span className="text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '选择 Agent' : 'Select agents'}</span>
                 <button
                   type="button"
-                  onClick={() => setGroupAgentIds(agentOptions.map((agent) => agent.agent_id))}
+                  onClick={() => setGroupAgentIds(agentOptions.slice(0, MAX_GROUP_AGENTS).map((agent) => agent.agent_id))}
                   disabled={groupBusy || agentOptions.length === 0}
                   className="text-xs font-black text-amber-700 transition hover:text-amber-500 disabled:opacity-50 dark:text-amber-300"
                 >
-                  {zh ? '全选' : 'Select all'}
+                  {zh ? `全选前 ${Math.min(agentOptions.length, MAX_GROUP_AGENTS)} 个` : `Select first ${Math.min(agentOptions.length, MAX_GROUP_AGENTS)}`}
                 </button>
               </div>
+              <p className="mb-2 text-[11px] font-semibold text-slate-400 dark:text-zinc-500">
+                {zh
+                  ? `已选 ${groupAgentIds.length}/${MAX_GROUP_AGENTS} 个。大量 Agent 会增加消息扇出成本，建议只拉入本次需要协作的 Agent。`
+                  : `Selected ${groupAgentIds.length}/${MAX_GROUP_AGENTS}. Large groups increase fan-out cost; invite only agents needed for this task.`}
+              </p>
               <div className="grid max-h-[38vh] gap-2 overflow-y-auto sm:grid-cols-2">
                 {agentOptions.map((agent) => {
                   const checked = groupAgentIds.includes(agent.agent_id)
