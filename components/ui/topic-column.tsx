@@ -1801,7 +1801,7 @@ export function TopicColumn(props: TopicColumnProps) {
                 <MessageCircle className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1 truncate text-[10px] font-black">
-                {zh ? '群聊' : 'Groups'}
+                {zh ? '团队/群聊' : 'Teams / Groups'}
               </span>
               <span className="rounded-full bg-white/75 px-1.5 py-0.5 text-[9px] font-black dark:bg-zinc-950/45">
                 {agentRailGroupTopics.length}
@@ -1846,7 +1846,7 @@ export function TopicColumn(props: TopicColumnProps) {
                   })
                 ) : (
                   <div className="rounded-lg border border-dashed border-[#ded6c8] bg-white/45 px-2 py-2 text-center text-[9px] font-semibold text-slate-400 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500">
-                    {zh ? '暂无群聊' : 'No groups'}
+                    {zh ? '暂无团队/群聊' : 'No teams or groups'}
                   </div>
                 )}
               </div>
