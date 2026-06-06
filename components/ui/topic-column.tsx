@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, ClipboardCopy, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Shield, Sparkles, Sun, Users, Waves, Zap } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardCopy, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Search, Shield, Sparkles, Sun, Users, Waves, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
@@ -720,6 +720,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [teamBusy, setTeamBusy] = useState(false)
   const [teamProgress, setTeamProgress] = useState('')
   const [teamError, setTeamError] = useState('')
+  const [agentSearchQuery, setAgentSearchQuery] = useState('')
   const [roleEditor, setRoleEditor] = useState<{
     agentId: string
     sourceRole?: AgentRoleTemplate
@@ -901,6 +902,25 @@ export function TopicColumn(props: TopicColumnProps) {
       .map((folder) => ({ ...folder, agents: folder.agents.filter((agent) => hostSet.has(agent.agent_id)) }))
       .filter((folder) => folder.agents.length > 0)
   }, [agentFolders, newAgentHosts])
+  const agentSearchResults = useMemo(() => {
+    const query = agentSearchQuery.trim().toLowerCase()
+    if (!query) return []
+    return agentOptions
+      .filter((agent) => {
+        const id = agent.agent_id.toLowerCase()
+        const name = agent.display_name.toLowerCase()
+        return id.includes(query) || name.includes(query)
+      })
+      .sort((a, b) => {
+        const aId = a.agent_id.toLowerCase()
+        const bId = b.agent_id.toLowerCase()
+        const aExact = aId === query ? 0 : aId.startsWith(query) ? 1 : 2
+        const bExact = bId === query ? 0 : bId.startsWith(query) ? 1 : 2
+        if (aExact !== bExact) return aExact - bExact
+        return a.display_name.localeCompare(b.display_name)
+      })
+      .slice(0, 8)
+  }, [agentOptions, agentSearchQuery])
 
   const openNewAgentModal = () => {
     const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId)
@@ -1425,6 +1445,71 @@ export function TopicColumn(props: TopicColumnProps) {
               </span>
               <span className="truncate">{zh ? '绑定已有 Agent' : 'Bind Agent'}</span>
             </button>
+          </section>
+
+          <section className="relative">
+            <label className="sr-only" htmlFor="wtt-agent-search">
+              {zh ? '搜索 Agent ID' : 'Search agent ID'}
+            </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
+              <input
+                id="wtt-agent-search"
+                type="search"
+                value={agentSearchQuery}
+                onChange={(event) => setAgentSearchQuery(event.target.value)}
+                placeholder={zh ? '搜 Agent ID' : 'Search ID'}
+                className="w-full rounded-xl border border-[#ded6c8] bg-white/70 py-1.5 pl-7 pr-2 text-[10px] font-semibold text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-sky-500/60 dark:focus:bg-zinc-900 dark:focus:ring-sky-500/15"
+              />
+            </div>
+
+            {agentSearchQuery.trim() && (
+              <div
+                className="absolute left-0 top-full z-40 mt-1 rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-1.5 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+                style={{ width: 'min(280px, calc(100vw - var(--wtt-agent-rail-width) - 16px))' }}
+              >
+                {agentSearchResults.length > 0 ? (
+                  agentSearchResults.map((agent) => {
+                    const runtime = displayRuntimeMap?.[agent.agent_id]
+                    const online = isAgentOnline(agent.agent_id)
+                    return (
+                      <button
+                        key={agent.agent_id}
+                        type="button"
+                        onClick={() => {
+                          onSelectAgent?.(agent.agent_id)
+                          setAgentSearchQuery('')
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-sky-50 dark:hover:bg-sky-500/10"
+                        title={agent.agent_id}
+                      >
+                        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-[10px] font-black text-sky-700 ring-1 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-100 dark:ring-sky-500/25">
+                          {agentInitial(agent.display_name)}
+                          <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-white dark:border-zinc-900 ${online ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-600'}`} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-black text-slate-800 dark:text-zinc-100">
+                            {agent.display_name || agent.agent_id}
+                          </span>
+                          <span className="block truncate font-mono text-[10px] font-semibold text-slate-400 dark:text-zinc-500">
+                            {agent.agent_id}
+                          </span>
+                          {runtime?.hostname && (
+                            <span className="block truncate text-[9px] font-semibold text-slate-400 dark:text-zinc-500">
+                              {runtime.hostname}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    )
+                  })
+                ) : (
+                  <div className="rounded-xl px-2 py-2 text-[10px] font-semibold text-slate-400 dark:text-zinc-500">
+                    {zh ? '没有匹配的 Agent' : 'No matching agents'}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <div className="h-px bg-gradient-to-r from-transparent via-[#d8ccbb] to-transparent dark:via-zinc-700" />
