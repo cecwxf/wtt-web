@@ -1342,57 +1342,55 @@ export function TopicColumn(props: TopicColumnProps) {
                 setCloudCreateOpen(true)
               }}
               disabled={cloudAgentBusy}
-              className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-300 via-sky-200 to-white px-1 py-2 text-center text-[9px] font-black leading-tight text-sky-900 shadow-sm shadow-sky-900/10 ring-1 ring-white/70 transition hover:-translate-y-0.5 hover:border-sky-300 hover:from-sky-200 hover:via-cyan-100 hover:to-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-400/45 dark:from-sky-500/35 dark:via-sky-400/20 dark:to-zinc-950 dark:text-sky-50 dark:ring-sky-200/20"
+              className="relative flex w-full items-center gap-1.5 overflow-hidden rounded-xl border border-sky-200 bg-gradient-to-r from-sky-300 via-sky-100 to-white px-2 py-1.5 text-left text-[10px] font-black leading-tight text-sky-900 shadow-sm shadow-sky-900/10 ring-1 ring-white/70 transition hover:-translate-y-0.5 hover:border-sky-300 hover:from-sky-200 hover:via-cyan-100 hover:to-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-400/45 dark:from-sky-500/35 dark:via-sky-400/20 dark:to-zinc-950 dark:text-sky-50 dark:ring-sky-200/20"
               title={hasCloudAgent
                 ? (zh ? '已创建 Cloud Agent；点击可查看限制提示' : 'Cloud Agent already exists; click for details')
                 : (zh ? '新建 Agent，需要 Pro 账户' : 'New Agent, requires Pro')}
             >
-              <span className="absolute -left-3 bottom-2 h-5 w-10 rounded-full bg-white/80 blur-[1px]" />
-              <span className="absolute -right-4 top-2 h-6 w-12 rounded-full bg-white/70 blur-[1px]" />
-              <span className="relative mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-white/85 text-sky-500 shadow-sm ring-1 ring-sky-100 dark:bg-white/90 dark:text-sky-600">
-                <Cloud className="h-5 w-5" />
+              <span className="absolute -left-3 bottom-1 h-4 w-10 rounded-full bg-white/80 blur-[1px]" />
+              <span className="absolute -right-4 top-1 h-5 w-12 rounded-full bg-white/70 blur-[1px]" />
+              <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/85 text-sky-500 shadow-sm ring-1 ring-sky-100 dark:bg-white/90 dark:text-sky-600">
+                <Cloud className="h-4 w-4" />
               </span>
-              <span className="relative">{zh ? '新建' : 'New'}</span>
-              <span className="relative">Agent</span>
+              <span className="relative truncate">{zh ? '新建 Agent' : 'New Agent'}</span>
             </button>
           )}
 
           <button
             type="button"
             onClick={openBindAgentModal}
-            className="flex w-full flex-col items-center justify-center rounded-2xl border border-emerald-200 bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-emerald-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-md dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:ring-emerald-500/10 dark:hover:bg-emerald-500/15"
+            className="flex w-full items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-2 py-1.5 text-left text-[10px] font-black leading-tight text-emerald-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-md dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:ring-emerald-500/10 dark:hover:bg-emerald-500/15"
             title={zh ? '生成 agent_id/token，并在自己的主机上启动 wtt-connect' : 'Generate agent_id/token and run wtt-connect on your own host'}
           >
-            <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-sm ring-1 ring-emerald-200 dark:bg-emerald-400/15 dark:text-emerald-200 dark:ring-emerald-400/25">
-              <Radio className="h-4 w-4" />
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 shadow-sm ring-1 ring-emerald-200 dark:bg-emerald-400/15 dark:text-emerald-200 dark:ring-emerald-400/25">
+              <Radio className="h-3.5 w-3.5" />
             </span>
-            <span>{zh ? '绑定已有' : 'Bind'}</span>
-            <span>Agent</span>
+            <span className="truncate">{zh ? '绑定已有 Agent' : 'Bind Agent'}</span>
           </button>
 
           <button
             type="button"
             onClick={openGroupModal}
-            className="flex w-full flex-col items-center justify-center rounded-2xl border border-amber-200 bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-amber-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:shadow-md dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100 dark:ring-amber-500/10 dark:hover:bg-amber-500/15"
+            className="flex w-full items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50/75 px-2 py-1.5 text-left text-[10px] font-black leading-tight text-amber-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 hover:shadow-md dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100 dark:ring-amber-500/10 dark:hover:bg-amber-500/15"
             title={zh ? '选择已绑定 Agent，直接创建一个群聊 Topic' : 'Select bound agents and create a group topic'}
           >
-            <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-600 shadow-sm ring-1 ring-amber-200 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-400/25">
-              <Users className="h-4 w-4" />
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600 shadow-sm ring-1 ring-amber-200 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-400/25">
+              <Users className="h-3.5 w-3.5" />
             </span>
-            <span>{zh ? '新建群聊' : 'New Group'}</span>
+            <span className="truncate">{zh ? '新建群聊' : 'New Group'}</span>
           </button>
 
           <button
             type="button"
             onClick={openTeamModal}
             disabled={!onNewAgentFromHost || newAgentHosts.length === 0}
-            className="flex w-full flex-col items-center justify-center rounded-2xl border border-fuchsia-200 bg-white/75 px-1 py-2 text-center text-[9px] font-black leading-tight text-fuchsia-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/10 dark:text-fuchsia-100 dark:ring-fuchsia-500/10 dark:hover:bg-fuchsia-500/15"
+            className="flex w-full items-center gap-1.5 rounded-xl border border-fuchsia-200 bg-fuchsia-50/75 px-2 py-1.5 text-left text-[10px] font-black leading-tight text-fuchsia-800 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-fuchsia-300 hover:bg-fuchsia-100 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/10 dark:text-fuchsia-100 dark:ring-fuchsia-500/10 dark:hover:bg-fuchsia-500/15"
             title={zh ? '选择团队模板，在在线主机中 clone 多个专业 Agent 并创建协作群聊' : 'Choose a team template, clone role agents on an online host, and create a collaboration topic'}
           >
-            <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-fuchsia-100 text-fuchsia-600 shadow-sm ring-1 ring-fuchsia-200 dark:bg-fuchsia-400/15 dark:text-fuchsia-200 dark:ring-fuchsia-400/25">
-              <Crown className="h-4 w-4" />
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-fuchsia-100 text-fuchsia-600 shadow-sm ring-1 ring-fuchsia-200 dark:bg-fuchsia-400/15 dark:text-fuchsia-200 dark:ring-fuchsia-400/25">
+              <Crown className="h-3.5 w-3.5" />
             </span>
-            <span>{zh ? '新建团队' : 'New Team'}</span>
+            <span className="truncate">{zh ? '新建团队' : 'New Team'}</span>
           </button>
 
           {agentOptions.length === 0 && (
