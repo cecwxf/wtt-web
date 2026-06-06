@@ -106,6 +106,18 @@ type BillingMe = {
   };
 };
 
+function normalizeCloudAgentUsageForDisplay(billing?: BillingMe | null) {
+  const usage = billing?.cloud_agent_usage;
+  const blockedUntilRaw = usage?.blocked_until || null;
+  const blockedUntilMs = blockedUntilRaw ? new Date(blockedUntilRaw).getTime() : Number.NaN;
+  const blockExpired = Number.isFinite(blockedUntilMs) && blockedUntilMs <= Date.now();
+  return {
+    window_count: blockExpired ? 0 : Number(usage?.window_count || 0),
+    monthly_count: Number(usage?.monthly_count || 0),
+    blocked_until: blockExpired ? null : blockedUntilRaw,
+  };
+}
+
 type CheckoutSession = {
   provider?: string;
   order_id?: string;
@@ -389,6 +401,7 @@ export function WttSettingsModal({
     [canViewMetrics],
   );
   const isPaidPlan = billing?.entitlement?.plan === "pro";
+  const billingUsage = normalizeCloudAgentUsageForDisplay(billing);
   const hasCloudAgentRecord = hasCloudAgent || Boolean(cloudAgentInfo?.has_cloud_agent);
   const cloudAgentModelLabel = useMemo(() => {
     const modelId = cloudAgentInfo?.model_id || "";
@@ -1523,13 +1536,13 @@ export function WttSettingsModal({
                   <div className="rounded-lg border border-slate-200 bg-white p-3">
                     <p className="text-slate-400">连续请求</p>
                     <p className="mt-1 font-semibold text-slate-800">
-                      {billing?.cloud_agent_usage?.window_count || 0}/{billing?.entitlement?.limits?.window_limit || 0}
+                      {billingUsage.window_count}/{billing?.entitlement?.limits?.window_limit || 0}
                     </p>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-white p-3">
                     <p className="text-slate-400">本月请求</p>
                     <p className="mt-1 font-semibold text-slate-800">
-                      {billing?.cloud_agent_usage?.monthly_count || 0}/{billing?.entitlement?.limits?.monthly_limit || 0}
+                      {billingUsage.monthly_count}/{billing?.entitlement?.limits?.monthly_limit || 0}
                     </p>
                   </div>
                 </div>
@@ -1942,20 +1955,20 @@ export function WttSettingsModal({
                     <div>
                       <p className="text-slate-400">连续请求额度</p>
                       <p className="mt-1 font-semibold text-slate-800">
-                        {billing?.cloud_agent_usage?.window_count || 0}/{billing?.entitlement?.limits?.window_limit || 0}
+                        {billingUsage.window_count}/{billing?.entitlement?.limits?.window_limit || 0}
                       </p>
                     </div>
                     <div>
                       <p className="text-slate-400">本月请求额度</p>
                       <p className="mt-1 font-semibold text-slate-800">
-                        {billing?.cloud_agent_usage?.monthly_count || 0}/{billing?.entitlement?.limits?.monthly_limit || 0}
+                        {billingUsage.monthly_count}/{billing?.entitlement?.limits?.monthly_limit || 0}
                       </p>
                     </div>
-                    {billing?.cloud_agent_usage?.blocked_until && (
+                    {billingUsage.blocked_until && (
                       <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
                         <p className="font-semibold">请求暂时限流</p>
                         <p className="mt-1 text-[11px] leading-4">
-                          恢复时间：{billing.cloud_agent_usage.blocked_until}
+                          恢复时间：{billingUsage.blocked_until}
                         </p>
                       </div>
                     )}

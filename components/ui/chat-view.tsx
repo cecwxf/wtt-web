@@ -1215,8 +1215,11 @@ function cloudAgentQuotaText(billing?: CloudSandboxBilling | null) {
   const monthlyLimit = Number(limits?.monthly_limit || 500)
   const windowLimit = Number(limits?.window_limit || 30)
   const monthlyCount = Number(usage?.monthly_count || 0)
-  const windowCount = Number(usage?.window_count || 0)
-  const blockedUntil = String(usage?.blocked_until || '').trim()
+  const blockedUntilRaw = String(usage?.blocked_until || '').trim()
+  const blockedUntilMs = blockedUntilRaw ? new Date(blockedUntilRaw).getTime() : Number.NaN
+  const blockExpired = Number.isFinite(blockedUntilMs) && blockedUntilMs <= Date.now()
+  const windowCount = blockExpired ? 0 : Number(usage?.window_count || 0)
+  const blockedUntil = blockExpired ? '' : blockedUntilRaw
   const resetText = blockedUntil ? `限制中，恢复时间 ${blockedUntil}` : '连续窗口 3 小时后重置'
   return `Cloud Agent 按 request 额度计算：本月 ${monthlyCount}/${monthlyLimit} 次，连续 ${windowCount}/${windowLimit} 次，${resetText}`
 }
