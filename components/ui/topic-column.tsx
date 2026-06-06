@@ -812,6 +812,12 @@ export function TopicColumn(props: TopicColumnProps) {
       return a.label.localeCompare(b.label)
     })
   }, [agentOptions, displayRuntimeMap, selectedAgentId, zh])
+  const newAgentHostFolders = useMemo<AgentFolder[]>(() => {
+    const hostSet = new Set(newAgentHosts.map((agent) => agent.agent_id))
+    return agentFolders
+      .map((folder) => ({ ...folder, agents: folder.agents.filter((agent) => hostSet.has(agent.agent_id)) }))
+      .filter((folder) => folder.agents.length > 0)
+  }, [agentFolders, newAgentHosts])
 
   const openNewAgentModal = () => {
     const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId)
@@ -1835,7 +1841,7 @@ export function TopicColumn(props: TopicColumnProps) {
 
       {groupOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
-          <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-amber-200 bg-[#fffdf8] p-4 shadow-2xl dark:border-amber-500/30 dark:bg-zinc-900">
+          <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-amber-200 bg-[#fffdf8] p-4 shadow-2xl dark:border-amber-500/30 dark:bg-zinc-900">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">{zh ? '新建群聊' : 'New Group Chat'}</h3>
@@ -1891,28 +1897,67 @@ export function TopicColumn(props: TopicColumnProps) {
                   ? `已选 ${groupAgentIds.length}/${MAX_GROUP_AGENTS} 个。大量 Agent 会增加消息扇出成本，建议只拉入本次需要协作的 Agent。`
                   : `Selected ${groupAgentIds.length}/${MAX_GROUP_AGENTS}. Large groups increase fan-out cost; invite only agents needed for this task.`}
               </p>
-              <div className="grid max-h-[38vh] gap-2 overflow-y-auto sm:grid-cols-2">
-                {agentOptions.map((agent) => {
-                  const checked = groupAgentIds.includes(agent.agent_id)
-                  const runtime = displayRuntimeMap?.[agent.agent_id]
-                  const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
+              <div className="grid max-h-[42vh] gap-3 overflow-y-auto lg:grid-cols-2">
+                {agentFolders.map((folder) => {
+                  const onlineCount = folder.agents.filter((agent) => isAgentOnline(agent.agent_id)).length
+                  const selectedCount = folder.agents.filter((agent) => groupAgentIds.includes(agent.agent_id)).length
+                  const folderTone = hostFolderTone(folder.key)
+                  const folderInitial = (folder.label.trim()[0] || '?').toUpperCase()
                   return (
-                    <button
-                      key={agent.agent_id}
-                      type="button"
-                      disabled={groupBusy}
-                      onClick={() => toggleGroupAgent(agent.agent_id)}
-                      className={`rounded-xl border px-3 py-2 text-left transition ${
-                        checked
-                          ? 'border-amber-300 bg-amber-50 text-amber-900 ring-2 ring-amber-100 dark:border-amber-500/45 dark:bg-amber-500/15 dark:text-amber-100 dark:ring-amber-500/20'
-                          : 'border-[#eee6da] bg-white/70 text-slate-600 hover:border-amber-200 hover:bg-amber-50/60 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-300 dark:hover:border-amber-500/30 dark:hover:bg-amber-500/10'
-                      }`}
+                    <section
+                      key={folder.key}
+                      className="rounded-2xl border border-[#eee6da] bg-white/70 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/60"
                     >
-                      <span className="block truncate text-sm font-black">{agent.display_name || agent.agent_id}</span>
-                      <span className="mt-1 block truncate text-[11px] leading-4 opacity-75">
-                        {role.shortLabel} · {runtime?.hostname || (zh ? '未知主机' : 'Unknown host')}
-                      </span>
-                    </button>
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-xs font-black ring-1 ring-white/70 ${folderTone.icon}`}>
+                          {folderInitial}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-black text-slate-800 dark:text-zinc-100" title={folder.label}>{folder.label}</span>
+                          <span className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500">
+                            {onlineCount}/{folder.agents.length} online · {selectedCount} selected
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={groupBusy}
+                          onClick={() => {
+                            const room = Math.max(0, MAX_GROUP_AGENTS - groupAgentIds.length)
+                            const folderIds = folder.agents.map((agent) => agent.agent_id)
+                            const missing = folderIds.filter((id) => !groupAgentIds.includes(id)).slice(0, room)
+                            setGroupAgentIds((prev) => Array.from(new Set([...prev, ...missing])))
+                          }}
+                          className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700 transition hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-500/10 dark:text-amber-200"
+                        >
+                          {zh ? '选目录' : 'Pick'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {folder.agents.map((agent) => {
+                          const checked = groupAgentIds.includes(agent.agent_id)
+                          const online = isAgentOnline(agent.agent_id)
+                          const role = agentRoleTemplateMap?.[agent.agent_id] || getAgentRoleTemplate(agentRoleMap?.[agent.agent_id])
+                          return (
+                            <button
+                              key={agent.agent_id}
+                              type="button"
+                              disabled={groupBusy}
+                              onClick={() => toggleGroupAgent(agent.agent_id)}
+                              className={`relative min-w-0 rounded-xl border px-2 py-2 text-left transition ${
+                                checked
+                                  ? 'border-amber-300 bg-amber-50 text-amber-900 ring-2 ring-amber-100 dark:border-amber-500/45 dark:bg-amber-500/15 dark:text-amber-100 dark:ring-amber-500/20'
+                                  : 'border-[#eee6da] bg-white/80 text-slate-600 hover:border-amber-200 hover:bg-amber-50/60 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300 dark:hover:border-amber-500/30 dark:hover:bg-amber-500/10'
+                              }`}
+                              title={`${agent.display_name || agent.agent_id} · ${agent.agent_id}`}
+                            >
+                              <span className={`absolute right-2 top-2 h-2 w-2 rounded-full ${online ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-600'}`} />
+                              <span className="block truncate pr-3 text-xs font-black">{agent.display_name || agent.agent_id}</span>
+                              <span className="mt-1 block truncate text-[10px] font-bold opacity-70">{role.shortLabel}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </section>
                   )
                 })}
               </div>
@@ -2009,31 +2054,60 @@ export function TopicColumn(props: TopicColumnProps) {
                   />
                 </label>
 
-                <label className="block">
-                  <span className="mb-1 block text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '运行主机' : 'Host'}</span>
-                  <select
-                    value={teamHostId}
-                    onChange={(event) => {
-                      const hostId = event.target.value
-                      setTeamHostId(hostId)
-                      setTeamAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[hostId]) || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
-                    }}
-                    disabled={teamBusy || newAgentHosts.length === 0}
-                    className="w-full rounded-xl border border-[#ded6c8] bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-fuchsia-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                  >
-                    {newAgentHosts.length === 0 ? (
-                      <option value="">{zh ? '没有在线可 clone 主机' : 'No online clone host'}</option>
-                    ) : newAgentHosts.map((agent) => {
-                      const runtime = displayRuntimeMap?.[agent.agent_id]
-                      const adapter = normalizeNewAgentAdapter(runtime)
-                      return (
-                        <option key={agent.agent_id} value={agent.agent_id}>
-                          {[agent.display_name || agent.agent_id, adapter, runtime?.hostname].filter(Boolean).join(' · ')}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </label>
+                <div>
+                  <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '运行主机' : 'Host'}</div>
+                  {newAgentHostFolders.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-[#ded6c8] bg-white/60 px-3 py-4 text-xs font-semibold text-slate-500 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-400">
+                      {zh ? '没有在线可 clone 主机。请先启动一个 Codex / Claude Code / Gemini Agent。' : 'No online clone host. Start a Codex / Claude Code / Gemini agent first.'}
+                    </div>
+                  ) : (
+                    <div className="grid max-h-56 gap-2 overflow-y-auto">
+                      {newAgentHostFolders.map((folder) => {
+                        const folderTone = hostFolderTone(folder.key)
+                        const folderInitial = (folder.label.trim()[0] || '?').toUpperCase()
+                        return (
+                          <section key={folder.key} className="rounded-2xl border border-[#eee6da] bg-white/70 p-2 dark:border-zinc-800 dark:bg-zinc-950/60">
+                            <div className="mb-2 flex items-center gap-2">
+                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-[11px] font-black ring-1 ring-white/70 ${folderTone.icon}`}>
+                                {folderInitial}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-xs font-black text-slate-700 dark:text-zinc-200" title={folder.label}>
+                                {folder.label}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {folder.agents.map((agent) => {
+                                const runtime = displayRuntimeMap?.[agent.agent_id]
+                                const adapter = normalizeNewAgentAdapter(runtime)
+                                const active = teamHostId === agent.agent_id
+                                return (
+                                  <button
+                                    key={agent.agent_id}
+                                    type="button"
+                                    disabled={teamBusy}
+                                    onClick={() => {
+                                      setTeamHostId(agent.agent_id)
+                                      setTeamAdapter((adapter || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
+                                    }}
+                                    className={`rounded-xl border px-2 py-2 text-left transition ${
+                                      active
+                                        ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-900 ring-2 ring-fuchsia-100 dark:border-fuchsia-500/45 dark:bg-fuchsia-500/15 dark:text-fuchsia-100 dark:ring-fuchsia-500/20'
+                                        : 'border-[#eee6da] bg-white/80 text-slate-600 hover:border-fuchsia-200 hover:bg-fuchsia-50/60 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300 dark:hover:border-fuchsia-500/30 dark:hover:bg-fuchsia-500/10'
+                                    }`}
+                                    title={`${agent.display_name || agent.agent_id} · ${agent.agent_id}`}
+                                  >
+                                    <span className="block truncate text-xs font-black">{agent.display_name || agent.agent_id}</span>
+                                    <span className="mt-1 block truncate text-[10px] font-bold opacity-70">{adapter || 'adapter'} · online</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </section>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
 
                 <div>
                   <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">Adapter</div>
