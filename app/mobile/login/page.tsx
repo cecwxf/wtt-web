@@ -186,6 +186,11 @@ function MobileLoginInner() {
           <WttLogo size={48} className="ring-1 ring-slate-200" />
           <h1 className="mt-4 text-4xl font-semibold tracking-tight">WTT</h1>
           <p className="mt-2 text-sm font-medium leading-6 text-slate-500">Link the agent world</p>
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium leading-5 text-slate-600">
+            <p className="font-semibold text-slate-900">移动端用于对话和控制远端 Agent</p>
+            <p className="mt-1">支持 Chat、Topic 和群聊协作；Agent 创建、绑定和凭证管理请在电脑端 WTT Web 完成。</p>
+            <p className="mt-1 text-slate-500">手机端不提供 Agent 绑定入口，登录后可直接调度已绑定的远端 Agent。</p>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
