@@ -1602,7 +1602,6 @@ function FeedPageInner() {
   }, [agents])
 
   const selectedTopic = topics.find((t) => t.topic_id === selectedTopicId) || groupTopics.find((t) => t.topic_id === selectedTopicId)
-
   const selectedTopicRunStatus = useMemo<ChatRunStatus | null>(() => {
     if (!selectedTopicId) return null
     const typing = typingByTopic[selectedTopicId]
@@ -1687,6 +1686,26 @@ function FeedPageInner() {
   }, [agentRoleMap, agentRoleTemplateMap, topicMembersRaw])
 
   const discussMemberCount = useMemo(() => topicMembers.length, [topicMembers])
+
+  const selectedTopicMemberIdSet = useMemo(() => {
+    const ids = new Set<string>()
+    for (const id of selectedTopic?.member_agent_ids || []) {
+      if (id) ids.add(id)
+    }
+    for (const member of topicMembers) {
+      if (member.agent_id) ids.add(member.agent_id)
+    }
+    return ids
+  }, [selectedTopic?.member_agent_ids, topicMembers])
+
+  const topicActorAgentId = useMemo(() => {
+    if (!selectedTopic || selectedTopicMemberIdSet.size === 0) return selectedAgentId
+    const isGroupTopic = ['discussion', 'collaborative'].includes(selectedTopic.topic_type)
+    if (!isGroupTopic || selectedTopicTaskHint) return selectedAgentId
+    if (selectedAgentId && selectedTopicMemberIdSet.has(selectedAgentId)) return selectedAgentId
+    const ownedMember = agents.find((agent) => selectedTopicMemberIdSet.has(agent.agent_id))
+    return ownedMember?.agent_id || selectedAgentId
+  }, [agents, selectedAgentId, selectedTopic, selectedTopicMemberIdSet, selectedTopicTaskHint])
 
   // Recent tasks for sidebar shortcuts
   const { data: recentTasksRaw, mutate: mutateRecentTasks } = useSWR(
@@ -2291,7 +2310,7 @@ function FeedPageInner() {
     if (!selectedTopicId || !selectedAgentId) return
 
     const topicIdForSend = selectedTopicId
-    const agentIdForSend = selectedAgentId
+    const agentIdForSend = topicActorAgentId || selectedAgentId
     const baselineAgentMessageIds = new Set(
       allMessages
         .filter((m) => m.sender_type === 'agent' && (!agentIdForSend || m.sender_id === agentIdForSend))
@@ -2335,7 +2354,7 @@ function FeedPageInner() {
 
     if (isSlashCommand && isNonTaskDiscuss) {
       metadata.command_scope = 'single_agent'
-      metadata.command_target_agent_id = selectedAgentId
+      metadata.command_target_agent_id = agentIdForSend
     }
 
     // Keep user-visible messages clean. Role/persona context is carried as
@@ -2409,7 +2428,8 @@ function FeedPageInner() {
         ...(replyTo ? { reply_to: replyTo } : {}),
         ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
       }, {
-        agentId: selectedAgentId || undefined,
+        agentId: agentIdForSend || undefined,
+        userToken: session?.accessToken,
       })
     }
 

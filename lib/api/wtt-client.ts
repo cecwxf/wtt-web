@@ -257,13 +257,17 @@ class WTTApiClient {
       metadata?: Record<string, unknown>
       encrypted?: boolean
     },
-    options?: { agentId?: string }
+    options?: { agentId?: string; userToken?: string }
   ): Promise<Message> {
     const qs = options?.agentId
       ? `?agent_id=${encodeURIComponent(options.agentId)}`
       : ''
+    const headers = options?.userToken
+      ? { Authorization: `Bearer ${options.userToken}` }
+      : undefined
     return this.request<Message>(`/topics/${topicId}/messages${qs}`, {
       method: 'POST',
+      ...(headers ? { headers } : {}),
       body: JSON.stringify(data),
     })
   }
