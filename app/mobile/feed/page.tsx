@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bot, Camera, ChevronDown, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
+import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
@@ -84,6 +84,8 @@ type OptimisticTaskTitle = {
 }
 
 type TopicGroupKey = 'p2p' | 'task' | 'group' | 'subscriber'
+
+type SelectorStep = 'hosts' | 'agents' | 'topics'
 
 type TopicMember = {
   agent_id: string
@@ -598,6 +600,8 @@ export default function MobileFeedPage() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [selectorOpen, setSelectorOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [selectorStep, setSelectorStep] = useState<SelectorStep>('hosts')
+  const [selectedHost, setSelectedHost] = useState('')
   const [attachOpen, setAttachOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
@@ -683,6 +687,13 @@ export default function MobileFeedPage() {
       sheetHistoryRef.current = false
       window.history.back()
     }
+  }, [])
+
+  const openSelector = useCallback(() => {
+    setSearch('')
+    setSelectorStep('hosts')
+    setSelectedHost('')
+    setSelectorOpen(true)
   }, [])
 
   const { data: agentsRaw } = useSWR(
@@ -1193,6 +1204,29 @@ export default function MobileFeedPage() {
       .sort((a, b) => a.host.localeCompare(b.host))
   }, [agents, runtimeMap, search])
 
+  const selectedAgentHost = useMemo(
+    () => selectedAgent ? runtimeHostLabel(selectedAgent, runtimeMap[selectedAgent.agent_id]) : '',
+    [runtimeMap, selectedAgent],
+  )
+
+  const activeHost = selectedHost || selectedAgentHost
+  const activeHostGroup = useMemo(
+    () => groupedAgents.find((group) => group.host === activeHost) || null,
+    [activeHost, groupedAgents],
+  )
+
+  const selectorTitle = selectorStep === 'hosts'
+    ? '选择主机'
+    : selectorStep === 'agents'
+      ? '选择 Agent'
+      : '选择 Topic'
+
+  const selectorSearchPlaceholder = selectorStep === 'hosts'
+    ? '搜索主机或 Agent'
+    : selectorStep === 'agents'
+      ? '搜索当前主机下的 Agent'
+      : '搜索当前 Agent 的 Topic'
+
   const filteredTopics = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return topics
@@ -1549,10 +1583,10 @@ export default function MobileFeedPage() {
     <main className="flex h-[100dvh] overflow-hidden bg-white text-[#0d0d0d] antialiased">
       <section className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3">
-          <button onClick={() => setSelectorOpen(true)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="选择 Agent / Topic">
+          <button onClick={openSelector} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="选择主机 / Agent / Topic">
             <FolderTree className="h-5 w-5" />
           </button>
-          <button onClick={() => setSelectorOpen(true)} className="min-w-0 flex-1 text-left">
+          <button onClick={openSelector} className="min-w-0 flex-1 text-left">
             <div className="flex min-w-0 items-center gap-2">
               <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500" />
               <div className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-6">{compactTopicTitle(selectedTopic)}</div>
@@ -1894,7 +1928,7 @@ export default function MobileFeedPage() {
       </section>
 
       {selectorOpen && (
-        <MobileSheet title="选择 Agent / Topic" onClose={() => closeSheet('selector')}>
+        <MobileSheet title={selectorTitle} onClose={() => closeSheet('selector')}>
           <div className="sticky top-0 z-10 bg-white pb-2">
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
               <Search className="h-4 w-4 text-slate-400" />
@@ -1907,111 +1941,176 @@ export default function MobileFeedPage() {
                   if (!searchInteractiveRef.current) event.currentTarget.blur()
                 }}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜索 Agent / Topic / 群聊"
+                placeholder={selectorSearchPlaceholder}
                 className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none"
               />
             </div>
           </div>
           <div className="space-y-3">
-            <section>
-              <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
-                <FolderTree className="h-4 w-4" />
-                主机目录
-                <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{agents.length}</span>
-              </div>
-              <div className="space-y-1.5">
-                {groupedAgents.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-400">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
-                ) : groupedAgents.map((group) => {
-                  const online = group.rows.filter((a) => onlineAgents.has(a.agent_id)).length
-                  return (
-                    <section key={group.host} className="rounded-xl border border-slate-200 bg-slate-50 p-1.5">
-                      <div className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold text-slate-500">
-                        <span className="min-w-0 truncate">{group.host}</span>
-                        <span className="shrink-0">{online}/{group.rows.length}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {group.rows.map((agent) => {
-                          const runtime = runtimeMap[agent.agent_id]
-                          const active = agent.agent_id === selectedAgentId
-                          return (
-                            <button
-                              key={agent.agent_id}
-                              onClick={() => {
-                                setSelectedAgentId(agent.agent_id)
-                                setSelectedTopicId('')
-                              }}
-                              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium ${active ? 'bg-[#0d0d0d] text-white' : 'bg-white text-slate-700'}`}
-                            >
-                              <Bot className="h-4 w-4 shrink-0" />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate">{labelForAgentInTopic(agent.agent_id, compactAgentName(agent))}</span>
-                                {runtimeLine(runtime) && <span className={`block truncate text-[10px] font-semibold ${active ? 'text-white/70' : 'text-slate-400'}`}>{runtimeLine(runtime)}</span>}
-                              </span>
-                              <span className={`h-2 w-2 rounded-full ${onlineAgents.has(agent.agent_id) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </section>
-                  )
-                })}
-              </div>
-            </section>
-            <section>
-              <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
-                <MessageSquare className="h-4 w-4" />
-                Topics
-                <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{filteredTopics.length}</span>
-              </div>
-              <div className="space-y-2">
-                {(['p2p', 'task', 'group', 'subscriber'] as TopicGroupKey[]).map((groupKey) => {
-                  const items = groupedTopics[groupKey]
-                  const meta = topicGroupMeta(groupKey)
-                  const GroupIcon = meta.Icon
-                  if (items.length === 0 && search.trim()) return null
-                  return (
-                    <div key={groupKey} className="rounded-xl border border-slate-200 bg-white p-1.5">
-                      <div className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-slate-500">
-                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${meta.tone}`}>
-                          <GroupIcon className="h-3.5 w-3.5" />
-                          {meta.label}
+            {selectorStep === 'hosts' && (
+              <section>
+                <div className="mb-2 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-500">
+                  先选择运行 Agent 的主机，再选择该主机下的 Agent，最后进入它的 Topic。
+                </div>
+                <div className="space-y-1.5">
+                  {groupedAgents.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-400">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
+                  ) : groupedAgents.map((group) => {
+                    const online = group.rows.filter((a) => onlineAgents.has(a.agent_id)).length
+                    const active = group.host === selectedAgentHost
+                    return (
+                      <button
+                        key={group.host}
+                        onClick={() => {
+                          setSelectedHost(group.host)
+                          setSearch('')
+                          setSelectorStep('agents')
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left ${active ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-white'}`}
+                      >
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#0d0d0d] text-white' : 'bg-slate-100 text-slate-700'}`}>
+                          <Server className="h-5 w-5" />
                         </span>
-                        <span className="ml-auto text-[10px]">{items.length}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-slate-900">{group.host}</span>
+                          <span className="mt-0.5 block text-xs font-medium text-slate-500">{online} 在线 · {group.rows.length} 个 Agent</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+
+            {selectorStep === 'agents' && (
+              <section>
+                <button
+                  onClick={() => {
+                    setSearch('')
+                    setSelectorStep('hosts')
+                  }}
+                  className="mb-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  返回主机
+                </button>
+                <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold text-slate-500">
+                  <Server className="h-4 w-4" />
+                  <span className="min-w-0 truncate">{activeHost || '选择主机'}</span>
+                  <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px]">{activeHostGroup?.rows.length || 0}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {!activeHostGroup ? (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-400">当前主机下没有匹配的 Agent。</div>
+                  ) : activeHostGroup.rows.map((agent) => {
+                    const runtime = runtimeMap[agent.agent_id]
+                    const active = agent.agent_id === selectedAgentId
+                    return (
+                      <button
+                        key={agent.agent_id}
+                        onClick={() => {
+                          pendingCreatedTopicIdRef.current = ''
+                          setSelectedAgentId(agent.agent_id)
+                          setSelectedTopicId('')
+                          setSearch('')
+                          setSelectorStep('topics')
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left ${active ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-white'}`}
+                      >
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#0d0d0d] text-white' : 'bg-slate-100 text-slate-700'}`}>
+                          <Bot className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-slate-900">{labelForAgentInTopic(agent.agent_id, compactAgentName(agent))}</span>
+                          <span className="mt-0.5 block truncate text-xs font-medium text-slate-500">{runtimeLine(runtime) || compactId(agent.agent_id, 10, 4)}</span>
+                        </span>
+                        <span className={`h-2.5 w-2.5 rounded-full ${onlineAgents.has(agent.agent_id) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+
+            {selectorStep === 'topics' && (
+              <section>
+                <button
+                  onClick={() => {
+                    setSearch('')
+                    setSelectedHost(selectedAgentHost)
+                    setSelectorStep('agents')
+                  }}
+                  className="mb-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  返回 Agent
+                </button>
+                <div className="mb-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 shrink-0 text-slate-600" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
+                      {selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '未选择 Agent'}
+                    </span>
+                    <span className={`h-2.5 w-2.5 rounded-full ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                  </div>
+                  <div className="mt-1 truncate text-xs font-medium text-slate-500">{selectedAgentHost || '未上报主机'}</div>
+                </div>
+                <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
+                  <MessageSquare className="h-4 w-4" />
+                  Topics
+                  <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{filteredTopics.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {(['p2p', 'task', 'group', 'subscriber'] as TopicGroupKey[]).map((groupKey) => {
+                    const items = groupedTopics[groupKey]
+                    const meta = topicGroupMeta(groupKey)
+                    const GroupIcon = meta.Icon
+                    if (items.length === 0 && search.trim()) return null
+                    return (
+                      <div key={groupKey} className="rounded-xl border border-slate-200 bg-white p-1.5">
+                        <div className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-slate-500">
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${meta.tone}`}>
+                            <GroupIcon className="h-3.5 w-3.5" />
+                            {meta.label}
+                          </span>
+                          <span className="ml-auto text-[10px]">{items.length}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {items.length === 0 ? (
+                            <div className="px-3 py-2 text-xs font-semibold text-slate-400">暂无{meta.label}</div>
+                          ) : items.map((topic) => {
+                            const id = topicId(topic)
+                            const TopicIcon = topicIcon(topic)
+                            return (
+                              <button
+                                key={id}
+                                onClick={() => {
+                                  updateTopicUnreadCache(id, (row) => ({ ...row, unread_count: 0 }))
+                                  setSelectedTopicId(id)
+                                  closeSheet('selector')
+                                }}
+                                className={`w-full rounded-lg border px-3 py-2 text-left ${id === selectedTopicId ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-slate-50'}`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <TopicIcon className="h-4 w-4 shrink-0 text-slate-600" />
+                                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
+                                  {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
+                                </div>
+                                <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500">
+                                  {topic.description || topicKindLabel(topic)}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        {items.length === 0 ? (
-                          <div className="px-3 py-2 text-xs font-semibold text-slate-400">暂无{meta.label}</div>
-                        ) : items.map((topic) => {
-                          const id = topicId(topic)
-                          const TopicIcon = topicIcon(topic)
-                          return (
-                            <button
-                              key={id}
-                              onClick={() => {
-                                updateTopicUnreadCache(id, (row) => ({ ...row, unread_count: 0 }))
-                                setSelectedTopicId(id)
-                                closeSheet('selector')
-                              }}
-                              className={`w-full rounded-lg border px-3 py-2 text-left ${id === selectedTopicId ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-slate-50'}`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <TopicIcon className="h-4 w-4 shrink-0 text-slate-600" />
-                                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
-                                {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
-                              </div>
-                              <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500">
-                                {topic.description || topicKindLabel(topic)}
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
           </div>
         </MobileSheet>
       )}
