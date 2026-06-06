@@ -463,6 +463,12 @@ export default function MobileFeedPage() {
   const sheetHistoryRef = useRef(false)
   const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
 
+  const openFilePicker = useCallback((input: HTMLInputElement | null) => {
+    if (!input) return
+    input.click()
+    setAttachOpen(false)
+  }, [])
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       const source = typeof window !== 'undefined'
@@ -1368,10 +1374,10 @@ export default function MobileFeedPage() {
               </button>
               {attachOpen && (
                 <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-xl">
-                  <button onClick={() => { setAttachOpen(false); fileInputRef.current?.click() }} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                  <button onClick={() => openFilePicker(fileInputRef.current)} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <Paperclip className="h-4 w-4" /> 文件/图片
                   </button>
-                  <button onClick={() => { setAttachOpen(false); cameraInputRef.current?.click() }} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                  <button onClick={() => openFilePicker(cameraInputRef.current)} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <Camera className="h-4 w-4" /> 拍照
                   </button>
                   <button onClick={insertLocation} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
@@ -1406,7 +1412,8 @@ export default function MobileFeedPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*,video/*,audio/*,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx,.xls,.xlsx,application/*"
-              className="hidden"
+              className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px opacity-0"
+              tabIndex={-1}
               onChange={(event) => {
                 const file = event.target.files?.[0]
                 if (file) void uploadAsset(file)
@@ -1418,7 +1425,8 @@ export default function MobileFeedPage() {
               type="file"
               accept="image/*"
               capture="environment"
-              className="hidden"
+              className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px opacity-0"
+              tabIndex={-1}
               onChange={(event) => {
                 const file = event.target.files?.[0]
                 if (file) void uploadAsset(file)
