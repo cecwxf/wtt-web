@@ -496,6 +496,16 @@ function getTopicDisplayName(topic: TopicItem) {
   return topic.topic_type === 'p2p' ? name.replace(/^Worker:\s*/i, '') : name
 }
 
+function isDiscussionGroupTopic(topic: TopicItem) {
+  const name = String(topic.name || '').trim()
+  const description = String(topic.description || '').toLowerCase()
+  if (!['discussion', 'collaborative'].includes(topic.topic_type)) return false
+  if (topic.task_id || topic.task_type || topic.task_mode || topic.exec_mode || topic.runner_agent_id) return false
+  if (/^TASK-[a-f0-9]{8}\b/i.test(name)) return false
+  if (description.includes('general task') || description.includes('task_id') || description.includes('task type')) return false
+  return true
+}
+
 type TopicGroupKey = 'p2p' | 'task' | 'discuss' | 'subscriber'
 
 function getTopicGroup(topic: TopicItem): TopicGroupKey {
@@ -1236,7 +1246,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const agentRailGroupTopics = useMemo(() => {
     const seen = new Set<string>()
     return groupTopics
-      .filter((topic) => ['discussion', 'collaborative'].includes(topic.topic_type) && !topic.task_id)
+      .filter(isDiscussionGroupTopic)
       .filter((topic) => {
         if (seen.has(topic.topic_id)) return false
         seen.add(topic.topic_id)

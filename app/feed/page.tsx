@@ -540,6 +540,16 @@ function mapRawTopicToItem(
   }
 }
 
+function isDiscussionGroupTopicItem(topic: TopicItem) {
+  const name = String(topic.name || '').trim()
+  const description = String(topic.description || '').toLowerCase()
+  if (!['discussion', 'collaborative'].includes(topic.topic_type)) return false
+  if (topic.task_id || topic.task_type || topic.task_mode || topic.exec_mode || topic.runner_agent_id) return false
+  if (/^TASK-[a-f0-9]{8}\b/i.test(name)) return false
+  if (description.includes('general task') || description.includes('task_id') || description.includes('task type')) return false
+  return true
+}
+
 function collectTopicSearchText(value: unknown, depth = 0): string {
   if (value == null || depth > 3) return ''
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
@@ -1550,6 +1560,7 @@ function FeedPageInner() {
     return groupTopicsRaw
       .filter((topic: RawTopicRecord & { origin_type?: string; originType?: string }) => !shouldHideFeedTopic(topic as Record<string, unknown>))
       .map((topic: RawTopicRecord) => mapRawTopicToItem(topic))
+      .filter(isDiscussionGroupTopicItem)
       .filter((topic) => {
         if (!topic.topic_id || seen.has(topic.topic_id)) return false
         seen.add(topic.topic_id)
