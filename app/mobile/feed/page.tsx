@@ -120,11 +120,6 @@ type FailedSend = {
   error: string
 }
 
-type ProvisionedAgent = {
-  agent_id: string
-  agent_token: string
-}
-
 function authHeaders(token?: string): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
@@ -560,15 +555,6 @@ export default function MobileFeedPage() {
   const [failedSend, setFailedSend] = useState<FailedSend | null>(null)
   const [browserOnline, setBrowserOnline] = useState(true)
   const [optimisticTaskTitles, setOptimisticTaskTitles] = useState<Record<string, OptimisticTaskTitle>>({})
-  const [claimAgentId, setClaimAgentId] = useState('')
-  const [claimAgentToken, setClaimAgentToken] = useState('')
-  const [claimDisplayName, setClaimDisplayName] = useState('')
-  const [claimingAgent, setClaimingAgent] = useState(false)
-  const [claimAgentMessage, setClaimAgentMessage] = useState('')
-  const [claimAgentError, setClaimAgentError] = useState('')
-  const [provisionDisplayName, setProvisionDisplayName] = useState('')
-  const [provisioningAgent, setProvisioningAgent] = useState(false)
-  const [provisionedAgent, setProvisionedAgent] = useState<ProvisionedAgent | null>(null)
   const [isAndroidWebView, setIsAndroidWebView] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
@@ -641,7 +627,7 @@ export default function MobileFeedPage() {
     }
   }, [])
 
-  const { data: agentsRaw, mutate: mutateAgents } = useSWR(
+  const { data: agentsRaw } = useSWR(
     token ? ['mobile-agents', token] : null,
     async () => {
       const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, { headers: authHeaders(token), cache: 'no-store' })
@@ -1262,84 +1248,6 @@ export default function MobileFeedPage() {
     }
   }, [creatingTask, mutateTopics, selectedAgentId, session, token])
 
-  const claimExistingAgent = useCallback(async () => {
-    if (!token || claimingAgent) return
-    const agentId = claimAgentId.trim()
-    const agentToken = claimAgentToken.trim()
-    if (!agentId || !agentToken) {
-      setClaimAgentError('agent_id 和 agent_token 都不能为空')
-      return
-    }
-    setClaimingAgent(true)
-    setClaimAgentError('')
-    setClaimAgentMessage('')
-    try {
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/claim-existing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify({
-          agent_id: agentId,
-          agent_token: agentToken,
-          display_name: claimDisplayName.trim() || undefined,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(typeof data.detail === 'string' ? data.detail : '绑定 Agent 失败')
-      }
-      const newAgentId = String(data.agent_id || agentId).trim()
-      setClaimAgentMessage('Agent 已绑定')
-      setClaimAgentId('')
-      setClaimAgentToken('')
-      setClaimDisplayName('')
-      await mutateAgents()
-      if (newAgentId) {
-        pendingCreatedTopicIdRef.current = ''
-        setSelectedAgentId(newAgentId)
-        setSelectedTopicId('')
-      }
-    } catch (error) {
-      setClaimAgentError(error instanceof Error ? error.message : '绑定 Agent 失败')
-    } finally {
-      setClaimingAgent(false)
-    }
-  }, [claimAgentId, claimAgentToken, claimDisplayName, claimingAgent, mutateAgents, token])
-
-  const provisionLocalAgent = useCallback(async () => {
-    if (!token || provisioningAgent) return
-    setProvisioningAgent(true)
-    setClaimAgentError('')
-    setClaimAgentMessage('')
-    try {
-      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/provision`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify({
-          display_name: provisionDisplayName.trim() || 'Self-managed Agent',
-          platform: 'openclaw',
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(typeof data.detail === 'string' ? data.detail : '生成 Agent 凭证失败')
-      }
-      const agentId = String(data.agent_id || '').trim()
-      const agentToken = String(data.agent_token || '').trim()
-      if (!agentId || !agentToken) throw new Error('后端未返回 agent_id 或 agent_token')
-      setProvisionedAgent({ agent_id: agentId, agent_token: agentToken })
-      setClaimAgentMessage('Agent 凭证已生成')
-      setProvisionDisplayName('')
-      await mutateAgents()
-      pendingCreatedTopicIdRef.current = ''
-      setSelectedAgentId(agentId)
-      setSelectedTopicId('')
-    } catch (error) {
-      setClaimAgentError(error instanceof Error ? error.message : '生成 Agent 凭证失败')
-    } finally {
-      setProvisioningAgent(false)
-    }
-  }, [mutateAgents, provisionDisplayName, provisioningAgent, token])
-
   const uploadAsset = useCallback(async (file: File) => {
     if (!token) {
       alert('请先登录后再上传附件')
@@ -1484,11 +1392,13 @@ export default function MobileFeedPage() {
         <div ref={scrollRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {!selectedAgentId ? (
             <EmptyCard
-              title="添加 Agent"
-              desc="绑定已有 Agent，或生成本地主机绑定凭证后再开始对话。"
-              actionLabel="绑定 Agent"
+              title="暂无 Agent"
+              desc="请在完整 Web Feed 中管理 Agent，移动端专注对话和 Topic 使用。"
+              actionLabel="打开完整 Web Feed"
               actionIcon={<Bot className="h-4 w-4" />}
-              onAction={() => setSettingsOpen(true)}
+              onAction={() => {
+                window.location.href = '/feed'
+              }}
             />
           ) : !selectedTopicId ? (
             <EmptyCard
@@ -1815,81 +1725,6 @@ export default function MobileFeedPage() {
               <p className="mt-1 text-base font-semibold text-slate-900">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
               <p className="mt-1 text-xs font-medium text-slate-500">{billing?.entitlement?.plan === 'pro' ? 'Pro' : 'Free'} · {quotaText(billing)}</p>
               <p className="mt-1 text-[11px] font-medium text-slate-400">网络 {browserOnline ? '在线' : '离线'} · WebSocket {wsState}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase text-slate-400">Agent 绑定</p>
-              <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                <p className="mb-2 text-sm font-semibold text-slate-900">绑定已有 Agent</p>
-                <div className="space-y-2">
-                <input
-                  value={claimAgentId}
-                  onChange={(event) => setClaimAgentId(event.target.value)}
-                  placeholder="已有 agent_id"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none"
-                />
-                <input
-                  value={claimAgentToken}
-                  onChange={(event) => setClaimAgentToken(event.target.value)}
-                  placeholder="已有 agent_token"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none"
-                />
-                <input
-                  value={claimDisplayName}
-                  onChange={(event) => setClaimDisplayName(event.target.value)}
-                  placeholder="显示名称（可选）"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none"
-                />
-                <button
-                  onClick={() => void claimExistingAgent()}
-                  disabled={!claimAgentId.trim() || !claimAgentToken.trim() || claimingAgent}
-                  className="w-full rounded-2xl bg-[#0d0d0d] px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300"
-                >
-                  {claimingAgent ? '绑定中...' : '绑定已有 Agent'}
-                </button>
-                </div>
-              </div>
-
-              <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                <p className="mb-2 text-sm font-semibold text-slate-900">生成本地 Agent</p>
-                <div className="space-y-2">
-                <input
-                  value={provisionDisplayName}
-                  onChange={(event) => setProvisionDisplayName(event.target.value)}
-                  placeholder="新 Agent 名称（可选）"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none"
-                />
-                <button
-                  onClick={() => void provisionLocalAgent()}
-                  disabled={provisioningAgent}
-                  className="w-full rounded-2xl bg-[#0d0d0d] px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300"
-                >
-                  {provisioningAgent ? '生成中...' : '生成本地 Agent 凭证'}
-                </button>
-                </div>
-              </div>
-
-              {provisionedAgent && (
-                <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
-                  <p className="text-xs font-semibold text-emerald-800">凭证只展示在这里，请在本地主机执行：</p>
-                  <textarea
-                    readOnly
-                    rows={5}
-                    value={[
-                      'npm install -g wtt-connect',
-                      `wtt-connect up codex ${provisionedAgent.agent_id} ${provisionedAgent.agent_token}`,
-                      'wtt-connect start',
-                    ].join('\n')}
-                    className="mt-2 w-full resize-none rounded-xl border border-emerald-100 bg-white p-2 text-xs font-medium leading-5 text-slate-700 outline-none"
-                  />
-                </div>
-              )}
-
-              {claimAgentMessage && <p className="mt-3 text-xs font-semibold text-emerald-600">{claimAgentMessage}</p>}
-              {claimAgentError && <p className="mt-3 text-xs font-semibold text-rose-600">{claimAgentError}</p>}
             </div>
             <a href="/feed" className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-900">打开完整 Web Feed</a>
             <a href={isAndroidWebView ? '/mobile/settings?source=android' : '/mobile/settings'} className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-900">移动端设置页</a>
