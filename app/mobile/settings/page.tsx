@@ -71,6 +71,7 @@ export default function MobileSettingsPage() {
   const plan = String(billing?.entitlement?.plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free'
   const isPro = plan === 'Pro'
   const mobileFeedHref = isAndroidWebView ? '/mobile/feed?source=android' : '/mobile/feed'
+  const upgradeHref = isAndroidWebView ? '/upgrade?source=android' : '/upgrade?source=mobile'
   const mobileLoginCallback = isAndroidWebView
     ? '/mobile/login?callbackUrl=/mobile/feed&source=android'
     : '/mobile/login?callbackUrl=/mobile/feed'
@@ -125,16 +126,18 @@ export default function MobileSettingsPage() {
           </div>
         </div>
 
-        <a href="/upgrade?source=mobile" className="flex items-center gap-3 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white">
+        <a href={upgradeHref} className="flex items-center gap-3 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white">
           <CreditCard className="h-5 w-5" />
           <span className="min-w-0 flex-1">{isPro ? '续费 Pro 会员' : '升级 Pro 会员'}</span>
           <ExternalLink className="h-4 w-4 opacity-80" />
         </a>
 
-        <a href="/feed" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold">
-          <Bot className="h-5 w-5 text-slate-700" />
-          打开完整 Web：绑定已有 Agent / 新建云端 Agent
-        </a>
+        {!isAndroidWebView && (
+          <a href="/feed" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold">
+            <Bot className="h-5 w-5 text-slate-700" />
+            打开完整 Web
+          </a>
+        )}
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">

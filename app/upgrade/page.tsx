@@ -66,9 +66,17 @@ export default function UpgradePage() {
   const [checkoutSession, setCheckoutSession] = useState<CheckoutSession | null>(null);
   const [checkoutStatus, setCheckoutStatus] = useState<string>("");
   const [error, setError] = useState("");
+  const [source, setSource] = useState("");
   const token = (session as SessionWithAccessToken | null)?.accessToken;
   const currentPlan = billing?.entitlement?.plan || "free";
   const isPro = currentPlan === "pro";
+  const isAndroidSource = source === "android";
+  const isMobileSource = isAndroidSource || source === "mobile";
+  const returnHref = isAndroidSource ? "/mobile/settings?source=android" : isMobileSource ? "/mobile/settings" : "/arena";
+  const returnLabel = isMobileSource ? "返回设置" : "返回 Arena";
+  const upgradeCopy = isMobileSource
+    ? "Pro 开放云 Agent、技术面试板块、教育板块和高考板块，并提升云 Agent 请求额度。"
+    : "Free 用户可继续使用自有 Agent。Pro 开放云 Agent、技术面试板块、教育板块和高考板块。";
 
   const usageText = useMemo(() => {
     const limits = billing?.entitlement?.limits;
@@ -76,6 +84,10 @@ export default function UpgradePage() {
     if (!limits || !usage) return "";
     return `${usage.monthly_count || 0}/${limits.monthly_limit || 0} monthly, ${usage.window_count || 0}/${limits.window_limit || 0} current window`;
   }, [billing]);
+
+  useEffect(() => {
+    setSource(String(new URLSearchParams(window.location.search).get("source") || "").toLowerCase());
+  }, []);
 
   async function loadBilling() {
     if (!token) {
@@ -136,6 +148,12 @@ export default function UpgradePage() {
       setError("当前账号已经是 Pro 会员，无需重复支付。");
       return;
     }
+    const checkoutReturnUrl = (checkout: "success" | "cancelled") => {
+      const params = new URLSearchParams({ checkout });
+      if (source) params.set("source", source);
+      return `${window.location.origin}/upgrade?${params.toString()}`;
+    };
+
     const key = `${plan}:${billingMode}`;
     setCheckoutKey(key);
     setError("");
@@ -149,8 +167,8 @@ export default function UpgradePage() {
         body: JSON.stringify({
           plan,
           billing_mode: billingMode,
-          success_url: `${window.location.origin}/upgrade?checkout=success`,
-          cancel_url: `${window.location.origin}/upgrade?checkout=cancelled`,
+          success_url: checkoutReturnUrl("success"),
+          cancel_url: checkoutReturnUrl("cancelled"),
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -176,14 +194,14 @@ export default function UpgradePage() {
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <nav className="mb-10 flex items-center justify-between">
           <Link href="/" className="bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-2xl font-black text-transparent">WTT</Link>
-          <Link href="/arena" className="rounded-md border border-gray-800 bg-[#1e1e1e] px-4 py-2 text-sm font-bold text-gray-300 hover:border-[#3ce8e2] hover:text-[#3ce8e2]">返回 Arena</Link>
+          <Link href={returnHref} className="rounded-md border border-gray-800 bg-[#1e1e1e] px-4 py-2 text-sm font-bold text-gray-300 hover:border-[#3ce8e2] hover:text-[#3ce8e2]">{returnLabel}</Link>
         </nav>
 
         <header className="mb-8">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-[#3ce8e2]">WTT Membership</p>
           <h1 className="mt-4 text-4xl font-black tracking-tight md:text-6xl">升级 Pro</h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-400">
-            Free 用户可继续使用自有 Agent 绑定。Pro 开放云 Agent、技术面试板块、教育板块和高考板块。
+            {upgradeCopy}
           </p>
         </header>
 
