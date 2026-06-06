@@ -9,15 +9,20 @@ import {
   ArrowRight,
   BookOpen,
   BrainCircuit,
+  Car,
   CheckCircle2,
   Cloud,
+  Cpu,
   Crown,
   GraduationCap,
   HardDrive,
   MessageSquareText,
+  Monitor,
   PenTool,
   Power,
+  Server,
   Sparkles,
+  Smartphone,
   TerminalSquare,
   Trophy,
   UsersRound,
@@ -448,6 +453,112 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
   )
 }
 
+function AgentFabricArchitectureCard({ zh }: { zh: boolean }) {
+  const endpoints = zh
+    ? [
+        { label: '云端 Agent', sub: 'Sandbox / Server', icon: Cloud, tone: 'from-sky-300 to-cyan-200 text-sky-950' },
+        { label: 'PC 端 Agent', sub: 'Mac / Windows / Linux', icon: Monitor, tone: 'from-emerald-300 to-teal-200 text-emerald-950' },
+        { label: '车端 Agent', sub: 'Vehicle Domain', icon: Car, tone: 'from-amber-300 to-orange-200 text-amber-950' },
+        { label: '手机端 Agent', sub: 'Mobile Runtime', icon: Smartphone, tone: 'from-rose-300 to-pink-200 text-rose-950' },
+        { label: '边缘端 Agent', sub: 'Edge / IoT', icon: Cpu, tone: 'from-violet-300 to-indigo-200 text-violet-950' },
+      ]
+    : [
+        { label: 'Cloud Agents', sub: 'Sandbox / Server', icon: Cloud, tone: 'from-sky-300 to-cyan-200 text-sky-950' },
+        { label: 'PC Agents', sub: 'Mac / Windows / Linux', icon: Monitor, tone: 'from-emerald-300 to-teal-200 text-emerald-950' },
+        { label: 'Vehicle Agents', sub: 'Vehicle Domain', icon: Car, tone: 'from-amber-300 to-orange-200 text-amber-950' },
+        { label: 'Mobile Agents', sub: 'Mobile Runtime', icon: Smartphone, tone: 'from-rose-300 to-pink-200 text-rose-950' },
+        { label: 'Edge Agents', sub: 'Edge / IoT', icon: Cpu, tone: 'from-violet-300 to-indigo-200 text-violet-950' },
+      ]
+
+  const protocols = zh
+    ? ['统一身份', 'Claim / Register', 'Heartbeat', 'Message / Event', 'Topic Context']
+    : ['Unified Identity', 'Claim / Register', 'Heartbeat', 'Message / Event', 'Topic Context']
+
+  const outputs = zh
+    ? ['跨 Domain 协作计算', '单聊 / 群聊 / 团队 Topic', 'Shell / Workspace / 文件', 'Preview URL 全球分享']
+    : ['Cross-domain collaboration', 'Chat / Group / Team Topics', 'Shell / Workspace / Files', 'Global Preview URLs']
+
+  return (
+    <div className="flex h-full rounded-[2rem] border border-slate-900 bg-slate-950 p-4 text-white shadow-2xl shadow-slate-950/20">
+      <div className="flex h-full w-full flex-col rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(45,212,191,0.24),transparent_35%),linear-gradient(145deg,#0f172a,#062f2d_54%,#43240a)] p-5">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">WTT Agent Fabric</p>
+            <h2 className="mt-1 text-2xl font-black">{zh ? '分布式 Agent Fabric 总线架构' : 'Distributed Agent Fabric Bus Architecture'}</h2>
+          </div>
+          <Sparkles className="h-6 w-6 shrink-0 text-amber-200" />
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          {endpoints.map((endpoint) => (
+            <div key={endpoint.label} className="rounded-2xl border border-white/10 bg-white/10 p-3">
+              <div className="flex items-center gap-3">
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${endpoint.tone}`}>
+                  <endpoint.icon className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-black text-white">{endpoint.label}</span>
+                  <span className="block text-[11px] font-bold text-slate-300">{endpoint.sub}</span>
+                </span>
+              </div>
+            </div>
+          ))}
+          <div className="rounded-2xl border border-dashed border-teal-200/35 bg-teal-300/10 p-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-teal-100 text-slate-950">
+                <Server className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block text-sm font-black text-white">{zh ? '更多 Domain' : 'More Domains'}</span>
+                <span className="block text-[11px] font-bold text-slate-300">{zh ? '统一协议即可接入' : 'Join through one protocol'}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="my-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-teal-200/50 to-teal-200/30" />
+          <span className="rounded-full border border-teal-200/40 bg-teal-200/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-teal-100">
+            {zh ? '统一接入' : 'Unified Access'}
+          </span>
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-teal-200/50 to-teal-200/30" />
+        </div>
+
+        <div className="rounded-[1.5rem] border border-teal-200/30 bg-slate-950/60 p-4 shadow-inner shadow-teal-950/40">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-lg font-black text-teal-100">{zh ? 'Unified Agent Fabric Bus' : 'Unified Agent Fabric Bus'}</p>
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-300">
+                {zh ? '统一接口、统一协议、统一身份、统一 Topic 上下文' : 'Unified interface, protocol, identity, and topic context'}
+              </p>
+            </div>
+            <Workflow className="h-8 w-8 text-teal-200" />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {protocols.map((protocol) => (
+              <span key={protocol} className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-black text-slate-100">
+                {protocol}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          {outputs.map((output) => (
+            <div key={output} className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-bold text-slate-100">
+              {output}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-amber-200/30 bg-amber-200/10 px-4 py-3 text-sm font-black text-amber-100">
+          {zh ? '愿景：Link The Agent World' : 'Vision: Link The Agent World'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AiWorkspaceSoftmaxExample({ zh }: { zh: boolean }) {
   const agents = zh
     ? [
@@ -844,28 +955,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex h-full rounded-[2rem] border border-slate-900 bg-slate-950 p-4 text-white shadow-2xl shadow-slate-950/20">
-            <div className="flex h-full w-full flex-col rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,#0f172a,#062f2d_54%,#43240a)] p-5">
-              <div className="mb-5 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">WTT Agent Fabric</p>
-                  <h2 className="mt-1 text-2xl font-black">{zh ? 'WTT Agent Fabric 的关键功能' : 'Key features of WTT Agent Fabric'}</h2>
-                </div>
-                <Sparkles className="h-6 w-6 text-amber-200" />
-              </div>
-              <div className="grid flex-1 content-center gap-3">
-                {(zh
-                  ? ['新建 Cloud Agent 或绑定已有 Agent', '单 Agent 对话、Shell 和 Workspace', '给 Agent 设置专业角色', '新建群聊：选择多个已有 Agent', '新建团队：按模板 clone 角色 Agent', 'Cloud Agent 生成 Preview URL 全球分享']
-                  : ['Create Cloud Agent or bind an existing agent', 'Single-agent chat, Shell, and Workspace', 'Assign professional roles', 'New Group: select existing agents', 'New Team: clone role agents from a template', 'Cloud Agent creates Preview URLs for global sharing']
-                ).map((item, index) => (
-                  <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 p-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-300 text-xs font-black text-slate-950">{index + 1}</span>
-                    <span className="text-sm font-bold text-slate-100">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <AgentFabricArchitectureCard zh={zh} />
         </section>
 
         <CloudAgentBillingExplainer zh={zh} />
