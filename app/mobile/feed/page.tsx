@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bot, Camera, ChevronDown, ClipboardList, Clock3, FolderTree, Hash, LocateFixed, Lock, LogOut, Menu, MessageSquare, Paperclip, Radio, Search, Send, Settings, SquarePen, Users, WifiOff, X, Zap } from 'lucide-react'
+import { Bot, Camera, ChevronDown, ClipboardList, Clock3, FolderTree, Hash, LocateFixed, Lock, LogOut, Menu, MessageSquare, Paperclip, Radio, Search, Send, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
@@ -215,6 +215,32 @@ function stripMobileMetaBlocks(content: string): string {
   return cleaned.trim()
 }
 
+const MOBILE_PROGRESS_PATTERNS = [
+  /^Time:\s*\d{1,2}:\d{2}:\d{2}\s*\n\s*Progress:\s*\d+%/m,
+  /^Status:\s*\[Task:/m,
+  /^\[STATUS\]\s*(Started|Completed)/m,
+  /^Plan Mode result:/m,
+  /^Plan Mode结果/m,
+  /^Progress:\s*\d+%\s*$/m,
+  /^\[TASK_STATUS\]/m,
+  /^\[TASK_RUN\]/m,
+  /^\[[^\]]+\]\s*状态=.*\|\s*动作=.*心跳=\d+s/m,
+  /^\[[^\]]+\]\s*\|\s*状态\s*=\s*doing\b.*心跳=\d+s/m,
+  /^\[[^\]]+\]\s*\|\s*状态\s*=\s*doing\b/m,
+  /^🤔\s*Agent thinking/m,
+]
+
+function isMobileProgressMessage(content: string): boolean {
+  const cleaned = stripMobileMetaBlocks(content).trim()
+  if (!cleaned) return true
+  return MOBILE_PROGRESS_PATTERNS.some((pattern) => pattern.test(cleaned))
+}
+
+function isMobileStatusRecord(record: Record<string, unknown>): boolean {
+  const semantic = String(record.semantic_type || record.message_type || record.kind || '').trim()
+  return ['task_request', 'TASK_REQUEST', 'task_status', 'TASK_STATUS', 'system', 'SYSTEM', 'notification', 'NOTIFICATION'].includes(semantic)
+}
+
 function filenameFromUrl(url: string): string {
   const clean = decodeURIComponent(String(url || '').split('?')[0].split('#')[0])
   return clean.split('/').pop() || 'file'
@@ -308,18 +334,20 @@ function humanSender(session: unknown): string {
 
 function normalizeMessages(raw: unknown): ChatMessage[] {
   const rows = Array.isArray(raw) ? raw : []
-  return rows.map((item) => {
+  return rows.flatMap((item) => {
     const rec = item as Record<string, unknown>
+    const content = String(rec.content || '')
+    if (isMobileStatusRecord(rec) || isMobileProgressMessage(content)) return []
     const senderType = String(rec.sender_type || '').toLowerCase() === 'agent' ? 'agent' : 'human'
-    return {
+    return [{
       message_id: String(rec.message_id || rec.id || `${rec.created_at || Date.now()}-${Math.random()}`),
       topic_id: String(rec.topic_id || ''),
       sender_id: String(rec.sender_id || ''),
       sender_display_name: rec.sender_display_name ? String(rec.sender_display_name) : undefined,
       sender_type: senderType,
-      content: String(rec.content || ''),
+      content,
       timestamp: String(rec.timestamp || rec.created_at || new Date().toISOString()),
-    }
+    }]
   })
 }
 
@@ -329,6 +357,7 @@ function normalizeWsMessage(raw: unknown): ChatMessage | null {
   const id = String(msg.message_id || msg.id || '')
   const content = String(msg.content || '')
   if (!id || !content) return null
+  if (isMobileStatusRecord(msg) || isMobileStatusRecord(rec) || isMobileProgressMessage(content)) return null
   return {
     message_id: id,
     topic_id: String(msg.topic_id || ''),
@@ -342,7 +371,7 @@ function normalizeWsMessage(raw: unknown): ChatMessage | null {
 
 function shouldCountUnreadMessage(message: ChatMessage): boolean {
   const content = stripMobileMetaBlocks(message.content).trim()
-  return Boolean(content && !content.startsWith('[TASK_STATUS]'))
+  return Boolean(content && !isMobileProgressMessage(content))
 }
 
 function collectNestedRecords(value: unknown, out: Record<string, unknown>[] = [], depth = 0): Record<string, unknown>[] {
@@ -439,7 +468,7 @@ export default function MobileFeedPage() {
   const [attachOpen, setAttachOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
-  const [typingByTopic, setTypingByTopic] = useState<Record<string, TypingState>>({})
+  const [, setTypingByTopic] = useState<Record<string, TypingState>>({})
   const [creatingTask, setCreatingTask] = useState(false)
   const [failedSend, setFailedSend] = useState<FailedSend | null>(null)
   const [browserOnline, setBrowserOnline] = useState(true)
@@ -828,7 +857,6 @@ export default function MobileFeedPage() {
     return () => window.clearInterval(timer)
   }, [])
 
-  const runStatus = selectedTopicId ? typingByTopic[selectedTopicId] : undefined
   const SelectedTopicIcon = topicIcon(selectedTopic)
   const selectedTopicMeta = selectedTopic
     ? [
@@ -1233,21 +1261,6 @@ export default function MobileFeedPage() {
           </div>
         )}
 
-        {runStatus && (
-          <div className="mx-3 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
-            <div className="flex items-center gap-2 font-semibold text-amber-900">
-              <Zap className="h-3.5 w-3.5" />
-              <span className="truncate">{runStatus.agentName || runStatus.agentId} 正在执行</span>
-              <span className="ml-auto text-[10px] font-medium text-amber-700">{wsState}</span>
-            </div>
-            <div className="mt-1 max-h-20 space-y-1 overflow-hidden text-[11px] font-medium leading-4 text-amber-800/85">
-              {(runStatus.statusLines.length ? runStatus.statusLines : [{ id: 'status', text: runStatus.statusText || '等待 Agent 状态更新' }]).slice(-4).map((line) => (
-                <p key={line.id} className="truncate">{line.text}</p>
-              ))}
-            </div>
-          </div>
-        )}
-
         {isGroupTopic(selectedTopic) && selectedTopicMembers.length > 0 && (
           <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <Users className="h-4 w-4 shrink-0 text-slate-600" />
@@ -1285,7 +1298,7 @@ export default function MobileFeedPage() {
               onAction={() => void createDefaultTask()}
             />
           ) : messages.length === 0 ? (
-            <EmptyCard title="开始对话" desc="发送第一条消息，Agent 的执行状态会显示在聊天区上方。" />
+            <EmptyCard title="开始对话" desc="发送第一条消息，Agent 的回复会显示在这里。" />
           ) : (
             messages.map((message) => {
               const isMine = message.sender_type === 'human'
