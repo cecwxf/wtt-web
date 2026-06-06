@@ -75,8 +75,13 @@ export default function UpgradePage() {
   const returnHref = isAndroidSource ? "/mobile/settings?source=android" : isMobileSource ? "/mobile/settings" : "/arena";
   const returnLabel = isMobileSource ? "返回设置" : "返回 Arena";
   const upgradeCopy = isMobileSource
-    ? "Pro 开放云 Agent、技术面试板块、教育板块和高考板块，并提升云 Agent 请求额度。"
+    ? "Pro 开放云 Agent 使用能力，并提升移动端云 Agent 请求额度。"
     : "Free 用户可继续使用自有 Agent。Pro 开放云 Agent、技术面试板块、教育板块和高考板块。";
+  const visiblePlanFeatures = (features: string[]) => (
+    isMobileSource
+      ? ["可申请云 Agent", "更高云 Agent 请求额度", "会员有效期 1 个月"]
+      : features
+  );
 
   const usageText = useMemo(() => {
     const limits = billing?.entitlement?.limits;
@@ -270,7 +275,7 @@ export default function UpgradePage() {
               <div className="mt-5 space-y-3 text-sm text-gray-300">
                 <p>{plan.requestWindow}</p>
                 <p>{plan.requestMonthly}</p>
-                {plan.features.map((feature) => (
+                {visiblePlanFeatures(plan.features).map((feature) => (
                   <p key={feature} className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-[#3ce8e2]" />
                     <span>{feature}</span>
