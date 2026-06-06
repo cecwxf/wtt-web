@@ -199,7 +199,7 @@ async function mockAuthenticatedMobileApi(
 test('mobile login renders compact auth UI', async ({ page }) => {
   await page.goto('/mobile/login?callbackUrl=/mobile/feed')
   await expect(page.getByRole('heading', { name: 'WTT' })).toBeVisible()
-  await expect(page.getByText('移动端工作台')).toBeVisible()
+  await expect(page.getByText('Link the agent world')).toBeVisible()
   await expect(page.getByRole('button', { name: '登录', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '注册', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '手机密码' })).toBeVisible()

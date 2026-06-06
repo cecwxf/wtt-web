@@ -3,8 +3,9 @@
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FormEvent, Suspense, useEffect, useState } from 'react'
-import { Github, Lock, Phone, Send, ShieldCheck, Twitter, User } from 'lucide-react'
+import { Github, Lock, Phone, Send, Twitter, User } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { WttLogo } from '@/components/ui/wtt-logo'
 
 type AuthTab = 'signin' | 'register'
 type SignInMode = 'password' | 'code'
@@ -182,11 +183,9 @@ function MobileLoginInner() {
     <main className="flex min-h-[100dvh] flex-col bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-[#0d0d0d] antialiased">
       <section className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center">
         <div className="mb-7">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0d0d0d] text-white">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
+          <WttLogo size={48} className="ring-1 ring-slate-200" />
           <h1 className="mt-4 text-4xl font-semibold tracking-tight">WTT</h1>
-          <p className="mt-2 text-sm font-medium leading-6 text-slate-500">移动端工作台</p>
+          <p className="mt-2 text-sm font-medium leading-6 text-slate-500">Link the agent world</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
