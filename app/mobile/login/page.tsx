@@ -179,46 +179,46 @@ function MobileLoginInner() {
   }
 
   return (
-    <main className="flex min-h-[100dvh] flex-col bg-[#f7f4ee] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-slate-950">
+    <main className="flex min-h-[100dvh] flex-col bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-[#0d0d0d] antialiased">
       <section className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center">
-        <div className="mb-6">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm shadow-slate-900/15">
+        <div className="mb-7">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0d0d0d] text-white">
             <ShieldCheck className="h-6 w-6" />
           </div>
-          <h1 className="mt-4 text-3xl font-black tracking-tight">WTT</h1>
-          <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">移动端工作台</p>
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight">WTT</h1>
+          <p className="mt-2 text-sm font-medium leading-6 text-slate-500">移动端工作台</p>
         </div>
 
-        <div className="rounded-2xl border border-[#eadfce] bg-white p-4 shadow-sm shadow-slate-900/5">
-          <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 text-sm font-black">
-            <button type="button" onClick={() => switchTab('signin')} className={`rounded-xl py-2 ${tab === 'signin' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>登录</button>
-            <button type="button" onClick={() => switchTab('register')} className={`rounded-xl py-2 ${tab === 'register' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>注册</button>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-slate-100 p-1 text-sm font-semibold">
+            <button type="button" onClick={() => switchTab('signin')} className={`rounded-full py-2 transition ${tab === 'signin' ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-slate-500'}`}>登录</button>
+            <button type="button" onClick={() => switchTab('register')} className={`rounded-full py-2 transition ${tab === 'register' ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-slate-500'}`}>注册</button>
           </div>
 
           {tab === 'signin' ? (
             <form onSubmit={submit}>
-              <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 text-sm font-black">
-                <button type="button" onClick={() => setMode('password')} className={`rounded-xl py-2 ${mode === 'password' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>手机密码</button>
-                <button type="button" onClick={() => setMode('code')} className={`rounded-xl py-2 ${mode === 'code' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>验证码</button>
+              <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-slate-100 p-1 text-sm font-semibold">
+                <button type="button" onClick={() => setMode('password')} className={`rounded-full py-2 transition ${mode === 'password' ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-slate-500'}`}>手机密码</button>
+                <button type="button" onClick={() => setMode('code')} className={`rounded-full py-2 transition ${mode === 'code' ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-slate-500'}`}>验证码</button>
               </div>
 
-              <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 focus-within:border-slate-400">
                 <Phone className="h-4 w-4 text-slate-400" />
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="手机号" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="手机号" className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-slate-400" />
               </label>
 
               {mode === 'password' ? (
-                <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 focus-within:border-slate-400">
                   <Lock className="h-4 w-4 text-slate-400" />
-                  <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="密码" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
+                  <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="密码" className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-slate-400" />
                 </label>
               ) : (
                 <div className="mb-3 flex gap-2">
-                  <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 focus-within:border-slate-400">
                     <Lock className="h-4 w-4 text-slate-400" />
-                    <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="验证码" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
+                    <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="验证码" className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-slate-400" />
                   </label>
-                  <button type="button" onClick={() => sendPhoneCode(phone, 'login')} disabled={sendingCode === 'login' || countdown.login > 0} className="min-w-20 rounded-xl bg-slate-950 px-3 text-xs font-black text-white disabled:bg-slate-300">
+                  <button type="button" onClick={() => sendPhoneCode(phone, 'login')} disabled={sendingCode === 'login' || countdown.login > 0} className="min-w-20 rounded-2xl bg-[#0d0d0d] px-3 text-xs font-semibold text-white disabled:bg-slate-300">
                     {sendingCode === 'login' ? '发送中' : countdown.login > 0 ? `${countdown.login}s` : '发验证码'}
                   </button>
                 </div>
@@ -227,47 +227,47 @@ function MobileLoginInner() {
               {error && <p className="mb-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-600">{error}</p>}
               {info && <p className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold leading-5 text-emerald-700">{info}</p>}
 
-              <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 py-3.5 text-sm font-black text-white shadow-sm shadow-sky-900/15 disabled:bg-slate-300 disabled:shadow-none">
+              <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0d0d0d] py-3.5 text-sm font-semibold text-white disabled:bg-slate-300">
                 <Send className="h-4 w-4" />
                 {loading ? '登录中...' : '进入 WTT'}
               </button>
             </form>
           ) : (
             <form onSubmit={register}>
-              <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 focus-within:border-slate-400">
                 <User className="h-4 w-4 text-slate-400" />
-                <input value={registerName} onChange={(e) => setRegisterName(e.target.value)} autoComplete="name" placeholder="昵称" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
+                <input value={registerName} onChange={(e) => setRegisterName(e.target.value)} autoComplete="name" placeholder="昵称" className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-slate-400" />
               </label>
 
-              <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 focus-within:border-slate-400">
                 <Phone className="h-4 w-4 text-slate-400" />
-                <input value={registerPhone} onChange={(e) => setRegisterPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="手机号" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
+                <input value={registerPhone} onChange={(e) => setRegisterPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="手机号" className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-slate-400" />
               </label>
 
               <div className="mb-3 flex gap-2">
-                <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 focus-within:border-slate-400">
                   <Lock className="h-4 w-4 text-slate-400" />
-                  <input value={registerCode} onChange={(e) => setRegisterCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="验证码" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
+                  <input value={registerCode} onChange={(e) => setRegisterCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="验证码" className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-slate-400" />
                 </label>
-                <button type="button" onClick={() => sendPhoneCode(registerPhone, 'register')} disabled={sendingCode === 'register' || countdown.register > 0} className="min-w-20 rounded-xl bg-slate-950 px-3 text-xs font-black text-white disabled:bg-slate-300">
+                <button type="button" onClick={() => sendPhoneCode(registerPhone, 'register')} disabled={sendingCode === 'register' || countdown.register > 0} className="min-w-20 rounded-2xl bg-[#0d0d0d] px-3 text-xs font-semibold text-white disabled:bg-slate-300">
                   {sendingCode === 'register' ? '发送中' : countdown.register > 0 ? `${countdown.register}s` : '发验证码'}
                 </button>
               </div>
 
-              <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 focus-within:border-slate-400">
                 <Lock className="h-4 w-4 text-slate-400" />
-                <input value={registerPassword} onChange={(e) => setRegisterPassword(e.target.value)} type="password" autoComplete="new-password" placeholder="密码，至少 8 位" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
+                <input value={registerPassword} onChange={(e) => setRegisterPassword(e.target.value)} type="password" autoComplete="new-password" placeholder="密码，至少 8 位" className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-slate-400" />
               </label>
 
-              <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 focus-within:border-slate-400">
                 <Lock className="h-4 w-4 text-slate-400" />
-                <input value={registerPassword2} onChange={(e) => setRegisterPassword2(e.target.value)} type="password" autoComplete="new-password" placeholder="确认密码" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
+                <input value={registerPassword2} onChange={(e) => setRegisterPassword2(e.target.value)} type="password" autoComplete="new-password" placeholder="确认密码" className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-slate-400" />
               </label>
 
               {error && <p className="mb-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-600">{error}</p>}
               {info && <p className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold leading-5 text-emerald-700">{info}</p>}
 
-              <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 py-3.5 text-sm font-black text-white shadow-sm shadow-sky-900/15 disabled:bg-slate-300 disabled:shadow-none">
+              <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0d0d0d] py-3.5 text-sm font-semibold text-white disabled:bg-slate-300">
                 <Send className="h-4 w-4" />
                 {loading ? '注册中...' : '注册并进入 WTT'}
               </button>
@@ -276,9 +276,9 @@ function MobileLoginInner() {
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <button aria-label="GitHub 登录" onClick={() => oauth('github')} className="flex h-12 items-center justify-center rounded-xl border border-[#eadfce] bg-white shadow-sm shadow-slate-900/5"><Github className="h-5 w-5" /></button>
-          <button aria-label="Google 登录" onClick={() => oauth('google')} className="h-12 rounded-xl border border-[#eadfce] bg-white text-sm font-black shadow-sm shadow-slate-900/5">G</button>
-          <button aria-label="X 登录" onClick={() => oauth('twitter')} className="flex h-12 items-center justify-center rounded-xl border border-[#eadfce] bg-white shadow-sm shadow-slate-900/5"><Twitter className="h-5 w-5" /></button>
+          <button aria-label="GitHub 登录" onClick={() => oauth('github')} className="flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-800"><Github className="h-5 w-5" /></button>
+          <button aria-label="Google 登录" onClick={() => oauth('google')} className="h-12 rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-800">G</button>
+          <button aria-label="X 登录" onClick={() => oauth('twitter')} className="flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-800"><Twitter className="h-5 w-5" /></button>
         </div>
       </section>
     </main>
@@ -287,7 +287,7 @@ function MobileLoginInner() {
 
 export default function MobileLoginPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[100dvh] items-center justify-center bg-[#f8f3ea] text-sm font-bold text-slate-500">Loading...</div>}>
+    <Suspense fallback={<div className="flex min-h-[100dvh] items-center justify-center bg-white text-sm font-medium text-slate-500">Loading...</div>}>
       <MobileLoginInner />
     </Suspense>
   )

@@ -84,69 +84,69 @@ export default function MobileSettingsPage() {
   }
 
   return (
-    <main className="min-h-[100dvh] bg-[#f7f4ee] px-4 py-[max(1rem,env(safe-area-inset-top))] text-slate-950">
+    <main className="min-h-[100dvh] bg-white px-4 py-[max(1rem,env(safe-area-inset-top))] text-[#0d0d0d] antialiased">
       <header className="flex items-center gap-3">
-        <button onClick={() => router.push(mobileFeedHref)} className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        <button onClick={() => router.push(mobileFeedHref)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
-          <p className="text-lg font-black">设置</p>
-          <p className="text-xs font-semibold text-slate-500">WTT Mobile</p>
+          <p className="text-lg font-semibold">设置</p>
+          <p className="text-xs font-medium text-slate-500">WTT Mobile</p>
         </div>
       </header>
 
       <section className="mt-6 space-y-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
               <Settings className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-base font-black">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
-              <p className="truncate text-xs font-semibold text-slate-500">{session?.user?.email || '已登录'}</p>
+              <p className="truncate text-base font-semibold">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
+              <p className="truncate text-xs font-medium text-slate-500">{session?.user?.email || '已登录'}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
               <CreditCard className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-base font-black">{plan} 用户</p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+              <p className="text-base font-semibold">{plan} 用户</p>
+              <p className="mt-1 text-xs font-medium leading-5 text-slate-500">
                 Cloud Agent 本月 {billing?.cloud_agent_usage?.monthly_count || 0}/{billing?.entitlement?.limits?.monthly_limit || 500} 次，连续 {billing?.cloud_agent_usage?.window_count || 0}/{billing?.entitlement?.limits?.window_limit || 30} 次。
               </p>
               {billing?.entitlement?.ends_at && (
-                <p className="mt-1 text-[11px] font-bold text-slate-400">有效期至 {billing.entitlement.ends_at}</p>
+                <p className="mt-1 text-[11px] font-medium text-slate-400">有效期至 {billing.entitlement.ends_at}</p>
               )}
             </div>
           </div>
         </div>
 
-        <a href="/upgrade?source=mobile" className="flex items-center gap-3 rounded-2xl border border-sky-100 bg-sky-600 p-4 text-sm font-black text-white shadow-sm shadow-sky-900/15">
+        <a href="/upgrade?source=mobile" className="flex items-center gap-3 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white">
           <CreditCard className="h-5 w-5" />
           <span className="min-w-0 flex-1">{isPro ? '续费 Pro 会员' : '升级 Pro 会员'}</span>
           <ExternalLink className="h-4 w-4 opacity-80" />
         </a>
 
-        <a href="/feed" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-black shadow-sm shadow-slate-900/5">
-          <Bot className="h-5 w-5 text-sky-600" />
+        <a href="/feed" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold">
+          <Bot className="h-5 w-5 text-slate-700" />
           打开完整 Web：绑定已有 Agent / 新建云端 Agent
         </a>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
               <Activity className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-base font-black">运行诊断</p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+              <p className="text-base font-semibold">运行诊断</p>
+              <p className="mt-1 text-xs font-medium leading-5 text-slate-500">
                 {isAndroidWebView ? 'Android WebView' : 'Mobile Web'} · {browserOnline ? '网络在线' : '网络离线'} · {status === 'authenticated' ? '已登录' : status}
               </p>
-              <p className="mt-1 truncate text-[11px] font-bold text-slate-400">API {CLIENT_WTT_API_BASE}</p>
+              <p className="mt-1 truncate text-[11px] font-medium text-slate-400">API {CLIENT_WTT_API_BASE}</p>
             </div>
           </div>
         </div>
@@ -154,7 +154,7 @@ export default function MobileSettingsPage() {
         {isAndroidWebView && (
           <button
             onClick={resetAndroidSession}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-black text-slate-700 shadow-sm shadow-slate-900/5"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-700"
           >
             清缓存并重新登录
           </button>
@@ -162,7 +162,7 @@ export default function MobileSettingsPage() {
 
         <button
           onClick={() => signOut({ callbackUrl: mobileLoginCallback })}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 p-4 text-sm font-black text-white shadow-sm shadow-slate-900/15"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white"
         >
           <LogOut className="h-4 w-4" />
           退出登录

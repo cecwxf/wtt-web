@@ -245,8 +245,8 @@ function MobileMarkdownLink({ href, children }: { href?: string; children?: Reac
   const meta = mobileFileMeta(label, url)
   if (meta.isAttachment) {
     return (
-      <a href={url} target="_blank" rel="noreferrer" className="my-1 inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm">
-        <span className="shrink-0 rounded-md bg-sky-50 px-1.5 py-1 text-[10px] font-black text-sky-700">{meta.kind}</span>
+      <a href={url} target="_blank" rel="noreferrer" className="my-1 inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+        <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-1 text-[10px] font-semibold text-slate-700">{meta.kind}</span>
         <span className="min-w-0 truncate">{meta.name}</span>
       </a>
     )
@@ -1185,22 +1185,22 @@ export default function MobileFeedPage() {
   }, [])
 
   if (status === 'loading') {
-    return <div className="flex min-h-[100dvh] items-center justify-center bg-[#f8f3ea] text-sm font-bold text-slate-500">Loading WTT...</div>
+    return <div className="flex min-h-[100dvh] items-center justify-center bg-white text-sm font-medium text-slate-500">Loading WTT...</div>
   }
 
   return (
-    <main className="flex h-[100dvh] overflow-hidden bg-[#f7f4ee] text-slate-950">
+    <main className="flex h-[100dvh] overflow-hidden bg-white text-[#0d0d0d] antialiased">
       <section className="relative flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-[#e5dac8] bg-white/95 px-3 shadow-[0_1px_0_rgba(15,23,42,0.03)] backdrop-blur">
-          <button onClick={() => setSelectorOpen(true)} className="rounded-2xl border border-slate-200 bg-[#fafafa] p-2 text-slate-700 shadow-sm">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3">
+          <button onClick={() => setSelectorOpen(true)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100">
             <Menu className="h-5 w-5" />
           </button>
           <button onClick={() => setSelectorOpen(true)} className="min-w-0 flex-1 text-left">
             <div className="flex min-w-0 items-center gap-2">
               <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500" />
-              <div className="truncate text-[15px] font-black leading-5">{selectedTopic?.name || '选择 Topic'}</div>
+              <div className="truncate text-[15px] font-semibold leading-5">{selectedTopic?.name || '选择 Topic'}</div>
             </div>
-            <div className="flex items-center gap-1 truncate text-[11px] font-semibold text-slate-500">
+            <div className="flex items-center gap-1 truncate text-[11px] font-medium text-slate-500">
               <span className={`h-2 w-2 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
               <span className="truncate">{selectedAgent ? displayName(selectedAgent) : '选择 Agent'}</span>
               {selectedTopicMeta && <span className="truncate">· {selectedTopicMeta}</span>}
@@ -1210,31 +1210,31 @@ export default function MobileFeedPage() {
           <button
             onClick={() => void createDefaultTask()}
             disabled={!selectedAgentId || creatingTask}
-            className="rounded-2xl border border-slate-200 bg-[#fafafa] p-2 text-slate-700 shadow-sm disabled:text-slate-300"
+            className="rounded-xl p-2 text-slate-700 hover:bg-slate-100 disabled:text-slate-300"
             aria-label="新建对话"
           >
             <SquarePen className={`h-5 w-5 ${creatingTask ? 'animate-pulse' : ''}`} />
           </button>
-          <button onClick={() => setSettingsOpen(true)} className="rounded-2xl border border-slate-200 bg-[#fafafa] p-2 text-slate-700 shadow-sm" aria-label="设置">
+          <button onClick={() => setSettingsOpen(true)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="设置">
             <Settings className="h-5 w-5" />
           </button>
         </header>
 
         {!browserOnline && (
-          <div className="mx-3 mt-2 flex items-center gap-2 rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-bold text-orange-800 shadow-sm">
+          <div className="mx-3 mt-2 flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-medium text-orange-800">
             <WifiOff className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1">当前网络离线，草稿和附件会保留，恢复后可继续发送。</span>
           </div>
         )}
 
         {runStatus && (
-          <div className="mx-3 mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs shadow-sm">
-            <div className="flex items-center gap-2 font-black text-amber-900">
+          <div className="mx-3 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 font-semibold text-amber-900">
               <Zap className="h-3.5 w-3.5" />
               <span className="truncate">{runStatus.agentName || runStatus.agentId} 正在执行</span>
-              <span className="ml-auto text-[10px] font-bold text-amber-700">{wsState}</span>
+              <span className="ml-auto text-[10px] font-medium text-amber-700">{wsState}</span>
             </div>
-            <div className="mt-1 max-h-20 space-y-1 overflow-hidden text-[11px] font-semibold leading-4 text-amber-800/85">
+            <div className="mt-1 max-h-20 space-y-1 overflow-hidden text-[11px] font-medium leading-4 text-amber-800/85">
               {(runStatus.statusLines.length ? runStatus.statusLines : [{ id: 'status', text: runStatus.statusText || '等待 Agent 状态更新' }]).slice(-4).map((line) => (
                 <p key={line.id} className="truncate">{line.text}</p>
               ))}
@@ -1243,24 +1243,24 @@ export default function MobileFeedPage() {
         )}
 
         {isGroupTopic(selectedTopic) && selectedTopicMembers.length > 0 && (
-          <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-2xl border border-sky-100 bg-sky-50 px-3 py-2">
-            <Users className="h-4 w-4 shrink-0 text-sky-600" />
-            <span className="shrink-0 text-[11px] font-black text-sky-700">群聊</span>
+          <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <Users className="h-4 w-4 shrink-0 text-slate-600" />
+            <span className="shrink-0 text-[11px] font-semibold text-slate-700">群聊</span>
             {selectedTopicMembers.slice(0, 8).map((member) => {
               const label = member.display_name || member.agent_id
               return (
-                <span key={member.agent_id} className="max-w-32 shrink-0 truncate rounded-full bg-white px-2 py-1 text-[11px] font-bold text-slate-600 shadow-sm">
+                <span key={member.agent_id} className="max-w-32 shrink-0 truncate rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-600">
                   {label}
                 </span>
               )
             })}
             {selectedTopicMembers.length > 8 && (
-              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-slate-500 shadow-sm">+{selectedTopicMembers.length - 8}</span>
+              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-500">+{selectedTopicMembers.length - 8}</span>
             )}
           </div>
         )}
 
-        <div ref={scrollRef} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-3 py-4">
+        <div ref={scrollRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {!selectedAgentId ? (
             <EmptyCard
               title="添加 Agent"
@@ -1286,27 +1286,25 @@ export default function MobileFeedPage() {
               const label = senderLabel(message)
               const cleanContent = stripMobileMetaBlocks(message.content)
               return (
-                <article key={message.message_id} className={`group rounded-xl border transition-colors hover:bg-white ${
-                  isMine ? 'border-[#eadfce] bg-white/70' : 'border-sky-100 bg-white/85 shadow-sm shadow-sky-900/5'
-                }`}>
+                <article key={message.message_id} className="group rounded-xl transition-colors hover:bg-slate-50">
                   <div className="flex items-start gap-2.5 px-2.5 py-2.5">
-                    <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-black shadow-sm ${
-                      isMine ? 'border-[#e2ddd4] bg-[#f4f1eb] text-[#766f64]' : 'border-sky-100 bg-sky-600 text-white'
+                    <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                      isMine ? 'bg-slate-100 text-slate-700' : 'bg-[#0d0d0d] text-white'
                     }`}>
                       {agentInitial(label)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="mb-0.5 flex min-w-0 items-center gap-1.5 px-1 text-[12px] font-semibold text-[#2b2f33]">
+                      <div className="mb-0.5 flex min-w-0 items-center gap-1.5 px-1 text-[12px] font-medium text-slate-800">
                         <span className="truncate">{label}</span>
-                        <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-                          isMine ? 'bg-[#f1eee7] text-[#766f64]' : 'bg-[#eee8dd] text-[#9a4b00]'
+                        <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
+                          isMine ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-600'
                         }`}>
                           {isMine ? 'You' : 'AI'}
                         </span>
                         <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-400">{shortTime(message.timestamp)}</span>
                       </div>
-                      <div className={`w-full rounded-lg px-2.5 py-2 text-[14px] leading-7 ${
-                        isMine ? 'bg-[#f4f1eb] text-[#283038]' : 'bg-[#f8fbff] text-[#283038]'
+                      <div className={`w-full rounded-2xl px-3 py-2 text-[14px] leading-7 ${
+                        isMine ? 'bg-slate-100 text-[#0d0d0d]' : 'bg-white text-[#0d0d0d]'
                       }`}>
                         <div className="prose prose-sm max-w-none break-words prose-p:my-1 prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:bg-slate-950 prose-pre:text-slate-100">
                           <ReactMarkdown
@@ -1325,14 +1323,14 @@ export default function MobileFeedPage() {
           )}
         </div>
 
-        <footer className="shrink-0 border-t border-[#e5dac8] bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.04)]">
+        <footer className="shrink-0 border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {failedSend && (
-            <div className="mb-2 flex items-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+            <div className="mb-2 flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
               <span className="min-w-0 flex-1 truncate">{failedSend.error || '发送失败'}</span>
-              <button onClick={() => void sendMessage(failedSend)} disabled={sending} className="shrink-0 rounded-full bg-white px-3 py-1 text-rose-700 shadow-sm disabled:text-slate-300">
+              <button onClick={() => void sendMessage(failedSend)} disabled={sending} className="shrink-0 rounded-full bg-white px-3 py-1 text-rose-700 disabled:text-slate-300">
                 重试
               </button>
-              <button onClick={() => setFailedSend(null)} className="shrink-0 rounded-full bg-white p-1 text-rose-400 shadow-sm" aria-label="关闭发送失败提示">
+              <button onClick={() => setFailedSend(null)} className="shrink-0 rounded-full bg-white p-1 text-rose-400" aria-label="关闭发送失败提示">
                 <X className="h-3 w-3" />
               </button>
             </div>
@@ -1340,16 +1338,16 @@ export default function MobileFeedPage() {
           {pendingAssets.length > 0 && (
             <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
               {pendingAssets.map((asset, index) => (
-                <div key={`${asset.url}-${index}`} className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2">
+                <div key={`${asset.url}-${index}`} className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2">
                   {asset.kind === 'image' ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={asset.url} alt="" className="h-10 w-10 rounded-xl object-cover" />
                   ) : (
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-[10px] font-black text-sky-700">FILE</span>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[10px] font-semibold text-slate-700">FILE</span>
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-black text-slate-800">{asset.filename}</span>
-                    <span className="block text-[10px] font-bold uppercase text-slate-400">{asset.kind}</span>
+                    <span className="block truncate text-xs font-semibold text-slate-800">{asset.filename}</span>
+                    <span className="block text-[10px] font-medium uppercase text-slate-400">{asset.kind}</span>
                   </span>
                   <button onClick={() => setPendingAssets((prev) => prev.filter((_, i) => i !== index))} className="rounded-full bg-white p-1 text-slate-400">
                     <X className="h-3 w-3" />
@@ -1359,17 +1357,17 @@ export default function MobileFeedPage() {
             </div>
           )}
           {uploading && (
-            <div className="mb-2 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700">
+            <div className="mb-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
               正在上传 {uploadProgress ?? 0}%
             </div>
           )}
-          <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-[#f8fafc] p-2 shadow-inner shadow-slate-200/40">
+          <div className="flex items-end gap-2 rounded-[1.4rem] border border-slate-300 bg-white p-2">
             <div className="relative">
-              <button onClick={() => setAttachOpen((v) => !v)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm" aria-label="添加附件">
+              <button onClick={() => setAttachOpen((v) => !v)} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100" aria-label="添加附件">
                 <Paperclip className="h-4 w-4" />
               </button>
               {attachOpen && (
-                <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs font-black text-slate-700 shadow-xl">
+                <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-xl">
                   <button onClick={() => { setAttachOpen(false); fileInputRef.current?.click() }} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <Paperclip className="h-4 w-4" /> 文件/图片
                   </button>
@@ -1394,12 +1392,12 @@ export default function MobileFeedPage() {
               }}
               rows={1}
               placeholder={isGroupTopic(selectedTopic) ? '发送到群聊...' : selectedTopic?.task_id ? '给 Agent 发送任务...' : '发送消息...'}
-              className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] font-semibold leading-6 outline-none placeholder:text-slate-400"
+              className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] font-medium leading-6 outline-none placeholder:text-slate-400"
             />
             <button
               onClick={() => void sendMessage()}
               disabled={(!draft.trim() && pendingAssets.length === 0) || sending || uploading || !selectedTopicId}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-600 text-white shadow-sm shadow-sky-900/15 disabled:bg-slate-300 disabled:shadow-none"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0d0d0d] text-white disabled:bg-slate-300"
               aria-label="发送消息"
             >
               <Send className="h-4 w-4" />
@@ -1434,26 +1432,26 @@ export default function MobileFeedPage() {
       {selectorOpen && (
         <MobileSheet title="选择 Agent / Topic" onClose={() => closeSheet('selector')}>
           <div className="sticky top-0 z-10 bg-white pb-3">
-            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
               <Search className="h-4 w-4 text-slate-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索 Agent / Topic / 群聊" className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索 Agent / Topic / 群聊" className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none" />
             </div>
           </div>
           <div className="space-y-4">
             <section>
-              <div className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-wide text-slate-500">
+              <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
                 <FolderTree className="h-4 w-4" />
                 主机目录
                 <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{agents.length}</span>
               </div>
               <div className="space-y-2">
                 {groupedAgents.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs font-semibold text-slate-400">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs font-medium text-slate-400">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
                 ) : groupedAgents.map((group) => {
                   const online = group.rows.filter((a) => onlineAgents.has(a.agent_id)).length
                   return (
-                    <section key={group.host} className="rounded-3xl border border-slate-200 bg-slate-50 p-2">
-                      <div className="mb-2 flex items-center justify-between px-2 text-xs font-black text-slate-500">
+                    <section key={group.host} className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                      <div className="mb-2 flex items-center justify-between px-2 text-xs font-semibold text-slate-500">
                         <span className="min-w-0 truncate">{group.host}</span>
                         <span className="shrink-0">{online}/{group.rows.length}</span>
                       </div>
@@ -1468,7 +1466,7 @@ export default function MobileFeedPage() {
                                 setSelectedAgentId(agent.agent_id)
                                 setSelectedTopicId('')
                               }}
-                              className={`flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-sm font-bold ${active ? 'bg-sky-600 text-white' : 'bg-white text-slate-700'}`}
+                              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium ${active ? 'bg-[#0d0d0d] text-white' : 'bg-white text-slate-700'}`}
                             >
                               <Bot className="h-4 w-4 shrink-0" />
                               <span className="min-w-0 flex-1">
@@ -1486,7 +1484,7 @@ export default function MobileFeedPage() {
               </div>
             </section>
             <section>
-              <div className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-wide text-slate-500">
+              <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
                 <MessageSquare className="h-4 w-4" />
                 Topics
                 <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{filteredTopics.length}</span>
@@ -1498,8 +1496,8 @@ export default function MobileFeedPage() {
                   const GroupIcon = meta.Icon
                   if (items.length === 0 && search.trim()) return null
                   return (
-                    <div key={groupKey} className="rounded-3xl border border-slate-200 bg-white p-2">
-                      <div className="mb-2 flex items-center gap-2 px-2 text-xs font-black text-slate-500">
+                    <div key={groupKey} className="rounded-2xl border border-slate-200 bg-white p-2">
+                      <div className="mb-2 flex items-center gap-2 px-2 text-xs font-semibold text-slate-500">
                         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${meta.tone}`}>
                           <GroupIcon className="h-3.5 w-3.5" />
                           {meta.label}
@@ -1520,14 +1518,14 @@ export default function MobileFeedPage() {
                                 setSelectedTopicId(id)
                                 closeSheet('selector')
                               }}
-                              className={`w-full rounded-2xl border p-3 text-left ${id === selectedTopicId ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50'}`}
+                              className={`w-full rounded-xl border p-3 text-left ${id === selectedTopicId ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-slate-50'}`}
                             >
                               <div className="flex items-center gap-2">
-                                <TopicIcon className="h-4 w-4 shrink-0 text-sky-600" />
-                                <span className="min-w-0 flex-1 truncate text-sm font-black text-slate-900">{topic.name || id}</span>
-                                {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white">{topic.unread_count}</span>}
+                                <TopicIcon className="h-4 w-4 shrink-0 text-slate-600" />
+                                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{topic.name || id}</span>
+                                {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
                               </div>
-                              <div className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">
+                              <div className="mt-1 line-clamp-2 text-xs font-medium leading-5 text-slate-500">
                                 {topic.description || topicKindLabel(topic)}
                               </div>
                             </button>
@@ -1546,16 +1544,16 @@ export default function MobileFeedPage() {
       {settingsOpen && (
         <MobileSheet title="设置" onClose={() => closeSheet('settings')}>
           <div className="space-y-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-400">Account</p>
-              <p className="mt-1 text-base font-black text-slate-900">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-500">{billing?.entitlement?.plan === 'pro' ? 'Pro' : 'Free'} · {quotaText(billing)}</p>
-              <p className="mt-1 text-[11px] font-bold text-slate-400">网络 {browserOnline ? '在线' : '离线'} · WebSocket {wsState}</p>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase text-slate-400">Account</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
+              <p className="mt-1 text-xs font-medium text-slate-500">{billing?.entitlement?.plan === 'pro' ? 'Pro' : 'Free'} · {quotaText(billing)}</p>
+              <p className="mt-1 text-[11px] font-medium text-slate-400">网络 {browserOnline ? '在线' : '离线'} · WebSocket {wsState}</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-400">Agent 绑定</p>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase text-slate-400">Agent 绑定</p>
               <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                <p className="mb-2 text-sm font-black text-slate-900">绑定已有 Agent</p>
+                <p className="mb-2 text-sm font-semibold text-slate-900">绑定已有 Agent</p>
                 <div className="space-y-2">
                 <input
                   value={claimAgentId}
@@ -1563,7 +1561,7 @@ export default function MobileFeedPage() {
                   placeholder="已有 agent_id"
                   autoCapitalize="none"
                   autoCorrect="off"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold outline-none"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none"
                 />
                 <input
                   value={claimAgentToken}
@@ -1571,18 +1569,18 @@ export default function MobileFeedPage() {
                   placeholder="已有 agent_token"
                   autoCapitalize="none"
                   autoCorrect="off"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold outline-none"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none"
                 />
                 <input
                   value={claimDisplayName}
                   onChange={(event) => setClaimDisplayName(event.target.value)}
                   placeholder="显示名称（可选）"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold outline-none"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none"
                 />
                 <button
                   onClick={() => void claimExistingAgent()}
                   disabled={!claimAgentId.trim() || !claimAgentToken.trim() || claimingAgent}
-                  className="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-sm disabled:bg-slate-300"
+                  className="w-full rounded-2xl bg-[#0d0d0d] px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300"
                 >
                   {claimingAgent ? '绑定中...' : '绑定已有 Agent'}
                 </button>
@@ -1590,18 +1588,18 @@ export default function MobileFeedPage() {
               </div>
 
               <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                <p className="mb-2 text-sm font-black text-slate-900">生成本地 Agent</p>
+                <p className="mb-2 text-sm font-semibold text-slate-900">生成本地 Agent</p>
                 <div className="space-y-2">
                 <input
                   value={provisionDisplayName}
                   onChange={(event) => setProvisionDisplayName(event.target.value)}
                   placeholder="新 Agent 名称（可选）"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold outline-none"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none"
                 />
                 <button
                   onClick={() => void provisionLocalAgent()}
                   disabled={provisioningAgent}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm disabled:bg-slate-300"
+                  className="w-full rounded-2xl bg-[#0d0d0d] px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300"
                 >
                   {provisioningAgent ? '生成中...' : '生成本地 Agent 凭证'}
                 </button>
@@ -1610,7 +1608,7 @@ export default function MobileFeedPage() {
 
               {provisionedAgent && (
                 <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
-                  <p className="text-xs font-black text-emerald-800">凭证只展示在这里，请在本地主机执行：</p>
+                  <p className="text-xs font-semibold text-emerald-800">凭证只展示在这里，请在本地主机执行：</p>
                   <textarea
                     readOnly
                     rows={5}
@@ -1619,17 +1617,17 @@ export default function MobileFeedPage() {
                       `wtt-connect up codex ${provisionedAgent.agent_id} ${provisionedAgent.agent_token}`,
                       'wtt-connect start',
                     ].join('\n')}
-                    className="mt-2 w-full resize-none rounded-xl border border-emerald-100 bg-white p-2 text-xs font-semibold leading-5 text-slate-700 outline-none"
+                    className="mt-2 w-full resize-none rounded-xl border border-emerald-100 bg-white p-2 text-xs font-medium leading-5 text-slate-700 outline-none"
                   />
                 </div>
               )}
 
-              {claimAgentMessage && <p className="mt-3 text-xs font-bold text-emerald-600">{claimAgentMessage}</p>}
-              {claimAgentError && <p className="mt-3 text-xs font-bold text-rose-600">{claimAgentError}</p>}
+              {claimAgentMessage && <p className="mt-3 text-xs font-semibold text-emerald-600">{claimAgentMessage}</p>}
+              {claimAgentError && <p className="mt-3 text-xs font-semibold text-rose-600">{claimAgentError}</p>}
             </div>
-            <a href="/feed" className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-black text-slate-900 shadow-sm">打开完整 Web Feed</a>
-            <a href={isAndroidWebView ? '/mobile/settings?source=android' : '/mobile/settings'} className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-black text-slate-900 shadow-sm">移动端设置页</a>
-            <button onClick={() => signOut({ callbackUrl: mobileLoginCallback })} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 p-4 text-sm font-black text-white shadow-sm">
+            <a href="/feed" className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-900">打开完整 Web Feed</a>
+            <a href={isAndroidWebView ? '/mobile/settings?source=android' : '/mobile/settings'} className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-900">移动端设置页</a>
+            <button onClick={() => signOut({ callbackUrl: mobileLoginCallback })} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white">
               <LogOut className="h-4 w-4" />
               退出登录
             </button>
@@ -1657,17 +1655,17 @@ function EmptyCard({
   onAction?: () => void
 }) {
   return (
-    <div className="mx-auto mt-14 max-w-sm rounded-2xl border border-[#eadfce] bg-white/90 p-5 text-center shadow-sm shadow-slate-900/5">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
+    <div className="mx-auto mt-14 max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
         <Clock3 className="h-6 w-6" />
       </div>
-      <p className="mt-3 text-base font-black text-slate-900">{title}</p>
-      <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{desc}</p>
+      <p className="mt-3 text-base font-semibold text-slate-900">{title}</p>
+      <p className="mt-2 text-sm font-medium leading-6 text-slate-500">{desc}</p>
       {actionLabel && onAction && (
         <button
           onClick={onAction}
           disabled={actionDisabled}
-          className="mx-auto mt-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-sm disabled:bg-slate-300"
+          className="mx-auto mt-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0d0d0d] px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300"
         >
           {actionIcon}
           {actionLabel}
@@ -1683,12 +1681,12 @@ function MobileSheet({ title, children, onClose }: { title: string; children: Re
       <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-hidden rounded-t-[1.5rem] bg-white shadow-2xl">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200" />
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <p className="text-base font-black text-slate-900">{title}</p>
+          <p className="text-base font-semibold text-slate-900">{title}</p>
           <button onClick={onClose} className="rounded-full bg-slate-100 p-2 text-slate-600" aria-label="关闭">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[calc(88dvh-4rem)] overflow-y-auto bg-[#fbfaf7] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
+        <div className="max-h-[calc(88dvh-4rem)] overflow-y-auto bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
       </div>
     </div>
   )
