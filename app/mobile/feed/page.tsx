@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bot, Camera, ChevronDown, ClipboardList, Clock3, FolderTree, Hash, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
+import { Bot, Camera, ChevronDown, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
@@ -277,6 +277,51 @@ function isMobileStatusRecord(record: Record<string, unknown>): boolean {
   return ['task_request', 'TASK_REQUEST', 'task_status', 'TASK_STATUS', 'system', 'SYSTEM', 'notification', 'NOTIFICATION'].includes(semantic)
 }
 
+function adapterDisplayName(adapterRaw?: unknown): string {
+  const adapter = String(adapterRaw || '').toLowerCase()
+  if (adapter.includes('codex')) return 'Codex'
+  if (adapter.includes('claude')) return 'Claude'
+  if (adapter.includes('gemini')) return 'Gemini'
+  if (adapter.includes('deepseek')) return 'DeepSeek'
+  return 'Agent'
+}
+
+function statusFromProgressMessage(contentRaw: unknown, adapterRaw?: unknown): { text: string; kind: string } | null {
+  const content = stripMobileMetaBlocks(String(contentRaw || '')).trim()
+  if (!content.startsWith('[TASK_STATUS]')) return null
+  const action = content.match(/\baction=([^\n\r]+)/)?.[1]?.trim() || ''
+  const status = content.match(/\bstatus=([^\s\n\r]+)/)?.[1]?.trim() || ''
+  if (!action && !status) return null
+
+  const [group, detail = ''] = action.split(/:(.+)/)
+  const kind = group || status || 'running'
+  const actor = adapterDisplayName(adapterRaw)
+  if (group === 'session') {
+    if (detail.includes('thread.started') || detail.includes('turn.started')) return { text: `${actor} 会话已启动`, kind: 'session' }
+    if (detail.includes('completed')) return { text: `${actor} 会话已完成`, kind: 'session' }
+    return { text: `${actor} 会话状态：${detail || status}`, kind: 'session' }
+  }
+  if (group === 'response') {
+    const output = detail.trim()
+    return { text: output ? `${actor} 输出：${output.slice(0, 80)}` : `${actor} 正在输出`, kind: 'response' }
+  }
+  if (group === 'command') return { text: `${actor} 执行命令：${detail || status}`, kind: 'command' }
+  if (group === 'tool') return { text: `${actor} 调用工具：${detail || status}`, kind: 'tool' }
+  return { text: `Agent 状态：${action || status}`, kind }
+}
+
+function mobileStatusKindLabel(kind?: string): string {
+  const normalized = String(kind || '').toLowerCase()
+  if (normalized.includes('queued')) return '排队'
+  if (normalized.includes('command')) return '命令'
+  if (normalized.includes('tool')) return '工具'
+  if (normalized.includes('response')) return '输出'
+  if (normalized.includes('session')) return '会话'
+  if (normalized.includes('complete') || normalized.includes('done')) return '完成'
+  if (normalized.includes('error') || normalized.includes('fail')) return '异常'
+  return '运行'
+}
+
 function filenameFromUrl(url: string): string {
   const clean = decodeURIComponent(String(url || '').split('?')[0].split('#')[0])
   return clean.split('/').pop() || 'file'
@@ -504,7 +549,7 @@ export default function MobileFeedPage() {
   const [attachOpen, setAttachOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
-  const [, setTypingByTopic] = useState<Record<string, TypingState>>({})
+  const [typingByTopic, setTypingByTopic] = useState<Record<string, TypingState>>({})
   const [creatingTask, setCreatingTask] = useState(false)
   const [failedSend, setFailedSend] = useState<FailedSend | null>(null)
   const [browserOnline, setBrowserOnline] = useState(true)
@@ -741,6 +786,35 @@ export default function MobileFeedPage() {
 
   const messages = useMemo(() => normalizeMessages(messagesRaw), [messagesRaw])
 
+  useEffect(() => {
+    if (!selectedTopicId || !Array.isArray(messagesRaw)) return
+    const now = Date.now()
+    setTypingByTopic((prev) => {
+      let nextState = prev[selectedTopicId]
+      let changed = false
+      for (const item of messagesRaw) {
+        const rec = item as Record<string, unknown>
+        const progress = statusFromProgressMessage(rec.content, nextState?.adapter)
+        if (!progress) continue
+        const rowTime = new Date(String(rec.timestamp || rec.created_at || '')).getTime()
+        const ts = Number.isFinite(rowTime) ? rowTime : now
+        if (ts + STATUS_STALE_MS < now) continue
+        const senderId = String(rec.sender_id || selectedAgentId)
+        nextState = appendTypingStatus(nextState, {
+          agentId: senderId,
+          agentName: rec.sender_display_name ? String(rec.sender_display_name) : displayName(agents.find((agent) => agent.agent_id === senderId)),
+          statusText: progress.text,
+          statusKind: progress.kind,
+          adapter: nextState?.adapter,
+          ttlMs: 60000,
+        }, Math.max(now, ts))
+        changed = true
+      }
+      if (!changed || !nextState) return prev
+      return { ...prev, [selectedTopicId]: nextState }
+    })
+  }, [agents, messagesRaw, selectedAgentId, selectedTopicId])
+
   const { data: selectedTopicMembersRaw } = useSWR(
     token && selectedTopicId && isGroupTopic(selectedTopic) ? ['mobile-topic-members', token, selectedTopicId] : null,
     async () => {
@@ -834,7 +908,30 @@ export default function MobileFeedPage() {
     }
 
     const incoming = normalizeWsMessage(rawEvent)
-    if (!incoming) return
+    if (!incoming) {
+      const msgRecord = (rawEvent.message && typeof rawEvent.message === 'object' ? rawEvent.message : rawEvent) as Record<string, unknown>
+      const progressTopicId = String(msgRecord.topic_id || rawEvent.topic_id || selectedTopicId)
+      if (progressTopicId) {
+        const senderId = String(msgRecord.sender_id || rawEvent.agent_id || selectedAgentId)
+        const senderDisplayName = msgRecord.sender_display_name ? String(msgRecord.sender_display_name) : undefined
+        setTypingByTopic((prev) => {
+          const progressStatus = statusFromProgressMessage(msgRecord.content, prev[progressTopicId]?.adapter)
+          if (!progressStatus) return prev
+          return {
+            ...prev,
+            [progressTopicId]: appendTypingStatus(prev[progressTopicId], {
+              agentId: senderId,
+              agentName: senderDisplayName || displayName(agents.find((agent) => agent.agent_id === senderId)),
+              statusText: progressStatus.text,
+              statusKind: progressStatus.kind,
+              adapter: prev[progressTopicId]?.adapter,
+              ttlMs: 60000,
+            }, Date.now()),
+          }
+        })
+      }
+      return
+    }
     const incomingTopicId = incoming.topic_id || ''
     const displayable = shouldCountUnreadMessage(incoming)
     const now = new Date().toISOString()
@@ -873,6 +970,25 @@ export default function MobileFeedPage() {
 
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=mobile-web` : ''
   const { state: wsState } = useWebSocket({ url: wsUrl, enabled: Boolean(token && selectedAgentId), token, onMessage: handleWsMessage })
+
+  const selectedTopicRunStatus = useMemo(() => {
+    if (!selectedTopicId) return null
+    const typing = typingByTopic[selectedTopicId]
+    if (!typing) return null
+    const agentName = typing.agentName || displayName(agents.find((agent) => agent.agent_id === typing.agentId)) || 'Agent'
+    const lines = typing.statusLines?.length
+      ? typing.statusLines
+      : typing.statusText
+        ? [{ id: `${typing.startedAt}-status`, text: typing.statusText, kind: typing.statusKind, ts: typing.startedAt }]
+        : []
+    return {
+      ...typing,
+      agentName,
+      statusText: typing.statusText || '等待 Agent 状态更新',
+      lines,
+      wsState,
+    }
+  }, [agents, selectedTopicId, typingByTopic, wsState])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -1404,6 +1520,34 @@ export default function MobileFeedPage() {
         </div>
 
         <footer className="shrink-0 border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {selectedTopicRunStatus && (
+            <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-slate-800">
+              <div className="flex min-w-0 items-center gap-2">
+                <Loader2 className={`h-4 w-4 shrink-0 text-blue-600 ${selectedTopicRunStatus.statusKind === 'response' ? '' : 'animate-spin'}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-xs font-semibold text-slate-900">{selectedTopicRunStatus.agentName}</span>
+                    <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
+                      {mobileStatusKindLabel(selectedTopicRunStatus.statusKind)}
+                    </span>
+                    <span className="shrink-0 text-[10px] font-medium text-slate-400">WS {selectedTopicRunStatus.wsState}</span>
+                  </div>
+                  <p className="mt-0.5 truncate text-[12px] font-medium text-slate-700">{selectedTopicRunStatus.statusText}</p>
+                </div>
+              </div>
+              {selectedTopicRunStatus.lines.length > 1 && (
+                <div className="mt-2 space-y-1 border-t border-blue-100 pt-2">
+                  {selectedTopicRunStatus.lines.slice(-2).map((line) => (
+                    <div key={line.id} className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-slate-500">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-300" />
+                      <span className="shrink-0 text-slate-400">{mobileStatusKindLabel(line.kind)}</span>
+                      <span className="min-w-0 flex-1 truncate">{line.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {failedSend && (
             <div className="mb-2 flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
               <span className="min-w-0 flex-1 truncate">{failedSend.error || '发送失败'}</span>
