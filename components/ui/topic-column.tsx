@@ -131,13 +131,19 @@ const WTT_CONNECT_ADAPTERS: Array<{ id: WttConnectAdapterId; label: string; note
 
 const MAX_GROUP_AGENTS = 30
 
+type TeamRolePlan = {
+  role: AgentRoleTemplateId
+  mission: string
+  deliverable: string
+}
+
 type TeamTemplate = {
   id: string
   title: string
   titleEn: string
   description: string
   descriptionEn: string
-  roles: AgentRoleTemplateId[]
+  rolePlan: TeamRolePlan[]
   workflow: string[]
 }
 
@@ -148,7 +154,13 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
     titleEn: 'Paper Research Team',
     description: '适合读论文、找证据、复现实验和形成研究综述。',
     descriptionEn: 'For reading papers, checking evidence, reproducing ideas, and writing research summaries.',
-    roles: ['research', 'engineering', 'qa', 'media_creator', 'product'],
+    rolePlan: [
+      { role: 'research', mission: '建立论文证据库，核查核心结论、数据集、实验设置和引用边界。', deliverable: '论文要点表、证据强弱、待验证假设。' },
+      { role: 'engineering', mission: '把论文方法拆成可复现实现路径，识别代码、数据、环境和工程风险。', deliverable: '复现步骤、工程实现草图、依赖清单。' },
+      { role: 'qa', mission: '设计复现实验和消融检查，专门找失败模式、指标陷阱和边界条件。', deliverable: '实验验证矩阵、风险清单、验收标准。' },
+      { role: 'media_creator', mission: '把研究结论整理成可读综述、汇报稿或对外传播版本。', deliverable: '综述大纲、摘要、图文表达建议。' },
+      { role: 'product', mission: '评估论文方法的应用场景、用户价值和产品化优先级。', deliverable: '应用场景、机会点、下一步产品实验。' },
+    ],
     workflow: ['研究员收集论文和事实证据', '研发 Agent 梳理方法与可复现路径', '测试 Agent 检查实验风险和验证方案', '写作 Agent 形成综述/报告', '产品 Agent 提炼应用场景和下一步'],
   },
   {
@@ -157,7 +169,13 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
     titleEn: 'R&D Team',
     description: '适合从需求到架构、实现、测试和上线复盘。',
     descriptionEn: 'For product requirements, architecture, implementation, testing, and release review.',
-    roles: ['product', 'engineering', 'designer', 'qa', 'operator'],
+    rolePlan: [
+      { role: 'product', mission: '定义需求边界、用户故事、优先级和验收标准。', deliverable: 'PRD 摘要、用户路径、验收清单。' },
+      { role: 'engineering', mission: '制定架构、接口、实现拆分和技术风险控制。', deliverable: '技术方案、任务拆分、代码实现计划。' },
+      { role: 'designer', mission: '负责信息层级、交互路径、视觉方向和可用性评审。', deliverable: '交互草图、设计原则、体验风险。' },
+      { role: 'qa', mission: '设计测试矩阵，覆盖边界条件、回归风险和上线验证。', deliverable: '测试用例、回归范围、验收报告。' },
+      { role: 'operator', mission: '规划上线节奏、用户触达、指标监控和复盘。', deliverable: '发布计划、运营动作、数据看板口径。' },
+    ],
     workflow: ['产品 Agent 明确需求和验收标准', '设计 Agent 给出交互/视觉方向', '研发 Agent 拆解架构和实现', '测试 Agent 输出回归矩阵', '运营 Agent 规划上线和数据复盘'],
   },
   {
@@ -166,7 +184,13 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
     titleEn: 'Coding Team',
     description: '适合代码实现、debug、review、测试和交付。',
     descriptionEn: 'For implementation, debugging, code review, testing, and delivery.',
-    roles: ['engineering', 'qa', 'research', 'product', 'ceo'],
+    rolePlan: [
+      { role: 'product', mission: '把用户需求翻译成明确的编码任务和验收标准。', deliverable: '任务边界、优先级、验收条件。' },
+      { role: 'engineering', mission: '承担主要实现、debug、重构和工程质量控制。', deliverable: '代码方案、补丁计划、风险点。' },
+      { role: 'research', mission: '查找官方文档、最佳实践和技术选型依据。', deliverable: '资料链接、方案对比、引用依据。' },
+      { role: 'qa', mission: '跑测试、找边界、验证修复是否破坏现有功能。', deliverable: '测试命令、失败模式、回归结论。' },
+      { role: 'ceo', mission: '负责节奏、取舍和最后合并前的风险判断。', deliverable: '执行顺序、阻塞项、最终决策建议。' },
+    ],
     workflow: ['产品 Agent 定义任务边界', '研发 Agent 实现核心代码', '研究 Agent 查资料和技术选型', '测试 Agent 跑测试和找边界', '总经理 Agent 汇总进度、风险和下一步'],
   },
   {
@@ -175,7 +199,13 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
     titleEn: 'Writing Team',
     description: '适合文章、脚本、商业文案和长内容生产。',
     descriptionEn: 'For articles, scripts, copywriting, and long-form content production.',
-    roles: ['media_creator', 'research', 'designer', 'operator', 'sales'],
+    rolePlan: [
+      { role: 'research', mission: '收集事实、案例、竞品和背景材料，确保内容可信。', deliverable: '素材库、事实核查、参考链接。' },
+      { role: 'media_creator', mission: '设计选题、标题、脚本结构、叙事节奏和传播钩子。', deliverable: '选题方案、标题组、正文/脚本初稿。' },
+      { role: 'designer', mission: '提供封面、配图、排版和视觉风格建议。', deliverable: '视觉方向、封面文案、版式建议。' },
+      { role: 'operator', mission: '规划发布节奏、渠道策略、互动方式和数据复盘。', deliverable: '发布计划、运营清单、复盘指标。' },
+      { role: 'sales', mission: '优化转化话术、行动号召和商业落点。', deliverable: 'CTA、转化路径、异议处理话术。' },
+    ],
     workflow: ['研究 Agent 收集素材和事实', '自媒体 Agent 设计选题/标题/脚本', '设计 Agent 建议视觉表达', '运营 Agent 规划发布节奏', '销售 Agent 优化转化话术'],
   },
   {
@@ -184,7 +214,13 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
     titleEn: 'Product Growth Team',
     description: '适合产品定位、增长实验、用户运营和商业化。',
     descriptionEn: 'For product positioning, growth experiments, user operations, and monetization.',
-    roles: ['product', 'operator', 'sales', 'finance', 'investor'],
+    rolePlan: [
+      { role: 'product', mission: '明确目标用户、核心问题、产品定位和功能优先级。', deliverable: '用户画像、价值主张、路线图。' },
+      { role: 'operator', mission: '设计增长实验、触达策略、留存机制和指标追踪。', deliverable: '实验计划、运营节奏、指标口径。' },
+      { role: 'sales', mission: '验证客户需求、成交路径、异议和价格接受度。', deliverable: '客户发现问题、销售话术、成交阻塞。' },
+      { role: 'finance', mission: '测算成本、收入、毛利、现金流和 ROI。', deliverable: '单位经济模型、预算、风险暴露。' },
+      { role: 'investor', mission: '评估市场空间、竞争壁垒、增长质量和融资叙事。', deliverable: '投资备忘录、关键假设、风险判断。' },
+    ],
     workflow: ['产品 Agent 明确用户和功能策略', '运营 Agent 设计增长实验', '销售 Agent 验证价值主张', '财务 Agent 测算成本收益', '投资人 Agent 评估市场空间和壁垒'],
   },
   {
@@ -193,7 +229,13 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
     titleEn: 'Legal & Compliance Team',
     description: '适合合同、隐私、商业风险和证据整理。',
     descriptionEn: 'For contracts, privacy, business risk, and evidence planning.',
-    roles: ['lawyer', 'finance', 'product', 'ceo', 'research'],
+    rolePlan: [
+      { role: 'lawyer', mission: '识别法律关系、合同风险、隐私合规和证据要求。', deliverable: '风险清单、条款建议、证据计划。' },
+      { role: 'finance', mission: '评估潜在赔付、成本、预算和财务影响。', deliverable: '成本测算、赔付暴露、财务口径。' },
+      { role: 'product', mission: '把合规要求转成产品流程、提示、权限和用户体验修改。', deliverable: '流程调整、产品约束、上线检查。' },
+      { role: 'research', mission: '补充法规、案例、监管口径和行业实践。', deliverable: '法规引用、案例摘要、边界说明。' },
+      { role: 'ceo', mission: '在法律、业务和成本之间做决策排序。', deliverable: '处理方案、负责人、时间表。' },
+    ],
     workflow: ['律师 Agent 梳理法律关系和风险', '财务 Agent 评估成本和赔付暴露', '产品 Agent 调整流程和提示', '研究 Agent 补充监管/案例材料', '总经理 Agent 制定决策和执行节奏'],
   },
   {
@@ -202,7 +244,12 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
     titleEn: 'Medical Health Team',
     description: '适合健康资料整理、就诊准备和风险提示。',
     descriptionEn: 'For health information summaries, clinic preparation, and risk warnings.',
-    roles: ['doctor', 'research', 'teacher', 'operator'],
+    rolePlan: [
+      { role: 'doctor', mission: '识别风险信号、就诊准备、检查治疗常识和医学边界。', deliverable: '风险提示、就诊问题清单、资料摘要。' },
+      { role: 'research', mission: '查找可信医学资料来源，标注证据等级和适用范围。', deliverable: '资料来源、证据边界、待确认问题。' },
+      { role: 'teacher', mission: '把医学概念用用户能理解的方式解释清楚。', deliverable: '通俗解释、学习路径、注意事项。' },
+      { role: 'operator', mission: '整理长期跟踪、生活方式、复查提醒和记录模板。', deliverable: '跟踪清单、提醒计划、记录表。' },
+    ],
     workflow: ['医生 Agent 识别风险信号和就诊准备', '研究 Agent 补充资料来源和边界', '教师 Agent 用易懂方式解释概念', '运营 Agent 整理长期跟踪清单'],
   },
   {
@@ -211,10 +258,33 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
     titleEn: 'Architecture Planning Team',
     description: '适合空间规划、材料风格、预算和施工约束。',
     descriptionEn: 'For space planning, materials, budget, and construction constraints.',
-    roles: ['architect', 'designer', 'finance', 'qa', 'product'],
+    rolePlan: [
+      { role: 'architect', mission: '负责空间功能、动线、采光、结构约束和施工可行性。', deliverable: '空间方案、约束清单、落地风险。' },
+      { role: 'designer', mission: '负责风格、材料、视觉体验和用户感受。', deliverable: '风格板、材料建议、视觉原则。' },
+      { role: 'finance', mission: '控制预算、造价、采购优先级和成本风险。', deliverable: '预算表、成本取舍、采购建议。' },
+      { role: 'qa', mission: '检查施工安全、质量隐患、验收点和维护风险。', deliverable: '验收清单、风险点、检查流程。' },
+      { role: 'product', mission: '对齐真实生活场景、用户习惯和功能优先级。', deliverable: '场景需求、功能排序、体验验收。' },
+    ],
     workflow: ['建筑师 Agent 明确空间和结构约束', '设计师 Agent 给出风格和体验方向', '财务 Agent 控制造价', '测试 Agent 检查施工/安全风险', '产品 Agent 对齐用户生活场景'],
   },
 ]
+
+function buildTeamRoleTemplate(plan: TeamRolePlan, template: TeamTemplate): AgentRoleTemplate {
+  const base = getAgentRoleTemplate(plan.role)
+  const description = `${base.description} 团队分工：${plan.mission} 主要交付：${plan.deliverable}`
+  return {
+    ...base,
+    description,
+    systemPrompt: [
+      base.systemPrompt,
+      '',
+      `你当前属于「${template.title}」协作团队。`,
+      `你的明确分工：${plan.mission}`,
+      `你的主要交付物：${plan.deliverable}`,
+      '协作要求：先完成自己职责内的判断，再用简洁结构同步给团队；不要越权替代其他角色，但可以指出需要其他角色补充的问题。',
+    ].join('\n'),
+  }
+}
 
 function shellQuote(value: string) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`
@@ -993,7 +1063,8 @@ export function TopicColumn(props: TopicColumnProps) {
       return
     }
     const name = teamName.trim() || (zh ? template.title : template.titleEn)
-    const roles = template.roles.slice(0, 5).map((roleId) => getAgentRoleTemplate(roleId))
+    const rolePlans = template.rolePlan.slice(0, 5)
+    const roles = rolePlans.map((plan) => buildTeamRoleTemplate(plan, template))
     setTeamBusy(true)
     setTeamError('')
     setTeamProgress(zh ? '开始创建团队 Agent...' : 'Creating team agents...')
@@ -1011,6 +1082,12 @@ export function TopicColumn(props: TopicColumnProps) {
       setTeamProgress(zh ? '正在创建团队 Topic...' : 'Creating team topic...')
       const description = [
         zh ? template.description : template.descriptionEn,
+        '',
+        zh ? '角色分工：' : 'Role assignments:',
+        ...rolePlans.map((plan, index) => {
+          const role = getAgentRoleTemplate(plan.role)
+          return `${index + 1}. ${role.label}: ${plan.mission} 交付：${plan.deliverable}`
+        }),
         '',
         zh ? '团队工作流：' : 'Team workflow:',
         ...template.workflow.map((step, index) => `${index + 1}. ${step}`),
@@ -2018,7 +2095,7 @@ export function TopicColumn(props: TopicColumnProps) {
                 <div className="grid max-h-[42vh] gap-2 overflow-y-auto sm:grid-cols-2">
                   {TEAM_TEMPLATES.map((template) => {
                     const active = template.id === teamTemplateId
-                    const roleNames = template.roles.slice(0, 5).map((roleId) => getAgentRoleTemplate(roleId).shortLabel).join(' / ')
+                    const roleNames = template.rolePlan.slice(0, 5).map((plan) => getAgentRoleTemplate(plan.role).shortLabel).join(' / ')
                     return (
                       <button
                         key={template.id}
@@ -2037,6 +2114,9 @@ export function TopicColumn(props: TopicColumnProps) {
                         <span className="block text-sm font-black">{zh ? template.title : template.titleEn}</span>
                         <span className="mt-1 block line-clamp-2 text-[11px] leading-4 opacity-75">{zh ? template.description : template.descriptionEn}</span>
                         <span className="mt-2 block truncate text-[10px] font-black uppercase tracking-wide opacity-60">{roleNames}</span>
+                        <span className="mt-1 block line-clamp-2 text-[10px] leading-4 opacity-70">
+                          {template.rolePlan.slice(0, 2).map((plan) => `${getAgentRoleTemplate(plan.role).shortLabel}: ${plan.deliverable}`).join(' · ')}
+                        </span>
                       </button>
                     )
                   })}
@@ -2139,7 +2219,18 @@ export function TopicColumn(props: TopicColumnProps) {
 
                 {selectedTeamTemplate && (
                   <div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/70 p-3 text-xs leading-5 text-fuchsia-900 dark:border-fuchsia-500/20 dark:bg-fuchsia-500/10 dark:text-fuchsia-100">
-                    <p className="font-black">{zh ? '工作流' : 'Workflow'}</p>
+                    <p className="font-black">{zh ? '角色分工' : 'Role assignments'}</p>
+                    <div className="mt-1 space-y-1">
+                      {selectedTeamTemplate.rolePlan.map((plan) => {
+                        const role = getAgentRoleTemplate(plan.role)
+                        return (
+                          <p key={`${selectedTeamTemplate.id}-${plan.role}`}>
+                            <span className="font-black">{role.shortLabel}</span>: {plan.mission}
+                          </p>
+                        )
+                      })}
+                    </div>
+                    <p className="mt-3 font-black">{zh ? '工作流' : 'Workflow'}</p>
                     <div className="mt-1 space-y-1">
                       {selectedTeamTemplate.workflow.map((step, index) => (
                         <p key={step}>{index + 1}. {step}</p>
