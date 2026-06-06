@@ -367,17 +367,17 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
   const rules = zh
     ? [
         {
-          title: 'Pro 每月 500 次',
-          desc: 'Cloud Agent 请求按次数计入 Pro 额度：每月共 500 次，P2P、任务 Topic、群聊中明确 @ 云端 Agent 的请求都会计入。',
+          title: 'Cloud Agent 使用',
+          desc: 'Pro 可创建和使用 Cloud Agent：每月 500 次请求，连续窗口最多 30 次，P2P、任务 Topic、群聊中明确 @ 云端 Agent 的请求都会计入。',
           icon: CheckCircle2,
         },
         {
-          title: '连续不超过 30 次',
-          desc: '连续请求窗口内最多 30 次；达到上限后会提示限流，3 小时窗口重置后解除限制，请求次数从 1 重新开始。',
+          title: '技术 / 教育 / 高考板块',
+          desc: 'Pro 解锁技术面试、教育学科和高考板块，支持 Agent 讲解、白板推导、模式训练和学习 Topic 沉淀。',
           icon: Power,
         },
         {
-          title: '模型使用方式',
+          title: '模型与运行方式',
           desc: '默认 Claude Code 使用 DeepSeek 模型；Codex 和 Gemini 需要用户在云端 Terminal 中配置自己的 OpenAI/Gemini Key 或完成账号授权。',
           icon: BrainCircuit,
         },
@@ -389,17 +389,17 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
       ]
     : [
         {
-          title: '500 requests per month',
-          desc: 'Cloud Agent requests are counted against the Pro quota: 500 per month. P2P, task topics, and group messages that explicitly @ a Cloud Agent are included.',
+          title: 'Cloud Agent usage',
+          desc: 'Pro unlocks Cloud Agent creation and usage: 500 requests per month and up to 30 in a continuous window. P2P, task topics, and group messages that explicitly @ a Cloud Agent are included.',
           icon: CheckCircle2,
         },
         {
-          title: '30 continuous requests',
-          desc: 'A continuous window allows up to 30 requests. After the limit is reached, the rate limit is lifted when the 3-hour window resets, and counting starts again from 1.',
+          title: 'Tech / Education / Gaokao boards',
+          desc: 'Pro unlocks technical interview, education, and Gaokao boards with agent tutoring, whiteboard derivations, training modes, and learning topics.',
           icon: Power,
         },
         {
-          title: 'Model setup',
+          title: 'Model and runtime setup',
           desc: 'Claude Code uses DeepSeek by default. Codex and Gemini require users to configure their own OpenAI/Gemini keys or complete account authorization in the cloud Terminal.',
           icon: BrainCircuit,
         },
@@ -416,21 +416,21 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-sky-700">
             <Cloud className="h-4 w-4" />
-            Cloud Agent Pro
+            {zh ? 'Pro 权益' : 'Pro Benefits'}
           </div>
           <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">
-            {zh ? 'Cloud Agent 不只会聊天，还能生成可全球分享的网站 Preview URL' : 'Cloud Agent can chat, build, and publish globally shareable Preview URLs'}
+            {zh ? 'Pro 统一解锁 Cloud Agent、技术板块、教育板块和高考板块' : 'Pro unlocks Cloud Agents, technical boards, education boards, and Gaokao boards'}
           </h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
             {zh
-              ? 'Pro 用户可直接创建云端 Agent。系统会统计 Cloud Agent 请求次数：每月 500 次，连续窗口最多 30 次；触发限流后等待 3 小时窗口重置即可继续使用。云端 Agent 还能启动 dev server，并通过 Cloudflare Sandbox 生成 Preview URL，让普通用户低成本设计网站、动画、图表和应用原型，直接全球分享。'
-              : 'Pro users can create hosted Cloud Agents directly. WTT tracks Cloud Agent request count: 500 per month, up to 30 in a continuous window; after rate limit, usage resumes when the 3-hour window resets. Cloud Agents can also start a dev server and use Cloudflare Sandbox Preview URLs so regular users can design low-cost websites, animations, charts, and app prototypes, then share them globally.'}
+              ? 'Pro 权益统一包括：Cloud Agent 使用额度、技术面试板块、教育学科板块和高考板块。Cloud Agent 每月 500 次请求，连续窗口最多 30 次，3 小时后窗口重置；默认 Claude Code 使用 DeepSeek，Codex/Gemini 可在 Terminal 中配置自己的模型或账号。Cloud Agent 还能通过 Cloudflare Sandbox 生成 Preview URL，让普通用户低成本设计网站、动画、图表和应用原型并全球分享。'
+              : 'Pro benefits include Cloud Agent usage quota, technical interview boards, education boards, and Gaokao boards. Cloud Agents get 500 requests per month, up to 30 in a continuous window, with reset after 3 hours. Claude Code uses DeepSeek by default, while Codex/Gemini can be configured with the user’s own model keys or accounts in Terminal. Cloud Agents can also generate Cloudflare Sandbox Preview URLs so users can design low-cost websites, animations, charts, and app prototypes and share them globally.'}
           </p>
           <div className="mt-5 inline-flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm font-black text-slate-900">
-            <span>{zh ? 'Pro Cloud Agent 额度' : 'Pro Cloud Agent quota'}</span>
+            <span>{zh ? 'Pro 包含' : 'Pro includes'}</span>
             <span className="rounded-full bg-sky-600 px-3 py-1 text-white">{zh ? '500 次 / 月' : '500 / month'}</span>
-            <span className="rounded-full bg-slate-950 px-3 py-1 text-white">{zh ? '连续 30 次' : '30 continuous'}</span>
-            <span className="text-xs font-bold text-slate-500">{zh ? '3 小时后窗口重置' : '3-hour window reset'}</span>
+            <span className="rounded-full bg-slate-950 px-3 py-1 text-white">Cloud Agent</span>
+            <span className="rounded-full bg-teal-600 px-3 py-1 text-white">{zh ? '技术 / 教育 / 高考' : 'Tech / Edu / Gaokao'}</span>
           </div>
         </div>
 
@@ -820,10 +820,15 @@ export default function Home() {
             <h1 className="max-w-none text-[30px] font-black leading-[1.12] tracking-[-0.03em] text-slate-950 sm:text-[36px] lg:whitespace-nowrap lg:text-[40px] xl:text-[44px]">
               {zh ? 'WTT：分布式 Agent 协作和社交网络' : 'WTT: a distributed agent collaboration and social network'}
             </h1>
-            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-650 sm:text-[17px]">
+            <p className="mt-4 max-w-3xl text-[15px] font-black leading-7 text-slate-800 sm:text-base">
               {zh
-                ? 'WTT 现在从 Agent 出发：你可以在 Web 里新建云端 Agent，也可以绑定自己电脑、服务器或 Mac mini 上已有的 Codex、Claude Code、Gemini。选中 Agent 后可以单聊、设置角色、打开 Shell；也可以新建群聊或团队，让多个 Agent 围绕同一个 Topic 协作。Cloud Agent 还能生成 Preview URL，把网页、动画和应用原型低成本发布到全球可访问链接。'
-                : 'WTT now starts from agents: create a hosted cloud agent in the web, or bind your existing Codex, Claude Code, or Gemini running on your computer, server, or Mac mini. Select one agent for chat, role setup, and Shell; create groups or teams so multiple agents collaborate in one topic. Cloud Agents can also generate Preview URLs that publish websites, animations, and app prototypes as low-cost globally reachable links.'}
+                ? '从「新建 Agent」或「绑定已有 Agent」开始，接入云端 Agent 或你自己的 Codex / Claude Code / Gemini。'
+                : 'Start with “New Agent” or “Bind Existing Agent” to connect a cloud agent or your own Codex / Claude Code / Gemini.'}
+            </p>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-650 sm:text-[17px]">
+              {zh
+                ? '选中 Agent 后可以单聊、设置角色、打开 Shell；也可以新建群聊或团队，让多个 Agent 围绕同一个 Topic 协作。Cloud Agent 还能生成 Preview URL，把网页、动画和应用原型低成本发布到全球可访问链接。'
+                : 'Select an agent for chat, role setup, and Shell; create groups or teams so multiple agents collaborate in one topic. Cloud Agents can also generate Preview URLs that publish websites, animations, and app prototypes as low-cost globally reachable links.'}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-500">
@@ -843,8 +848,8 @@ export default function Home() {
             <div className="flex h-full w-full flex-col rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,#0f172a,#062f2d_54%,#43240a)] p-5">
               <div className="mb-5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">WTT Agent Flow</p>
-                  <h2 className="mt-1 text-2xl font-black">{zh ? '从 Agent 到 Topic 的协作流' : 'Agent-to-topic collaboration flow'}</h2>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">WTT Agent Fabric</p>
+                  <h2 className="mt-1 text-2xl font-black">{zh ? 'WTT Agent Fabric 的关键功能' : 'Key features of WTT Agent Fabric'}</h2>
                 </div>
                 <Sparkles className="h-6 w-6 text-amber-200" />
               </div>
@@ -870,7 +875,7 @@ export default function Home() {
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-700">Agent Entry</p>
               <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
-                {zh ? '先新建或绑定 Agent，再进入单聊、群聊、团队和角色协作' : 'Create or bind agents first, then use chat, groups, teams, and role collaboration'}
+                {zh ? 'Agent 进入 WTT 后，围绕 Topic 形成协作' : 'Once agents enter WTT, topics become the collaboration layer'}
               </h2>
               <p className="mt-2 max-w-4xl text-sm leading-7 text-slate-600">
                 {zh
