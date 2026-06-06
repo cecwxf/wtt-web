@@ -683,7 +683,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [folderMenuFor, setFolderMenuFor] = useState<string | null>(null)
   const [sandboxActionFor, setSandboxActionFor] = useState<string | null>(null)
   const [topicMenuFor, setTopicMenuFor] = useState<string | null>(null)
-  const [createMenuOpen, setCreateMenuOpen] = useState(false)
+  const [createActionOpen, setCreateActionOpen] = useState(false)
   const [mentionMuteByTopic, setMentionMuteByTopic] = useState<Record<string, boolean>>({})
   const [shellAgent, setShellAgent] = useState<AgentOption | null>(null)
   const [newAgentOpen, setNewAgentOpen] = useState(false)
@@ -785,7 +785,6 @@ export function TopicColumn(props: TopicColumnProps) {
       setTopicMenuFor(null)
       setAgentMenuFor(null)
       setFolderMenuFor(null)
-      setCreateMenuOpen(false)
     }
     window.addEventListener('click', closeMenus)
     return () => window.removeEventListener('click', closeMenus)
@@ -861,11 +860,6 @@ export function TopicColumn(props: TopicColumnProps) {
     () => TEAM_TEMPLATES.find((template) => template.id === teamTemplateId) || TEAM_TEMPLATES[0],
     [teamTemplateId],
   )
-  const hasCloudAgent = useMemo(
-    () => agentOptions.some((agent) => (agent.binding_method || agent.bound_via || '') === 'cloud_trial'),
-    [agentOptions],
-  )
-
   const agentFolders = useMemo<AgentFolder[]>(() => {
     const folders = new Map<string, AgentFolder>()
 
@@ -1401,12 +1395,11 @@ export function TopicColumn(props: TopicColumnProps) {
             <div className="relative">
               <button
                 type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
+                onClick={() => {
                   setTopicMenuFor(null)
                   setAgentMenuFor(null)
                   setFolderMenuFor(null)
-                  setCreateMenuOpen((open) => !open)
+                  setCreateActionOpen(true)
                 }}
                 className="relative flex w-full items-center gap-1.5 overflow-hidden rounded-xl border border-sky-200 bg-gradient-to-r from-sky-300 via-sky-100 to-white px-2 py-1.5 text-left text-[10px] font-black leading-tight text-sky-900 shadow-sm shadow-sky-900/10 ring-1 ring-white/70 transition hover:-translate-y-0.5 hover:border-sky-300 hover:from-sky-200 hover:via-cyan-100 hover:to-white hover:shadow-md dark:border-sky-400/45 dark:from-sky-500/35 dark:via-sky-400/20 dark:to-zinc-950 dark:text-sky-50 dark:ring-sky-200/20"
                 title={zh ? '选择新建 Agent、群聊或团队' : 'Create an agent, group, or team'}
@@ -1417,76 +1410,8 @@ export function TopicColumn(props: TopicColumnProps) {
                   <Plus className="h-3.5 w-3.5" />
                 </span>
                 <span className="relative min-w-0 flex-1 truncate">{zh ? '新建' : 'New'}</span>
-                <ChevronDown className={`relative h-3.5 w-3.5 shrink-0 transition ${createMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronRight className="relative h-3.5 w-3.5 shrink-0" />
               </button>
-
-              {createMenuOpen && (
-                <div
-                  className="absolute left-0 top-[calc(100%+0.35rem)] z-50 w-[13.5rem] rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-1.5 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:ring-white/10"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {onCreateCloudAgent && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCreateMenuOpen(false)
-                        setCloudCreateError('')
-                        setCloudCreateOpen(true)
-                      }}
-                      disabled={cloudAgentBusy}
-                      className="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-sky-500/10"
-                      title={hasCloudAgent
-                        ? (zh ? '已创建 Cloud Agent；点击可查看限制提示' : 'Cloud Agent already exists; click for details')
-                        : (zh ? '新建 Agent，需要 Pro 账户' : 'New Agent, requires Pro')}
-                    >
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 shadow-sm ring-1 ring-sky-200 dark:bg-sky-400/15 dark:text-sky-200 dark:ring-sky-400/25">
-                        <Cloud className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block whitespace-nowrap text-[11px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建 Agent' : 'New Agent'}</span>
-                        <span className="mt-0.5 block whitespace-normal text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '云端托管 Agent' : 'Cloud-hosted agent'}</span>
-                      </span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreateMenuOpen(false)
-                      openGroupModal()
-                    }}
-                    className="mt-1 flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-amber-50 dark:hover:bg-amber-500/10"
-                    title={zh ? '选择已绑定 Agent，直接创建一个群聊 Topic' : 'Select bound agents and create a group topic'}
-                  >
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600 shadow-sm ring-1 ring-amber-200 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-400/25">
-                      <Users className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block whitespace-nowrap text-[11px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建群聊' : 'New Group'}</span>
-                      <span className="mt-0.5 block whitespace-normal text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '选择现有 Agent' : 'Use existing agents'}</span>
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreateMenuOpen(false)
-                      openTeamModal()
-                    }}
-                    disabled={!onNewAgentFromHost || newAgentHosts.length === 0}
-                    className="mt-1 flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-fuchsia-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-fuchsia-500/10"
-                    title={zh ? '选择团队模板，在在线主机中 clone 多个专业 Agent 并创建协作群聊' : 'Choose a team template, clone role agents on an online host, and create a collaboration topic'}
-                  >
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-fuchsia-100 text-fuchsia-600 shadow-sm ring-1 ring-fuchsia-200 dark:bg-fuchsia-400/15 dark:text-fuchsia-200 dark:ring-fuchsia-400/25">
-                      <Crown className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block whitespace-nowrap text-[11px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建团队' : 'New Team'}</span>
-                      <span className="mt-0.5 block whitespace-normal text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '模板化协作角色' : 'Template role workflow'}</span>
-                    </span>
-                  </button>
-                </div>
-              )}
             </div>
 
             <button
@@ -2051,6 +1976,96 @@ export function TopicColumn(props: TopicColumnProps) {
           </div>
         </div>
       </aside>
+
+      {createActionOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-sky-200 bg-[#fffdf8] p-4 shadow-2xl dark:border-sky-500/30 dark:bg-zinc-900">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-zinc-100">
+                  {zh ? '新建' : 'New'}
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
+                  {zh
+                    ? '选择你要创建的类型：云端 Agent、普通群聊，或带角色分工的团队。'
+                    : 'Choose what to create: a cloud agent, a group chat, or a role-based team.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateActionOpen(false)}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                {zh ? '关闭' : 'Close'}
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {onCreateCloudAgent && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateActionOpen(false)
+                    setCloudCreateError('')
+                    setCloudCreateOpen(true)
+                  }}
+                  disabled={cloudAgentBusy}
+                  className="group rounded-2xl border border-sky-200 bg-sky-50/80 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-100 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-500/30 dark:bg-sky-500/10 dark:hover:bg-sky-500/15"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-sky-400/15 dark:text-sky-200 dark:ring-sky-400/25">
+                    <Cloud className="h-5 w-5" />
+                  </span>
+                  <span className="mt-3 block text-sm font-black text-slate-900 dark:text-zinc-100">
+                    {zh ? '新建 Agent' : 'New Agent'}
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500 dark:text-zinc-400">
+                    {zh ? '创建 WTT 托管的云端 Agent，需要 Pro 权益。' : 'Create a WTT-hosted cloud agent. Requires Pro.'}
+                  </span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateActionOpen(false)
+                  openGroupModal()
+                }}
+                className="group rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 hover:shadow-md dark:border-amber-500/30 dark:bg-amber-500/10 dark:hover:bg-amber-500/15"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-amber-600 shadow-sm ring-1 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-400/25">
+                  <Users className="h-5 w-5" />
+                </span>
+                <span className="mt-3 block text-sm font-black text-slate-900 dark:text-zinc-100">
+                  {zh ? '新建群聊' : 'New Group'}
+                </span>
+                <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500 dark:text-zinc-400">
+                  {zh ? '选择已有 Agent，创建一个私有协作 Topic。' : 'Select existing agents and create a private collaboration topic.'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateActionOpen(false)
+                  openTeamModal()
+                }}
+                disabled={!onNewAgentFromHost || newAgentHosts.length === 0}
+                className="group rounded-2xl border border-fuchsia-200 bg-fuchsia-50/80 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-fuchsia-300 hover:bg-fuchsia-100 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/10 dark:hover:bg-fuchsia-500/15"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-fuchsia-600 shadow-sm ring-1 ring-fuchsia-100 dark:bg-fuchsia-400/15 dark:text-fuchsia-200 dark:ring-fuchsia-400/25">
+                  <Crown className="h-5 w-5" />
+                </span>
+                <span className="mt-3 block text-sm font-black text-slate-900 dark:text-zinc-100">
+                  {zh ? '新建团队' : 'New Team'}
+                </span>
+                <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500 dark:text-zinc-400">
+                  {zh ? '选择团队模板，自动 clone 多个角色 Agent 并创建群聊。' : 'Choose a team template, clone role agents, and create a group chat.'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {roleEditor && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
