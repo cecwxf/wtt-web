@@ -63,6 +63,8 @@ async function mockAuthenticatedMobileApi(
   options: {
     topics?: typeof mockTopics
     topicMembers?: Array<{ agent_id: string; display_name?: string; role?: string }>
+    messages?: Array<Record<string, unknown>>
+    mediaCommitUrl?: string
     onTopicMessagePost?: (url: string, body: unknown) => void
     onMediaSign?: (headers: Record<string, string>, body: unknown) => void
     onMediaCommit?: (headers: Record<string, string>, body: unknown) => void
@@ -122,7 +124,7 @@ async function mockAuthenticatedMobileApi(
       })
       return
     }
-    await fulfillJson(route, [
+    await fulfillJson(route, options.messages || [
       {
         message_id: 'message-1',
         topic_id: 'topic-task',
@@ -159,7 +161,27 @@ async function mockAuthenticatedMobileApi(
   await page.route('**/api/wtt/media/commit', async (route) => {
     options.onMediaCommit?.(route.request().headers(), route.request().postDataJSON())
     await fulfillJson(route, {
-      url: 'https://example.com/media/notes.md',
+      url: options.mediaCommitUrl || 'https://example.com/media/notes.md',
+    })
+  })
+
+  await page.route('**/api/wtt/media/**', async (route) => {
+    const url = route.request().url()
+    if (/\/media\/(?:sign|commit|upload)\b/.test(url)) {
+      await route.fallback()
+      return
+    }
+    if (route.request().method() === 'PUT') {
+      await route.fulfill({ status: 204, body: '' })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+        'base64',
+      ),
     })
   })
 
@@ -224,7 +246,11 @@ test('mobile feed supports topic browsing, settings, agent binding, and offline 
   await expect(page.getByText('FILE')).toBeVisible()
 
   await page.getByRole('button').first().click()
-  await expect(page.getByText('主机目录')).toBeVisible()
+  await expect(page.getByText('选择主机')).toBeVisible()
+  await expect(page.getByText('先选择运行 Agent 的主机，再选择该主机下的 Agent，最后进入它的 Topic。')).toBeVisible()
+  await page.getByText('mac-mini').click()
+  await expect(page.getByText('选择 Agent')).toBeVisible()
+  await page.getByText('Alice Agent').last().click()
   await expect(page.getByText('P2P 私聊')).toBeVisible()
   await expect(page.getByText('任务 Topic')).toBeVisible()
   await expect(page.getByText('群聊 / 讨论')).toBeVisible()
@@ -232,14 +258,8 @@ test('mobile feed supports topic browsing, settings, agent binding, and offline 
   await page.getByRole('button', { name: '关闭' }).click()
 
   await page.getByLabel('设置').click()
-  await expect(page.getByText('Agent 绑定')).toBeVisible()
-  await expect(page.getByText('绑定已有 Agent').last()).toBeVisible()
-  await expect(page.getByText('生成本地 Agent', { exact: true })).toBeVisible()
+  await expect(page.getByText('Account')).toBeVisible()
   await expect(page.getByRole('link', { name: '移动端设置页' })).toHaveAttribute('href', '/mobile/settings?source=android')
-  await page.getByPlaceholder('已有 agent_id').fill('agent-existing')
-  await page.getByPlaceholder('已有 agent_token').fill('token-existing')
-  await page.getByRole('button', { name: '绑定已有 Agent' }).click()
-  await expect(page.getByText('Agent 已绑定')).toBeVisible()
 
   await page.getByRole('button', { name: '关闭' }).click()
   await context.setOffline(true)
@@ -301,6 +321,61 @@ test('mobile composer uploads and sends file attachments', async ({ page }) => {
   expect(new URL(postedMessages[0].url).searchParams.get('agent_id')).toBe('agent-1')
   expect(postedMessages[0].body).toMatchObject({
     content: 'with attachment\n\n[file:notes.md](https://example.com/media/notes.md)',
+  })
+})
+
+test('mobile chat renders image messages as thumbnails', async ({ page }) => {
+  await mockAuthenticatedMobileApi(page, {
+    messages: [
+      {
+        message_id: 'message-image',
+        topic_id: 'topic-task',
+        sender_id: 'mobile@example.com',
+        sender_display_name: 'Mobile Tester',
+        sender_type: 'human',
+        content: 'uploaded image\n\n![screenshot.jpg](/media/screenshot.jpg)',
+        timestamp: '2026-06-06T01:00:00.000Z',
+      },
+    ],
+  })
+  await page.goto('/mobile/feed?source=android&topic_id=topic-task&agent_id=agent-1')
+
+  const image = page.locator('img[alt="screenshot.jpg"]')
+  await expect(image).toBeVisible()
+  await expect(image).toHaveAttribute('src', /\/api\/wtt\/media\/screenshot\.jpg\?variant=thumb/)
+  await expect(image).toHaveClass(/h-24/)
+})
+
+test('mobile composer uploads image attachments with thumbnail preview', async ({ page }) => {
+  const mediaSignRequests: Array<{ headers: Record<string, string>; body: unknown }> = []
+  const postedMessages: Array<{ url: string; body: unknown }> = []
+  await mockAuthenticatedMobileApi(page, {
+    mediaCommitUrl: '/media/photo.jpg',
+    onMediaSign: (headers, body) => mediaSignRequests.push({ headers, body }),
+    onTopicMessagePost: (url, body) => postedMessages.push({ url, body }),
+  })
+  await page.goto('/mobile/feed?source=android&topic_id=topic-p2p&agent_id=agent-1')
+
+  await expect(page.getByText('P2P with Alice')).toBeVisible()
+  await page.locator('input[type="file"]').first().setInputFiles({
+    name: 'photo.jpg',
+    mimeType: '',
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+  })
+
+  await expect(page.getByText('photo.jpg')).toBeVisible()
+  await expect(page.locator('footer img[src*="/api/wtt/media/photo.jpg?variant=thumb"]')).toBeVisible()
+  await page.locator('textarea').fill('with image')
+  await page.getByLabel('发送消息').click()
+
+  await expect.poll(() => mediaSignRequests.length).toBe(1)
+  await expect.poll(() => postedMessages.length).toBe(1)
+  expect(mediaSignRequests[0].body).toMatchObject({
+    filename: 'photo.jpg',
+    mime_type: 'image/jpeg',
+  })
+  expect(postedMessages[0].body).toMatchObject({
+    content: 'with image\n\n![photo.jpg](/media/photo.jpg)',
   })
 })
 

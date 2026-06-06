@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm'
 import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
+import { proxyMediaUrl, toThumbnailUrl } from '@/lib/rich-content'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
@@ -381,6 +382,23 @@ function filenameFromUrl(url: string): string {
   return clean.split('/').pop() || 'file'
 }
 
+function isMobileImageCandidate(label: string, url: string): boolean {
+  const candidate = `${label} ${url}`.toLowerCase()
+  return /(^|\.)((png|jpe?g|gif|webp|heic|heif|bmp|avif))(\?|#|\s|$)/i.test(candidate)
+}
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/') || isMobileImageCandidate(file.name, file.name)
+}
+
+function isAudioFile(file: File): boolean {
+  return file.type.startsWith('audio/') || /(^|\.)((mp3|wav|ogg|m4a|aac|flac))$/i.test(file.name)
+}
+
+function isVideoFile(file: File): boolean {
+  return file.type.startsWith('video/') || /(^|\.)((mp4|webm|mov|m4v))$/i.test(file.name)
+}
+
 function mobileFileMeta(label: string, href: string): { isAttachment: boolean; kind: string; name: string } {
   const cleanLabel = String(label || '').replace(/^(file|audio|video):/i, '').trim()
   const name = cleanLabel || filenameFromUrl(href)
@@ -388,6 +406,7 @@ function mobileFileMeta(label: string, href: string): { isAttachment: boolean; k
   const isAudio = /(^|\.)((mp3|wav|ogg|m4a|aac|flac))(\?|#|\s|$)/i.test(candidate)
   const isVideo = /(^|\.)((mp4|webm|mov|m4v))(\?|#|\s|$)/i.test(candidate)
   const isFile = /(^|\.)((pdf|doc|docx|ppt|pptx|xls|xlsx|csv|zip|tar|gz|md|txt|html|htm))(\?|#|\s|$)/i.test(candidate)
+  if (isMobileImageCandidate(name, href)) return { isAttachment: true, kind: 'IMAGE', name }
   if (/^audio:/i.test(String(label)) || isAudio) return { isAttachment: true, kind: 'AUDIO', name }
   if (/^video:/i.test(String(label)) || isVideo) return { isAttachment: true, kind: 'VIDEO', name }
   if (/^file:/i.test(String(label)) || isFile || href.includes('/media/')) return { isAttachment: true, kind: 'FILE', name }
@@ -405,8 +424,20 @@ function MobileMarkdownLink({ href, children }: { href?: string; children?: Reac
   const label = childText(children)
   const meta = mobileFileMeta(label, url)
   if (meta.isAttachment) {
+    if (meta.kind === 'IMAGE') {
+      const imageUrl = proxyMediaUrl(url)
+      const thumbUrl = toThumbnailUrl(url)
+      return (
+        <a href={imageUrl} target="_blank" rel="noreferrer" className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white align-top shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={thumbUrl} alt={meta.name} className="h-24 w-36 bg-slate-100 object-cover" loading="lazy" />
+          <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500">{meta.name}</span>
+        </a>
+      )
+    }
+    const fileUrl = proxyMediaUrl(url)
     return (
-      <a href={url} target="_blank" rel="noreferrer" className="my-1 inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+      <a href={fileUrl} target="_blank" rel="noreferrer" className="my-1 inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
         <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-1 text-[10px] font-semibold text-slate-700">{meta.kind}</span>
         <span className="min-w-0 truncate">{meta.name}</span>
       </a>
@@ -421,10 +452,12 @@ function MobileMarkdownLink({ href, children }: { href?: string; children?: Reac
 
 function MobileMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   const url = String(src || '')
+  const imageUrl = proxyMediaUrl(url)
+  const thumbUrl = toThumbnailUrl(url)
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="my-2 block overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <a href={imageUrl} target="_blank" rel="noreferrer" className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white align-top shadow-sm">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt={alt || ''} className="max-h-60 w-full object-cover" loading="lazy" />
+      <img src={thumbUrl} alt={alt || ''} className="h-24 w-36 bg-slate-100 object-cover" loading="lazy" />
       {alt && <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500">{alt}</span>}
     </a>
   )
@@ -1537,9 +1570,9 @@ export default function MobileFeedPage() {
       })
       if (!commit.ok) throw new Error(await commit.text())
       const asset = await commit.json()
-      const isImage = file.type.startsWith('image/')
-      const isAudio = file.type.startsWith('audio/')
-      const isVideo = file.type.startsWith('video/')
+      const isImage = isImageFile(file)
+      const isAudio = isAudioFile(file)
+      const isVideo = isVideoFile(file)
       const kind: PendingAsset['kind'] = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'file'
       const assetToken = isImage
         ? `![${file.name}](${asset.url})`
@@ -1548,7 +1581,7 @@ export default function MobileFeedPage() {
           : isVideo
             ? `[video:${file.name}](${asset.url})`
             : `[file:${file.name}](${asset.url})`
-      setPendingAssets((prev) => [...prev, { url: asset.url, filename: file.name, kind, token: assetToken }])
+      setPendingAssets((prev) => [...prev, { url: proxyMediaUrl(String(asset.url || '')), filename: file.name, kind, token: assetToken }])
       setUploadProgress(100)
     } catch (error) {
       alert(error instanceof Error ? error.message : '上传失败')
@@ -1749,7 +1782,7 @@ export default function MobileFeedPage() {
                 <div key={`${asset.url}-${index}`} className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2">
                   {asset.kind === 'image' ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={asset.url} alt="" className="h-10 w-10 rounded-xl object-cover" />
+                    <img src={toThumbnailUrl(asset.url)} alt="" className="h-10 w-10 rounded-xl object-cover" />
                   ) : (
                     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[10px] font-semibold text-slate-700">FILE</span>
                   )}
