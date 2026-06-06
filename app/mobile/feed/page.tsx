@@ -207,6 +207,21 @@ function compactTopicTitle(topic?: TopicRecord | null): string {
   return name
 }
 
+function isDefaultTaskTitle(topic?: TopicRecord | null): boolean {
+  const name = String(topic?.name || '').trim()
+  if (!topic?.task_id) return false
+  return !name || name === 'New Task' || /^TASK-[a-f0-9]{8}\s+New Task$/i.test(name)
+}
+
+function titleFromFirstMessage(content: string): string {
+  const line = String(content || '')
+    .split('\n')
+    .map((item) => item.replace(/\[[^\]]+\]\([^)]+\)/g, '').trim())
+    .find(Boolean)
+  if (!line) return 'New Task'
+  return line.length > 36 ? `${line.slice(0, 34)}...` : line
+}
+
 function topicIcon(topic?: TopicRecord | null) {
   if (!topic) return Hash
   if (topic.task_id) return ClipboardList
@@ -506,6 +521,7 @@ export default function MobileFeedPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const pendingCreatedTopicIdRef = useRef('')
+  const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
   const deepLinkAgentAppliedRef = useRef('')
   const deepLinkTopicAppliedRef = useRef('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1001,6 +1017,27 @@ export default function MobileFeedPage() {
         const detail = typeof data.detail === 'string' ? data.detail : `发送失败 (${res.status})`
         throw new Error(detail)
       }
+      if (sourceTaskId) {
+        const optimisticTitle = titleFromFirstMessage(content)
+        if (optimisticTitle !== 'New Task') {
+          void mutateTopics((current?: TopicRecord[]) => {
+            if (!Array.isArray(current)) return current
+            return current.map((topic) => {
+              if (topicId(topic) !== sourceTopicId || !isDefaultTaskTitle(topic)) return topic
+              return {
+                ...topic,
+                name: optimisticTitle,
+                last_activity_at: new Date().toISOString(),
+              }
+            })
+          }, false)
+        }
+        if (pendingRenameTaskRef.current?.topicId === sourceTopicId) {
+          pendingRenameTaskRef.current = null
+        }
+        window.setTimeout(() => void mutateTopics(), 1200)
+        window.setTimeout(() => void mutateTopics(), 3500)
+      }
       await mutateMessages()
       await mutateTopics()
     } catch (error) {
@@ -1050,8 +1087,10 @@ export default function MobileFeedPage() {
       const record = data as Record<string, unknown>
       const nestedTopic = (record.topic && typeof record.topic === 'object' ? record.topic : {}) as Record<string, unknown>
       const id = String(record.topic_id || nestedTopic.topic_id || nestedTopic.id || '').trim()
+      const taskId = String(record.id || record.task_id || '').trim()
       if (id) {
         pendingCreatedTopicIdRef.current = id
+        if (taskId) pendingRenameTaskRef.current = { taskId, topicId: id }
         const optimisticTopic: TopicRecord = {
           id,
           topic_id: id,
@@ -1059,7 +1098,7 @@ export default function MobileFeedPage() {
           description: String(nestedTopic.description || 'General task conversation'),
           type: 'discussion',
           topic_type: 'discussion',
-          task_id: String(record.id || record.task_id || ''),
+          task_id: taskId,
           task_type: 'general',
           last_activity_at: new Date().toISOString(),
         }
@@ -1253,13 +1292,14 @@ export default function MobileFeedPage() {
           <button onClick={() => setSelectorOpen(true)} className="min-w-0 flex-1 text-left">
             <div className="flex min-w-0 items-center gap-2">
               <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500" />
-              <div className="truncate text-[15px] font-semibold leading-5">{compactTopicTitle(selectedTopic)}</div>
+              <div className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-6">{compactTopicTitle(selectedTopic)}</div>
             </div>
-            <div className="flex items-center gap-1 truncate text-[11px] font-medium text-slate-500">
-              <span className={`h-2 w-2 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className="truncate">{selectedAgent ? compactAgentName(selectedAgent) : '选择 Agent'}</span>
-              {selectedTopicMeta && <span className="truncate">· {selectedTopicMeta}</span>}
-              <ChevronDown className="h-3 w-3" />
+            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] font-medium leading-4 text-slate-500">
+              <span className={`h-2 w-2 shrink-0 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+              <span className="min-w-0 truncate">{selectedAgent ? compactAgentName(selectedAgent) : '选择 Agent'}</span>
+              {selectedTopicMeta && <span className="shrink-0 text-slate-300">·</span>}
+              {selectedTopicMeta && <span className="min-w-0 truncate">{selectedTopicMeta}</span>}
+              <ChevronDown className="h-3 w-3 shrink-0" />
             </div>
           </button>
           <button
