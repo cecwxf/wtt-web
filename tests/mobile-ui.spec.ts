@@ -58,7 +58,14 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
   })
 }
 
-async function mockAuthenticatedMobileApi(page: Page) {
+async function mockAuthenticatedMobileApi(
+  page: Page,
+  options: {
+    topics?: typeof mockTopics
+    topicMembers?: Array<{ agent_id: string; display_name?: string; role?: string }>
+    onTopicMessagePost?: (url: string) => void
+  } = {},
+) {
   await page.route('**/api/auth/session', async (route) => {
     await fulfillJson(route, {
       user: { name: 'Mobile Tester', email: 'mobile@example.com' },
@@ -90,11 +97,11 @@ async function mockAuthenticatedMobileApi(page: Page) {
   })
 
   await page.route('**/api/wtt/topics/subscribed**', async (route) => {
-    await fulfillJson(route, mockTopics)
+    await fulfillJson(route, options.topics || mockTopics)
   })
 
   await page.route('**/api/wtt/topics/*/members', async (route) => {
-    await fulfillJson(route, [
+    await fulfillJson(route, options.topicMembers || [
       { agent_id: 'agent-1', display_name: 'Alice Agent', role: 'owner' },
       { agent_id: 'agent-2', display_name: 'Build Agent', role: 'member' },
     ])
@@ -102,6 +109,7 @@ async function mockAuthenticatedMobileApi(page: Page) {
 
   await page.route('**/api/wtt/topics/*/messages**', async (route) => {
     if (route.request().method() === 'POST') {
+      options.onTopicMessagePost?.(route.request().url())
       await fulfillJson(route, {
         message_id: 'message-new',
         topic_id: 'topic-task',
@@ -211,6 +219,23 @@ test('mobile feed supports topic browsing, settings, agent binding, and offline 
   await page.getByLabel('发送消息').click()
   await expect(page.getByText('当前离线，消息已保留，恢复网络后可重试。')).toBeVisible()
   await context.setOffline(false)
+})
+
+test('mobile group topic send uses an owned member agent', async ({ page }) => {
+  const postUrls: string[] = []
+  await mockAuthenticatedMobileApi(page, {
+    topicMembers: [{ agent_id: 'agent-2', display_name: 'Build Agent', role: 'member' }],
+    onTopicMessagePost: (url) => postUrls.push(url),
+  })
+  await page.goto('/mobile/feed?source=android&topic_id=topic-group&agent_id=agent-1')
+
+  await expect(page.getByText('Research Group')).toBeVisible()
+  await expect(page.getByText('1 成员')).toBeVisible()
+  await page.locator('textarea').fill('hello group')
+  await page.getByLabel('发送消息').click()
+
+  await expect.poll(() => postUrls[0] || '').toContain('topics/topic-group/messages')
+  expect(new URL(postUrls[0]).searchParams.get('agent_id')).toBe('agent-2')
 })
 
 test('android mobile settings keeps recovery controls visible', async ({ page }) => {

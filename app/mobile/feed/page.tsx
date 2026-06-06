@@ -38,6 +38,7 @@ type TopicRecord = {
   last_activity_at?: string
   last_message_at?: string
   created_at?: string
+  member_agent_ids?: string[]
 }
 
 type TopicGroupKey = 'p2p' | 'task' | 'group' | 'subscriber'
@@ -277,6 +278,28 @@ function runtimeLine(runtime?: RuntimeInfo): string {
   return [runtime.adapter || runtime.provider, runtime.current_model || runtime.model].filter(Boolean).join(' · ')
 }
 
+function agentSearchText(agent: AgentRecord, runtime?: RuntimeInfo, host = ''): string {
+  return [
+    agent.agent_id,
+    agent.name || '',
+    agent.display_name || '',
+    host,
+    runtimeLine(runtime),
+  ].join('\n').toLowerCase()
+}
+
+function agentSearchRank(agent: AgentRecord, query: string, host = ''): number {
+  const fields = [
+    agent.agent_id,
+    agent.name || '',
+    agent.display_name || '',
+    host,
+  ].map((field) => field.toLowerCase()).filter(Boolean)
+  if (fields.some((field) => field === query)) return 0
+  if (fields.some((field) => field.startsWith(query))) return 1
+  return 2
+}
+
 function humanSender(session: unknown): string {
   const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
   const uid = s?.userId || ''
@@ -315,6 +338,11 @@ function normalizeWsMessage(raw: unknown): ChatMessage | null {
     content,
     timestamp: String(msg.timestamp || msg.created_at || new Date().toISOString()),
   }
+}
+
+function shouldCountUnreadMessage(message: ChatMessage): boolean {
+  const content = stripMobileMetaBlocks(message.content).trim()
+  return Boolean(content && !content.startsWith('[TASK_STATUS]'))
 }
 
 function collectNestedRecords(value: unknown, out: Record<string, unknown>[] = [], depth = 0): Record<string, unknown>[] {
@@ -433,6 +461,7 @@ export default function MobileFeedPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const sheetHistoryRef = useRef(false)
+  const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -566,6 +595,21 @@ export default function MobileFeedPage() {
     return [...list].sort((a, b) => new Date(topicTime(b)).getTime() - new Date(topicTime(a)).getTime())
   }, [topicsRaw])
 
+  const updateTopicUnreadCache = useCallback((targetTopicId: string, updater: (topic: TopicRecord) => TopicRecord) => {
+    if (!targetTopicId) return
+    void mutateTopics((current?: TopicRecord[]) => {
+      if (!Array.isArray(current)) return current
+      let changed = false
+      const next = (current as TopicRecord[]).map((topic) => {
+        if (topicId(topic) !== targetTopicId) return topic
+        const updated = updater(topic)
+        if (updated !== topic) changed = true
+        return updated
+      })
+      return changed ? next : current
+    }, false)
+  }, [mutateTopics])
+
   useEffect(() => {
     if (!selectedTopicId && topics.length) {
       setSelectedTopicId(topicId(topics[0]))
@@ -641,6 +685,45 @@ export default function MobileFeedPage() {
     [selectedTopicMembersRaw],
   )
 
+  const selectedTopicMemberIdSet = useMemo(() => {
+    const ids = new Set<string>()
+    for (const id of selectedTopic?.member_agent_ids || []) {
+      if (id) ids.add(String(id))
+    }
+    for (const member of selectedTopicMembers) {
+      if (member.agent_id) ids.add(member.agent_id)
+    }
+    return ids
+  }, [selectedTopic?.member_agent_ids, selectedTopicMembers])
+
+  const topicActorAgentId = useMemo(() => {
+    if (!selectedTopic || selectedTopicMemberIdSet.size === 0) return selectedAgentId
+    if (!isGroupTopic(selectedTopic) || selectedTaskId) return selectedAgentId
+    if (selectedAgentId && selectedTopicMemberIdSet.has(selectedAgentId)) return selectedAgentId
+    const ownedMember = agents.find((agent) => selectedTopicMemberIdSet.has(agent.agent_id))
+    return ownedMember?.agent_id || selectedAgentId
+  }, [agents, selectedAgentId, selectedTaskId, selectedTopic, selectedTopicMemberIdSet])
+
+  const topicActorAgent = useMemo(
+    () => agents.find((agent) => agent.agent_id === topicActorAgentId) || selectedAgent,
+    [agents, selectedAgent, topicActorAgentId],
+  )
+
+  useEffect(() => {
+    if (!selectedTopicId) return
+    updateTopicUnreadCache(selectedTopicId, (topic) => {
+      if (!Number(topic.unread_count || 0)) return topic
+      return { ...topic, unread_count: 0 }
+    })
+    if (!Array.isArray(messagesRaw)) return
+
+    const now = Date.now()
+    const prev = lastReadSyncRef.current
+    if (prev && prev.topicId === selectedTopicId && now - prev.ts < 5000) return
+    lastReadSyncRef.current = { topicId: selectedTopicId, ts: now }
+    void mutateTopics()
+  }, [messagesRaw, mutateTopics, selectedTopicId, updateTopicUnreadCache])
+
   const { data: billing } = useSWR(
     token ? ['mobile-billing', token] : null,
     async () => {
@@ -678,7 +761,23 @@ export default function MobileFeedPage() {
 
     const incoming = normalizeWsMessage(rawEvent)
     if (!incoming) return
-    if (incoming.topic_id === selectedTopicId) {
+    const incomingTopicId = incoming.topic_id || ''
+    const displayable = shouldCountUnreadMessage(incoming)
+    const now = new Date().toISOString()
+    if (incomingTopicId) {
+      updateTopicUnreadCache(incomingTopicId, (topic) => {
+        const currentUnread = Number(topic.unread_count || 0)
+        if (incomingTopicId === selectedTopicId) {
+          return { ...topic, last_activity_at: now, unread_count: 0 }
+        }
+        return {
+          ...topic,
+          last_activity_at: now,
+          unread_count: displayable ? currentUnread + 1 : currentUnread,
+        }
+      })
+    }
+    if (incomingTopicId === selectedTopicId) {
       void mutateMessages((current: unknown) => {
         const list = normalizeMessages(current)
         if (list.some((m) => m.message_id === incoming.message_id)) return current
@@ -696,8 +795,7 @@ export default function MobileFeedPage() {
         }))
       }
     }
-    void mutateTopics()
-  }, [agents, mutateMessages, mutateTopics, selectedAgentId, selectedTopicId])
+  }, [agents, mutateMessages, selectedAgentId, selectedTopicId, updateTopicUnreadCache])
 
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=mobile-web` : ''
   const { state: wsState } = useWebSocket({ url: wsUrl, enabled: Boolean(token && selectedAgentId), token, onMessage: handleWsMessage })
@@ -738,18 +836,23 @@ export default function MobileFeedPage() {
 
   const groupedAgents = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const groups = new Map<string, AgentRecord[]>()
+    const groups = new Map<string, Array<{ agent: AgentRecord; rank: number }>>()
     for (const agent of agents) {
       const runtime = runtimeMap[agent.agent_id]
       const host = runtimeHostLabel(agent, runtime)
-      const haystack = `${host} ${displayName(agent)} ${agent.agent_id} ${runtimeLine(runtime)}`.toLowerCase()
+      const haystack = agentSearchText(agent, runtime, host)
       if (q && !haystack.includes(q)) continue
-      groups.set(host, [...(groups.get(host) || []), agent])
+      groups.set(host, [...(groups.get(host) || []), { agent, rank: q ? agentSearchRank(agent, q, host) : 2 }])
     }
     return Array.from(groups.entries())
       .map(([host, rows]) => ({
         host,
-        rows: [...rows].sort((a, b) => displayName(a).localeCompare(displayName(b))),
+        rows: [...rows]
+          .sort((a, b) => {
+            if (a.rank !== b.rank) return a.rank - b.rank
+            return displayName(a.agent).localeCompare(displayName(b.agent))
+          })
+          .map((row) => row.agent),
       }))
       .sort((a, b) => a.host.localeCompare(b.host))
   }, [agents, runtimeMap, search])
@@ -774,9 +877,10 @@ export default function MobileFeedPage() {
   const sendMessage = useCallback(async (retry?: FailedSend) => {
     const sourceDraft = retry ? retry.draft : draft
     const sourceAssets = retry ? retry.assets : pendingAssets
-    const sourceAgentId = retry ? retry.agentId : selectedAgentId
+    const sourceAgentId = retry ? retry.agentId : (topicActorAgentId || selectedAgentId)
     const sourceTopicId = retry ? retry.topicId : selectedTopicId
     const sourceTaskId = retry ? retry.taskId : selectedTaskId
+    const sourceAgent = agents.find((agent) => agent.agent_id === sourceAgentId) || topicActorAgent
     const attachmentContent = sourceAssets.map((asset) => asset.token).join('\n\n')
     const content = retry?.content || [sourceDraft.trim(), attachmentContent].filter(Boolean).join('\n\n')
     if (!content || !token || !sourceAgentId || !sourceTopicId || sending) return
@@ -804,7 +908,7 @@ export default function MobileFeedPage() {
       ...prev,
       [sourceTopicId]: appendTypingStatus(prev[sourceTopicId], {
         agentId: sourceAgentId,
-        agentName: displayName(selectedAgent),
+        agentName: displayName(sourceAgent),
         statusText: '消息已发送，等待 Agent 接收',
         statusKind: 'queued',
       }, now),
@@ -860,7 +964,7 @@ export default function MobileFeedPage() {
     } finally {
       setSending(false)
     }
-  }, [draft, mutateMessages, mutateTopics, pendingAssets, selectedAgent, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token])
+  }, [agents, draft, mutateMessages, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
 
   const createDefaultTask = useCallback(async () => {
     if (!token || !selectedAgentId || creatingTask) return
@@ -1408,6 +1512,7 @@ export default function MobileFeedPage() {
                             <button
                               key={id}
                               onClick={() => {
+                                updateTopicUnreadCache(id, (row) => ({ ...row, unread_count: 0 }))
                                 setSelectedTopicId(id)
                                 closeSheet('selector')
                               }}
