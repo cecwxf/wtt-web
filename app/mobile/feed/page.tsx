@@ -16,6 +16,41 @@ const COMPLETE_HOLD_MS = 4500
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 const OPTIMISTIC_TASK_TITLE_TTL_MS = 30 * 60 * 1000
 
+type MobileSlashCommand = {
+  cmd: string
+  desc: string
+  family: 'WTT' | 'Codex' | 'Claude' | 'Gemini' | 'Agent'
+}
+
+const MOBILE_SLASH_COMMANDS: MobileSlashCommand[] = [
+  { cmd: '/new task', desc: '创建普通任务', family: 'WTT' },
+  { cmd: '/new code task', desc: '创建代码任务', family: 'WTT' },
+  { cmd: '/new research task', desc: '创建研究任务', family: 'WTT' },
+  { cmd: '/new topic', desc: '创建 Topic', family: 'WTT' },
+  { cmd: '/run', desc: '运行当前任务', family: 'WTT' },
+  { cmd: '/workers', desc: '查看 Agent workers', family: 'WTT' },
+  { cmd: '/status', desc: '查看运行状态', family: 'Agent' },
+  { cmd: '/help', desc: '查看帮助', family: 'Agent' },
+  { cmd: '/model', desc: '查看或切换模型', family: 'Agent' },
+  { cmd: '/compact', desc: '压缩上下文', family: 'Agent' },
+  { cmd: '/clear', desc: '清空当前会话视图', family: 'Agent' },
+  { cmd: '/new', desc: '开启新运行时会话', family: 'Agent' },
+  { cmd: '/review', desc: '审查当前修改', family: 'Codex' },
+  { cmd: '/init', desc: '初始化项目上下文', family: 'Codex' },
+  { cmd: '/approvals', desc: '查看审批策略', family: 'Codex' },
+  { cmd: '/permissions', desc: '查看权限设置', family: 'Codex' },
+  { cmd: '/diff', desc: '查看当前 diff', family: 'Codex' },
+  { cmd: '/mcp', desc: '查看 MCP 工具', family: 'Codex' },
+  { cmd: '/agents', desc: '管理子 Agent', family: 'Claude' },
+  { cmd: '/config', desc: '运行时配置', family: 'Claude' },
+  { cmd: '/memory', desc: '查看或管理记忆', family: 'Claude' },
+  { cmd: '/cost', desc: '查看用量成本', family: 'Claude' },
+  { cmd: '/tools', desc: '查看可用工具', family: 'Gemini' },
+  { cmd: '/stats', desc: '查看会话统计', family: 'Gemini' },
+  { cmd: '/resume', desc: '恢复会话', family: 'Agent' },
+  { cmd: '/exit', desc: '退出或断开运行时', family: 'Agent' },
+]
+
 type AgentRecord = {
   agent_id: string
   display_name?: string
@@ -555,6 +590,13 @@ export default function MobileFeedPage() {
   const [failedSend, setFailedSend] = useState<FailedSend | null>(null)
   const [browserOnline, setBrowserOnline] = useState(true)
   const [optimisticTaskTitles, setOptimisticTaskTitles] = useState<Record<string, OptimisticTaskTitle>>({})
+  const [slashOpen, setSlashOpen] = useState(false)
+  const [slashFilter, setSlashFilter] = useState('')
+  const [slashIndex, setSlashIndex] = useState(0)
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const [mentionStartPos, setMentionStartPos] = useState(-1)
   const [isAndroidWebView, setIsAndroidWebView] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
@@ -875,6 +917,55 @@ export default function MobileFeedPage() {
     [agents, selectedAgent, topicActorAgentId],
   )
 
+  const mentionCandidates = useMemo(() => {
+    const rows = new Map<string, { agentId: string; label: string; meta: string }>()
+    const canMentionAll = Boolean(selectedTopic && isGroupTopic(selectedTopic))
+    if (canMentionAll) rows.set('__all__', { agentId: '__all__', label: 'all', meta: '所有成员' })
+
+    for (const member of selectedTopicMembers) {
+      const agentId = String(member.agent_id || '').trim()
+      if (!agentId) continue
+      const label = String(member.display_name || '').trim() || compactId(agentId, 9, 4)
+      const meta = String(member.role || '').trim() || compactId(agentId, 9, 4)
+      rows.set(agentId, { agentId, label, meta })
+    }
+
+    for (const id of selectedTopic?.member_agent_ids || []) {
+      const agentId = String(id || '').trim()
+      if (!agentId || rows.has(agentId)) continue
+      const agent = agents.find((item) => item.agent_id === agentId)
+      const label = agent ? displayName(agent) : compactId(agentId, 9, 4)
+      rows.set(agentId, { agentId, label, meta: compactId(agentId, 9, 4) })
+    }
+
+    for (const agent of agents) {
+      if (!agent.agent_id || rows.has(agent.agent_id)) continue
+      rows.set(agent.agent_id, {
+        agentId: agent.agent_id,
+        label: displayName(agent),
+        meta: runtimeHostLabel(agent, runtimeMap[agent.agent_id]),
+      })
+    }
+
+    return Array.from(rows.values())
+  }, [agents, runtimeMap, selectedTopic, selectedTopicMembers])
+
+  const filteredMentions = useMemo(() => {
+    const q = mentionQuery.trim().toLowerCase()
+    if (!q) return mentionCandidates.slice(0, 10)
+    return mentionCandidates
+      .filter((candidate) => `${candidate.label} ${candidate.agentId} ${candidate.meta}`.toLowerCase().includes(q))
+      .slice(0, 10)
+  }, [mentionCandidates, mentionQuery])
+
+  const filteredSlashCommands = useMemo(() => {
+    const q = slashFilter.trim().toLowerCase()
+    const rows = q
+      ? MOBILE_SLASH_COMMANDS.filter((command) => `${command.cmd} ${command.desc} ${command.family}`.toLowerCase().includes(q))
+      : MOBILE_SLASH_COMMANDS
+    return rows.slice(0, 10)
+  }, [slashFilter])
+
   useEffect(() => {
     if (!selectedTopicId) return
     updateTopicUnreadCache(selectedTopicId, (topic) => {
@@ -1081,6 +1172,89 @@ export default function MobileFeedPage() {
     return groups
   }, [filteredTopics])
 
+  useEffect(() => {
+    setSlashIndex((index) => Math.min(index, Math.max(filteredSlashCommands.length - 1, 0)))
+  }, [filteredSlashCommands.length])
+
+  useEffect(() => {
+    setMentionIndex((index) => Math.min(index, Math.max(filteredMentions.length - 1, 0)))
+  }, [filteredMentions.length])
+
+  useEffect(() => {
+    setSlashOpen(false)
+    setMentionOpen(false)
+    setSlashFilter('')
+    setMentionQuery('')
+    setMentionStartPos(-1)
+  }, [selectedTopicId])
+
+  const updateComposerDraft = useCallback((value: string, cursorPos?: number | null) => {
+    setDraft(value)
+
+    const cursor = typeof cursorPos === 'number' ? cursorPos : value.length
+    const textUpToCursor = value.slice(0, cursor)
+    const singleLine = !value.includes('\n')
+    const slashFilterText = singleLine && textUpToCursor.startsWith('/') ? textUpToCursor.trim() : ''
+    if (slashFilterText) {
+      setSlashOpen(true)
+      setSlashFilter(slashFilterText)
+      setSlashIndex(0)
+    } else {
+      setSlashOpen(false)
+      setSlashFilter('')
+    }
+
+    const mentionMatch = textUpToCursor.match(/@([^\s@]*)$/)
+    if (mentionMatch && mentionCandidates.length > 0) {
+      setMentionOpen(true)
+      setMentionQuery(mentionMatch[1] || '')
+      setMentionStartPos(cursor - mentionMatch[0].length)
+      setMentionIndex(0)
+    } else {
+      setMentionOpen(false)
+      setMentionQuery('')
+      setMentionStartPos(-1)
+    }
+  }, [mentionCandidates.length])
+
+  const closeComposerSuggestions = useCallback(() => {
+    setSlashOpen(false)
+    setSlashFilter('')
+    setMentionOpen(false)
+    setMentionQuery('')
+    setMentionStartPos(-1)
+  }, [])
+
+  const insertSlashCommand = useCallback((command: MobileSlashCommand) => {
+    const next = `${command.cmd} `
+    setDraft(next)
+    setSlashOpen(false)
+    setSlashFilter('')
+    requestAnimationFrame(() => {
+      composerRef.current?.focus()
+      composerRef.current?.setSelectionRange(next.length, next.length)
+    })
+  }, [])
+
+  const insertMention = useCallback((candidate: { agentId: string; label: string }) => {
+    const textarea = composerRef.current
+    if (!textarea || mentionStartPos < 0) return
+    const cursor = textarea.selectionStart
+    const before = draft.slice(0, mentionStartPos)
+    const after = draft.slice(cursor)
+    const mention = candidate.agentId === '__all__' ? '@all ' : `@${candidate.label} `
+    const next = before + mention + after
+    const nextCursor = before.length + mention.length
+    setDraft(next)
+    setMentionOpen(false)
+    setMentionQuery('')
+    setMentionStartPos(-1)
+    requestAnimationFrame(() => {
+      textarea.focus()
+      textarea.setSelectionRange(nextCursor, nextCursor)
+    })
+  }, [draft, mentionStartPos])
+
   const sendMessage = useCallback(async (retry?: FailedSend) => {
     const sourceDraft = retry ? retry.draft : draft
     const sourceAssets = retry ? retry.assets : pendingAssets
@@ -1109,6 +1283,7 @@ export default function MobileFeedPage() {
     if (!retry) {
       setDraft('')
       setPendingAssets([])
+      closeComposerSuggestions()
     }
     const now = Date.now()
     setTypingByTopic((prev) => ({
@@ -1185,7 +1360,7 @@ export default function MobileFeedPage() {
     } finally {
       setSending(false)
     }
-  }, [agents, draft, mutateMessages, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
+  }, [agents, closeComposerSuggestions, draft, mutateMessages, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
 
   const createDefaultTask = useCallback(async () => {
     if (!token || !selectedAgentId || creatingTask) return
@@ -1241,12 +1416,13 @@ export default function MobileFeedPage() {
       }
       void mutateTopics()
       setDraft('')
+      closeComposerSuggestions()
     } catch {
       alert('网络异常，请稍后重试')
     } finally {
       setCreatingTask(false)
     }
-  }, [creatingTask, mutateTopics, selectedAgentId, session, token])
+  }, [closeComposerSuggestions, creatingTask, mutateTopics, selectedAgentId, session, token])
 
   const uploadAsset = useCallback(async (file: File) => {
     if (!token) {
@@ -1520,6 +1696,46 @@ export default function MobileFeedPage() {
               正在上传 {uploadProgress ?? 0}%
             </div>
           )}
+          {slashOpen && filteredSlashCommands.length > 0 && (
+            <div className="mb-2 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 bg-white py-1 text-sm shadow-xl">
+              {filteredSlashCommands.map((command, index) => (
+                <button
+                  key={command.cmd}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => insertSlashCommand(command)}
+                  className={`flex w-full items-center gap-2 px-3 py-2.5 text-left ${index === slashIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                >
+                  <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600">{command.family}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-slate-900">{command.cmd}</span>
+                    <span className="block truncate text-xs font-medium text-slate-500">{command.desc}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {mentionOpen && filteredMentions.length > 0 && (
+            <div className="mb-2 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 bg-white py-1 text-sm shadow-xl">
+              {filteredMentions.map((candidate, index) => (
+                <button
+                  key={candidate.agentId}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => insertMention(candidate)}
+                  className={`flex w-full items-center gap-2 px-3 py-2.5 text-left ${index === mentionIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+                    {candidate.label.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-slate-900">@{candidate.label}</span>
+                    <span className="block truncate text-xs font-medium text-slate-500">{candidate.meta}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-2 rounded-[1.4rem] border border-slate-300 bg-white p-2">
             <div className="relative">
               <button onClick={() => setAttachOpen((v) => !v)} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100" aria-label="添加附件">
@@ -1542,8 +1758,52 @@ export default function MobileFeedPage() {
             <textarea
               ref={composerRef}
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => updateComposerDraft(event.target.value, event.target.selectionStart)}
               onKeyDown={(event) => {
+                if (mentionOpen && filteredMentions.length > 0) {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    setMentionIndex((index) => (index + 1) % filteredMentions.length)
+                    return
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    setMentionIndex((index) => (index - 1 + filteredMentions.length) % filteredMentions.length)
+                    return
+                  }
+                  if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+                    event.preventDefault()
+                    const selected = filteredMentions[mentionIndex]
+                    if (selected) insertMention(selected)
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    setMentionOpen(false)
+                    return
+                  }
+                }
+                if (slashOpen && filteredSlashCommands.length > 0) {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    setSlashIndex((index) => (index + 1) % filteredSlashCommands.length)
+                    return
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    setSlashIndex((index) => (index - 1 + filteredSlashCommands.length) % filteredSlashCommands.length)
+                    return
+                  }
+                  if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+                    event.preventDefault()
+                    const selected = filteredSlashCommands[slashIndex]
+                    if (selected) insertSlashCommand(selected)
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    setSlashOpen(false)
+                    return
+                  }
+                }
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault()
                   void sendMessage()
