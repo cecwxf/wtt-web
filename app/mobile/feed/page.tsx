@@ -14,6 +14,7 @@ const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
 const COMPLETE_HOLD_MS = 4500
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+const OPTIMISTIC_TASK_TITLE_TTL_MS = 30 * 60 * 1000
 
 type AgentRecord = {
   agent_id: string
@@ -39,6 +40,11 @@ type TopicRecord = {
   last_message_at?: string
   created_at?: string
   member_agent_ids?: string[]
+}
+
+type OptimisticTaskTitle = {
+  title: string
+  expiresAt: number
 }
 
 type TopicGroupKey = 'p2p' | 'task' | 'group' | 'subscriber'
@@ -210,7 +216,7 @@ function compactTopicTitle(topic?: TopicRecord | null): string {
 function isDefaultTaskTitle(topic?: TopicRecord | null): boolean {
   const name = String(topic?.name || '').trim()
   if (!topic?.task_id) return false
-  return !name || name === 'New Task' || /^TASK-[a-f0-9]{8}\s+New Task$/i.test(name)
+  return !name || name === 'New Task' || /^TASK-[a-f0-9]{8}$/i.test(name) || /^TASK-[a-f0-9]{8}\s+New Task$/i.test(name)
 }
 
 function titleFromFirstMessage(content: string): string {
@@ -553,6 +559,7 @@ export default function MobileFeedPage() {
   const [creatingTask, setCreatingTask] = useState(false)
   const [failedSend, setFailedSend] = useState<FailedSend | null>(null)
   const [browserOnline, setBrowserOnline] = useState(true)
+  const [optimisticTaskTitles, setOptimisticTaskTitles] = useState<Record<string, OptimisticTaskTitle>>({})
   const [claimAgentId, setClaimAgentId] = useState('')
   const [claimAgentToken, setClaimAgentToken] = useState('')
   const [claimDisplayName, setClaimDisplayName] = useState('')
@@ -711,8 +718,39 @@ export default function MobileFeedPage() {
 
   const topics = useMemo(() => {
     const list = (Array.isArray(topicsRaw) ? topicsRaw : []).filter((t) => topicId(t))
-    return [...list].sort((a, b) => new Date(topicTime(b)).getTime() - new Date(topicTime(a)).getTime())
-  }, [topicsRaw])
+    const now = Date.now()
+    return [...list]
+      .map((topic) => {
+        const id = topicId(topic)
+        const optimistic = optimisticTaskTitles[id]
+        if (!optimistic || optimistic.expiresAt <= now || !isDefaultTaskTitle(topic)) return topic
+        return {
+          ...topic,
+          name: optimistic.title,
+          last_activity_at: topic.last_activity_at || new Date(now).toISOString(),
+        }
+      })
+      .sort((a, b) => new Date(topicTime(b)).getTime() - new Date(topicTime(a)).getTime())
+  }, [optimisticTaskTitles, topicsRaw])
+
+  useEffect(() => {
+    if (!Object.keys(optimisticTaskTitles).length) return
+    const now = Date.now()
+    const rawList = Array.isArray(topicsRaw) ? topicsRaw : []
+    setOptimisticTaskTitles((current) => {
+      let changed = false
+      const next: Record<string, OptimisticTaskTitle> = {}
+      for (const [id, optimistic] of Object.entries(current)) {
+        const rawTopic = rawList.find((topic) => topicId(topic) === id)
+        if (optimistic.expiresAt <= now || (rawTopic && !isDefaultTaskTitle(rawTopic))) {
+          changed = true
+          continue
+        }
+        next[id] = optimistic
+      }
+      return changed ? next : current
+    })
+  }, [optimisticTaskTitles, topicsRaw])
 
   const updateTopicUnreadCache = useCallback((targetTopicId: string, updater: (topic: TopicRecord) => TopicRecord) => {
     if (!targetTopicId) return
@@ -1136,6 +1174,11 @@ export default function MobileFeedPage() {
       if (sourceTaskId) {
         const optimisticTitle = titleFromFirstMessage(content)
         if (optimisticTitle !== 'New Task') {
+          const expiresAt = Date.now() + OPTIMISTIC_TASK_TITLE_TTL_MS
+          setOptimisticTaskTitles((current) => ({
+            ...current,
+            [sourceTopicId]: { title: optimisticTitle, expiresAt },
+          }))
           void mutateTopics((current?: TopicRecord[]) => {
             if (!Array.isArray(current)) return current
             return current.map((topic) => {
