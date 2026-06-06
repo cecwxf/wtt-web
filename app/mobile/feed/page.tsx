@@ -1106,6 +1106,10 @@ export default function MobileFeedPage() {
   }, [mutateAgents, provisionDisplayName, provisioningAgent, token])
 
   const uploadAsset = useCallback(async (file: File) => {
+    if (!token) {
+      alert('请先登录后再上传附件')
+      return
+    }
     if (file.size > MAX_UPLOAD_BYTES) {
       alert(`文件过大，最大 100MB，当前 ${(file.size / (1024 * 1024)).toFixed(1)}MB`)
       return
@@ -1115,7 +1119,7 @@ export default function MobileFeedPage() {
     try {
       const sign = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({ filename: file.name, mime_type: file.type || 'application/octet-stream', size: file.size }),
       })
       if (!sign.ok) throw new Error(await sign.text())
@@ -1137,7 +1141,7 @@ export default function MobileFeedPage() {
       setUploadProgress(95)
       const commit = await fetch(`${CLIENT_WTT_API_BASE}/media/commit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({ upload_token: signed.upload_token }),
       })
       if (!commit.ok) throw new Error(await commit.text())
@@ -1146,14 +1150,14 @@ export default function MobileFeedPage() {
       const isAudio = file.type.startsWith('audio/')
       const isVideo = file.type.startsWith('video/')
       const kind: PendingAsset['kind'] = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'file'
-      const token = isImage
+      const assetToken = isImage
         ? `![${file.name}](${asset.url})`
         : isAudio
           ? `[audio:${file.name}](${asset.url})`
           : isVideo
             ? `[video:${file.name}](${asset.url})`
             : `[file:${file.name}](${asset.url})`
-      setPendingAssets((prev) => [...prev, { url: asset.url, filename: file.name, kind, token }])
+      setPendingAssets((prev) => [...prev, { url: asset.url, filename: file.name, kind, token: assetToken }])
       setUploadProgress(100)
     } catch (error) {
       alert(error instanceof Error ? error.message : '上传失败')
@@ -1161,7 +1165,7 @@ export default function MobileFeedPage() {
       setUploading(false)
       setUploadProgress(null)
     }
-  }, [])
+  }, [token])
 
   const insertLocation = useCallback(() => {
     setAttachOpen(false)

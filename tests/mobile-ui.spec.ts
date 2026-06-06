@@ -63,7 +63,9 @@ async function mockAuthenticatedMobileApi(
   options: {
     topics?: typeof mockTopics
     topicMembers?: Array<{ agent_id: string; display_name?: string; role?: string }>
-    onTopicMessagePost?: (url: string) => void
+    onTopicMessagePost?: (url: string, body: unknown) => void
+    onMediaSign?: (headers: Record<string, string>, body: unknown) => void
+    onMediaCommit?: (headers: Record<string, string>, body: unknown) => void
   } = {},
 ) {
   await page.route('**/api/auth/session', async (route) => {
@@ -109,7 +111,7 @@ async function mockAuthenticatedMobileApi(
 
   await page.route('**/api/wtt/topics/*/messages**', async (route) => {
     if (route.request().method() === 'POST') {
-      options.onTopicMessagePost?.(route.request().url())
+      options.onTopicMessagePost?.(route.request().url(), route.request().postDataJSON())
       await fulfillJson(route, {
         message_id: 'message-new',
         topic_id: 'topic-task',
@@ -140,6 +142,25 @@ async function mockAuthenticatedMobileApi(
         timestamp: '2026-06-06T01:01:00.000Z',
       },
     ])
+  })
+
+  await page.route('**/api/wtt/media/sign', async (route) => {
+    options.onMediaSign?.(route.request().headers(), route.request().postDataJSON())
+    await fulfillJson(route, {
+      upload_token: 'upload-token-notes',
+      upload_url: '/media/upload/upload-token-notes',
+    })
+  })
+
+  await page.route('**/api/wtt/media/upload/*', async (route) => {
+    await route.fulfill({ status: 204, body: '' })
+  })
+
+  await page.route('**/api/wtt/media/commit', async (route) => {
+    options.onMediaCommit?.(route.request().headers(), route.request().postDataJSON())
+    await fulfillJson(route, {
+      url: 'https://example.com/media/notes.md',
+    })
   })
 
   await page.route('**/api/wtt/billing/me', async (route) => {
@@ -236,6 +257,44 @@ test('mobile group topic send uses an owned member agent', async ({ page }) => {
 
   await expect.poll(() => postUrls[0] || '').toContain('topics/topic-group/messages')
   expect(new URL(postUrls[0]).searchParams.get('agent_id')).toBe('agent-2')
+})
+
+test('mobile composer uploads and sends file attachments', async ({ page }) => {
+  const mediaSignRequests: Array<{ headers: Record<string, string>; body: unknown }> = []
+  const mediaCommitRequests: Array<{ headers: Record<string, string>; body: unknown }> = []
+  const postedMessages: Array<{ url: string; body: unknown }> = []
+  await mockAuthenticatedMobileApi(page, {
+    onMediaSign: (headers, body) => mediaSignRequests.push({ headers, body }),
+    onMediaCommit: (headers, body) => mediaCommitRequests.push({ headers, body }),
+    onTopicMessagePost: (url, body) => postedMessages.push({ url, body }),
+  })
+  await page.goto('/mobile/feed?source=android&topic_id=topic-p2p&agent_id=agent-1')
+
+  await expect(page.getByText('P2P with Alice')).toBeVisible()
+  await page.locator('input[type="file"]').first().setInputFiles({
+    name: 'notes.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from('# mobile attachment\n'),
+  })
+  await expect(page.getByText('notes.md')).toBeVisible()
+  await expect(page.getByText('FILE').first()).toBeVisible()
+  await page.locator('textarea').fill('with attachment')
+  await page.getByLabel('发送消息').click()
+
+  await expect.poll(() => mediaSignRequests.length).toBe(1)
+  await expect.poll(() => mediaCommitRequests.length).toBe(1)
+  await expect.poll(() => postedMessages.length).toBe(1)
+  expect(mediaSignRequests[0].headers.authorization).toBe('Bearer test-access-token')
+  expect(mediaCommitRequests[0].headers.authorization).toBe('Bearer test-access-token')
+  expect(mediaSignRequests[0].body).toMatchObject({
+    filename: 'notes.md',
+    mime_type: 'text/markdown',
+  })
+  expect(mediaCommitRequests[0].body).toMatchObject({ upload_token: 'upload-token-notes' })
+  expect(new URL(postedMessages[0].url).searchParams.get('agent_id')).toBe('agent-1')
+  expect(postedMessages[0].body).toMatchObject({
+    content: 'with attachment\n\n[file:notes.md](https://example.com/media/notes.md)',
+  })
 })
 
 test('android mobile settings keeps recovery controls visible', async ({ page }) => {
