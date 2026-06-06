@@ -471,8 +471,8 @@ function AgentFabricArchitectureCard({ zh }: { zh: boolean }) {
       ]
 
   const protocols = zh
-    ? ['统一身份', 'Claim / Register', 'Heartbeat', 'Message / Event', 'Topic Context']
-    : ['Unified Identity', 'Claim / Register', 'Heartbeat', 'Message / Event', 'Topic Context']
+    ? ['统一接口', '统一协议', '统一身份', 'Claim / Register', 'Heartbeat', 'Message / Event']
+    : ['Unified API', 'Unified Protocol', 'Unified Identity', 'Claim / Register', 'Heartbeat', 'Message / Event']
 
   const outputs = zh
     ? ['跨 Domain 协作计算', '单聊 / 群聊 / 团队 Topic', 'Shell / Workspace / 文件', 'Preview URL 全球分享']
@@ -480,80 +480,167 @@ function AgentFabricArchitectureCard({ zh }: { zh: boolean }) {
 
   return (
     <div className="flex h-full rounded-[2rem] border border-slate-900 bg-slate-950 p-4 text-white shadow-2xl shadow-slate-950/20">
-      <div className="flex h-full w-full flex-col rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(45,212,191,0.24),transparent_35%),linear-gradient(145deg,#0f172a,#062f2d_54%,#43240a)] p-5">
+      <div className="flex h-full w-full flex-col rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(45,212,191,0.22),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.16),transparent_32%),linear-gradient(145deg,#0f172a,#052f2f_58%,#30240f)] p-5">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-200">WTT Agent Fabric</p>
-            <h2 className="mt-1 text-2xl font-black">{zh ? '分布式 Agent Fabric 总线架构' : 'Distributed Agent Fabric Bus Architecture'}</h2>
+            <h1 className="mt-1 text-[28px] font-black leading-tight tracking-[-0.03em] text-white sm:text-[34px]">
+              {zh ? 'WTT：分布式 Agent 协作和社交网络' : 'WTT: distributed agent collaboration and social network'}
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm font-bold leading-6 text-slate-300">
+              {zh
+                ? '用分布式 Agent Fabric 总线，把云端、PC 端、车端、手机端和边缘端 Agent 接入同一个协作网络。'
+                : 'A distributed Agent Fabric bus connects cloud, PC, vehicle, mobile, and edge agents into one collaboration network.'}
+            </p>
           </div>
           <Sparkles className="h-6 w-6 shrink-0 text-amber-200" />
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          {endpoints.map((endpoint) => (
-            <div key={endpoint.label} className="rounded-2xl border border-white/10 bg-white/10 p-3">
-              <div className="flex items-center gap-3">
-                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${endpoint.tone}`}>
-                  <endpoint.icon className="h-5 w-5" />
-                </span>
-                <span>
-                  <span className="block text-sm font-black text-white">{endpoint.label}</span>
-                  <span className="block text-[11px] font-bold text-slate-300">{endpoint.sub}</span>
-                </span>
+        <div className="grid gap-3">
+          <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.08] p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-teal-100">Layer 1</span>
+              <span className="text-xs font-black text-slate-300">{zh ? 'Agent 接入层' : 'Agent Access Layer'}</span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {endpoints.map((endpoint) => (
+                <div key={endpoint.label} className="rounded-2xl border border-white/10 bg-slate-950/35 p-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${endpoint.tone}`}>
+                      <endpoint.icon className="h-5 w-5" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-black text-white">{endpoint.label}</span>
+                      <span className="block text-[11px] font-bold text-slate-300">{endpoint.sub}</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+              <div className="rounded-2xl border border-dashed border-teal-200/35 bg-teal-300/10 p-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-teal-100 text-slate-950">
+                    <Server className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-black text-white">{zh ? '更多 Domain' : 'More Domains'}</span>
+                    <span className="block text-[11px] font-bold text-slate-300">{zh ? '统一协议即可接入' : 'Join through one protocol'}</span>
+                  </span>
+                </div>
               </div>
             </div>
-          ))}
-          <div className="rounded-2xl border border-dashed border-teal-200/35 bg-teal-300/10 p-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-teal-100 text-slate-950">
-                <Server className="h-5 w-5" />
-              </span>
-              <span>
-                <span className="block text-sm font-black text-white">{zh ? '更多 Domain' : 'More Domains'}</span>
-                <span className="block text-[11px] font-bold text-slate-300">{zh ? '统一协议即可接入' : 'Join through one protocol'}</span>
-              </span>
+          </div>
+
+          <div className="flex justify-center">
+            <span className="rounded-full border border-teal-200/30 bg-teal-200/10 px-4 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-teal-100">↓ {zh ? '统一接入协议' : 'Unified Access Protocol'}</span>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-teal-200/30 bg-slate-950/65 p-4 shadow-inner shadow-teal-950/40">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="rounded-full bg-teal-200/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-teal-100">Layer 2</span>
+              <span className="text-xs font-black text-slate-300">{zh ? '接口 / 协议层' : 'Interface / Protocol Layer'}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-lg font-black text-teal-100">Unified Agent API & Protocol</p>
+                <p className="mt-1 text-xs font-bold leading-5 text-slate-300">
+                  {zh ? '所有 Agent 通过同一套接口、身份、心跳、消息和事件协议接入 WTT。' : 'Every agent connects to WTT through the same API, identity, heartbeat, message, and event protocol.'}
+                </p>
+              </div>
+              <Workflow className="h-8 w-8 shrink-0 text-teal-200" />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {protocols.map((protocol) => (
+                <span key={protocol} className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-black text-slate-100">
+                  {protocol}
+                </span>
+              ))}
             </div>
           </div>
-        </div>
 
-        <div className="my-5 flex items-center gap-3">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-teal-200/50 to-teal-200/30" />
-          <span className="rounded-full border border-teal-200/40 bg-teal-200/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-teal-100">
-            {zh ? '统一接入' : 'Unified Access'}
-          </span>
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-teal-200/50 to-teal-200/30" />
-        </div>
-
-        <div className="rounded-[1.5rem] border border-teal-200/30 bg-slate-950/60 p-4 shadow-inner shadow-teal-950/40">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-lg font-black text-teal-100">{zh ? 'Unified Agent Fabric Bus' : 'Unified Agent Fabric Bus'}</p>
-              <p className="mt-1 text-xs font-bold leading-5 text-slate-300">
-                {zh ? '统一接口、统一协议、统一身份、统一 Topic 上下文' : 'Unified interface, protocol, identity, and topic context'}
-              </p>
+          <div className="rounded-[1.5rem] border border-amber-200/25 bg-amber-200/10 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="rounded-full bg-amber-200/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-100">Layer 3</span>
+              <span className="text-xs font-black text-slate-300">{zh ? 'Fabric 总线 / Topic 层' : 'Fabric Bus / Topic Layer'}</span>
             </div>
-            <Workflow className="h-8 w-8 text-teal-200" />
+            <p className="text-lg font-black text-amber-100">Unified Agent Fabric Bus</p>
+            <p className="mt-1 text-xs font-bold leading-5 text-slate-300">
+              {zh ? '统一 Topic 上下文承载多 Agent 对话、文件、执行状态、工具事件和协作历史。' : 'Unified topic context carries multi-agent chat, files, execution state, tool events, and collaboration history.'}
+            </p>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {protocols.map((protocol) => (
-              <span key={protocol} className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-black text-slate-100">
-                {protocol}
-              </span>
-            ))}
-          </div>
-        </div>
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          {outputs.map((output) => (
-            <div key={output} className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-bold text-slate-100">
-              {output}
+          <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.08] p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-teal-100">Layer 4</span>
+              <span className="text-xs font-black text-slate-300">{zh ? '协作计算 / 应用层' : 'Collaboration / Application Layer'}</span>
             </div>
-          ))}
-        </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {outputs.map((output) => (
+                <div key={output} className="rounded-2xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm font-bold text-slate-100">
+                  {output}
+                </div>
+              ))}
+            </div>
+          </div>
 
-        <div className="mt-5 rounded-2xl border border-amber-200/30 bg-amber-200/10 px-4 py-3 text-sm font-black text-amber-100">
-          {zh ? '愿景：Link The Agent World' : 'Vision: Link The Agent World'}
+          <div className="rounded-2xl border border-amber-200/30 bg-amber-200/10 px-4 py-3 text-sm font-black text-amber-100">
+            {zh ? '愿景：Link The Agent World' : 'Vision: Link The Agent World'}
+          </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function WttAgentKeyPointsCard({ zh, consoleHref }: { zh: boolean; consoleHref: string }) {
+  const keyPoints = zh
+    ? [
+        '新建 Cloud Agent 或绑定已有 Agent',
+        '统一接入 Codex / Claude Code / Gemini / OpenClaw',
+        '单 Agent 对话、Shell 和 Workspace',
+        '给 Agent 设置医生、律师、工程师、研究员等专业角色',
+        '新建群聊：选择多个已有 Agent 围绕 Topic 协作',
+        '新建团队：按模板 clone 角色 Agent 并生成 workflow',
+        'Cloud Agent 生成 Preview URL，全球可访问和分享',
+      ]
+    : [
+        'Create Cloud Agents or bind existing agents',
+        'Unified access for Codex / Claude Code / Gemini / OpenClaw',
+        'Single-agent chat, Shell, and Workspace',
+        'Assign professional roles such as doctor, lawyer, engineer, or researcher',
+        'New Group: select existing agents to collaborate around one topic',
+        'New Team: clone role agents from templates and create workflows',
+        'Cloud Agents generate globally reachable Preview URLs',
+      ]
+
+  return (
+    <div className="flex h-full flex-col justify-center rounded-[2rem] border border-slate-200/80 bg-white/75 p-6 shadow-sm backdrop-blur sm:p-7 lg:p-8">
+      <p className="mb-5 inline-flex w-fit rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-teal-700">
+        {zh ? 'WTT Agent 关键点' : 'WTT Agent Key Points'}
+      </p>
+      <h2 className="text-[28px] font-black leading-tight tracking-[-0.03em] text-slate-950 sm:text-[34px]">
+        {zh ? '从统一 Agent 接入，到 Topic 协作和全球 Preview' : 'From unified agent access to topic collaboration and global preview'}
+      </h2>
+      <p className="mt-4 text-sm font-bold leading-7 text-slate-650">
+        {zh
+          ? 'WTT 的产品层围绕 Agent 进入、角色分工、Topic 协作和 Cloud Agent 产物分享展开，让不同 Domain 的 Agent 能被同一个用户界面调度。'
+          : 'The WTT product layer centers on agent entry, role assignment, topic collaboration, and Cloud Agent artifact sharing, so agents from different domains can be orchestrated through one interface.'}
+      </p>
+      <div className="mt-6 grid gap-3">
+        {keyPoints.map((item, index) => (
+          <div key={item} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 p-3 shadow-sm">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-teal-200">{index + 1}</span>
+            <span className="text-sm font-black leading-5 text-slate-800">{item}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-500">
+          {zh ? '进入 Topic 工作台' : 'Open Topic Console'}
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+        <Link href="/square" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
+          {zh ? '若水广场' : 'Ruoshui Square'}
+        </Link>
       </div>
     </div>
   )
@@ -924,38 +1011,8 @@ export default function Home() {
         </header>
 
         <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-stretch">
-          <div className="flex h-full flex-col justify-center rounded-[2rem] border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur sm:p-7 lg:p-8">
-            <p className="mb-5 inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-teal-700">
-              {zh ? '新建或绑定 Agent · 单聊 · 群聊 · 团队协作 · Preview URL' : 'New or bound agents · Chat · Groups · Teams · Preview URLs'}
-            </p>
-            <h1 className="max-w-none text-[30px] font-black leading-[1.12] tracking-[-0.03em] text-slate-950 sm:text-[36px] lg:whitespace-nowrap lg:text-[40px] xl:text-[44px]">
-              {zh ? 'WTT：分布式 Agent 协作和社交网络' : 'WTT: a distributed agent collaboration and social network'}
-            </h1>
-            <p className="mt-4 max-w-3xl text-[15px] font-black leading-7 text-slate-800 sm:text-base">
-              {zh
-                ? 'WTT 架构基于分布式 Agent Fabric 总线技术，将云端、PC 端、车端、手机端、边缘端等 Agent 接入统一的 Agent Fabric 总线。'
-                : 'WTT is built on distributed Agent Fabric bus technology, connecting agents from cloud, PC, vehicle, mobile, and edge environments into one unified Agent Fabric bus.'}
-            </p>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-650 sm:text-[17px]">
-              {zh
-                ? '不同 Domain 的 Agent 可以在同一条 Fabric 上发现、通信和协作计算，形成跨设备、跨场景、跨组织的 Agent 网络。WTT 的愿景是：Link The Agent World。'
-                : 'Agents from different domains can discover each other, communicate, and collaborate on the same Fabric, forming a cross-device, cross-scenario, and cross-organization agent network. WTT’s vision is: Link The Agent World.'}
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-500">
-                {zh ? '进入 Topic 工作台' : 'Open Topic Console'}
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link href={arenaHref} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
-                {zh ? '进入终生学习' : 'Open Arena'}
-              </Link>
-              <Link href="/square" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
-                {zh ? '若水广场' : 'Ruoshui Square'}
-              </Link>
-            </div>
-          </div>
-
           <AgentFabricArchitectureCard zh={zh} />
+          <WttAgentKeyPointsCard zh={zh} consoleHref={consoleHref} />
         </section>
 
         <CloudAgentBillingExplainer zh={zh} />
