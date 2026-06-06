@@ -9,7 +9,9 @@ const UPSTREAM_BASE =
   DEFAULT_WTT_API_ORIGIN
 
 const REQUEST_TIMEOUT_MS = 15000
+const LONG_CONTROL_PLANE_TIMEOUT_MS = 60000
 const RETRYABLE_ERROR_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH'])
+const RETRYABLE_UPSTREAM_STATUSES = new Set([408, 429, 500, 502, 503, 504])
 
 const HTTP_AGENT = new HttpAgent({
   keepAlive: true,
@@ -47,6 +49,10 @@ function isWorkspacePath(path: string[]): boolean {
   return path.length >= 4 && path[0] === 'agents' && path[2] === 'workspace'
 }
 
+function isAgentOperationPath(path: string[]): boolean {
+  return path[0] === 'agent-operations'
+}
+
 function shouldRetry(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const code = (error as { code?: string }).code
@@ -55,7 +61,7 @@ function shouldRetry(error: unknown): boolean {
   return msg.includes('socket hang up') || msg.includes('timeout')
 }
 
-async function requestUpstreamOnce(urlString: string, method: string, headers: Headers, body?: Buffer): Promise<Response> {
+async function requestUpstreamOnce(urlString: string, method: string, headers: Headers, body?: Buffer, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   const url = new URL(urlString)
   const isHttps = url.protocol === 'https:'
   const reqFn = isHttps ? httpsRequest : httpRequest
@@ -98,8 +104,8 @@ async function requestUpstreamOnce(urlString: string, method: string, headers: H
       },
     )
 
-    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
-      req.destroy(Object.assign(new Error(`upstream timeout after ${REQUEST_TIMEOUT_MS}ms`), { code: 'ETIMEDOUT' }))
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(Object.assign(new Error(`upstream timeout after ${timeoutMs}ms`), { code: 'ETIMEDOUT' }))
     })
 
     req.on('error', (error) => reject(error))
@@ -111,13 +117,28 @@ async function requestUpstreamOnce(urlString: string, method: string, headers: H
   })
 }
 
-async function requestUpstream(urlString: string, method: string, headers: Headers, body?: Buffer): Promise<Response> {
+async function requestUpstream(
+  urlString: string,
+  method: string,
+  headers: Headers,
+  body?: Buffer,
+  options?: { timeoutMs?: number; retryUpstreamStatus?: boolean },
+): Promise<Response> {
   let lastError: unknown
   const maxAttempts = 2
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await requestUpstreamOnce(urlString, method, headers, body)
+      const response = await requestUpstreamOnce(urlString, method, headers, body, options?.timeoutMs)
+      if (
+        attempt < maxAttempts &&
+        options?.retryUpstreamStatus &&
+        RETRYABLE_UPSTREAM_STATUSES.has(response.status)
+      ) {
+        await new Promise((r) => setTimeout(r, 150 * attempt))
+        continue
+      }
+      return response
     } catch (error) {
       lastError = error
       if (attempt < maxAttempts && shouldRetry(error)) {
@@ -194,7 +215,11 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   const hasBody = !['GET', 'HEAD'].includes(request.method.toUpperCase())
   const body = hasBody ? Buffer.from(await request.arrayBuffer()) : undefined
 
-  const response = await requestUpstream(url, request.method, headers, body)
+  const agentOperationPath = isAgentOperationPath(path)
+  const response = await requestUpstream(url, request.method, headers, body, {
+    timeoutMs: agentOperationPath ? LONG_CONTROL_PLANE_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+    retryUpstreamStatus: agentOperationPath,
+  })
   if (isWorkspacePath(path)) {
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
     response.headers.set('Pragma', 'no-cache')
