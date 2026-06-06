@@ -7,7 +7,8 @@
     "build": "node -r ./scripts/rename-fallback.cjs ./node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",
-    "smoke:slash": "bash ./scripts/smoke-slash.sh"
+    "smoke:slash": "bash ./scripts/smoke-slash.sh",
+    "test:mobile-ui": "playwright test tests/mobile-ui.spec.ts"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
@@ -57,6 +58,7 @@
     "swr": "^2.4.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

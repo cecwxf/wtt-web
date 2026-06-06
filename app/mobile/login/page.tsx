@@ -3,7 +3,7 @@
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FormEvent, Suspense, useEffect, useState } from 'react'
-import { Github, Lock, Phone, Send, Sparkles, Twitter } from 'lucide-react'
+import { Github, Lock, Phone, Send, ShieldCheck, Twitter } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 function normalizeCallback(raw: string | null): string {
@@ -16,7 +16,7 @@ function MobileLoginInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = normalizeCallback(searchParams.get('callbackUrl'))
-  const [mode, setMode] = useState<'password' | 'code'>('password')
+  const [mode, setMode] = useState<'password' | 'code'>('code')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
@@ -102,57 +102,57 @@ function MobileLoginInner() {
   }
 
   return (
-    <main className="flex min-h-[100dvh] flex-col bg-[radial-gradient(circle_at_20%_0%,#dff7ff_0,#f8f3ea_38%,#efe3d1_100%)] px-5 py-[max(1.5rem,env(safe-area-inset-top))] text-slate-950">
+    <main className="flex min-h-[100dvh] flex-col bg-[#f7f4ee] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-slate-950">
       <section className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center">
-        <div className="mb-7 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-950 text-white shadow-lg">
-            <Sparkles className="h-6 w-6" />
+        <div className="mb-6">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm shadow-slate-900/15">
+            <ShieldCheck className="h-6 w-6" />
           </div>
-          <h1 className="mt-4 text-3xl font-black tracking-tight">WTT Mobile</h1>
-          <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">登录后即可在手机上指挥你的远端 Agent 工作。</p>
+          <h1 className="mt-4 text-3xl font-black tracking-tight">WTT</h1>
+          <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">移动端工作台</p>
         </div>
 
-        <form onSubmit={submit} className="rounded-[2rem] border border-white/70 bg-white/90 p-4 shadow-xl shadow-sky-950/10 backdrop-blur">
+        <form onSubmit={submit} className="rounded-2xl border border-[#eadfce] bg-white p-4 shadow-sm shadow-slate-900/5">
           <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 text-sm font-black">
-            <button type="button" onClick={() => setMode('password')} className={`rounded-xl py-2 ${mode === 'password' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>密码登录</button>
             <button type="button" onClick={() => setMode('code')} className={`rounded-xl py-2 ${mode === 'code' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>验证码</button>
+            <button type="button" onClick={() => setMode('password')} className={`rounded-xl py-2 ${mode === 'password' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>密码</button>
           </div>
 
-          <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
             <Phone className="h-4 w-4 text-slate-400" />
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="手机号" className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none" />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="手机号" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
           </label>
 
           {mode === 'password' ? (
-            <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
               <Lock className="h-4 w-4 text-slate-400" />
-              <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="密码" className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none" />
+              <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="密码" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
             </label>
           ) : (
             <div className="mb-3 flex gap-2">
-              <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
                 <Lock className="h-4 w-4 text-slate-400" />
-                <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" placeholder="验证码" className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none" />
+                <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="验证码" className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400" />
               </label>
-              <button type="button" onClick={sendPhoneCode} disabled={sendingCode || countdown > 0} className="rounded-2xl bg-slate-950 px-3 text-xs font-black text-white disabled:bg-slate-300">
+              <button type="button" onClick={sendPhoneCode} disabled={sendingCode || countdown > 0} className="min-w-20 rounded-xl bg-slate-950 px-3 text-xs font-black text-white disabled:bg-slate-300">
                 {sendingCode ? '发送中' : countdown > 0 ? `${countdown}s` : '发验证码'}
               </button>
             </div>
           )}
 
-          {error && <p className="mb-3 rounded-2xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{error}</p>}
-          {info && <p className="mb-3 rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">{info}</p>}
+          {error && <p className="mb-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-600">{error}</p>}
+          {info && <p className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold leading-5 text-emerald-700">{info}</p>}
 
-          <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/20 disabled:bg-slate-300">
+          <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 py-3.5 text-sm font-black text-white shadow-sm shadow-sky-900/15 disabled:bg-slate-300 disabled:shadow-none">
             <Send className="h-4 w-4" />
             {loading ? '登录中...' : '进入 WTT'}
           </button>
         </form>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <button onClick={() => oauth('github')} className="flex items-center justify-center rounded-2xl border border-white/70 bg-white/80 py-3 shadow-sm"><Github className="h-5 w-5" /></button>
-          <button onClick={() => oauth('google')} className="rounded-2xl border border-white/70 bg-white/80 py-3 text-sm font-black shadow-sm">G</button>
-          <button onClick={() => oauth('twitter')} className="flex items-center justify-center rounded-2xl border border-white/70 bg-white/80 py-3 shadow-sm"><Twitter className="h-5 w-5" /></button>
+          <button aria-label="GitHub 登录" onClick={() => oauth('github')} className="flex h-12 items-center justify-center rounded-xl border border-[#eadfce] bg-white shadow-sm shadow-slate-900/5"><Github className="h-5 w-5" /></button>
+          <button aria-label="Google 登录" onClick={() => oauth('google')} className="h-12 rounded-xl border border-[#eadfce] bg-white text-sm font-black shadow-sm shadow-slate-900/5">G</button>
+          <button aria-label="X 登录" onClick={() => oauth('twitter')} className="flex h-12 items-center justify-center rounded-xl border border-[#eadfce] bg-white shadow-sm shadow-slate-900/5"><Twitter className="h-5 w-5" /></button>
         </div>
       </section>
     </main>

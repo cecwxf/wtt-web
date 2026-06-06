@@ -1,0 +1,225 @@
+import { expect, type Page, type Route, test } from '@playwright/test'
+
+const mockAgents = [
+  {
+    agent_id: 'agent-1',
+    display_name: 'Alice Agent',
+    cloud_host_agent_id: 'host-a',
+  },
+  {
+    agent_id: 'agent-2',
+    display_name: 'Build Agent',
+    cloud_host_agent_id: 'host-a',
+  },
+]
+
+const mockTopics = [
+  {
+    id: 'topic-task',
+    topic_id: 'topic-task',
+    name: 'Sprint Planning',
+    description: 'General task conversation',
+    topic_type: 'discussion',
+    task_id: 'task-1',
+    last_activity_at: '2026-06-06T01:00:00.000Z',
+  },
+  {
+    id: 'topic-p2p',
+    topic_id: 'topic-p2p',
+    name: 'P2P with Alice',
+    description: 'Private agent chat',
+    topic_type: 'p2p',
+    last_activity_at: '2026-06-06T00:58:00.000Z',
+  },
+  {
+    id: 'topic-group',
+    topic_id: 'topic-group',
+    name: 'Research Group',
+    description: 'Group discussion',
+    topic_type: 'collaborative',
+    unread_count: 2,
+    last_activity_at: '2026-06-06T00:55:00.000Z',
+  },
+  {
+    id: 'topic-broadcast',
+    topic_id: 'topic-broadcast',
+    name: 'Daily Broadcast',
+    description: 'Subscriber updates',
+    topic_type: 'broadcast',
+    last_activity_at: '2026-06-06T00:50:00.000Z',
+  },
+]
+
+async function fulfillJson(route: Route, body: unknown, status = 200) {
+  await route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  })
+}
+
+async function mockAuthenticatedMobileApi(page: Page) {
+  await page.route('**/api/auth/session', async (route) => {
+    await fulfillJson(route, {
+      user: { name: 'Mobile Tester', email: 'mobile@example.com' },
+      accessToken: 'test-access-token',
+      expires: '2099-01-01T00:00:00.000Z',
+    })
+  })
+
+  await page.route('**/api/wtt/agents/my', async (route) => {
+    await fulfillJson(route, mockAgents)
+  })
+
+  await page.route('**/api/wtt/agents/stats', async (route) => {
+    await fulfillJson(route, {
+      online_agents: ['agent-1'],
+      runtimes: {
+        'agent-1': {
+          hostname: 'mac-mini',
+          adapter: 'codex',
+          current_model: 'gpt-5.4',
+        },
+        'agent-2': {
+          hostname: 'mac-mini',
+          adapter: 'claude-code',
+          current_model: 'deepseek-v4-pro',
+        },
+      },
+    })
+  })
+
+  await page.route('**/api/wtt/topics/subscribed**', async (route) => {
+    await fulfillJson(route, mockTopics)
+  })
+
+  await page.route('**/api/wtt/topics/*/members', async (route) => {
+    await fulfillJson(route, [
+      { agent_id: 'agent-1', display_name: 'Alice Agent', role: 'owner' },
+      { agent_id: 'agent-2', display_name: 'Build Agent', role: 'member' },
+    ])
+  })
+
+  await page.route('**/api/wtt/topics/*/messages**', async (route) => {
+    if (route.request().method() === 'POST') {
+      await fulfillJson(route, {
+        message_id: 'message-new',
+        topic_id: 'topic-task',
+        sender_id: 'mobile@example.com',
+        sender_type: 'human',
+        content: 'sent',
+        timestamp: '2026-06-06T01:02:00.000Z',
+      })
+      return
+    }
+    await fulfillJson(route, [
+      {
+        message_id: 'message-1',
+        topic_id: 'topic-task',
+        sender_id: 'mobile@example.com',
+        sender_display_name: 'Mobile Tester',
+        sender_type: 'human',
+        content: 'Hello from mobile',
+        timestamp: '2026-06-06T01:00:00.000Z',
+      },
+      {
+        message_id: 'message-2',
+        topic_id: 'topic-task',
+        sender_id: 'agent-1',
+        sender_display_name: 'Alice Agent',
+        sender_type: 'agent',
+        content: 'I can see the mobile chat. [file:notes.md](https://example.com/media/notes.md)',
+        timestamp: '2026-06-06T01:01:00.000Z',
+      },
+    ])
+  })
+
+  await page.route('**/api/wtt/billing/me', async (route) => {
+    await fulfillJson(route, {
+      entitlement: {
+        plan: 'pro',
+        status: 'active',
+        ends_at: '2026-07-06T00:00:00.000Z',
+        limits: { monthly_limit: 500, window_limit: 30 },
+      },
+      cloud_agent_usage: { monthly_count: 12, window_count: 2 },
+    })
+  })
+
+  await page.route('**/api/wtt/tasks', async (route) => {
+    await fulfillJson(route, {
+      id: 'task-new',
+      topic_id: 'topic-new',
+      title: 'New Task',
+      topic: { topic_id: 'topic-new', name: 'New Task' },
+    })
+  })
+
+  await page.route('**/api/wtt/agents/claim-existing', async (route) => {
+    await fulfillJson(route, { agent_id: 'agent-claimed' })
+  })
+
+  await page.route('**/api/wtt/agents/provision', async (route) => {
+    await fulfillJson(route, {
+      agent_id: 'agent-provisioned',
+      agent_token: 'token-provisioned',
+    })
+  })
+}
+
+test('mobile login renders compact auth UI', async ({ page }) => {
+  await page.goto('/mobile/login?callbackUrl=/mobile/feed')
+  await expect(page.getByRole('heading', { name: 'WTT' })).toBeVisible()
+  await expect(page.getByText('移动端工作台')).toBeVisible()
+  await expect(page.getByRole('button', { name: '验证码', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '密码' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '进入 WTT' })).toBeVisible()
+  await page.getByRole('button', { name: '密码' }).click()
+  await expect(page.getByPlaceholder('密码')).toBeVisible()
+})
+
+test('mobile feed supports topic browsing, settings, agent binding, and offline retry state', async ({ page, context }) => {
+  await mockAuthenticatedMobileApi(page)
+  await page.goto('/mobile/feed?source=android&topic_id=topic-task&agent_id=agent-1')
+
+  await expect(page.getByText('Sprint Planning')).toBeVisible()
+  await expect(page.getByText('Alice Agent').first()).toBeVisible()
+  await expect(page.getByText('Hello from mobile')).toBeVisible()
+  await expect(page.getByText('FILE')).toBeVisible()
+
+  await page.getByRole('button').first().click()
+  await expect(page.getByText('主机目录')).toBeVisible()
+  await expect(page.getByText('P2P 私聊')).toBeVisible()
+  await expect(page.getByText('任务 Topic')).toBeVisible()
+  await expect(page.getByText('群聊 / 讨论')).toBeVisible()
+  await expect(page.getByText('订阅 / 广播')).toBeVisible()
+  await page.getByRole('button', { name: '关闭' }).click()
+
+  await page.getByLabel('设置').click()
+  await expect(page.getByText('Agent 绑定')).toBeVisible()
+  await expect(page.getByText('绑定已有 Agent').last()).toBeVisible()
+  await expect(page.getByText('生成本地 Agent', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: '移动端设置页' })).toHaveAttribute('href', '/mobile/settings?source=android')
+  await page.getByPlaceholder('已有 agent_id').fill('agent-existing')
+  await page.getByPlaceholder('已有 agent_token').fill('token-existing')
+  await page.getByRole('button', { name: '绑定已有 Agent' }).click()
+  await expect(page.getByText('Agent 已绑定')).toBeVisible()
+
+  await page.getByRole('button', { name: '关闭' }).click()
+  await context.setOffline(true)
+  await page.locator('textarea').fill('offline message')
+  await page.getByLabel('发送消息').click()
+  await expect(page.getByText('当前离线，消息已保留，恢复网络后可重试。')).toBeVisible()
+  await context.setOffline(false)
+})
+
+test('android mobile settings keeps recovery controls visible', async ({ page }) => {
+  await mockAuthenticatedMobileApi(page)
+  await page.goto('/mobile/settings?source=android')
+  await expect(page.getByText('设置')).toBeVisible()
+  await expect(page.getByText('Pro 用户')).toBeVisible()
+  await expect(page.getByText('运行诊断')).toBeVisible()
+  await expect(page.getByText(/Android WebView/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '清缓存并重新登录' })).toBeVisible()
+  await expect(page.getByRole('button').first()).toBeVisible()
+})
