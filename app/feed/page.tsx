@@ -1015,6 +1015,22 @@ function FeedPageInner() {
   // WebSocket for real-time messages
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=web` : ''
   const subscribedTopicsRef = useRef<{ raw: unknown[] | null; mutate: (data?: unknown, revalidate?: boolean) => void }>({ raw: null, mutate: () => {} })
+  const groupTopicsRef = useRef<{ raw: unknown[] | null; mutate: (data?: unknown, revalidate?: boolean) => void }>({ raw: null, mutate: () => {} })
+  const updateTopicUnreadCaches = useCallback((topicId: string, updater: (topic: Record<string, unknown>) => Record<string, unknown>) => {
+    for (const ref of [subscribedTopicsRef, groupTopicsRef]) {
+      const { raw, mutate: mutateList } = ref.current
+      if (!Array.isArray(raw)) continue
+      mutateList(
+        raw.map((item) => {
+          const record = item as Record<string, unknown>
+          const id = String(record.id ?? record.topic_id ?? '')
+          if (id !== topicId) return item
+          return updater(record)
+        }),
+        false,
+      )
+    }
+  }, [])
   const decryptMessageForDisplay = useCallback(async (message: ChatMessage): Promise<ChatMessage> => {
     if (!message.encrypted) return message
 
@@ -1131,27 +1147,18 @@ function FeedPageInner() {
       const displayable = shouldDisplayMessage(semanticType, cleanedContent)
 
       // Bump activity and unread counters for the topic that received the message.
-      const { raw, mutate: mutateSubs } = subscribedTopicsRef.current
-      if (raw && Array.isArray(raw)) {
-        const now = new Date().toISOString()
-        mutateSubs(
-          raw.map((t) => {
-            const rec = t as Record<string, unknown>
-            if (rec.id !== incomingTopicId) return t
-
-            const currentUnread = Number(rec.unread_count || 0)
-            if (incomingTopicId === selectedTopicId) {
-              return { ...rec, last_activity_at: now, unread_count: 0 }
-            }
-            return {
-              ...rec,
-              last_activity_at: now,
-              unread_count: displayable ? currentUnread + 1 : currentUnread,
-            }
-          }),
-          false,
-        )
-      }
+      const now = new Date().toISOString()
+      updateTopicUnreadCaches(incomingTopicId, (rec) => {
+        const currentUnread = Number(rec.unread_count || 0)
+        if (incomingTopicId === selectedTopicId) {
+          return { ...rec, last_activity_at: now, unread_count: 0 }
+        }
+        return {
+          ...rec,
+          last_activity_at: now,
+          unread_count: displayable ? currentUnread + 1 : currentUnread,
+        }
+      })
 
       if (incomingTopicId !== selectedTopicId) return
       if (cleanedContent.trim().startsWith('[TASK_STATUS]')) {
@@ -1216,7 +1223,7 @@ function FeedPageInner() {
         })
       })()
     },
-    [selectedTopicId, agentNameMap, knownAgentIds, decryptMessageForDisplay],
+    [selectedTopicId, agentNameMap, knownAgentIds, decryptMessageForDisplay, updateTopicUnreadCaches],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
@@ -1511,6 +1518,10 @@ function FeedPageInner() {
     subscribedTopicsRef.current = { raw: subscribedTopicsRaw ?? null, mutate: mutateTopics }
   }, [subscribedTopicsRaw, mutateTopics])
 
+  useEffect(() => {
+    groupTopicsRef.current = { raw: groupTopicsRaw ?? null, mutate: mutateGroupTopics }
+  }, [groupTopicsRaw, mutateGroupTopics])
+
   // After topic messages are loaded (which marks latest as read server-side),
   // sync subscribed topic list to clear unread badges after refresh.
   useEffect(() => {
@@ -1523,7 +1534,8 @@ function FeedPageInner() {
 
     lastReadSyncRef.current = { topicId: selectedTopicId, ts: now }
     void mutateTopics()
-  }, [selectedTopicId, feedRaw, mutateTopics])
+    void mutateGroupTopics()
+  }, [selectedTopicId, feedRaw, mutateGroupTopics, mutateTopics])
 
   // Poll pending P2P requests for notifications
   // session.userId is the WTT backend UUID; session.user.id may not be set by NextAuth
@@ -2833,16 +2845,8 @@ function FeedPageInner() {
     if (!topicId) return
 
     // Optimistic unread-clear for immediate red badge feedback.
-    void mutateTopics((prev: unknown) => {
-      if (!Array.isArray(prev)) return prev
-      return prev.map((t) => {
-        const row = t as Record<string, unknown>
-        const id = String(row.id ?? row.topic_id ?? '')
-        if (id !== topicId) return t
-        return { ...row, unread_count: 0 }
-      })
-    }, false)
-  }, [mutateTopics, setSelectedTopicId])
+    updateTopicUnreadCaches(topicId, (row) => ({ ...row, unread_count: 0 }))
+  }, [setSelectedTopicId, updateTopicUnreadCaches])
 
   if (status === 'loading') {
     return (
