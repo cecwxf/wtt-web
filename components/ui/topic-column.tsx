@@ -1422,7 +1422,7 @@ export function TopicColumn(props: TopicColumnProps) {
 
               {createMenuOpen && (
                 <div
-                  className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-50 rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-1.5 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:ring-white/10"
+                  className="absolute left-0 top-[calc(100%+0.35rem)] z-50 w-[13.5rem] rounded-2xl border border-[#ded6c8] bg-[#fffdf8] p-1.5 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:ring-white/10"
                   onClick={(event) => event.stopPropagation()}
                 >
                   {onCreateCloudAgent && (
@@ -1443,8 +1443,8 @@ export function TopicColumn(props: TopicColumnProps) {
                         <Cloud className="h-3.5 w-3.5" />
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-[10px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建 Agent' : 'New Agent'}</span>
-                        <span className="mt-0.5 block text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '云端托管 Agent' : 'Cloud-hosted agent'}</span>
+                        <span className="block whitespace-nowrap text-[11px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建 Agent' : 'New Agent'}</span>
+                        <span className="mt-0.5 block whitespace-normal text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '云端托管 Agent' : 'Cloud-hosted agent'}</span>
                       </span>
                     </button>
                   )}
@@ -1462,8 +1462,8 @@ export function TopicColumn(props: TopicColumnProps) {
                       <Users className="h-3.5 w-3.5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-[10px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建群聊' : 'New Group'}</span>
-                      <span className="mt-0.5 block text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '选择现有 Agent' : 'Use existing agents'}</span>
+                      <span className="block whitespace-nowrap text-[11px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建群聊' : 'New Group'}</span>
+                      <span className="mt-0.5 block whitespace-normal text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '选择现有 Agent' : 'Use existing agents'}</span>
                     </span>
                   </button>
 
@@ -1481,8 +1481,8 @@ export function TopicColumn(props: TopicColumnProps) {
                       <Crown className="h-3.5 w-3.5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-[10px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建团队' : 'New Team'}</span>
-                      <span className="mt-0.5 block text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '模板化协作角色' : 'Template role workflow'}</span>
+                      <span className="block whitespace-nowrap text-[11px] font-black text-slate-800 dark:text-zinc-100">{zh ? '新建团队' : 'New Team'}</span>
+                      <span className="mt-0.5 block whitespace-normal text-[9px] font-semibold leading-3 text-slate-400 dark:text-zinc-500">{zh ? '模板化协作角色' : 'Template role workflow'}</span>
                     </span>
                   </button>
                 </div>
