@@ -582,12 +582,6 @@ export default function MobileFeedPage() {
   const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
   const searchInteractiveRef = useRef(false)
 
-  const openFilePicker = useCallback((input: HTMLInputElement | null) => {
-    if (!input) return
-    input.click()
-    setAttachOpen(false)
-  }, [])
-
   useEffect(() => {
     if (status === 'unauthenticated') {
       const source = typeof window !== 'undefined'
@@ -1179,26 +1173,14 @@ export default function MobileFeedPage() {
             ...current,
             [sourceTopicId]: { title: optimisticTitle, expiresAt },
           }))
-          void mutateTopics((current?: TopicRecord[]) => {
-            if (!Array.isArray(current)) return current
-            return current.map((topic) => {
-              if (topicId(topic) !== sourceTopicId || !isDefaultTaskTitle(topic)) return topic
-              return {
-                ...topic,
-                name: optimisticTitle,
-                last_activity_at: new Date().toISOString(),
-              }
-            })
-          }, false)
         }
         if (pendingRenameTaskRef.current?.topicId === sourceTopicId) {
           pendingRenameTaskRef.current = null
         }
-        window.setTimeout(() => void mutateTopics(), 1200)
         window.setTimeout(() => void mutateTopics(), 3500)
       }
       await mutateMessages()
-      await mutateTopics()
+      if (!sourceTaskId) await mutateTopics()
     } catch (error) {
       const message = error instanceof Error ? error.message : '网络异常，发送失败'
       setFailedSend({
@@ -1635,12 +1617,12 @@ export default function MobileFeedPage() {
               </button>
               {attachOpen && (
                 <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-xl">
-                  <button onClick={() => openFilePicker(fileInputRef.current)} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                  <label htmlFor="wtt-mobile-file-input" className="flex w-full cursor-pointer items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <Paperclip className="h-4 w-4" /> 文件/图片
-                  </button>
-                  <button onClick={() => openFilePicker(cameraInputRef.current)} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                  </label>
+                  <label htmlFor="wtt-mobile-camera-input" className="flex w-full cursor-pointer items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <Camera className="h-4 w-4" /> 拍照
-                  </button>
+                  </label>
                   <button onClick={insertLocation} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <LocateFixed className="h-4 w-4" /> 发送位置
                   </button>
@@ -1670,25 +1652,29 @@ export default function MobileFeedPage() {
               <Send className="h-4 w-4" />
             </button>
             <input
+              id="wtt-mobile-file-input"
               ref={fileInputRef}
               type="file"
               accept="image/*,video/*,audio/*,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx,.xls,.xlsx,application/*"
-              className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px opacity-0"
+              className="absolute bottom-0 left-0 h-px w-px opacity-0"
               tabIndex={-1}
               onChange={(event) => {
+                setAttachOpen(false)
                 const file = event.target.files?.[0]
                 if (file) void uploadAsset(file)
                 event.currentTarget.value = ''
               }}
             />
             <input
+              id="wtt-mobile-camera-input"
               ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
-              className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px opacity-0"
+              className="absolute bottom-0 left-0 h-px w-px opacity-0"
               tabIndex={-1}
               onChange={(event) => {
+                setAttachOpen(false)
                 const file = event.target.files?.[0]
                 if (file) void uploadAsset(file)
                 event.currentTarget.value = ''
