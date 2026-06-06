@@ -88,6 +88,9 @@ type TopicMember = {
   agent_id: string
   display_name?: string
   role?: string
+  roleLabel?: string
+  role_label?: string
+  role_name?: string
 }
 
 type ChatMessage = {
@@ -169,6 +172,18 @@ function topicTime(topic: TopicRecord): string {
 
 function displayName(agent?: AgentRecord | null): string {
   return String(agent?.display_name || agent?.name || agent?.agent_id || 'Agent')
+}
+
+function appendRoleLabel(label: string, roleLabel?: string): string {
+  const base = String(label || '').trim()
+  const role = String(roleLabel || '').trim()
+  if (!base || !role) return base
+  if (base.includes(`(${role})`) || base.includes(`（${role}）`)) return base
+  return `${base}(${role})`
+}
+
+function topicMemberRole(member?: TopicMember | null): string {
+  return String(member?.roleLabel || member?.role_label || member?.role_name || member?.role || '').trim()
 }
 
 function agentInitial(name: string): string {
@@ -917,17 +932,34 @@ export default function MobileFeedPage() {
     [agents, selectedAgent, topicActorAgentId],
   )
 
+  const roleLabelForAgent = useCallback((agentId?: string) => {
+    const id = String(agentId || '').trim()
+    if (!id) return ''
+    return topicMemberRole(selectedTopicMembers.find((member) => member.agent_id === id))
+  }, [selectedTopicMembers])
+
+  const labelForAgentInTopic = useCallback((agentId: string, fallbackLabel?: string) => {
+    const id = String(agentId || '').trim()
+    const agent = agents.find((item) => item.agent_id === id)
+    const base = String(fallbackLabel || '').trim()
+      || selectedTopicMembers.find((member) => member.agent_id === id)?.display_name
+      || (agent ? displayName(agent) : '')
+      || compactId(id, 9, 4)
+    return appendRoleLabel(base, roleLabelForAgent(id))
+  }, [agents, roleLabelForAgent, selectedTopicMembers])
+
   const mentionCandidates = useMemo(() => {
-    const rows = new Map<string, { agentId: string; label: string; meta: string }>()
+    const rows = new Map<string, { agentId: string; label: string; displayLabel: string; meta: string }>()
     const canMentionAll = Boolean(selectedTopic && isGroupTopic(selectedTopic))
-    if (canMentionAll) rows.set('__all__', { agentId: '__all__', label: 'all', meta: '所有成员' })
+    if (canMentionAll) rows.set('__all__', { agentId: '__all__', label: 'all', displayLabel: 'all(所有成员)', meta: '所有成员' })
 
     for (const member of selectedTopicMembers) {
       const agentId = String(member.agent_id || '').trim()
       if (!agentId) continue
       const label = String(member.display_name || '').trim() || compactId(agentId, 9, 4)
-      const meta = String(member.role || '').trim() || compactId(agentId, 9, 4)
-      rows.set(agentId, { agentId, label, meta })
+      const role = topicMemberRole(member)
+      const meta = role || compactId(agentId, 9, 4)
+      rows.set(agentId, { agentId, label, displayLabel: appendRoleLabel(label, role), meta })
     }
 
     for (const id of selectedTopic?.member_agent_ids || []) {
@@ -935,26 +967,28 @@ export default function MobileFeedPage() {
       if (!agentId || rows.has(agentId)) continue
       const agent = agents.find((item) => item.agent_id === agentId)
       const label = agent ? displayName(agent) : compactId(agentId, 9, 4)
-      rows.set(agentId, { agentId, label, meta: compactId(agentId, 9, 4) })
+      rows.set(agentId, { agentId, label, displayLabel: labelForAgentInTopic(agentId, label), meta: compactId(agentId, 9, 4) })
     }
 
     for (const agent of agents) {
       if (!agent.agent_id || rows.has(agent.agent_id)) continue
+      const label = displayName(agent)
       rows.set(agent.agent_id, {
         agentId: agent.agent_id,
-        label: displayName(agent),
+        label,
+        displayLabel: labelForAgentInTopic(agent.agent_id, label),
         meta: runtimeHostLabel(agent, runtimeMap[agent.agent_id]),
       })
     }
 
     return Array.from(rows.values())
-  }, [agents, runtimeMap, selectedTopic, selectedTopicMembers])
+  }, [agents, labelForAgentInTopic, runtimeMap, selectedTopic, selectedTopicMembers])
 
   const filteredMentions = useMemo(() => {
     const q = mentionQuery.trim().toLowerCase()
     if (!q) return mentionCandidates.slice(0, 10)
     return mentionCandidates
-      .filter((candidate) => `${candidate.label} ${candidate.agentId} ${candidate.meta}`.toLowerCase().includes(q))
+      .filter((candidate) => `${candidate.displayLabel} ${candidate.label} ${candidate.agentId} ${candidate.meta}`.toLowerCase().includes(q))
       .slice(0, 10)
   }, [mentionCandidates, mentionQuery])
 
@@ -1001,11 +1035,12 @@ export default function MobileFeedPage() {
       const now = Date.now()
       const ttlRaw = Number(rawEvent.ttl_ms || 0)
       const ttlMs = Number.isFinite(ttlRaw) && ttlRaw > 0 ? Math.max(ttlRaw, 30000) : undefined
+      const agentName = String(rawEvent.agent_display_name || '') || labelForAgentInTopic(aid)
       setTypingByTopic((prev) => ({
         ...prev,
         [tid]: appendTypingStatus(prev[tid], {
           agentId: aid,
-          agentName: String(rawEvent.agent_display_name || '') || displayName(agents.find((a) => a.agent_id === aid)),
+          agentName: appendRoleLabel(agentName, roleLabelForAgent(aid)),
           adapter: String(rawEvent.adapter || '').trim() || undefined,
           model: String(rawEvent.model || rawEvent.model_id || rawEvent.current_model || '').trim() || undefined,
           statusText: statusTextFromTypingEvent(rawEvent),
@@ -1022,7 +1057,7 @@ export default function MobileFeedPage() {
       const progressTopicId = String(msgRecord.topic_id || rawEvent.topic_id || selectedTopicId)
       if (progressTopicId) {
         const senderId = String(msgRecord.sender_id || rawEvent.agent_id || selectedAgentId)
-        const senderDisplayName = msgRecord.sender_display_name ? String(msgRecord.sender_display_name) : undefined
+        const senderDisplayName = msgRecord.sender_display_name ? String(msgRecord.sender_display_name) : labelForAgentInTopic(senderId)
         setTypingByTopic((prev) => {
           const progressStatus = statusFromProgressMessage(msgRecord.content, prev[progressTopicId]?.adapter)
           if (!progressStatus) return prev
@@ -1030,7 +1065,7 @@ export default function MobileFeedPage() {
             ...prev,
             [progressTopicId]: appendTypingStatus(prev[progressTopicId], {
               agentId: senderId,
-              agentName: senderDisplayName || displayName(agents.find((agent) => agent.agent_id === senderId)),
+              agentName: appendRoleLabel(senderDisplayName, roleLabelForAgent(senderId)),
               statusText: progressStatus.text,
               statusKind: progressStatus.kind,
               adapter: prev[progressTopicId]?.adapter,
@@ -1075,7 +1110,7 @@ export default function MobileFeedPage() {
         }))
       }
     }
-  }, [agents, mutateMessages, selectedAgentId, selectedTopicId, updateTopicUnreadCache])
+  }, [labelForAgentInTopic, mutateMessages, roleLabelForAgent, selectedAgentId, selectedTopicId, updateTopicUnreadCache])
 
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=mobile-web` : ''
   const { state: wsState } = useWebSocket({ url: wsUrl, enabled: Boolean(token && selectedAgentId), token, onMessage: handleWsMessage })
@@ -1290,7 +1325,7 @@ export default function MobileFeedPage() {
       ...prev,
       [sourceTopicId]: appendTypingStatus(prev[sourceTopicId], {
         agentId: sourceAgentId,
-        agentName: displayName(sourceAgent),
+        agentName: labelForAgentInTopic(sourceAgentId, displayName(sourceAgent)),
         statusText: '消息已发送，等待 Agent 接收',
         statusKind: 'queued',
       }, now),
@@ -1360,7 +1395,7 @@ export default function MobileFeedPage() {
     } finally {
       setSending(false)
     }
-  }, [agents, closeComposerSuggestions, draft, mutateMessages, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
+  }, [agents, closeComposerSuggestions, draft, labelForAgentInTopic, mutateMessages, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
 
   const createDefaultTask = useCallback(async () => {
     if (!token || !selectedAgentId || creatingTask) return
@@ -1521,7 +1556,7 @@ export default function MobileFeedPage() {
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] font-medium leading-4 text-slate-500">
               <span className={`h-2 w-2 shrink-0 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className="min-w-0 truncate">{selectedAgent ? compactAgentName(selectedAgent) : '选择 Agent'}</span>
+              <span className="min-w-0 truncate">{selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '选择 Agent'}</span>
               {selectedTopicMeta && <span className="shrink-0 text-slate-300">·</span>}
               {selectedTopicMeta && <span className="min-w-0 truncate">{selectedTopicMeta}</span>}
               <ChevronDown className="h-3 w-3 shrink-0" />
@@ -1555,7 +1590,7 @@ export default function MobileFeedPage() {
               const label = member.display_name || compactId(member.agent_id, 9, 4)
               return (
                 <span key={member.agent_id} className="max-w-32 shrink-0 truncate rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-600">
-                  {label}
+                  {appendRoleLabel(label, topicMemberRole(member))}
                 </span>
               )
             })}
@@ -1590,7 +1625,8 @@ export default function MobileFeedPage() {
           ) : (
             messages.map((message) => {
               const isMine = message.sender_type === 'human'
-              const label = senderLabel(message)
+              const baseLabel = senderLabel(message)
+              const label = isMine ? baseLabel : appendRoleLabel(baseLabel, roleLabelForAgent(message.sender_id))
               const cleanContent = stripMobileMetaBlocks(message.content)
               return (
                 <article key={message.message_id} className="group rounded-xl transition-colors hover:bg-slate-50">
@@ -1637,7 +1673,7 @@ export default function MobileFeedPage() {
                 <Loader2 className={`h-4 w-4 shrink-0 text-blue-600 ${selectedTopicRunStatus.statusKind === 'response' ? '' : 'animate-spin'}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-xs font-semibold text-slate-900">{selectedTopicRunStatus.agentName}</span>
+                    <span className="truncate text-xs font-semibold text-slate-900">{appendRoleLabel(selectedTopicRunStatus.agentName, roleLabelForAgent(selectedTopicRunStatus.agentId))}</span>
                     <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
                       {mobileStatusKindLabel(selectedTopicRunStatus.statusKind)}
                     </span>
@@ -1729,7 +1765,7 @@ export default function MobileFeedPage() {
                     {candidate.label.slice(0, 1).toUpperCase()}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-slate-900">@{candidate.label}</span>
+                    <span className="block truncate font-semibold text-slate-900">@{candidate.displayLabel}</span>
                     <span className="block truncate text-xs font-medium text-slate-500">{candidate.meta}</span>
                   </span>
                 </button>
@@ -1906,7 +1942,7 @@ export default function MobileFeedPage() {
                             >
                               <Bot className="h-4 w-4 shrink-0" />
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate">{compactAgentName(agent)}</span>
+                                <span className="block truncate">{labelForAgentInTopic(agent.agent_id, compactAgentName(agent))}</span>
                                 {runtimeLine(runtime) && <span className={`block truncate text-[10px] font-semibold ${active ? 'text-white/70' : 'text-slate-400'}`}>{runtimeLine(runtime)}</span>}
                               </span>
                               <span className={`h-2 w-2 rounded-full ${onlineAgents.has(agent.agent_id) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
