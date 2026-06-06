@@ -34,6 +34,7 @@ export interface TopicItem {
 
 interface AgentOption {
   agent_id: string
+  name?: string
   display_name: string
   binding_method?: string
   bound_via?: string
@@ -905,18 +906,29 @@ export function TopicColumn(props: TopicColumnProps) {
   const agentSearchResults = useMemo(() => {
     const query = agentSearchQuery.trim().toLowerCase()
     if (!query) return []
+    const searchText = (agent: AgentOption) => [
+      agent.agent_id,
+      agent.name || '',
+      agent.display_name || '',
+    ].join('\n').toLowerCase()
+    const matchRank = (agent: AgentOption) => {
+      const fields = [
+        agent.agent_id.toLowerCase(),
+        String(agent.name || '').toLowerCase(),
+        String(agent.display_name || '').toLowerCase(),
+      ].filter(Boolean)
+      if (fields.some((field) => field === query)) return 0
+      if (fields.some((field) => field.startsWith(query))) return 1
+      return 2
+    }
     return agentOptions
       .filter((agent) => {
-        const id = agent.agent_id.toLowerCase()
-        const name = agent.display_name.toLowerCase()
-        return id.includes(query) || name.includes(query)
+        return searchText(agent).includes(query)
       })
       .sort((a, b) => {
-        const aId = a.agent_id.toLowerCase()
-        const bId = b.agent_id.toLowerCase()
-        const aExact = aId === query ? 0 : aId.startsWith(query) ? 1 : 2
-        const bExact = bId === query ? 0 : bId.startsWith(query) ? 1 : 2
-        if (aExact !== bExact) return aExact - bExact
+        const aRank = matchRank(a)
+        const bRank = matchRank(b)
+        if (aRank !== bRank) return aRank - bRank
         return a.display_name.localeCompare(b.display_name)
       })
       .slice(0, 8)
@@ -1491,6 +1503,11 @@ export function TopicColumn(props: TopicColumnProps) {
                           <span className="block truncate text-xs font-black text-slate-800 dark:text-zinc-100">
                             {agent.display_name || agent.agent_id}
                           </span>
+                          {agent.name && agent.name !== agent.display_name && (
+                            <span className="block truncate text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
+                              {agent.name}
+                            </span>
+                          )}
                           <span className="block truncate font-mono text-[10px] font-semibold text-slate-400 dark:text-zinc-500">
                             {agent.agent_id}
                           </span>

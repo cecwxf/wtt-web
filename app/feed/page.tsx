@@ -52,6 +52,7 @@ const ContentEditor = dynamic(
 interface Agent {
   id: string
   agent_id: string
+  name?: string
   display_name: string
   is_primary: boolean
   api_key?: string
@@ -1592,6 +1593,7 @@ function FeedPageInner() {
   const agentItems = useMemo<AgentItem[]>(() => {
     return agents.map((agent) => ({
       agent_id: agent.agent_id,
+      name: agent.name,
       display_name: agent.display_name,
       unread_count: 0,
       binding_method: agent.binding_method,

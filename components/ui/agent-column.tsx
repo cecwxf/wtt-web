@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n-provider'
 
 export interface AgentItem {
   agent_id: string
+  name?: string
   display_name: string
   unread_count?: number
   binding_method?: string

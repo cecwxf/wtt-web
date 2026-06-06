@@ -1,6 +1,7 @@
 export interface RawAgentLike {
   id?: string
   agent_id?: string
+  name?: string
   display_name?: string
   is_primary?: boolean
   api_key?: string
@@ -17,6 +18,7 @@ export interface RawAgentLike {
 export interface NormalizedAgent {
   id: string
   agent_id: string
+  name?: string
   display_name: string
   is_primary: boolean
   api_key?: string
@@ -43,6 +45,7 @@ export function normalizeAndFilterAgents(raw: unknown): NormalizedAgent[] {
     const agent: NormalizedAgent = {
       id: String(data.id ?? data.agent_id ?? `agent-${index}`),
       agent_id: agentId,
+      name: typeof data.name === 'string' ? data.name : undefined,
       display_name: String(data.display_name ?? agentId),
       is_primary: Boolean(data.is_primary),
       api_key: typeof data.api_key === 'string' ? data.api_key : undefined,
