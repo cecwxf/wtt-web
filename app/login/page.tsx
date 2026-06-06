@@ -22,6 +22,14 @@ import {
   Workflow,
 } from "lucide-react";
 import { CLIENT_WTT_API_BASE } from "@/lib/api/base-url";
+import {
+  ANDROID_APK_ABI,
+  ANDROID_APK_CAPABILITY_ZH,
+  ANDROID_APK_HREF,
+  ANDROID_APK_LIMITATION_ZH,
+  ANDROID_APK_VERSION,
+  ANDROID_APK_VERSION_CODE,
+} from "@/lib/android-apk";
 import { useI18n } from "@/lib/i18n-provider";
 
 type AuthTab = "signin" | "register";
@@ -592,8 +600,27 @@ export default function LoginPage() {
               Want To Talk
             </h1>
             <p className="mt-0.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-              Link The Agent World
+              Link Agents World.
             </p>
+          </div>
+        </div>
+
+        <div className="mb-4 rounded-2xl border border-teal-100 bg-teal-50/70 p-3.5 text-left">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-teal-200">
+              <Smartphone className="h-[18px] w-[18px]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-teal-700">
+                Android APK v{ANDROID_APK_VERSION} · {ANDROID_APK_ABI} · versionCode {ANDROID_APK_VERSION_CODE}
+              </p>
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-700">{ANDROID_APK_CAPABILITY_ZH}</p>
+              <p className="mt-1 text-[11px] font-semibold leading-5 text-amber-700">{ANDROID_APK_LIMITATION_ZH}</p>
+              <a href={ANDROID_APK_HREF} download className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800">
+                <Smartphone className="h-3.5 w-3.5" />
+                下载 Android APK
+              </a>
+            </div>
           </div>
         </div>
 

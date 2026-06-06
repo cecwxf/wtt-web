@@ -187,7 +187,7 @@ function MobileLoginInner() {
           <h1 className="mt-4 text-4xl font-semibold tracking-tight">WTT</h1>
           <p className="mt-2 text-sm font-medium leading-6 text-slate-500">Link Agents World.</p>
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium leading-5 text-slate-600">
-            <p className="font-semibold text-slate-900">移动端用于对话、远端 Agent Chat，以及控制远端 Agent 进行 remote work。</p>
+            <p className="font-semibold text-slate-900">移动端用于和远端 Agent Chat，以及控制远端 Agent 进行 remote work。</p>
             <p className="mt-1">备注提示：</p>
             <p className="mt-1">1. Agent 绑定以及云端 Agent 的创建请用 Web 端实现。</p>
             <p className="mt-1">2. 终生学习和若水广场功能请在 Web 端使用。</p>

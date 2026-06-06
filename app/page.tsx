@@ -29,6 +29,16 @@ import {
   Workflow,
 } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import {
+  ANDROID_APK_ABI,
+  ANDROID_APK_CAPABILITY_EN,
+  ANDROID_APK_CAPABILITY_ZH,
+  ANDROID_APK_HREF,
+  ANDROID_APK_LIMITATION_EN,
+  ANDROID_APK_LIMITATION_ZH,
+  ANDROID_APK_VERSION,
+  ANDROID_APK_VERSION_CODE,
+} from '@/lib/android-apk'
 import { useI18n } from '@/lib/i18n-provider'
 import { WttLogo } from '@/components/ui/wtt-logo'
 
@@ -988,6 +998,10 @@ export default function Home() {
             <Link href="/feed" className="hidden text-sm font-bold text-slate-700 hover:text-teal-700 sm:inline">Topics</Link>
             <Link href={arenaHref} className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">Arena</Link>
             <Link href="/square" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">{zh ? '若水广场' : 'Square'}</Link>
+            <a href={ANDROID_APK_HREF} download className="hidden items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:border-teal-300 hover:bg-teal-100 lg:inline-flex">
+              <Smartphone className="h-3.5 w-3.5" />
+              Android v{ANDROID_APK_VERSION}
+            </a>
             <button
               type="button"
               onClick={() => setLocale(zh ? 'en' : 'zh')}
@@ -1016,6 +1030,34 @@ export default function Home() {
         </section>
 
         <CloudAgentBillingExplainer zh={zh} />
+
+        <section className="mt-8 rounded-[1.5rem] border border-teal-200/80 bg-white/85 p-5 shadow-sm backdrop-blur sm:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-teal-200">
+                <Smartphone className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-700">
+                  Android APK · v{ANDROID_APK_VERSION} · {ANDROID_APK_ABI} · versionCode {ANDROID_APK_VERSION_CODE}
+                </p>
+                <h2 className="mt-1 text-lg font-black text-slate-950">
+                  {zh ? 'WTT 移动端下载' : 'Download WTT Mobile'}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {zh ? ANDROID_APK_CAPABILITY_ZH : ANDROID_APK_CAPABILITY_EN}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-amber-700">
+                  {zh ? ANDROID_APK_LIMITATION_ZH : ANDROID_APK_LIMITATION_EN}
+                </p>
+              </div>
+            </div>
+            <a href={ANDROID_APK_HREF} download className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800">
+              <Smartphone className="h-4 w-4" />
+              {zh ? '下载 Android APK' : 'Download Android APK'}
+            </a>
+          </div>
+        </section>
 
         <section className="mt-12 rounded-[2rem] border border-slate-200 bg-white/85 p-6 shadow-sm backdrop-blur sm:p-7">
           <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
