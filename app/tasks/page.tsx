@@ -104,7 +104,7 @@ const HOST_COLORS = [
   'from-slate-500 via-slate-400 to-zinc-600',
 ]
 
-const RUNNING_STATUSES = new Set(['running', 'in_progress', 'doing', 'executing', 'active', 'review'])
+const EXECUTING_STATUSES = new Set(['running', 'in_progress', 'doing', 'executing', 'active'])
 
 function authHeaders(token?: string): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -256,14 +256,23 @@ function taskAgentId(task: TaskItem) {
 }
 
 function isRunningTask(task: TaskItem) {
-  return RUNNING_STATUSES.has(String(task.status || '').toLowerCase())
+  const status = String(task.status || '').toLowerCase()
+  // 'review' means the agent output is waiting for human review — agent is idle
+  if (status === 'review') return false
+  return EXECUTING_STATUSES.has(status)
+}
+
+/** Track agent typing state: typing within 90s → busy. */
+function agentIsTyping(agentId: string, runtimeMap: Record<string, AgentRuntimeInfo>): boolean {
+  const rt = runtimeMap[agentId]
+  if (!rt?.typing_at) return false
+  return Date.now() / 1000 - Number(rt.typing_at) < 90
 }
 
 function taskDurationMs(task: TaskItem) {
   const start = toMs(task.started_at)
-  if (!start) return 0
-  const end = toMs(task.completed_at) ?? (isRunningTask(task) ? Date.now() : null)
-  if (!end) return 0
+  const end = toMs(task.completed_at)
+  if (!start || !end) return 0
   return Math.max(0, end - start)
 }
 
@@ -440,13 +449,13 @@ function TasksPageInner() {
       const runningTasks = hostTasks.filter(isRunningTask)
       host.total = host.agents.length
       host.online = host.agents.filter((agent) => onlineAgentIds.has(agent.agent_id)).length
-      host.busy = host.agents.filter((agent) => (agentTasks[agent.agent_id] || []).some(isRunningTask)).length
+      host.busy = host.agents.filter((agent) => agentIsTyping(agent.agent_id, agentRuntimeMap)).length
       host.idle = Math.max(0, host.online - host.busy)
       host.tasks = hostTasks
       host.runningTasks = runningTasks
-      host.tokenTotal = hostTasks.reduce((sum, task) => {
-        const tokenStat = tokenStatsRaw[task.id]
-        return sum + Number(tokenStat?.estimated_tokens || task.usage_total_tokens || 0)
+      host.tokenTotal = host.agents.reduce((sum, agent) => {
+        const stat = agentStats[agent.agent_id]
+        return sum + (stat?.total || 0)
       }, 0)
       host.executionMs = hostTasks.reduce((sum, task) => sum + taskDurationMs(task), 0)
       host.runtimeCount = host.agents.filter((agent) => Boolean(agentRuntimeMap[agent.agent_id])).length
@@ -705,11 +714,13 @@ function TasksPageInner() {
                 <div className="grid max-h-[42vh] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
                   {(selectedHost?.agents || []).map((agent) => {
                     const runtime = agentRuntimeMap[agent.agent_id]
-                    const rows = agentTasks[agent.agent_id] || []
-                    const running = rows.filter(isRunningTask)
+                    const typing = agentIsTyping(agent.agent_id, agentRuntimeMap)
                     const online = onlineAgentIds.has(agent.agent_id)
-                    const model = runtime?.current_model || runtime?.model_id || runtime?.model || 'unknown model'
+                    const model = runtime?.current_model || runtime?.model_id || runtime?.model || ''
                     const adapter = runtime?.adapter || runtime?.kind || (agent.is_cloud_sandbox ? 'cloud-agent' : 'agent')
+                    const roleLabel = agent.role_template_id
+                      ? (agent.role_template?.short_label || agent.role_template?.label || agent.display_name)
+                      : ''
                     return (
                       <button
                         key={agent.agent_id}
@@ -719,22 +730,29 @@ function TasksPageInner() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className={`h-2.5 w-2.5 rounded-full ${online ? running.length ? 'bg-amber-400 shadow-[0_0_0_4px_rgba(251,191,36,0.18)]' : 'bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.18)]' : 'bg-slate-300 dark:bg-zinc-600'}`} />
+                              <span className={`h-2.5 w-2.5 rounded-full ${
+                                !online ? 'bg-slate-300 dark:bg-zinc-600'
+                                : typing ? 'bg-amber-400 shadow-[0_0_0_4px_rgba(251,191,36,0.18)]'
+                                : 'bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.18)]'
+                              }`} />
                               <p className="truncate text-sm font-black" title={agent.display_name}>{agent.display_name}</p>
+                              {roleLabel && (
+                                <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500 dark:bg-zinc-800 dark:text-zinc-400">{roleLabel}</span>
+                              )}
                             </div>
                             <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">{shortId(agent.agent_id)}</p>
                           </div>
                           <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:border-zinc-700 dark:text-zinc-400">
-                            {online ? running.length ? '执行中' : '空闲' : '离线'}
+                            {!online ? '离线' : typing ? '执行中' : '空闲'}
                           </span>
                         </div>
                         <div className="mt-3 space-y-1.5 text-[11px] text-slate-500 dark:text-zinc-400">
                           <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Adapter:</span> {adapter}</p>
-                          <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Model:</span> {model}</p>
+                          {model && <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Model:</span> {model}</p>}
                           <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Workdir:</span> {runtime?.workdir || runtime?.workdir_name || runtime?.git?.repo || '-'}</p>
                         </div>
                         <div className="mt-3 flex items-center justify-between text-[11px]">
-                          <span className="text-slate-500 dark:text-zinc-400">{rows.length} tasks · {running.length} active</span>
+                          <span className="text-slate-500 dark:text-zinc-400">{typing ? '正在执行' : online ? '空闲中' : '离线'}</span>
                           <span className="inline-flex items-center gap-1 font-bold text-sky-600 dark:text-sky-300">
                             打开对话 <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
                           </span>

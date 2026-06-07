@@ -71,6 +71,9 @@ export interface AgentRuntimeInfo {
     dirty?: boolean
   } | null
   last_heartbeat_secs_ago?: number
+  typing_at?: number
+  typing_topic_id?: string
+  runtime_status?: string
 }
 
 interface TopicColumnProps {
