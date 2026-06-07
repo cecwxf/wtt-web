@@ -1,7 +1,7 @@
-export const ANDROID_APK_VERSION = '1.2.0'
-export const ANDROID_APK_VERSION_CODE = 12
+export const ANDROID_APK_VERSION = '1.2.1'
+export const ANDROID_APK_VERSION_CODE = 13
 export const ANDROID_APK_ABI = 'arm64-v8a'
-export const ANDROID_APK_HREF = '/downloads/wtt-android-v1.2.0-arm64.apk'
+export const ANDROID_APK_HREF = '/downloads/wtt-android-v1.2.1-arm64.apk'
 
 export const ANDROID_APK_CAPABILITY_ZH =
   '移动端用于和远端 Agent Chat，以及控制远端 Agent 进行 remote work。'
