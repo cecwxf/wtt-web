@@ -16,7 +16,7 @@ const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
 const COMPLETE_HOLD_MS = 4500
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
-const OPTIMISTIC_TASK_TITLE_TTL_MS = 30 * 60 * 1000
+const OPTIMISTIC_TASK_TITLE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 type MobileSlashCommand = {
   cmd: string

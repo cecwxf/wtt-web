@@ -476,7 +476,7 @@ type RawTopicRecord = {
   member_agent_ids?: string[]
 }
 
-const OPTIMISTIC_TASK_TITLE_TTL_MS = 30 * 60 * 1000
+const OPTIMISTIC_TASK_TITLE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 type OptimisticTaskTitle = {
   title: string
