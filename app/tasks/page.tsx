@@ -159,7 +159,8 @@ function shortId(id: string) {
 function cleanHostLabel(value?: string) {
   const raw = String(value || '').trim()
   if (!raw || raw.toLowerCase() === 'unknown') return ''
-  return raw
+  // Normalise macOS hostnames (strip .local suffix, lowercase)
+  return raw.replace(/\.local$/i, '').toLowerCase()
 }
 
 function isCloudRuntime(runtime?: AgentRuntimeInfo) {
@@ -169,38 +170,49 @@ function isCloudRuntime(runtime?: AgentRuntimeInfo) {
 }
 
 function hostKeyForAgent(agent: NormalizedAgent, runtime?: AgentRuntimeInfo) {
-  // Cloud sandbox agents: group by the sandbox host (cloud_host_agent_id),
-  // not by individual agent.  This matches the feed sidebar directory where
-  // all agents in the same sandbox are listed under one host entry.
-  if (agent.is_cloud_sandbox || isCloudRuntime(runtime)) {
-    const sandboxHost = cleanHostLabel(agent.cloud_host_agent_id || runtime?.host_agent_id)
-    if (sandboxHost) return sandboxHost
-    // If we only have the agent_id itself, try to find the parent sandbox
-    // from other agents' cloud_host_agent_id that point to this agent.
-    return 'cloud-sandbox'
+  // 1. Cloud sandbox agents: always group by cloud_host_agent_id.
+  //    The API guarantees this field for all agents inside a sandbox,
+  //    including child/clone agents created via cloud_sandbox_clone.
+  if (agent.is_cloud_sandbox || agent.cloud_host_agent_id) {
+    const sandboxHost = cleanHostLabel(agent.cloud_host_agent_id) || 'cloud-sandbox'
+    return sandboxHost
   }
 
-  // Self-hosted agents: group by actual hostname from runtime.
+  // 2. Self-hosted agents: group by runtime hostname (normalised).
   const hostname = cleanHostLabel(runtime?.hostname)
   if (hostname) return hostname
 
-  // Fallback priority matches feed sidebar: host_agent_id > bound_via > binding_method
-  return cleanHostLabel(runtime?.host_agent_id)
-    || cleanHostLabel(agent.bound_via)
-    || cleanHostLabel(agent.binding_method)
-    || 'unknown-host'
+  // 3. No runtime available — group all offline self-hosted agents together.
+  return 'other-self-hosted'
 }
 
 function hostLabelForKey(key: string, runtime?: AgentRuntimeInfo, hostAgents?: NormalizedAgent[]) {
   if (key === 'cloud-sandbox') return 'Cloud Sandbox'
-  if (key === 'unknown-host') return 'Unknown Host'
-  // Use the first cloud sandbox agent's display name as the host label
+  if (key === 'unknown-host' || key === 'other-self-hosted') return 'Other Agents'
+
+  // For self-hosted: if we have a hostname-based key, capitalise nicely
   if (hostAgents) {
     const cloudAgent = hostAgents.find((a) => a.is_cloud_sandbox)
     if (cloudAgent && cloudAgent.display_name) return cloudAgent.display_name
   }
   if (isCloudRuntime(runtime)) return 'Cloud Sandbox'
+
+  // Pretty-print hostnames
+  if (/^agent-[a-f0-9]+$/.test(key)) return cloudLabelForHostKey(key, hostAgents)
   return key
+}
+
+/** Derive a stable display name for a cloud sandbox host key. */
+function cloudLabelForHostKey(key: string, hostAgents?: NormalizedAgent[]) {
+  if (hostAgents) {
+    const host = hostAgents.find((a) => a.agent_id === key)
+    if (host) return host.display_name || 'Cloud Sandbox'
+    // If key is a sandbox host agent, try to find any child agent that references it
+    for (const a of hostAgents) {
+      if (a.cloud_host_agent_id === key) return a.display_name || 'Cloud Sandbox'
+    }
+  }
+  return 'Cloud Sandbox'
 }
 
 function topicType(raw?: string): TopicItem['topic_type'] {
