@@ -23,12 +23,8 @@ import {
 } from "lucide-react";
 import { CLIENT_WTT_API_BASE } from "@/lib/api/base-url";
 import {
-  ANDROID_APK_ABI,
-  ANDROID_APK_CAPABILITY_ZH,
   ANDROID_APK_HREF,
-  ANDROID_APK_LIMITATION_ZH,
   ANDROID_APK_VERSION,
-  ANDROID_APK_VERSION_CODE,
 } from "@/lib/android-apk";
 import { useI18n } from "@/lib/i18n-provider";
 
@@ -605,22 +601,21 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="mb-4 rounded-2xl border border-teal-100 bg-teal-50/70 p-3.5 text-left">
-          <div className="flex items-start gap-3">
+        <div className="mb-4 rounded-2xl border border-teal-100 bg-teal-50/70 px-3.5 py-3 text-left">
+          <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-teal-200">
               <Smartphone className="h-[18px] w-[18px]" />
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-teal-700">
-                Android APK v{ANDROID_APK_VERSION} · {ANDROID_APK_ABI} · versionCode {ANDROID_APK_VERSION_CODE}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black text-slate-900">WTT Android v{ANDROID_APK_VERSION}</p>
+              <p className="mt-0.5 text-[11px] font-semibold leading-5 text-slate-600">
+                移动版仅覆盖基础聊天和设置能力；完整功能请使用 WTT Web。
               </p>
-              <p className="mt-1 text-xs font-bold leading-5 text-slate-700">{ANDROID_APK_CAPABILITY_ZH}</p>
-              <p className="mt-1 text-[11px] font-semibold leading-5 text-amber-700">{ANDROID_APK_LIMITATION_ZH}</p>
-              <a href={ANDROID_APK_HREF} download className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800">
-                <Smartphone className="h-3.5 w-3.5" />
-                下载 Android APK
-              </a>
             </div>
+            <a href={ANDROID_APK_HREF} download className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800">
+                <Smartphone className="h-3.5 w-3.5" />
+                下载
+            </a>
           </div>
         </div>
 
