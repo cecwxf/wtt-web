@@ -733,10 +733,10 @@ export function TopicColumn(props: TopicColumnProps) {
     custom: boolean
   } | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<TopicGroupKey, boolean>>({
-    p2p: false,
-    task: false,
-    discuss: false,
-    subscriber: false,
+    p2p: true,
+    task: true,
+    discuss: true,
+    subscriber: true,
   })
   const [groupTopicsCollapsed, setGroupTopicsCollapsed] = useState(false)
   const [collapsedAgentFolders, setCollapsedAgentFolders] = useState<Record<string, boolean>>({})
