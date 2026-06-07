@@ -169,20 +169,37 @@ function isCloudRuntime(runtime?: AgentRuntimeInfo) {
 }
 
 function hostKeyForAgent(agent: NormalizedAgent, runtime?: AgentRuntimeInfo) {
-  const cloudHost = cleanHostLabel(agent.cloud_host_agent_id || runtime?.host_agent_id)
+  // Cloud sandbox agents: group by the sandbox host (cloud_host_agent_id),
+  // not by individual agent.  This matches the feed sidebar directory where
+  // all agents in the same sandbox are listed under one host entry.
   if (agent.is_cloud_sandbox || isCloudRuntime(runtime)) {
-    return cloudHost || 'cloud-sandbox'
+    const sandboxHost = cleanHostLabel(agent.cloud_host_agent_id || runtime?.host_agent_id)
+    if (sandboxHost) return sandboxHost
+    // If we only have the agent_id itself, try to find the parent sandbox
+    // from other agents' cloud_host_agent_id that point to this agent.
+    return 'cloud-sandbox'
   }
-  return cleanHostLabel(runtime?.hostname)
-    || cleanHostLabel(runtime?.host_agent_id)
+
+  // Self-hosted agents: group by actual hostname from runtime.
+  const hostname = cleanHostLabel(runtime?.hostname)
+  if (hostname) return hostname
+
+  // Fallback priority matches feed sidebar: host_agent_id > bound_via > binding_method
+  return cleanHostLabel(runtime?.host_agent_id)
     || cleanHostLabel(agent.bound_via)
     || cleanHostLabel(agent.binding_method)
     || 'unknown-host'
 }
 
-function hostLabelForKey(key: string, runtime?: AgentRuntimeInfo) {
-  if (key === 'cloud-sandbox' || isCloudRuntime(runtime)) return 'Cloud Sandbox'
+function hostLabelForKey(key: string, runtime?: AgentRuntimeInfo, hostAgents?: NormalizedAgent[]) {
+  if (key === 'cloud-sandbox') return 'Cloud Sandbox'
   if (key === 'unknown-host') return 'Unknown Host'
+  // Use the first cloud sandbox agent's display name as the host label
+  if (hostAgents) {
+    const cloudAgent = hostAgents.find((a) => a.is_cloud_sandbox)
+    if (cloudAgent && cloudAgent.display_name) return cloudAgent.display_name
+  }
+  if (isCloudRuntime(runtime)) return 'Cloud Sandbox'
   return key
 }
 
@@ -386,7 +403,7 @@ function TasksPageInner() {
         map.set(key, {
           id: key,
           label: hostLabelForKey(key, runtime),
-          subtitle: isCloudRuntime(runtime) || agent.is_cloud_sandbox ? 'Cloud Agent Runtime' : 'Self-hosted Runtime',
+          subtitle: isCloudRuntime(runtime) || agent.is_cloud_sandbox ? 'Cloud Sandbox Host' : 'Self-hosted Runtime',
           color,
           agents: [],
           online: 0,
@@ -501,6 +518,8 @@ function TasksPageInner() {
 
   const openAgent = (agentId: string) => {
     setSelectedAgentId(agentId)
+    // Navigate to the feed page which will auto-create and auto-select
+    // the default P2P topic for this agent, opening directly into chat.
     router.push(buildAgentUrl('/feed', agentId))
   }
 
@@ -705,7 +724,7 @@ function TasksPageInner() {
                         <div className="mt-3 flex items-center justify-between text-[11px]">
                           <span className="text-slate-500 dark:text-zinc-400">{rows.length} tasks · {running.length} active</span>
                           <span className="inline-flex items-center gap-1 font-bold text-sky-600 dark:text-sky-300">
-                            打开 Feed <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+                            打开对话 <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
                           </span>
                         </div>
                       </button>
