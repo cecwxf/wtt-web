@@ -71,6 +71,7 @@ export default function MobileSettingsPage() {
   const plan = String(billing?.entitlement?.plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free'
   const isPro = plan === 'Pro'
   const mobileFeedHref = isAndroidWebView ? '/mobile/feed?source=android' : '/mobile/feed'
+  const fullWebFeedHref = isAndroidWebView ? '/feed?source=android' : '/feed'
   const upgradeHref = isAndroidWebView ? '/upgrade?source=android' : '/upgrade?source=mobile'
   const mobileLoginCallback = isAndroidWebView
     ? '/mobile/login?callbackUrl=/mobile/feed&source=android'
@@ -132,12 +133,14 @@ export default function MobileSettingsPage() {
           <ExternalLink className="h-4 w-4 opacity-80" />
         </a>
 
-        {!isAndroidWebView && (
-          <a href="/feed" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold">
-            <Bot className="h-5 w-5 text-slate-700" />
+        <a href={fullWebFeedHref} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold">
+          <Bot className="h-5 w-5 text-slate-700" />
+          <span className="min-w-0 flex-1">
             打开完整 Web
-          </a>
-        )}
+            {isAndroidWebView && <span className="mt-1 block text-xs font-medium text-slate-500">进入 WTT Web Feed 处理移动端暂不支持的操作</span>}
+          </span>
+          <ExternalLink className="h-4 w-4 text-slate-400" />
+        </a>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
