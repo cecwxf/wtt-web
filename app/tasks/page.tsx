@@ -718,8 +718,9 @@ function TasksPageInner() {
                     const online = onlineAgentIds.has(agent.agent_id)
                     const model = runtime?.current_model || runtime?.model_id || runtime?.model || ''
                     const adapter = runtime?.adapter || runtime?.kind || (agent.is_cloud_sandbox ? 'cloud-agent' : 'agent')
+                    const roleTemplate = agent.role_template as Record<string, string> | undefined
                     const roleLabel = agent.role_template_id
-                      ? (agent.role_template?.short_label || agent.role_template?.label || agent.display_name)
+                      ? String(roleTemplate?.shortLabel || roleTemplate?.label || '')
                       : ''
                     return (
                       <button
