@@ -1476,7 +1476,10 @@ function FeedPageInner() {
           Authorization: `Bearer ${session?.accessToken}`,
         },
       })
-      if (!response.ok) return []
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '')
+        throw new Error(detail || `Failed to load group topics (${response.status})`)
+      }
       return response.json()
     },
     {
