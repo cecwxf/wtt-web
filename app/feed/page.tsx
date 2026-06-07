@@ -465,6 +465,7 @@ type RawTopicRecord = {
   topic_type?: string
   my_role?: string
   task_id?: string
+  task_title?: string
   runner_agent_id?: string
   task_type?: string
   task_mode?: string
@@ -489,12 +490,14 @@ function isDefaultTaskTitle(topic?: { name?: string; task_id?: string } | null):
 }
 
 function titleFromFirstMessage(content: string): string {
-  const line = String(content || '')
+  const title = String(content || '')
     .split('\n')
     .map((item) => item.replace(/\[[^\]]+\]\([^)]+\)/g, '').trim())
-    .find(Boolean)
-  if (!line) return 'New Task'
-  return line.length > 36 ? `${line.slice(0, 34)}...` : line
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(' ')
+  if (!title) return 'New Task'
+  return title.length > 48 ? `${title.slice(0, 46)}...` : title
 }
 
 function mapRawTopicToItem(
@@ -516,7 +519,7 @@ function mapRawTopicToItem(
 
   return {
     topic_id: topicId,
-    name: String(topic.name || topicId || 'Topic'),
+    name: String((topic.task_id && topic.task_title) || topic.name || topicId || 'Topic'),
     topic_type: topicType,
     unread_count: Number(topic.unread_count || 0),
     can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
@@ -707,6 +710,7 @@ function FeedPageInner() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [optimisticTaskTitles, setOptimisticTaskTitles] = useState<Record<string, OptimisticTaskTitle>>({})
+  const [createdTaskIdsByTopic, setCreatedTaskIdsByTopic] = useState<Record<string, string>>({})
 
   useEffect(() => {
     try {
@@ -1640,13 +1644,13 @@ function FeedPageInner() {
   }, [groupTopics, topics, selectedTopicId, setSelectedTopicId, subscribedTopicsRaw])
 
   const selectedTopicTaskHint = useMemo(() => {
-    const direct = selectedTopic?.task_id
+    const direct = selectedTopic?.task_id || (selectedTopicId ? createdTaskIdsByTopic[selectedTopicId] : '')
     if (direct) return direct
 
     const name = String(selectedTopic?.name || '')
     const match = /^TASK-([a-f0-9]{8})\b/i.exec(name)
     return match ? match[1].toLowerCase() : undefined
-  }, [selectedTopic?.task_id, selectedTopic?.name])
+  }, [createdTaskIdsByTopic, selectedTopic?.task_id, selectedTopic?.name, selectedTopicId])
 
   const shouldShowDiscussMembers = !!selectedTopic && ['discussion', 'collaborative'].includes(selectedTopic.topic_type) && !selectedTopicTaskHint
   const { data: topicMembersRaw, mutate: mutateMembers } = useSWR(
@@ -2300,7 +2304,10 @@ function FeedPageInner() {
       const topicId = String(real?.topic_id || '')
       if (topicId) {
         const taskId = String(real?.id || real?.task_id || '').trim()
-        if (taskId) pendingRenameTaskRef.current = { taskId, topicId }
+        if (taskId) {
+          pendingRenameTaskRef.current = { taskId, topicId }
+          setCreatedTaskIdsByTopic((current) => ({ ...current, [topicId]: taskId }))
+        }
         setSelectedTopicId(topicId)
         setPendingComposerFocusTopicId(topicId)
       } else {

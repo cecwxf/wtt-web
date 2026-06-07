@@ -71,6 +71,7 @@ type TopicRecord = {
   type?: string
   topic_type?: string
   task_id?: string
+  task_title?: string
   task_type?: string
   unread_count?: number
   last_activity_at?: string
@@ -254,6 +255,8 @@ function compactAgentName(agent?: AgentRecord | null): string {
 }
 
 function compactTopicTitle(topic?: TopicRecord | null): string {
+  const taskTitle = String(topic?.task_title || '').trim()
+  if (topic?.task_id && taskTitle) return taskTitle
   const name = String(topic?.name || '').trim()
   if (!name) return '选择 Topic'
   const taskMatch = /^TASK-[a-f0-9]{8}\s+(.+)$/i.exec(name)
@@ -269,12 +272,14 @@ function isDefaultTaskTitle(topic?: TopicRecord | null): boolean {
 }
 
 function titleFromFirstMessage(content: string): string {
-  const line = String(content || '')
+  const title = String(content || '')
     .split('\n')
     .map((item) => item.replace(/\[[^\]]+\]\([^)]+\)/g, '').trim())
-    .find(Boolean)
-  if (!line) return 'New Task'
-  return line.length > 36 ? `${line.slice(0, 34)}...` : line
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(' ')
+  if (!title) return 'New Task'
+  return title.length > 48 ? `${title.slice(0, 46)}...` : title
 }
 
 function topicIcon(topic?: TopicRecord | null) {
@@ -670,6 +675,7 @@ export default function MobileFeedPage() {
   const [failedSend, setFailedSend] = useState<FailedSend | null>(null)
   const [browserOnline, setBrowserOnline] = useState(true)
   const [optimisticTaskTitles, setOptimisticTaskTitles] = useState<Record<string, OptimisticTaskTitle>>({})
+  const [createdTaskIdsByTopic, setCreatedTaskIdsByTopic] = useState<Record<string, string>>({})
   const [slashOpen, setSlashOpen] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
@@ -854,6 +860,7 @@ export default function MobileFeedPage() {
         return {
           ...topic,
           name: optimistic.title,
+          task_title: optimistic.title,
           last_activity_at: topic.last_activity_at || new Date(now).toISOString(),
         }
       })
@@ -933,7 +940,9 @@ export default function MobileFeedPage() {
   }, [topics])
 
   const selectedTopic = useMemo(() => topics.find((t) => topicId(t) === selectedTopicId) || null, [selectedTopicId, topics])
-  const selectedTaskId = selectedTopic?.task_id ? String(selectedTopic.task_id) : ''
+  const selectedTaskId = selectedTopic?.task_id
+    ? String(selectedTopic.task_id)
+    : (selectedTopicId ? createdTaskIdsByTopic[selectedTopicId] || '' : '')
 
   const { data: messagesRaw, mutate: mutateMessages } = useSWR(
     token && selectedAgentId && selectedTopicId ? ['mobile-messages', token, selectedAgentId, selectedTopicId] : null,
@@ -1540,7 +1549,10 @@ export default function MobileFeedPage() {
       const taskId = String(record.id || record.task_id || '').trim()
       if (id) {
         pendingCreatedTopicIdRef.current = id
-        if (taskId) pendingRenameTaskRef.current = { taskId, topicId: id }
+        if (taskId) {
+          pendingRenameTaskRef.current = { taskId, topicId: id }
+          setCreatedTaskIdsByTopic((current) => ({ ...current, [id]: taskId }))
+        }
         const optimisticTopic: TopicRecord = {
           id,
           topic_id: id,
