@@ -1,1278 +1,916 @@
 'use client'
 
-import { useSession, signOut } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { signOut, useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
-import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
+import {
+  Activity,
+  ArrowRight,
+  Bot,
+  Clock3,
+  Cpu,
+  Gauge,
+  GitBranch,
+  MessageCircle,
+  Network,
+  Radio,
+  Sparkles,
+  Users,
+  Zap,
+} from 'lucide-react'
+import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { normalizeAndFilterAgents, type NormalizedAgent } from '@/lib/agents'
+import { buildAgentUrl, useAgentId } from '@/lib/hooks/use-agent-id'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
-import { normalizeAndFilterAgents } from '@/lib/agents'
-import { ChatFileUpload, FileAttachmentPreview, stripFileTokens, PendingAttachments } from '@/components/ui/chat-file-upload'
-import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import type { AgentSubAgentMap, AgentStatsMap } from '@/components/ui/agent-column'
-import { ShareDialog } from '@/components/ui/share-dialog'
-import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
-import { useI18n } from '@/lib/i18n-provider'
-import { isDesktop } from '@/lib/desktop'
+import type { AgentRuntimeInfo, TopicItem } from '@/components/ui/topic-column'
 
-interface Agent {
-  id: string
-  agent_id: string
-  display_name: string
-  is_primary: boolean
-  api_key?: string
-}
+type TaskStatus = 'todo' | 'running' | 'in_progress' | 'doing' | 'review' | 'done' | 'blocked' | string
 
 interface TaskItem {
   id: string
-  title: string
+  title?: string
   description?: string
-  task_type: string
-  task_mode?: string
-  pipeline_id?: string
-  priority: 'P0' | 'P1' | 'P2' | 'P3'
-  status?: string
+  task_type?: string
+  status?: TaskStatus
   owner_agent_id?: string
   runner_agent_id?: string
-  created_by?: string
   topic_id?: string
-  acceptance?: string
-  exec_mode?: string
-  due_at?: string
-  estimate_hours?: number
-  dependencies?: string
-  notes?: string
   created_at?: string
   started_at?: string
   completed_at?: string
   updated_at?: string
+  usage_total_tokens?: number
 }
 
-const pieColors = ['#6366f1', '#52d1a8', '#ffd166', '#f78c6b', '#c792ea', '#7fd1f5', '#f5b4e6', '#9be564']
+interface TokenStat {
+  total_chars?: number
+  estimated_tokens?: number
+  message_count?: number
+  exact_tokens?: number
+}
 
-const toMs = (value?: string) => {
+interface RawTopicRecord {
+  id?: string
+  topic_id?: string
+  name?: string
+  type?: string
+  topic_type?: string
+  unread_count?: number
+  my_role?: string
+  task_id?: string
+  task_type?: string
+  task_mode?: string
+  exec_mode?: string
+  runner_agent_id?: string
+  last_activity_at?: string
+  description?: string
+  creator_agent_id?: string
+  member_agent_ids?: unknown[]
+}
+
+interface ChatMessage {
+  id: string
+  sender_id: string
+  sender_type: string
+  content: string
+  created_at: string
+}
+
+interface HostGroup {
+  id: string
+  label: string
+  subtitle: string
+  color: string
+  agents: NormalizedAgent[]
+  online: number
+  total: number
+  busy: number
+  idle: number
+  tasks: TaskItem[]
+  runningTasks: TaskItem[]
+  tokenTotal: number
+  executionMs: number
+  runtimeCount: number
+}
+
+const HOST_COLORS = [
+  'from-sky-400 via-cyan-300 to-blue-500',
+  'from-emerald-400 via-teal-300 to-cyan-500',
+  'from-amber-400 via-orange-300 to-rose-400',
+  'from-fuchsia-400 via-violet-400 to-indigo-500',
+  'from-lime-400 via-emerald-300 to-green-500',
+  'from-slate-500 via-slate-400 to-zinc-600',
+]
+
+const RUNNING_STATUSES = new Set(['running', 'in_progress', 'doing', 'executing', 'active', 'review'])
+
+function authHeaders(token?: string): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+async function fetchJson<T>(url: string, token: string | undefined, fallback: T): Promise<T> {
+  const response = await fetch(url, {
+    headers: authHeaders(token),
+    cache: 'no-store',
+  })
+  if (!response.ok) return fallback
+  return response.json() as Promise<T>
+}
+
+function toMs(value?: string) {
   if (!value) return null
   const ms = new Date(value).getTime()
   return Number.isFinite(ms) ? ms : null
 }
 
-const formatDuration = (ms: number) => {
-  const totalSec = Math.max(0, Math.floor(ms / 1000))
-  const hours = Math.floor(totalSec / 3600)
-  const minutes = Math.floor((totalSec % 3600) / 60)
-  if (hours > 0) return `${hours}h ${minutes}m`
+function formatDuration(ms: number) {
+  const minutes = Math.max(0, Math.round(ms / 60000))
+  if (minutes >= 60 * 24) return `${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h`
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
   return `${minutes}m`
 }
 
-const formatTokens = (n: number) => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
+function formatTokens(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+  return String(Math.max(0, Math.round(value)))
 }
 
-const arcPath = (cx: number, cy: number, r: number, start: number, end: number) => {
-  const x1 = cx + r * Math.cos(start)
-  const y1 = cy + r * Math.sin(start)
-  const x2 = cx + r * Math.cos(end)
-  const y2 = cy + r * Math.sin(end)
-  const largeArc = end - start > Math.PI ? 1 : 0
-  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
+function formatRelative(value?: string) {
+  const ms = toMs(value)
+  if (!ms) return '暂无活动'
+  const delta = Math.max(0, Date.now() - ms)
+  const minutes = Math.floor(delta / 60000)
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}小时前`
+  return `${Math.floor(hours / 24)}天前`
 }
 
+function shortId(id: string) {
+  if (!id) return ''
+  if (id.length <= 14) return id
+  return `${id.slice(0, 8)}…${id.slice(-4)}`
+}
 
-const actorSource = (session: unknown) => {
-  const s = session as { userId?: string; user?: { name?: string | null; email?: string | null } } | null | undefined
-  const uid = s?.userId || ''
-  return s?.user?.name || s?.user?.email || (uid ? `user_${uid.slice(0, 8)}` : 'user_default')
+function cleanHostLabel(value?: string) {
+  const raw = String(value || '').trim()
+  if (!raw || raw.toLowerCase() === 'unknown') return ''
+  return raw
+}
+
+function isCloudRuntime(runtime?: AgentRuntimeInfo) {
+  const provider = String(runtime?.provider || '').toLowerCase()
+  const hostname = String(runtime?.hostname || '').toLowerCase()
+  return provider.includes('cloudflare') || provider.includes('sandbox') || hostname.includes('cloudchamber')
+}
+
+function hostKeyForAgent(agent: NormalizedAgent, runtime?: AgentRuntimeInfo) {
+  const cloudHost = cleanHostLabel(agent.cloud_host_agent_id || runtime?.host_agent_id)
+  if (agent.is_cloud_sandbox || isCloudRuntime(runtime)) {
+    return cloudHost || 'cloud-sandbox'
+  }
+  return cleanHostLabel(runtime?.hostname)
+    || cleanHostLabel(runtime?.host_agent_id)
+    || cleanHostLabel(agent.bound_via)
+    || cleanHostLabel(agent.binding_method)
+    || 'unknown-host'
+}
+
+function hostLabelForKey(key: string, runtime?: AgentRuntimeInfo) {
+  if (key === 'cloud-sandbox' || isCloudRuntime(runtime)) return 'Cloud Sandbox'
+  if (key === 'unknown-host') return 'Unknown Host'
+  return key
+}
+
+function topicType(raw?: string): TopicItem['topic_type'] {
+  const value = String(raw || 'discussion').toLowerCase()
+  if (value === 'broadcast' || value === 'p2p' || value === 'collaborative') return value
+  return 'discussion'
+}
+
+function mapRawTopicToItem(topic: RawTopicRecord): TopicItem {
+  const topicId = String(topic.id || topic.topic_id || '').trim()
+  return {
+    topic_id: topicId,
+    name: String(topic.name || topicId || 'Topic'),
+    topic_type: topicType(topic.type || topic.topic_type),
+    unread_count: Number(topic.unread_count || 0),
+    can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
+    task_id: topic.task_id,
+    task_type: topic.task_type,
+    task_mode: topic.task_mode,
+    exec_mode: topic.exec_mode,
+    runner_agent_id: topic.runner_agent_id,
+    last_activity_at: topic.last_activity_at || '',
+    description: topic.description,
+    creator_agent_id: topic.creator_agent_id,
+    member_agent_ids: Array.isArray(topic.member_agent_ids) ? topic.member_agent_ids.map(String).filter(Boolean) : undefined,
+  }
+}
+
+function isDiscussionGroupTopic(topic: TopicItem) {
+  const name = String(topic.name || '').trim()
+  const description = String(topic.description || '').toLowerCase()
+  if (!['discussion', 'collaborative'].includes(topic.topic_type)) return false
+  if (topic.task_id || topic.task_type || topic.task_mode || topic.exec_mode || topic.runner_agent_id) return false
+  if (/^TASK-[a-f0-9]{8}\b/i.test(name)) return false
+  if (description.includes('general task') || description.includes('task_id') || description.includes('task type')) return false
+  return true
+}
+
+function taskAgentId(task: TaskItem) {
+  return task.runner_agent_id || task.owner_agent_id || ''
+}
+
+function isRunningTask(task: TaskItem) {
+  return RUNNING_STATUSES.has(String(task.status || '').toLowerCase())
+}
+
+function taskDurationMs(task: TaskItem) {
+  const start = toMs(task.started_at)
+  if (!start) return 0
+  const end = toMs(task.completed_at) ?? (isRunningTask(task) ? Date.now() : null)
+  if (!end) return 0
+  return Math.max(0, end - start)
+}
+
+function pointsForSparkline(seed: string, activeScore: number) {
+  let hash = 0
+  for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) % 9973
+  return Array.from({ length: 14 }, (_, index) => {
+    const wave = Math.sin((hash + index * 37) / 19) * 11
+    const lift = Math.min(34, activeScore * 3)
+    const y = Math.max(8, Math.min(46, 42 - lift - wave))
+    return `${index * 12},${y.toFixed(1)}`
+  }).join(' ')
+}
+
+function newestTimestamp(tasks: TaskItem[], topics: TopicItem[]) {
+  const values = [
+    ...tasks.map((task) => toMs(task.updated_at || task.completed_at || task.started_at || task.created_at) || 0),
+    ...topics.map((topic) => toMs(topic.last_activity_at) || 0),
+  ]
+  return Math.max(0, ...values)
+}
+
+function initialHostId(hosts: HostGroup[], selected: string) {
+  if (selected && hosts.some((host) => host.id === selected)) return selected
+  return hosts[0]?.id || ''
 }
 
 export default function TasksPageWrapper() {
-  return <Suspense fallback={null}><TasksPageInner /></Suspense>
+  return (
+    <Suspense fallback={null}>
+      <TasksPageInner />
+    </Suspense>
+  )
 }
 
 function TasksPageInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const { t } = useI18n()
-  const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
-  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
-  // taskDraft removed — no longer used after status system removal
-  const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; task: TaskItem } | null>(null)
-  const [renameModal, setRenameModal] = useState<{ task: TaskItem; value: string } | null>(null)
-  // Local-only labels: rename is a per-browser display alias, not a real
-  // task/topic title change. This keeps chat-view, the WTT plugin and the
-  // backend topic name untouched.
-  // Synced across devices via /task-labels API; localStorage is offline cache.
-  const TASK_LABELS_LS_KEY = 'wtt:task-labels:v1'
-  const [taskLabels, setTaskLabels] = useState<Record<string, string>>({})
-  // Load cached labels first (instant UI), then refresh from server.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const raw = window.localStorage.getItem(TASK_LABELS_LS_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object') {
-        const cleaned: Record<string, string> = {}
-        for (const [k, v] of Object.entries(parsed)) {
-          if (typeof k === 'string' && typeof v === 'string' && v.trim()) cleaned[k] = v
-        }
-        setTaskLabels(cleaned)
-      }
-    } catch {
-      /* ignore corrupt label store */
-    }
-  }, [])
-  // Fetch the canonical label set from the server whenever auth becomes available.
-  useEffect(() => {
-    if (!session?.accessToken) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const resp = await fetch(`${CLIENT_WTT_API_BASE}/task-labels`, {
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-        })
-        if (!resp.ok) return
-        const data = await resp.json()
-        if (cancelled || !data || typeof data !== 'object') return
-        const cleaned: Record<string, string> = {}
-        for (const [k, v] of Object.entries(data)) {
-          if (typeof k === 'string' && typeof v === 'string' && v.trim()) cleaned[k] = v
-        }
-        setTaskLabels(cleaned)
-        try { window.localStorage.setItem(TASK_LABELS_LS_KEY, JSON.stringify(cleaned)) } catch { /* quota */ }
-      } catch {
-        /* network down → keep local cache */
-      }
-    })()
-    return () => { cancelled = true }
-  }, [session?.accessToken])
-  const persistTaskLabels = useCallback((next: Record<string, string>) => {
-    setTaskLabels(next)
-    if (typeof window === 'undefined') return
-    try { window.localStorage.setItem(TASK_LABELS_LS_KEY, JSON.stringify(next)) } catch { /* quota/private mode */ }
-  }, [])
-  // Push a single label change to the server (fire-and-forget; local cache is source of truth for UI).
-  const syncTaskLabelToServer = useCallback(async (taskId: string, label: string | null) => {
-    if (!session?.accessToken) return
-    try {
-      await fetch(`${CLIENT_WTT_API_BASE}/task-labels/${encodeURIComponent(taskId)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-        body: JSON.stringify({ label: label ?? '' }),
-      })
-    } catch {
-      /* offline — server will catch up on next reload via GET /task-labels */
-    }
-  }, [session?.accessToken])
-  const labelFor = useCallback(
-    (task: { id: string; title?: string | null }) => (taskLabels[task.id]?.trim() || task.title || 'Untitled'),
-    [taskLabels],
-  )
-  const [shareTarget, setShareTarget] = useState<{ topicId: string; name: string } | null>(null)
-  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
-  const [creatingTaskType, setCreatingTaskType] = useState<string | null>(null)
-  const [desktop, setDesktop] = useState(false)
-  useEffect(() => { setDesktop(isDesktop()) }, [])
-  const [panelInput, setPanelInput] = useState('')
-  const [panelSending, setPanelSending] = useState(false)
-  const panelSendingRef = useRef(false)
-  const createTaskTriggeredRef = useRef(false)
-  const [pendingAttachments, setPendingAttachments] = useState<string[]>([])
-  const [queueIndicator, setQueueIndicator] = useState(false)
-  const [panelAwaitingInference, setPanelAwaitingInference] = useState(false)
-  const [lastPanelUserSendAt, setLastPanelUserSendAt] = useState<string | null>(null)
-  const initialType = searchParams.get('type')
-  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | 'general' | 'research' | 'code'>(
-    initialType === 'code' || initialType === 'research' || initialType === 'general' ? initialType : 'all'
-  )
-  // const [kbLoading, setKbLoading] = useState(false) // KB hidden
-  const chatScrollRef = useRef<HTMLDivElement>(null)
-
-  const loadAgents = useCallback(async () => {
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
-      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-    })
-    if (!response.ok) return
-    const data = await response.json()
-    const list = normalizeAndFilterAgents(data)
-    setAgents(list)
-    if (!selectedAgentId && list[0]) setSelectedAgentId(list[0].agent_id)
-  }, [session?.accessToken, selectedAgentId])
+  const [selectedHostId, setSelectedHostId] = useState('')
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const token = session?.accessToken as string | undefined
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login')
-      return
-    }
-    if (status === 'authenticated') loadAgents()
-  }, [status, router, loadAgents])
+    if (status === 'unauthenticated') router.push('/login')
+  }, [router, status])
 
-  const { data: subscribedTopicsRaw, mutate: mutateSubscribedTopics } = useSWR(
-    selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,
-    async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/subscribed?agent_id=${selectedAgentId}`, {
-        headers: { Authorization: `Bearer ${session?.accessToken}` },
-      })
-      if (!response.ok) return []
-      return response.json()
-    }
+  const { data: agents = [], mutate: mutateAgents } = useSWR(
+    token ? ['tasks-agents', token] : null,
+    async () => normalizeAndFilterAgents(await fetchJson<unknown>(`${CLIENT_WTT_API_BASE}/agents/my`, token, [])),
+    { refreshInterval: 30_000, revalidateOnFocus: true, dedupingInterval: 5_000 },
   )
 
-  const { data: tasksRaw, mutate: mutateTasks } = useSWR(
-    selectedAgentId && session?.accessToken ? ['tasks', selectedAgentId, session.accessToken] : null,
-    async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks?owner_agent_id=${encodeURIComponent(selectedAgentId)}&limit=500`, {
-        headers: { Authorization: `Bearer ${session?.accessToken}` },
-      })
-      if (!response.ok) throw new Error('Failed to load tasks')
-      return response.json()
-    },
-    { refreshInterval: 5000 }
+  const { data: statsData = null, mutate: mutateStats } = useSWR(
+    token ? ['tasks-agent-stats', token] : null,
+    async () => fetchJson<Record<string, unknown> | null>(`${CLIENT_WTT_API_BASE}/agents/stats`, token, null),
+    { refreshInterval: 10_000, revalidateOnFocus: true, dedupingInterval: 3_000 },
   )
 
-  const tasks: TaskItem[] = useMemo(() => (Array.isArray(tasksRaw) ? tasksRaw : []), [tasksRaw])
+  const { data: tasks = [], mutate: mutateTasks } = useSWR(
+    token ? ['tasks-runtime-map-tasks', token] : null,
+    async () => fetchJson<TaskItem[]>(`${CLIENT_WTT_API_BASE}/tasks?limit=500`, token, []),
+    { refreshInterval: 15_000, revalidateOnFocus: true, dedupingInterval: 5_000 },
+  )
 
-  /* ─── WebSocket for real-time task status updates ─── */
-  const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}` : ''
-  const handleWsTaskStatus = useCallback(
-    (msg: WsMessage) => {
-      if (msg.type === 'task_status') {
-        mutateTasks()
+  const { data: tokenStatsRaw = {} } = useSWR(
+    token ? ['tasks-runtime-map-token-stats', token] : null,
+    async () => fetchJson<Record<string, TokenStat>>(`${CLIENT_WTT_API_BASE}/tasks/token-stats`, token, {}),
+    { refreshInterval: 30_000, revalidateOnFocus: true, dedupingInterval: 10_000 },
+  )
+
+  const { data: groupsRaw = [], mutate: mutateGroups } = useSWR(
+    token ? ['tasks-my-groups', token] : null,
+    async () => fetchJson<RawTopicRecord[]>(`${CLIENT_WTT_API_BASE}/topics/my-groups`, token, []),
+    { refreshInterval: 30_000, revalidateOnFocus: true, dedupingInterval: 5_000 },
+  )
+
+  const { data: billingRaw = null } = useSWR(
+    token ? ['tasks-billing', token] : null,
+    async () => fetchJson<Record<string, unknown> | null>(`${CLIENT_WTT_API_BASE}/billing/me`, token, null),
+    { refreshInterval: 60_000, dedupingInterval: 20_000 },
+  )
+
+  const agentRuntimeMap = useMemo(
+    () => ((statsData?.runtimes || {}) as Record<string, AgentRuntimeInfo>),
+    [statsData],
+  )
+
+  const onlineAgentIds = useMemo(() => {
+    const ids = new Set<string>(Array.isArray(statsData?.online_agents) ? (statsData?.online_agents as string[]) : [])
+    for (const [agentId, runtime] of Object.entries(agentRuntimeMap)) {
+      if (typeof runtime.last_heartbeat_secs_ago === 'number' && runtime.last_heartbeat_secs_ago <= 90) {
+        ids.add(agentId)
       }
-    },
-    [mutateTasks],
-  )
-  useWebSocket({
-    url: wsUrl,
-    enabled: !!selectedAgentId,
-    token: session?.accessToken || undefined,
-    onMessage: handleWsTaskStatus,
-  })
+    }
+    return ids
+  }, [agentRuntimeMap, statsData])
 
-  // Task panel should reflect owner-scoped task truth, independent of topic subscription state.
-  const visibleTasks: TaskItem[] = useMemo(
-    () => tasks.filter((t) => {
-      // Browser: hide code/research tasks (desktop-only features)
-      if (!desktop && (t.task_type === 'code' || t.task_type === 'research')) return false
-      // Type filter
-      if (taskTypeFilter === 'all') return true
-      if (taskTypeFilter === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
-      return t.task_type === taskTypeFilter
-    }),
-    [tasks, taskTypeFilter, desktop]
+  const groupTopics = useMemo(
+    () => groupsRaw.map(mapRawTopicToItem).filter(isDiscussionGroupTopic),
+    [groupsRaw],
   )
 
-  // Worker (sub-agent) grouping — same as feed page
-  const agentSubAgents = useMemo<AgentSubAgentMap>(() => {
-    const map: AgentSubAgentMap = {}
-    for (const t of tasks) {
-      const aid = t.owner_agent_id || t.runner_agent_id
-      if (!aid) continue
-      if (!map[aid]) map[aid] = []
-      map[aid].push({ id: t.id, title: labelFor(t), task_type: t.task_type || 'general', status: t.status || 'todo' })
+  useEffect(() => {
+    if (!selectedAgentId && agents[0]?.agent_id) setSelectedAgentId(agents[0].agent_id)
+  }, [agents, selectedAgentId, setSelectedAgentId])
+
+  useEffect(() => {
+    if (!selectedGroupId && groupTopics[0]?.topic_id) setSelectedGroupId(groupTopics[0].topic_id)
+  }, [groupTopics, selectedGroupId])
+
+  const agentTasks = useMemo(() => {
+    const map: Record<string, TaskItem[]> = {}
+    for (const task of tasks) {
+      const agentId = taskAgentId(task)
+      if (!agentId) continue
+      if (!map[agentId]) map[agentId] = []
+      map[agentId].push(task)
     }
     return map
   }, [tasks])
 
-  // Agent stats from backend
-  const { data: statsData } = useSWR(
-    session?.accessToken ? `${CLIENT_WTT_API_BASE}/agents/stats` : null,
-    async (url: string) => {
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${session?.accessToken}` } })
-      if (!r.ok) return null
-      return r.json()
-    },
-    { refreshInterval: 30_000 }
-  )
-  const agentStats = useMemo<AgentStatsMap>(() => statsData?.agents ?? {}, [statsData])
-  const onlineAgentIds = useMemo(() => {
-    const arr: string[] = statsData?.online_agents ?? []
-    return new Set(arr)
-  }, [statsData])
-  const maxSubAgents = statsData?.max_sub_agents ?? 20
-
-  const { data: progressRaw } = useSWR(
-    session?.accessToken && selectedAgentId ? ['tasks-progress', selectedAgentId, session.accessToken] : null,
-    async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/progress?owner_agent_id=${encodeURIComponent(selectedAgentId)}`, {
-        headers: { Authorization: `Bearer ${session?.accessToken}` },
-      })
-      if (!response.ok) return {}
-      return response.json()
-    },
-    { refreshInterval: 5000 }
-  )
-
-  // Token consumption stats per task — scoped to selected agent
-  const { data: tokenStatsRaw } = useSWR(
-    session?.accessToken && selectedAgentId ? ['tasks-token-stats', selectedAgentId, session.accessToken] : null,
-    async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/token-stats?owner_agent_id=${encodeURIComponent(selectedAgentId)}`, {
-        headers: { Authorization: `Bearer ${session?.accessToken}` },
-      })
-      if (!response.ok) return {}
-      return response.json()
-    },
-    { refreshInterval: 30_000 }
-  )
-  const tokenStats = useMemo<Record<string, { total_chars: number; estimated_tokens: number; message_count: number }>>(() => {
-    if (!tokenStatsRaw || typeof tokenStatsRaw !== 'object') return {}
-    return tokenStatsRaw as Record<string, { total_chars: number; estimated_tokens: number; message_count: number }>
-  }, [tokenStatsRaw])
-
-  const { data: timelineRaw } = useSWR(
-    selectedTask?.topic_id && session?.accessToken ? ['task-timeline', selectedTask.topic_id, session.accessToken, selectedAgentId] : null,
-    async () => {
-      const agentQuery = selectedAgentId ? `&agent_id=${encodeURIComponent(selectedAgentId)}` : ''
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTask?.topic_id}/messages?limit=500${agentQuery}`, {
-        headers: { Authorization: `Bearer ${session?.accessToken}` },
-      })
-      if (!response.ok) return []
-      return response.json()
-    },
-    { refreshInterval: 5000 }
-  )
-
-  const timeline = useMemo(() => {
-    const rows = Array.isArray(timelineRaw)
-      ? timelineRaw
-      : Array.isArray((timelineRaw as { messages?: unknown[] })?.messages)
-        ? ((timelineRaw as { messages: unknown[] }).messages || [])
-        : []
-    return rows
-      .map((x) => x as Record<string, unknown>)
-      .map((x) => {
-        const content = String(x.content || '')
-        let kind: 'reasoned' | 'review' | 'normal' = 'normal'
-        if (content.includes('[AUTO-REASONED]')) kind = 'reasoned'
-        else if (content.includes('[TASK_REVIEW]')) kind = 'review'
-        return {
-          id: String(x.id || x.message_id || ''),
-          sender: String(x.sender_id || 'unknown'),
-          sender_type: String(x.sender_type || 'agent'),
-          content,
-          created_at: String(x.created_at || x.timestamp || ''),
-          kind,
-        }
-      })
-      .filter((x) => x.content)
-  }, [timelineRaw])
-
-  useEffect(() => {
-    if (selectedTask) {
-      const fresh = visibleTasks.find((t) => t.id === selectedTask.id)
-      if (!fresh) {
-        setSelectedTask(null)
-        return
-      }
-      setSelectedTask(fresh)
+  const agentSubAgents = useMemo<AgentSubAgentMap>(() => {
+    const map: AgentSubAgentMap = {}
+    for (const [agentId, rows] of Object.entries(agentTasks)) {
+      map[agentId] = rows.slice(0, 12).map((task) => ({
+        id: task.id,
+        title: task.title || task.id,
+        task_type: task.task_type || 'general',
+        status: task.status || 'todo',
+      }))
     }
-  }, [visibleTasks, selectedTask])
-
-  useEffect(() => {
-    const taskSet = new Set(visibleTasks.map((t) => t.id))
-    setSelectedTaskIds((prev) => prev.filter((id) => taskSet.has(id)))
-  }, [visibleTasks])
-
-  useEffect(() => {
-    if (!taskContextMenu) return
-    const onClose = () => setTaskContextMenu(null)
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setTaskContextMenu(null)
-    }
-    window.addEventListener('click', onClose)
-    window.addEventListener('contextmenu', onClose)
-    window.addEventListener('keydown', onEsc)
-    return () => {
-      window.removeEventListener('click', onClose)
-      window.removeEventListener('contextmenu', onClose)
-      window.removeEventListener('keydown', onEsc)
-    }
-  }, [taskContextMenu])
-
-  const taskDurationSummary = useMemo(() => {
-    const now = Date.now()
-    const rows = visibleTasks
-      .map((task) => {
-        const start = toMs(task.started_at)
-        if (!start) return null
-        const end = toMs(task.completed_at) ?? (task.status !== 'done' ? now : null)
-        if (!end) return null
-        const durationMs = Math.max(0, end - start)
-        return {
-          id: task.id,
-          title: labelFor(task),
-          durationMs,
-        }
-      })
-      .filter((x): x is { id: string; title: string; durationMs: number } => {
-        if (!x) return false
-        return x.durationMs > 0
-      })
-      .sort((a, b) => b.durationMs - a.durationMs)
-      .slice(0, 8)
-
-    const totalMs = rows.reduce((sum, item) => sum + item.durationMs, 0)
-    let startAngle = -Math.PI / 2
-    const slices = rows.map((item, index) => {
-      const ratio = totalMs > 0 ? item.durationMs / totalMs : 0
-      const endAngle = startAngle + ratio * Math.PI * 2
-      const slice = {
-        ...item,
-        color: pieColors[index % pieColors.length],
-        ratio,
-        path: arcPath(60, 60, 52, startAngle, endAngle),
-      }
-      startAngle = endAngle
-      return slice
-    })
-
-    return { totalMs, slices }
-  }, [visibleTasks])
-
-  const taskProgressMap = useMemo(() => {
-    const map: Record<string, number> = {}
-
-    if (progressRaw && typeof progressRaw === 'object') {
-      for (const [taskId, value] of Object.entries(progressRaw as Record<string, unknown>)) {
-        const p = Number(value)
-        if (!Number.isFinite(p)) continue
-        map[taskId] = Math.min(100, Math.max(0, p))
-      }
-    }
-
-    for (const task of visibleTasks) {
-      if (map[task.id] === undefined) {
-        map[task.id] = 0
-      }
-    }
-
     return map
-  }, [visibleTasks, progressRaw])
+  }, [agentTasks])
 
-  const topics = useMemo(() => {
-    const topicMap = new Map<string, { topic_id: string; name: string; topic_type: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'; unread_count: number; can_delete: boolean; is_default_p2p?: boolean }>()
-    const human = actorSource(session)
+  const agentStats = useMemo<AgentStatsMap>(() => {
+    const raw = (statsData?.agents || {}) as AgentStatsMap
+    return raw || {}
+  }, [statsData])
 
-    // 1. Add subscribed topics
-    if (Array.isArray(subscribedTopicsRaw)) {
-      for (const topic of subscribedTopicsRaw as { id: string; name: string; type?: string; my_role?: string }[]) {
-        let displayName = topic.name
-        const taskPrefixMatch = displayName.match(/^TASK-[a-f0-9]{8}\s+(.+)$/i)
-        if (taskPrefixMatch) displayName = taskPrefixMatch[1]
-        const topicType = (topic.type || 'discussion') as 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
-        const isDefaultP2P = topicType === 'p2p' && !!selectedAgentId && displayName.includes(selectedAgentId) && displayName.includes(human)
-        topicMap.set(topic.id, {
-          topic_id: topic.id,
-          name: displayName,
-          topic_type: topicType,
-          unread_count: 0,
-          can_delete: topic.my_role === 'owner' || topic.my_role === 'admin',
-          is_default_p2p: isDefaultP2P,
+  const hostGroups = useMemo<HostGroup[]>(() => {
+    const map = new Map<string, HostGroup>()
+
+    agents.forEach((agent) => {
+      const runtime = agentRuntimeMap[agent.agent_id]
+      const key = hostKeyForAgent(agent, runtime)
+      if (!map.has(key)) {
+        const color = HOST_COLORS[map.size % HOST_COLORS.length]
+        map.set(key, {
+          id: key,
+          label: hostLabelForKey(key, runtime),
+          subtitle: isCloudRuntime(runtime) || agent.is_cloud_sandbox ? 'Cloud Agent Runtime' : 'Self-hosted Runtime',
+          color,
+          agents: [],
+          online: 0,
+          total: 0,
+          busy: 0,
+          idle: 0,
+          tasks: [],
+          runningTasks: [],
+          tokenTotal: 0,
+          executionMs: 0,
+          runtimeCount: 0,
         })
       }
+      const host = map.get(key)
+      if (!host) return
+      host.agents.push(agent)
+    })
+
+    for (const host of Array.from(map.values())) {
+      const hostAgentIds = new Set(host.agents.map((agent) => agent.agent_id))
+      const hostTasks = tasks.filter((task) => hostAgentIds.has(taskAgentId(task)))
+      const runningTasks = hostTasks.filter(isRunningTask)
+      host.total = host.agents.length
+      host.online = host.agents.filter((agent) => onlineAgentIds.has(agent.agent_id)).length
+      host.busy = host.agents.filter((agent) => (agentTasks[agent.agent_id] || []).some(isRunningTask)).length
+      host.idle = Math.max(0, host.online - host.busy)
+      host.tasks = hostTasks
+      host.runningTasks = runningTasks
+      host.tokenTotal = hostTasks.reduce((sum, task) => {
+        const tokenStat = tokenStatsRaw[task.id]
+        return sum + Number(tokenStat?.estimated_tokens || task.usage_total_tokens || 0)
+      }, 0)
+      host.executionMs = hostTasks.reduce((sum, task) => sum + taskDurationMs(task), 0)
+      host.runtimeCount = host.agents.filter((agent) => Boolean(agentRuntimeMap[agent.agent_id])).length
     }
 
-    return Array.from(topicMap.values())
-  }, [subscribedTopicsRaw, selectedAgentId, session])
-
-  const agentItems = useMemo(() => {
-    return agents.map((a) => ({ agent_id: a.agent_id, display_name: a.display_name, unread_count: 0 }))
-  }, [agents])
-
-  const quickCreateTask = useCallback(async (taskType: 'code' | 'research' | 'general') => {
-    if (!selectedAgentId || !session?.accessToken) return
-    setCreatingTaskType(taskType)
-    try {
-      const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-        body: JSON.stringify({
-          title: taskType === 'code' ? 'New Code Task' : taskType === 'research' ? 'New Research Task' : 'New Task',
-          task_mode: 'single',
-          priority: 'P1',
-          status: 'todo',
-          task_type: taskType,
-          exec_mode: 'reasoning',
-          owner_agent_id: selectedAgentId,
-          runner_agent_id: selectedAgentId,
-          created_by: actorSource(session),
-        }),
+    const unknownAgents = agents.filter((agent) => !map.has(hostKeyForAgent(agent, agentRuntimeMap[agent.agent_id])))
+    if (unknownAgents.length) {
+      const color = HOST_COLORS[map.size % HOST_COLORS.length]
+      map.set('unknown-host', {
+        id: 'unknown-host',
+        label: 'Unknown Host',
+        subtitle: 'Last known runtime unavailable',
+        color,
+        agents: unknownAgents,
+        online: 0,
+        total: unknownAgents.length,
+        busy: 0,
+        idle: 0,
+        tasks: [],
+        runningTasks: [],
+        tokenTotal: 0,
+        executionMs: 0,
+        runtimeCount: 0,
       })
-      if (resp.ok) {
-        const real = await resp.json()
-        if (taskType === 'code') {
-          router.push(buildAgentUrl(`/tasks/code/${real.id}`, selectedAgentId))
-        } else if (taskType === 'research') {
-          router.push(buildAgentUrl(`/tasks/research/${real.id}`, selectedAgentId))
-        } else {
-          const topicId = String(real.topic_id || '')
-          if (topicId) router.push(buildAgentUrl('/feed', selectedAgentId, { topicId }))
-          else router.push(buildAgentUrl('/tasks', selectedAgentId, { type: 'general' }))
-        }
-      } else {
-        alert(t('feed.failedCreateTask'))
-        mutateTasks()
-      }
-    } catch {
-      alert(t('feed.failedCreateTask'))
-      mutateTasks()
-    } finally {
-      setCreatingTaskType(null)
-    }
-  }, [selectedAgentId, session, router, t, mutateTasks])
-
-  useEffect(() => {
-    const create = searchParams.get('create')
-    const reqType = searchParams.get('type')
-    if (create !== '1') {
-      createTaskTriggeredRef.current = false
-      return
-    }
-    if (createTaskTriggeredRef.current) return
-    if (!selectedAgentId || !session?.accessToken) return
-
-    const taskType: 'general' | 'code' | 'research' =
-      reqType === 'code' || reqType === 'research' || reqType === 'general'
-        ? reqType
-        : 'general'
-
-    createTaskTriggeredRef.current = true
-    void quickCreateTask(taskType)
-  }, [searchParams, selectedAgentId, session?.accessToken, quickCreateTask])
-
-  const renameTask = (task: TaskItem) => {
-    setTaskContextMenu(null)
-    setRenameModal({ task, value: labelFor(task) })
-  }
-
-  const submitRename = async () => {
-    if (!renameModal) return
-    const { task, value } = renameModal
-    const trimmed = value.trim()
-    const currentLabel = taskLabels[task.id] || ''
-    // Empty (or matches the real title with no existing label) → clear the label.
-    const next = { ...taskLabels }
-    if (!trimmed || trimmed === task.title) {
-      if (currentLabel) {
-        delete next[task.id]
-        persistTaskLabels(next)
-        syncTaskLabelToServer(task.id, null)
-      }
-      setRenameModal(null)
-      return
-    }
-    if (trimmed === currentLabel) {
-      setRenameModal(null)
-      return
-    }
-    next[task.id] = trimmed
-    persistTaskLabels(next)
-    syncTaskLabelToServer(task.id, trimmed)
-    setRenameModal(null)
-  }
-
-  const cancelTask = async (task: TaskItem) => {
-    const ok = window.confirm(t('tasks.cancelTaskConfirm', { title: labelFor(task) }))
-    if (!ok) return
-
-    const actingAgent = task.owner_agent_id || selectedAgentId
-    const response = await fetch(
-      `${CLIENT_WTT_API_BASE}/tasks/${task.id}?acting_as_agent_id=${encodeURIComponent(actingAgent)}&delete_topic=true`,
-      {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-      }
-    )
-
-    if (!response.ok) {
-      const txt = await response.text()
-      try {
-        const detail = JSON.parse(txt)?.detail || txt
-        alert(t('tasks.cancelTaskFailed', { detail }))
-      } catch { alert(t('tasks.cancelTaskFailed', { detail: txt || response.status })) }
-      return
     }
 
-    if (selectedTask?.id === task.id) {
-      setSelectedTask(null)
-    }
-
-    setTaskContextMenu(null)
-    // Optimistically remove from list immediately
-    mutateTasks((prev: TaskItem[] | undefined) => (prev || []).filter(t => t.id !== task.id), { revalidate: true })
-    await mutateSubscribedTopics()
-  }
-
-  const bulkRunTasks = async () => {
-    if (!selectedTaskIds.length) return alert(t('tasks.selectTasksFirst'))
-    const targets = tasks.filter((t) => selectedTaskIds.includes(t.id))
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session?.accessToken ?? ''}`,
-    }
-    const results = await Promise.allSettled(
-      targets.map((t) =>
-        fetch(`${CLIENT_WTT_API_BASE}/tasks/${t.id}/run`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            trigger_agent_id: actorSource(session) || 'task-runner',
-            runner_agent_id: t.runner_agent_id || t.owner_agent_id || selectedAgentId,
-          }),
-        })
-      )
-    )
-    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
-    alert(t('tasks.bulkRunDone', { ok, total: targets.length }))
-    await mutateTasks()
-  }
-
-  const bulkCancelTasks = async () => {
-    if (!selectedTaskIds.length) return alert(t('tasks.selectTasksFirst'))
-    if (!confirm(t('tasks.bulkCancelConfirm', { count: selectedTaskIds.length }))) return
-    const headers = { Authorization: `Bearer ${session?.accessToken ?? ''}` }
-    const results = await Promise.allSettled(
-      selectedTaskIds.map((id) => {
-        const task = tasks.find(t => t.id === id)
-        const actingAgent = task?.owner_agent_id || selectedAgentId
-        return fetch(`${CLIENT_WTT_API_BASE}/tasks/${id}?acting_as_agent_id=${encodeURIComponent(actingAgent)}&delete_topic=true`, {
-          method: 'DELETE',
-          headers,
-        })
-      })
-    )
-    const ok = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
-    const deletedIds = new Set(selectedTaskIds)
-    setSelectedTaskIds([])
-    mutateTasks((prev: TaskItem[] | undefined) => (prev || []).filter(t => !deletedIds.has(t.id)), { revalidate: true })
-    await mutateSubscribedTopics()
-    alert(t('tasks.bulkCancelDone', { ok, total: results.length }))
-  }
-
-  const leaveTopicFromSidebar = async (topicId: string) => {
-    if (!confirm(t('tasks.leaveTopicConfirm'))) return
-
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}/leave?agent_id=${encodeURIComponent(selectedAgentId)}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.online !== b.online) return b.online - a.online
+      if (a.busy !== b.busy) return b.busy - a.busy
+      return a.label.localeCompare(b.label)
     })
+  }, [agentRuntimeMap, agentTasks, agents, onlineAgentIds, tasks, tokenStatsRaw])
 
-    if (!response.ok) {
-      const txt = await response.text()
-      alert(t('tasks.leaveTopicFailed', { detail: txt || response.status }))
-      return
-    }
+  useEffect(() => {
+    setSelectedHostId((current) => initialHostId(hostGroups, current))
+  }, [hostGroups])
 
-    await mutateSubscribedTopics()
+  const selectedHost = useMemo(
+    () => hostGroups.find((host) => host.id === selectedHostId) || hostGroups[0],
+    [hostGroups, selectedHostId],
+  )
+
+  const selectedGroup = useMemo(
+    () => groupTopics.find((topic) => topic.topic_id === selectedGroupId) || groupTopics[0],
+    [groupTopics, selectedGroupId],
+  )
+
+  const selectedGroupAgent = selectedGroup?.member_agent_ids?.find((agentId) => agents.some((agent) => agent.agent_id === agentId))
+    || selectedAgentId
+    || agents[0]?.agent_id
+    || ''
+
+  const { data: selectedGroupMessagesRaw = [] } = useSWR(
+    token && selectedGroup?.topic_id
+      ? ['tasks-group-messages', selectedGroup.topic_id, selectedGroupAgent, token]
+      : null,
+    async () => {
+      const agentQuery = selectedGroupAgent ? `?limit=8&agent_id=${encodeURIComponent(selectedGroupAgent)}` : '?limit=8'
+      const data = await fetchJson<unknown>(`${CLIENT_WTT_API_BASE}/topics/${selectedGroup?.topic_id}/messages${agentQuery}`, token, [])
+      if (Array.isArray(data)) return data as ChatMessage[]
+      const messages = (data as { messages?: unknown[] })?.messages
+      return Array.isArray(messages) ? messages as ChatMessage[] : []
+    },
+    { refreshInterval: 12_000, revalidateOnFocus: true, dedupingInterval: 4_000 },
+  )
+
+  const totalTokens = hostGroups.reduce((sum, host) => sum + host.tokenTotal, 0)
+  const totalExecutionMs = hostGroups.reduce((sum, host) => sum + host.executionMs, 0)
+  const activeHosts = hostGroups.filter((host) => host.online > 0).length
+  const newestActivity = newestTimestamp(tasks, groupTopics)
+  const planLabel = String(((billingRaw?.entitlement as Record<string, unknown> | undefined)?.plan || 'free')).toLowerCase() === 'pro' ? 'Pro' : 'Free'
+
+  const refreshAll = async () => {
+    await Promise.allSettled([
+      mutateAgents(),
+      mutateStats(),
+      mutateTasks(),
+      mutateGroups(),
+    ])
   }
 
-  const deleteTopicFromSidebar = async (topicId: string) => {
-    if (!confirm(t('tasks.deleteTopicConfirm'))) return
-
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${topicId}?agent_id=${encodeURIComponent(selectedAgentId)}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-    })
-
-    if (!response.ok) {
-      const txt = await response.text()
-      try {
-        const detail = JSON.parse(txt)?.detail || txt
-        alert(t('tasks.deleteTopicFailed', { detail }))
-      } catch { alert(t('tasks.deleteTopicFailed', { detail: txt || response.status })) }
-      return
-    }
-
-    await mutateSubscribedTopics()
+  const openAgent = (agentId: string) => {
+    setSelectedAgentId(agentId)
+    router.push(buildAgentUrl('/feed', agentId))
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const sendPanelMessage = async () => {
-    const attachmentText = pendingAttachments.join('\n')
-    if (!selectedTask || (!panelInput.trim() && !attachmentText)) return
-    if (panelSendingRef.current) return
-    const text = panelInput.trim()
-    setPanelInput('')
-    setPendingAttachments([])
-    panelSendingRef.current = true
-    setPanelSending(true)
-
-    const isUser = true
-    const agentId = selectedAgentId || 'user'
-    const senderType = 'HUMAN'
-    const senderId = actorSource(session)
-    if (panelAwaitingInference) {
-      setQueueIndicator(true)
-    }
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session?.accessToken ?? ''}`,
-    }
-
-    try {
-      const fullContent = attachmentText ? `${attachmentText}\n\n${text}` : text
-      // User sends always go through task chat API
-      if (isUser) {
-        const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/chat/send`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            content: fullContent,
-            sender_type: 'HUMAN',
-            sender_id: senderId,
-            semantic_type: 'reply',
-            auto_run: true,
-          }),
-        })
-        if (!resp.ok) {
-          const err = await resp.text().catch(() => '')
-          throw new Error(`send failed: ${resp.status} ${err}`)
-        }
-      } else if (selectedTask.topic_id) {
-        const url = `${CLIENT_WTT_API_BASE}/topics/${selectedTask.topic_id}/messages?agent_id=${encodeURIComponent(agentId)}`
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            sender_id: senderId,
-            sender_type: senderType,
-            content: fullContent,
-            content_type: 'text',
-            semantic_type: 'reply',
-          }),
-        })
-        if (!resp.ok) {
-          const err = await resp.text().catch(() => '')
-          throw new Error(`send failed: ${resp.status} ${err}`)
-        }
-      }
-
-      if (isUser) {
-        setPanelAwaitingInference(true)
-        setLastPanelUserSendAt(new Date().toISOString())
-      }
-
-      // If already waiting for a prior inference, show queued hint persistently
-      if (panelAwaitingInference) {
-        setQueueIndicator(true)
-      }
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'send failed')
-    } finally {
-      panelSendingRef.current = false
-      setPanelSending(false)
-      await mutateTasks()
-    }
+  const openGroup = (topic: TopicItem) => {
+    const agentId = topic.member_agent_ids?.find((id) => agents.some((agent) => agent.agent_id === id)) || selectedAgentId
+    router.push(buildAgentUrl('/feed', agentId, { topicId: topic.topic_id }))
   }
 
-  // Scroll chat to bottom when timeline changes
-  useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
-    }
-  }, [timeline])
+  if (status === 'loading') {
+    return <div className="h-[100dvh] bg-[#fbfaf7] dark:bg-zinc-950" />
+  }
 
-  // Clear queued/awaiting states once agent has replied after latest user send
-  useEffect(() => {
-    if (!panelAwaitingInference || !lastPanelUserSendAt) return
-    const sentAt = Date.parse(lastPanelUserSendAt)
-    if (!Number.isFinite(sentAt)) return
-    const hasAgentReply = timeline.some((item) => {
-      if ((item.sender_type || '').toUpperCase() !== 'AGENT') return false
-      const t = Date.parse(item.created_at || '')
-      if (!(Number.isFinite(t) && t > sentAt)) return false
-      const content = String(item.content || '')
-      // "Agent thinking..." should NOT be treated as final reply
-      if (content.includes('Agent thinking')) return false
-      return true
-    })
-    if (hasAgentReply) {
-      setPanelAwaitingInference(false)
-      setQueueIndicator(false)
-    }
-  }, [timeline, panelAwaitingInference, lastPanelUserSendAt])
-
-  // Reset queue state when switching tasks
-  useEffect(() => {
-    setPanelAwaitingInference(false)
-    setLastPanelUserSendAt(null)
-    setQueueIndicator(false)
-  }, [selectedTask?.id])
+  const shellAgents = agents.map((agent) => ({
+    agent_id: agent.agent_id,
+    display_name: agent.display_name,
+    unread_count: 0,
+    binding_method: agent.binding_method,
+    bound_via: agent.bound_via,
+    is_cloud_sandbox: agent.is_cloud_sandbox,
+    cloud_host_agent_id: agent.cloud_host_agent_id,
+  }))
 
   return (
     <WttShellV2
-      agents={agentItems}
+      agents={shellAgents}
       selectedAgentId={selectedAgentId}
-      onAgentChange={(id) => { setSelectedAgentId(id); setSelectedTask(null) }}
-      topics={topics}
+      onAgentChange={openAgent}
+      topics={[]}
+      groupTopics={groupTopics}
       selectedTopicId={null}
-      onTopicChange={(topicId) => router.push(buildAgentUrl('/feed', selectedAgentId, topicId ? { topicId } : undefined))}
-      onLeaveTopic={leaveTopicFromSidebar}
-      onDeleteTopic={deleteTopicFromSidebar}
-      onTopicsRefresh={() => mutateSubscribedTopics()}
+      onTopicChange={(topicId) => {
+        if (!topicId) return
+        const topic = groupTopics.find((item) => item.topic_id === topicId)
+        if (topic) openGroup(topic)
+      }}
       onLogout={() => signOut({ callbackUrl: '/login' })}
-      currentUserName={actorSource(session)}
+      onTopicsRefresh={refreshAll}
+      currentUserName={session?.user?.name || session?.user?.email || 'user'}
       agentSubAgents={agentSubAgents}
-      maxSubAgents={maxSubAgents}
       agentStats={agentStats}
       onlineAgentIds={onlineAgentIds}
-      userToken={session?.accessToken as string | undefined}
+      agentRuntimeMap={agentRuntimeMap}
+      userToken={token}
+      planLabel={planLabel}
       hideTopics
       hideCreateTopic
     >
-      <div className="h-full p-4 text-slate-800 dark:text-zinc-200">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{t('tasks.title')}</h1>
-            <p className="text-xs text-slate-500 dark:text-zinc-400">{t('tasks.subtitle')}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={bulkRunTasks} className="rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2 text-sm text-indigo-500 dark:text-indigo-300">{t('tasks.bulkRun')}</button>
-            <button onClick={bulkCancelTasks} className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{t('tasks.bulkCancel')}</button>
-            {desktop && <button
-              disabled={creatingTaskType === 'code'}
-              onClick={() => quickCreateTask('code')}
-              className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-600 disabled:opacity-50"
-            >{creatingTaskType === 'code' ? '⏳...' : '💻 '}{t('tasks.newCodeTask')}</button>}
-            {desktop && <button
-              disabled={creatingTaskType === 'research'}
-              onClick={() => quickCreateTask('research')}
-              className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-600 disabled:opacity-50"
-            >{creatingTaskType === 'research' ? '⏳...' : '📄 '}{t('tasks.newResearchTask')}</button>}
-          </div>
+      <div className="runtime-map min-h-full overflow-hidden bg-[#f5efe4] text-slate-900 dark:bg-[#090b10] dark:text-zinc-100">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="runtime-orb runtime-orb-a" />
+          <div className="runtime-orb runtime-orb-b" />
+          <div className="runtime-grid" />
         </div>
 
-        {/* Task type filter tabs */}
-        <div className="mb-3 flex items-center gap-1">
-          {([
-            ['all', `📋 ${t('tasks.filterAll')}`],
-            ['general', `💬 ${t('tasks.filterGeneral')}`],
-            ...(desktop ? [['code', `💻 ${t('tasks.filterCode')}`], ['research', `📄 ${t('tasks.filterResearch')}`]] : []),
-          ] as [string, string][]).map(([key, label]) => {
-            const count = tasks.filter(t => {
-              if (key === 'all') return true
-              if (key === 'general') return !t.task_type || t.task_type === 'general' || t.task_type === 'feature' || t.task_type === 'common'
-              return t.task_type === key
-            }).length
-            const isActive = taskTypeFilter === key
-            return (
+        <div className="relative z-10 mx-auto flex min-h-full max-w-[1680px] flex-col gap-5 p-4 md:p-6">
+          <header className="overflow-hidden rounded-[28px] border border-white/70 bg-white/70 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/72">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="max-w-4xl">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-sky-700 dark:border-sky-700/60 dark:bg-sky-950/40 dark:text-sky-200">
+                  <Network className="h-3.5 w-3.5" />
+                  WTT Runtime Map
+                </div>
+                <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white md:text-5xl">
+                  分布式 Agent Fabric 任务视图
+                </h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-zinc-300">
+                  按主机、团队/群聊、Token 与执行时长聚合当前 WTT 工作负载。这里用于观察运行态和快速跳转，真正对话仍在 Feed Chat 中完成。
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[560px]">
+                <MetricCard icon={<Radio className="h-4 w-4" />} label="在线主机" value={`${activeHosts}/${hostGroups.length}`} tone="sky" />
+                <MetricCard icon={<Bot className="h-4 w-4" />} label="Agent" value={`${onlineAgentIds.size}/${agents.length}`} tone="emerald" />
+                <MetricCard icon={<Zap className="h-4 w-4" />} label="Token" value={formatTokens(totalTokens)} tone="amber" />
+                <MetricCard icon={<Clock3 className="h-4 w-4" />} label="执行时长" value={formatDuration(totalExecutionMs)} tone="violet" />
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-zinc-400">
+              <span>最近活动：{newestActivity ? formatRelative(new Date(newestActivity).toISOString()) : '暂无'}</span>
               <button
-                key={key}
-                onClick={() => setTaskTypeFilter(key as typeof taskTypeFilter)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                  isActive
-                    ? 'bg-indigo-500 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
-                }`}
+                onClick={refreshAll}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600 shadow-sm transition hover:border-sky-300 hover:text-sky-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
               >
-                {label} <span className={`ml-1 ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>({count})</span>
+                刷新运行图
               </button>
-            )
-          })}
-          {desktop && <>
-          {/* KB hidden — feature temporarily disabled
-          <div className="mx-2 h-5 w-px bg-slate-300 dark:bg-zinc-600" />
-          <button
-            disabled={kbLoading}
-            onClick={async () => {
-              setKbLoading(true)
-              try {
-                const resp = await fetch(`${CLIENT_WTT_API_BASE}/kb/personal`, {
-                  headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                })
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-                const kb = await resp.json()
-                router.push(buildAgentUrl(`/tasks/kb/${kb.id}`, selectedAgentId))
-              } catch (e) {
-                console.error('KB redirect failed:', e)
-                alert('Failed to open Knowledge Root. Please ensure you are logged in.')
-              } finally {
-                setKbLoading(false)
-              }
-            }}
-            className="rounded-lg bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-600 hover:shadow-md disabled:opacity-50"
-          >
-            {kbLoading ? '⏳...' : '📚 Knowledge Root'}
-          </button>
-          */}
-          </>}
-        </div>
+            </div>
+          </header>
 
-        <div className="grid h-[calc(100%-88px)] grid-cols-1 gap-2 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-3">
-          {/* Flat task list */}
-          <div className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/50 p-2 space-y-1.5">
-            {visibleTasks.length === 0 && (
-              <p className="py-8 text-center text-sm text-slate-400 dark:text-zinc-500">{t('tasks.noTasks')}</p>
-            )}
-            {visibleTasks.map((task) => {
-              const ts = tokenStats[task.id]
-              const start = toMs(task.started_at)
-              const end = toMs(task.completed_at) ?? (start ? Date.now() : null)
-              const durationMs = start && end ? Math.max(0, end - start) : 0
-              const progress = taskProgressMap[task.id] ?? 0
-              return (
-                <button
-                  key={task.id}
-                  onClick={(e) => {
-                    setSelectedTask(task)
-                    if (e.metaKey || e.ctrlKey) {
-                      setSelectedTaskIds((prev) =>
-                        prev.includes(task.id) ? prev.filter((id) => id !== task.id) : Array.from(new Set([...prev, task.id]))
-                      )
-                    }
-                  }}
-                  onDoubleClick={() => {
-                    if (task.task_type === 'code') router.push(buildAgentUrl(`/tasks/code/${task.id}`, selectedAgentId))
-                    else if (task.task_type === 'research') router.push(buildAgentUrl(`/tasks/research/${task.id}`, selectedAgentId))
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    setTaskContextMenu({ x: e.clientX, y: e.clientY, task })
-                  }}
-                  className={`w-full rounded-lg border bg-white dark:bg-zinc-800 p-3 text-left transition hover:border-indigo-400 dark:hover:border-indigo-600 ${
-                    selectedTask?.id === task.id ? 'border-indigo-500 ring-1 ring-indigo-300 dark:ring-indigo-700' : 'border-slate-200 dark:border-zinc-700'
-                  } ${selectedTaskIds.includes(task.id) ? 'ring-2 ring-indigo-400 !bg-indigo-50 dark:!bg-indigo-950/30' : ''}`}
-                >
-                  <div className="flex items-center gap-3">
-                    {/* Type badge */}
-                    {task.task_type === 'code' && <span className="shrink-0 rounded-md bg-cyan-100 dark:bg-cyan-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">💻 Code</span>}
-                    {task.task_type === 'research' && <span className="shrink-0 rounded-md bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">📄 Research</span>}
-                    {(!task.task_type || task.task_type === 'general' || task.task_type === 'feature' || task.task_type === 'common') && <span className="shrink-0 rounded-md bg-slate-100 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-zinc-300">💬 General</span>}
+          <main className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(360px,1.08fr)_minmax(420px,1fr)] 2xl:grid-cols-[minmax(520px,1.12fr)_minmax(520px,0.88fr)]">
+            <section className="min-h-0 rounded-[28px] border border-white/70 bg-white/75 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/72">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black">Host Fabric</h2>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">第一维度：按运行主机聚合 Agent 状态</p>
+                </div>
+                <Gauge className="h-5 w-5 text-sky-500" />
+              </div>
 
-                    {/* Title */}
-                    <p className="flex-1 truncate text-sm font-medium" title={labelFor(task)}>{labelFor(task)}</p>
-
-                    {/* Token badge */}
-                    {ts && ts.estimated_tokens > 0 && (
-                      <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400" title={`${ts.estimated_tokens.toLocaleString()} ${t('tasks.tokens')} (${ts.message_count} ${t('tasks.messages')})`}>
-                        🪙 {formatTokens(ts.estimated_tokens)}
-                      </span>
-                    )}
-
-                    {/* Duration badge */}
-                    {durationMs > 0 && (
-                      <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-blue-50 dark:bg-blue-950/30 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                        ⏱ {formatDuration(durationMs)}
-                      </span>
-                    )}
-
-                    {/* Feed link */}
-                    {task.topic_id && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(buildAgentUrl('/feed', selectedAgentId, { topicId: task.topic_id! })) } }}
-                        className="shrink-0 inline-flex items-center gap-1 rounded-md border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950/50 cursor-pointer transition"
-                        title={t('tasks.viewInFeed')}
-                      >
-                        📡 {t('tasks.feed')}
-                      </span>
-                    )}
-
-                    {/* Rename inline button */}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); renameTask(task) }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); renameTask(task) } }}
-                      className="shrink-0 inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer transition"
-                      title={t('tasks.rename') || 'Rename'}
-                    >
-                      ✏️ {t('tasks.rename') || 'Rename'}
-                    </span>
-
-                    {(task.task_type === 'code' || task.task_type === 'research') && (
-                      <span className="shrink-0 text-[9px] text-slate-400 dark:text-zinc-500">{t('tasks.doubleClickOpen')}</span>
-                    )}
+              <div className="grid gap-3 md:grid-cols-2">
+                {hostGroups.length === 0 && (
+                  <div className="col-span-full rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">
+                    暂无绑定 Agent。请先在 Feed 左侧绑定已有 Agent 或新建云端 Agent。
                   </div>
-                  {/* Progress bar */}
-                  {progress > 0 && (
-                    <div className="mt-2 h-1 rounded bg-slate-200 dark:bg-zinc-700">
-                      <div className="h-1 rounded bg-indigo-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+                )}
+                {hostGroups.map((host) => (
+                  <button
+                    key={host.id}
+                    onClick={() => setSelectedHostId(host.id)}
+                    className={`group relative overflow-hidden rounded-3xl border p-4 text-left shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl ${
+                      selectedHost?.id === host.id
+                        ? 'border-sky-300 bg-sky-50/80 ring-2 ring-sky-200 dark:border-sky-500/60 dark:bg-sky-950/25 dark:ring-sky-500/20'
+                        : 'border-slate-200 bg-white/78 hover:border-slate-300 dark:border-zinc-800 dark:bg-zinc-950/45 dark:hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className={`absolute -right-10 -top-12 h-32 w-32 rounded-full bg-gradient-to-br ${host.color} opacity-20 blur-2xl transition group-hover:opacity-35`} />
+                    <div className="relative flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${host.color} text-white shadow-lg shadow-slate-300/40 dark:shadow-black/30`}>
+                            <Cpu className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black" title={host.label}>{host.label}</p>
+                            <p className="truncate text-[11px] text-slate-500 dark:text-zinc-400">{host.subtitle}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-slate-950 px-2 py-1 text-[10px] font-black text-white dark:bg-white dark:text-zinc-950">
+                        {host.online}/{host.total}
+                      </span>
                     </div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
 
-          <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-zinc-700 dark:bg-zinc-900/50 2xl:p-3">
-            <div className="mb-3 shrink-0 rounded-lg border border-slate-200 bg-slate-100 p-2">
-              <p className="text-xs font-semibold text-slate-600">{t('tasks.durationPieTop8')}</p>
-              {taskDurationSummary.slices.length > 0 ? (
-                <>
-                  <div className="mt-2 flex items-center gap-3">
-                    <svg viewBox="0 0 120 120" className="h-28 w-28 shrink-0">
-                      <circle cx="60" cy="60" r="52" fill="#f1f5f9" />
-                      {taskDurationSummary.slices.map((slice) => (
-                        <path key={slice.id} d={slice.path} fill={slice.color} />
-                      ))}
-                      <circle cx="60" cy="60" r="25" fill="#f8fafc" />
-                      <text x="60" y="57" textAnchor="middle" className="fill-slate-500 text-[8px]">{t('tasks.totalDuration')}</text>
-                      <text x="60" y="67" textAnchor="middle" className="fill-slate-600 text-[9px] font-semibold">{formatDuration(taskDurationSummary.totalMs)}</text>
+                    <svg viewBox="0 0 156 54" className="mt-4 h-14 w-full overflow-visible">
+                      <polyline
+                        points={pointsForSparkline(host.id, host.online + host.busy + host.runningTasks.length)}
+                        fill="none"
+                        stroke="url(#hostLine)"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <defs>
+                        <linearGradient id="hostLine" x1="0" x2="156" y1="0" y2="0">
+                          <stop stopColor="#38bdf8" />
+                          <stop offset="0.55" stopColor="#22c55e" />
+                          <stop offset="1" stopColor="#f59e0b" />
+                        </linearGradient>
+                      </defs>
                     </svg>
-                    <div className="max-h-28 flex-1 space-y-1 overflow-auto pr-1">
-                      {taskDurationSummary.slices.map((slice) => (
-                        <div key={slice.id} className="flex items-center gap-1 text-[10px] text-slate-600">
-                          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: slice.color }} />
-                          <span className="truncate" title={slice.title}>{slice.title}</span>
-                          <span className="ml-auto shrink-0 text-slate-700">{formatDuration(slice.durationMs)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="mt-1 text-[10px] text-slate-500">{t('tasks.durationHint')}</p>
-                </>
-              ) : (
-                <p className="mt-1 text-[11px] text-slate-400">{t('tasks.noDurationData')}</p>
-              )}
-              {/* Token consumption summary below pie chart */}
-              {(() => {
-                const tokenEntries = visibleTasks
-                  .filter(t => tokenStats[t.id] && tokenStats[t.id].estimated_tokens > 0)
-                  .map(t => ({ id: t.id, title: labelFor(t), ...tokenStats[t.id] }))
-                  .sort((a, b) => b.estimated_tokens - a.estimated_tokens)
-                  .slice(0, 8)
-                const totalTokens = tokenEntries.reduce((s, e) => s + e.estimated_tokens, 0)
-                if (tokenEntries.length === 0) return null
-                return (
-                  <div className="mt-2 border-t border-slate-200 dark:border-zinc-700 pt-2">
-                    <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1">🪙 {t('tasks.tokenTop8')}  {t('tasks.total')}: {formatTokens(totalTokens)}</p>
-                    <div className="space-y-0.5 max-h-24 overflow-auto">
-                      {tokenEntries.map((entry) => (
-                        <div key={entry.id} className="flex items-center gap-1 text-[10px] text-slate-600 dark:text-zinc-400">
-                          <div className="h-1.5 flex-1 rounded bg-slate-200 dark:bg-zinc-700">
-                            <div className="h-1.5 rounded bg-emerald-400 dark:bg-emerald-600 transition-all" style={{ width: `${Math.max(2, (entry.estimated_tokens / (tokenEntries[0]?.estimated_tokens || 1)) * 100)}%` }} />
-                          </div>
-                          <span className="shrink-0 w-12 text-right font-medium text-emerald-600 dark:text-emerald-400">{formatTokens(entry.estimated_tokens)}</span>
-                          <span className="shrink-0 truncate max-w-[80px]" title={entry.title}>{entry.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
 
-            <h2 className="mb-2 shrink-0 text-sm font-semibold">{t('tasks.messagesPanel')}</h2>
-            {selectedTask ? (
-              <>
-                {/* Task header */}
-                <div className="flex items-center gap-2 mb-2 px-1">
-                  <span className="text-sm font-semibold truncate flex-1">{labelFor(selectedTask)}</span>
-                  <button
-                    onClick={() => renameTask(selectedTask)}
-                    className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 border border-slate-300 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                    title={t('tasks.rename') || 'Rename'}
-                  >
-                    ✏️ {t('tasks.rename') || 'Rename'}
+                    <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                      <MiniStat label="在线" value={host.online} />
+                      <MiniStat label="空闲" value={host.idle} />
+                      <MiniStat label="执行" value={host.busy} />
+                      <MiniStat label="任务" value={host.tasks.length} />
+                    </div>
                   </button>
-                  <button
-                    onClick={async () => {
-                      const rerunInput = prompt(t('tasks.rerunPrompt'), '1')
-                      if (!rerunInput) return
-                      const n = Math.max(1, Math.min(10, parseInt(rerunInput) || 1))
-                      const r = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}/rerun?times=${n}`, {
-                        method: 'POST',
-                        headers: { Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                      })
-                      if (r.ok) mutateTasks()
-                      else alert(t('tasks.rerunFailed'))
-                    }}
-                    className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-amber-600 hover:bg-amber-50 border border-amber-300 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
-                    title={t('tasks.rerunTitle')}
-                  >
-                    ↻ {t('tasks.rerun')}
-                  </button>
-                  <div className="flex gap-1">
-                    <button
-                      className={`rounded-md px-2 py-0.5 text-[10px] ${(selectedTask.exec_mode || 'reasoning') !== 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'}`}
-                      onClick={async () => {
-                        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                          body: JSON.stringify({ exec_mode: 'reasoning' }),
-                        })
-                        mutateTasks()
-                      }}
-                    >{t('tasks.agentMode')}</button>
-                    <button
-                      className={`rounded-md px-2 py-0.5 text-[10px] ${selectedTask.exec_mode === 'plan' ? 'bg-indigo-500 text-white' : 'border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'}`}
-                      onClick={async () => {
-                        await fetch(`${CLIENT_WTT_API_BASE}/tasks/${selectedTask.id}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.accessToken ?? ''}` },
-                          body: JSON.stringify({ exec_mode: 'plan' }),
-                        })
-                        mutateTasks()
-                      }}
-                    >{t('tasks.planMode')}</button>
+                ))}
+              </div>
+            </section>
+
+            <section className="grid min-h-0 gap-5 lg:grid-rows-[minmax(300px,0.95fr)_minmax(280px,1.05fr)]">
+              <div className="min-h-0 rounded-[28px] border border-white/70 bg-white/75 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/72">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-black">{selectedHost?.label || 'Host Detail'}</h2>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">Agent 状态、空闲/执行态、模型与工作目录</p>
                   </div>
+                  <Activity className="h-5 w-5 text-emerald-500" />
                 </div>
 
-                {/* Message stream */}
-                <div ref={chatScrollRef} className="flex-1 overflow-y-auto space-y-2 px-1 mb-2">
-                  {timeline.length > 0 ? (
-                    timeline.map((item) => {
-                      const isHuman = item.sender_type.toUpperCase() === 'HUMAN'
-                      const displayContent = item.content
+                <div className="grid max-h-[42vh] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                  {(selectedHost?.agents || []).map((agent) => {
+                    const runtime = agentRuntimeMap[agent.agent_id]
+                    const rows = agentTasks[agent.agent_id] || []
+                    const running = rows.filter(isRunningTask)
+                    const online = onlineAgentIds.has(agent.agent_id)
+                    const model = runtime?.current_model || runtime?.model_id || runtime?.model || 'unknown model'
+                    const adapter = runtime?.adapter || runtime?.kind || (agent.is_cloud_sandbox ? 'cloud-agent' : 'agent')
+                    return (
+                      <button
+                        key={agent.agent_id}
+                        onClick={() => openAgent(agent.agent_id)}
+                        className="group rounded-2xl border border-slate-200 bg-white/85 p-3 text-left transition hover:border-sky-300 hover:bg-sky-50/70 dark:border-zinc-800 dark:bg-zinc-950/55 dark:hover:border-sky-700 dark:hover:bg-sky-950/20"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`h-2.5 w-2.5 rounded-full ${online ? running.length ? 'bg-amber-400 shadow-[0_0_0_4px_rgba(251,191,36,0.18)]' : 'bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.18)]' : 'bg-slate-300 dark:bg-zinc-600'}`} />
+                              <p className="truncate text-sm font-black" title={agent.display_name}>{agent.display_name}</p>
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">{shortId(agent.agent_id)}</p>
+                          </div>
+                          <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:border-zinc-700 dark:text-zinc-400">
+                            {online ? running.length ? '执行中' : '空闲' : '离线'}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-1.5 text-[11px] text-slate-500 dark:text-zinc-400">
+                          <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Adapter:</span> {adapter}</p>
+                          <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Model:</span> {model}</p>
+                          <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Workdir:</span> {runtime?.workdir || runtime?.workdir_name || runtime?.git?.repo || '-'}</p>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-500 dark:text-zinc-400">{rows.length} tasks · {running.length} active</span>
+                          <span className="inline-flex items-center gap-1 font-bold text-sky-600 dark:text-sky-300">
+                            打开 Feed <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(260px,0.92fr)_minmax(260px,1.08fr)]">
+                <div className="min-h-0 rounded-[28px] border border-white/70 bg-white/75 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/72">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-black">团队 / 群聊</h2>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400">第二维度：协作 Topic 活跃度</p>
+                    </div>
+                    <Users className="h-5 w-5 text-violet-500" />
+                  </div>
+                  <div className="max-h-[34vh] space-y-2 overflow-y-auto pr-1">
+                    {groupTopics.length === 0 && (
+                      <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">
+                        暂无团队/群聊。可以在 Feed 左侧新建群聊或团队。
+                      </p>
+                    )}
+                    {groupTopics.map((topic) => {
+                      const active = selectedGroup?.topic_id === topic.topic_id
+                      const memberCount = topic.member_agent_ids?.length || 0
                       return (
-                        <div key={item.id || `${item.sender}-${item.created_at}`} className={`flex ${isHuman ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 ${isHuman ? 'bg-indigo-500 text-white' : 'bg-slate-200 dark:bg-zinc-700 text-slate-800 dark:text-zinc-200'}`}>
-                            <p className={`text-[10px] mb-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-500 dark:text-zinc-400'}`}>{isHuman ? t('tasks.you') : `🤖 ${item.sender}`}</p>
-                            <p className="text-[11px] leading-4 whitespace-pre-wrap break-words">{stripFileTokens(displayContent) || displayContent}</p>
-                            <FileAttachmentPreview content={displayContent} />
-                            <p className={`text-[9px] mt-0.5 ${isHuman ? 'text-indigo-200' : 'text-slate-400 dark:text-zinc-500'}`}>{item.created_at?.replace('T', ' ').slice(0, 19)}</p>
+                        <button
+                          key={topic.topic_id}
+                          onClick={() => setSelectedGroupId(topic.topic_id)}
+                          onDoubleClick={() => openGroup(topic)}
+                          className={`w-full overflow-hidden rounded-2xl border p-3 text-left transition ${
+                            active
+                              ? 'border-violet-300 bg-violet-50/75 ring-2 ring-violet-200 dark:border-violet-600 dark:bg-violet-950/20 dark:ring-violet-600/20'
+                              : 'border-slate-200 bg-white/82 hover:border-violet-200 dark:border-zinc-800 dark:bg-zinc-950/45 dark:hover:border-violet-700'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-black" title={topic.name}>{topic.name}</p>
+                              <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">{memberCount} agents · {formatRelative(topic.last_activity_at)}</p>
+                            </div>
+                            {Number(topic.unread_count || 0) > 0 && (
+                              <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-black text-white">{topic.unread_count}</span>
+                            )}
                           </div>
-                        </div>
+                          <svg viewBox="0 0 156 50" className="mt-2 h-10 w-full">
+                            <polyline
+                              points={pointsForSparkline(topic.topic_id, memberCount + Number(topic.unread_count || 0))}
+                              fill="none"
+                              stroke={active ? '#8b5cf6' : '#94a3b8'}
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
                       )
-                    })
-                  ) : (
-                    <p className="text-[11px] text-slate-400 dark:text-zinc-500 text-center py-4">{t('tasks.noMessages')}</p>
-                  )}
-                </div>
-
-                {/* Send box */}
-                <div className="shrink-0 border-t border-slate-200 dark:border-zinc-700 pt-2 px-1">
-                  <div className="mb-1 text-[10px] text-slate-500 dark:text-zinc-400">{t('tasks.senderIdentity')}: 👤 {actorSource(session)}</div>
-                  <PendingAttachments attachments={pendingAttachments} onRemove={(i) => setPendingAttachments(prev => prev.filter((_, j) => j !== i))} />
-                  <div className="flex gap-1 items-center">
-                    <ChatFileUpload
-                      compact
-                      onUploaded={(asset) => setPendingAttachments(prev => [...prev, asset.markdownToken])}
-                      disabled={panelSending}
-                    />
-                    <input
-                      className="flex-1 rounded border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-2 py-1 text-xs outline-none focus:border-indigo-400 dark:text-zinc-200"
-                      placeholder={t('tasks.typeMessage')}
-                      value={panelInput}
-                      onChange={(e) => setPanelInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (panelInput.trim() || pendingAttachments.length)) { e.preventDefault(); sendPanelMessage() } }}
-                    />
-                    <button
-                      onClick={sendPanelMessage}
-                      disabled={panelSending || (!panelInput.trim() && !pendingAttachments.length)}
-                      className="shrink-0 rounded-md bg-indigo-500 px-3 py-1 text-xs text-white disabled:opacity-50"
-                    >{panelSending ? '...' : t('tasks.send')}</button>
+                    })}
                   </div>
-                  {queueIndicator && <p className="text-[10px] text-amber-500 mt-1">📨 {t('tasks.queuedHint')}</p>}
                 </div>
-              </>
-            ) : (
-              <p className="text-xs text-slate-500 dark:text-zinc-400">{t('tasks.selectTaskHint')}</p>
-            )}
-          </aside>
-        </div>
-      </div>
 
-      {taskContextMenu && (
-        <div
-          className="fixed z-50 min-w-44 rounded-lg border border-slate-200 bg-white p-1 shadow-2xl"
-          style={{ left: taskContextMenu.x, top: taskContextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {(taskContextMenu.task.task_type === 'code' || taskContextMenu.task.task_type === 'research') && (
-            <button
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50"
-              onClick={() => {
-                const t = taskContextMenu.task
-                setTaskContextMenu(null)
-                if (t.task_type === 'code') router.push(buildAgentUrl(`/tasks/code/${t.id}`, selectedAgentId))
-                else router.push(buildAgentUrl(`/tasks/research/${t.id}`, selectedAgentId))
-              }}
-            >
-              {taskContextMenu.task.task_type === 'code' ? '💻' : '📄'} {t('tasks.openInIde')}
-            </button>
-          )}
-          <button
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50"
-            onClick={() => renameTask(taskContextMenu.task)}
-          >
-            ✏️ {t('tasks.rename') || 'Rename'}
-          </button>
-          {taskContextMenu.task.topic_id && (
-            <button
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50"
-              onClick={() => {
-                const t = taskContextMenu.task
-                setTaskContextMenu(null)
-                setShareTarget({ topicId: t.topic_id!, name: labelFor(t) })
-              }}
-            >
-              🔗 {t('tasks.shareTo')}
-            </button>
-          )}
-          <button
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
-            onClick={() => cancelTask(taskContextMenu.task)}
-          >
-            🗑️ {t('tasks.cancelTask')}
-          </button>
-        </div>
-      )}
+                <div className="min-h-0 rounded-[28px] border border-white/70 bg-white/75 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/72">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-black">{selectedGroup?.name || '最近聊天'}</h2>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400">最近消息预览，双击群聊卡片进入完整对话</p>
+                    </div>
+                    <MessageCircle className="h-5 w-5 text-amber-500" />
+                  </div>
+                  <div className="max-h-[34vh] space-y-2 overflow-y-auto pr-1">
+                    {!selectedGroup && (
+                      <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">选择一个团队/群聊查看最近消息。</p>
+                    )}
+                    {selectedGroup && selectedGroupMessagesRaw.length === 0 && (
+                      <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">暂无最近消息。</p>
+                    )}
+                    {selectedGroupMessagesRaw.slice(-8).map((message) => (
+                      <div key={message.id || `${message.sender_id}-${message.created_at}`} className="rounded-2xl border border-slate-200 bg-white/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/45">
+                        <div className="mb-1 flex items-center justify-between gap-2 text-[11px]">
+                          <span className="truncate font-black text-slate-700 dark:text-zinc-200">{message.sender_type === 'HUMAN' ? 'Human' : shortId(message.sender_id)}</span>
+                          <span className="shrink-0 text-slate-400">{formatRelative(message.created_at)}</span>
+                        </div>
+                        <p className="line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-slate-600 dark:text-zinc-300">
+                          {message.content}
+                        </p>
+                      </div>
+                    ))}
+                    {selectedGroup && (
+                      <button
+                        onClick={() => openGroup(selectedGroup)}
+                        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-sky-600 dark:bg-white dark:text-zinc-950 dark:hover:bg-sky-200"
+                      >
+                        进入完整群聊 <ArrowRight className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </main>
 
-      {renameModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setRenameModal(null)}
-        >
-          <div
-            className="w-[min(420px,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 2xl:p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-3">
-              {t('tasks.renamePrompt') || 'Rename task'}
-            </h3>
-            <input
-              autoFocus
-              type="text"
-              value={renameModal.value}
-              onChange={(e) => setRenameModal({ ...renameModal, value: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); submitRename() }
-                else if (e.key === 'Escape') { e.preventDefault(); setRenameModal(null) }
-              }}
-              className="w-full rounded-md border border-slate-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          <section className="grid gap-4 rounded-[28px] border border-white/70 bg-white/75 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/72 md:grid-cols-3">
+            <UsagePanel
+              icon={<Sparkles className="h-4 w-4" />}
+              title="第三维度：Token 消耗"
+              value={formatTokens(totalTokens)}
+              detail="按任务消息与 runtime usage 聚合到主机"
             />
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setRenameModal(null)}
-                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
-              >
-                {t('common.cancel') || 'Cancel'}
-              </button>
-              <button
-                onClick={submitRename}
-                className="rounded-md bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-600"
-              >
-                {t('common.confirm') || 'OK'}
-              </button>
-            </div>
-          </div>
+            <UsagePanel
+              icon={<Clock3 className="h-4 w-4" />}
+              title="执行任务时间"
+              value={formatDuration(totalExecutionMs)}
+              detail="started_at / completed_at / active status 计算"
+            />
+            <UsagePanel
+              icon={<GitBranch className="h-4 w-4" />}
+              title="Fabric 活跃度"
+              value={`${tasks.filter(isRunningTask).length} active`}
+              detail={`${tasks.length} tasks · ${groupTopics.length} collaboration topics`}
+            />
+          </section>
         </div>
-      )}
 
-      {shareTarget && (
-        <ShareDialog
-          open={!!shareTarget}
-          onClose={() => setShareTarget(null)}
-          topicId={shareTarget.topicId}
-          agentId={selectedAgentId}
-          topicName={shareTarget.name}
-        />
-      )}
-
+        <style jsx global>{`
+          .runtime-map {
+            position: relative;
+          }
+          .runtime-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+              linear-gradient(rgba(14, 165, 233, 0.08) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(14, 165, 233, 0.08) 1px, transparent 1px);
+            background-size: 34px 34px;
+            mask-image: radial-gradient(circle at 50% 10%, black 0, transparent 68%);
+          }
+          .runtime-orb {
+            position: absolute;
+            border-radius: 9999px;
+            filter: blur(22px);
+            opacity: 0.55;
+            animation: runtimeFloat 10s ease-in-out infinite alternate;
+          }
+          .runtime-orb-a {
+            left: -8rem;
+            top: -6rem;
+            width: 22rem;
+            height: 22rem;
+            background: rgba(56, 189, 248, 0.32);
+          }
+          .runtime-orb-b {
+            right: -10rem;
+            bottom: 4rem;
+            width: 26rem;
+            height: 26rem;
+            background: rgba(168, 85, 247, 0.20);
+            animation-delay: -3s;
+          }
+          @keyframes runtimeFloat {
+            from { transform: translate3d(0, 0, 0) scale(1); }
+            to { transform: translate3d(2rem, 1.5rem, 0) scale(1.08); }
+          }
+        `}</style>
+      </div>
     </WttShellV2>
+  )
+}
+
+function MetricCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: 'sky' | 'emerald' | 'amber' | 'violet' }) {
+  const toneClass = {
+    sky: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200',
+    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200',
+    amber: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200',
+    violet: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200',
+  }[tone]
+  return (
+    <div className={`rounded-2xl border border-white/70 p-3 shadow-sm dark:border-white/10 ${toneClass}`}>
+      <div className="mb-2 flex items-center justify-between">
+        {icon}
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] opacity-65">{label}</span>
+      </div>
+      <p className="text-xl font-black">{value}</p>
+    </div>
+  )
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl bg-slate-100/80 px-2 py-2 dark:bg-zinc-900/70">
+      <p className="text-sm font-black">{value}</p>
+      <p className="text-[10px] text-slate-500 dark:text-zinc-400">{label}</p>
+    </div>
+  )
+}
+
+function UsagePanel({ icon, title, value, detail }: { icon: React.ReactNode; title: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white/78 p-4 dark:border-zinc-800 dark:bg-zinc-950/45">
+      <div className="mb-3 flex items-center gap-2 text-slate-500 dark:text-zinc-400">
+        {icon}
+        <span className="text-xs font-black uppercase tracking-[0.14em]">{title}</span>
+      </div>
+      <p className="text-2xl font-black text-slate-950 dark:text-white">{value}</p>
+      <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">{detail}</p>
+    </div>
   )
 }
