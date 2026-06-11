@@ -1354,7 +1354,6 @@ export function ChatView({
   const previewCacheRef = useRef<Record<string, CachedPreview>>({})
   const previewInflightRef = useRef<Set<string>>(new Set())
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
-  const [fileAccept, setFileAccept] = useState<string>('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevMsgCountRef = useRef(0)
@@ -2299,10 +2298,12 @@ export function ChatView({
     }
   }
 
-  const openFilePicker = (accept: string) => {
-    setFileAccept(accept)
+  const openFilePicker = (accept = '') => {
     setAttachMenuOpen(false)
-    requestAnimationFrame(() => fileInputRef.current?.click())
+    const input = fileInputRef.current
+    if (!input) return
+    input.accept = accept
+    input.click()
   }
 
   const insertLocation = () => {
@@ -3659,7 +3660,7 @@ export function ChatView({
                 <button type="button" onClick={() => openFilePicker('video/*')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
                   <Video className="h-3.5 w-3.5" /> {t('chat.video')}
                 </button>
-                <button type="button" onClick={() => openFilePicker('*/*')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
+                <button type="button" onClick={() => openFilePicker()} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
                   <Paperclip className="h-3.5 w-3.5" /> {t('chat.file')}
                 </button>
                 <button type="button" onClick={insertLocation} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">
@@ -3699,7 +3700,6 @@ export function ChatView({
           <input
             ref={fileInputRef}
             type="file"
-            accept={fileAccept || undefined}
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0]
