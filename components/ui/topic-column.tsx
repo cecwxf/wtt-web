@@ -6,6 +6,7 @@ import {
   AGENT_ROLE_TEMPLATES,
   buildRoleSystemPrompt,
   getAgentRoleTemplate,
+  serializeAgentRoleTemplate,
   type AgentRoleTemplate,
   type AgentRoleTemplateId,
 } from '@/lib/agent-role-templates'
@@ -121,6 +122,7 @@ interface TopicColumnProps {
     options?: { select?: boolean; alert?: boolean },
   ) => string | void | Promise<string | void>
   onCreateCloudAgent?: (options?: CloudAgentCreateOptions) => void | Promise<void>
+  onSubmitAgentOperation?: SubmitAgentOperation
   onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
   onRenameAgent?: (agentId: string, currentName: string) => void
@@ -140,12 +142,39 @@ function agentInitial(name: string) {
   return (name.trim()[0] || 'A').toUpperCase()
 }
 
+function newClientOperationId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 type WttConnectAdapterId = 'codex' | 'claude-code' | 'gemini'
 
 type ProvisionedWttConnectAgent = {
   agent_id: string
   agent_token: string
 }
+
+export type AgentOperationType =
+  | 'cloud_agent_create'
+  | 'cloud_sandbox_clone'
+  | 'local_host_clone'
+  | 'group_create'
+  | 'team_create'
+
+export type AgentOperationJob = {
+  job_id?: string
+  operation_type?: string
+  status?: string
+  phase?: string
+  result?: Record<string, unknown>
+  error_message?: string
+}
+
+type SubmitAgentOperation = (
+  operationType: AgentOperationType,
+  payload: Record<string, unknown>,
+  idempotencyKey?: string,
+  onProgress?: (job: AgentOperationJob) => void,
+) => Promise<AgentOperationJob>
 
 const WTT_CONNECT_ADAPTERS: Array<{ id: WttConnectAdapterId; label: string; note: string }> = [
   { id: 'codex', label: 'Codex', note: '使用 Codex CLI，本机登录 ChatGPT/OpenAI 后启动。' },
@@ -688,6 +717,7 @@ export function TopicColumn(props: TopicColumnProps) {
     onSaveAgentRole,
     onNewAgentFromHost,
     onCreateCloudAgent,
+    onSubmitAgentOperation,
     onSleepSandbox,
     onWakeSandbox,
     onRenameAgent,
@@ -1050,32 +1080,6 @@ export function TopicColumn(props: TopicColumnProps) {
     ))
   }
 
-  const joinAgentToTopic = async (topicId: string, agentId: string) => {
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/join?agent_id=${encodeURIComponent(agentId)}`, {
-      method: 'POST',
-      headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
-    })
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      const detail = typeof data.detail === 'string' ? data.detail : ''
-      throw new Error(detail || `Failed to add ${agentId} to topic`)
-    }
-  }
-
-  const createPrivateDiscussionTopic = async (name: string, description: string, creatorAgentId: string) => {
-    const topic = await wttApi.createTopic({
-      name,
-      description,
-      type: 'discussion',
-      visibility: 'private',
-      join_method: 'invite_only',
-      creator_agent_id: creatorAgentId,
-    }, userToken)
-    const topicId = String((topic as unknown as { topic_id?: string; id?: string }).topic_id || topic.id || '').trim()
-    if (!topicId) throw new Error(zh ? '后端未返回 Topic ID。' : 'Backend did not return topic id.')
-    return topicId
-  }
-
   const createGroupChat = async () => {
     const selectedIds = Array.from(new Set(groupAgentIds)).filter(Boolean)
     if (!userToken) {
@@ -1098,25 +1102,37 @@ export function TopicColumn(props: TopicColumnProps) {
     }
     setGroupBusy(true)
     setGroupError('')
-    setGroupProgress(zh ? '正在创建群聊 Topic...' : 'Creating group topic...')
+    setGroupProgress(zh ? '正在提交群聊创建任务...' : 'Submitting group creation job...')
     try {
       const creator = selectedIds.includes(selectedAgentId) ? selectedAgentId : selectedIds[0]
-      const topicId = await createPrivateDiscussionTopic(name, description, creator)
+      if (!onSubmitAgentOperation) {
+        throw new Error(zh ? '后端异步 Action 未接入。' : 'Async operation action is unavailable.')
+      }
+      const job = await onSubmitAgentOperation(
+        'group_create',
+        {
+          name,
+          description,
+          creator_agent_id: creator,
+          agent_ids: selectedIds,
+          client_operation_id: newClientOperationId(),
+        },
+        undefined,
+        (nextJob) => setGroupProgress(`${zh ? '正在创建群聊' : 'Creating group'} · ${nextJob.phase || nextJob.status || 'running'}`),
+      )
+      const result = (job.result || {}) as { topic?: TopicItem; topic_id?: string; member_agent_ids?: string[] }
+      const topicId = String(result.topic_id || result.topic?.topic_id || '').trim()
+      if (!topicId) throw new Error(zh ? '群聊创建完成但未返回 Topic ID。' : 'Group creation finished without topic id.')
       const optimisticTopic: TopicItem = {
         topic_id: topicId,
-        name,
-        description,
+        name: result.topic?.name || name,
+        description: result.topic?.description || description,
         topic_type: 'discussion',
         unread_count: 0,
         can_delete: true,
-        creator_agent_id: creator,
-        member_agent_ids: selectedIds,
+        creator_agent_id: result.topic?.creator_agent_id || creator,
+        member_agent_ids: result.member_agent_ids || result.topic?.member_agent_ids || selectedIds,
         last_activity_at: new Date().toISOString(),
-      }
-      const memberIds = selectedIds.filter((id) => id !== creator)
-      for (let index = 0; index < memberIds.length; index += 1) {
-        setGroupProgress(`${zh ? '正在加入成员' : 'Adding member'} ${index + 1}/${memberIds.length}: ${memberIds[index]}`)
-        await joinAgentToTopic(topicId, memberIds[index])
       }
       await onTopicCreated?.(optimisticTopic)
       setGroupProgress(zh ? '正在刷新 Topic 列表...' : 'Refreshing topic list...')
@@ -1133,7 +1149,7 @@ export function TopicColumn(props: TopicColumnProps) {
 
   const createTeamFromTemplate = async () => {
     const template = selectedTeamTemplate
-    if (!template || !onNewAgentFromHost) return
+    if (!template) return
     if (!userToken) {
       setTeamError(zh ? '登录已过期，请重新登录。' : 'Session expired. Please sign in again.')
       return
@@ -1147,19 +1163,8 @@ export function TopicColumn(props: TopicColumnProps) {
     const roles = rolePlans.map((plan) => buildTeamRoleTemplate(plan, template))
     setTeamBusy(true)
     setTeamError('')
-    setTeamProgress(zh ? '开始创建团队 Agent...' : 'Creating team agents...')
+    setTeamProgress(zh ? '正在提交团队创建任务...' : 'Submitting team creation job...')
     try {
-      const createdAgentIds: string[] = []
-      for (let index = 0; index < roles.length; index += 1) {
-        const role = roles[index]
-        setTeamProgress(`${zh ? '正在创建' : 'Creating'} ${index + 1}/${roles.length}: ${role.label}`)
-        const newAgentId = await onNewAgentFromHost(teamHostId, role, teamAdapter, { select: false, alert: false })
-        const normalizedId = String(newAgentId || '').trim()
-        if (!normalizedId) throw new Error(`${zh ? 'Clone 未返回 agent_id' : 'Clone did not return agent_id'}: ${role.label}`)
-        createdAgentIds.push(normalizedId)
-      }
-
-      setTeamProgress(zh ? '正在创建团队 Topic...' : 'Creating team topic...')
       const description = [
         zh ? template.description : template.descriptionEn,
         '',
@@ -1172,22 +1177,44 @@ export function TopicColumn(props: TopicColumnProps) {
         zh ? '团队工作流：' : 'Team workflow:',
         ...template.workflow.map((step, index) => `${index + 1}. ${step}`),
       ].join('\n')
-      const topicId = await createPrivateDiscussionTopic(name, description, createdAgentIds[0])
+      if (!onSubmitAgentOperation) {
+        throw new Error(zh ? '后端异步 Action 未接入。' : 'Async operation action is unavailable.')
+      }
+      const job = await onSubmitAgentOperation(
+        'team_create',
+        {
+          name,
+          description,
+          host_agent_id: teamHostId,
+          adapter: teamAdapter,
+          roles: roles.map((role) => ({
+            id: role.id,
+            label: role.label,
+            display_name: role.shortLabel || role.label,
+            role_template_id: role.id,
+            role_template: serializeAgentRoleTemplate(role),
+          })),
+          client_operation_id: newClientOperationId(),
+        },
+        undefined,
+        (nextJob) => setTeamProgress(`${zh ? '正在创建团队' : 'Creating team'} · ${nextJob.phase || nextJob.status || 'running'}`),
+      )
+      const result = (job.result || {}) as { topic?: TopicItem; topic_id?: string; agent_ids?: string[]; agents?: Array<{ agent_id?: string }> }
+      const topicId = String(result.topic_id || result.topic?.topic_id || '').trim()
+      const createdAgentIds = (Array.isArray(result.agent_ids) && result.agent_ids.length
+        ? result.agent_ids
+        : (result.agents || []).map((agent) => String(agent.agent_id || '').trim()).filter(Boolean))
+      if (!topicId) throw new Error(zh ? '团队创建完成但未返回 Topic ID。' : 'Team creation finished without topic id.')
       const optimisticTopic: TopicItem = {
         topic_id: topicId,
-        name,
-        description,
+        name: result.topic?.name || name,
+        description: result.topic?.description || description,
         topic_type: 'discussion',
         unread_count: 0,
         can_delete: true,
-        creator_agent_id: createdAgentIds[0],
-        member_agent_ids: createdAgentIds,
+        creator_agent_id: result.topic?.creator_agent_id || createdAgentIds[0],
+        member_agent_ids: result.topic?.member_agent_ids || createdAgentIds,
         last_activity_at: new Date().toISOString(),
-      }
-      const memberIds = createdAgentIds.slice(1)
-      for (let index = 0; index < memberIds.length; index += 1) {
-        setTeamProgress(`${zh ? '正在加入团队成员' : 'Adding team member'} ${index + 1}/${memberIds.length}: ${memberIds[index]}`)
-        await joinAgentToTopic(topicId, memberIds[index])
       }
       await onTopicCreated?.(optimisticTopic)
       setTeamProgress(zh ? '正在刷新 Agent 和 Topic 列表...' : 'Refreshing agents and topics...')

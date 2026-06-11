@@ -11,7 +11,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { ChatView, ChatMessage, ChatModelConfig, ChatSendOptions, ChatRunStatus, isProgressMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
-import { AgentRuntimeInfo, TopicItem, type CloudAgentCreateOptions, type RecentTopicItem } from '@/components/ui/topic-column'
+import { AgentRuntimeInfo, TopicItem, type AgentOperationType, type CloudAgentCreateOptions, type RecentTopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 import type { ContentFormat } from '@/components/ui/content-editor'
 import type { EditorTopic } from '@/components/ui/markdown-editor'
@@ -1940,9 +1940,10 @@ function FeedPageInner() {
   }, [agentStatsRaw, agentRuntimeMap, suppressedCloudAgentIds])
 
   const submitAgentOperation = useCallback(async (
-    operationType: 'cloud_agent_create' | 'cloud_sandbox_clone' | 'local_host_clone',
+    operationType: AgentOperationType,
     payload: Record<string, unknown>,
     idempotencyKey?: string,
+    onProgress?: (job: AgentOperationJob) => void,
   ): Promise<AgentOperationJob> => {
     const token = session?.accessToken as string | undefined
     if (!token) throw new Error(t('settings.sessionExpired'))
@@ -1987,6 +1988,7 @@ function FeedPageInner() {
     const jobId = String((createData as AgentOperationJob).job_id || '').trim()
     if (!jobId) throw new Error('Agent operation did not return a job id')
     let job = createData as AgentOperationJob
+    onProgress?.(job)
     const startedAt = Date.now()
     while (Date.now() - startedAt < 240_000) {
       const status = String(job.status || '').toLowerCase()
@@ -2003,6 +2005,7 @@ function FeedPageInner() {
         throw new Error(responseErrorMessage(pollData, `Agent operation polling failed (${pollRes.status})`))
       }
       job = pollData as AgentOperationJob
+      onProgress?.(job)
     }
     throw new Error('Agent operation is still running; refresh the Agent list to check progress.')
   }, [session?.accessToken, t])
@@ -2992,6 +2995,7 @@ function FeedPageInner() {
         onSaveAgentRole={handleSaveAgentRole}
         onNewAgentFromHost={handleNewAgentFromHost}
         onCreateCloudAgent={handleCreateCloudAgent}
+        onSubmitAgentOperation={submitAgentOperation}
         onSleepSandbox={handleSleepSandbox}
         onWakeSandbox={handleWakeSandbox}
         userToken={session?.accessToken as string | undefined}

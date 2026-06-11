@@ -4,7 +4,7 @@ import { Menu } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
-import { AgentRuntimeInfo, TopicColumn, TopicItem, type CloudAgentCreateOptions, type RecentTopicItem } from './topic-column'
+import { AgentRuntimeInfo, TopicColumn, TopicItem, type AgentOperationJob, type AgentOperationType, type CloudAgentCreateOptions, type RecentTopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
@@ -72,6 +72,12 @@ interface WttShellV2Props {
     options?: { select?: boolean; alert?: boolean },
   ) => string | void | Promise<string | void>
   onCreateCloudAgent?: (options?: CloudAgentCreateOptions) => void | Promise<void>
+  onSubmitAgentOperation?: (
+    operationType: AgentOperationType,
+    payload: Record<string, unknown>,
+    idempotencyKey?: string,
+    onProgress?: (job: AgentOperationJob) => void,
+  ) => Promise<AgentOperationJob>
   onSleepSandbox?: (hostAgentId: string) => void | Promise<void>
   onWakeSandbox?: (hostAgentId: string) => void | Promise<void>
   userToken?: string
@@ -139,6 +145,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onSaveAgentRole,
     onNewAgentFromHost,
     onCreateCloudAgent,
+    onSubmitAgentOperation,
     onSleepSandbox,
     onWakeSandbox,
     children,
@@ -364,6 +371,7 @@ export function WttShellV2(props: WttShellV2Props) {
               onSaveAgentRole={onSaveAgentRole}
               onNewAgentFromHost={onNewAgentFromHost}
               onCreateCloudAgent={onCreateCloudAgent}
+              onSubmitAgentOperation={onSubmitAgentOperation}
               onSleepSandbox={onSleepSandbox}
               onWakeSandbox={onWakeSandbox}
               onRenameAgent={onRenameAgent}
