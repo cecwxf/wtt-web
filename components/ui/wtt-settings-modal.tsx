@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { CLIENT_WTT_API_BASE } from "@/lib/api/base-url";
+import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from "@/lib/api/base-url";
 import { useI18n } from "@/lib/i18n-provider";
 import { Avatar } from "@/components/ui/avatar";
 
@@ -573,11 +573,9 @@ export function WttSettingsModal({
         if (!signRes.ok) throw new Error("Sign failed");
         const { upload_token, upload_url } = await signRes.json();
 
-        // Step 2: Upload (upload_url is relative like /media/upload-direct/xxx,
-        // must route through the Next.js proxy)
-        const fullUploadUrl = upload_url.startsWith("/")
-          ? `${CLIENT_WTT_API_BASE}${upload_url}`
-          : upload_url;
+        // Step 2: Upload large bodies directly to the API host; Vercel API routes
+        // reject request bodies around 4.5MB.
+        const fullUploadUrl = resolveWttUploadUrl(upload_url);
         const uploadRes = await fetch(fullUploadUrl, {
           method: "PUT",
           headers: { "Content-Type": file.type },

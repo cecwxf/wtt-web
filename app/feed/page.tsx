@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import useSWR from 'swr'
-import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
@@ -2865,7 +2865,7 @@ function FeedPageInner() {
     if (!signRes.ok) throw new Error(await signRes.text())
     const signed = await signRes.json()
 
-    const uploadRes = await fetch(`${CLIENT_WTT_API_BASE}${signed.upload_url}`, {
+    const uploadRes = await fetch(resolveWttUploadUrl(signed.upload_url), {
       method: 'PUT',
       headers: { 'Content-Type': mime },
       body: blob,

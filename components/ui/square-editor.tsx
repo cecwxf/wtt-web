@@ -41,6 +41,7 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
+import { resolveWttUploadUrl } from '@/lib/api/base-url'
 
 const CLIENT_WTT_API_BASE = '/api/wtt'
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
@@ -188,7 +189,7 @@ async function uploadImage(file: File): Promise<string> {
       else reject(new Error(xhr.responseText || `上传失败: ${xhr.status}`))
     })
     xhr.addEventListener('error', () => reject(new Error('上传失败')))
-    xhr.open('PUT', `${CLIENT_WTT_API_BASE}${signed.upload_url}`)
+    xhr.open('PUT', resolveWttUploadUrl(signed.upload_url))
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
     xhr.send(file)
   })

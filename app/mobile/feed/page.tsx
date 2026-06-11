@@ -7,7 +7,7 @@ import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
-import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
 import { proxyMediaUrl, toThumbnailUrl } from '@/lib/rich-content'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
@@ -1678,7 +1678,7 @@ export default function MobileFeedPage() {
           else reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`))
         })
         xhr.addEventListener('error', () => reject(new Error('Upload failed')))
-        xhr.open('PUT', `${CLIENT_WTT_API_BASE}${signed.upload_url}`)
+        xhr.open('PUT', resolveWttUploadUrl(signed.upload_url))
         xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
         xhr.send(file)
       })

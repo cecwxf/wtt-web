@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
 import {
@@ -2262,7 +2262,7 @@ export function ChatView({
           else reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`))
         })
         xhr.addEventListener('error', () => reject(new Error('Upload failed')))
-        xhr.open('PUT', `${CLIENT_WTT_API_BASE}${signed.upload_url}`)
+        xhr.open('PUT', resolveWttUploadUrl(signed.upload_url))
         xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
         xhr.send(file)
       })

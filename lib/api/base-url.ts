@@ -3,6 +3,12 @@ export const CLIENT_WTT_API_BASE = '/api/wtt'
 export const DEFAULT_WTT_API_ORIGIN =
   process.env.NEXT_PUBLIC_WTT_API_URL || 'http://170.106.109.4:8000'
 
+export function resolveWttUploadUrl(uploadUrl: string): string {
+  if (/^https?:\/\//i.test(uploadUrl)) return uploadUrl
+  const base = DEFAULT_WTT_API_ORIGIN.replace(/\/+$/, '')
+  return `${base}/${uploadUrl.replace(/^\/+/, '')}`
+}
+
 const DEFAULT_PUBLIC_WTT_WS_ORIGIN = 'wss://www.waxbyte.com'
 
 function toWsOrigin(input: string): string {

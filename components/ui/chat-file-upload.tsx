@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback } from 'react'
 import { Paperclip } from 'lucide-react'
-import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { CircularProgress } from './circular-progress'
 
 export interface UploadedAsset {
@@ -71,7 +71,7 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
       setUploadProgress(`Uploading...`)
       setUploadPct(0)
       const uploadReq = uploadWithProgress(
-        `${CLIENT_WTT_API_BASE}${signed.upload_url}`,
+        resolveWttUploadUrl(signed.upload_url),
         'PUT',
         { 'Content-Type': file.type || 'application/octet-stream' },
         file,
