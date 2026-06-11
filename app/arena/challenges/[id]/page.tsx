@@ -434,7 +434,7 @@ const copy = {
     examples: '样例', input: '输入', expected: '期望输出',
     language: '语言', run: '交给 Agent 运行并提交', judging: 'Agent 运行中...', console: '运行结果', notSubmitted: '未提交', hidden: '隐藏测试已脱敏',
     noSubmission: '提交后会在这里看到真实 Agent/Runner 判题结果。历史提交会持久化到 WTT 后端。', firstAc: '暂无 AC 记录，拿下首个榜单位置。',
-    agentTitle: 'Agent 对话', agentRole: '固定使用 Codex 终生学习 Coach：agent-65d869bb6fa1。所有登录用户都可使用，不需要 claim 该 Agent。',
+    agentTitle: 'Agent 对话', agentRole: '使用你自己的 Cloud Agent 作为 Arena Coach；不同用户的 Arena 会话、工具和 Preview URL 相互隔离。',
     agentWaiting: '直接在下面和 Agent 对话。', openFull: '打开完整提交 →',
     chatTitle: '终生学习 Coach', chatIntro: '真实 WTT Agent 会话；Agent 会读取终生学习题库长期记忆和当前题目上下文。', chatPlaceholder: '问 Agent：这题怎么入手？为什么 WA？', chatSend: '发送', chatThinking: 'Agent 思考中...', chatFallback: 'Agent 暂时没有返回，请稍后再试。', chatLogin: '登录后可对话。', chatSyncing: '正在连接固定终生学习 Agent...',
     chatWorking: 'Agent 正在思考 / 输出中', whiteboardWorking: 'Agent 正在生成白板',
@@ -449,9 +449,9 @@ const copy = {
     examples: 'Examples', input: 'Input', expected: 'Expected',
     language: 'Language', run: 'Run & Submit via Agent', judging: 'Agent running...', console: 'Console', notSubmitted: 'not_submitted', hidden: 'Hidden tests are redacted.',
     noSubmission: 'Submit once to see the real Agent/Runner verdict. Submissions are persisted in the WTT backend.', firstAc: 'No accepted run yet. Take the first spot.',
-    agentTitle: 'Agent Chat', agentRole: 'Fixed Codex Arena Coach: agent-65d869bb6fa1. Every signed-in user can use it without claiming this Agent.',
+    agentTitle: 'Agent Chat', agentRole: 'Use your own Cloud Agent as the Arena Coach. Arena sessions, tools, and Preview URLs are isolated per user.',
     agentWaiting: 'Chat with the Agent below.', openFull: 'Open full submission →',
-    chatTitle: 'Arena Coach', chatIntro: 'Real WTT Agent session. The Agent reads persistent Arena question-bank memory plus the current challenge context.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.', chatLogin: 'Sign in to chat.', chatSyncing: 'Connecting fixed Arena Agent...',
+    chatTitle: 'Arena Coach', chatIntro: 'Real WTT Agent session. Your Cloud Agent reads persistent Arena question-bank memory plus the current challenge context.', chatPlaceholder: 'Ask Agent: how should I start? why WA?', chatSend: 'Send', chatThinking: 'Agent is thinking...', chatFallback: 'Agent did not respond. Please try again.', chatLogin: 'Sign in to chat.', chatSyncing: 'Connecting your Cloud Agent...',
     chatWorking: 'Agent is thinking / writing', whiteboardWorking: 'Agent is generating the whiteboard',
     mode: 'Mode',
     coachFlow: 'Teaching flow', growth: 'Growth profile', weak: 'Weak spots', next: 'Next', mastery: 'Mastery', stage: 'Stage',
@@ -1481,6 +1481,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [chatMode, setChatMode] = useState<ChatMode>('socratic')
   const [chatSending, setChatSending] = useState(false)
   const [arenaTopicByKey, setArenaTopicByKey] = useState<Record<string, string>>({})
+  const [arenaAgentByKey, setArenaAgentByKey] = useState<Record<string, string>>({})
   const [, setArenaSessionState] = useState<ArenaSessionState | null>(null)
   const [arenaProfile, setArenaProfile] = useState<ArenaUserProfile | null>(null)
   const [arenaLearningItems, setArenaLearningItems] = useState<ArenaLearningItem[]>([])
@@ -1573,8 +1574,9 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   const challenge = payload?.challenge
   const arenaActor = arenaSessionActor(session as ArenaSession)
-  const arenaSessionKey = challenge && session?.accessToken ? `${arenaActor}:${ARENA_AGENT_ID}:${challenge.id}` : ''
+  const arenaSessionKey = challenge && session?.accessToken ? `${arenaActor}:${challenge.id}` : ''
   const arenaTopicId = arenaSessionKey ? (arenaTopicByKey[arenaSessionKey] || '') : ''
+  const arenaAgentId = arenaSessionKey ? (arenaAgentByKey[arenaSessionKey] || '') : ''
 
   const authHeaders = useMemo(() => ({
     'Content-Type': 'application/json',
@@ -1606,9 +1608,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return () => { alive = false }
   }, [selectedAgentId, session?.accessToken, setSelectedAgentId])
 
-  function rememberArenaTopic(topicId: string) {
+  function rememberArenaTopic(topicId: string, agentId?: string) {
     if (!arenaSessionKey || !topicId) return
     setArenaTopicByKey((prev) => ({ ...prev, [arenaSessionKey]: topicId }))
+    if (agentId) setArenaAgentByKey((prev) => ({ ...prev, [arenaSessionKey]: agentId }))
   }
 
   const refreshArenaState = async () => {
@@ -1644,7 +1647,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (!topicId || !session?.accessToken) return [] as TopicMessage[]
     let response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/messages?topic_id=${encodeURIComponent(topicId)}&limit=100`, { headers: authHeaders })
     if (!response.ok) {
-      response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?limit=100&agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, { headers: authHeaders })
+      response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?limit=100&agent_id=${encodeURIComponent(arenaAgentId || ARENA_AGENT_ID)}`, { headers: authHeaders })
     }
     if (!response.ok) return [] as TopicMessage[]
     const raw = await response.json()
@@ -1658,7 +1661,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   function isArenaAgentTopicMessage(row: TopicMessage) {
     const senderType = String(row.sender_type || '').toUpperCase()
     const senderId = String(row.sender_id || '')
-    return senderType === 'AGENT' || senderId === ARENA_AGENT_ID
+    return senderType === 'AGENT' || (!!arenaAgentId && senderId === arenaAgentId) || senderId === ARENA_AGENT_ID
   }
 
   function applyLatestWhiteboardFromRows(rows: TopicMessage[]) {
@@ -1696,7 +1699,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const refreshArenaMessages = async (topicId = arenaTopicId) => {
     if (!topicId || !session?.accessToken || !challenge) return [] as FeedChatMessage[]
     const rows = await fetchArenaMessageRows(topicId)
-    const mapped = topicMessagesToChat(rows, ARENA_AGENT_ID)
+    const mapped = topicMessagesToChat(rows, arenaAgentId || ARENA_AGENT_ID)
     applyLatestWhiteboardFromRows(rows)
     setChatMessages(mapped)
     return mapped
@@ -1721,7 +1724,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   function markArenaAgentBusy(topicId: string, statusText: string, statusKind = 'running', ttlMs = 180000) {
     setArenaTyping((prev) => appendArenaTypingStatus(prev, {
       topicId,
-      agentId: ARENA_AGENT_ID,
+      agentId: arenaAgentId || ARENA_AGENT_ID,
       agentName: locale === 'zh' ? '终生学习 Coach' : 'Arena Coach',
       statusText,
       statusKind,
@@ -1734,7 +1737,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return {
       message_id: `arena-local:${timestamp}:${Math.random().toString(36).slice(2)}`,
       topic_id: arenaTopicId || undefined,
-      sender_id: ARENA_AGENT_ID,
+      sender_id: arenaAgentId || ARENA_AGENT_ID,
       sender_display_name: locale === 'zh' ? 'Arena Coach' : 'Arena Coach',
       sender_type: 'agent',
       content,
@@ -1810,7 +1813,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const ttlMs = Number.isFinite(ttlMsRaw) ? Math.max(1500, Math.min(120000, ttlMsRaw)) : 30000
       setArenaTyping((prev) => appendArenaTypingStatus(prev, {
         topicId,
-        agentId: String(rawEvent.agent_id || ARENA_AGENT_ID),
+        agentId: String(rawEvent.agent_id || arenaAgentId || ARENA_AGENT_ID),
         agentName: String(rawEvent.agent_display_name || '') || undefined,
         statusText: String(rawEvent.status_text || '').trim() || undefined,
         statusKind: String(rawEvent.status_kind || '').trim() || undefined,
@@ -1826,10 +1829,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     const senderType = String(msg.message.sender_type || '').toUpperCase()
     const senderId = String(msg.message.sender_id || '')
     const agentStatus = parseAgentStatusContent(String(msg.message.content || ''))
-    if (agentStatus && (senderType === 'AGENT' || senderId === ARENA_AGENT_ID)) {
+    if (agentStatus && (senderType === 'AGENT' || (!!arenaAgentId && senderId === arenaAgentId) || senderId === ARENA_AGENT_ID)) {
       setArenaTyping((prev) => appendArenaTypingStatus(prev, {
         topicId: incomingTopicId,
-        agentId: senderId || ARENA_AGENT_ID,
+        agentId: senderId || arenaAgentId || ARENA_AGENT_ID,
         agentName: String((msg.message as Record<string, unknown>).sender_display_name || '') || undefined,
         statusText: agentStatus.text,
         statusKind: agentStatus.kind,
@@ -1837,7 +1840,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }))
       return
     }
-    if (senderType === 'AGENT' || senderId === ARENA_AGENT_ID) {
+    if (senderType === 'AGENT' || (!!arenaAgentId && senderId === arenaAgentId) || senderId === ARENA_AGENT_ID) {
       setArenaTyping((prev) => {
         if (!prev || prev.topicId !== incomingTopicId) return prev
         return {
@@ -1852,8 +1855,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }
 
   const { state: arenaWsState } = useWebSocket({
-    url: session?.accessToken ? `${WS_BASE_URL}/ws/${ARENA_AGENT_ID}` : '',
-    enabled: !!arenaTopicId && !!session?.accessToken,
+    url: session?.accessToken && arenaAgentId ? `${WS_BASE_URL}/ws/${arenaAgentId}` : '',
+    enabled: !!arenaTopicId && !!arenaAgentId && !!session?.accessToken,
     token: session?.accessToken || undefined,
     onMessage: handleArenaWsMessage,
   })
@@ -1922,7 +1925,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         ? [{ id: `${arenaTyping.startedAt}-status`, text: arenaTyping.statusText, kind: arenaTyping.statusKind, ts: arenaTyping.startedAt }]
         : []
     return {
-      agentId: arenaTyping.agentId || ARENA_AGENT_ID,
+      agentId: arenaTyping.agentId || arenaAgentId || ARENA_AGENT_ID,
       agentName: arenaTyping.agentName || (locale === 'zh' ? '终生学习 Coach' : 'Arena Coach'),
       adapter: 'codex',
       model: 'arena-coach',
@@ -1932,7 +1935,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       startedAt: arenaTyping.startedAt,
       lines,
     }
-  }, [arenaTopicId, arenaTyping, arenaWsState, locale])
+  }, [arenaAgentId, arenaTopicId, arenaTyping, arenaWsState, locale])
 
   const latestArenaPreview = useMemo(() => {
     for (const message of [...chatMessages].reverse()) {
@@ -2029,10 +2032,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }
 
 
-  async function ensureArenaSession() {
+  async function ensureArenaSession(): Promise<{ topicId: string; agentId: string }> {
     if (!session?.accessToken) throw new Error('missing login session')
     if (!challenge || !arenaSessionKey) throw new Error('missing Arena challenge/session key')
-    if (arenaTopicId) return arenaTopicId
+    if (arenaTopicId && arenaAgentId) return { topicId: arenaTopicId, agentId: arenaAgentId }
     setArenaSyncing(true)
     try {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
@@ -2044,18 +2047,20 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const data = await response.json()
       if (data.session) setArenaSessionState(data.session)
       const topicId = data.topic_id as string
+      const agentId = String(data.agent_id || '')
       if (!topicId) throw new Error('failed to connect Arena Agent: missing topic_id')
-      rememberArenaTopic(topicId)
-      return topicId
+      if (!agentId) throw new Error('failed to connect Arena Agent: missing agent_id')
+      rememberArenaTopic(topicId, agentId)
+      return { topicId, agentId }
     } finally {
       setArenaSyncing(false)
     }
   }
 
-  async function publishArenaFallback(topicId: string, userMessage: string, intent?: ArenaTeachingIntent, mode: ChatMode = chatMode) {
+  async function publishArenaFallback(topicId: string, userMessage: string, intent?: ArenaTeachingIntent, mode: ChatMode = chatMode, agentId = arenaAgentId) {
     if (!challenge) throw new Error('missing challenge')
     const content = `${arenaAgentPromptContext(challenge, locale, language, code, mode, intent)}\n\n${userMessage}`
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(agentId || ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({
@@ -2068,8 +2073,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena fallback message'))
   }
 
-  async function publishArenaRaw(topicId: string, content: string, metadata?: Record<string, unknown>) {
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
+  async function publishArenaRaw(topicId: string, content: string, metadata?: Record<string, unknown>, agentId = arenaAgentId) {
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(agentId || ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({
@@ -2146,7 +2151,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
     setChatSending(true)
     try {
-      const topicId = await ensureArenaSession()
+      const { topicId, agentId: activeArenaAgentId } = await ensureArenaSession()
       markArenaAgentBusy(
         topicId,
         isSlashCommand
@@ -2192,7 +2197,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             attachment_types: attachmentTypes,
             ...(isSlashCommand ? {
             command_scope: 'single_agent',
-            command_target_agent_id: ARENA_AGENT_ID,
+            command_target_agent_id: activeArenaAgentId,
             } : {}),
             ...(modelConfig ? {
               model_config: {
@@ -2210,10 +2215,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             slash_type: 'agent_passthrough',
             slash_command: options?.slashCommand || arenaSlashName(message),
             command_scope: 'single_agent',
-            command_target_agent_id: ARENA_AGENT_ID,
-          })
+            command_target_agent_id: activeArenaAgentId,
+          }, activeArenaAgentId)
         } else {
-          await publishArenaFallback(topicId, message, effectiveIntent, mode)
+          await publishArenaFallback(topicId, message, effectiveIntent, mode, activeArenaAgentId)
         }
       }
       const data = await response.json().catch(() => ({}))
@@ -2256,7 +2261,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     setWhiteboardBusy(true)
     setChatSending(true)
     try {
-      const topicId = await ensureArenaSession()
+      const { topicId, agentId: activeArenaAgentId } = await ensureArenaSession()
       markArenaAgentBusy(topicId, locale === 'zh' ? 'Agent 正在生成白板可视化' : 'Agent is generating whiteboard visualization', 'whiteboard', 240000)
       await refreshArenaMessages(topicId)
       const baselineWhiteboardIds = new Set(appliedWhiteboardMessageIdsRef.current)
@@ -2285,7 +2290,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       })
       if (!response.ok) {
         if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena whiteboard request'))
-        await publishArenaFallback(topicId, message, 'whiteboard')
+        await publishArenaFallback(topicId, message, 'whiteboard', chatMode, activeArenaAgentId)
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)
@@ -2673,16 +2678,16 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   topicName={challenge.title || t.chatTitle}
                   topicId={arenaTopicId || undefined}
                   messages={chatMessages}
-                  currentAgentId={ARENA_AGENT_ID}
+                  currentAgentId={arenaAgentId || ARENA_AGENT_ID}
                   onSendMessage={handleArenaChatSend}
                   loading={arenaSyncing && chatMessages.length === 0}
-                  wsConnected={Boolean(arenaTopicId && session?.accessToken)}
+                  wsConnected={Boolean(arenaTopicId && arenaAgentId && session?.accessToken)}
                   accessToken={session?.accessToken || undefined}
                   topicType="p2p"
                   runStatus={arenaRunStatus}
                   compactUi
                   currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
-                  agentRoleLabelMap={{ [ARENA_AGENT_ID]: locale === 'zh' ? 'Arena Coach' : 'Arena Coach' }}
+                  agentRoleLabelMap={arenaAgentId ? { [arenaAgentId]: locale === 'zh' ? '我的 Cloud Agent' : 'My Cloud Agent' } : {}}
                   emptyState={(
                     <div className="mx-auto max-w-xl rounded-2xl border border-dashed border-[#3ce8e2]/35 bg-[#efffff] p-4 text-left shadow-[0_0_28px_rgba(60,232,226,0.08)] dark:border-[#3ce8e2]/25 dark:bg-[#101818]">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#7de9e5]">{t.chatTitle}</p>
@@ -2757,7 +2762,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   <ArenaPreviewWhiteboard preview={latestArenaPreview} locale={locale} busy={whiteboardBusy || agentBusy} />
                 ) : whiteboardDiagram ? (
                   <AgentWhiteboard
-                    challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
+                    challengeId={`${arenaAgentId || ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
                     locale={locale}
                     diagram={whiteboardDiagram}
                     expanded

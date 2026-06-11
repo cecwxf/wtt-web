@@ -130,7 +130,7 @@ function iconFor(config: FlowConfig) {
   return <ClipboardCheck className={className} />
 }
 
-function topicMessagesToChat(rows: Array<Record<string, unknown>>): FeedChatMessage[] {
+function topicMessagesToChat(rows: Array<Record<string, unknown>>, agentId: string): FeedChatMessage[] {
   return rows
     .filter((row) => String(row.semantic_type || '').toLowerCase() !== 'notification')
     .map((row, index) => {
@@ -141,18 +141,18 @@ function topicMessagesToChat(rows: Array<Record<string, unknown>>): FeedChatMess
         message_id: String(row.id || row.message_id || `${timestamp}:${index}`),
         topic_id: String(row.topic_id || ''),
         sender_id: senderId,
-        sender_type: senderType === 'AGENT' || senderId === ARENA_AGENT_ID ? 'agent' : 'human',
+        sender_type: senderType === 'AGENT' || (!!agentId && senderId === agentId) || senderId === ARENA_AGENT_ID ? 'agent' : 'human',
         content: String(row.content || ''),
         timestamp,
       }
     })
 }
 
-function localAgentMessage(content: string): FeedChatMessage {
+function localAgentMessage(content: string, agentId = ARENA_AGENT_ID): FeedChatMessage {
   const timestamp = new Date().toISOString()
   return {
     message_id: `flow-local:${timestamp}`,
-    sender_id: ARENA_AGENT_ID,
+    sender_id: agentId,
     sender_type: 'agent',
     content,
     timestamp,
@@ -167,6 +167,7 @@ export default function ArenaFlowPage() {
   const { data: session, status } = useSession()
   const token = session?.accessToken as string | undefined
   const [topicId, setTopicId] = useState('')
+  const [arenaAgentId, setArenaAgentId] = useState('')
   const [messages, setMessages] = useState<FeedChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [subject, setSubject] = useState('')
@@ -189,14 +190,16 @@ export default function ArenaFlowPage() {
     })
     if (!response.ok) return []
     const data = await response.json().catch(() => ({}))
-    const mapped = topicMessagesToChat(Array.isArray(data.messages) ? data.messages : [])
+    const nextAgentId = String(data.agent_id || arenaAgentId || '')
+    if (nextAgentId && nextAgentId !== arenaAgentId) setArenaAgentId(nextAgentId)
+    const mapped = topicMessagesToChat(Array.isArray(data.messages) ? data.messages : [], nextAgentId)
     setMessages(mapped)
     return mapped
-  }, [headers, token, topicId])
+  }, [arenaAgentId, headers, token, topicId])
 
   const ensureTopic = useCallback(async () => {
     if (!token) throw new Error('请先登录')
-    if (topicId) return topicId
+    if (topicId && arenaAgentId) return { topicId, agentId: arenaAgentId }
     const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
       method: 'POST',
       headers,
@@ -205,11 +208,14 @@ export default function ArenaFlowPage() {
     if (!response.ok) throw new Error(await response.text())
     const data = await response.json()
     const nextTopicId = String(data.topic_id || '')
+    const nextAgentId = String(data.agent_id || '')
     if (!nextTopicId) throw new Error('Arena Coach topic 创建失败')
+    if (!nextAgentId) throw new Error('Arena Coach agent 创建失败')
     setTopicId(nextTopicId)
+    setArenaAgentId(nextAgentId)
     await refreshMessages(nextTopicId)
-    return nextTopicId
-  }, [config.id, headers, refreshMessages, token, topicId])
+    return { topicId: nextTopicId, agentId: nextAgentId }
+  }, [arenaAgentId, config.id, headers, refreshMessages, token, topicId])
 
   useEffect(() => {
     if (token) {
@@ -221,8 +227,8 @@ export default function ArenaFlowPage() {
     if (msg.type === 'agent_status') {
       const raw = (msg as unknown as { status?: string; stage?: string; detail?: string }).status || (msg as unknown as { stage?: string }).stage || 'running'
       setTyping({
-        agentId: ARENA_AGENT_ID,
-        agentName: 'Arena Coach',
+        agentId: arenaAgentId || ARENA_AGENT_ID,
+        agentName: '我的 Cloud Agent',
         adapter: 'generic',
         model: 'arena-coach',
         wsState: 'connected',
@@ -235,15 +241,15 @@ export default function ArenaFlowPage() {
     }
     if (msg.message?.topic_id && (!topicId || msg.message.topic_id === topicId)) {
       void refreshMessages(msg.message.topic_id)
-      if (msg.message.sender_id === ARENA_AGENT_ID || String(msg.message.sender_type || '').toUpperCase() === 'AGENT') {
+      if (msg.message.sender_id === arenaAgentId || msg.message.sender_id === ARENA_AGENT_ID || String(msg.message.sender_type || '').toUpperCase() === 'AGENT') {
         setTyping(null)
       }
     }
-  }, [refreshMessages, topicId])
+  }, [arenaAgentId, refreshMessages, topicId])
 
   const ws = useWebSocket({
-    url: token ? `${WS_BASE_URL}/ws/${ARENA_AGENT_ID}` : '',
-    enabled: Boolean(token),
+    url: token && arenaAgentId ? `${WS_BASE_URL}/ws/${arenaAgentId}` : '',
+    enabled: Boolean(token && arenaAgentId),
     token,
     onMessage: handleWsMessage,
   })
@@ -252,13 +258,13 @@ export default function ArenaFlowPage() {
     const text = content.trim()
     if (!text || loading) return
     if (!token) {
-      setMessages((prev) => [...prev, localAgentMessage('请先登录后使用 Arena Flow。')])
+      setMessages((prev) => [...prev, localAgentMessage('请先登录后使用 Arena Flow。', arenaAgentId || ARENA_AGENT_ID)])
       return
     }
     setLoading(true)
     setNotice('')
     try {
-      const nextTopicId = await ensureTopic()
+      const { topicId: nextTopicId, agentId: activeArenaAgentId } = await ensureTopic()
       const fileLine = uploadedAssets.length
         ? [
             '\n\n附件/图片/OCR材料：',
@@ -277,8 +283,8 @@ export default function ArenaFlowPage() {
         '\n\n请在回答末尾给出“是否建议保存到学习档案”和“下次复习建议”。',
       ].filter(Boolean).join('\n')
       setTyping({
-        agentId: ARENA_AGENT_ID,
-        agentName: 'Arena Coach',
+        agentId: activeArenaAgentId,
+        agentName: '我的 Cloud Agent',
         adapter: 'generic',
         model: 'arena-coach',
         wsState: ws.state,
@@ -288,7 +294,7 @@ export default function ArenaFlowPage() {
         lines: [{ id: `flow-send-${Date.now()}`, text: 'Arena Coach 已接收，正在处理', kind: 'running', ts: Date.now() }],
       })
       const before = await refreshMessages(nextTopicId)
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(nextTopicId)}/messages?agent_id=${encodeURIComponent(ARENA_AGENT_ID)}`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(nextTopicId)}/messages?agent_id=${encodeURIComponent(activeArenaAgentId)}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -316,7 +322,7 @@ export default function ArenaFlowPage() {
         if (latest.length > baselineCount && latest.some((message) => message.sender_type === 'agent')) break
       }
     } catch (error) {
-      setMessages((prev) => [...prev, localAgentMessage(`Flow 执行失败：${error instanceof Error ? error.message : String(error)}`)])
+      setMessages((prev) => [...prev, localAgentMessage(`Flow 执行失败：${error instanceof Error ? error.message : String(error)}`, arenaAgentId || ARENA_AGENT_ID)])
     } finally {
       setTyping(null)
       setLoading(false)
@@ -495,16 +501,16 @@ export default function ArenaFlowPage() {
               topicName={`${config.title} · Arena Coach`}
               topicId={topicId || undefined}
               messages={messages}
-              currentAgentId={ARENA_AGENT_ID}
+              currentAgentId={arenaAgentId || ARENA_AGENT_ID}
               onSendMessage={sendFlowMessage}
               loading={loading && messages.length === 0}
-              wsConnected={ws.state === 'connected'}
+              wsConnected={ws.state === 'connected' && Boolean(arenaAgentId)}
               accessToken={token}
               topicType="p2p"
               runStatus={typing}
               compactUi
               currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
-              agentRoleLabelMap={{ [ARENA_AGENT_ID]: 'Arena Coach' }}
+              agentRoleLabelMap={arenaAgentId ? { [arenaAgentId]: '我的 Cloud Agent' } : {}}
               extraHeaderActions={(
                 <button
                   type="button"
