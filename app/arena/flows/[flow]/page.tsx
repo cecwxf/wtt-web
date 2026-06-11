@@ -199,7 +199,7 @@ export default function ArenaFlowPage() {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/session`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({}),
+      body: JSON.stringify({ flow_id: config.id }),
     })
     if (!response.ok) throw new Error(await response.text())
     const data = await response.json()
@@ -208,7 +208,7 @@ export default function ArenaFlowPage() {
     setTopicId(nextTopicId)
     await refreshMessages(nextTopicId)
     return nextTopicId
-  }, [headers, refreshMessages, token, topicId])
+  }, [config.id, headers, refreshMessages, token, topicId])
 
   useEffect(() => {
     if (token) {
