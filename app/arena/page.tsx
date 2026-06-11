@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArenaNav } from '@/components/arena/arena-nav'
 import { listChallenges } from '@/lib/arena/store'
 import { childSections, rootArenaSections, sectionStats } from '@/lib/arena/sections'
+import { arenaSkillFlows } from '@/lib/arena/skill-flows'
 
 function difficultyTone(difficulty: string) {
   if (difficulty === 'easy') return 'text-emerald-300'
@@ -40,6 +41,7 @@ export default function ArenaPage() {
             <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500 dark:text-gray-400 sm:gap-4 lg:gap-5">
             <a href="#sections" className="hidden transition-colors hover:text-[#3ce8e2] sm:inline">学习板块</a>
             <a href="#featured" className="hidden transition-colors hover:text-[#3ce8e2] sm:inline">推荐入口</a>
+            <Link href="/arena/learning" className="transition-colors hover:text-[#3ce8e2]">学习档案</Link>
             <Link href="/feed" className="transition-colors hover:text-[#3ce8e2]">讨论</Link>
             <Link href="/arena/sections/ai-kernel" className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-3 py-2 text-xs font-black text-black transition-opacity hover:opacity-90 sm:px-4 sm:text-sm">
               进入 AI Kernel
@@ -64,6 +66,41 @@ export default function ArenaPage() {
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:p-5"><p className="text-2xl font-black text-amber-600 dark:text-amber-300 sm:text-3xl">{educationCount}</p><p className="mt-1 text-xs text-slate-500 dark:text-gray-500 sm:text-sm">学科学习</p></div>
           </div>
         </div>
+
+        <section className="mb-12 lg:mb-16">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#3ce8e2]">Skill Learning Flow</p>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">从题目到长期能力沉淀</h2>
+            </div>
+            <p className="max-w-xl text-xs leading-5 text-slate-500 dark:text-gray-500 sm:text-sm">
+              参考 Hermes Edu Skills 的结构化能力路由、小依错题本的错题闭环和 FSRS 复习思想，Arena 会把教育/面试对话沉淀为用户私有学习档案。
+            </p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-5">
+            {arenaSkillFlows.map((flow) => (
+              <Link key={flow.id} href={flow.href} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-[#3ce8e2]/50 dark:border-gray-800 dark:bg-[#1b1b1b]">
+                <div className={`h-1.5 bg-gradient-to-r ${flow.accent}`} />
+                <div className="p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:bg-[#111] dark:text-gray-400">{flow.domain === 'education' ? 'Edu' : 'Interview'}</span>
+                    <span className="text-xs font-black text-[#008f8f] opacity-0 transition group-hover:opacity-100 dark:text-[#3ce8e2]">Open</span>
+                  </div>
+                  <h3 className="text-lg font-black text-slate-950 dark:text-white">{flow.title}</h3>
+                  <p className="mt-2 min-h-[60px] text-xs leading-5 text-slate-600 dark:text-gray-400">{flow.subtitle}</p>
+                  <div className="mt-4 space-y-1.5">
+                    {flow.steps.map((step, index) => (
+                      <div key={step} className="flex items-center gap-2 text-xs text-slate-500 dark:text-gray-500">
+                        <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-100 text-[10px] font-black text-slate-700 dark:bg-[#111] dark:text-gray-300">{index + 1}</span>
+                        <span className="truncate">{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
 
         <section id="sections" className="mb-12 lg:mb-20">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-6">

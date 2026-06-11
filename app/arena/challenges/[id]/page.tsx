@@ -16,7 +16,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
-import type { ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
+import type { ArenaLearningItem, ArenaReviewSchedule, ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeWhiteboardFromAnswerPrompt, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
 import { gaokaoKnowledgeContextMarkdown } from '@/lib/arena/gaokao-knowledge'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
@@ -29,6 +29,15 @@ type Language = 'opencl' | 'cuda' | 'triton' | 'cpp' | 'python' | 'c'
 type KernelEnvironment = 'macos-opencl'
 type ChatMode = 'socratic' | 'interview_answer' | 'ask'
 
+type ArenaRoutedSkill = {
+  id?: string
+  name?: string
+  domain?: string
+  category?: string
+  workflow?: string[]
+  output_contract?: string
+}
+
 function isArenaSlashMessage(value: string) {
   const trimmed = value.trim()
   return trimmed.startsWith('/') && !trimmed.startsWith('//')
@@ -37,6 +46,16 @@ function isArenaSlashMessage(value: string) {
 function arenaSlashName(value: string) {
   const trimmed = value.trim()
   return trimmed.split(/\s+/, 1)[0] || trimmed
+}
+
+function arenaAttachmentTypesFromMessage(value: string): string[] {
+  const text = value || ''
+  const types = new Set<string>()
+  if (/!\[[^\]]*]\([^)]+\)/.test(text) || /\.(png|jpe?g|gif|webp|bmp|heic)(\?|#|\)|\s|$)/i.test(text)) types.add('image')
+  if (/\[file:[^\]]+]\([^)]+\)/i.test(text) || /\.(pdf|docx?|pptx?|xlsx?)(\?|#|\)|\s|$)/i.test(text)) types.add('document')
+  if (/\[audio:[^\]]+]\([^)]+\)/i.test(text) || /\.(mp3|wav|m4a|ogg)(\?|#|\)|\s|$)/i.test(text)) types.add('audio')
+  if (/\[video:[^\]]+]\([^)]+\)/i.test(text) || /\.(mp4|mov|webm|mkv)(\?|#|\)|\s|$)/i.test(text)) types.add('video')
+  return Array.from(types)
 }
 
 type ChallengePayload = {
@@ -1384,19 +1403,36 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [chatSending, setChatSending] = useState(false)
   const [arenaTopicByKey, setArenaTopicByKey] = useState<Record<string, string>>({})
   const [, setArenaSessionState] = useState<ArenaSessionState | null>(null)
-  const [, setArenaProfile] = useState<ArenaUserProfile | null>(null)
+  const [arenaProfile, setArenaProfile] = useState<ArenaUserProfile | null>(null)
+  const [arenaLearningItems, setArenaLearningItems] = useState<ArenaLearningItem[]>([])
+  const [arenaReviewSchedules, setArenaReviewSchedules] = useState<ArenaReviewSchedule[]>([])
   const [arenaSyncing, setArenaSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'leaderboard'>('description')
   const [whiteboardDiagram, setWhiteboardDiagram] = useState<WhiteboardDiagram | null>(null)
   const [whiteboardVisible, setWhiteboardVisible] = useState(false)
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
+  const [arenaRoutedSkill, setArenaRoutedSkill] = useState<ArenaRoutedSkill | null>(null)
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
   const [whiteboardPanelWidth, setWhiteboardPanelWidth] = useState(520)
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
   const appliedWhiteboardHtmlMessageIdsRef = useRef(new Set<string>())
   const autoWhiteboardSourceKeysRef = useRef(new Set<string>())
+
+  async function markReviewSchedule(scheduleId: string, rating: 'again' | 'good') {
+    if (!session?.accessToken) return
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/learning/review-schedule/${encodeURIComponent(scheduleId)}/review`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ rating }),
+    })
+    if (!response.ok) return
+    const data = await response.json().catch(() => ({}))
+    if (data.schedule) {
+      setArenaReviewSchedules((prev) => prev.map((item) => item.id === scheduleId ? data.schedule : item))
+    }
+  }
 
   function startPanelResize() {
     return (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1498,9 +1534,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   const refreshArenaState = async () => {
     if (!challenge || !session?.accessToken) return
-    const [sessionResponse, profileResponse] = await Promise.all([
+    const [sessionResponse, profileResponse, itemsResponse, scheduleResponse] = await Promise.all([
       fetch(`${CLIENT_WTT_API_BASE}/arena/sessions/${encodeURIComponent(challenge.id)}`, { headers: authHeaders }),
       fetch(`${CLIENT_WTT_API_BASE}/arena/profile/me`, { headers: authHeaders }),
+      fetch(`${CLIENT_WTT_API_BASE}/arena/learning/items?limit=8`, { headers: authHeaders }),
+      fetch(`${CLIENT_WTT_API_BASE}/arena/learning/review-schedule?limit=6`, { headers: authHeaders }),
     ])
     if (sessionResponse.ok) {
       const data = await sessionResponse.json()
@@ -1512,6 +1550,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     if (profileResponse.ok) {
       const data = await profileResponse.json()
       if (data.profile) setArenaProfile(data.profile)
+    }
+    if (itemsResponse.ok) {
+      const data = await itemsResponse.json()
+      setArenaLearningItems(Array.isArray(data.items) ? data.items : [])
+    }
+    if (scheduleResponse.ok) {
+      const data = await scheduleResponse.json()
+      setArenaReviewSchedules(Array.isArray(data.schedules) ? data.schedules : [])
     }
   }
 
@@ -1979,6 +2025,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         await publishArenaRaw(topicId, message)
       }
       const data = await response.json().catch(() => ({}))
+      if (data.skill) setArenaRoutedSkill(data.skill)
       if (data.session) setArenaSessionState(data.session)
       await waitForArenaWhiteboardPayload(topicId, baselineWhiteboardIds, 240000, true)
       await refreshArenaState().catch(() => undefined)
@@ -2016,6 +2063,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       const baselineWhiteboardHtmlIds = new Set(appliedWhiteboardHtmlMessageIdsRef.current)
       const promptContext = isSlashCommand ? '' : arenaAgentPromptContext(challenge, locale, language, code, mode, effectiveIntent)
       const requiresWhiteboard = !isSlashCommand && !isCoding && !isGaokaoVolunteerChallenge(challenge)
+      const attachmentTypes = arenaAttachmentTypesFromMessage(message)
       const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/agent-chat/send`, {
         method: 'POST',
         headers: authHeaders,
@@ -2043,6 +2091,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             reasoning_effort: modelConfig.reasoningEffort,
           } : undefined,
           metadata: {
+            attachment_types: attachmentTypes,
             ...(isSlashCommand ? {
             command_scope: 'single_agent',
             command_target_agent_id: ARENA_AGENT_ID,
@@ -2183,6 +2232,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">{locale === 'zh' ? 'WTT 终生学习' : 'WTT Arena'}</Link>
             <div className="hidden items-center gap-4 text-sm text-slate-500 dark:text-gray-500 lg:flex">
               <Link href="/arena" className="hover:text-[#3ce8e2]">{t.challenges}</Link>
+              <Link href="/arena/learning" className="hover:text-[#3ce8e2]">学习档案</Link>
               <span>{t.playground}</span>
               <span>{t.discuss}</span>
             </div>
@@ -2243,6 +2293,83 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     )}
                     {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-500 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-400">{tag}</span>)}
                   </div>
+                  {arenaRoutedSkill && (
+                    <div className="mt-4 rounded-xl border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 text-sm text-slate-700 dark:text-gray-300">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#008f8f] dark:text-[#3ce8e2]">Current Skill Flow</p>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-500 shadow-sm dark:bg-[#111] dark:text-gray-400">{arenaRoutedSkill.domain || 'arena'}</span>
+                      </div>
+                      <p className="mt-2 font-black text-slate-950 dark:text-white">{arenaRoutedSkill.name || arenaRoutedSkill.id}</p>
+                      {!!arenaRoutedSkill.workflow?.length && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {arenaRoutedSkill.workflow.slice(0, 5).map((step) => (
+                            <span key={step} className="rounded-md border border-[#3ce8e2]/20 bg-white/70 px-2.5 py-1 text-xs text-slate-600 dark:bg-[#151515] dark:text-gray-300">{step}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(arenaProfile || arenaLearningItems.length > 0 || arenaReviewSchedules.length > 0) && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-slate-700 shadow-sm dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-gray-300">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-700 dark:text-amber-200">Learning Profile</p>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-amber-700 shadow-sm dark:bg-[#111] dark:text-amber-200">
+                          私有沉淀
+                        </span>
+                      </div>
+                      {!!arenaProfile?.weak_concepts?.length && (
+                        <div className="mt-3">
+                          <p className="text-xs font-bold text-slate-500 dark:text-gray-400">薄弱知识点</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {arenaProfile.weak_concepts.slice(0, 8).map((concept) => (
+                              <span key={concept} className="rounded-md bg-white px-2.5 py-1 text-xs text-slate-600 shadow-sm dark:bg-[#151515] dark:text-gray-300">{concept}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!!arenaReviewSchedules.length && (
+                        <div className="mt-3">
+                          <p className="text-xs font-bold text-slate-500 dark:text-gray-400">待复习</p>
+                          <div className="mt-2 space-y-1.5">
+                            {arenaReviewSchedules.slice(0, 3).map((item) => (
+                              <div key={item.id} className="grid gap-2 rounded-md bg-white px-2.5 py-2 text-xs shadow-sm dark:bg-[#151515]">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="min-w-0 truncate">{item.item_title || item.skill_id || item.item_type}</span>
+                                  <span className="shrink-0 text-slate-400 dark:text-gray-500">{item.due_at ? new Date(item.due_at).toLocaleDateString() : '待定'}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => markReviewSchedule(item.id, 'again')}
+                                    className="rounded-full border border-rose-200 px-2 py-0.5 text-[11px] font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-400/20 dark:text-rose-200 dark:hover:bg-rose-400/10"
+                                  >
+                                    再练
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => markReviewSchedule(item.id, 'good')}
+                                    className="rounded-full border border-emerald-200 px-2 py-0.5 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-50 dark:border-emerald-400/20 dark:text-emerald-200 dark:hover:bg-emerald-400/10"
+                                  >
+                                    已掌握
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!!arenaLearningItems.length && (
+                        <div className="mt-3">
+                          <p className="text-xs font-bold text-slate-500 dark:text-gray-400">最近沉淀</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {arenaLearningItems.slice(0, 5).map((item) => (
+                              <span key={item.id} className="rounded-md border border-amber-200/70 bg-white px-2.5 py-1 text-xs text-slate-600 dark:border-amber-400/20 dark:bg-[#151515] dark:text-gray-300">{item.skill_id || item.item_type}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {isGaokaoVolunteer && (
                     <p className="mt-4 rounded-lg border border-blue-300/50 bg-blue-50 p-4 text-sm leading-6 text-blue-800 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-100">{t.gaokaoIntro}</p>
                   )}

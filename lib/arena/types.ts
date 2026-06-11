@@ -151,3 +151,34 @@ export interface ArenaUserProfile {
   recommended_next_challenges: string[]
   updated_at?: string | null
 }
+
+export interface ArenaLearningItem {
+  id: string
+  user_id: string
+  challenge_id?: string | null
+  item_type: string
+  title?: string | null
+  content: string
+  answer?: string | null
+  subject?: string | null
+  stage?: string | null
+  knowledge_points: string[]
+  error_reasons: string[]
+  skill_id?: string | null
+  source_metadata: Record<string, unknown>
+  mastery_estimate: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ArenaReviewSchedule {
+  id: string
+  learning_item_id: string
+  item_title?: string | null
+  item_type: string
+  skill_id?: string | null
+  scheduler: string
+  state: Record<string, unknown>
+  due_at?: string | null
+  last_reviewed_at?: string | null
+}
