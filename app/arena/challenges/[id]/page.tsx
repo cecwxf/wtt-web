@@ -2059,28 +2059,34 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   async function publishArenaFallback(topicId: string, userMessage: string, intent?: ArenaTeachingIntent, mode: ChatMode = chatMode, agentId = arenaAgentId) {
     if (!challenge) throw new Error('missing challenge')
-    const content = `${arenaAgentPromptContext(challenge, locale, language, code, mode, intent)}\n\n${userMessage}`
+    const arenaAgentContext = arenaAgentPromptContext(challenge, locale, language, code, mode, intent)
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(agentId || ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({
-        content,
+        content: userMessage,
         content_type: 'text',
         semantic_type: 'post',
         sender_type: 'HUMAN',
+        metadata: {
+          arena_agent_context: arenaAgentContext,
+          arena_challenge_id: challenge.id,
+          arena_intent: intent || intentForChatMode(mode),
+          chat_mode: mode,
+        },
       }),
     })
     if (!response.ok) throw new Error(await responseError(response, 'failed to publish Arena fallback message'))
   }
 
-  async function publishArenaRaw(topicId: string, content: string, metadata?: Record<string, unknown>, agentId = arenaAgentId) {
+  async function publishArenaRaw(topicId: string, content: string, metadata?: Record<string, unknown>, agentId = arenaAgentId, semanticType = 'post') {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(agentId || ARENA_AGENT_ID)}`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({
         content,
         content_type: 'text',
-        semantic_type: 'post',
+        semantic_type: semanticType,
         sender_type: 'HUMAN',
         metadata,
       }),
@@ -2125,7 +2131,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       })
       if (!response.ok) {
         if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena whiteboard request'))
-        await publishArenaRaw(topicId, message)
+        await publishArenaRaw(
+          topicId,
+          'Arena whiteboard render request',
+          { arena_agent_context: message, arena_challenge_id: challenge.id, arena_intent: 'whiteboard' },
+          arenaAgentId,
+          'system',
+        )
       }
       const data = await response.json().catch(() => ({}))
       if (data.skill) setArenaRoutedSkill(data.skill)
@@ -2290,7 +2302,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       })
       if (!response.ok) {
         if (!isLocalArenaChallenge(challenge)) throw new Error(await responseError(response, 'failed to send Arena whiteboard request'))
-        await publishArenaFallback(topicId, message, 'whiteboard', chatMode, activeArenaAgentId)
+        await publishArenaRaw(
+          topicId,
+          'Arena whiteboard render request',
+          { arena_agent_context: message, arena_challenge_id: challenge.id, arena_intent: 'whiteboard' },
+          activeArenaAgentId,
+          'system',
+        )
       }
       const data = await response.json().catch(() => ({}))
       if (data.session) setArenaSessionState(data.session)

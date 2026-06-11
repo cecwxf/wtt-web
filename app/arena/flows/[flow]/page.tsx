@@ -130,6 +130,15 @@ function iconFor(config: FlowConfig) {
   return <ClipboardCheck className={className} />
 }
 
+function stripArenaFlowRuntimeContext(content: string) {
+  return (content || '')
+    .replace(/^┌─ 来源标识 ─+\n(?:│[^\n]*\n)?└─+\n?/, '')
+    .replace(/^\[WTT Arena Flow Context\][\s\S]*?\[\/WTT Arena Flow Context\]\n*/m, '')
+    .replace(/^\[WTT Arena Flow:[\s\S]*?用户输入：\n/m, '')
+    .replace(/\n\n请在回答末尾给出“是否建议保存到学习档案”和“下次复习建议”。\s*$/m, '')
+    .trim()
+}
+
 function topicMessagesToChat(rows: Array<Record<string, unknown>>, agentId: string): FeedChatMessage[] {
   return rows
     .filter((row) => String(row.semantic_type || '').toLowerCase() !== 'notification')
@@ -142,7 +151,7 @@ function topicMessagesToChat(rows: Array<Record<string, unknown>>, agentId: stri
         topic_id: String(row.topic_id || ''),
         sender_id: senderId,
         sender_type: senderType === 'AGENT' || (!!agentId && senderId === agentId) || senderId === ARENA_AGENT_ID ? 'agent' : 'human',
-        content: String(row.content || ''),
+        content: stripArenaFlowRuntimeContext(String(row.content || '')),
         timestamp,
       }
     })
@@ -269,18 +278,26 @@ export default function ArenaFlowPage() {
         ? [
             '\n\n附件/图片/OCR材料：',
             uploadedAssets.map((asset) => asset.markdownToken).join('\n\n'),
-            '\n\n请直接基于以上附件 URL、图片和抽取文本进行题目识别、OCR/图像理解、分步讲解；如果图片无法读取，再要求用户补充文字。',
           ].join('\n')
         : ''
       const subjectLine = subject.trim() ? `\n\n主题/学科：${subject.trim()}` : ''
-      const message = [
-        `[WTT Arena Flow: ${config.id}]`,
-        config.promptPrefix,
-        `工作流步骤：${config.workflow.join(' -> ')}`,
+      const visibleMessage = [
         subjectLine,
         fileLine,
-        `\n\n用户输入：\n${text}`,
-        '\n\n请在回答末尾给出“是否建议保存到学习档案”和“下次复习建议”。',
+        text,
+      ].filter(Boolean).join('\n').trim()
+      const arenaAgentContext = [
+        `[WTT Arena Flow Context]`,
+        `flow_id: ${config.id}`,
+        `flow_domain: ${config.domain}`,
+        config.promptPrefix,
+        `工作流步骤：${config.workflow.join(' -> ')}`,
+        subject.trim() ? `主题/学科：${subject.trim()}` : '',
+        uploadedAssets.length
+          ? '请直接基于用户消息里的附件 URL、图片和抽取文本进行题目识别、OCR/图像理解、分步讲解；如果图片无法读取，再要求用户补充文字。'
+          : '',
+        '请在回答末尾给出“是否建议保存到学习档案”和“下次复习建议”。',
+        `[/WTT Arena Flow Context]`,
       ].filter(Boolean).join('\n')
       setTyping({
         agentId: activeArenaAgentId,
@@ -298,13 +315,14 @@ export default function ArenaFlowPage() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          content: message,
+          content: visibleMessage,
           content_type: 'text',
           semantic_type: 'post',
           sender_type: 'HUMAN',
           metadata: {
             arena_flow_id: config.id,
             flow_domain: config.domain,
+            arena_agent_context: arenaAgentContext,
             attachment_names: uploadedAssets.map((asset) => asset.filename),
             attachment_urls: uploadedAssets.map((asset) => asset.url),
             attachment_types: uploadedAssets.map((asset) => asset.mimeType),

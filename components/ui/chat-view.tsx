@@ -283,6 +283,14 @@ const LOCAL_SLASH_COMMANDS: SlashCommandDef[] = [
   { cmd: '/upgrade', desc: 'WTT · Upgrade agent toolchain', icon: '⬆️', mode: 'passthrough', family: 'wtt' },
 ]
 
+const WTT_GOAL_COMMAND: SlashCommandDef = {
+  cmd: '/goal',
+  desc: 'WTT · Start team goal workflow',
+  icon: '🎯',
+  mode: 'local',
+  family: 'wtt',
+}
+
 const GENERIC_AGENT_COMMANDS: SlashCommandDef[] = [
   { cmd: '/help', desc: 'Agent · Help', icon: '❓', mode: 'passthrough', family: 'generic' },
   { cmd: '/status', desc: 'Agent · Runtime status', icon: '📊', mode: 'passthrough', family: 'generic' },
@@ -1836,8 +1844,9 @@ export function ChatView({
   }, [composerExpanded])
 
   const isDiscussTopic = topicType === 'discussion'
+  const isCollaborativeTopic = topicType === 'collaborative'
   const isBroadcastTopic = topicType === 'broadcast'
-  const isNonTaskDiscussTopic = isDiscussTopic && !isTaskTopic
+  const isNonTaskDiscussTopic = (isDiscussTopic || isCollaborativeTopic) && !isTaskTopic
   const isModelCommand = useCallback((cmd: string) => {
     const c = cmd.trim().toLowerCase()
     return c === '/model' || c.startsWith('/model ') || c === '/models' || c.startsWith('/models ')
@@ -1854,6 +1863,9 @@ export function ChatView({
     const deduped = new Map<string, SlashCommandDef>()
     for (const command of [...LOCAL_SLASH_COMMANDS, ...runtimeCommands]) {
       deduped.set(command.cmd, command)
+    }
+    if (isNonTaskDiscussTopic) {
+      deduped.set(WTT_GOAL_COMMAND.cmd, WTT_GOAL_COMMAND)
     }
     const commands = Array.from(deduped.values())
     if (!isNonTaskDiscussTopic) return commands
@@ -2036,6 +2048,33 @@ export function ChatView({
           }
           return
         }
+        case '/goal': {
+          const goal = args.trim()
+          if (!isNonTaskDiscussTopic || !topicId) {
+            setSlashResult('⚠️ /goal is only available in group/team topics.')
+            return
+          }
+          if (!goal) {
+            setSlashResult('⚠️ Usage: /goal <what the team should accomplish>')
+            return
+          }
+          const goalHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (accessToken) goalHeaders['Authorization'] = `Bearer ${accessToken}`
+          const res = await fetch(`${apiBase}/topics/${topicId}/goals`, {
+            method: 'POST',
+            headers: goalHeaders,
+            body: JSON.stringify({ goal }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            const shortId = String(data.goal_id || '').slice(0, 8)
+            setSlashResult(`🎯 Goal workflow started${shortId ? ` (${shortId})` : ''}.`)
+          } else {
+            const detail = await res.text()
+            setSlashResult(`❌ Failed to start goal: ${detail}`)
+          }
+          return
+        }
         case '/new session': {
           setSlashResult('💬 Starting new session — chat history cleared.')
           return
@@ -2085,7 +2124,7 @@ export function ChatView({
     } catch (e) {
       setSlashResult(`❌ Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
-  }, [currentAgentId, propTaskId, accessToken, onTaskCreated, onTopicCreated])
+  }, [currentAgentId, propTaskId, accessToken, onTaskCreated, onTopicCreated, isNonTaskDiscussTopic, topicId])
 
   const sendPassthroughSlash = useCallback(async (command: string, opts?: { silent?: boolean }) => {
     setSending(true)
