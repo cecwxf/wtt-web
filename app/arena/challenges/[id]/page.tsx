@@ -28,6 +28,11 @@ type Locale = 'zh' | 'en'
 type Language = 'opencl' | 'cuda' | 'triton' | 'cpp' | 'python' | 'c'
 type KernelEnvironment = 'macos-opencl'
 type ChatMode = 'socratic' | 'interview_answer' | 'ask'
+type ArenaPreviewUrl = {
+  key: string
+  url: string
+  title: string
+}
 
 type ArenaRoutedSkill = {
   id?: string
@@ -56,6 +61,43 @@ function arenaAttachmentTypesFromMessage(value: string): string[] {
   if (/\[audio:[^\]]+]\([^)]+\)/i.test(text) || /\.(mp3|wav|m4a|ogg)(\?|#|\)|\s|$)/i.test(text)) types.add('audio')
   if (/\[video:[^\]]+]\([^)]+\)/i.test(text) || /\.(mp4|mov|webm|mkv)(\?|#|\)|\s|$)/i.test(text)) types.add('video')
   return Array.from(types)
+}
+
+function extractArenaPreviewUrl(content: string, messageId = ''): ArenaPreviewUrl | null {
+  const text = String(content || '')
+  const markdownMatches = Array.from(text.matchAll(/\[(?:preview_url|cloud_preview|sandbox_preview|cloud_sandbox_preview)(?::([^\]]+))?\]\((https?:\/\/[^)\s]+)\)/gi))
+  const markdownMatch = markdownMatches[markdownMatches.length - 1]
+  if (markdownMatch?.[2]) {
+    const url = markdownMatch[2].trim()
+    return {
+      key: `${messageId || 'preview'}:${url}`,
+      url,
+      title: (markdownMatch[1] || 'Arena Preview').trim(),
+    }
+  }
+
+  const jsonCandidates = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('{') && line.endsWith('}'))
+  for (let i = jsonCandidates.length - 1; i >= 0; i -= 1) {
+    try {
+      const data = JSON.parse(jsonCandidates[i]) as { type?: unknown; url?: unknown; preview_url?: unknown; title?: unknown }
+      const type = String(data.type || '').toLowerCase()
+      const url = String(data.preview_url || data.url || '').trim()
+      if (url.startsWith('http://') || url.startsWith('https://') || type.includes('preview')) {
+        if (!url.startsWith('http://') && !url.startsWith('https://')) continue
+        return {
+          key: `${messageId || 'preview'}:${url}`,
+          url,
+          title: String(data.title || 'Arena Preview').trim(),
+        }
+      }
+    } catch {
+      // Ignore non-preview JSON snippets.
+    }
+  }
+  return null
 }
 
 type ChallengePayload = {
@@ -337,6 +379,43 @@ function ArenaDescriptionMarkdown({ content }: { content: string }) {
           {normalizeMarkdownMath(content)}
         </ReactMarkdown>
       </div>
+    </div>
+  )
+}
+
+function ArenaPreviewWhiteboard({ preview, locale, busy }: { preview: ArenaPreviewUrl; locale: Locale; busy?: boolean }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-gray-800 dark:bg-[#111]">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 px-4 py-3 pr-20 dark:border-gray-800 dark:from-sky-950/35 dark:via-[#111] dark:to-cyan-950/20">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-sky-600 dark:text-sky-300">
+            {locale === 'zh' ? 'Preview URL 白板' : 'Preview URL Board'}
+          </p>
+          <h2 className="mt-1 truncate text-sm font-black text-slate-900 dark:text-white">{preview.title || 'Arena Preview'}</h2>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {busy && (
+            <span className="rounded-full border border-emerald-300/50 bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
+              {locale === 'zh' ? '生成中' : 'Working'}
+            </span>
+          )}
+          <a
+            href={preview.url}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full bg-slate-950 px-3 py-1.5 text-xs font-black text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+          >
+            {locale === 'zh' ? '新窗口打开' : 'Open'}
+          </a>
+        </div>
+      </div>
+      <iframe
+        key={preview.key}
+        src={preview.url}
+        title={preview.title || 'Arena Preview'}
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+        className="min-h-0 flex-1 border-0 bg-white"
+      />
     </div>
   )
 }
@@ -1311,8 +1390,8 @@ function modeInstruction(mode: ChatMode, locale: Locale, challenge?: Challenge |
     return locale === 'zh' ? gaokaoVolunteerSkillZh : gaokaoVolunteerSkillEn
   }
   const whiteboardProtocol = locale === 'zh'
-    ? '本轮先输出正常学习 Coach 回答，然后在末尾必须附带一个 WHITEBOARD_DIAGRAM JSON 协议块；前端会隐藏协议块，只在 chat 中显示正文，并同步渲染右侧 Markdown/HTML 白板。WHITEBOARD_DIAGRAM 必须包含 format/title/summary/mermaid/html/steps 字段。steps[0].mermaid 必须有第一段局部诊断/流程图；steps 中 architecture_concepts 必须有局部架构图，decomposition 或 complete_answer 必须有局部流程图。html 必须基于你刚刚写出的回答生成，不要按 Markdown 四步标题组织；要绘制大尺寸 SVG 主图（viewBox 至少约 1200x560，宽度 100%，主图高度不少于 420px），必须有真实 CSS 动画（@keyframes、stroke-dasharray/stroke-dashoffset 或 transform/opacity），箭头/路径动画结束后要完整可见；必须包含图旁文字说明、公式逐项说明、一个简单示例、动画说明和结论检查清单。不要使用通用模板、占位文字、script、JavaScript、iframe、外链资源、网络图片或表单。'
-    : 'First output the normal Arena Chat answer, then append one WHITEBOARD_DIAGRAM JSON protocol block at the end. The frontend hides the protocol block from chat and renders the Markdown/HTML board on the right. WHITEBOARD_DIAGRAM must include format/title/summary/mermaid/html/steps. steps[0].mermaid must include the first-section local diagnosis/flow diagram; architecture_concepts must include a local architecture diagram, and decomposition or complete_answer must include a local flow diagram. The html must be generated from the answer you just wrote and must not use the four Markdown step headings. Draw a large SVG main diagram with a viewBox of at least about 1200x560, width 100%, and main diagram height at least 420px. Include real CSS animation using @keyframes, stroke-dasharray/stroke-dashoffset, or transform/opacity; arrow/path animation must end fully visible. Include adjacent text explanations, formula-by-formula explanation, one simple example, animation explanation, and conclusion checklist. Do not use generic templates, placeholders, script, JavaScript, iframe, external resources, network images, or forms.'
+    ? '本轮先输出正常学习 Coach 回答。需要白板/图解/动画时，优先生成一个可直接打开的网站预览，并在回答末尾附带 `[preview_url:白板标题](https://...)`；前端会把该 URL 直接作为右侧白板网页展示。只有当当前运行环境无法创建 preview-url 时，才退回输出 WHITEBOARD_DIAGRAM JSON 协议块。preview 网站应包含大尺寸 SVG/HTML 图解、公式逐项说明、简单示例、动画说明和结论检查清单。'
+    : 'First output the normal Arena Chat answer. When a board/diagram/animation is needed, prefer generating a directly accessible website preview and append `[preview_url:Board Title](https://...)` at the end; the frontend will show that URL as the right-side whiteboard webpage. Only fall back to a WHITEBOARD_DIAGRAM JSON protocol block when this runtime cannot create a preview-url. The preview website should include a large SVG/HTML diagram, formula-by-formula explanation, a simple example, animation notes, and a conclusion checklist.'
   if (mode === 'interview_answer') {
     return locale === 'zh'
       ? `chat_mode: interview_answer\n请把用户输入当作候选人的面试回答来评审：先给 0-10 分，再指出亮点、缺口、误区，补充一版更强答案，并给一个下一轮追问。${whiteboardProtocol}`
@@ -1332,8 +1411,8 @@ function arenaAgentPromptContext(challenge: Challenge, locale: Locale, language:
   const sameTurnWhiteboard = isGaokaoVolunteerChallenge(challenge)
     ? ''
     : locale === 'zh'
-      ? 'whiteboard_delivery: same_response\n首轮回答必须是“正文 + WHITEBOARD_DIAGRAM”同一次输出，不要等第二次白板请求才生成 html。WHITEBOARD_DIAGRAM.html 和 Markdown/Mermaid 必须基于同一轮正文同时返回。'
-      : 'whiteboard_delivery: same_response\nThe first reply must be one same-turn output: normal answer plus WHITEBOARD_DIAGRAM. Do not wait for a second whiteboard request to generate html. Return WHITEBOARD_DIAGRAM.html and Markdown/Mermaid from the same answer.'
+      ? 'whiteboard_delivery: same_response\n首轮回答必须是“正文 + preview_url”同一次输出；如果环境无法生成 preview_url，才使用“正文 + WHITEBOARD_DIAGRAM”作为 fallback。不要等第二次白板请求才生成可视化。'
+      : 'whiteboard_delivery: same_response\nThe first reply must be one same-turn output: normal answer plus preview_url. If this runtime cannot generate a preview_url, use normal answer plus WHITEBOARD_DIAGRAM as fallback. Do not wait for a second board request.'
   return [
     arenaChallengeContext(challenge, locale, language, code),
     modeInstruction(mode, locale, challenge),
@@ -1688,6 +1767,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         if (!isArenaAgentTopicMessage(row) || baselineWhiteboardIds.has(messageId)) return false
         const content = stripSourceBlock(String(row.content || ''))
         if (content.includes('Agent thinking')) return false
+        if (extractArenaPreviewUrl(content, messageId)) return true
         const diagram = extractWhiteboardPayload(content)?.diagram
         return Boolean(diagram && (!requireHtml || diagramHasHtml(diagram)))
       })
@@ -1854,9 +1934,18 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
   }, [arenaTopicId, arenaTyping, arenaWsState, locale])
 
+  const latestArenaPreview = useMemo(() => {
+    for (const message of [...chatMessages].reverse()) {
+      if (message.sender_type !== 'agent') continue
+      const preview = extractArenaPreviewUrl(message.content, message.message_id)
+      if (preview) return preview
+    }
+    return null
+  }, [chatMessages])
+
   useEffect(() => {
-    if (whiteboardDiagram && !isCoding && !isGaokaoVolunteer) setWhiteboardVisible(true)
-  }, [isCoding, isGaokaoVolunteer, whiteboardDiagram])
+    if ((latestArenaPreview || whiteboardDiagram) && !isCoding && !isGaokaoVolunteer) setWhiteboardVisible(true)
+  }, [isCoding, isGaokaoVolunteer, latestArenaPreview, whiteboardDiagram])
 
   useEffect(() => {
     if (isGaokaoVolunteer && chatMode !== 'ask') setChatMode('ask')
@@ -2135,9 +2224,14 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       }
       const latestMessages = await refreshArenaMessages(topicId)
       const newAgentAnswer = latestNewAgentMessage(latestMessages, baselineKeys)
+      const previewApplied = latestMessages.some((message) => (
+        message.sender_type === 'agent'
+        && !baselineKeys.has(chatMessageKey(message))
+        && Boolean(extractArenaPreviewUrl(message.content, message.message_id))
+      ))
       const whiteboardApplied = hasNewAppliedWhiteboard(baselineWhiteboardIds)
       const whiteboardHtmlApplied = hasNewAppliedWhiteboardHtml(baselineWhiteboardHtmlIds)
-      if (newAgentAnswer?.content.trim() && requiresWhiteboard && (!whiteboardApplied || !whiteboardHtmlApplied)) {
+      if (newAgentAnswer?.content.trim() && requiresWhiteboard && !previewApplied && (!whiteboardApplied || !whiteboardHtmlApplied)) {
         void requestAutoWhiteboardFromAnswer(topicId, newAgentAnswer, message)
       }
       await refreshArenaState().catch(() => undefined)
@@ -2223,11 +2317,13 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const compactArena = viewport.isCompact && !viewport.isNarrow
   const leftColumnWidth = compactArena ? clampNumber(Math.round(leftPanelWidth * 0.88), 280, 330) : leftPanelWidth
 
+  const hasArenaVisualPanel = whiteboardVisible && (latestArenaPreview || whiteboardDiagram)
+
   const arenaLayoutStyle = !isCoding && !stackedArenaLayout
     ? {
       gridTemplateColumns: isGaokaoVolunteer
         ? `${leftColumnWidth}px minmax(${compactArena ? 480 : 560}px, 1fr)`
-        : whiteboardVisible && whiteboardDiagram
+        : hasArenaVisualPanel
         ? `${leftColumnWidth}px 6px minmax(${compactArena ? 360 : 420}px, 1fr) 6px ${whiteboardPanelWidth}px`
         : `${leftColumnWidth}px 6px minmax(${compactArena ? 480 : 560}px, 1fr)`,
     }
@@ -2639,7 +2735,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             </div>
           </aside>
 
-          {!isCoding && !isGaokaoVolunteer && whiteboardVisible && whiteboardDiagram && (
+          {!isCoding && !isGaokaoVolunteer && hasArenaVisualPanel && (
             <>
               {!stackedArenaLayout && (
                 <div
@@ -2657,14 +2753,18 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 >
                   {locale === 'zh' ? '关闭' : 'Close'}
                 </button>
-                <AgentWhiteboard
-                  challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
-                  locale={locale}
-                  diagram={whiteboardDiagram}
-                  expanded
-                  busy={whiteboardBusy || agentBusy}
-                  onExplain={() => requestWhiteboardExplain(false)}
-                />
+                {latestArenaPreview ? (
+                  <ArenaPreviewWhiteboard preview={latestArenaPreview} locale={locale} busy={whiteboardBusy || agentBusy} />
+                ) : whiteboardDiagram ? (
+                  <AgentWhiteboard
+                    challengeId={`${ARENA_AGENT_ID}:${challenge.id}:${arenaTopicId || 'pending'}`}
+                    locale={locale}
+                    diagram={whiteboardDiagram}
+                    expanded
+                    busy={whiteboardBusy || agentBusy}
+                    onExplain={() => requestWhiteboardExplain(false)}
+                  />
+                ) : null}
               </aside>
             </>
           )}
