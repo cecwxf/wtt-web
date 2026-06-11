@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { Paperclip } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
+import { attachmentMimeType } from '@/lib/media/mime'
 import { CircularProgress } from './circular-progress'
 
 export interface UploadedAsset {
@@ -58,13 +59,14 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
     setUploadProgress(`Signing...`)
     setUploadPct(-1)
     try {
+      const mimeType = attachmentMimeType(file)
       // Step 1: Sign
       const signRes = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, mime_type: file.type, size: file.size }),
+        body: JSON.stringify({ filename: file.name, mime_type: mimeType, size: file.size }),
       })
-      if (!signRes.ok) throw new Error(await signRes.text())
+      if (!signRes.ok) throw new Error(`Sign failed: ${await signRes.text()}`)
       const signed = await signRes.json()
 
       // Step 2: Upload with XHR for progress
@@ -73,7 +75,7 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
       const uploadReq = uploadWithProgress(
         resolveWttUploadUrl(signed.upload_url),
         'PUT',
-        { 'Content-Type': file.type || 'application/octet-stream' },
+        { 'Content-Type': mimeType },
         file,
       )
       uploadReq.onProgress((pct) => setUploadPct(pct))
@@ -88,12 +90,12 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ upload_token: signed.upload_token }),
       })
-      if (!commitRes.ok) throw new Error(await commitRes.text())
+      if (!commitRes.ok) throw new Error(`Commit failed: ${await commitRes.text()}`)
       const asset = await commitRes.json()
 
-      const isImage = file.type.startsWith('image/')
-      const isAudio = file.type.startsWith('audio/')
-      const isVideo = file.type.startsWith('video/')
+      const isImage = mimeType.startsWith('image/')
+      const isAudio = mimeType.startsWith('audio/')
+      const isVideo = mimeType.startsWith('video/')
       const kind: UploadedAsset['kind'] = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'file'
       const baseToken = isImage
         ? `![${file.name}](${asset.url})`
@@ -120,7 +122,7 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
         filename: file.name,
         kind,
         size: file.size,
-        mimeType: file.type,
+        mimeType,
         markdownToken,
         extractedText,
       })

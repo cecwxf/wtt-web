@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm'
 import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
+import { attachmentMimeType } from '@/lib/media/mime'
 import { proxyMediaUrl, toThumbnailUrl } from '@/lib/rich-content'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
@@ -1663,12 +1664,13 @@ export default function MobileFeedPage() {
     setUploadProgress(0)
     setUploadError('')
     try {
+      const mimeType = attachmentMimeType(file)
       const sign = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify({ filename: file.name, mime_type: file.type || 'application/octet-stream', size: file.size }),
+        body: JSON.stringify({ filename: file.name, mime_type: mimeType, size: file.size }),
       })
-      if (!sign.ok) throw new Error(await sign.text())
+      if (!sign.ok) throw new Error(`Sign failed: ${await sign.text()}`)
       const signed = await sign.json()
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
@@ -1679,9 +1681,9 @@ export default function MobileFeedPage() {
           if (xhr.status >= 200 && xhr.status < 300) resolve()
           else reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`))
         })
-        xhr.addEventListener('error', () => reject(new Error('Upload failed')))
+        xhr.addEventListener('error', () => reject(new Error('Upload network failed')))
         xhr.open('PUT', resolveWttUploadUrl(signed.upload_url))
-        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+        xhr.setRequestHeader('Content-Type', mimeType)
         xhr.send(file)
       })
       setUploadProgress(95)
@@ -1690,7 +1692,7 @@ export default function MobileFeedPage() {
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({ upload_token: signed.upload_token }),
       })
-      if (!commit.ok) throw new Error(await commit.text())
+      if (!commit.ok) throw new Error(`Commit failed: ${await commit.text()}`)
       const asset = await commit.json()
       const isImage = isImageFile(file)
       const isAudio = isAudioFile(file)

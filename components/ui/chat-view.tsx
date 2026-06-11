@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
+import { attachmentMimeType } from '@/lib/media/mime'
 import { formatTime, formatDateGroup } from '@/lib/time'
 import { normalizeMarkdownMath } from '@/lib/markdown-math'
 import {
@@ -2243,12 +2244,13 @@ export function ChatView({
     setUploading(true)
     setUploadProgress(0)
     try {
+      const mimeType = attachmentMimeType(file)
       const sign = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, mime_type: file.type, size: file.size }),
+        body: JSON.stringify({ filename: file.name, mime_type: mimeType, size: file.size }),
       })
-      if (!sign.ok) throw new Error(await sign.text())
+      if (!sign.ok) throw new Error(`Sign failed: ${await sign.text()}`)
       const signed = await sign.json()
 
       // Use XHR for upload progress tracking
@@ -2261,9 +2263,9 @@ export function ChatView({
           if (xhr.status >= 200 && xhr.status < 300) resolve()
           else reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`))
         })
-        xhr.addEventListener('error', () => reject(new Error('Upload failed')))
+        xhr.addEventListener('error', () => reject(new Error('Upload network failed')))
         xhr.open('PUT', resolveWttUploadUrl(signed.upload_url))
-        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+        xhr.setRequestHeader('Content-Type', mimeType)
         xhr.send(file)
       })
 
@@ -2273,13 +2275,13 @@ export function ChatView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ upload_token: signed.upload_token }),
       })
-      if (!commit.ok) throw new Error(await commit.text())
+      if (!commit.ok) throw new Error(`Commit failed: ${await commit.text()}`)
       const asset = await commit.json()
       setUploadProgress(100)
 
-      const isImage = file.type.startsWith('image/')
-      const isAudio = file.type.startsWith('audio/')
-      const isVideo = file.type.startsWith('video/')
+      const isImage = mimeType.startsWith('image/')
+      const isAudio = mimeType.startsWith('audio/')
+      const isVideo = mimeType.startsWith('video/')
       const kind: PendingAsset['kind'] = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'file'
       const token = isImage
         ? `![${file.name}](${asset.url})`
