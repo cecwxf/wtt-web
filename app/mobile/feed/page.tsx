@@ -671,6 +671,7 @@ export default function MobileFeedPage() {
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [uploadError, setUploadError] = useState('')
   const [selectorOpen, setSelectorOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectorStep, setSelectorStep] = useState<SelectorStep>('hosts')
@@ -1660,6 +1661,7 @@ export default function MobileFeedPage() {
     }
     setUploading(true)
     setUploadProgress(0)
+    setUploadError('')
     try {
       const sign = await fetch(`${CLIENT_WTT_API_BASE}/media/sign`, {
         method: 'POST',
@@ -1704,12 +1706,22 @@ export default function MobileFeedPage() {
       setPendingAssets((prev) => [...prev, { url: proxyMediaUrl(String(asset.url || '')), filename: file.name, kind, token: assetToken }])
       setUploadProgress(100)
     } catch (error) {
-      alert(error instanceof Error ? error.message : '上传失败')
+      const message = error instanceof Error ? error.message : '上传失败'
+      setUploadError(message)
+      alert(message)
     } finally {
       setUploading(false)
       setUploadProgress(null)
     }
   }, [token])
+
+  const openFilePicker = useCallback((kind: 'file' | 'camera') => {
+    setAttachOpen(false)
+    requestAnimationFrame(() => {
+      const input = kind === 'camera' ? cameraInputRef.current : fileInputRef.current
+      input?.click()
+    })
+  }, [])
 
   const insertLocation = useCallback(() => {
     setAttachOpen(false)
@@ -1920,8 +1932,14 @@ export default function MobileFeedPage() {
             </div>
           )}
           {uploading && (
-            <div className="mb-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-              正在上传 {uploadProgress ?? 0}%
+            <div className="mb-2 flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>正在上传 {uploadProgress ?? 0}%</span>
+            </div>
+          )}
+          {uploadError && !uploading && (
+            <div className="mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+              上传失败：{uploadError}
             </div>
           )}
           {slashOpen && filteredSlashCommands.length > 0 && (
@@ -1971,12 +1989,12 @@ export default function MobileFeedPage() {
               </button>
               {attachOpen && (
                 <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-xl">
-                  <label htmlFor="wtt-mobile-file-input" className="flex w-full cursor-pointer items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                  <button type="button" onClick={() => openFilePicker('file')} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <Paperclip className="h-4 w-4" /> 文件/图片
-                  </label>
-                  <label htmlFor="wtt-mobile-camera-input" className="flex w-full cursor-pointer items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
+                  </button>
+                  <button type="button" onClick={() => openFilePicker('camera')} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <Camera className="h-4 w-4" /> 拍照
-                  </label>
+                  </button>
                   <button onClick={insertLocation} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <LocateFixed className="h-4 w-4" /> 发送位置
                   </button>

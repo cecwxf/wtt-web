@@ -298,7 +298,11 @@ test('mobile composer uploads and sends file attachments', async ({ page }) => {
   await page.goto('/mobile/feed?source=android&topic_id=topic-p2p&agent_id=agent-1')
 
   await expect(page.getByText('P2P with Alice')).toBeVisible()
-  await page.locator('input[type="file"]').first().setInputFiles({
+  await page.getByLabel('添加附件').click()
+  const fileChooserPromise = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: '文件/图片' }).click()
+  const fileChooser = await fileChooserPromise
+  await fileChooser.setFiles({
     name: 'notes.md',
     mimeType: 'text/markdown',
     buffer: Buffer.from('# mobile attachment\n'),

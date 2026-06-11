@@ -8,6 +8,12 @@ const DEFAULT_PUBLIC_WTT_WS_ORIGIN = 'wss://www.waxbyte.com'
 
 export function resolveWttUploadUrl(uploadUrl: string): string {
   if (/^https?:\/\//i.test(uploadUrl)) return uploadUrl
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') {
+      return `${CLIENT_WTT_API_BASE}/${uploadUrl.replace(/^\/+/, '')}`
+    }
+  }
   let origin = DEFAULT_WTT_API_ORIGIN
   if (
     typeof window !== 'undefined' &&
