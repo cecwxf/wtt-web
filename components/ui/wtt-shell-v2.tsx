@@ -4,7 +4,7 @@ import { Menu } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { AgentItem, AgentSubAgentMap, AgentStatsMap } from './agent-column'
-import { AgentRuntimeInfo, TopicColumn, TopicItem, type CloudAgentCreateOptions } from './topic-column'
+import { AgentRuntimeInfo, TopicColumn, TopicItem, type CloudAgentCreateOptions, type RecentTopicItem } from './topic-column'
 import { TopBar } from './top-bar'
 import { WttSettingsModal } from './wtt-settings-modal'
 import { CreateTopicModal } from './create-topic-modal'
@@ -30,6 +30,7 @@ interface WttShellV2Props {
   onAgentChange: (agentId: string) => void
   topics: TopicItem[]
   groupTopics?: TopicItem[]
+  recentTopics?: RecentTopicItem[]
   selectedTopicId: string | null
   onTopicChange: (topicId: string | null) => void
   onLogout: () => void
@@ -101,6 +102,7 @@ export function WttShellV2(props: WttShellV2Props) {
     onAgentChange,
     topics,
     groupTopics,
+    recentTopics,
     selectedTopicId,
     onTopicChange,
     onLogout,
@@ -334,6 +336,7 @@ export function WttShellV2(props: WttShellV2Props) {
             <TopicColumn
               topics={topics}
               groupTopics={groupTopics}
+              recentTopics={recentTopics}
               selectedTopicId={selectedTopicId}
               onSelectTopic={onTopicChange}
               onLeaveTopic={onLeaveTopic}

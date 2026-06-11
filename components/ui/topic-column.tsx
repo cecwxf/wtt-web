@@ -32,6 +32,22 @@ export interface TopicItem {
   member_agent_ids?: string[]
 }
 
+export interface RecentTopicItem {
+  topic_id: string
+  topic_name?: string
+  name?: string
+  topic_type?: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
+  type?: 'broadcast' | 'discussion' | 'p2p' | 'collaborative'
+  last_activity_at?: string
+  last_message_preview?: string
+  last_sender_id?: string
+  primary_agent_id?: string
+  agent_ids?: string[]
+  member_agent_ids?: string[]
+  agent_labels?: Array<{ agent_id: string; display_name?: string }>
+  unread_count?: number
+}
+
 interface AgentOption {
   agent_id: string
   name?: string
@@ -79,6 +95,7 @@ export interface AgentRuntimeInfo {
 interface TopicColumnProps {
   topics: TopicItem[]
   groupTopics?: TopicItem[]
+  recentTopics?: RecentTopicItem[]
   selectedTopicId: string | null
   onSelectTopic: (topicId: string | null) => void
   onLeaveTopic?: (topicId: string) => void
@@ -654,6 +671,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const {
     topics,
     groupTopics = [],
+    recentTopics = [],
     selectedTopicId,
     onSelectTopic,
     onLeaveTopic,
@@ -1292,6 +1310,29 @@ export function TopicColumn(props: TopicColumnProps) {
       })
   }, [groupTopics])
 
+  const visibleRecentTopics = useMemo(() => {
+    const seen = new Set<string>()
+    return recentTopics
+      .filter((topic) => {
+        if (!topic.topic_id || seen.has(topic.topic_id)) return false
+        seen.add(topic.topic_id)
+        return true
+      })
+      .slice(0, 10)
+  }, [recentTopics])
+
+  const openRecentTopic = (topic: RecentTopicItem) => {
+    const primaryAgentId = String(topic.primary_agent_id || topic.agent_ids?.[0] || topic.member_agent_ids?.[0] || '').trim()
+    if (primaryAgentId && primaryAgentId !== selectedAgentId) onSelectAgent?.(primaryAgentId)
+    onSelectTopic(topic.topic_id)
+  }
+
+  const recentTopicAgentLabel = (topic: RecentTopicItem) => {
+    const primaryAgentId = String(topic.primary_agent_id || topic.agent_ids?.[0] || topic.member_agent_ids?.[0] || '').trim()
+    const label = topic.agent_labels?.find((agent) => agent.agent_id === primaryAgentId)?.display_name
+    return label || agentOptions.find((agent) => agent.agent_id === primaryAgentId)?.display_name || primaryAgentId
+  }
+
   const renderTopicRow = (topic: TopicItem) => {
     const selected = topic.topic_id === selectedTopicId
     const Icon = getTopicIcon(topic)
@@ -1539,6 +1580,72 @@ export function TopicColumn(props: TopicColumnProps) {
               {zh ? '无 Agent' : 'No agents'}
             </div>
           )}
+
+          <section className="space-y-1">
+            <button
+              type="button"
+              onClick={() => setCollapsedAgentFolders((prev) => ({ ...prev, recent: !(prev.recent ?? false) }))}
+              className="flex w-full items-center gap-1.5 rounded-xl border border-slate-200 bg-white/70 px-1.5 py-1.5 text-left text-slate-700 shadow-sm ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:border-sky-200 hover:bg-sky-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:ring-white/5 dark:hover:border-sky-500/25 dark:hover:bg-sky-500/10"
+              title={zh ? '最近 10 条对话' : 'Recent 10 conversations'}
+            >
+              {(collapsedAgentFolders.recent ?? false) ? <ChevronRight className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 shadow-sm ring-1 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:ring-sky-400/20">
+                <MessageCircle className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[10px] font-black">
+                Recent
+              </span>
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-black text-slate-500 dark:bg-zinc-950/60 dark:text-zinc-400">
+                {visibleRecentTopics.length}
+              </span>
+            </button>
+
+            {!(collapsedAgentFolders.recent ?? false) && (
+              <div className="space-y-1">
+                {visibleRecentTopics.length > 0 ? (
+                  visibleRecentTopics.map((topic) => {
+                    const selected = topic.topic_id === selectedTopicId
+                    const unread = Number(topic.unread_count || 0)
+                    const title = topic.topic_name || topic.name || topic.topic_id
+                    const kind = topic.topic_type || topic.type || 'discussion'
+                    const agentLabel = recentTopicAgentLabel(topic)
+                    return (
+                      <button
+                        key={topic.topic_id}
+                        type="button"
+                        onClick={() => openRecentTopic(topic)}
+                        title={[title, agentLabel, topic.last_message_preview].filter(Boolean).join(' · ')}
+                        className={`relative flex w-full flex-col rounded-lg border px-1.5 py-1.5 text-left transition ${
+                          selected
+                            ? 'border-sky-300 bg-sky-100 text-sky-950 shadow-sm ring-1 ring-sky-200 dark:border-sky-300/50 dark:bg-sky-500/20 dark:text-sky-50 dark:ring-sky-300/25'
+                            : 'border-transparent bg-white/45 text-slate-600 hover:border-sky-100 hover:bg-sky-50/75 dark:bg-zinc-900/45 dark:text-zinc-300 dark:hover:border-sky-500/20 dark:hover:bg-sky-500/10'
+                        }`}
+                      >
+                        <span className="truncate text-[9px] font-black leading-tight">{title}</span>
+                        <span className="mt-0.5 truncate text-[8px] font-bold leading-tight opacity-65">
+                          {agentLabel ? `${agentLabel} · ${kind}` : kind}
+                        </span>
+                        {topic.last_message_preview && (
+                          <span className="mt-0.5 line-clamp-2 text-[8px] font-semibold leading-tight opacity-55">
+                            {topic.last_message_preview}
+                          </span>
+                        )}
+                        {unread > 0 && (
+                          <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1 py-0.5 text-[8px] font-black leading-none text-white">
+                            {unread > 99 ? '99+' : unread}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })
+                ) : (
+                  <div className="rounded-lg border border-dashed border-[#ded6c8] bg-white/45 px-2 py-2 text-center text-[9px] font-semibold text-slate-400 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500">
+                    {zh ? '暂无最近对话' : 'No recent chats'}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
 
           <section className="space-y-1.5">
             <div className="px-1 text-[8px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-zinc-500">

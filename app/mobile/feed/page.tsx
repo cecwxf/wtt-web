@@ -80,6 +80,14 @@ type TopicRecord = {
   member_agent_ids?: string[]
 }
 
+type RecentTopicRecord = TopicRecord & {
+  topic_name?: string
+  last_message_preview?: string
+  primary_agent_id?: string
+  agent_ids?: string[]
+  agent_labels?: Array<{ agent_id: string; display_name?: string }>
+}
+
 type OptimisticTaskTitle = {
   title: string
   expiresAt: number
@@ -847,10 +855,48 @@ export default function MobileFeedPage() {
     { refreshInterval: 12000, revalidateOnFocus: true },
   )
 
+  const { data: groupTopicsRaw, mutate: mutateGroupTopics } = useSWR(
+    token ? ['mobile-group-topics', token] : null,
+    async () => {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/my-groups`, {
+        headers: authHeaders(token),
+        cache: 'no-store',
+      })
+      if (!res.ok) return []
+      return res.json() as Promise<TopicRecord[]>
+    },
+    { refreshInterval: 30000, revalidateOnFocus: true },
+  )
+
+  const { data: recentTopicsRaw, mutate: mutateRecentTopics } = useSWR(
+    token ? ['mobile-recent-topics', token] : null,
+    async () => {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/my-recent?limit=10`, {
+        headers: authHeaders(token),
+        cache: 'no-store',
+      })
+      if (!res.ok) return { items: [] }
+      return res.json() as Promise<{ items?: RecentTopicRecord[] }>
+    },
+    { refreshInterval: 12000, revalidateOnFocus: true },
+  )
+
   const topics = useMemo(() => {
-    const list = (Array.isArray(topicsRaw) ? topicsRaw : [])
+    const seen = new Set<string>()
+    const recentRows = Array.isArray(recentTopicsRaw?.items) ? recentTopicsRaw.items : []
+    const list = [
+      ...(Array.isArray(topicsRaw) ? topicsRaw : []),
+      ...(Array.isArray(groupTopicsRaw) ? groupTopicsRaw : []),
+      ...recentRows,
+    ]
       .filter((t) => topicId(t))
       .filter((topic) => !shouldHideFeedTopic(topic as Record<string, unknown>))
+      .filter((topic) => {
+        const id = topicId(topic)
+        if (!id || seen.has(id)) return false
+        seen.add(id)
+        return true
+      })
     const now = Date.now()
     return [...list]
       .map((topic) => {
@@ -865,7 +911,15 @@ export default function MobileFeedPage() {
         }
       })
       .sort((a, b) => new Date(topicTime(b)).getTime() - new Date(topicTime(a)).getTime())
-  }, [optimisticTaskTitles, topicsRaw])
+  }, [groupTopicsRaw, optimisticTaskTitles, recentTopicsRaw, topicsRaw])
+
+  const recentTopics = useMemo(() => {
+    const items = Array.isArray(recentTopicsRaw?.items) ? recentTopicsRaw.items : []
+    return items
+      .filter((topic) => topicId(topic))
+      .filter((topic) => !shouldHideFeedTopic(topic as Record<string, unknown>))
+      .slice(0, 10)
+  }, [recentTopicsRaw])
 
   useEffect(() => {
     if (!Object.keys(optimisticTaskTitles).length) return
@@ -888,7 +942,7 @@ export default function MobileFeedPage() {
 
   const updateTopicUnreadCache = useCallback((targetTopicId: string, updater: (topic: TopicRecord) => TopicRecord) => {
     if (!targetTopicId) return
-    void mutateTopics((current?: TopicRecord[]) => {
+    const updateList = (current?: TopicRecord[]) => {
       if (!Array.isArray(current)) return current
       let changed = false
       const next = (current as TopicRecord[]).map((topic) => {
@@ -898,8 +952,15 @@ export default function MobileFeedPage() {
         return updated
       })
       return changed ? next : current
+    }
+    void mutateTopics(updateList, false)
+    void mutateGroupTopics(updateList, false)
+    void mutateRecentTopics((current?: { items?: RecentTopicRecord[] }) => {
+      if (!current || !Array.isArray(current.items)) return current
+      const next = updateList(current.items)
+      return next === current.items ? current : { ...current, items: next as RecentTopicRecord[] }
     }, false)
-  }, [mutateTopics])
+  }, [mutateGroupTopics, mutateRecentTopics, mutateTopics])
 
   useEffect(() => {
     if (!selectedTopicId && topics.length) {
@@ -1498,7 +1559,11 @@ export default function MobileFeedPage() {
         window.setTimeout(() => void mutateTopics(), 3500)
       }
       await mutateMessages()
-      if (!sourceTaskId) await mutateTopics()
+      if (!sourceTaskId) {
+        await Promise.allSettled([mutateTopics(), mutateGroupTopics(), mutateRecentTopics()])
+      } else {
+        void mutateRecentTopics()
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '网络异常，发送失败'
       setFailedSend({
@@ -1517,7 +1582,7 @@ export default function MobileFeedPage() {
     } finally {
       setSending(false)
     }
-  }, [agents, closeComposerSuggestions, draft, labelForAgentInTopic, mutateMessages, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
+  }, [agents, closeComposerSuggestions, draft, labelForAgentInTopic, mutateGroupTopics, mutateMessages, mutateRecentTopics, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
 
   const createDefaultTask = useCallback(async () => {
     if (!token || !selectedAgentId || creatingTask) return
@@ -2177,6 +2242,49 @@ export default function MobileFeedPage() {
                   <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{filteredTopics.length}</span>
                 </div>
                 <div className="space-y-2">
+                  <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-1.5">
+                    <div className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-sky-700">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-white/70 px-2 py-0.5">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        Recent
+                      </span>
+                      <span className="ml-auto text-[10px]">{recentTopics.length}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {recentTopics.length === 0 ? (
+                        <div className="px-3 py-2 text-xs font-semibold text-sky-400">暂无最近对话</div>
+                      ) : recentTopics.map((topic) => {
+                        const id = topicId(topic)
+                        const TopicIcon = topicIcon(topic)
+                        const primaryAgentId = String(topic.primary_agent_id || topic.agent_ids?.[0] || topic.member_agent_ids?.[0] || '').trim()
+                        const agentLabel = topic.agent_labels?.find((agent) => agent.agent_id === primaryAgentId)?.display_name
+                          || agents.find((agent) => agent.agent_id === primaryAgentId)?.display_name
+                          || primaryAgentId
+                        return (
+                          <button
+                            key={`recent-${id}`}
+                            onClick={() => {
+                              if (primaryAgentId && primaryAgentId !== selectedAgentId) setSelectedAgentId(primaryAgentId)
+                              updateTopicUnreadCache(id, (row) => ({ ...row, unread_count: 0 }))
+                              setSelectedTopicId(id)
+                              closeSheet('selector')
+                            }}
+                            className={`w-full rounded-lg border px-3 py-2 text-left ${id === selectedTopicId ? 'border-sky-600 bg-white' : 'border-sky-100 bg-white/75'}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <TopicIcon className="h-4 w-4 shrink-0 text-sky-700" />
+                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{topic.topic_name || compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
+                              {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
+                            </div>
+                            <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500">
+                              {[agentLabel, topic.last_message_preview || topicKindLabel(topic)].filter(Boolean).join(' · ')}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
                   {(['p2p', 'task', 'group', 'subscriber'] as TopicGroupKey[]).map((groupKey) => {
                     const items = groupedTopics[groupKey]
                     const meta = topicGroupMeta(groupKey)

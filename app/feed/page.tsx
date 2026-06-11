@@ -11,7 +11,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
 import { ChatView, ChatMessage, ChatModelConfig, ChatSendOptions, ChatRunStatus, isProgressMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
-import { AgentRuntimeInfo, TopicItem, type CloudAgentCreateOptions } from '@/components/ui/topic-column'
+import { AgentRuntimeInfo, TopicItem, type CloudAgentCreateOptions, type RecentTopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 import type { ContentFormat } from '@/components/ui/content-editor'
 import type { EditorTopic } from '@/components/ui/markdown-editor'
@@ -1489,6 +1489,25 @@ function FeedPageInner() {
     },
   )
 
+  const { data: recentTopicsRaw, mutate: mutateRecentTopics } = useSWR(
+    session?.accessToken ? ['my-recent-topics', session.accessToken] : null,
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/my-recent?limit=10`, {
+        headers: {
+          Authorization: `Bearer ${session?.accessToken}`,
+        },
+        cache: 'no-store',
+      })
+      if (!response.ok) return { items: [] }
+      return response.json()
+    },
+    {
+      refreshInterval: wsState === 'connected' ? 15000 : 5000,
+      revalidateOnFocus: true,
+      dedupingInterval: 2000,
+    },
+  )
+
   // Keep ref in sync for WS handler (avoids circular dependency)
   useEffect(() => {
     subscribedTopicsRef.current = { raw: subscribedTopicsRaw ?? null, mutate: mutateTopics }
@@ -1594,6 +1613,46 @@ function FeedPageInner() {
         return bt - at
       })
   }, [groupTopicsRaw])
+
+  const recentTopics = useMemo<RecentTopicItem[]>(() => {
+    const items = Array.isArray((recentTopicsRaw as { items?: unknown[] } | undefined)?.items)
+      ? (recentTopicsRaw as { items: unknown[] }).items
+      : Array.isArray(recentTopicsRaw)
+        ? recentTopicsRaw as unknown[]
+        : []
+    return items
+      .map((item) => (item && typeof item === 'object' ? item as Record<string, unknown> : null))
+      .filter(Boolean)
+      .map((row) => {
+        const topicId = String(row?.topic_id || row?.id || '')
+        const agentLabels = Array.isArray(row?.agent_labels)
+          ? row.agent_labels
+              .map((label) => (label && typeof label === 'object' ? label as Record<string, unknown> : null))
+              .filter(Boolean)
+              .map((label) => ({
+                agent_id: String(label?.agent_id || ''),
+                display_name: String(label?.display_name || label?.agent_id || ''),
+              }))
+              .filter((label) => label.agent_id)
+          : []
+        return {
+          topic_id: topicId,
+          topic_name: String(row?.topic_name || row?.name || topicId),
+          name: String(row?.name || row?.topic_name || topicId),
+          topic_type: String(row?.topic_type || row?.type || 'discussion').toLowerCase() as RecentTopicItem['topic_type'],
+          type: String(row?.type || row?.topic_type || 'discussion').toLowerCase() as RecentTopicItem['type'],
+          last_activity_at: String(row?.last_activity_at || row?.created_at || ''),
+          last_message_preview: String(row?.last_message_preview || ''),
+          last_sender_id: String(row?.last_sender_id || ''),
+          primary_agent_id: String(row?.primary_agent_id || ''),
+          agent_ids: Array.isArray(row?.agent_ids) ? row.agent_ids.map(String).filter(Boolean) : [],
+          member_agent_ids: Array.isArray(row?.member_agent_ids) ? row.member_agent_ids.map(String).filter(Boolean) : [],
+          agent_labels: agentLabels,
+          unread_count: Number(row?.unread_count || 0),
+        }
+      })
+      .filter((topic) => topic.topic_id)
+  }, [recentTopicsRaw])
 
   const subscribedTopicIds = useMemo(() => topics.map(t => t.topic_id), [topics])
 
@@ -1799,12 +1858,13 @@ function FeedPageInner() {
       loadAgents(),
       mutateTopics(),
       mutateGroupTopics(),
+      mutateRecentTopics(),
       mutateAgentStats(),
       mutateCloudAgentState(),
       mutateP2pRequests(),
       mutateRecentTasks(),
     ])
-  }, [loadAgents, mutateAgentStats, mutateCloudAgentState, mutateGroupTopics, mutateP2pRequests, mutateRecentTasks, mutateTopics])
+  }, [loadAgents, mutateAgentStats, mutateCloudAgentState, mutateGroupTopics, mutateP2pRequests, mutateRecentTasks, mutateRecentTopics, mutateTopics])
 
   useEffect(() => {
     if (!selectedAgentId) return
@@ -2897,6 +2957,7 @@ function FeedPageInner() {
         onAgentChange={(id) => { setSelectedAgentId(id); setSelectedTopicId(null) }}
         topics={topics}
         groupTopics={groupTopics}
+        recentTopics={recentTopics}
         selectedTopicId={selectedTopicId}
         onTopicChange={handleTopicChange}
         onRenameAgent={handleRenameAgent}
