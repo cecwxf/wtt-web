@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BookOpenCheck, Camera, ClipboardCheck, FileText, MessageSquareText, RefreshCw, Save, Sparkles } from 'lucide-react'
 import { ArenaNav } from '@/components/arena/arena-nav'
+import { ChatFileUpload, type UploadedAsset } from '@/components/ui/chat-file-upload'
 import { ChatView, type ChatMessage as FeedChatMessage, type ChatRunStatus } from '@/components/ui/chat-view'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
@@ -169,7 +170,7 @@ export default function ArenaFlowPage() {
   const [messages, setMessages] = useState<FeedChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [subject, setSubject] = useState('')
-  const [files, setFiles] = useState<File[]>([])
+  const [uploadedAssets, setUploadedAssets] = useState<UploadedAsset[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
@@ -258,7 +259,13 @@ export default function ArenaFlowPage() {
     setNotice('')
     try {
       const nextTopicId = await ensureTopic()
-      const fileLine = files.length ? `\n\n附件/图片：${files.map((file) => `${file.name} (${Math.round(file.size / 1024)}KB)`).join('、')}` : ''
+      const fileLine = uploadedAssets.length
+        ? [
+            '\n\n附件/图片/OCR材料：',
+            uploadedAssets.map((asset) => asset.markdownToken).join('\n\n'),
+            '\n\n请直接基于以上附件 URL、图片和抽取文本进行题目识别、OCR/图像理解、分步讲解；如果图片无法读取，再要求用户补充文字。',
+          ].join('\n')
+        : ''
       const subjectLine = subject.trim() ? `\n\n主题/学科：${subject.trim()}` : ''
       const message = [
         `[WTT Arena Flow: ${config.id}]`,
@@ -292,7 +299,9 @@ export default function ArenaFlowPage() {
           metadata: {
             arena_flow_id: config.id,
             flow_domain: config.domain,
-            attachment_names: files.map((file) => file.name),
+            attachment_names: uploadedAssets.map((asset) => asset.filename),
+            attachment_urls: uploadedAssets.map((asset) => asset.url),
+            attachment_types: uploadedAssets.map((asset) => asset.mimeType),
           },
         }),
       })
@@ -338,7 +347,8 @@ export default function ArenaFlowPage() {
           source_metadata: {
             source_type: config.id,
             flow_id: config.id,
-            attachment_names: files.map((file) => file.name),
+            attachment_names: uploadedAssets.map((asset) => asset.filename),
+            attachment_urls: uploadedAssets.map((asset) => asset.url),
           },
         }),
       })
@@ -411,23 +421,32 @@ export default function ArenaFlowPage() {
                 className="mt-3 min-h-40 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111]"
               />
               {config.id === 'photo-question' && (
-                <label className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500 transition hover:border-[#3ce8e2] dark:border-gray-700 dark:bg-[#111] dark:text-gray-400">
+                <div className="mt-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500 transition hover:border-[#3ce8e2] dark:border-gray-700 dark:bg-[#111] dark:text-gray-400">
                   <Camera className="mb-2 h-6 w-6" />
-                  <span className="font-bold">选择图片/PDF</span>
-                  <span className="mt-1 text-xs">第一版记录附件名；真实 OCR 服务后续接入。</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf"
-                    className="hidden"
-                    onChange={(event) => setFiles(Array.from(event.target.files || []))}
+                  <span className="font-bold">上传图片/PDF 给 Arena Agent 识别</span>
+                  <span className="mt-1 text-xs">图片会生成可访问 URL；PDF/文本会尽量抽取正文，Agent 负责 OCR、理解和讲解。</span>
+                  <ChatFileUpload
+                    compact
+                    disabled={loading}
+                    className="mt-3 justify-center"
+                    onUploaded={(asset) => setUploadedAssets((prev) => [...prev, asset])}
                   />
-                </label>
+                </div>
               )}
-              {!!files.length && (
+              {!!uploadedAssets.length && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {files.map((file) => (
-                    <span key={`${file.name}-${file.size}`} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 dark:border-gray-800 dark:bg-[#111] dark:text-gray-300">{file.name}</span>
+                  {uploadedAssets.map((asset, index) => (
+                    <span key={`${asset.url}-${index}`} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 dark:border-gray-800 dark:bg-[#111] dark:text-gray-300">
+                      {asset.filename}
+                      <button
+                        type="button"
+                        className="font-black text-slate-400 hover:text-rose-500"
+                        onClick={() => setUploadedAssets((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}
+                        aria-label={`移除 ${asset.filename}`}
+                      >
+                        ×
+                      </button>
+                    </span>
                   ))}
                 </div>
               )}
