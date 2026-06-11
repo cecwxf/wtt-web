@@ -1822,6 +1822,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const isCoding = challenge?.challenge_type === 'coding'
   const isGaokaoVolunteer = isGaokaoVolunteerChallenge(challenge)
   const isInterviewPractice = Boolean(challenge?.challenge_type === 'qa' && challenge?.category.endsWith('-interview'))
+  const isEducationPractice = Boolean(challenge?.category.startsWith('education-'))
+  const isCoachOnlyPractice = isGaokaoVolunteer || isInterviewPractice || isEducationPractice
+  const coachFlowSteps = isInterviewPractice
+    ? ['先回答', 'Agent 评分', '补强答案', '继续追问']
+    : isEducationPractice
+      ? ['读题定位', '提示点拨', '分步讲解', '类题迁移']
+      : isGaokaoVolunteer
+        ? ['补全信息', '分层推荐', '风险核验', '规划路径']
+        : []
   const passedCount = useMemo(() => submission?.results.filter((result) => result.status === 'accepted').length || 0, [submission])
   const arenaTypingActive = !!arenaTyping && arenaTyping.topicId === arenaTopicId
   const agentBusy = arenaTypingActive || chatSending || arenaSyncing || whiteboardBusy
@@ -1854,8 +1863,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   }, [chatMode, isGaokaoVolunteer])
 
   useEffect(() => {
-    if ((isGaokaoVolunteer || isInterviewPractice) && activeTab !== 'description') setActiveTab('description')
-  }, [activeTab, isGaokaoVolunteer, isInterviewPractice])
+    if (isCoachOnlyPractice && activeTab !== 'description') setActiveTab('description')
+  }, [activeTab, isCoachOnlyPractice])
 
   function changeLanguage(next: Language) {
     setLanguage(next)
@@ -2229,12 +2238,12 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       <div className="flex h-[100dvh] flex-col overflow-hidden">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-[#f7f5f0]/95 px-3 py-2 backdrop-blur dark:border-gray-800 dark:bg-[#151515]/95 sm:px-4 sm:py-3">
           <div className="flex min-w-0 items-center gap-3 sm:gap-5">
-            <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">{locale === 'zh' ? 'WTT 终生学习' : 'WTT Arena'}</Link>
+            <Link href="/arena" className="shrink-0 bg-gradient-to-r from-[#3ce8e2] to-[#00b3b3] bg-clip-text text-xl font-black text-transparent sm:text-2xl">{locale === 'zh' ? 'WTT Arena' : 'WTT Arena'}</Link>
             <div className="hidden items-center gap-4 text-sm text-slate-500 dark:text-gray-500 lg:flex">
-              <Link href="/arena" className="hover:text-[#3ce8e2]">{t.challenges}</Link>
+              <Link href="/arena" className="hover:text-[#3ce8e2]">{locale === 'zh' ? '教育/面试' : 'Education / Interview'}</Link>
               <Link href="/arena/learning" className="hover:text-[#3ce8e2]">学习档案</Link>
-              <span>{t.playground}</span>
-              <span>{t.discuss}</span>
+              {!isCoachOnlyPractice && <span>{t.playground}</span>}
+              {!isCoachOnlyPractice && <span>{t.discuss}</span>}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500 dark:text-gray-500 sm:gap-3">
@@ -2242,8 +2251,10 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
             <button onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} className="rounded-md border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-600 hover:border-[#3ce8e2] hover:text-[#00a7a7] dark:border-gray-800 dark:bg-[#202020] dark:text-gray-300 dark:hover:border-[#3ce8e2] dark:hover:text-[#3ce8e2] sm:px-3">
               {locale === 'zh' ? 'English' : '中文'}
             </button>
-            <span className="hidden rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#3ce8e2] md:inline">OpenCL · Mac runner</span>
-            <span className="hidden sm:inline">{t.runner}</span>
+            <span className="hidden rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1 text-[#008f8f] dark:text-[#3ce8e2] md:inline">
+              {isCoachOnlyPractice ? (locale === 'zh' ? 'Arena Coach' : 'Arena Coach') : 'OpenCL · Mac runner'}
+            </span>
+            {!isCoachOnlyPractice && <span className="hidden sm:inline">{t.runner}</span>}
           </div>
         </header>
 
@@ -2261,7 +2272,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           {(
           <section className="min-h-0 overflow-hidden rounded-lg border border-slate-200 bg-white/85 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
             <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 bg-[#fbfaf7] px-3 py-2.5 text-sm dark:border-gray-800 dark:bg-[#191919] lg:px-4 lg:py-3">
-              {(isGaokaoVolunteer || isInterviewPractice
+              {(isCoachOnlyPractice
                 ? [['description', isGaokaoVolunteer ? t.consultation : t.description]]
                 : [
                   ['description', t.description],
@@ -2279,7 +2290,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-xl font-black tracking-tight text-slate-950 dark:text-white lg:text-2xl">{challenge.title}</h1>
-                    {challengeAccepted && (
+                    {!isCoachOnlyPractice && challengeAccepted && (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
                         ✓ {locale === 'zh' ? '已通过' : 'Accepted'}
                       </span>
@@ -2293,6 +2304,42 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     )}
                     {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-500 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-400">{tag}</span>)}
                   </div>
+                  {isCoachOnlyPractice && coachFlowSteps.length > 0 && (
+                    <div className="mt-4 rounded-2xl border border-[#3ce8e2]/20 bg-gradient-to-br from-[#efffff] to-white p-4 shadow-sm dark:border-[#3ce8e2]/20 dark:from-[#101818] dark:to-[#151515]">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#008f8f] dark:text-[#3ce8e2]">Skill Flow</p>
+                          <p className="mt-1 text-sm font-bold text-slate-700 dark:text-gray-300">
+                            {isInterviewPractice
+                              ? '面试训练按“回答-评分-补强-追问”推进。'
+                              : isEducationPractice
+                                ? '教育练习按“读题-提示-讲解-迁移”推进。'
+                                : '志愿咨询按“信息-推荐-核验-规划”推进。'}
+                          </p>
+                        </div>
+                        <Link href="/arena/learning" className="rounded-full border border-[#3ce8e2]/30 bg-white px-3 py-1.5 text-xs font-black text-[#008f8f] shadow-sm transition hover:bg-[#3ce8e2]/10 dark:bg-[#111] dark:text-[#3ce8e2]">
+                          学习档案
+                        </Link>
+                      </div>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                        {coachFlowSteps.map((step, index) => (
+                          <button
+                            key={step}
+                            type="button"
+                            onClick={() => {
+                              const action = index === 0 ? coachActions[0] : index === 1 ? coachActions[1] : coachActions[Math.min(index - 1, coachActions.length - 1)]
+                              if (action) runCoachAction(action)
+                            }}
+                            disabled={chatSending || arenaSyncing}
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:-translate-y-0.5 hover:border-[#3ce8e2] hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-[#101010]"
+                          >
+                            <span className="grid h-7 w-7 place-items-center rounded-full bg-[#3ce8e2]/15 text-xs font-black text-[#008f8f] dark:text-[#3ce8e2]">{index + 1}</span>
+                            <span className="mt-2 block text-sm font-black text-slate-900 dark:text-white">{step}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {arenaRoutedSkill && (
                     <div className="mt-4 rounded-xl border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 text-sm text-slate-700 dark:text-gray-300">
                       <div className="flex flex-wrap items-center justify-between gap-2">

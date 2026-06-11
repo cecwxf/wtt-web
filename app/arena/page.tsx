@@ -1,183 +1,163 @@
 import Link from 'next/link'
 import { ArenaNav } from '@/components/arena/arena-nav'
 import { listChallenges } from '@/lib/arena/store'
-import { childSections, rootArenaSections, sectionStats } from '@/lib/arena/sections'
+import { childSections, getArenaSection, sectionStats } from '@/lib/arena/sections'
 import { arenaSkillFlows } from '@/lib/arena/skill-flows'
 
-function difficultyTone(difficulty: string) {
-  if (difficulty === 'easy') return 'text-emerald-300'
-  if (difficulty === 'medium') return 'text-yellow-300'
-  return 'text-rose-300'
+const interviewSectionSlugs = [
+  'ai-interview',
+  'linux-kernel-interview',
+  'android-interview',
+  'programming-interview',
+  'hardware-interview',
+  'ai-infra-interview',
+]
+
+function sectionCard(slug: string) {
+  return getArenaSection(slug)
 }
 
 export default function ArenaPage() {
   const challenges = listChallenges()
-  const sections = rootArenaSections()
-  const total = challenges.length
-  const technologyCount = sectionStats(challenges, 'technology').total
+  const education = getArenaSection('education')
+  const educationStages = childSections('education')
+  const interviewSections = interviewSectionSlugs.map(sectionCard).filter(Boolean)
   const educationCount = sectionStats(challenges, 'education').total
-  const featured = challenges.filter((challenge) => [
-    'ai-vector-add',
-    'ai-gemm',
-    'ai-softmax-attention',
-    'ai-interview-pretraining-data-mixture',
-    'ai-interview-runtime-continuous-batching',
-    'ai-interview-npu-gpgpu-attention-kernel',
-    'education-primary-math-number-classic',
-    'education-junior-physics-mechanics-classic',
-    'education-senior-math-function-classic',
-  ].includes(challenge.slug))
+  const interviewCount = interviewSections.reduce((sum, section) => sum + sectionStats(challenges, section!.slug).total, 0)
+  const educationFlows = arenaSkillFlows.filter((flow) => flow.domain === 'education')
+  const interviewFlows = arenaSkillFlows.filter((flow) => flow.domain === 'interview')
 
   return (
     <main className="min-h-[100dvh] bg-[#f7f5f0] text-slate-950 dark:bg-[#151515] dark:text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-[-18rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#3ce8e2]/20 blur-3xl dark:bg-[#3ce8e2]/10" />
-        <div className="absolute bottom-[-16rem] right-[-12rem] h-[32rem] w-[32rem] rounded-full bg-sky-300/20 blur-3xl dark:bg-violet-500/10" />
+        <div className="absolute left-[-12rem] top-[-18rem] h-[36rem] w-[36rem] rounded-full bg-amber-200/30 blur-3xl dark:bg-amber-300/10" />
+        <div className="absolute right-[-10rem] top-[-12rem] h-[32rem] w-[32rem] rounded-full bg-[#3ce8e2]/20 blur-3xl dark:bg-[#3ce8e2]/10" />
+        <div className="absolute bottom-[-18rem] left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-violet-300/20 blur-3xl dark:bg-violet-500/10" />
       </div>
 
       <section className="relative mx-auto max-w-7xl px-3 py-6 sm:px-5 sm:py-8 lg:px-8 lg:py-10">
         <ArenaNav
+          title="WTT Arena"
+          subtitle="教育与面试训练"
           right={(
-            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500 dark:text-gray-400 sm:gap-4 lg:gap-5">
-            <a href="#sections" className="hidden transition-colors hover:text-[#3ce8e2] sm:inline">学习板块</a>
-            <a href="#featured" className="hidden transition-colors hover:text-[#3ce8e2] sm:inline">推荐入口</a>
-            <Link href="/arena/learning" className="transition-colors hover:text-[#3ce8e2]">学习档案</Link>
-            <Link href="/feed" className="transition-colors hover:text-[#3ce8e2]">讨论</Link>
-            <Link href="/arena/sections/ai-kernel" className="rounded-md bg-gradient-to-r from-[#2ee6e3] to-[#00b3b3] px-3 py-2 text-xs font-black text-black transition-opacity hover:opacity-90 sm:px-4 sm:text-sm">
-              进入 AI Kernel
-            </Link>
+            <div className="flex flex-wrap items-center gap-3 text-sm font-bold text-slate-500 dark:text-gray-400">
+              <a href="#education" className="transition-colors hover:text-[#008f8f] dark:hover:text-[#3ce8e2]">教育</a>
+              <a href="#interview" className="transition-colors hover:text-[#008f8f] dark:hover:text-[#3ce8e2]">面试</a>
+              <Link href="/arena/learning" className="transition-colors hover:text-[#008f8f] dark:hover:text-[#3ce8e2]">学习档案</Link>
+              <Link href="/feed" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-sm transition hover:border-[#3ce8e2] hover:text-[#008f8f] dark:border-gray-800 dark:bg-[#1e1e1e] dark:text-gray-300 dark:hover:text-[#3ce8e2]">返回 Feed</Link>
             </div>
           )}
         />
 
-        <div className="mb-10 text-center sm:mb-12 lg:mb-16">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#3ce8e2] sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.26em]">
-            先选板块 · 再进入题目 · Agent Runner / Coach
-          </div>
-          <h1 className="mx-auto max-w-5xl text-4xl font-black tracking-tight text-slate-950 dark:text-white sm:text-5xl lg:text-6xl xl:text-7xl">
-            终生学习：面试、学科、AI Kernel 与志愿咨询
-          </h1>
-          <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-slate-600 dark:text-gray-400 sm:mt-6 lg:text-lg lg:leading-8">
-            技术板块覆盖 AI Kernel、系统、硬件、芯片、固件、RTOS 和编程训练；教育板块按小学、初中、高中组织学科练习；高考志愿板块提供院校、专业、位次和就业方向咨询。
-          </p>
-          <div className="mt-6 grid gap-3 text-center sm:mt-8 sm:grid-cols-3 lg:mt-10">
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:p-5"><p className="text-2xl font-black text-[#008f8f] dark:text-[#3ce8e2] sm:text-3xl">{total}</p><p className="mt-1 text-xs text-slate-500 dark:text-gray-500 sm:text-sm">题目与咨询</p></div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:p-5"><p className="text-2xl font-black text-cyan-600 dark:text-cyan-300 sm:text-3xl">{technologyCount}</p><p className="mt-1 text-xs text-slate-500 dark:text-gray-500 sm:text-sm">技术训练</p></div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:p-5"><p className="text-2xl font-black text-amber-600 dark:text-amber-300 sm:text-3xl">{educationCount}</p><p className="mt-1 text-xs text-slate-500 dark:text-gray-500 sm:text-sm">学科学习</p></div>
-          </div>
-        </div>
-
-        <section className="mb-12 lg:mb-16">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#3ce8e2]">Skill Learning Flow</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">从题目到长期能力沉淀</h2>
+        <header className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-stretch">
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] sm:p-8 lg:p-10">
+            <div className="mb-6 inline-flex rounded-full border border-[#3ce8e2]/25 bg-[#3ce8e2]/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-[#008f8f] dark:text-[#3ce8e2]">
+              Skill Coach · Practice · Review
             </div>
-            <p className="max-w-xl text-xs leading-5 text-slate-500 dark:text-gray-500 sm:text-sm">
-              参考 Hermes Edu Skills 的结构化能力路由、小依错题本的错题闭环和 FSRS 复习思想，Arena 会把教育/面试对话沉淀为用户私有学习档案。
+            <h1 className="max-w-4xl text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl lg:text-5xl">
+              简单进入练习，让 Agent 帮你学会题、练好面试。
+            </h1>
+            <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600 dark:text-gray-400">
+              Arena 现在聚焦两件事：教育题目讲解和面试问答训练。选择板块后直接进入题目，使用提示、讲答案、类题迁移三类 Coach Action 推动学习闭环。
             </p>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <Link href="/arena/sections/education" className="group rounded-2xl border border-amber-200 bg-amber-50 p-5 transition hover:-translate-y-1 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/10 dark:hover:bg-amber-400/15">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-700 dark:text-amber-200">Education</p>
+                <h2 className="mt-3 text-2xl font-black">教育练习</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-300">小学、初中、高中学科题，按错题复盘和分步讲解组织。</p>
+                <p className="mt-5 text-sm font-black text-amber-700 dark:text-amber-200">{educationCount} 个练习入口 →</p>
+              </Link>
+              <Link href="/arena/sections/ai-interview" className="group rounded-2xl border border-violet-200 bg-violet-50 p-5 transition hover:-translate-y-1 hover:border-violet-300 hover:bg-violet-100 dark:border-violet-400/20 dark:bg-violet-400/10 dark:hover:bg-violet-400/15">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-700 dark:text-violet-200">Interview</p>
+                <h2 className="mt-3 text-2xl font-black">面试训练</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-300">AI、系统、Android、Linux、硬件等开放式面试问答。</p>
+                <p className="mt-5 text-sm font-black text-violet-700 dark:text-violet-200">{interviewCount} 个面试题 →</p>
+              </Link>
+            </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-5">
-            {arenaSkillFlows.map((flow) => (
-              <Link key={flow.id} href={flow.href} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-[#3ce8e2]/50 dark:border-gray-800 dark:bg-[#1b1b1b]">
-                <div className={`h-1.5 bg-gradient-to-r ${flow.accent}`} />
-                <div className="p-4">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:bg-[#111] dark:text-gray-400">{flow.domain === 'education' ? 'Edu' : 'Interview'}</span>
-                    <span className="text-xs font-black text-[#008f8f] opacity-0 transition group-hover:opacity-100 dark:text-[#3ce8e2]">Open</span>
-                  </div>
-                  <h3 className="text-lg font-black text-slate-950 dark:text-white">{flow.title}</h3>
-                  <p className="mt-2 min-h-[60px] text-xs leading-5 text-slate-600 dark:text-gray-400">{flow.subtitle}</p>
-                  <div className="mt-4 space-y-1.5">
-                    {flow.steps.map((step, index) => (
-                      <div key={step} className="flex items-center gap-2 text-xs text-slate-500 dark:text-gray-500">
-                        <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-100 text-[10px] font-black text-slate-700 dark:bg-[#111] dark:text-gray-300">{index + 1}</span>
-                        <span className="truncate">{step}</span>
-                      </div>
-                    ))}
-                  </div>
+
+          <aside className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#008f8f] dark:text-[#3ce8e2]">Action Status</p>
+            <h2 className="mt-3 text-2xl font-black">当前保留的核心动作</h2>
+            <div className="mt-5 space-y-3">
+              {['提示：先追问和点拨，不直接倒答案', '讲答案：分步讲解、公式和关键误区', '类题迁移：生成下一题和迁移方向'].map((item, index) => (
+                <div key={item} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#3ce8e2]/15 text-xs font-black text-[#008f8f] dark:text-[#3ce8e2]">{index + 1}</span>
+                  <span>{item}</span>
                 </div>
+              ))}
+            </div>
+          </aside>
+        </header>
+
+        <section id="education" className="mt-10 grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-300">Education Flow</p>
+            <h2 className="mt-2 text-3xl font-black">教育板块</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-gray-400">{education?.descriptionZh}</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {educationStages.map((section) => (
+              <Link key={section.slug} href={section.href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-amber-300 dark:border-gray-800 dark:bg-[#1b1b1b]">
+                <div className={`mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r ${section.accent}`} />
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-500">{section.eyebrow}</p>
+                <h3 className="mt-3 text-xl font-black">{section.titleZh}</h3>
+                <p className="mt-3 min-h-[72px] text-sm leading-6 text-slate-600 dark:text-gray-400">{section.descriptionZh}</p>
+                <p className="mt-4 text-sm font-black text-amber-700 dark:text-amber-200">进入阶段 →</p>
               </Link>
             ))}
           </div>
         </section>
 
-        <section id="sections" className="mb-12 lg:mb-20">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#3ce8e2]">Learning Boards</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">选择训练板块</h2>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-gray-500 sm:text-sm">板块 → 题目列表 → 题目详情 / Agent 对话</p>
+        <section className="mt-8 grid gap-4 md:grid-cols-3">
+          {educationFlows.map((flow) => (
+            <SkillFlowCard key={flow.id} flow={flow} />
+          ))}
+        </section>
+
+        <section id="interview" className="mt-12 grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Interview Flow</p>
+            <h2 className="mt-2 text-3xl font-black">面试板块</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-gray-400">选择一个领域后直接进入开放式问答。Agent 会按候选人回答评分、补强答案并继续追问。</p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-5">
-            {sections.map((section) => {
-              const stats = sectionStats(challenges, section.slug)
-              const childCount = childSections(section.slug).length
-              const isTutorial = section.slug === 'claude-code-tutorial' || section.slug === 'codex-tutorial'
-              return (
-                <Link key={section.slug} href={section.href} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-[#3ce8e2]/50 hover:bg-[#f9fffe] dark:border-gray-800 dark:bg-[#1b1b1b] dark:hover:border-[#3ce8e2]/40 dark:hover:bg-[#202020] lg:p-6">
-                  <div className={`mb-5 h-1.5 w-24 rounded-full bg-gradient-to-r ${section.accent}`} />
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">{section.eyebrow}</p>
-                  <h3 className="mt-3 text-2xl font-black text-slate-950 group-hover:text-[#008f8f] dark:text-white dark:group-hover:text-[#3ce8e2]">{section.titleZh}</h3>
-                  <p className="mt-4 min-h-[54px] text-sm leading-6 text-slate-600 dark:text-gray-400 lg:min-h-[72px]">{section.descriptionZh}</p>
-                  <div className="mt-6 grid grid-cols-4 gap-2 text-center text-xs">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-slate-950 dark:text-white">{isTutorial ? childCount : stats.total}</p><p className="text-slate-500 dark:text-gray-500">{isTutorial ? '章' : '题'}</p></div>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className={`text-lg font-black ${isTutorial ? 'text-cyan-600 dark:text-cyan-300' : difficultyTone('easy')}`}>{isTutorial ? '官方' : stats.easy}</p><p className="text-slate-500 dark:text-gray-500">{isTutorial ? 'Docs' : 'Easy'}</p></div>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className={`text-lg font-black ${isTutorial ? 'text-yellow-600 dark:text-yellow-300' : difficultyTone('medium')}`}>{isTutorial ? '中文' : stats.medium}</p><p className="text-slate-500 dark:text-gray-500">{isTutorial ? 'CN' : 'Med'}</p></div>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className={`text-lg font-black ${isTutorial ? 'text-emerald-600 dark:text-emerald-300' : difficultyTone('hard')}`}>{isTutorial ? '实践' : stats.hard}</p><p className="text-slate-500 dark:text-gray-500">{isTutorial ? '命令' : 'Hard'}</p></div>
-                  </div>
-                  <div className="mt-6 flex items-center justify-between text-sm">
-                    <span className="text-slate-500 dark:text-gray-500">Sources: {section.sources.slice(0, 2).map((item) => item.label).join(' / ')}</span>
-                    <span className="font-black text-[#008f8f] dark:text-[#3ce8e2]">进入 →</span>
-                  </div>
-                </Link>
-              )
-            })}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {interviewSections.map((section) => section && (
+              <Link key={section.slug} href={section.href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-violet-300 dark:border-gray-800 dark:bg-[#1b1b1b]">
+                <div className={`mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r ${section.accent}`} />
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-500">{section.eyebrow}</p>
+                <h3 className="mt-3 text-xl font-black">{section.titleZh}</h3>
+                <p className="mt-3 min-h-[72px] text-sm leading-6 text-slate-600 dark:text-gray-400">{section.descriptionZh}</p>
+                <p className="mt-4 text-sm font-black text-violet-700 dark:text-violet-200">开始面试 →</p>
+              </Link>
+            ))}
           </div>
         </section>
 
-        <section id="featured" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8">
-          <div>
-            <div className="mb-5 flex items-end justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#3ce8e2]">Featured</p>
-                <h2 className="mt-2 text-3xl font-black">推荐入口</h2>
-              </div>
-              <p className="text-sm text-slate-500 dark:text-gray-500">快速打开代表性题目</p>
-            </div>
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-              {featured.map((challenge, index) => (
-                <Link key={challenge.id} href={`/arena/challenges/${challenge.slug}`} className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200 px-4 py-3 transition-colors last:border-b-0 hover:bg-[#efffff] dark:border-gray-800/70 dark:hover:bg-[#252525] md:grid-cols-[minmax(0,1fr)_90px_96px] lg:px-5 lg:py-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm text-slate-400 dark:text-gray-500">{String(index + 1).padStart(2, '0')}</span>
-                      <h3 className="truncate text-base font-bold text-slate-950 group-hover:text-[#008f8f] dark:text-white dark:group-hover:text-[#3ce8e2]">{challenge.title}</h3>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2 pl-9">
-                      {challenge.tags.slice(0, 3).map((tag) => <span key={tag} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-[#151515] dark:text-gray-400">{tag}</span>)}
-                    </div>
-                  </div>
-                  <span className="hidden text-sm font-bold capitalize text-slate-500 dark:text-gray-300 md:inline">{challenge.difficulty}</span>
-                  <span className="text-right text-sm font-semibold text-[#008f8f] dark:text-[#3ce8e2]">Open →</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <aside className="space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-              <h3 className="font-bold text-slate-950 dark:text-white">板块说明</h3>
-              <ul className="mt-3 space-y-3 text-sm text-slate-600 dark:text-gray-400">
-                <li>• 技术板块：AI Kernel、AI 面试、系统、芯片、硬件、固件、RTOS、编程和工程基础训练。</li>
-                <li>• 教育板块：小学、初中、高中学科练习，支持学习 Coach、答题点评和白板讲解。</li>
-                <li>• 高考志愿板块：围绕院校层次、分数线、位次、专业方向、城市和就业路径进行咨询。</li>
-                <li>• 推荐入口：快速打开代表性题目或咨询场景。</li>
-              </ul>
-            </div>
-          </aside>
+        <section className="mt-8 grid gap-4 md:grid-cols-2">
+          {interviewFlows.map((flow) => (
+            <SkillFlowCard key={flow.id} flow={flow} />
+          ))}
         </section>
       </section>
     </main>
+  )
+}
+
+function SkillFlowCard({ flow }: { flow: (typeof arenaSkillFlows)[number] }) {
+  return (
+    <Link href={flow.href} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-[#3ce8e2]/50 dark:border-gray-800 dark:bg-[#1b1b1b]">
+      <div className={`h-1.5 bg-gradient-to-r ${flow.accent}`} />
+      <div className="p-5">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-500">{flow.domain === 'education' ? 'Education Action' : 'Interview Action'}</p>
+        <h3 className="mt-3 text-xl font-black text-slate-950 dark:text-white">{flow.title}</h3>
+        <p className="mt-2 min-h-[48px] text-sm leading-6 text-slate-600 dark:text-gray-400">{flow.subtitle}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {flow.steps.map((step, index) => (
+            <span key={step} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">{index + 1}. {step}</span>
+          ))}
+        </div>
+      </div>
+    </Link>
   )
 }

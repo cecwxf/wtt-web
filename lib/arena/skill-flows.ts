@@ -42,7 +42,7 @@ export const arenaSkillFlows: ArenaSkillFlow[] = [
     subtitle: '把回答当作候选人表现评审，给分、补强答案并继续追问。',
     domain: 'interview',
     accent: 'from-violet-200 via-fuchsia-300 to-pink-500',
-    href: '/arena/sections/technology',
+    href: '/arena/sections/ai-interview',
     steps: ['Agent 提问', '用户回答', '评分复盘', '下一轮追问'],
   },
   {

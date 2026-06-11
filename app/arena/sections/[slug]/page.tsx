@@ -19,6 +19,10 @@ function typeLabel(type: string) {
   return 'Judge'
 }
 
+function isLearningSection(slug: string) {
+  return slug === 'education' || slug.startsWith('education-') || slug.includes('interview')
+}
+
 export default function ArenaSectionPage({ params }: { params: { slug: string } }) {
   const section = getArenaSection(params.slug)
   if (!section) notFound()
@@ -28,6 +32,7 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
   const rows = challengesForSection(challenges, section.slug)
   const stats = sectionStats(challenges, section.slug)
   const isGaokaoVolunteer = section.slug === 'gaokao-volunteer'
+  const isLearning = isLearningSection(section.slug)
   const isPremiumSection = isPremiumArenaSection(section.slug)
   const maybeGate = (content: ReactNode) => (
     isPremiumSection
@@ -135,33 +140,40 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
             <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {children.map((child) => {
                 const childStats = sectionStats(challenges, child.slug)
+                const childIsLearning = isLearningSection(child.slug)
                 return (
                   <Link key={child.slug} href={child.href} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-[#3ce8e2]/50 hover:bg-[#f9fffe] dark:border-gray-800 dark:bg-[#1b1b1b] dark:hover:border-[#3ce8e2]/40 dark:hover:bg-[#202020]">
                     <div className={`mb-5 h-1.5 w-24 rounded-full bg-gradient-to-r ${child.accent}`} />
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">{child.eyebrow}</p>
                     <h3 className="mt-3 text-2xl font-black text-slate-950 group-hover:text-[#008f8f] dark:text-white dark:group-hover:text-[#3ce8e2]">{child.titleZh}</h3>
                     <p className="mt-4 min-h-[72px] text-sm leading-6 text-slate-600 dark:text-gray-400">{child.descriptionZh}</p>
-                    <div className="mt-6 grid grid-cols-4 gap-2 text-center text-xs">
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-slate-950 dark:text-white">{childStats.total}</p><p className="text-slate-500 dark:text-gray-500">题</p></div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-emerald-600 dark:text-emerald-300">{childStats.easy}</p><p className="text-slate-500 dark:text-gray-500">Easy</p></div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-yellow-600 dark:text-yellow-300">{childStats.medium}</p><p className="text-slate-500 dark:text-gray-500">Med</p></div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-rose-600 dark:text-rose-300">{childStats.hard}</p><p className="text-slate-500 dark:text-gray-500">Hard</p></div>
-                    </div>
-                    <div className="mt-6 text-right text-sm font-black text-[#008f8f] dark:text-[#3ce8e2]">进入 →</div>
+                    {childIsLearning ? (
+                      <div className="mt-6 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-gray-800 dark:bg-[#151515]">
+                        <span className="font-bold text-slate-600 dark:text-gray-300">{childStats.total} 个练习</span>
+                        <span className="font-black text-[#008f8f] dark:text-[#3ce8e2]">开始 →</span>
+                      </div>
+                    ) : (
+                      <div className="mt-6 grid grid-cols-4 gap-2 text-center text-xs">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-slate-950 dark:text-white">{childStats.total}</p><p className="text-slate-500 dark:text-gray-500">题</p></div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-emerald-600 dark:text-emerald-300">{childStats.easy}</p><p className="text-slate-500 dark:text-gray-500">Easy</p></div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-yellow-600 dark:text-yellow-300">{childStats.medium}</p><p className="text-slate-500 dark:text-gray-500">Med</p></div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]"><p className="text-lg font-black text-rose-600 dark:text-rose-300">{childStats.hard}</p><p className="text-slate-500 dark:text-gray-500">Hard</p></div>
+                      </div>
+                    )}
                   </Link>
                 )
               })}
             </section>
           ) : (
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-              <div className="grid grid-cols-[1fr_120px_120px_120px] border-b border-slate-200 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:border-gray-800 dark:text-gray-500">
-                <span>Problem</span>
-                <span>Type</span>
-                <span>Difficulty</span>
-                <span className="text-right">Action</span>
+              <div className={`grid border-b border-slate-200 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:border-gray-800 dark:text-gray-500 ${isLearning ? 'grid-cols-[1fr_120px]' : 'grid-cols-[1fr_120px_120px_120px]'}`}>
+                <span>{isLearning ? 'Practice' : 'Problem'}</span>
+                {!isLearning && <span>Type</span>}
+                {!isLearning && <span>Difficulty</span>}
+                <span className="text-right">{isLearning ? 'Start' : 'Open'}</span>
               </div>
               {rows.map((challenge, index) => (
-                <Link key={challenge.id} href={`/arena/challenges/${challenge.slug}`} className="group grid grid-cols-[1fr_120px_120px_120px] items-center border-b border-slate-200 px-5 py-4 transition-colors last:border-b-0 hover:bg-[#efffff] dark:border-gray-800/70 dark:hover:bg-[#252525]">
+                <Link key={challenge.id} href={`/arena/challenges/${challenge.slug}`} className={`group grid items-center border-b border-slate-200 px-5 py-4 transition-colors last:border-b-0 hover:bg-[#efffff] dark:border-gray-800/70 dark:hover:bg-[#252525] ${isLearning ? 'grid-cols-[1fr_120px]' : 'grid-cols-[1fr_120px_120px_120px]'}`}>
                   <div className="min-w-0">
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-sm text-slate-400 dark:text-gray-500">{String(index + 1).padStart(2, '0')}</span>
@@ -171,9 +183,9 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
                       {challenge.tags.slice(0, 4).map((tag) => <span key={tag} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-[#151515] dark:text-gray-400">{tag}</span>)}
                     </div>
                   </div>
-                  <span className="text-sm font-bold text-slate-500 dark:text-gray-300">{typeLabel(challenge.challenge_type)}</span>
-                  <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${difficultyTone(challenge.difficulty)}`}>{challenge.difficulty}</span>
-                  <span className="text-right text-sm font-semibold text-[#008f8f] dark:text-[#3ce8e2]">进入 →</span>
+                  {!isLearning && <span className="text-sm font-bold text-slate-500 dark:text-gray-300">{typeLabel(challenge.challenge_type)}</span>}
+                  {!isLearning && <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${difficultyTone(challenge.difficulty)}`}>{challenge.difficulty}</span>}
+                  <span className="text-right text-sm font-semibold text-[#008f8f] dark:text-[#3ce8e2]">{isLearning ? '开始练习 →' : '进入 →'}</span>
                 </Link>
               ))}
             </section>
@@ -194,10 +206,21 @@ export default function ArenaSectionPage({ params }: { params: { slug: string } 
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
               <h2 className="font-black text-slate-950 dark:text-white">使用方式</h2>
               <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-600 dark:text-gray-400">
-                <li>• Judge 题：进入后可用 Python/C/C++ 提交给 Agent Runner。</li>
-                <li>• Coach 题：进入后直接用右侧 Arena Coach 做苏格拉底、答题点评或 Ask 问答。</li>
-                <li>• 白板会根据 Agent 回答同步生成图表、公式和解题结构。</li>
-                <li>• 隐藏测试和上下文注入仍保持脱敏。</li>
+                {isLearning ? (
+                  <>
+                    <li>• 进入练习后直接使用 Arena Coach，不需要提交代码。</li>
+                    <li>• 常用动作是提示、讲答案和类题迁移。</li>
+                    <li>• 白板会根据 Agent 回答同步生成图表、公式和解题结构。</li>
+                    <li>• 学习记录会沉淀到用户私有学习档案。</li>
+                  </>
+                ) : (
+                  <>
+                    <li>• Judge 题：进入后可用 Python/C/C++ 提交给 Agent Runner。</li>
+                    <li>• Coach 题：进入后直接用右侧 Arena Coach 做苏格拉底、答题点评或 Ask 问答。</li>
+                    <li>• 白板会根据 Agent 回答同步生成图表、公式和解题结构。</li>
+                    <li>• 隐藏测试和上下文注入仍保持脱敏。</li>
+                  </>
+                )}
               </ul>
             </div>
           </aside>
