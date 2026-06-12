@@ -38,9 +38,30 @@ function normalizeMathDelimiters(segment: string) {
   return normalizeStandaloneMathLines(normalized)
 }
 
+function splitMarkdownCodeSensitiveSegments(markdown: string): Array<{ text: string; protected: boolean }> {
+  const input = String(markdown || '')
+  const segments: Array<{ text: string; protected: boolean }> = []
+  const pattern = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*(?:`|$))/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = pattern.exec(input)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: input.slice(lastIndex, match.index), protected: false })
+    }
+    segments.push({ text: match[0], protected: true })
+    lastIndex = pattern.lastIndex
+  }
+
+  if (lastIndex < input.length) {
+    segments.push({ text: input.slice(lastIndex), protected: false })
+  }
+
+  return segments
+}
+
 export function normalizeMarkdownMath(markdown: string) {
-  return String(markdown || '')
-    .split(/(```[\s\S]*?```)/g)
-    .map((segment, index) => (index % 2 === 0 ? normalizeMathDelimiters(segment) : segment))
+  return splitMarkdownCodeSensitiveSegments(markdown)
+    .map((segment) => (segment.protected ? segment.text : normalizeMathDelimiters(segment.text)))
     .join('')
 }

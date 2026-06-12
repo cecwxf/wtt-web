@@ -2,14 +2,9 @@
 
 import { Bell, Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
 import { formatTime, formatDateGroup } from '@/lib/time'
-import { normalizeMarkdownMath } from '@/lib/markdown-math'
 import {
   parseRichBlocks,
   publicMediaUrl,
@@ -24,6 +19,7 @@ import { isDesktop, saveToLocal } from '@/lib/desktop'
 import { buildFileContext } from '@/lib/file-context'
 import { AgentTerminalPane } from '@/components/ui/agent-terminal-modal'
 import { SandboxWorkspacePanel } from '@/components/ui/sandbox-workspace-panel'
+import { RichMarkdown } from '@/components/ui/rich-markdown'
 
 export interface ChatMessage {
   message_id: string
@@ -475,13 +471,7 @@ const LOCAL_NOARG_SLASH_COMMANDS = new Set([
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 function MarkdownWithMath({ children, className }: { children: string; className?: string }) {
-  return (
-    <div className={className}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-        {normalizeMarkdownMath(children)}
-      </ReactMarkdown>
-    </div>
-  )
+  return <RichMarkdown className={className}>{children}</RichMarkdown>
 }
 
 /**

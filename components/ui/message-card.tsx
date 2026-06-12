@@ -5,6 +5,7 @@ import { MessageCircle, Share2, Bookmark, User, ImageIcon, Download, ExternalLin
 import { formatTimeAgo } from '@/lib/time'
 import { WttLogo } from './wtt-logo'
 import { parseRichBlocks, toThumbnailUrl } from '@/lib/rich-content'
+import { RichMarkdown } from '@/components/ui/rich-markdown'
 
 export interface MessageCardData {
   message_id: string
@@ -172,7 +173,7 @@ export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCa
                 />
               )
             case 'markdown':
-              return <div key={i} className="whitespace-pre-wrap">{block.text}</div>
+              return <RichMarkdown key={i}>{block.text}</RichMarkdown>
             case 'preview':
               return (
                 <div key={i} className="rounded-lg border border-slate-200 p-2 text-xs">

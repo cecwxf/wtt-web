@@ -4,22 +4,17 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import rehypeRaw from 'rehype-raw'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useAgentId } from '@/lib/hooks/use-agent-id'
 import { useViewportClass } from '@/lib/hooks/use-viewport-class'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
+import { RichMarkdown } from '@/components/ui/rich-markdown'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import type { ArenaLearningItem, ArenaReviewSchedule, ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
 import { extractWhiteboardPayload, makeWhiteboardFromAnswerPrompt, makeWhiteboardPrompt, stripWhiteboardPayload, type WhiteboardDiagram } from '@/lib/arena/whiteboard'
 import { gaokaoKnowledgeContextMarkdown } from '@/lib/arena/gaokao-knowledge'
-import { normalizeMarkdownMath } from '@/lib/markdown-math'
 import { buildOpenClStarter } from '@/lib/arena/opencl-starters'
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
@@ -374,11 +369,9 @@ function descriptionMarkdown(challenge: Challenge, locale: Locale) {
 function ArenaDescriptionMarkdown({ content }: { content: string }) {
   return (
     <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm leading-7 text-slate-700 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">
-      <div className="max-w-none space-y-4 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_a]:text-[#009f9f] [&_a]:underline dark:[&_a]:text-[#3ce8e2] [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono dark:[&_code]:bg-black/40 [&_h1]:mt-2 [&_h1]:text-2xl [&_h1]:font-black [&_h1]:text-slate-950 dark:[&_h1]:text-white [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-slate-950 dark:[&_h2]:text-white [&_h3]:mt-5 [&_h3]:font-bold [&_h3]:text-slate-950 dark:[&_h3]:text-white [&_li]:ml-5 [&_li]:list-disc [&_ol>li]:list-decimal [&_p]:leading-7 [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-slate-200 [&_pre]:bg-slate-50 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-slate-800 dark:[&_pre]:border-gray-800 dark:[&_pre]:bg-black/30 dark:[&_pre]:text-gray-200 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_svg]:mx-auto [&_svg]:my-5 [&_svg]:max-w-full [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-200 dark:[&_td]:border-gray-800 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-100 dark:[&_th]:border-gray-800 dark:[&_th]:bg-gray-900 [&_th]:p-2 [&_th]:text-left">
-        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]}>
-          {normalizeMarkdownMath(content)}
-        </ReactMarkdown>
-      </div>
+      <RichMarkdown className="[&_a]:text-[#009f9f] dark:[&_a]:text-[#3ce8e2] [&_svg]:mx-auto [&_svg]:my-5 [&_svg]:max-w-full">
+        {content}
+      </RichMarkdown>
     </div>
   )
 }
