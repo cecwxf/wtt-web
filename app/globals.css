@@ -24,6 +24,63 @@ body {
   line-height: 1.45;
 }
 
+.wtt-chat-view {
+  --wtt-chat-font: var(--font-geist-sans), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --wtt-chat-text: #2f342f;
+  --wtt-chat-muted: #7d766b;
+  --wtt-chat-surface: rgba(251, 248, 241, 0.72);
+  --wtt-chat-surface-mine: #f4efe6;
+  --wtt-chat-border: rgba(89, 72, 52, 0.12);
+  font-family: var(--wtt-chat-font);
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.004em;
+}
+
+.dark .wtt-chat-view {
+  --wtt-chat-text: #e9e4da;
+  --wtt-chat-muted: #a89f91;
+  --wtt-chat-surface: rgba(31, 29, 26, 0.58);
+  --wtt-chat-surface-mine: rgba(42, 39, 35, 0.92);
+  --wtt-chat-border: rgba(255, 255, 255, 0.08);
+}
+
+.wtt-message-bubble {
+  color: var(--wtt-chat-text);
+  font-family: var(--wtt-chat-font);
+  font-size: 14.5px;
+  line-height: 1.82;
+  letter-spacing: -0.003em;
+}
+
+.wtt-message-bubble--agent {
+  background: transparent;
+}
+
+.wtt-message-bubble--mine {
+  background: var(--wtt-chat-surface-mine);
+  border: 1px solid var(--wtt-chat-border);
+}
+
+.wtt-rich-markdown {
+  color: var(--wtt-chat-text, #2f342f);
+  font-family: var(--wtt-chat-font, var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif);
+  letter-spacing: -0.003em;
+}
+
+.wtt-rich-markdown :where(p, li) {
+  line-height: 1.82;
+}
+
+.wtt-rich-markdown :where(strong) {
+  color: inherit;
+  font-weight: 680;
+}
+
+.wtt-rich-markdown :where(code) {
+  letter-spacing: 0;
+}
+
 /* Responsive shell density. Laptop screens often have desktop width but
    limited height, so the app shell uses variables instead of hard-coded rails. */
 .wtt-app-shell {

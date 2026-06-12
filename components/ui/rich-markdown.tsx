@@ -14,20 +14,20 @@ type RichMarkdownProps = {
 }
 
 const baseClassName = [
-  'wtt-rich-markdown prose prose-sm max-w-none dark:prose-invert',
+  'wtt-rich-markdown prose max-w-none dark:prose-invert',
   'prose-slate dark:prose-zinc',
-  'prose-p:my-2 prose-p:whitespace-pre-wrap prose-p:leading-7',
+  'prose-p:my-2.5 prose-p:whitespace-pre-wrap prose-p:leading-[1.82]',
   'text-slate-800 dark:text-zinc-100',
-  'prose-headings:mt-4 prose-headings:mb-2 prose-headings:font-bold',
-  'prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5',
-  'prose-blockquote:my-3 prose-blockquote:border-l-4 prose-blockquote:border-slate-300 prose-blockquote:pl-3 prose-blockquote:text-slate-600 dark:prose-blockquote:border-zinc-700 dark:prose-blockquote:text-zinc-300',
-  'prose-pre:my-3 prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-200 prose-pre:bg-slate-50 prose-pre:p-0 prose-pre:text-slate-800 dark:prose-pre:border-zinc-800 dark:prose-pre:bg-zinc-950 dark:prose-pre:text-zinc-100',
+  'prose-headings:mt-5 prose-headings:mb-2 prose-headings:font-semibold prose-headings:tracking-[-0.015em]',
+  'prose-ul:my-2.5 prose-ol:my-2.5 prose-li:my-1',
+  'prose-blockquote:my-4 prose-blockquote:rounded-r-xl prose-blockquote:border-l-4 prose-blockquote:border-[#d8cfc0] prose-blockquote:bg-[#f8f3ea]/70 prose-blockquote:px-3 prose-blockquote:py-1 prose-blockquote:text-[#5b5348] dark:prose-blockquote:border-zinc-700 dark:prose-blockquote:bg-zinc-900/70 dark:prose-blockquote:text-zinc-300',
+  'prose-pre:my-4 prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:border prose-pre:border-[#e4d9ca] prose-pre:bg-[#faf7f1] prose-pre:p-0 prose-pre:text-slate-800 dark:prose-pre:border-zinc-800 dark:prose-pre:bg-zinc-950 dark:prose-pre:text-zinc-100',
   'prose-code:before:content-none prose-code:after:content-none',
   'prose-table:my-3 prose-table:block prose-table:w-full prose-table:overflow-x-auto prose-table:rounded-lg prose-table:border prose-table:border-slate-200 dark:prose-table:border-zinc-800',
   'prose-thead:bg-slate-50 dark:prose-thead:bg-zinc-900',
   'prose-th:border prose-th:border-slate-200 prose-th:px-3 prose-th:py-2 prose-th:text-left dark:prose-th:border-zinc-800',
   'prose-td:border prose-td:border-slate-200 prose-td:px-3 prose-td:py-2 dark:prose-td:border-zinc-800',
-  'prose-a:break-words prose-a:text-indigo-600 prose-a:no-underline hover:prose-a:underline dark:prose-a:text-cyan-300',
+  'prose-a:break-words prose-a:text-[#8b5e22] prose-a:no-underline hover:prose-a:underline dark:prose-a:text-amber-300',
   '[&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-1',
   '[&_.katex]:text-[1.02em]',
 ].join(' ')
@@ -79,7 +79,7 @@ export function RichMarkdown({ children, className }: RichMarkdownProps) {
           },
           pre({ children: preChildren }) {
             return (
-              <pre className="my-3 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+              <pre className="my-4 overflow-x-auto rounded-xl border border-[#e4d9ca] bg-[#faf7f1] p-3 text-xs leading-5 text-slate-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                 {preChildren}
               </pre>
             )
@@ -93,7 +93,7 @@ export function RichMarkdown({ children, className }: RichMarkdownProps) {
               return (
                 <code
                   className={joinClassName(
-                    'rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.86em] font-semibold text-slate-800 dark:bg-zinc-800 dark:text-zinc-100',
+                    'rounded-md bg-[#efe7d8] px-1.5 py-0.5 font-mono text-[0.86em] font-semibold text-[#4b4033] dark:bg-zinc-800 dark:text-zinc-100',
                     codeClassName,
                   )}
                   {...props}

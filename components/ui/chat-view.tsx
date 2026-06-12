@@ -2624,8 +2624,7 @@ export function ChatView({
 
   return (
     <div
-      className={`relative flex h-full flex-col ${dragOver ? 'ring-2 ring-inset ring-indigo-400' : ''}`}
-      style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif' }}
+      className={`wtt-chat-view relative flex h-full flex-col ${dragOver ? 'ring-2 ring-inset ring-indigo-400' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -2980,10 +2979,10 @@ export function ChatView({
                         )}
 
                         <div
-                          className={`w-full rounded-md px-2 py-1.5 text-[14px] leading-7 ${
+                          className={`wtt-message-bubble w-full rounded-lg px-2.5 py-1.5 ${
                             isMine
-                              ? 'bg-[#f4f1eb] text-[#283038] dark:bg-zinc-900 dark:text-zinc-100'
-                              : 'bg-transparent text-[#283038] dark:text-zinc-200'
+                              ? 'wtt-message-bubble--mine'
+                              : 'wtt-message-bubble--agent'
                           }`}
                         >
                           {/* Reply-to quote preview */}
