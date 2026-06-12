@@ -38,8 +38,27 @@ function codeText(children: unknown): string {
   return String(children)
 }
 
+function normalizeInlineOrderedLists(markdown: string): string {
+  return String(markdown || '')
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*(?:`|$))/g)
+    .map((segment, index) => {
+      if (index % 2 === 1) return segment
+      const markers = segment.match(/(?:^|[\s。；;，,])(?:\d{1,2})[、，.)]\s*\S/g)
+      if (!markers || markers.length < 2) return segment
+
+      return segment
+        .replace(/(^|\n)\s*(\d{1,2})[、，)]\s+/g, (_match, prefix: string, n: string) => `${prefix}${n}. `)
+        .replace(/([^\n])\s+(\d{1,2})[、，.)]\s+(?=\S)/g, (match, before: string, n: string) => {
+          // Avoid turning decimals or version numbers into lists.
+          if (/\d$/.test(before) && match.includes('.')) return match
+          return `${before}\n${n}. `
+        })
+    })
+    .join('')
+}
+
 export function RichMarkdown({ children, className }: RichMarkdownProps) {
-  const markdown = useMemo(() => normalizeMarkdownMath(children || ''), [children])
+  const markdown = useMemo(() => normalizeMarkdownMath(normalizeInlineOrderedLists(children || '')), [children])
 
   return (
     <div className={[baseClassName, className].filter(Boolean).join(' ')}>

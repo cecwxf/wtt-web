@@ -309,7 +309,11 @@ export function parseRichBlocks(content: string): ParsedRichBlock[] {
   if (!c) return [{ kind: 'plain', text: '' }]
   const hasAttachmentToken = /(?:^|\n)\s*(?:!\[[^\]]*\]\([^)]+\)|\[(?:file|audio|video|link|preview_url|cloud_preview|sandbox_preview|cloud_sandbox_preview)(?::[^\]]*)?\]\([^)]+\))\s*(?:\n|$)/i.test(c)
   const hasStandaloneUrlToken = /(?:^|\n)\s*(?:https?:\/\/\S+|\/?media\/\S+)\s*(?:\n|$)/i.test(c)
-  const hasMarkdownSyntax = (text: string) => /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(text)
+  const hasInlineOrderedList = (text: string) => {
+    const markers = String(text || '').match(/(?:^|[\s。；;，,])(?:\d{1,2})[、，.)]\s*\S/g)
+    return Boolean(markers && markers.length >= 2)
+  }
+  const hasMarkdownSyntax = (text: string) => /(?:^#{1,6}\s|^\s*[-*+]\s.+|^\d+\.\s|\*\*.+\*\*|^\|.+\||```[\s\S]*```)/m.test(text) || hasInlineOrderedList(text)
 
   // [preview] block
   if (c.startsWith('[preview]')) {
