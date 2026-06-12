@@ -17,10 +17,11 @@ const baseClassName = [
   'wtt-rich-markdown prose prose-sm max-w-none dark:prose-invert',
   'prose-slate dark:prose-zinc',
   'prose-p:my-2 prose-p:whitespace-pre-wrap prose-p:leading-7',
+  'text-slate-800 dark:text-zinc-100',
   'prose-headings:mt-4 prose-headings:mb-2 prose-headings:font-bold',
   'prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5',
   'prose-blockquote:my-3 prose-blockquote:border-l-4 prose-blockquote:border-slate-300 prose-blockquote:pl-3 prose-blockquote:text-slate-600 dark:prose-blockquote:border-zinc-700 dark:prose-blockquote:text-zinc-300',
-  'prose-pre:my-3 prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-200 prose-pre:bg-slate-950 prose-pre:p-0 prose-pre:text-slate-100 dark:prose-pre:border-zinc-800 dark:prose-pre:bg-black',
+  'prose-pre:my-3 prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-200 prose-pre:bg-slate-50 prose-pre:p-0 prose-pre:text-slate-800 dark:prose-pre:border-zinc-800 dark:prose-pre:bg-zinc-950 dark:prose-pre:text-zinc-100',
   'prose-code:before:content-none prose-code:after:content-none',
   'prose-table:my-3 prose-table:block prose-table:w-full prose-table:overflow-x-auto prose-table:rounded-lg prose-table:border prose-table:border-slate-200 dark:prose-table:border-zinc-800',
   'prose-thead:bg-slate-50 dark:prose-thead:bg-zinc-900',
@@ -78,7 +79,7 @@ export function RichMarkdown({ children, className }: RichMarkdownProps) {
           },
           pre({ children: preChildren }) {
             return (
-              <pre className="my-3 overflow-x-auto rounded-xl border border-slate-200 bg-slate-950 p-3 text-xs leading-5 text-slate-100 shadow-sm dark:border-zinc-800 dark:bg-black">
+              <pre className="my-3 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                 {preChildren}
               </pre>
             )
@@ -106,7 +107,7 @@ export function RichMarkdown({ children, className }: RichMarkdownProps) {
             return (
               <code
                 className={joinClassName(
-                  'block min-w-full whitespace-pre bg-transparent p-0 font-mono text-xs font-normal leading-5 text-slate-100',
+                  'block min-w-full whitespace-pre bg-transparent p-0 font-mono text-xs font-normal leading-5 text-slate-800 dark:text-zinc-100',
                   codeClassName,
                 )}
                 data-language={lang || undefined}
