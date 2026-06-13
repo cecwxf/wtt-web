@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video, X } from 'lucide-react'
+import { Bell, BookOpen, Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
@@ -19,6 +19,7 @@ import { isDesktop, saveToLocal } from '@/lib/desktop'
 import { buildFileContext } from '@/lib/file-context'
 import { AgentTerminalPane } from '@/components/ui/agent-terminal-modal'
 import { SandboxWorkspacePanel } from '@/components/ui/sandbox-workspace-panel'
+import { KnowledgeBasePanel } from '@/components/ui/knowledge-base-panel'
 import { RichMarkdown } from '@/components/ui/rich-markdown'
 
 export interface ChatMessage {
@@ -48,6 +49,11 @@ export interface ChatMessage {
 export interface ChatSendOptions {
   slashType?: 'agent_passthrough'
   slashCommand?: string
+  kbMode?: boolean
+  kbTaskId?: string
+  kbScope?: 'personal'
+  kbContextType?: 'chat' | 'task'
+  kbTargetAgentId?: string
 }
 
 export interface ChatRunStatus {
@@ -495,6 +501,10 @@ interface ChatViewProps {
   workspaceAgentName?: string
   workspaceWorkdir?: string
   agentRoleLabelMap?: Record<string, string>
+  canUseKnowledgeMode?: boolean
+  knowledgeTaskId?: string
+  knowledgeTargetAgentId?: string
+  knowledgeContextType?: 'chat' | 'task'
 }
 
 interface AgentProfileSummary {
@@ -542,7 +552,7 @@ type ParsedTask = {
   assetPath?: string
 }
 
-type ChatPanelTab = 'chat' | 'files' | 'terminal' | 'workspace'
+type ChatPanelTab = 'chat' | 'files' | 'terminal' | 'workspace' | 'knowledge'
 
 type ConversationFile = {
   key: string
@@ -1196,7 +1206,6 @@ export function ChatView({
   loading,
   emptyState,
   extraHeaderActions,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isTaskTopic = false,
   taskType = null,
   wsConnected = false,
@@ -1215,11 +1224,16 @@ export function ChatView({
   workspaceAgentName,
   workspaceWorkdir,
   agentRoleLabelMap = {},
+  canUseKnowledgeMode = false,
+  knowledgeTaskId,
+  knowledgeTargetAgentId,
+  knowledgeContextType,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
+  const [kbMode, setKbMode] = useState(false)
   const [terminalMaximized, setTerminalMaximized] = useState(false)
   const [manualPreviewFile, setManualPreviewFile] = useState<ConversationFile | null>(null)
   const [closedPreviewKeys, setClosedPreviewKeys] = useState<Set<string>>(() => new Set())
@@ -1245,6 +1259,10 @@ export function ChatView({
   const prevMsgCountRef = useRef(0)
   const initialScrollDoneRef = useRef(false)
   const canUseWorkspaceTab = Boolean(currentAgentIsCloud && currentAgentId)
+  const canUseKnowledgeTab = Boolean(accessToken)
+  const utilityTabActive = activeTab === 'terminal'
+    || (activeTab === 'workspace' && canUseWorkspaceTab)
+    || activeTab === 'knowledge'
 
   // Slash command state
   const [slashOpen, setSlashOpen] = useState(false)
@@ -1972,7 +1990,14 @@ export function ChatView({
 
     setSending(true)
     try {
-      await onSendMessage(content, replyContext?.replyToId)
+      const kbOptions = kbMode && canUseKnowledgeMode && knowledgeTaskId ? {
+        kbMode: true,
+        kbTaskId: knowledgeTaskId,
+        kbScope: 'personal' as const,
+        kbContextType: knowledgeContextType || (isTaskTopic ? 'task' as const : 'chat' as const),
+        kbTargetAgentId: knowledgeTargetAgentId || currentAgentId,
+      } : undefined
+      await onSendMessage(content, replyContext?.replyToId, kbOptions)
       setDraft('')
       setPendingAssets([])
       setReplyContext(null)
@@ -2286,7 +2311,7 @@ export function ChatView({
     if (lastAutoPreviewKeyRef.current === key) return
     lastAutoPreviewKeyRef.current = key
     setManualPreviewFile(null)
-    if (activeTab === 'terminal' || activeTab === 'workspace') setActiveTab('chat')
+    if (activeTab === 'terminal' || activeTab === 'workspace' || activeTab === 'knowledge') setActiveTab('chat')
   }, [activeTab, latestAutoSidePreview])
 
   useEffect(() => {
@@ -2298,6 +2323,18 @@ export function ChatView({
       setActiveTab('chat')
     }
   }, [activeTab, canUseWorkspaceTab])
+
+  useEffect(() => {
+    if (activeTab === 'knowledge' && !canUseKnowledgeTab) {
+      setActiveTab('chat')
+    }
+  }, [activeTab, canUseKnowledgeTab])
+
+  useEffect(() => {
+    if (!canUseKnowledgeMode && kbMode) {
+      setKbMode(false)
+    }
+  }, [canUseKnowledgeMode, kbMode])
 
   useEffect(() => {
     if (!manualPreviewFile) return
@@ -2447,6 +2484,20 @@ export function ChatView({
                     <span>Workspace</span>
                   </button>
                 )}
+                {canUseKnowledgeTab && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('knowledge')}
+                    className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
+                      activeTab === 'knowledge'
+                        ? 'border-[#1f2328] text-[#1f2328] dark:border-zinc-100 dark:text-zinc-100'
+                        : 'border-transparent text-[#8a8378] hover:border-[#cfc6b8] hover:text-[#1f2328] dark:text-zinc-500 dark:hover:border-zinc-600 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    <BookOpen className={compactUi ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+                    <span>知识库</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2498,12 +2549,12 @@ export function ChatView({
       <div
         ref={scrollRef}
         className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
-          activeTab === 'terminal' || (activeTab === 'workspace' && canUseWorkspaceTab)
+          utilityTabActive
             ? 'overflow-hidden px-3 py-3 sm:px-4'
             : 'overflow-y-auto px-4 py-3 sm:px-6'
         }`}
       >
-        {activeTab !== 'terminal' && !(activeTab === 'workspace' && canUseWorkspaceTab) && (
+        {!utilityTabActive && (
         <div className="mb-3 flex justify-center">
           <button
             onClick={handleLoadOlder}
@@ -2562,6 +2613,8 @@ export function ChatView({
           </div>
         ) : activeTab === 'workspace' && canUseWorkspaceTab ? (
           <SandboxWorkspacePanel agentId={currentAgentId} accessToken={accessToken} />
+        ) : activeTab === 'knowledge' ? (
+          <KnowledgeBasePanel accessToken={accessToken} compact={compactUi} />
         ) : activeTab === 'files' ? (
           <div className="mx-auto w-full max-w-3xl">
             <div className="mb-3 rounded-xl border border-[#eee9df] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
@@ -3223,6 +3276,21 @@ export function ChatView({
           <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {activeAgentLabel}
           </span>
+          {canUseKnowledgeMode && (
+            <button
+              type="button"
+              onClick={() => setKbMode((value) => !value)}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 font-semibold transition ${
+                kbMode
+                  ? 'border-[#f87500] bg-orange-50 text-[#dc6900] dark:border-orange-500/50 dark:bg-orange-500/10 dark:text-orange-200'
+                  : 'border-[#e5e0d8] bg-white text-[#615d55] hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
+              }`}
+              title="启用后，本条消息会让 Agent 按需检索你的个人知识库。"
+            >
+              <BookOpen className="h-3 w-3" />
+              知识库
+            </button>
+          )}
           {quickSlashActions.map((action) => (
             <button
               key={action.cmd}
@@ -3450,7 +3518,7 @@ export function ChatView({
         )}
         </div>
         </div>
-        {activeTab !== 'workspace' && sidePreviewFile && (
+        {activeTab === 'chat' && sidePreviewFile && (
           <DocumentSidePreview file={sidePreviewFile} onClose={closeFilePreview} />
         )}
       </div>

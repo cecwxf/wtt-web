@@ -796,6 +796,22 @@ function FeedPageInner() {
   }, [persistAgentRole])
 
   const [kbLoading, setKbLoading] = useState(false)
+  const { data: personalKbRaw, mutate: mutatePersonalKb } = useSWR(
+    session?.accessToken ? ['personal-kb-root', session.accessToken] : null,
+    async () => {
+      const resp = await fetch(`${CLIENT_WTT_API_BASE}/kb/personal`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      })
+      if (!resp.ok) return null
+      return resp.json()
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60000 }
+  )
+  const personalKbTaskId = useMemo(() => {
+    const raw = personalKbRaw as Record<string, unknown> | null | undefined
+    return raw?.id ? String(raw.id) : undefined
+  }, [personalKbRaw])
+
   const handleOpenKnowledgeRoot = useCallback(async () => {
     if (kbLoading) return
     if (!session?.accessToken) {
@@ -814,6 +830,7 @@ function FeedPageInner() {
         return
       }
       const kb = await resp.json()
+      mutatePersonalKb(kb, false)
       if (kb?.id) {
         router.push(`/tasks/kb/${kb.id}`)
       } else {
@@ -825,7 +842,7 @@ function FeedPageInner() {
     } finally {
       setKbLoading(false)
     }
-  }, [session?.accessToken, router, kbLoading])
+  }, [session?.accessToken, router, kbLoading, mutatePersonalKb])
   const [membersOpen, setMembersOpen] = useState(false)
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false)
   const [inviteAgentId, setInviteAgentId] = useState('')
@@ -1836,6 +1853,17 @@ function FeedPageInner() {
     return undefined
   }, [selectedTopicTaskHint, recentTasksRaw])
 
+  const selectedTopicKnowledgeTargetAgentId = useMemo(() => (
+    selectedTopic?.runner_agent_id || topicActorAgentId || selectedAgentId
+  ), [selectedAgentId, selectedTopic?.runner_agent_id, topicActorAgentId])
+  const selectedTopicKnowledgeContextType = selectedTopicTaskId ? 'task' : 'chat'
+  const canUseKnowledgeMode = Boolean(
+    personalKbTaskId &&
+    selectedTopic &&
+    selectedAgentId &&
+    (selectedTopicTaskId || selectedTopic.topic_type === 'p2p')
+  )
+
   // Build sub-agent map: each task = 1 sub-agent, grouped by owner agent
   const agentSubAgents = useMemo(() => {
     const map: Record<string, { id: string; title: string; task_type: string; status: string }[]> = {}
@@ -2456,6 +2484,13 @@ function FeedPageInner() {
     if (options?.slashType || isSlashCommand) {
       metadata.slash_type = options?.slashType || 'agent_passthrough'
       metadata.slash_command = options?.slashCommand || content.trim().split(/\s+/, 1)[0] || content.trim()
+    }
+    if (options?.kbMode && options.kbTaskId) {
+      metadata.kb_mode = true
+      metadata.kb_scope = options.kbScope || 'personal'
+      metadata.kb_task_id = options.kbTaskId
+      metadata.kb_context_type = options.kbContextType || (isTask ? 'task' : 'chat')
+      metadata.kb_target_agent_id = options.kbTargetAgentId || agentIdForSend
     }
 
     if (isSlashCommand && isNonTaskDiscuss) {
@@ -3082,6 +3117,10 @@ function FeedPageInner() {
                 workspaceWorkdir={selectedAgentId ? agentRuntimeMap?.[selectedAgentId]?.workdir : undefined}
                 currentAgentRuntime={selectedAgentRuntime}
                 currentAgentIsCloud={selectedAgentIsCloud}
+                canUseKnowledgeMode={canUseKnowledgeMode}
+                knowledgeTaskId={personalKbTaskId}
+                knowledgeTargetAgentId={selectedTopicKnowledgeTargetAgentId}
+                knowledgeContextType={selectedTopicKnowledgeContextType}
                 cloudSandboxBilling={selectedAgentIsCloud ? {
                   ...(((cloudAgentStateRaw as CloudAgentState | null | undefined)?.sandbox_billing) || {}),
                   cloud_agent_usage: billingRaw?.cloud_agent_usage,
