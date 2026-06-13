@@ -10,6 +10,12 @@ import { ChatFileUpload, type UploadedAsset } from '@/components/ui/chat-file-up
 import { ChatView, type ChatMessage as FeedChatMessage, type ChatRunStatus } from '@/components/ui/chat-view'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
+import {
+  applyMessageStreamEvent,
+  mergePersistedMessagesWithStreaming,
+  parseMessageStreamEvent,
+  streamIdFromMessageRecord,
+} from '@/lib/message-stream'
 
 const ARENA_AGENT_ID = 'agent-65d869bb6fa1'
 
@@ -151,8 +157,10 @@ function topicMessagesToChat(rows: Array<Record<string, unknown>>, agentId: stri
         topic_id: String(row.topic_id || ''),
         sender_id: senderId,
         sender_type: senderType === 'AGENT' || (!!agentId && senderId === agentId) || senderId === ARENA_AGENT_ID ? 'agent' : 'human',
+        sender_display_name: senderType === 'AGENT' || (!!agentId && senderId === agentId) || senderId === ARENA_AGENT_ID ? 'Arena Coach' : undefined,
         content: stripArenaFlowRuntimeContext(String(row.content || '')),
         timestamp,
+        stream_id: streamIdFromMessageRecord(row) || undefined,
       }
     })
 }
@@ -202,7 +210,7 @@ export default function ArenaFlowPage() {
     const nextAgentId = String(data.agent_id || arenaAgentId || '')
     if (nextAgentId && nextAgentId !== arenaAgentId) setArenaAgentId(nextAgentId)
     const mapped = topicMessagesToChat(Array.isArray(data.messages) ? data.messages : [], nextAgentId)
-    setMessages(mapped)
+    setMessages((prev) => mergePersistedMessagesWithStreaming(mapped, prev, nextTopicId))
     return mapped
   }, [arenaAgentId, headers, token, topicId])
 
@@ -233,6 +241,15 @@ export default function ArenaFlowPage() {
   }, [ensureTopic, token])
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
+    const streamEvent = parseMessageStreamEvent(msg as unknown)
+    if (streamEvent) {
+      setMessages((prev) => applyMessageStreamEvent(prev, streamEvent, {
+        topicId: topicId || undefined,
+        displayName: () => 'Arena Coach',
+      }))
+      setTyping(null)
+      return
+    }
     if (msg.type === 'agent_status') {
       const raw = (msg as unknown as { status?: string; stage?: string; detail?: string }).status || (msg as unknown as { stage?: string }).stage || 'running'
       setTyping({

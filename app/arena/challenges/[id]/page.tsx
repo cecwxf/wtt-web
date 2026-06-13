@@ -8,6 +8,12 @@ import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useAgentId } from '@/lib/hooks/use-agent-id'
 import { useViewportClass } from '@/lib/hooks/use-viewport-class'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
+import {
+  applyMessageStreamEvent,
+  mergePersistedMessagesWithStreaming,
+  parseMessageStreamEvent,
+  streamIdFromMessageRecord,
+} from '@/lib/message-stream'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
 import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
 import { RichMarkdown } from '@/components/ui/rich-markdown'
@@ -1453,6 +1459,7 @@ function topicMessagesToChat(messages: TopicMessage[], agentId: string): FeedCha
         content: stripWhiteboardPayload(stripSourceBlock(String(message.content || ''))),
         timestamp,
         semantic_type: String(message.semantic_type || 'post'),
+        stream_id: streamIdFromMessageRecord(message) || undefined,
       }
     })
 }
@@ -1694,7 +1701,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     const rows = await fetchArenaMessageRows(topicId)
     const mapped = topicMessagesToChat(rows, arenaAgentId || ARENA_AGENT_ID)
     applyLatestWhiteboardFromRows(rows)
-    setChatMessages(mapped)
+    setChatMessages((prev) => mergePersistedMessagesWithStreaming(mapped, prev, topicId))
     return mapped
   }
 
@@ -1785,6 +1792,17 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
   function handleArenaWsMessage(msg: WsMessage) {
     const rawEvent = msg as unknown as Record<string, unknown>
+    const streamEvent = parseMessageStreamEvent(rawEvent)
+    if (streamEvent) {
+      setChatMessages((prev) => applyMessageStreamEvent(prev, streamEvent, {
+        topicId: arenaTopicId || undefined,
+        displayName: () => locale === 'zh' ? '终生学习 Coach' : 'Arena Coach',
+      }))
+      if (streamEvent.topic_id === arenaTopicId) {
+        setArenaTyping((prev) => (prev && prev.topicId === streamEvent.topic_id ? null : prev))
+      }
+      return
+    }
 
     if (rawEvent.type === 'typing') {
       const topicId = String(rawEvent.topic_id || '')

@@ -41,6 +41,8 @@ export interface ChatMessage {
   reasoning_hint?: 'off' | 'low' | 'medium' | 'high'
   reply_to?: string
   is_cloud_sandbox?: boolean
+  is_streaming?: boolean
+  stream_id?: string
 }
 
 export interface ChatModelConfig {
@@ -3274,6 +3276,12 @@ export function ChatView({
                                   </button>
                                 ))}
                               </div>
+                            )}
+                            {message.is_streaming && (
+                              <span className="inline-flex items-center gap-1 px-0.5 text-[11px] font-semibold text-[#9a4b00] dark:text-amber-300">
+                                <span className="h-3 w-1.5 animate-pulse rounded-sm bg-current" />
+                                <span>正在输出</span>
+                              </span>
                             )}
                           </div>
                         )

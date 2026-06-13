@@ -21,6 +21,12 @@ import { useAgentId, buildAgentUrl } from '@/lib/hooks/use-agent-id'
 import { useI18n } from '@/lib/i18n-provider'
 import { cacheKeyFromBase64, clearCachedKey, decryptReceived, encryptForSend, getCachedKey } from '@/lib/e2e-crypto'
 import {
+  applyMessageStreamEvent,
+  parseMessageStreamEvent,
+  removeStreamPlaceholderForFinalMessage,
+  streamIdFromMessageRecord,
+} from '@/lib/message-stream'
+import {
   getAgentRoleTemplate,
   roleTemplateFromPayload,
   serializeAgentRoleTemplate,
@@ -1032,6 +1038,17 @@ function FeedPageInner() {
   const handleWsMessage = useCallback(
     (msg: WsMessage) => {
       const rawEvent = msg as unknown as Record<string, unknown>
+      const streamEvent = parseMessageStreamEvent(rawEvent)
+      if (streamEvent) {
+        setAllMessages((prev) => applyMessageStreamEvent(prev, streamEvent, {
+          topicId: selectedTopicId || undefined,
+          displayName: (senderId) => agentNameMap[senderId] || senderId,
+        }))
+        if (streamEvent.topic_id === selectedTopicId && streamEvent.sender_id) {
+          setTypingByTopic((prev) => clearTypingAfterAgentReply(prev, streamEvent.topic_id, streamEvent.sender_id, new Date().toISOString()))
+        }
+        return
+      }
 
       if (rawEvent.type === 'typing') {
         const topicId = String(rawEvent.topic_id || '')
@@ -1168,6 +1185,7 @@ function FeedPageInner() {
         ? String((msg.message as Record<string, unknown>).sender_display_name)
         : agentNameMap[senderId] || undefined
       const modelHint = parseModelHintFromMetadata((msg.message as Record<string, unknown>).metadata)
+      const streamId = streamIdFromMessageRecord(msg.message)
       const incomingBase: ChatMessage = {
         message_id: msg.message.id,
         topic_id: incomingTopicId,
@@ -1180,6 +1198,7 @@ function FeedPageInner() {
         timestamp: msg.message.created_at,
         semantic_type: semanticType,
         reply_to: (msg.message as Record<string, unknown>).reply_to ? String((msg.message as Record<string, unknown>).reply_to) : undefined,
+        stream_id: streamId || undefined,
         ...modelHint,
       }
 
@@ -1191,8 +1210,9 @@ function FeedPageInner() {
       void (async () => {
         const incoming = await decryptMessageForDisplay(incomingBase)
         setAllMessages((prev) => {
-          if (prev.some((m) => m.message_id === incoming.message_id)) return prev
-          return [...prev, incoming]
+          const withoutStream = removeStreamPlaceholderForFinalMessage(prev, msg.message)
+          if (withoutStream.some((m) => m.message_id === incoming.message_id)) return withoutStream
+          return [...withoutStream, incoming]
         })
       })()
     },

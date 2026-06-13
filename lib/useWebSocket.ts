@@ -17,14 +17,22 @@ export interface WsMessage {
     semantic_type?: string
     content: string
     encrypted?: boolean
+    metadata?: unknown
     created_at: string
   }
+  topic_id?: string
+  stream_id?: string
+  sender_id?: string
+  sender_type?: string
+  state?: 'start' | 'delta' | 'snapshot' | 'done' | 'error'
+  delta?: string
+  full_text?: string
 }
 
 export type WsAction =
   | 'list' | 'find' | 'join' | 'leave' | 'subscribed'
   | 'publish' | 'poll' | 'p2p' | 'history' | 'detail'
-  | 'e2e_get_key'
+  | 'e2e_get_key' | 'stream_message'
 
 interface PendingRequest {
   resolve: (data: unknown) => void
