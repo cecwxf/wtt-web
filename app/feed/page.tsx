@@ -9,7 +9,7 @@ import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api
 import { wttApi } from '@/lib/api/wtt-client'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import { WttShellV2 } from '@/components/ui/wtt-shell-v2'
-import { ChatView, ChatMessage, ChatModelConfig, ChatSendOptions, ChatRunStatus, isProgressMessage } from '@/components/ui/chat-view'
+import { ChatView, ChatMessage, ChatSendOptions, ChatRunStatus, isProgressMessage } from '@/components/ui/chat-view'
 import { AgentItem } from '@/components/ui/agent-column'
 import { AgentRuntimeInfo, TopicItem, type AgentOperationType, type CloudAgentCreateOptions, type RecentTopicItem } from '@/components/ui/topic-column'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
@@ -577,11 +577,26 @@ function parseModelHintFromMetadata(metaRaw: unknown): { model_hint?: string; re
   if (!meta) return {}
 
   const cfgRaw = meta.model_config
-  const cfg = (cfgRaw && typeof cfgRaw === 'object') ? (cfgRaw as Record<string, unknown>) : null
-  if (!cfg) return {}
+  const cfg = (cfgRaw && typeof cfgRaw === 'object') ? (cfgRaw as Record<string, unknown>) : {}
 
-  const model = String(cfg.model || '').trim()
-  const effortRaw = String(cfg.reasoning_effort || cfg.reasoningEffort || '').trim().toLowerCase()
+  const model = String(
+    cfg.model
+      || meta.model
+      || meta.current_model
+      || meta.currentModel
+      || meta.model_id
+      || meta.modelId
+      || '',
+  ).trim()
+  const effortRaw = String(
+    cfg.reasoning_effort
+      || cfg.reasoningEffort
+      || meta.reasoning_effort
+      || meta.reasoningEffort
+      || meta.thinking_mode
+      || meta.thinkingMode
+      || '',
+  ).trim().toLowerCase()
   const reasoning = (['off', 'low', 'medium', 'high'].includes(effortRaw)
     ? effortRaw
     : '') as '' | 'off' | 'low' | 'medium' | 'high'
@@ -2404,7 +2419,7 @@ function FeedPageInner() {
     }
   }, [selectedAgentId, session, mutateRecentTasks, mutateTopics, router, t, setSelectedTopicId])
 
-  const handleSendMessage = async (content: string, modelConfig?: ChatModelConfig, replyTo?: string, options?: ChatSendOptions) => {
+  const handleSendMessage = async (content: string, replyTo?: string, options?: ChatSendOptions) => {
     if (!selectedTopicId || !selectedAgentId) return
 
     const topicIdForSend = selectedTopicId
@@ -2433,14 +2448,7 @@ function FeedPageInner() {
     const isSlashCommand = content.trim().startsWith('/')
     const isNonTaskDiscuss = selectedTopic?.topic_type === 'discussion' && !isTask
 
-    // Build metadata with model config so the agent knows which model/mode to use
     const metadata: Record<string, unknown> = {}
-    if (modelConfig) {
-      metadata.model_config = {
-        model: modelConfig.model,
-        reasoning_effort: modelConfig.reasoningEffort,
-      }
-    }
     const selectedCloudAgentOnline = selectedAgentId ? onlineAgentIds.has(selectedAgentId) : false
     if (selectedAgentIsCloud && selectedCloudAgentOnline) {
       metadata.cloud_no_auto_wake = true

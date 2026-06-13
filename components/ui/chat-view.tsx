@@ -45,11 +45,6 @@ export interface ChatMessage {
   stream_id?: string
 }
 
-export interface ChatModelConfig {
-  model: string
-  reasoningEffort: 'off' | 'low' | 'medium' | 'high'
-}
-
 export interface ChatSendOptions {
   slashType?: 'agent_passthrough'
   slashCommand?: string
@@ -90,12 +85,6 @@ export interface CloudSandboxBilling {
   }
 }
 
-interface ModelOption {
-  id: string
-  label: string
-  supports_reasoning?: boolean
-}
-
 interface CurrentAgentRuntimeInfo {
   adapter?: string
   model?: string
@@ -107,32 +96,8 @@ interface CurrentAgentRuntimeInfo {
 }
 
 const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
-const DEFAULT_CODEX_MODEL_ID = 'openai-codex/gpt-5.5'
-const DEFAULT_GEMINI_MODEL_ID = 'gemini-3.1-pro-preview'
-
-const FALLBACK_MODELS: ModelOption[] = [
-  { id: DEFAULT_MODEL_ID, label: 'DeepSeek V4 Pro', supports_reasoning: true },
-  { id: 'anthropic/claude-opus-4.7', label: 'Claude Opus 4.7', supports_reasoning: true },
-  { id: 'anthropic/claude-sonnet-4.7', label: 'Claude Sonnet 4.7', supports_reasoning: true },
-  { id: 'openai-codex/gpt-5.5', label: 'GPT-5.5', supports_reasoning: true },
-]
-
-function mergeModelOptions(models: ModelOption[]): ModelOption[] {
-  const merged = new Map<string, ModelOption>()
-
-  for (const model of FALLBACK_MODELS) merged.set(model.id, model)
-  for (const model of models) {
-    if (!model?.id) continue
-    merged.set(model.id, {
-      ...model,
-      supports_reasoning: model.supports_reasoning ?? true,
-    })
-  }
-
-  const defaultModel = merged.get(DEFAULT_MODEL_ID) ?? FALLBACK_MODELS[0]
-  const rest = Array.from(merged.values()).filter((model) => model.id !== DEFAULT_MODEL_ID)
-  return [defaultModel, ...rest]
-}
+type RuntimeEffort = 'off' | 'low' | 'medium' | 'high'
+type RuntimeModelPref = { model: string; effort: RuntimeEffort }
 
 function normalizeRuntimeModelId(raw: unknown): string {
   const value = String(raw || '').trim()
@@ -146,7 +111,7 @@ function normalizeRuntimeModelId(raw: unknown): string {
   return value
 }
 
-function normalizeRuntimeEffort(runtime?: CurrentAgentRuntimeInfo): ModelPref['effort'] | undefined {
+function normalizeRuntimeEffort(runtime?: CurrentAgentRuntimeInfo): RuntimeEffort | undefined {
   const raw = String(runtime?.reasoning_effort || runtime?.thinking_mode || '').trim().toLowerCase()
   if (!raw) return undefined
   if (['off', 'none', 'disabled', 'false', '0'].includes(raw)) return 'off'
@@ -156,7 +121,7 @@ function normalizeRuntimeEffort(runtime?: CurrentAgentRuntimeInfo): ModelPref['e
   return undefined
 }
 
-function runtimeModelPref(runtime?: CurrentAgentRuntimeInfo): Partial<ModelPref> | null {
+function runtimeModelPref(runtime?: CurrentAgentRuntimeInfo): Partial<RuntimeModelPref> | null {
   if (!runtime) return null
   if (typeof runtime.last_heartbeat_secs_ago === 'number' && runtime.last_heartbeat_secs_ago > 90) return null
   const model = normalizeRuntimeModelId(runtime.current_model || runtime.model_id || runtime.model)
@@ -180,46 +145,6 @@ function normalizeAgentAdapter(runtime?: CurrentAgentRuntimeInfo): 'claude-code'
   return 'generic'
 }
 
-function defaultModelForAdapter(adapter: ReturnType<typeof normalizeAgentAdapter>): string {
-  if (adapter === 'codex') return DEFAULT_CODEX_MODEL_ID
-  if (adapter === 'gemini') return DEFAULT_GEMINI_MODEL_ID
-  return DEFAULT_MODEL_ID
-}
-
-function isModelAllowedForAdapter(modelId: string, adapter: ReturnType<typeof normalizeAgentAdapter>): boolean {
-  const model = String(modelId || '').trim().toLowerCase()
-  if (!model || adapter === 'generic') return true
-  if (adapter === 'codex') {
-    return model.startsWith('openai-codex/')
-      || model.startsWith('openai/')
-      || model.startsWith('gpt-')
-      || /^o[1-9]/.test(model)
-      || model.includes('codex')
-  }
-  if (adapter === 'gemini') {
-    return model.startsWith('google/')
-      || model.startsWith('gemini-')
-      || model.includes('gemini')
-  }
-  if (adapter === 'claude-code') {
-    return model.startsWith('anthropic/')
-      || model.startsWith('claude')
-      || model.startsWith('deepseek/')
-      || model.startsWith('deepseek')
-      || model.startsWith('moonshot/')
-      || model.startsWith('kimi')
-  }
-  return true
-}
-
-function filterModelsForAdapter(models: ModelOption[], adapter: ReturnType<typeof normalizeAgentAdapter>): ModelOption[] {
-  const filtered = models.filter((model) => isModelAllowedForAdapter(model.id, adapter))
-  if (filtered.length) return filtered
-  const fallback = defaultModelForAdapter(adapter)
-  const existing = FALLBACK_MODELS.find((model) => model.id === fallback)
-  return existing ? [existing] : [{ id: fallback, label: fallback, supports_reasoning: true }]
-}
-
 function labelForRuntimeModel(modelId: string, adapter: ReturnType<typeof normalizeAgentAdapter>): string {
   const raw = String(modelId || '').trim()
   if (!raw) return ''
@@ -228,34 +153,6 @@ function labelForRuntimeModel(modelId: string, adapter: ReturnType<typeof normal
   if (adapter === 'codex') return short.toLowerCase().includes('gpt') ? short.toUpperCase() : `Codex ${short}`
   if (adapter === 'claude-code') return short.toLowerCase().includes('claude') ? short : `Claude ${short}`
   return short
-}
-
-type ModelPref = { model: string; effort: 'off' | 'low' | 'medium' | 'high' }
-
-const MODEL_PREF_STORAGE_PREFIX = 'wtt:model-pref:v2:'
-
-function readStoredModelPref(key: string): ModelPref | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = localStorage.getItem(`${MODEL_PREF_STORAGE_PREFIX}${key}`)
-    if (!raw) return null
-    const data = JSON.parse(raw) as { model?: string; effort?: string }
-    const effort = String(data?.effort || '').toLowerCase()
-    if (!data?.model) return null
-    if (!['off', 'low', 'medium', 'high'].includes(effort)) return null
-    return { model: String(data.model), effort: effort as ModelPref['effort'] }
-  } catch {
-    return null
-  }
-}
-
-function writeStoredModelPref(key: string, pref: ModelPref): void {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(`${MODEL_PREF_STORAGE_PREFIX}${key}`, JSON.stringify(pref))
-  } catch {
-    // ignore quota/storage errors
-  }
 }
 
 type SlashCommandMode = 'local' | 'passthrough'
@@ -573,7 +470,7 @@ interface ChatViewProps {
   taskId?: string
   messages: ChatMessage[]
   currentAgentId: string
-  onSendMessage: (content: string, modelConfig?: ChatModelConfig, replyTo?: string, options?: ChatSendOptions) => Promise<void>
+  onSendMessage: (content: string, replyTo?: string, options?: ChatSendOptions) => Promise<void>
   onLoadOlder?: () => Promise<void>
   onExport?: (format: 'md') => void
   hasOlder?: boolean
@@ -1336,19 +1233,8 @@ export function ChatView({
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | undefined>(undefined)
   const [exportOpen, setExportOpen] = useState(false)
-  const [availableModels, setAvailableModels] = useState<ModelOption[]>(FALLBACK_MODELS)
-  const [selectedModel, setSelectedModel] = useState(FALLBACK_MODELS[0].id)
-  const [reasoningEffort, setReasoningEffort] = useState<'off' | 'low' | 'medium' | 'high'>(defaultEffort)
-  const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  const [thinkMenuOpen, setThinkMenuOpen] = useState(false)
-  const modelMenuRef = useRef<HTMLDivElement>(null)
-  const thinkMenuRef = useRef<HTMLDivElement>(null)
   const attachMenuRef = useRef<HTMLDivElement>(null)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
-  const lastSentConfigRef = useRef<{ model: string; effort: string } | null>(null)
-  const modelPrefsByTopicRef = useRef<Record<string, ModelPref>>({})
-  const workerConfigHydratedRef = useRef<Record<string, boolean>>({})
-  const messageHintAppliedRef = useRef<Record<string, string>>({})
   const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const previewCacheRef = useRef<Record<string, CachedPreview>>({})
@@ -1494,26 +1380,24 @@ export function ChatView({
     }
   }, [])
 
-  const topicPreferenceKey = topicId || propTaskId || `topic:${topicName}`
   const currentRuntimePref = runtimeModelPref(currentAgentRuntime)
   const activeAgentAdapter = normalizeAgentAdapter(currentAgentRuntime)
-  const modelOptions = useMemo(() => {
-    const runtimeModel = currentRuntimePref?.model && isModelAllowedForAdapter(currentRuntimePref.model, activeAgentAdapter)
-      ? currentRuntimePref.model
-      : ''
-    const dynamicModels = runtimeModel
-      ? [{
-          id: runtimeModel,
-          label: labelForRuntimeModel(runtimeModel, activeAgentAdapter),
-          supports_reasoning: true,
-        }]
-      : []
-    return filterModelsForAdapter(mergeModelOptions([...availableModels, ...dynamicModels]), activeAgentAdapter)
-  }, [availableModels, currentRuntimePref?.model, activeAgentAdapter])
   const activeAgentLabel = activeAgentAdapter === 'codex' ? 'Codex'
     : activeAgentAdapter === 'claude-code' ? 'Claude Code'
       : activeAgentAdapter === 'gemini' ? 'Gemini'
       : 'Agent'
+  const displayModelId = normalizeRuntimeModelId(
+    runStatus?.model
+      || currentRuntimePref?.model
+      || currentAgentRuntime?.current_model
+      || currentAgentRuntime?.model_id
+      || currentAgentRuntime?.model,
+  )
+  const displayModelLabel = displayModelId
+    ? labelForRuntimeModel(displayModelId, activeAgentAdapter)
+    : 'Runtime default'
+  const displayEffort = currentRuntimePref?.effort || normalizeRuntimeEffort(currentAgentRuntime) || defaultEffort || 'off'
+  const displayEffortLabel = REASONING_EFFORTS.find((e) => e.id === displayEffort)?.label || displayEffort
   const showCloudBilling = Boolean(currentAgentIsCloud)
   const cloudBillingText = cloudAgentQuotaText(cloudSandboxBilling)
 
@@ -1656,164 +1540,6 @@ export function ChatView({
       setHumanCardRequestingAgentId(null)
     }
   }, [onRequestPrivateDiscuss])
-
-  // Fetch available models from API
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const res = await fetch(`${CLIENT_WTT_API_BASE}/workers/models/available`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.models?.length > 0) {
-            const models: ModelOption[] = data.models.map((m: { id: string; label: string; supports_reasoning?: boolean }) => ({
-              id: m.id,
-              label: m.label,
-              supports_reasoning: m.supports_reasoning ?? true,
-            }))
-            setAvailableModels(mergeModelOptions(models))
-          }
-        }
-      } catch {}
-    }
-    fetchModels()
-  }, [])
-
-  // Keep model/think preference per topic/task/p2p session.
-  // Priority: live connector heartbeat > local persisted per-topic pref > task defaults.
-  useEffect(() => {
-    const inMemory = modelPrefsByTopicRef.current[topicPreferenceKey]
-    const persisted = readStoredModelPref(topicPreferenceKey)
-    const saved = inMemory ?? persisted
-    const runtimeModel = currentRuntimePref?.model
-      && isModelAllowedForAdapter(currentRuntimePref.model, activeAgentAdapter)
-      && modelOptions.some((m) => m.id === currentRuntimePref.model)
-      ? currentRuntimePref.model
-      : ''
-
-    const preferredEffort = currentRuntimePref?.effort
-      || saved?.effort
-      || ((taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off')
-
-    let preferredModel = runtimeModel || saved?.model
-    if (!preferredModel || !isModelAllowedForAdapter(preferredModel, activeAgentAdapter) || !modelOptions.some((m) => m.id === preferredModel)) {
-      preferredModel = defaultModelForAdapter(activeAgentAdapter)
-    }
-
-    setSelectedModel(preferredModel)
-    setReasoningEffort(preferredEffort)
-  }, [topicPreferenceKey, taskType, modelOptions, currentRuntimePref?.model, currentRuntimePref?.effort, activeAgentAdapter])
-
-  useEffect(() => {
-    const pref: ModelPref = {
-      model: selectedModel,
-      effort: reasoningEffort,
-    }
-    modelPrefsByTopicRef.current[topicPreferenceKey] = pref
-    writeStoredModelPref(topicPreferenceKey, pref)
-  }, [topicPreferenceKey, selectedModel, reasoningEffort])
-
-  // Hydrate from latest message metadata.model_config when available.
-  // This keeps picker aligned with the actual running session config per topic.
-  useEffect(() => {
-    const latestWithHint = [...messages]
-      .reverse()
-      .find((m) => m.model_hint || m.reasoning_hint)
-
-    if (!latestWithHint) return
-
-    const appliedMessageId = messageHintAppliedRef.current[topicPreferenceKey]
-    if (appliedMessageId === latestWithHint.message_id) return
-
-    const model = String(latestWithHint.model_hint || '').trim()
-    const effort = latestWithHint.reasoning_hint
-
-    const nextModel = model && isModelAllowedForAdapter(model, activeAgentAdapter) && modelOptions.some((m) => m.id === model)
-      ? model
-      : (isModelAllowedForAdapter(selectedModel, activeAgentAdapter) && modelOptions.some((m) => m.id === selectedModel) ? selectedModel : defaultModelForAdapter(activeAgentAdapter))
-    const nextEffort: ModelPref['effort'] = effort || reasoningEffort
-
-    if (nextModel) setSelectedModel(nextModel)
-    setReasoningEffort(nextEffort)
-
-    const pref: ModelPref = { model: nextModel || selectedModel, effort: nextEffort }
-    modelPrefsByTopicRef.current[topicPreferenceKey] = pref
-    writeStoredModelPref(topicPreferenceKey, pref)
-    messageHintAppliedRef.current[topicPreferenceKey] = latestWithHint.message_id
-  }, [messages, topicPreferenceKey, modelOptions, selectedModel, reasoningEffort, activeAgentAdapter])
-
-  // Hydrate from current worker model config so picker reflects active worker settings.
-  useEffect(() => {
-    if (!topicId || !currentAgentId) return
-    if (workerConfigHydratedRef.current[topicPreferenceKey]) return
-
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch(`${CLIENT_WTT_API_BASE}/workers?agent_id=${encodeURIComponent(currentAgentId)}`, {
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-        })
-        if (!res.ok) return
-        const rows = await res.json() as unknown
-        if (!Array.isArray(rows)) return
-
-        const row = rows.find((r) => String((r as Record<string, unknown>).topic_id || '') === String(topicId)) as Record<string, unknown> | undefined
-        if (!row) return
-
-        const cfg = ((row.model_config && typeof row.model_config === 'object') ? row.model_config : {}) as Record<string, unknown>
-        const model = String(cfg.model || '').trim()
-        const effortRaw = String(cfg.reasoning_effort || cfg.reasoningEffort || '').trim().toLowerCase()
-        const effort = (['off', 'low', 'medium', 'high'].includes(effortRaw)
-          ? effortRaw
-          : '') as '' | ModelPref['effort']
-
-        if (cancelled) return
-
-        const nextModel = model && isModelAllowedForAdapter(model, activeAgentAdapter) && modelOptions.some((m) => m.id === model)
-          ? model
-          : (isModelAllowedForAdapter(selectedModel, activeAgentAdapter) && modelOptions.some((m) => m.id === selectedModel) ? selectedModel : defaultModelForAdapter(activeAgentAdapter))
-        const nextEffort: ModelPref['effort'] = effort || reasoningEffort
-
-        if (nextModel) setSelectedModel(nextModel)
-        setReasoningEffort(nextEffort)
-
-        const pref: ModelPref = { model: nextModel || selectedModel, effort: nextEffort }
-        modelPrefsByTopicRef.current[topicPreferenceKey] = pref
-        writeStoredModelPref(topicPreferenceKey, pref)
-      } catch {
-        // keep local pref fallback
-      } finally {
-        workerConfigHydratedRef.current[topicPreferenceKey] = true
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [topicId, currentAgentId, accessToken, topicPreferenceKey, modelOptions, selectedModel, reasoningEffort, activeAgentAdapter])
-
-  // Close model menu on click outside
-  useEffect(() => {
-    if (!modelMenuOpen) return
-    const handler = (e: MouseEvent) => {
-      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
-        setModelMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [modelMenuOpen])
-
-  useEffect(() => {
-    if (!thinkMenuOpen) return
-    const handler = (e: MouseEvent) => {
-      if (thinkMenuRef.current && !thinkMenuRef.current.contains(e.target as Node)) {
-        setThinkMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [thinkMenuOpen])
 
   useEffect(() => {
     if (!attachMenuOpen) return
@@ -2121,7 +1847,7 @@ export function ChatView({
   const sendPassthroughSlash = useCallback(async (command: string, opts?: { silent?: boolean }) => {
     setSending(true)
     try {
-      await onSendMessage(command, undefined, undefined, {
+      await onSendMessage(command, undefined, {
         slashType: 'agent_passthrough',
         slashCommand: command.trim().split(/\s+/, 1)[0] || command.trim(),
       })
@@ -2242,17 +1968,11 @@ export function ChatView({
       }
     }
 
-    const sendModel = isModelAllowedForAdapter(selectedModel, activeAgentAdapter)
-      ? selectedModel
-      : defaultModelForAdapter(activeAgentAdapter)
-    const modelConfig: ChatModelConfig = { model: sendModel, reasoningEffort }
-
-    lastSentConfigRef.current = { model: sendModel, effort: reasoningEffort }
     if (isFirstMessage) setIsFirstMessage(false)
 
     setSending(true)
     try {
-      await onSendMessage(content, modelConfig, replyContext?.replyToId)
+      await onSendMessage(content, replyContext?.replyToId)
       setDraft('')
       setPendingAssets([])
       setReplyContext(null)
@@ -3482,76 +3202,23 @@ export function ChatView({
           </div>
         )}
 
-        {/* Compact control bar: model / think / adapter-aware slash */}
+        {/* Compact status bar: actual runtime model / think / adapter-aware slash */}
         <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
-          <div className="relative shrink-0" ref={modelMenuRef}>
-              <button
-                onClick={() => setModelMenuOpen(!modelMenuOpen)}
-                className="flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                title="Select model"
-              >
-                <span>🤖</span>
-                <span className="font-medium max-w-[140px] truncate">{modelOptions.find(m => m.id === selectedModel)?.label || selectedModel}</span>
-                <span className="text-slate-400">▾</span>
-              </button>
-              {modelMenuOpen && (
-                <div className="absolute bottom-full left-0 mb-1 z-50 min-w-[220px] max-h-[240px] overflow-y-auto rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
-                  {modelOptions.map(m => (
-                    <button
-                      key={m.id}
-                      onMouseDown={e => e.preventDefault()}
-                      onClick={() => {
-                        setSelectedModel(m.id)
-                        setModelMenuOpen(false)
-                      }}
-                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
-                        selectedModel === m.id
-                          ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 font-medium'
-                          : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
-                      }`}
-                    >
-                      {selectedModel === m.id && <span className="text-indigo-500">✓</span>}
-                      <span>{m.label}</span>
-                      {m.supports_reasoning === false && <span className="ml-auto text-[9px] text-slate-400">no reasoning</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          <span
+            className="flex min-w-0 max-w-[220px] shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            title={`Current runtime model: ${displayModelId || displayModelLabel}`}
+          >
+            <span>🤖</span>
+            <span className="truncate font-medium">{displayModelLabel}</span>
+          </span>
 
-          <div className="relative shrink-0" ref={thinkMenuRef}>
-            <button
-              onClick={() => setThinkMenuOpen((v) => !v)}
-              className="flex items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] transition hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              title="Select think mode"
-            >
-              <span>🧠</span>
-              <span className="font-medium">{REASONING_EFFORTS.find((e) => e.id === reasoningEffort)?.label || reasoningEffort}</span>
-              <span className="text-slate-400">▾</span>
-            </button>
-            {thinkMenuOpen && (
-              <div className="absolute bottom-full left-0 mb-1 z-50 min-w-[140px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
-                {REASONING_EFFORTS.map((e) => (
-                  <button
-                    key={e.id}
-                    onMouseDown={(ev) => ev.preventDefault()}
-                    onClick={() => {
-                      setReasoningEffort(e.id)
-                      setThinkMenuOpen(false)
-                    }}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${
-                      reasoningEffort === e.id
-                        ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 font-medium'
-                        : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
-                    }`}
-                  >
-                    {reasoningEffort === e.id && <span className="text-indigo-500">✓</span>}
-                    <span>{e.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <span
+            className="flex shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            title={`Current think mode: ${displayEffortLabel}`}
+          >
+            <span>🧠</span>
+            <span className="font-medium">{displayEffortLabel}</span>
+          </span>
 
           <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {activeAgentLabel}

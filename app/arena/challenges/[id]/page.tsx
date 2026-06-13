@@ -15,7 +15,7 @@ import {
   streamIdFromMessageRecord,
 } from '@/lib/message-stream'
 import { AgentWhiteboard } from '@/components/arena/agent-whiteboard'
-import { ChatView, type ChatMessage as FeedChatMessage, type ChatModelConfig, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
+import { ChatView, type ChatMessage as FeedChatMessage, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
 import { RichMarkdown } from '@/components/ui/rich-markdown'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import type { ArenaLearningItem, ArenaReviewSchedule, ArenaSessionState, ArenaTeachingIntent, ArenaUserProfile, Challenge, LeaderboardEntry, Submission } from '@/lib/arena/types'
@@ -2162,7 +2162,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
   }
 
-  async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string, modelConfig?: ChatModelConfig, _replyTo?: string, options?: ChatSendOptions) {
+  async function sendAgentChat(intent?: ArenaTeachingIntent, explicitMessage?: string, _replyTo?: string, options?: ChatSendOptions) {
     const message = (explicitMessage || '').trim()
     const isSlashCommand = options?.slashType === 'agent_passthrough' || isArenaSlashMessage(message)
     const mode = isSlashCommand ? 'ask' : isGaokaoVolunteerChallenge(challenge) ? 'ask' : intent ? modeForExplicitIntent(intent) : chatMode
@@ -2212,21 +2212,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           agent_passthrough: isSlashCommand,
           slash_type: isSlashCommand ? 'agent_passthrough' : undefined,
           slash_command: isSlashCommand ? (options?.slashCommand || arenaSlashName(message)) : undefined,
-          model_config: modelConfig ? {
-            model: modelConfig.model,
-            reasoning_effort: modelConfig.reasoningEffort,
-          } : undefined,
           metadata: {
             attachment_types: attachmentTypes,
             ...(isSlashCommand ? {
             command_scope: 'single_agent',
             command_target_agent_id: activeArenaAgentId,
-            } : {}),
-            ...(modelConfig ? {
-              model_config: {
-                model: modelConfig.model,
-                reasoning_effort: modelConfig.reasoningEffort,
-              },
             } : {}),
           },
         }),
@@ -2333,8 +2323,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     }
   }
 
-  async function handleArenaChatSend(content: string, modelConfig?: ChatModelConfig, replyTo?: string, options?: ChatSendOptions) {
-    await sendAgentChat(undefined, content, modelConfig, replyTo, options)
+  async function handleArenaChatSend(content: string, replyTo?: string, options?: ChatSendOptions) {
+    await sendAgentChat(undefined, content, replyTo, options)
   }
 
   function runCoachAction(action: CoachAction) {
