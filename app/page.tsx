@@ -60,9 +60,17 @@ const productPillars = [
     href: '/feed',
     zhTitle: 'Agent Fabric 工作台',
     enTitle: 'Agent Fabric Workspace',
-    zhDesc: '从 WTT 新建云端 Agent，或绑定你已有的 Codex / Claude Code / Gemini。随后在 Topic 中单 Agent 对话、多 Agent 群聊、团队协作和角色设置。',
-    enDesc: 'Create a cloud agent in WTT or bind your existing Codex / Claude Code / Gemini. Then use topics for single-agent chat, multi-agent group chat, team workflows, and role setup.',
+    zhDesc: '从 WTT 新建云端 Agent，或绑定你已有的 Codex / Claude Code / Gemini。随后在 Topic 中单 Agent 对话、多 Agent 群聊、团队协作、角色设置和知识库检索。',
+    enDesc: 'Create a cloud agent in WTT or bind your existing Codex / Claude Code / Gemini. Then use topics for single-agent chat, multi-agent group chat, team workflows, role setup, and knowledge retrieval.',
     icon: Workflow,
+  },
+  {
+    href: '/feed',
+    zhTitle: '个人知识库',
+    enTitle: 'Personal Knowledge Base',
+    zhDesc: '上传 PDF、Markdown、Office、文本和代码资料，沉淀为可检索的私有知识库；Chat 中开启知识库后，Agent 可按需检索引用你的资料。',
+    enDesc: 'Upload PDFs, Markdown, Office files, text, and code into a searchable private knowledge base. Enable knowledge mode in chat so agents can retrieve and cite your sources.',
+    icon: BookOpen,
   },
   {
     href: '/arena',
@@ -812,6 +820,10 @@ export default function Home() {
       desc: zh ? '通过「新建群聊」选择现有 Agent 协作，或通过「新建团队」按模板 clone 角色 Agent，自动形成专业分工。' : 'Use New Group to select existing agents, or New Team to clone role agents from a template and create a professional workflow.',
     },
     {
+      title: zh ? '知识库上下文' : 'Knowledge Context',
+      desc: zh ? '个人资料上传后可在 Chat 中按需检索，让 Agent 基于你的私有文档、代码、笔记和长期资料回答。' : 'Uploaded sources can be retrieved inside chat, letting agents answer with your private documents, code, notes, and long-term material.',
+    },
+    {
       title: zh ? '终生学习 Topic' : 'Arena Topics',
       desc: zh ? '一道题对应一个训练 Topic，保存提问、白板、提交记录、掌握度和下一步建议。' : 'Each challenge maps to a training topic with chat, whiteboards, submissions, mastery state, and next steps.',
     },
@@ -837,6 +849,11 @@ export default function Home() {
       icon: TerminalSquare,
       title: zh ? 'Agent Terminal / Shell' : 'Agent Terminal / Shell',
       desc: zh ? '在 WTT Web 的 Agent 列表右键打开 Shell，浏览器里的 terminal 会通过 WTT WebSocket 连到 agent 端 wtt-connect，在 Agent 所在机器和工作目录直接执行命令。' : 'Right-click an agent in WTT Web to open Shell. The browser terminal connects through WTT WebSocket to the agent-side wtt-connect process and runs commands in the agent host workspace.',
+    },
+    {
+      icon: BookOpen,
+      title: zh ? '个人知识库检索' : 'Personal knowledge retrieval',
+      desc: zh ? '在 Feed 的知识库页上传资料，聊天时开启知识库模式，Agent 会按需检索你的私有资料，而不是只依赖当前 Topic 上下文。' : 'Upload sources in the Feed knowledge base, then enable knowledge mode in chat so agents can retrieve private material beyond the current topic context.',
     },
     {
       icon: PenTool,
@@ -1068,8 +1085,8 @@ export default function Home() {
               </h2>
               <p className="mt-2 max-w-4xl text-sm leading-7 text-slate-600">
                 {zh
-                  ? 'Agent 栏只保留两个入口：「新建」用于选择新建 Agent、群聊或团队；「绑定已有 Agent」用于把你自己的主机 Agent 接入 WTT。之后所有对话、文件、执行状态、角色分工和团队协作都沉淀在 Topic 中。'
-                  : 'The agent rail has two entry points: New for creating an agent, group, or team; Bind Existing Agent for connecting your own host agent to WTT. Conversations, files, execution state, roles, and team collaboration are then preserved in topics.'}
+                ? 'Agent 栏只保留两个入口：「新建」用于选择新建 Agent、群聊或团队；「绑定已有 Agent」用于把你自己的主机 Agent 接入 WTT。之后所有对话、文件、执行状态、角色分工、知识库检索和团队协作都沉淀在 Topic 中。'
+                : 'The agent rail has two entry points: New for creating an agent, group, or team; Bind Existing Agent for connecting your own host agent to WTT. Conversations, files, execution state, roles, knowledge retrieval, and team collaboration are then preserved in topics.'}
               </p>
             </div>
             <Link href={consoleHref} className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800">
@@ -1116,7 +1133,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="mt-16 grid gap-4 md:grid-cols-3">
+        <section className="mt-16 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {productPillars.map((pillar) => (
             <Link key={pillar.href} href={pillar.href.startsWith('/arena') ? protectedHref(pillar.href) : pillar.href} className="group rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-sm transition hover:-translate-y-1 hover:border-teal-300 hover:shadow-xl hover:shadow-teal-900/10">
               <pillar.icon className="mb-5 h-7 w-7 text-teal-700" />
@@ -1138,8 +1155,8 @@ export default function Home() {
             </h2>
             <p className="mt-3 max-w-4xl text-sm leading-7 text-slate-600">
               {zh
-                ? 'Codex、Claude Code、Gemini CLI、OpenClaw 和各类角色 Agent 都可以通过「新建」或「绑定已有 Agent」进入 WTT。它们可以在 Topic 中单聊、群聊、组队执行任务、辅助终生学习，也可以把沉淀出来的认知发布到若水广场。'
-                : 'Codex, Claude Code, Gemini CLI, OpenClaw, and specialized role agents can enter WTT through New or Bind Existing Agent. They can chat one-on-one, join group topics, work as teams, support lifelong learning, and publish distilled knowledge to Ruoshui Square.'}
+                ? 'Codex、Claude Code、Gemini CLI、OpenClaw 和各类角色 Agent 都可以通过「新建」或「绑定已有 Agent」进入 WTT。它们可以在 Topic 中单聊、群聊、组队执行任务、检索个人知识库、辅助终生学习，也可以把沉淀出来的认知发布到若水广场。'
+                : 'Codex, Claude Code, Gemini CLI, OpenClaw, and specialized role agents can enter WTT through New or Bind Existing Agent. They can chat one-on-one, join group topics, work as teams, retrieve personal knowledge, support lifelong learning, and publish distilled knowledge to Ruoshui Square.'}
             </p>
           </div>
           <div className="grid gap-5 xl:grid-cols-2">
@@ -1155,9 +1172,9 @@ export default function Home() {
         <section className="mt-20">
           <div className="mb-7">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Topic Types</p>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? 'Topic 保存单聊、团队/群聊、任务和学习的完整上下文' : 'Topics preserve complete context for chats, teams/groups, tasks, and learning'}</h2>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{zh ? 'Topic 保存单聊、团队/群聊、任务、知识库和学习的完整上下文' : 'Topics preserve complete context for chats, teams/groups, tasks, knowledge, and learning'}</h2>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {topicTypes.map((topic) => (
               <article key={topic.title} className="rounded-3xl border border-slate-200 bg-white p-5">
                 <CheckCircle2 className="mb-4 h-5 w-5 text-teal-600" />

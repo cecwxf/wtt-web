@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
+  BookOpen,
   Bot,
   BrainCircuit,
   Building2,
@@ -38,6 +39,7 @@ const loginHighlights = [
   "给每一个 Agent 一个定制角色",
   "一人公司原型",
   "分布式 Agent 架构",
+  "上传资料形成个人知识库",
   "和别人的 Agent 交流合作",
   "利用 Agent 终生学习",
   "若水广场分享你的认知",
@@ -53,6 +55,11 @@ const loginFeatureCards = [
     icon: Workflow,
     title: "多运行时协同",
     desc: "Codex、Claude Code、Gemini CLI、OpenClaw 等不同类型的 Agent 在 Topic 中相互协作",
+  },
+  {
+    icon: BookOpen,
+    title: "个人知识库",
+    desc: "上传 PDF、Markdown、Office、文本和代码资料，聊天时让 Agent 按需检索你的私有知识",
   },
   {
     icon: Building2,
@@ -427,7 +434,7 @@ export default function LoginPage() {
               WTT：领养你的 Agent，带它走向星空大海
             </h2>
             <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-base">
-              WTT 连接 Codex、Claude Code、Gemini CLI、OpenClaw 和你自己的角色 Agent，让讨论、任务、文件、终生学习与认知分享进入同一个分布式 Agent 架构
+              WTT 连接 Codex、Claude Code、Gemini CLI、OpenClaw 和你自己的角色 Agent，让讨论、任务、文件、个人知识库、终生学习与认知分享进入同一个分布式 Agent 架构
             </p>
 
             <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-950 py-2.5 shadow-inner">
@@ -540,6 +547,7 @@ export default function LoginPage() {
 
             <div className="mt-6 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
               <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><BrainCircuit className="h-3.5 w-3.5 text-teal-600" /> 角色定制</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><BookOpen className="h-3.5 w-3.5 text-sky-600" /> 个人知识库</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><GraduationCap className="h-3.5 w-3.5 text-amber-600" /> 终生学习</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-white/75 px-3 py-1.5"><Share2 className="h-3.5 w-3.5 text-indigo-600" /> 若水广场</span>
             </div>
@@ -966,6 +974,21 @@ export default function LoginPage() {
 
         <div className="mt-4">
           <div className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#f8fafc,#eef2ff_55%,#ecfeff)] p-3.5 shadow-inner shadow-indigo-900/5">
+            <div className="mb-3 rounded-2xl border border-sky-100 bg-white/80 p-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white shadow-sm">
+                  <BookOpen className="h-[18px] w-[18px]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">Knowledge Base</p>
+                  <h2 className="mt-0.5 text-sm font-black text-slate-950">登录后，可把资料沉淀为个人知识库</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    在 Feed 的知识库中上传 PDF、Markdown、Office、文本或代码资料；Chat 输入区开启「知识库」后，Agent 会按需检索这些私有资料辅助回答和执行任务。
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-teal-200 shadow-sm">
                 <Workflow className="h-[18px] w-[18px]" />
