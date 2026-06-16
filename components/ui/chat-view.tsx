@@ -1869,9 +1869,7 @@ export function ChatView({
         slashType: 'agent_passthrough',
         slashCommand: command.trim().split(/\s+/, 1)[0] || command.trim(),
       })
-      if (!opts?.silent) {
-        setSlashResult(`✅ Sent ${command}`)
-      }
+      setSlashResult(opts?.silent ? `↗ Sent to Agent: ${command}` : `✅ Sent ${command}`)
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Failed to send command'
       setSlashResult(`❌ ${msg}`)

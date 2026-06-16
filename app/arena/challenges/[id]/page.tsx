@@ -44,6 +44,70 @@ type ArenaRoutedSkill = {
   output_contract?: string
 }
 
+type ArenaRuntimeInfo = {
+  adapter?: string
+  kind?: string
+  model?: string
+  model_id?: string
+  current_model?: string
+  reasoning_effort?: string
+}
+
+function normalizeArenaAdapter(raw: unknown): 'codex' | 'claude-code' | 'gemini' | 'generic' {
+  const value = String(raw || '').trim().toLowerCase().replace(/_/g, '-')
+  if (value.includes('codex')) return 'codex'
+  if (value.includes('gemini')) return 'gemini'
+  if (value.includes('claude')) return 'claude-code'
+  return 'generic'
+}
+
+function arenaAdapterDisplayName(raw: unknown): string {
+  const adapter = normalizeArenaAdapter(raw)
+  if (adapter === 'codex') return 'Codex'
+  if (adapter === 'claude-code') return 'Claude Code'
+  if (adapter === 'gemini') return 'Gemini'
+  return 'Agent'
+}
+
+function collectNestedArenaRecords(value: unknown, out: Record<string, unknown>[] = [], depth = 0): Record<string, unknown>[] {
+  if (!value || typeof value !== 'object' || depth > 3) return out
+  const record = value as Record<string, unknown>
+  out.push(record)
+  for (const key of ['payload', 'data', 'event', 'item', 'message', 'delta', 'metadata', 'detail']) {
+    collectNestedArenaRecords(record[key], out, depth + 1)
+  }
+  return out
+}
+
+function arenaEventString(record: Record<string, unknown>, keys: string[]): string {
+  const records = collectNestedArenaRecords(record)
+  for (const key of keys) {
+    for (const source of records) {
+      const value = source[key]
+      if (value == null) continue
+      if (typeof value === 'string' && value.trim()) return value.trim()
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    }
+  }
+  return ''
+}
+
+function arenaStatusTextFromTypingEvent(record: Record<string, unknown>): string | undefined {
+  const direct = arenaEventString(record, ['status_text', 'statusText', 'activity_text', 'activityText', 'message', 'detail', 'text', 'summary', 'description', 'progress'])
+  if (direct) return direct
+  const command = arenaEventString(record, ['command', 'cmd', 'shell_command'])
+  if (command) return `执行命令：${command}`
+  const tool = arenaEventString(record, ['tool', 'tool_name', 'toolName', 'name'])
+  if (tool) return `调用工具：${tool}`
+  const phase = arenaEventString(record, ['phase', 'stage', 'step', 'status'])
+  if (phase) return `阶段：${phase}`
+  return undefined
+}
+
+function arenaStatusKindFromTypingEvent(record: Record<string, unknown>): string | undefined {
+  return arenaEventString(record, ['status_kind', 'statusKind', 'kind', 'event_kind', 'eventKind', 'phase', 'type', 'status']) || undefined
+}
+
 function isArenaSlashMessage(value: string) {
   const trimmed = value.trim()
   return trimmed.startsWith('/') && !trimmed.startsWith('//')
@@ -134,20 +198,30 @@ type ArenaTypingState = {
   expiresAt: number
 }
 
-function parseAgentStatusContent(contentRaw: unknown): { text: string; kind?: string } | null {
+function parseAgentStatusContent(contentRaw: unknown, adapterRaw?: unknown): { text: string; kind?: string } | null {
   const content = String(contentRaw ?? '').trim()
   if (!content.startsWith('[TASK_STATUS]')) return null
-  const status = content.match(/\bstatus=([^\s]+)/)?.[1] || ''
-  const action = content.match(/\baction=([^:\s]+):([\s\S]*)$/)
-  const kind = action?.[1] || 'running'
-  const detail = (action?.[2] || '').trim()
-  if (status === 'completed') return { text: `Agent 已完成 ${kind.replace(/_/g, ' ')}`, kind }
-  if (status === 'failed') return { text: `Agent 执行失败：${detail || kind}`, kind }
-  if (kind === 'command') return { text: `Agent 正在执行命令：${detail || 'command'}`, kind }
-  if (kind === 'tool') return { text: `Agent 正在调用工具：${detail || 'tool'}`, kind }
-  if (kind === 'web_search') return { text: `Agent 正在搜索：${detail || 'web search'}`, kind }
-  if (kind === 'response') return { text: 'Agent 正在组织回复', kind }
-  return { text: `Agent 正在执行：${detail || kind.replace(/_/g, ' ')}`, kind }
+  const action = content.match(/\baction=([^\n\r]+)/)?.[1]?.trim() || ''
+  const status = content.match(/\bstatus=([^\s\n\r]+)/)?.[1]?.trim() || ''
+  if (!action && !status) return null
+
+  const [group, detail = ''] = action.split(/:(.+)/)
+  const kind = group || status || 'running'
+  const actor = arenaAdapterDisplayName(adapterRaw)
+  if (group === 'session') {
+    if (detail.includes('thread.started') || detail.includes('turn.started')) return { text: `${actor} 会话已启动`, kind: 'session' }
+    if (detail.includes('completed')) return { text: `${actor} 会话已完成`, kind: 'session' }
+    return { text: `${actor} 会话状态：${detail || status}`, kind: 'session' }
+  }
+  if (group === 'response') {
+    const output = detail.trim()
+    return { text: output ? `${actor} 输出：${output.slice(0, 120)}` : `${actor} 正在输出`, kind: 'response' }
+  }
+  if (group === 'command') return { text: `${actor} 执行命令：${detail || status}`, kind: 'command' }
+  if (group === 'tool') return { text: `${actor} 调用工具：${detail || status}`, kind: 'tool' }
+  if (status === 'completed') return { text: `${actor} 已完成`, kind }
+  if (status === 'failed') return { text: `${actor} 执行失败：${detail || kind}`, kind }
+  return { text: `${actor} 状态：${action || status}`, kind }
 }
 
 function appendArenaTypingStatus(
@@ -1493,6 +1567,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [whiteboardBusy, setWhiteboardBusy] = useState(false)
   const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
   const [arenaRoutedSkill, setArenaRoutedSkill] = useState<ArenaRoutedSkill | null>(null)
+  const [arenaRuntimeMap, setArenaRuntimeMap] = useState<Record<string, ArenaRuntimeInfo>>({})
   const [leftPanelWidth, setLeftPanelWidth] = useState(360)
   const [whiteboardPanelWidth, setWhiteboardPanelWidth] = useState(520)
   const layoutRef = useRef<HTMLDivElement | null>(null)
@@ -1577,6 +1652,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const arenaSessionKey = challenge && session?.accessToken ? `${arenaActor}:${challenge.id}` : ''
   const arenaTopicId = arenaSessionKey ? (arenaTopicByKey[arenaSessionKey] || '') : ''
   const arenaAgentId = arenaSessionKey ? (arenaAgentByKey[arenaSessionKey] || '') : ''
+  const arenaAgentRuntime = arenaAgentId ? arenaRuntimeMap[arenaAgentId] : undefined
+  const arenaAgentAdapter = normalizeArenaAdapter(arenaAgentRuntime?.adapter || arenaAgentRuntime?.kind)
 
   const authHeaders = useMemo(() => ({
     'Content-Type': 'application/json',
@@ -1607,6 +1684,33 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       .catch(() => undefined)
     return () => { alive = false }
   }, [selectedAgentId, session?.accessToken, setSelectedAgentId])
+
+  useEffect(() => {
+    if (!session?.accessToken) return
+    let alive = true
+    const loadRuntimes = async () => {
+      try {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/stats`, {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        })
+        if (!response.ok) return
+        const data = await response.json().catch(() => ({}))
+        if (!alive) return
+        const runtimes = (data && typeof data === 'object' && (data as Record<string, unknown>).runtimes && typeof (data as Record<string, unknown>).runtimes === 'object')
+          ? ((data as Record<string, unknown>).runtimes as Record<string, ArenaRuntimeInfo>)
+          : {}
+        setArenaRuntimeMap(runtimes)
+      } catch {
+        // Runtime metadata is best-effort; chat still works without it.
+      }
+    }
+    loadRuntimes()
+    const timer = window.setInterval(loadRuntimes, 10000)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+    }
+  }, [session?.accessToken])
 
   function rememberArenaTopic(topicId: string, agentId?: string) {
     if (!arenaSessionKey || !topicId) return
@@ -1826,8 +1930,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
         topicId,
         agentId: String(rawEvent.agent_id || arenaAgentId || ARENA_AGENT_ID),
         agentName: String(rawEvent.agent_display_name || '') || undefined,
-        statusText: String(rawEvent.status_text || '').trim() || undefined,
-        statusKind: String(rawEvent.status_kind || '').trim() || undefined,
+        statusText: arenaStatusTextFromTypingEvent(rawEvent),
+        statusKind: arenaStatusKindFromTypingEvent(rawEvent),
         ttlMs,
       }))
       return
@@ -1839,7 +1943,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
 
     const senderType = String(msg.message.sender_type || '').toUpperCase()
     const senderId = String(msg.message.sender_id || '')
-    const agentStatus = parseAgentStatusContent(String(msg.message.content || ''))
+    const agentStatus = parseAgentStatusContent(String(msg.message.content || ''), arenaAgentRuntime?.adapter || arenaAgentRuntime?.kind)
     if (agentStatus && (senderType === 'AGENT' || (!!arenaAgentId && senderId === arenaAgentId) || senderId === ARENA_AGENT_ID)) {
       setArenaTyping((prev) => appendArenaTypingStatus(prev, {
         topicId: incomingTopicId,
@@ -1938,15 +2042,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return {
       agentId: arenaTyping.agentId || arenaAgentId || ARENA_AGENT_ID,
       agentName: arenaTyping.agentName || (locale === 'zh' ? '终生学习 Coach' : 'Arena Coach'),
-      adapter: 'codex',
-      model: 'arena-coach',
+      adapter: arenaAgentAdapter,
+      model: arenaAgentRuntime?.current_model || arenaAgentRuntime?.model_id || arenaAgentRuntime?.model || 'arena-coach',
       wsState: arenaWsState,
       statusText: arenaTyping.statusText || (locale === 'zh' ? '等待 Agent 状态更新' : 'Waiting for Agent status'),
       statusKind: arenaTyping.statusKind,
       startedAt: arenaTyping.startedAt,
       lines,
     }
-  }, [arenaAgentId, arenaTopicId, arenaTyping, arenaWsState, locale])
+  }, [arenaAgentAdapter, arenaAgentId, arenaAgentRuntime?.current_model, arenaAgentRuntime?.model, arenaAgentRuntime?.model_id, arenaTopicId, arenaTyping, arenaWsState, locale])
 
   const latestArenaPreview = useMemo(() => {
     for (const message of [...chatMessages].reverse()) {
@@ -2705,7 +2809,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   topicType="p2p"
                   runStatus={arenaRunStatus}
                   compactUi
-                  currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
+                  currentAgentRuntime={{
+                    adapter: arenaAgentAdapter,
+                    model: arenaAgentRuntime?.current_model || arenaAgentRuntime?.model_id || arenaAgentRuntime?.model || 'arena-coach',
+                    reasoning_effort: arenaAgentRuntime?.reasoning_effort || 'medium',
+                  }}
                   agentRoleLabelMap={arenaAgentId ? { [arenaAgentId]: locale === 'zh' ? '我的 Cloud Agent' : 'My Cloud Agent' } : {}}
                   emptyState={(
                     <div className="mx-auto max-w-xl rounded-2xl border border-dashed border-[#3ce8e2]/35 bg-[#efffff] p-4 text-left shadow-[0_0_28px_rgba(60,232,226,0.08)] dark:border-[#3ce8e2]/25 dark:bg-[#101818]">

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArenaNav } from '@/components/arena/arena-nav'
 import { listChallenges } from '@/lib/arena/store'
-import { childSections, getArenaSection, sectionStats } from '@/lib/arena/sections'
+import { getArenaSection, sectionStats } from '@/lib/arena/sections'
 import { arenaSkillFlows } from '@/lib/arena/skill-flows'
 
 const interviewSectionSlugs = [
@@ -20,7 +20,6 @@ function sectionCard(slug: string) {
 export default function ArenaPage() {
   const challenges = listChallenges()
   const education = getArenaSection('education')
-  const educationStages = childSections('education')
   const interviewSections = interviewSectionSlugs.map(sectionCard).filter(Boolean)
   const educationCount = sectionStats(challenges, 'education').total
   const interviewCount = interviewSections.reduce((sum, section) => sum + sectionStats(challenges, section!.slug).total, 0)
@@ -94,25 +93,15 @@ export default function ArenaPage() {
           <div>
             <p className="text-sm font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-300">Education Flow</p>
             <h2 className="mt-2 text-3xl font-black">教育板块</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-gray-400">{education?.descriptionZh}</p>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-gray-400">
+              {education?.descriptionZh || '按学习动作进入练习，避免在首页铺开过多学科入口。'}
+            </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            {educationStages.map((section) => (
-              <Link key={section.slug} href={section.href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-amber-300 dark:border-gray-800 dark:bg-[#1b1b1b]">
-                <div className={`mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r ${section.accent}`} />
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-500">{section.eyebrow}</p>
-                <h3 className="mt-3 text-xl font-black">{section.titleZh}</h3>
-                <p className="mt-3 min-h-[72px] text-sm leading-6 text-slate-600 dark:text-gray-400">{section.descriptionZh}</p>
-                <p className="mt-4 text-sm font-black text-amber-700 dark:text-amber-200">进入阶段 →</p>
-              </Link>
+            {educationFlows.map((flow) => (
+              <SkillFlowCard key={flow.id} flow={flow} compact />
             ))}
           </div>
-        </section>
-
-        <section className="mt-8 grid gap-4 md:grid-cols-3">
-          {educationFlows.map((flow) => (
-            <SkillFlowCard key={flow.id} flow={flow} />
-          ))}
         </section>
 
         <section id="interview" className="mt-12 grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
@@ -134,24 +123,27 @@ export default function ArenaPage() {
           </div>
         </section>
 
-        <section className="mt-8 grid gap-4 md:grid-cols-2">
-          {interviewFlows.map((flow) => (
-            <SkillFlowCard key={flow.id} flow={flow} />
-          ))}
+        <section className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
+          <p className="text-sm font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Interview Actions</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {interviewFlows.map((flow) => (
+              <SkillFlowCard key={flow.id} flow={flow} compact />
+            ))}
+          </div>
         </section>
       </section>
     </main>
   )
 }
 
-function SkillFlowCard({ flow }: { flow: (typeof arenaSkillFlows)[number] }) {
+function SkillFlowCard({ flow, compact = false }: { flow: (typeof arenaSkillFlows)[number]; compact?: boolean }) {
   return (
     <Link href={flow.href} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-[#3ce8e2]/50 dark:border-gray-800 dark:bg-[#1b1b1b]">
       <div className={`h-1.5 bg-gradient-to-r ${flow.accent}`} />
       <div className="p-5">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-500">{flow.domain === 'education' ? 'Education Action' : 'Interview Action'}</p>
         <h3 className="mt-3 text-xl font-black text-slate-950 dark:text-white">{flow.title}</h3>
-        <p className="mt-2 min-h-[48px] text-sm leading-6 text-slate-600 dark:text-gray-400">{flow.subtitle}</p>
+        <p className={`mt-2 text-sm leading-6 text-slate-600 dark:text-gray-400 ${compact ? '' : 'min-h-[48px]'}`}>{flow.subtitle}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {flow.steps.map((step, index) => (
             <span key={step} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">{index + 1}. {step}</span>
