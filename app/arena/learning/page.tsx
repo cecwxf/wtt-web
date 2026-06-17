@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Brain, CalendarClock, CheckCircle2, RefreshCw, Sparkles } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { ArrowRight, BookOpenCheck, Brain, CalendarClock, CheckCircle2, ChevronDown, RefreshCw, Sparkles } from 'lucide-react'
 import { ArenaNav } from '@/components/arena/arena-nav'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import type { ArenaLearningItem, ArenaReviewSchedule, ArenaUserProfile } from '@/lib/arena/types'
@@ -13,6 +14,14 @@ type DashboardState = {
   items: ArenaLearningItem[]
   schedules: ArenaReviewSchedule[]
 }
+
+const filters = [
+  { id: 'all', label: '全部' },
+  { id: 'mistake', label: '错题' },
+  { id: 'photo_question', label: '拍照题' },
+  { id: 'interview_answer', label: '面试' },
+  { id: 'daily_review', label: '复盘' },
+]
 
 function formatDate(value?: string | null) {
   if (!value) return '待定'
@@ -24,8 +33,26 @@ function formatDate(value?: string | null) {
 }
 
 function topMastery(profile: ArenaUserProfile | null) {
-  const entries = Object.entries(profile?.concept_mastery || {})
-  return entries.sort((a, b) => b[1] - a[1]).slice(0, 8)
+  return Object.entries(profile?.concept_mastery || {}).sort((a, b) => b[1] - a[1]).slice(0, 8)
+}
+
+function itemLabel(item: ArenaLearningItem) {
+  const structured = item.structured || {}
+  return String(structured.title || item.title || item.skill_id || item.item_type || '学习记录')
+}
+
+function itemQuestion(item: ArenaLearningItem) {
+  return String(item.structured?.question || item.content || '')
+}
+
+function itemAnswer(item: ArenaLearningItem) {
+  return String(item.structured?.coach_answer || item.answer || '')
+}
+
+function statusText(status?: string) {
+  if (status === 'mastered') return '已掌握'
+  if (status === 'reviewing') return '复习中'
+  return '新记录'
 }
 
 export default function ArenaLearningDashboardPage() {
@@ -33,6 +60,10 @@ export default function ArenaLearningDashboardPage() {
   const token = session?.accessToken as string | undefined
   const [state, setState] = useState<DashboardState>({ profile: null, items: [], schedules: [] })
   const [loading, setLoading] = useState(false)
+  const [filter, setFilter] = useState('all')
+  const [expandedId, setExpandedId] = useState<string>('')
+  const [busyItemId, setBusyItemId] = useState<string>('')
+  const [notice, setNotice] = useState('')
 
   const headers = useMemo(() => ({
     'Content-Type': 'application/json',
@@ -45,8 +76,8 @@ export default function ArenaLearningDashboardPage() {
     try {
       const [profileRes, itemsRes, schedulesRes] = await Promise.all([
         fetch(`${CLIENT_WTT_API_BASE}/arena/profile/me`, { headers, cache: 'no-store' }),
-        fetch(`${CLIENT_WTT_API_BASE}/arena/learning/items?limit=50`, { headers, cache: 'no-store' }),
-        fetch(`${CLIENT_WTT_API_BASE}/arena/learning/review-schedule?limit=50`, { headers, cache: 'no-store' }),
+        fetch(`${CLIENT_WTT_API_BASE}/arena/learning/items?limit=100`, { headers, cache: 'no-store' }),
+        fetch(`${CLIENT_WTT_API_BASE}/arena/learning/review-schedule?limit=100`, { headers, cache: 'no-store' }),
       ])
       const [profileData, itemsData, schedulesData] = await Promise.all([
         profileRes.ok ? profileRes.json() : Promise.resolve({}),
@@ -63,29 +94,45 @@ export default function ArenaLearningDashboardPage() {
     }
   }, [headers, token])
 
-  async function markReview(scheduleId: string, rating: 'again' | 'good' | 'easy') {
-    if (!token) return
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/arena/learning/review-schedule/${encodeURIComponent(scheduleId)}/review`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ rating }),
-    })
-    if (response.ok) await refresh()
-  }
-
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  async function updateItem(itemId: string, path: string, body: Record<string, unknown> = {}) {
+    if (!token) return
+    setBusyItemId(itemId)
+    setNotice('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      })
+      if (!response.ok) throw new Error(await response.text())
+      await refresh()
+      setNotice('学习档案已更新。')
+    } catch (error) {
+      setNotice(`操作失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setBusyItemId('')
+    }
+  }
 
   const mastery = topMastery(state.profile)
   const dueNow = state.schedules.filter((item) => {
     if (!item.due_at) return true
     return new Date(item.due_at).getTime() <= Date.now() + 24 * 60 * 60 * 1000
   })
+  const visibleItems = state.items.filter((item) => filter === 'all' || item.item_type === filter || item.skill_id === filter)
 
   return (
     <main className="min-h-[100dvh] bg-[#f7f5f0] px-3 py-6 text-slate-950 dark:bg-[#151515] dark:text-white sm:px-5 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute left-[-12rem] top-[-16rem] h-[34rem] w-[34rem] rounded-full bg-[#3ce8e2]/15 blur-3xl" />
+        <div className="absolute bottom-[-18rem] right-[-12rem] h-[36rem] w-[36rem] rounded-full bg-amber-300/20 blur-3xl dark:bg-violet-500/10" />
+      </div>
+
+      <div className="relative mx-auto max-w-7xl">
         <ArenaNav
           subtitle="学习档案"
           right={(
@@ -106,105 +153,237 @@ export default function ArenaLearningDashboardPage() {
             <Link href="/login" className="mt-4 inline-flex rounded-2xl bg-[#3ce8e2] px-5 py-3 text-sm font-black text-black">去登录</Link>
           </section>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-3">
-                <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-                  <Brain className="h-6 w-6 text-[#008f8f] dark:text-[#3ce8e2]" />
-                  <p className="mt-4 text-3xl font-black">{state.profile?.weak_concepts?.length || 0}</p>
-                  <p className="text-sm text-slate-500 dark:text-gray-400">薄弱知识点</p>
-                </article>
-                <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-                  <Sparkles className="h-6 w-6 text-amber-500" />
-                  <p className="mt-4 text-3xl font-black">{state.items.length}</p>
-                  <p className="text-sm text-slate-500 dark:text-gray-400">学习/面试沉淀</p>
-                </article>
-                <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-                  <CalendarClock className="h-6 w-6 text-rose-500" />
-                  <p className="mt-4 text-3xl font-black">{dueNow.length}</p>
-                  <p className="text-sm text-slate-500 dark:text-gray-400">24 小时内待复习</p>
-                </article>
-              </div>
-
-              <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-[#008f8f] dark:text-[#3ce8e2]">Recent Learning Items</p>
-                    <h2 className="mt-2 text-2xl font-black">最近沉淀</h2>
-                  </div>
-                  <Link href="/arena" className="inline-flex items-center gap-1 text-sm font-black text-[#008f8f] dark:text-[#3ce8e2]">继续学习 <ArrowRight className="h-4 w-4" /></Link>
-                </div>
-                <div className="mt-5 space-y-3">
-                  {state.items.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500 dark:border-gray-800 dark:text-gray-400">还没有沉淀记录。进入教育或面试题目，和 Arena Coach 对话后会自动生成。</p>}
-                  {state.items.slice(0, 12).map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#151515]">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-black">{item.title || item.skill_id || item.item_type}</p>
-                          <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-gray-400">{item.content}</p>
-                        </div>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-500 dark:bg-[#222] dark:text-gray-300">{item.skill_id || item.item_type}</span>
-                      </div>
-                      {!!item.knowledge_points?.length && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {item.knowledge_points.slice(0, 5).map((point) => (
-                            <span key={point} className="rounded-md bg-white px-2 py-1 text-xs text-slate-500 dark:bg-[#222] dark:text-gray-300">{point}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </article>
+          <div className="space-y-5">
+            <section className="grid gap-4 md:grid-cols-4">
+              <StatCard icon={<Brain className="h-6 w-6" />} label="薄弱知识点" value={state.profile?.weak_concepts?.length || 0} tone="teal" />
+              <StatCard icon={<Sparkles className="h-6 w-6" />} label="学习/面试沉淀" value={state.items.length} tone="amber" />
+              <StatCard icon={<CalendarClock className="h-6 w-6" />} label="24 小时内待复习" value={dueNow.length} tone="rose" />
+              <StatCard icon={<CheckCircle2 className="h-6 w-6" />} label="已掌握" value={state.items.filter((item) => item.status === 'mastered').length} tone="emerald" />
             </section>
 
-            <aside className="space-y-5">
-              <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-300">Review Queue</p>
-                <h2 className="mt-2 text-2xl font-black">复习队列</h2>
-                <div className="mt-5 space-y-3">
-                  {state.schedules.length === 0 && <p className="text-sm leading-6 text-slate-500 dark:text-gray-400">暂无复习计划。</p>}
-                  {state.schedules.slice(0, 10).map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#151515]">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-black">{item.item_title || item.skill_id || item.item_type}</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">下次：{formatDate(item.due_at)}</p>
-                        </div>
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button onClick={() => markReview(item.id, 'again')} className="rounded-full border border-rose-200 px-2 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/20 dark:text-rose-200">再练</button>
-                        <button onClick={() => markReview(item.id, 'good')} className="rounded-full border border-emerald-200 px-2 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-400/20 dark:text-emerald-200">已掌握</button>
-                        <button onClick={() => markReview(item.id, 'easy')} className="rounded-full border border-cyan-200 px-2 py-1 text-xs font-bold text-cyan-700 hover:bg-cyan-50 dark:border-cyan-400/20 dark:text-cyan-200">太简单</button>
-                      </div>
-                    </div>
-                  ))}
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-[#008f8f] dark:text-[#3ce8e2]">Learning Profile</p>
+                  <h1 className="mt-2 text-3xl font-black">错题、面试和知识沉淀</h1>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-gray-400">每条记录都保留题目、Agent 讲解、错因、知识点、同类题和复习状态，跨端登录后可继续查看。</p>
                 </div>
-              </article>
+                <Link href="/arena" className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-black text-[#008f8f] hover:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111] dark:text-[#3ce8e2]">
+                  继续练习 <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
 
-              <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#008f8f] dark:text-[#3ce8e2]">Mastery</p>
-                <h2 className="mt-2 text-2xl font-black">掌握度</h2>
-                <div className="mt-5 space-y-3">
-                  {mastery.length === 0 && <p className="text-sm leading-6 text-slate-500 dark:text-gray-400">暂无掌握度数据。</p>}
-                  {mastery.map(([name, value]) => (
-                    <div key={name}>
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="truncate text-slate-600 dark:text-gray-300">{name}</span>
-                        <span className="font-black text-slate-500 dark:text-gray-400">{Math.round(value * 100)}%</span>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {filters.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setFilter(item.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-black transition ${filter === item.id ? 'bg-[#3ce8e2] text-black' : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111] dark:text-gray-300'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {notice && <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-gray-800 dark:bg-[#111] dark:text-gray-300">{notice}</p>}
+            </section>
+
+            <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-3">
+                {visibleItems.length === 0 && (
+                  <p className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 dark:border-gray-800 dark:bg-[#1e1e1e] dark:text-gray-400">还没有对应记录。进入教育或面试 Flow，和 Arena Coach 对话后可以保存到学习档案。</p>
+                )}
+                {visibleItems.map((item) => (
+                  <LearningItemCard
+                    key={item.id}
+                    item={item}
+                    expanded={expandedId === item.id}
+                    busy={busyItemId === item.id}
+                    dueAt={state.schedules.find((schedule) => schedule.learning_item_id === item.id)?.due_at}
+                    onToggle={() => setExpandedId((current) => current === item.id ? '' : item.id)}
+                    onReview={(rating) => updateItem(item.id, `/arena/learning/items/${encodeURIComponent(item.id)}/review`, { rating })}
+                    onSimilar={() => updateItem(item.id, `/arena/learning/items/${encodeURIComponent(item.id)}/generate-similar`)}
+                  />
+                ))}
+              </div>
+
+              <aside className="space-y-4">
+                <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-[#008f8f] dark:text-[#3ce8e2]">Mastery</p>
+                  <h2 className="mt-2 text-xl font-black">知识点掌握</h2>
+                  <div className="mt-5 space-y-3">
+                    {mastery.length === 0 && <p className="text-sm leading-6 text-slate-500 dark:text-gray-400">暂无掌握度数据。</p>}
+                    {mastery.map(([name, value]) => (
+                      <div key={name}>
+                        <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                          <span className="truncate text-slate-600 dark:text-gray-300">{name}</span>
+                          <span className="font-black text-slate-500 dark:text-gray-400">{Math.round(value * 100)}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-[#111]">
+                          <div className="h-full rounded-full bg-gradient-to-r from-[#3ce8e2] to-emerald-400" style={{ width: `${Math.max(6, Math.min(100, value * 100))}%` }} />
+                        </div>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-[#111]">
-                        <div className="h-full rounded-full bg-gradient-to-r from-[#3ce8e2] to-emerald-400" style={{ width: `${Math.max(6, Math.min(100, value * 100))}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            </aside>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-300">Next Review</p>
+                  <h2 className="mt-2 text-xl font-black">最近复习</h2>
+                  <div className="mt-4 space-y-2 text-sm text-slate-600 dark:text-gray-300">
+                    {state.schedules.slice(0, 6).map((schedule) => (
+                      <button
+                        key={schedule.id}
+                        type="button"
+                        onClick={() => setExpandedId(schedule.learning_item_id)}
+                        className="block w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left hover:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111]"
+                      >
+                        <span className="block truncate font-bold">{schedule.item_title || schedule.item_type}</span>
+                        <span className="text-xs text-slate-500 dark:text-gray-400">{formatDate(schedule.due_at)}</span>
+                      </button>
+                    ))}
+                    {state.schedules.length === 0 && <p>暂无复习计划。</p>}
+                  </div>
+                </section>
+              </aside>
+            </section>
           </div>
         )}
       </div>
     </main>
+  )
+}
+
+function StatCard({ icon, label, value, tone }: { icon: ReactNode; label: string; value: number; tone: 'teal' | 'amber' | 'rose' | 'emerald' }) {
+  const colors = {
+    teal: 'text-[#008f8f] dark:text-[#3ce8e2]',
+    amber: 'text-amber-500',
+    rose: 'text-rose-500',
+    emerald: 'text-emerald-500',
+  }
+  return (
+    <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+      <div className={colors[tone]}>{icon}</div>
+      <p className="mt-4 text-3xl font-black">{value}</p>
+      <p className="text-sm text-slate-500 dark:text-gray-400">{label}</p>
+    </article>
+  )
+}
+
+function LearningItemCard({
+  item,
+  expanded,
+  busy,
+  dueAt,
+  onToggle,
+  onReview,
+  onSimilar,
+}: {
+  item: ArenaLearningItem
+  expanded: boolean
+  busy: boolean
+  dueAt?: string | null
+  onToggle: () => void
+  onReview: (rating: 'again' | 'hard' | 'good' | 'easy') => void
+  onSimilar: () => void
+}) {
+  const structured = item.structured || {}
+  const points = structured.knowledge_points?.length ? structured.knowledge_points : item.knowledge_points
+  const mistakes = structured.mistake_reason?.length ? structured.mistake_reason : item.error_reasons
+  const similar = Array.isArray(structured.similar_questions) ? structured.similar_questions : []
+
+  return (
+    <article className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+      <button type="button" onClick={onToggle} className="flex w-full items-start justify-between gap-4 p-5 text-left">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[#3ce8e2]/15 px-2.5 py-1 text-xs font-black text-[#008f8f] dark:text-[#3ce8e2]">{statusText(item.status)}</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500 dark:bg-[#111] dark:text-gray-400">{item.skill_id || item.item_type}</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500 dark:bg-[#111] dark:text-gray-400">复习：{formatDate(dueAt)}</span>
+          </div>
+          <h2 className="mt-3 text-xl font-black text-slate-950 dark:text-white">{itemLabel(item)}</h2>
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-gray-400">{itemQuestion(item) || itemAnswer(item) || '暂无正文'}</p>
+        </div>
+        <ChevronDown className={`mt-1 h-5 w-5 shrink-0 text-slate-400 transition ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="border-t border-slate-200 px-5 pb-5 pt-4 dark:border-gray-800">
+          <div className="grid gap-4 md:grid-cols-2">
+            <DetailBlock title="题目 / Prompt" content={itemQuestion(item)} fallback="暂无题面。" />
+            <DetailBlock title="Agent 讲解" content={itemAnswer(item)} fallback="暂无讲解。" />
+            <DetailList title="知识点" items={points || []} fallback="暂无知识点。" />
+            <DetailList title="错因 / 风险" items={mistakes || []} fallback="暂无错因记录。" />
+          </div>
+
+          {!!structured.final_answer && (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100">
+              <p className="mb-1 text-xs font-black uppercase tracking-[0.18em]">Final Answer</p>
+              {structured.final_answer}
+            </div>
+          )}
+
+          {!!structured.review_plan && (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
+              <p className="mb-1 text-xs font-black uppercase tracking-[0.18em]">Review Plan</p>
+              {String(structured.review_plan)}
+            </div>
+          )}
+
+          {!!similar.length && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#151515]">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-400">同类题</p>
+              <div className="mt-3 space-y-3">
+                {similar.map((entry, index) => {
+                  const item = typeof entry === 'string' ? { title: `同类题 ${index + 1}`, prompt: entry } : entry
+                  return (
+                    <div key={`${item.title || index}`} className="rounded-xl bg-white p-3 text-sm leading-6 text-slate-700 dark:bg-[#111] dark:text-gray-300">
+                      <p className="font-black">{item.title || `同类题 ${index + 1}`}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-slate-500 dark:text-gray-400">{item.prompt || ''}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button type="button" disabled={busy} onClick={() => onReview('again')} className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-400/20 dark:text-rose-200">再练</button>
+            <button type="button" disabled={busy} onClick={() => onReview('good')} className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-400/20 dark:text-emerald-200">已掌握</button>
+            <button type="button" disabled={busy} onClick={() => onReview('easy')} className="rounded-full border border-cyan-200 px-3 py-1.5 text-xs font-black text-cyan-700 hover:bg-cyan-50 disabled:opacity-50 dark:border-cyan-400/20 dark:text-cyan-200">太简单</button>
+            <button type="button" disabled={busy} onClick={onSimilar} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-[#3ce8e2] disabled:opacity-50 dark:border-gray-800 dark:text-gray-200">
+              <BookOpenCheck className="h-3.5 w-3.5" />
+              生成同类题
+            </button>
+          </div>
+        </div>
+      )}
+    </article>
+  )
+}
+
+function DetailBlock({ title, content, fallback }: { title: string; content?: string; fallback: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#151515]">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-400">{title}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-gray-300">{content || fallback}</p>
+    </div>
+  )
+}
+
+function DetailList({ title, items, fallback }: { title: string; items: string[]; fallback: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#151515]">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-400">{title}</p>
+      {items.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {items.map((item) => (
+            <span key={item} className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-600 dark:bg-[#111] dark:text-gray-300">{item}</span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-gray-400">{fallback}</p>
+      )}
+    </div>
   )
 }

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { notFound, useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookOpenCheck, Camera, ClipboardCheck, FileText, MessageSquareText, RefreshCw, Save, Sparkles } from 'lucide-react'
+import { BookOpenCheck, Camera, ClipboardCheck, FileText, MessageSquareText, RefreshCw, Save } from 'lucide-react'
 import { ArenaNav } from '@/components/arena/arena-nav'
 import { ChatFileUpload, type UploadedAsset } from '@/components/ui/chat-file-upload'
 import { ChatView, type ChatMessage as FeedChatMessage, type ChatRunStatus } from '@/components/ui/chat-view'
@@ -181,12 +181,11 @@ export default function ArenaFlowPage() {
   const config = flowConfigs[params.flow as FlowId]
   if (!config) notFound()
 
-  const { data: session, status } = useSession()
+  const { data: session } = useSession()
   const token = session?.accessToken as string | undefined
   const [topicId, setTopicId] = useState('')
   const [arenaAgentId, setArenaAgentId] = useState('')
   const [messages, setMessages] = useState<FeedChatMessage[]>([])
-  const [draft, setDraft] = useState('')
   const [subject, setSubject] = useState('')
   const [uploadedAssets, setUploadedAssets] = useState<UploadedAsset[]>([])
   const [loading, setLoading] = useState(false)
@@ -347,7 +346,6 @@ export default function ArenaFlowPage() {
         }),
       })
       if (!response.ok) throw new Error(await response.text())
-      setDraft('')
       await refreshMessages(nextTopicId)
       const baselineCount = before.length
       const started = Date.now()
@@ -365,7 +363,7 @@ export default function ArenaFlowPage() {
   }
 
   async function saveLearningItem() {
-    const content = draft.trim() || messages.slice().reverse().find((message) => message.sender_type === 'human')?.content || ''
+    const content = messages.slice().reverse().find((message) => message.sender_type === 'human')?.content || ''
     const answer = messages.slice().reverse().find((message) => message.sender_type === 'agent')?.content || ''
     if (!token || !content.trim()) {
       setNotice(token ? '请先输入要沉淀的内容。' : '请先登录。')
@@ -420,49 +418,47 @@ export default function ArenaFlowPage() {
           )}
         />
 
-        <div className="mt-6 grid min-h-0 flex-1 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="space-y-4">
-            <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
-              <div className={`h-2 bg-gradient-to-r ${config.accent}`} />
-              <div className="p-5">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#3ce8e2]/15 text-[#008f8f] dark:text-[#3ce8e2]">
+        <div className="mt-6 flex min-h-0 flex-1 flex-col gap-4">
+          <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
+            <div className={`h-2 bg-gradient-to-r ${config.accent}`} />
+            <div className="p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#3ce8e2]/15 text-[#008f8f] dark:text-[#3ce8e2]">
                     {iconFor(config)}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">{config.eyebrow}</p>
                     <h1 className="text-2xl font-black">{config.title}</h1>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-gray-400">{config.subtitle}</p>
                   </div>
                 </div>
-                <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-gray-400">{config.subtitle}</p>
-                <div className="mt-5 space-y-2">
-                  {config.workflow.map((step, index) => (
-                    <div key={step} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-gray-800 dark:bg-[#151515]">
-                      <span className="grid h-6 w-6 place-items-center rounded-full bg-white text-xs font-black text-[#008f8f] dark:bg-[#111] dark:text-[#3ce8e2]">{index + 1}</span>
-                      <span className="font-bold text-slate-700 dark:text-gray-300">{step}</span>
-                    </div>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => void saveLearningItem()}
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:border-[#3ce8e2] hover:text-[#008f8f] disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-[#111] dark:text-gray-200"
+                >
+                  <Save className="h-4 w-4" />
+                  {saving ? '保存中...' : config.saveLabel}
+                </button>
               </div>
-            </section>
-
-            <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#008f8f] dark:text-[#3ce8e2]">Input</p>
-              <label className="mt-4 block text-sm font-black text-slate-800 dark:text-gray-200">{config.inputLabel}</label>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {config.workflow.map((step, index) => (
+                  <span key={step} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-600 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">
+                    {index + 1}. {step}
+                  </span>
+                ))}
+              </div>
+              <label className="mt-5 block text-sm font-black text-slate-800 dark:text-gray-200">主题/学科/岗位，可选</label>
               <input
                 value={subject}
                 onChange={(event) => setSubject(event.target.value)}
                 placeholder="主题/学科/岗位，可选"
                 className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111]"
               />
-              <textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder={config.inputPlaceholder}
-                className="mt-3 min-h-40 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111]"
-              />
               {config.id === 'photo-question' && (
-                <div className="mt-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500 transition hover:border-[#3ce8e2] dark:border-gray-700 dark:bg-[#111] dark:text-gray-400">
+                <div className="mt-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-sm text-slate-500 transition hover:border-[#3ce8e2] dark:border-gray-700 dark:bg-[#111] dark:text-gray-400">
                   <Camera className="mb-2 h-6 w-6" />
                   <span className="font-bold">上传图片/PDF 给 Arena Agent 识别</span>
                   <span className="mt-1 text-xs">图片会生成可访问 URL；PDF/文本会尽量抽取正文，Agent 负责 OCR、理解和讲解。</span>
@@ -491,31 +487,7 @@ export default function ArenaFlowPage() {
                   ))}
                 </div>
               )}
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => void sendFlowMessage(draft)}
-                  disabled={loading || status === 'loading'}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#3ce8e2] px-4 py-3 text-sm font-black text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {loading ? '处理中...' : config.primaryAction}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void saveLearningItem()}
-                  disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:border-[#3ce8e2] hover:text-[#008f8f] disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-[#111] dark:text-gray-200"
-                >
-                  <Save className="h-4 w-4" />
-                  {saving ? '保存中...' : config.saveLabel}
-                </button>
-              </div>
               {notice && <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-gray-800 dark:bg-[#111] dark:text-gray-300">{notice}</p>}
-            </section>
-
-            <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">Examples</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {config.examples.map((example) => (
                   <button
@@ -528,8 +500,8 @@ export default function ArenaFlowPage() {
                   </button>
                 ))}
               </div>
-            </section>
-          </aside>
+            </div>
+          </section>
 
           <section className="min-h-[640px] overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white/90 p-2 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
             <ChatView
@@ -561,7 +533,7 @@ export default function ArenaFlowPage() {
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-[#008f8f] dark:text-[#3ce8e2]">{config.eyebrow}</p>
                   <h2 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{config.title}</h2>
                   <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-gray-300">
-                    这个页面是独立学习工作流，不再跳题库。左侧输入内容后，Arena Coach 会按当前 flow 的协议处理。
+                    这个页面是独立学习工作流，不再跳题库。直接在下方对话框输入内容，Arena Coach 会按当前 flow 的协议处理。
                   </p>
                 </div>
               )}

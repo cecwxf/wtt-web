@@ -152,6 +152,24 @@ export interface ArenaUserProfile {
   updated_at?: string | null
 }
 
+export interface ArenaLearningStructured {
+  title?: string
+  question?: string
+  user_answer?: string
+  coach_answer?: string
+  final_answer?: string
+  mistake_reason?: string[]
+  knowledge_points?: string[]
+  similar_questions?: Array<{
+    id?: string
+    title?: string
+    prompt?: string
+  } | string>
+  review_plan?: string
+  source_assets?: string[]
+  [key: string]: unknown
+}
+
 export interface ArenaLearningItem {
   id: string
   user_id: string
@@ -166,7 +184,10 @@ export interface ArenaLearningItem {
   error_reasons: string[]
   skill_id?: string | null
   source_metadata: Record<string, unknown>
+  structured?: ArenaLearningStructured
+  status?: 'new' | 'reviewing' | 'mastered' | string
   mastery_estimate: number
+  last_reviewed_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -181,4 +202,16 @@ export interface ArenaReviewSchedule {
   state: Record<string, unknown>
   due_at?: string | null
   last_reviewed_at?: string | null
+}
+
+export interface ArenaPracticeSession {
+  id: string
+  user_id: string
+  title?: string | null
+  mode: string
+  item_ids: string[]
+  status: 'active' | 'completed' | string
+  result: Record<string, unknown>
+  created_at: string
+  updated_at: string
 }

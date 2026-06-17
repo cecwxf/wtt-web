@@ -48,8 +48,7 @@ export default function ArenaPage() {
           )}
         />
 
-        <header className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-stretch">
-          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] sm:p-8 lg:p-10">
+        <header className="mt-8 overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] sm:p-8 lg:p-10">
             <div className="mb-6 inline-flex rounded-full border border-[#3ce8e2]/25 bg-[#3ce8e2]/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-[#008f8f] dark:text-[#3ce8e2]">
               Skill Coach · Practice · Review
             </div>
@@ -59,7 +58,7 @@ export default function ArenaPage() {
             <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600 dark:text-gray-400">
               Arena 现在聚焦两件事：教育题目讲解和面试问答训练。选择板块后直接进入题目，使用提示、讲答案、类题迁移三类 Coach Action 推动学习闭环。
             </p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <div className="mt-8 grid gap-3 md:grid-cols-3">
               <Link href="/arena/sections/education" className="group rounded-2xl border border-amber-200 bg-amber-50 p-5 transition hover:-translate-y-1 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/10 dark:hover:bg-amber-400/15">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-700 dark:text-amber-200">Education</p>
                 <h2 className="mt-3 text-2xl font-black">教育练习</h2>
@@ -72,21 +71,13 @@ export default function ArenaPage() {
                 <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-300">AI、系统、Android、Linux、硬件等开放式面试问答。</p>
                 <p className="mt-5 text-sm font-black text-violet-700 dark:text-violet-200">{interviewCount} 个面试题 →</p>
               </Link>
+              <Link href="/arena/learning" className="group rounded-2xl border border-cyan-200 bg-cyan-50 p-5 transition hover:-translate-y-1 hover:border-cyan-300 hover:bg-cyan-100 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:hover:bg-cyan-400/15">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-700 dark:text-cyan-200">Learning Profile</p>
+                <h2 className="mt-3 text-2xl font-black">学习档案</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-300">查看错题、面试复盘、掌握度和下一次复习计划。</p>
+                <p className="mt-5 text-sm font-black text-cyan-700 dark:text-cyan-200">打开档案 →</p>
+              </Link>
             </div>
-          </div>
-
-          <aside className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#008f8f] dark:text-[#3ce8e2]">Action Status</p>
-            <h2 className="mt-3 text-2xl font-black">当前保留的核心动作</h2>
-            <div className="mt-5 space-y-3">
-              {['提示：先追问和点拨，不直接倒答案', '讲答案：分步讲解、公式和关键误区', '类题迁移：生成下一题和迁移方向'].map((item, index) => (
-                <div key={item} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#3ce8e2]/15 text-xs font-black text-[#008f8f] dark:text-[#3ce8e2]">{index + 1}</span>
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </aside>
         </header>
 
         <section id="education" className="mt-10 grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
@@ -123,14 +114,13 @@ export default function ArenaPage() {
           </div>
         </section>
 
-        <section className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
-          <p className="text-sm font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Interview Actions</p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+        {!!interviewFlows.length && (
+          <section className="mt-8 grid gap-4 md:grid-cols-2">
             {interviewFlows.map((flow) => (
               <SkillFlowCard key={flow.id} flow={flow} compact />
             ))}
-          </div>
-        </section>
+          </section>
+        )}
       </section>
     </main>
   )
