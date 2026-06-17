@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, BookOpen, Camera, Check, Download, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Sparkles, SquareTerminal, Video, X } from 'lucide-react'
+import { Bell, BookOpen, Camera, Check, Download, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Sparkles, SquareTerminal, Star, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
@@ -112,6 +112,11 @@ interface AgentSkillCandidate {
   source_ref?: string
   source_url?: string
   url?: string
+  downloads?: number | string | null
+  rating?: number | string | null
+  rating_count?: number | string | null
+  stars?: number | string | null
+  forks?: number | string | null
   compatible?: boolean
   installed?: boolean
 }
@@ -122,6 +127,22 @@ interface AgentSkillSourceStatus {
   count?: number
   reason?: string
   error?: string
+}
+
+function formatSkillMetric(value: unknown): string {
+  if (value === null || value === undefined || value === '') return ''
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return String(value)
+  if (Math.abs(numeric) >= 1_000_000) return `${(numeric / 1_000_000).toFixed(numeric >= 10_000_000 ? 0 : 1)}M`
+  if (Math.abs(numeric) >= 1_000) return `${(numeric / 1_000).toFixed(numeric >= 10_000 ? 0 : 1)}k`
+  return String(numeric)
+}
+
+function formatSkillRating(value: unknown): string {
+  if (value === null || value === undefined || value === '') return ''
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return String(value)
+  return numeric.toFixed(numeric % 1 === 0 ? 0 : 1)
 }
 
 function buildAgentSkillInstallPrompt(skill: AgentSkillCandidate, adapter: string, agentId: string): string {
@@ -2702,6 +2723,11 @@ export function ChatView({
                   {skillCandidates.map((skill) => {
                     const installing = skillInstallingId === skill.id
                     const disabled = installing || skill.installed || skill.compatible === false
+                    const downloadLabel = formatSkillMetric(skill.downloads)
+                    const ratingLabel = formatSkillRating(skill.rating)
+                    const ratingCountLabel = formatSkillMetric(skill.rating_count)
+                    const starsLabel = formatSkillMetric(skill.stars)
+                    const forksLabel = formatSkillMetric(skill.forks)
                     return (
                       <div
                         key={skill.id}
@@ -2726,6 +2752,33 @@ export function ChatView({
                         <p className="mt-2 line-clamp-3 flex-1 text-xs leading-5 text-slate-600 dark:text-zinc-300">
                           {skill.description || 'No description available.'}
                         </p>
+                        {(downloadLabel || ratingLabel || starsLabel || forksLabel) && (
+                          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                            {downloadLabel && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-sky-100 bg-sky-50 px-2 py-1 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200" title="Downloads / installs">
+                                <Download className="h-3 w-3" />
+                                {downloadLabel}
+                              </span>
+                            )}
+                            {ratingLabel && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200" title={ratingCountLabel ? `${ratingCountLabel} ratings` : 'Rating'}>
+                                <Star className="h-3 w-3 fill-current" />
+                                {ratingLabel}{ratingCountLabel ? ` (${ratingCountLabel})` : ''}
+                              </span>
+                            )}
+                            {starsLabel && !ratingLabel && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200" title="GitHub stars">
+                                <Star className="h-3 w-3 fill-current" />
+                                {starsLabel}
+                              </span>
+                            )}
+                            {forksLabel && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" title="GitHub forks">
+                                Fork {forksLabel}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <div className="mt-3 flex flex-wrap gap-1">
                           {skill.source && (
                             <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
