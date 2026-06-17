@@ -1568,7 +1568,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
   const [arenaTyping, setArenaTyping] = useState<ArenaTypingState | null>(null)
   const [arenaRoutedSkill, setArenaRoutedSkill] = useState<ArenaRoutedSkill | null>(null)
   const [arenaRuntimeMap, setArenaRuntimeMap] = useState<Record<string, ArenaRuntimeInfo>>({})
-  const [leftPanelWidth, setLeftPanelWidth] = useState(360)
+  const [leftPanelWidth, setLeftPanelWidth] = useState(300)
   const [whiteboardPanelWidth, setWhiteboardPanelWidth] = useState(520)
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const appliedWhiteboardMessageIdsRef = useRef(new Set<string>())
@@ -1597,7 +1597,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
       if (!bounds) return
       const handleMove = (moveEvent: PointerEvent) => {
         const available = bounds.width - 760
-        setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 280, Math.max(300, available)))
+        setLeftPanelWidth(clampNumber(moveEvent.clientX - bounds.left, 240, Math.max(280, available)))
       }
       const stop = () => {
         window.removeEventListener('pointermove', handleMove)
@@ -2441,19 +2441,19 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
     return <main className="min-h-screen bg-[#f7f5f0] p-8 text-slate-900 dark:bg-[#151515] dark:text-white">Loading Arena...</main>
   }
   const challengeAccepted = submission?.status === 'accepted'
-  const stackedArenaLayout = !isCoding && viewport.isNarrow
+  const stackedArenaLayout = !isCoding && viewport.width < 900
   const compactArena = viewport.isCompact && !viewport.isNarrow
-  const leftColumnWidth = compactArena ? clampNumber(Math.round(leftPanelWidth * 0.88), 280, 330) : leftPanelWidth
+  const leftColumnWidth = compactArena ? clampNumber(Math.round(leftPanelWidth * 0.88), 240, 300) : leftPanelWidth
 
   const hasArenaVisualPanel = whiteboardVisible && (latestArenaPreview || whiteboardDiagram)
 
   const arenaLayoutStyle = !isCoding && !stackedArenaLayout
     ? {
       gridTemplateColumns: isGaokaoVolunteer
-        ? `${leftColumnWidth}px minmax(${compactArena ? 480 : 560}px, 1fr)`
+        ? `${leftColumnWidth}px minmax(${compactArena ? 420 : 520}px, 1fr)`
         : hasArenaVisualPanel
-        ? `${leftColumnWidth}px 6px minmax(${compactArena ? 360 : 420}px, 1fr) 6px ${whiteboardPanelWidth}px`
-        : `${leftColumnWidth}px 6px minmax(${compactArena ? 480 : 560}px, 1fr)`,
+        ? `${leftColumnWidth}px 6px minmax(${compactArena ? 320 : 400}px, 1fr) 6px ${whiteboardPanelWidth}px`
+        : `${leftColumnWidth}px 6px minmax(${compactArena ? 420 : 520}px, 1fr)`,
     }
     : undefined
 
@@ -2509,11 +2509,11 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
               ))}
             </div>
 
-            <div className="h-full overflow-y-auto p-4 pb-20 lg:p-5 lg:pb-24">
+            <div className="h-full overflow-y-auto p-3 pb-16 lg:p-4 lg:pb-20">
               {activeTab === 'description' && (
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-xl font-black tracking-tight text-slate-950 dark:text-white lg:text-2xl">{challenge.title}</h1>
+                    <h1 className="text-lg font-black tracking-tight text-slate-950 dark:text-white lg:text-xl">{challenge.title}</h1>
                     {!isCoachOnlyPractice && challengeAccepted && (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
                         ✓ {locale === 'zh' ? '已通过' : 'Accepted'}
@@ -2529,7 +2529,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     {challenge.tags.map((tag) => <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-500 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-400">{tag}</span>)}
                   </div>
                   {isCoachOnlyPractice && coachFlowSteps.length > 0 && (
-                    <div className="mt-4 rounded-2xl border border-[#3ce8e2]/20 bg-gradient-to-br from-[#efffff] to-white p-4 shadow-sm dark:border-[#3ce8e2]/20 dark:from-[#101818] dark:to-[#151515]">
+                    <div className="mt-3 rounded-2xl border border-[#3ce8e2]/20 bg-gradient-to-br from-[#efffff] to-white p-3 shadow-sm dark:border-[#3ce8e2]/20 dark:from-[#101818] dark:to-[#151515]">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#008f8f] dark:text-[#3ce8e2]">Skill Flow</p>
@@ -2545,7 +2545,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                           学习档案
                         </Link>
                       </div>
-                      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                      <div className="mt-3 grid gap-2">
                         {coachFlowSteps.map((step, index) => (
                           <button
                             key={step}
@@ -2555,17 +2555,17 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                               if (action) runCoachAction(action)
                             }}
                             disabled={chatSending || arenaSyncing}
-                            className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:-translate-y-0.5 hover:border-[#3ce8e2] hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-[#101010]"
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left transition hover:-translate-y-0.5 hover:border-[#3ce8e2] hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-[#101010]"
                           >
-                            <span className="grid h-7 w-7 place-items-center rounded-full bg-[#3ce8e2]/15 text-xs font-black text-[#008f8f] dark:text-[#3ce8e2]">{index + 1}</span>
-                            <span className="mt-2 block text-sm font-black text-slate-900 dark:text-white">{step}</span>
+                            <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-[#3ce8e2]/15 text-xs font-black text-[#008f8f] dark:text-[#3ce8e2]">{index + 1}</span>
+                            <span className="ml-2 text-sm font-black text-slate-900 dark:text-white">{step}</span>
                           </button>
                         ))}
                       </div>
                     </div>
                   )}
                   {arenaRoutedSkill && (
-                    <div className="mt-4 rounded-xl border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-4 text-sm text-slate-700 dark:text-gray-300">
+                    <div className="mt-3 rounded-xl border border-[#3ce8e2]/20 bg-[#3ce8e2]/5 p-3 text-sm text-slate-700 dark:text-gray-300">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs font-black uppercase tracking-[0.22em] text-[#008f8f] dark:text-[#3ce8e2]">Current Skill Flow</p>
                         <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-500 shadow-sm dark:bg-[#111] dark:text-gray-400">{arenaRoutedSkill.domain || 'arena'}</span>
@@ -2581,7 +2581,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                     </div>
                   )}
                   {(arenaProfile || arenaLearningItems.length > 0 || arenaReviewSchedules.length > 0) && (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-slate-700 shadow-sm dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-gray-300">
+                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-sm text-slate-700 shadow-sm dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-gray-300">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-700 dark:text-amber-200">Learning Profile</p>
                         <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-amber-700 shadow-sm dark:bg-[#111] dark:text-amber-200">
@@ -2795,7 +2795,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           ) : null}
 
           <aside className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/85 p-2 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e] ${isCoding ? 'lg:col-span-2 xl:col-span-1' : ''}`}>
-            <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7] dark:border-gray-800 dark:bg-[#151515] lg:min-h-[520px]">
+            <div className="flex min-h-[72dvh] flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7] dark:border-gray-800 dark:bg-[#151515] md:min-h-0">
               <div className="min-h-0 flex-1">
                 <ChatView
                   topicName={challenge.title || t.chatTitle}

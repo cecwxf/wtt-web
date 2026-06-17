@@ -374,8 +374,8 @@ export default function ArenaFlowPage() {
           )}
         />
 
-        <div className="mt-6 grid min-h-0 flex-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:self-start">
+        <div className="mt-4 grid min-h-0 flex-1 gap-3 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]">
+          <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] md:self-start">
             <div className={`h-2 bg-gradient-to-r ${config.accent}`} />
             <div className="p-4">
               <div className="flex flex-col gap-4">
@@ -413,7 +413,7 @@ export default function ArenaFlowPage() {
             </div>
           </section>
 
-          <section className="min-h-[72dvh] overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white/90 p-2 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e] lg:min-h-0">
+          <section className="min-h-[72dvh] overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white/90 p-2 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e] md:min-h-0">
             <ChatView
               topicName={`${config.title} · Arena Coach`}
               topicId={topicId || undefined}
