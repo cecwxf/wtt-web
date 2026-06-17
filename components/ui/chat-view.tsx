@@ -109,8 +109,18 @@ interface AgentSkillCandidate {
   adapters?: string[]
   tags?: string[]
   source?: string
+  source_ref?: string
+  url?: string
   compatible?: boolean
   installed?: boolean
+}
+
+interface AgentSkillSourceStatus {
+  source: string
+  enabled?: boolean
+  count?: number
+  reason?: string
+  error?: string
 }
 
 const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
@@ -1308,6 +1318,7 @@ export function ChatView({
   const [skillSearch, setSkillSearch] = useState('')
   const [skillCompatibleOnly, setSkillCompatibleOnly] = useState(true)
   const [skillCandidates, setSkillCandidates] = useState<AgentSkillCandidate[]>([])
+  const [skillSources, setSkillSources] = useState<AgentSkillSourceStatus[]>([])
   const [skillLoading, setSkillLoading] = useState(false)
   const [skillInstallingId, setSkillInstallingId] = useState<string | null>(null)
   const [skillNotice, setSkillNotice] = useState('')
@@ -1711,9 +1722,11 @@ export function ChatView({
         }
         const data = await response.json()
         setSkillCandidates(Array.isArray(data.skills) ? data.skills : [])
+        setSkillSources(Array.isArray(data.sources) ? data.sources : [])
       } catch (error) {
         if (controller.signal.aborted) return
         setSkillCandidates([])
+        setSkillSources([])
         setSkillNotice(error instanceof Error ? error.message : 'Skill search failed')
       } finally {
         if (!controller.signal.aborted) setSkillLoading(false)
@@ -2625,6 +2638,23 @@ export function ChatView({
                   {skillNotice}
                 </div>
               )}
+              {skillSources.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 text-[10px]">
+                  {skillSources.map((source) => (
+                    <span
+                      key={`${source.source}-${source.reason || source.error || source.count || 0}`}
+                      className={`rounded-full px-2 py-0.5 font-semibold ${
+                        source.enabled === false || source.error
+                          ? 'bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400'
+                          : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                      }`}
+                      title={source.error || source.reason || ''}
+                    >
+                      {source.source}: {source.enabled === false ? (source.reason || 'disabled') : source.error ? 'error' : `${source.count ?? 0}`}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -2667,6 +2697,11 @@ export function ChatView({
                           {skill.description || 'No description available.'}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-1">
+                          {skill.source && (
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                              {skill.source}
+                            </span>
+                          )}
                           {(skill.adapters || []).slice(0, 3).map((adapter) => (
                             <span key={adapter} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-zinc-800 dark:text-zinc-400">
                               {adapter}
