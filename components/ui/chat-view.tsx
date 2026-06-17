@@ -110,6 +110,7 @@ interface AgentSkillCandidate {
   tags?: string[]
   source?: string
   source_ref?: string
+  source_url?: string
   url?: string
   compatible?: boolean
   installed?: boolean
@@ -1749,7 +1750,13 @@ export function ChatView({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ skill_id: skill.id, adapter: activeAgentAdapter }),
+        body: JSON.stringify({
+          skill_id: skill.id,
+          adapter: activeAgentAdapter,
+          source: skill.source,
+          source_ref: skill.source_ref,
+          source_url: skill.source_url || skill.url,
+        }),
       })
       if (!response.ok) {
         const text = await response.text()
