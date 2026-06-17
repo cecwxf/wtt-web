@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, BookOpen, Camera, Download, HardDriveDownload, Image as ImageIcon, MapPin, Maximize2, Minimize2, Paperclip, Reply, Send, SquareTerminal, Video, X } from 'lucide-react'
+import { Bell, BookOpen, Camera, Check, Download, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Sparkles, SquareTerminal, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
@@ -100,6 +100,17 @@ interface CurrentAgentRuntimeInfo {
   reasoning_effort?: string
   thinking_mode?: string
   last_heartbeat_secs_ago?: number
+}
+
+interface AgentSkillCandidate {
+  id: string
+  name: string
+  description?: string
+  adapters?: string[]
+  tags?: string[]
+  source?: string
+  compatible?: boolean
+  installed?: boolean
 }
 
 const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
@@ -1293,6 +1304,13 @@ export function ChatView({
   const [slashFilter, setSlashFilter] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
   const [slashResult, setSlashResult] = useState<string | null>(null)
+  const [skillModalOpen, setSkillModalOpen] = useState(false)
+  const [skillSearch, setSkillSearch] = useState('')
+  const [skillCompatibleOnly, setSkillCompatibleOnly] = useState(true)
+  const [skillCandidates, setSkillCandidates] = useState<AgentSkillCandidate[]>([])
+  const [skillLoading, setSkillLoading] = useState(false)
+  const [skillInstallingId, setSkillInstallingId] = useState<string | null>(null)
+  const [skillNotice, setSkillNotice] = useState('')
 
   // @mention autocomplete state
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -1442,6 +1460,7 @@ export function ChatView({
   const displayEffortLabel = REASONING_EFFORTS.find((e) => e.id === displayEffort)?.label || displayEffort
   const showCloudBilling = Boolean(currentAgentIsCloud)
   const cloudBillingText = cloudAgentQuotaText(cloudSandboxBilling)
+  const skillAdapterLabel = activeAgentLabel
 
   const mentionCandidates = useMemo(() => {
     const shouldShowAll = topicType === 'discussion' || topicType === 'collaborative'
@@ -1669,6 +1688,72 @@ export function ChatView({
           ]
     return commands.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd)))
   }, [activeAgentAdapter, isModelCommand, isNonTaskDiscussTopic])
+
+  useEffect(() => {
+    if (!skillModalOpen || !accessToken || !currentAgentId) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setSkillLoading(true)
+      setSkillNotice('')
+      try {
+        const params = new URLSearchParams()
+        params.set('agent_id', currentAgentId)
+        params.set('adapter', activeAgentAdapter)
+        params.set('include_incompatible', skillCompatibleOnly ? 'false' : 'true')
+        if (skillSearch.trim()) params.set('q', skillSearch.trim())
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/skills/search?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          const text = await response.text()
+          throw new Error(text || `Skill search failed (${response.status})`)
+        }
+        const data = await response.json()
+        setSkillCandidates(Array.isArray(data.skills) ? data.skills : [])
+      } catch (error) {
+        if (controller.signal.aborted) return
+        setSkillCandidates([])
+        setSkillNotice(error instanceof Error ? error.message : 'Skill search failed')
+      } finally {
+        if (!controller.signal.aborted) setSkillLoading(false)
+      }
+    }, 180)
+    return () => {
+      controller.abort()
+      window.clearTimeout(timer)
+    }
+  }, [accessToken, activeAgentAdapter, currentAgentId, skillCompatibleOnly, skillModalOpen, skillSearch])
+
+  const installSkill = useCallback(async (skill: AgentSkillCandidate) => {
+    if (!accessToken || !currentAgentId || !skill.id || skill.installed || skill.compatible === false) return
+    setSkillInstallingId(skill.id)
+    setSkillNotice('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(currentAgentId)}/skills/install`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ skill_id: skill.id, adapter: activeAgentAdapter }),
+      })
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(text || `Install failed (${response.status})`)
+      }
+      const data = await response.json()
+      const installedId = String(data?.skill?.id || skill.id)
+      setSkillCandidates((prev) => prev.map((item) => (
+        item.id === installedId ? { ...item, installed: true } : item
+      )))
+      setSkillNotice(`${skill.name || skill.id} installed for ${skillAdapterLabel}.`)
+    } catch (error) {
+      setSkillNotice(error instanceof Error ? error.message : 'Skill install failed')
+    } finally {
+      setSkillInstallingId(null)
+    }
+  }, [accessToken, activeAgentAdapter, currentAgentId, skillAdapterLabel])
 
   const handleDraftChange = useCallback((value: string) => {
     setDraft(value)
@@ -2480,6 +2565,134 @@ export function ChatView({
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-indigo-50/60 dark:bg-indigo-900/30">
           <div className="rounded-xl bg-white dark:bg-zinc-800 px-6 py-4 shadow-lg border-2 border-dashed border-indigo-400">
             <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">📄 Drop files to analyze with Agent</p>
+          </div>
+        </div>
+      )}
+      {skillModalOpen && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/35 px-3 py-6" onMouseDown={() => setSkillModalOpen(false)}>
+          <div
+            className="flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-950"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-br from-sky-50 via-white to-amber-50 px-4 py-3 dark:border-zinc-800 dark:from-sky-950/25 dark:via-zinc-950 dark:to-amber-950/10">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-600 text-white shadow-sm">
+                    <Sparkles className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-zinc-100">Install Skill</h3>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                      Showing skills compatible with {skillAdapterLabel}.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSkillModalOpen(false)}
+                className="rounded-full p-1 text-slate-400 transition hover:bg-white/70 hover:text-slate-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                aria-label="Close skill modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 border-b border-slate-100 px-4 py-3 dark:border-zinc-800">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={skillSearch}
+                    onChange={(event) => setSkillSearch(event.target.value)}
+                    placeholder="Search skill name, tag, or description"
+                    className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20"
+                    autoFocus
+                  />
+                </div>
+                <label className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={skillCompatibleOnly}
+                    onChange={(event) => setSkillCompatibleOnly(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-sky-600"
+                  />
+                  Compatible only
+                </label>
+              </div>
+              {skillNotice && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                  {skillNotice}
+                </div>
+              )}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {skillLoading ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500 dark:text-zinc-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading skills...
+                </div>
+              ) : skillCandidates.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">
+                  No matching skills.
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {skillCandidates.map((skill) => {
+                    const installing = skillInstallingId === skill.id
+                    const disabled = installing || skill.installed || skill.compatible === false
+                    return (
+                      <div
+                        key={skill.id}
+                        className={`flex min-h-[150px] flex-col rounded-2xl border p-3 transition ${
+                          skill.compatible === false
+                            ? 'border-slate-200 bg-slate-50 opacity-75 dark:border-zinc-800 dark:bg-zinc-900/60'
+                            : 'border-sky-100 bg-white shadow-sm hover:border-sky-200 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-sky-500/40'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-bold text-slate-900 dark:text-zinc-100">{skill.name || skill.id}</div>
+                            <div className="mt-0.5 truncate font-mono text-[10px] text-slate-400 dark:text-zinc-500">{skill.id}</div>
+                          </div>
+                          {skill.installed && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                              <Check className="h-3 w-3" />
+                              Installed
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-2 line-clamp-3 flex-1 text-xs leading-5 text-slate-600 dark:text-zinc-300">
+                          {skill.description || 'No description available.'}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {(skill.adapters || []).slice(0, 3).map((adapter) => (
+                            <span key={adapter} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-zinc-800 dark:text-zinc-400">
+                              {adapter}
+                            </span>
+                          ))}
+                          {(skill.tags || []).slice(0, 2).map((tag) => (
+                            <span key={tag} className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-600 dark:bg-sky-500/10 dark:text-sky-300">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => void installSkill(skill)}
+                          className="mt-3 inline-flex items-center justify-center gap-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
+                        >
+                          {installing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : skill.installed ? <Check className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                          {skill.compatible === false ? 'Not compatible' : skill.installed ? 'Installed' : 'Install'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -3358,6 +3571,19 @@ export function ChatView({
           <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {activeAgentLabel}
           </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSkillModalOpen(true)
+              setSkillNotice('')
+            }}
+            disabled={!accessToken || !currentAgentId}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/20"
+            title={`Search ${skillAdapterLabel} compatible skills`}
+          >
+            <Sparkles className="h-3 w-3" />
+            Skill
+          </button>
           {canUseKnowledgeMode && (
             <button
               type="button"
