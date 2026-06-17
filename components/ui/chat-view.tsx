@@ -124,6 +124,45 @@ interface AgentSkillSourceStatus {
   error?: string
 }
 
+function buildAgentSkillInstallPrompt(skill: AgentSkillCandidate, adapter: string, agentId: string): string {
+  const skillId = String(skill.id || '').trim()
+  const skillName = String(skill.name || skillId).trim()
+  const source = String(skill.source || '').trim()
+  const sourceRef = String(skill.source_ref || '').trim()
+  const sourceUrl = String(skill.source_url || '').trim()
+  const pageUrl = String(skill.url || '').trim()
+  const links = [
+    sourceUrl ? `- Source URL: ${sourceUrl}` : '',
+    pageUrl && pageUrl !== sourceUrl ? `- Skill page: ${pageUrl}` : '',
+  ].filter(Boolean).join('\n')
+  const tags = (skill.tags || []).filter(Boolean).slice(0, 8).join(', ')
+  const adapters = (skill.adapters || []).filter(Boolean).join(', ')
+  return [
+    '[WTT_SKILL_INSTALL_REQUEST]',
+    '',
+    `Please install the following skill into this Agent runtime and make it usable by the current ${adapter || 'agent'} adapter.`,
+    '',
+    `- Skill ID: ${skillId}`,
+    `- Skill name: ${skillName}`,
+    `- Target Agent ID: ${agentId}`,
+    source ? `- Catalog source: ${source}` : '',
+    sourceRef ? `- Source ref: ${sourceRef}` : '',
+    adapters ? `- Compatible adapters: ${adapters}` : '',
+    tags ? `- Tags: ${tags}` : '',
+    links,
+    skill.description ? `\nDescription:\n${skill.description}` : '',
+    '',
+    'Install requirements:',
+    '1. Verify the source contains a valid SKILL.md before installing.',
+    '2. Install the skill into the local skill directory used by this runtime, not the WTT backend server.',
+    '3. If the provided GitHub tree URL is unavailable, inspect the SkillsMP page or search equivalent forks by skill name and install the closest valid source.',
+    '4. Keep the install scoped to this Agent runtime. Do not modify unrelated global system files.',
+    '5. After installation, reply with the installed path, the detected SKILL.md title/description, and one short usage example.',
+    '',
+    'If installation is impossible, explain the exact blocker and suggest the next best compatible skill.',
+  ].filter(Boolean).join('\n')
+}
+
 const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
 type RuntimeEffort = 'off' | 'low' | 'medium' | 'high'
 type RuntimeModelPref = { model: string; effort: RuntimeEffort }
@@ -1744,36 +1783,17 @@ export function ChatView({
     setSkillInstallingId(skill.id)
     setSkillNotice('')
     try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(currentAgentId)}/skills/install`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          skill_id: skill.id,
-          adapter: activeAgentAdapter,
-          source: skill.source,
-          source_ref: skill.source_ref,
-          source_url: skill.source_url || skill.url,
-        }),
-      })
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(text || `Install failed (${response.status})`)
-      }
-      const data = await response.json()
-      const installedId = String(data?.skill?.id || skill.id)
-      setSkillCandidates((prev) => prev.map((item) => (
-        item.id === installedId ? { ...item, installed: true } : item
-      )))
-      setSkillNotice(`${skill.name || skill.id} installed for ${skillAdapterLabel}.`)
+      const prompt = buildAgentSkillInstallPrompt(skill, activeAgentAdapter, currentAgentId)
+      await onSendMessage(prompt)
+      setSkillNotice(`Install task sent to ${skillAdapterLabel}. Watch the chat for progress.`)
+      setSkillModalOpen(false)
+      setActiveTab('chat')
     } catch (error) {
-      setSkillNotice(error instanceof Error ? error.message : 'Skill install failed')
+      setSkillNotice(error instanceof Error ? error.message : 'Failed to send install task')
     } finally {
       setSkillInstallingId(null)
     }
-  }, [accessToken, activeAgentAdapter, currentAgentId, skillAdapterLabel])
+  }, [accessToken, activeAgentAdapter, currentAgentId, onSendMessage, skillAdapterLabel])
 
   const handleDraftChange = useCallback((value: string) => {
     setDraft(value)
@@ -2601,9 +2621,9 @@ export function ChatView({
                     <Sparkles className="h-4 w-4" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-zinc-100">Install Skill</h3>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-zinc-100">Agent Skill Install</h3>
                     <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                      Showing skills compatible with {skillAdapterLabel}.
+                      Send an install task to {skillAdapterLabel}; the Agent installs it in its own runtime.
                     </p>
                   </div>
                 </div>
@@ -2619,6 +2639,9 @@ export function ChatView({
             </div>
 
             <div className="space-y-3 border-b border-slate-100 px-4 py-3 dark:border-zinc-800">
+              <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-[11px] leading-5 text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200">
+                Install runs through the selected Agent, so Cloud Sandbox, local Mac, and self-hosted runtimes use the same flow. The Agent can recover from stale source links or choose a valid fork.
+              </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -2727,7 +2750,7 @@ export function ChatView({
                           className="mt-3 inline-flex items-center justify-center gap-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
                         >
                           {installing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : skill.installed ? <Check className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-                          {skill.compatible === false ? 'Not compatible' : skill.installed ? 'Installed' : 'Install'}
+                          {skill.compatible === false ? 'Not compatible' : skill.installed ? 'Installed' : 'Ask Agent'}
                         </button>
                       </div>
                     )
