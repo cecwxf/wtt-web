@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ArrowRight, BookOpenCheck, Brain, CalendarClock, CheckCircle2, ChevronDown, RefreshCw, Sparkles } from 'lucide-react'
 import { ArenaNav } from '@/components/arena/arena-nav'
+import { RichMarkdown } from '@/components/ui/rich-markdown'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import type { ArenaLearningItem, ArenaReviewSchedule, ArenaUserProfile } from '@/lib/arena/types'
 
@@ -416,7 +417,7 @@ function LearningItemCard({
           {!!reviewPlan && (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
               <p className="mb-1 text-xs font-black uppercase tracking-[0.18em]">复习建议</p>
-              {reviewPlan}
+              <RichMarkdown className="text-amber-900 dark:text-amber-100">{reviewPlan}</RichMarkdown>
             </div>
           )}
 
@@ -429,7 +430,7 @@ function LearningItemCard({
                   return (
                     <div key={`${item.title || index}`} className="rounded-xl bg-white p-3 text-sm leading-6 text-slate-700 dark:bg-[#111] dark:text-gray-300">
                       <p className="font-black">{item.title || `同类题 ${index + 1}`}</p>
-                      <p className="mt-1 whitespace-pre-wrap text-slate-500 dark:text-gray-400">{item.prompt || ''}</p>
+                      <RichMarkdown className="mt-1 text-slate-500 dark:text-gray-300">{item.prompt || ''}</RichMarkdown>
                     </div>
                   )
                 })}
@@ -440,7 +441,7 @@ function LearningItemCard({
           {sourceQuestion && (
             <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-400">
               <summary className="cursor-pointer text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-400">原始题目 / 来源</summary>
-              <p className="mt-3 whitespace-pre-wrap leading-6">{sourceQuestion}</p>
+              <RichMarkdown className="mt-3 text-slate-600 dark:text-gray-300">{sourceQuestion}</RichMarkdown>
             </details>
           )}
 
@@ -460,10 +461,11 @@ function LearningItemCard({
 }
 
 function DetailBlock({ title, content, fallback, featured = false }: { title: string; content?: string; fallback: string; featured?: boolean }) {
+  const body = content || fallback
   return (
     <div className={`rounded-2xl border p-4 ${featured ? 'border-[#3ce8e2]/30 bg-[#efffff] dark:border-[#3ce8e2]/20 dark:bg-[#101818]' : 'border-slate-200 bg-slate-50 dark:border-gray-800 dark:bg-[#151515]'}`}>
       <p className={`text-xs font-black uppercase tracking-[0.18em] ${featured ? 'text-[#008f8f] dark:text-[#3ce8e2]' : 'text-slate-500 dark:text-gray-400'}`}>{title}</p>
-      <p className={`mt-2 whitespace-pre-wrap text-sm leading-6 ${featured ? 'text-slate-800 dark:text-gray-100' : 'text-slate-700 dark:text-gray-300'}`}>{content || fallback}</p>
+      <RichMarkdown className={`mt-2 text-sm ${featured ? 'text-slate-800 dark:text-gray-100' : 'text-slate-700 dark:text-gray-300'}`}>{body}</RichMarkdown>
     </div>
   )
 }
