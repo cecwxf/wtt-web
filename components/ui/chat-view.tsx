@@ -54,6 +54,7 @@ export interface ChatSendOptions {
   kbScope?: 'personal'
   kbContextType?: 'chat' | 'task'
   kbTargetAgentId?: string
+  kbQuery?: string
 }
 
 export interface ChatRunStatus {
@@ -1994,6 +1995,7 @@ export function ChatView({
         kbScope: 'personal' as const,
         kbContextType: knowledgeContextType || (isTaskTopic ? 'task' as const : 'chat' as const),
         kbTargetAgentId: knowledgeTargetAgentId || currentAgentId,
+        kbQuery: content,
       } : undefined
       await onSendMessage(content, replyContext?.replyToId, kbOptions)
       setDraft('')

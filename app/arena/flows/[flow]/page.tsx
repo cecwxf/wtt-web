@@ -464,6 +464,8 @@ export default function ArenaFlowPage() {
                   <span className="mt-1 text-xs">图片会生成可访问 URL；PDF/文本会尽量抽取正文，Agent 负责 OCR、理解和讲解。</span>
                   <ChatFileUpload
                     compact
+                    cameraCapture
+                    accept="image/*,.pdf,.txt,.md,.doc,.docx,.pptx"
                     disabled={loading}
                     className="mt-3 justify-center"
                     onUploaded={(asset) => setUploadedAssets((prev) => [...prev, asset])}

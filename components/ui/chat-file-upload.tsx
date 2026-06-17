@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import { Paperclip } from 'lucide-react'
+import { Camera, Paperclip } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
 import { CircularProgress } from './circular-progress'
@@ -21,6 +21,8 @@ interface ChatFileUploadProps {
   disabled?: boolean
   compact?: boolean
   className?: string
+  cameraCapture?: boolean
+  accept?: string
 }
 
 function uploadWithProgress(url: string, method: string, headers: Record<string, string>, body: Blob | File): Promise<{ ok: boolean; text: () => Promise<string>; json: () => Promise<unknown> }> & { onProgress: (cb: (pct: number) => void) => void } {
@@ -47,8 +49,9 @@ function uploadWithProgress(url: string, method: string, headers: Record<string,
   return promise
 }
 
-export function ChatFileUpload({ onUploaded, disabled, compact, className }: ChatFileUploadProps) {
+export function ChatFileUpload({ onUploaded, disabled, compact, className, cameraCapture, accept }: ChatFileUploadProps) {
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
   const [uploadPct, setUploadPct] = useState(-1) // -1 = indeterminate
@@ -169,13 +172,45 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className }: Cha
           <Paperclip className={iconSize} />
         )}
       </button>
+      {cameraCapture && (
+        <button
+          type="button"
+          onClick={() => cameraRef.current?.click()}
+          disabled={disabled || uploading}
+          className={btnClass}
+          title="Take photo"
+        >
+          {uploading ? (
+            <CircularProgress
+              progress={uploadPct}
+              size={progressSize}
+              strokeWidth={2}
+              color="#f59e0b"
+              trackColor="rgba(245,158,11,0.15)"
+              label={uploadPct >= 0 ? `${uploadPct}` : undefined}
+            />
+          ) : (
+            <Camera className={iconSize} />
+          )}
+        </button>
+      )}
       <input
         ref={fileRef}
         type="file"
         className="hidden"
-        accept="image/*,audio/*,video/*,.pdf,.txt,.md,.tex,.bib,.csv,.json,.xml,.zip,.doc,.docx,.pptx,.xls,.xlsx"
+        accept={accept || "image/*,audio/*,video/*,.pdf,.txt,.md,.tex,.bib,.csv,.json,.xml,.zip,.doc,.docx,.pptx,.xls,.xlsx"}
         onChange={handleFileChange}
       />
+      {cameraCapture && (
+        <input
+          ref={cameraRef}
+          type="file"
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileChange}
+        />
+      )}
       {uploadProgress && (
         <span className={`${compact ? 'text-[9px]' : 'text-[10px]'} text-amber-500 truncate max-w-[120px]`}>
           {uploadProgress}

@@ -1860,8 +1860,7 @@ function FeedPageInner() {
   const canUseKnowledgeMode = Boolean(
     personalKbTaskId &&
     selectedTopic &&
-    selectedAgentId &&
-    (selectedTopicTaskId || selectedTopic.topic_type === 'p2p')
+    selectedTopicKnowledgeTargetAgentId
   )
 
   // Build sub-agent map: each task = 1 sub-agent, grouped by owner agent
@@ -2491,6 +2490,7 @@ function FeedPageInner() {
       metadata.kb_task_id = options.kbTaskId
       metadata.kb_context_type = options.kbContextType || (isTask ? 'task' : 'chat')
       metadata.kb_target_agent_id = options.kbTargetAgentId || agentIdForSend
+      metadata.kb_query = options.kbQuery || content
     }
 
     if (isSlashCommand && isNonTaskDiscuss) {
