@@ -2781,7 +2781,7 @@ export function ChatView({
                         {blocks.filter(b => b.kind !== 'image' || b !== firstImage).map((block, bi) => {
                           switch (block.kind) {
                             case 'html': return <div key={bi} dangerouslySetInnerHTML={{ __html: block.html }} />
-                            case 'plain': return <p key={bi} className="whitespace-pre-wrap">{block.text}</p>
+                            case 'plain': return <MarkdownWithMath key={bi}>{block.text}</MarkdownWithMath>
                             case 'markdown': return <MarkdownWithMath key={bi}>{block.text}</MarkdownWithMath>
                             case 'image': return <img key={bi} src={block.url} alt="" className="max-h-[200px] rounded-lg my-2" loading="lazy" />
                             default: return null
@@ -3114,7 +3114,7 @@ export function ChatView({
                               }
                               // plain text
                               if (!block.text?.trim()) return null
-                              return <p key={bi} className="whitespace-pre-wrap break-words leading-relaxed">{block.text}</p>
+                              return <MarkdownWithMath key={bi} className="break-words leading-relaxed">{block.text}</MarkdownWithMath>
                             })}
 
                             {actionButtons.length > 0 && (
