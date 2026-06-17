@@ -374,34 +374,34 @@ export default function ArenaFlowPage() {
           )}
         />
 
-        <div className="mt-6 flex min-h-0 flex-1 flex-col gap-4">
-          <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b]">
+        <div className="mt-6 grid min-h-0 flex-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1b1b1b] lg:self-start">
             <div className={`h-2 bg-gradient-to-r ${config.accent}`} />
-            <div className="p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-3">
+            <div className="p-4">
+              <div className="flex flex-col gap-4">
+                <div className="flex min-w-0 items-start gap-3">
                   <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#3ce8e2]/15 text-[#008f8f] dark:text-[#3ce8e2]">
                     {iconFor(config)}
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">{config.eyebrow}</p>
-                    <h1 className="text-2xl font-black">{config.title}</h1>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-gray-400">{config.subtitle}</p>
+                    <h1 className="text-xl font-black">{config.title}</h1>
+                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-400">{config.subtitle}</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => void saveLearningItem()}
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:border-[#3ce8e2] hover:text-[#008f8f] disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-[#111] dark:text-gray-200"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:border-[#3ce8e2] hover:text-[#008f8f] disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-[#111] dark:text-gray-200"
                 >
                   <Save className="h-4 w-4" />
                   {saving ? '保存中...' : config.saveLabel}
                 </button>
               </div>
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-5 grid gap-2">
                 {config.workflow.map((step, index) => (
-                  <span key={step} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-600 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">
+                  <span key={step} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-600 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-300">
                     {index + 1}. {step}
                   </span>
                 ))}
@@ -413,7 +413,7 @@ export default function ArenaFlowPage() {
             </div>
           </section>
 
-          <section className="min-h-[640px] overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white/90 p-2 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
+          <section className="min-h-[72dvh] overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white/90 p-2 shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e] lg:min-h-0">
             <ChatView
               topicName={`${config.title} · Arena Coach`}
               topicId={topicId || undefined}

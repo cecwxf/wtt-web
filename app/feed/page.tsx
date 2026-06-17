@@ -3113,6 +3113,7 @@ function FeedPageInner() {
                 runStatus={selectedTopicRunStatus}
                 onRequestPrivateDiscuss={handleRequestPrivateDiscuss}
                 autoFocusNonce={composerFocusNonce}
+                enableCameraCapture
                 workspaceAgentName={selectedAgentId ? (agentNameMap[selectedAgentId] || selectedAgentId) : undefined}
                 workspaceWorkdir={selectedAgentId ? agentRuntimeMap?.[selectedAgentId]?.workdir : undefined}
                 currentAgentRuntime={selectedAgentRuntime}
