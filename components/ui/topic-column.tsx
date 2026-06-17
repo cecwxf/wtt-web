@@ -2078,16 +2078,15 @@ export function TopicColumn(props: TopicColumnProps) {
         </div>
 
         {newAgentHosts.length > 0 && (
-          <div className="space-y-1.5 border-t border-[#e7e1d7] p-1.5 dark:border-zinc-800">
+          <div className="border-t border-[#e7e1d7] p-1.5 dark:border-zinc-800">
             <button
               type="button"
               onClick={openNewAgentModal}
-              className="flex w-full flex-col items-center justify-center rounded-xl border border-emerald-400 bg-gradient-to-b from-emerald-500 to-teal-600 px-1 py-2 text-center text-[9px] font-black leading-tight text-white shadow-md shadow-emerald-900/15 ring-1 ring-emerald-200 transition hover:from-emerald-400 hover:to-teal-500 hover:shadow-lg dark:border-emerald-400/60 dark:from-emerald-500 dark:to-teal-600 dark:ring-emerald-400/25"
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1.5 text-center text-[10px] font-black leading-tight text-emerald-800 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:bg-emerald-500/15"
               title={zh ? '克隆当前在线 Codex / Claude Code 主机上的 Agent' : 'Clone an agent on an online Codex / Claude Code host'}
             >
-              <Plus className="mb-1 h-4 w-4" />
-              <span>Clone</span>
-              <span>Agent</span>
+              <Plus className="h-3.5 w-3.5" />
+              <span>{zh ? '克隆 Agent' : 'Clone Agent'}</span>
             </button>
           </div>
         )}
