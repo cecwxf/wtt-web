@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
-import { Camera, Paperclip } from 'lucide-react'
+import { useRef, useState, useCallback, useEffect } from 'react'
+import { Camera, Paperclip, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
 import { CircularProgress } from './circular-progress'
@@ -52,9 +52,13 @@ function uploadWithProgress(url: string, method: string, headers: Record<string,
 export function ChatFileUpload({ onUploaded, disabled, compact, className, cameraCapture, accept }: ChatFileUploadProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
   const [uploadPct, setUploadPct] = useState(-1) // -1 = indeterminate
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const [cameraError, setCameraError] = useState('')
 
   const upload = useCallback(async (file: File) => {
     if (!file) return
@@ -142,7 +146,67 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className, camer
     const f = e.target.files?.[0]
     if (f) upload(f)
     if (fileRef.current) fileRef.current.value = ''
+    if (cameraRef.current) cameraRef.current.value = ''
   }
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setCameraOpen(false)
+  }, [])
+
+  const openCamera = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraRef.current?.click()
+      return
+    }
+    setCameraError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      })
+      streamRef.current = stream
+      setCameraOpen(true)
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          void videoRef.current.play().catch(() => undefined)
+        }
+      })
+    } catch (error) {
+      setCameraError(error instanceof Error ? error.message : 'Camera unavailable')
+      cameraRef.current?.click()
+    }
+  }, [])
+
+  const capturePhoto = useCallback(async () => {
+    const video = videoRef.current
+    if (!video || video.videoWidth <= 0 || video.videoHeight <= 0) {
+      setCameraError('Camera is not ready yet')
+      return
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      setCameraError('Cannot capture camera frame')
+      return
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+    if (!blob) {
+      setCameraError('Cannot encode photo')
+      return
+    }
+    stopCamera()
+    const file = new File([blob], `camera-${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`, { type: 'image/jpeg' })
+    await upload(file)
+  }, [stopCamera, upload])
+
+  useEffect(() => () => stopCamera(), [stopCamera])
 
   const btnClass = compact
     ? 'p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-40'
@@ -175,7 +239,7 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className, camer
       {cameraCapture && (
         <button
           type="button"
-          onClick={() => cameraRef.current?.click()}
+          onClick={() => void openCamera()}
           disabled={disabled || uploading}
           className={btnClass}
           title="Take photo"
@@ -215,6 +279,44 @@ export function ChatFileUpload({ onUploaded, disabled, compact, className, camer
         <span className={`${compact ? 'text-[9px]' : 'text-[10px]'} text-amber-500 truncate max-w-[120px]`}>
           {uploadProgress}
         </span>
+      )}
+      {cameraOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 py-6">
+          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3 text-slate-100">
+              <div>
+                <p className="text-sm font-black">Camera</p>
+                <p className="text-xs text-slate-400">拍照后会自动上传到当前 Arena 对话</p>
+              </div>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="rounded-full p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                aria-label="Close camera"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <video ref={videoRef} className="aspect-video w-full bg-black object-contain" playsInline muted />
+            {cameraError && <p className="px-4 pt-3 text-xs text-rose-300">{cameraError}</p>}
+            <div className="flex items-center justify-end gap-2 px-4 py-3">
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-bold text-slate-200 transition hover:bg-slate-800"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => void capturePhoto()}
+                className="rounded-xl bg-[#3ce8e2] px-4 py-2 text-sm font-black text-black transition hover:brightness-95"
+              >
+                拍照上传
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
