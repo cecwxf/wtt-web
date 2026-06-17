@@ -51,6 +51,10 @@ body {
   font-size: 14.5px;
   line-height: 1.82;
   letter-spacing: -0.003em;
+  word-break: normal;
+  overflow-wrap: normal;
+  line-break: strict;
+  hyphens: none;
 }
 
 .wtt-message-bubble--agent {
@@ -66,10 +70,18 @@ body {
   color: var(--wtt-chat-text, #2f342f);
   font-family: var(--wtt-chat-font, var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif);
   letter-spacing: -0.003em;
+  word-break: normal;
+  overflow-wrap: normal;
+  line-break: strict;
+  hyphens: none;
 }
 
 .wtt-rich-markdown :where(p, li) {
   line-height: 1.82;
+  word-break: normal;
+  overflow-wrap: normal;
+  line-break: strict;
+  hyphens: none;
 }
 
 .wtt-rich-markdown :where(strong) {
@@ -79,6 +91,12 @@ body {
 
 .wtt-rich-markdown :where(code) {
   letter-spacing: 0;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.wtt-rich-markdown :where(a) {
+  overflow-wrap: anywhere;
 }
 
 /* Responsive shell density. Laptop screens often have desktop width but

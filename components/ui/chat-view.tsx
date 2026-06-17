@@ -1054,7 +1054,7 @@ function DocumentSidePreview({ file, onClose }: { file: ConversationFile; onClos
                   <MarkdownWithMath>{text}</MarkdownWithMath>
                 </div>
               ) : (
-                <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">{text}</pre>
+                <pre className="whitespace-pre-wrap font-mono text-xs leading-5">{text}</pre>
               )}
             </div>
           )}
@@ -1251,7 +1251,7 @@ function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatu
             <span className="rounded-md bg-[#efe4d2] px-1.5 py-0.5 text-center font-medium text-[#7c613d] dark:bg-zinc-800 dark:text-zinc-400">
               {runStatusKindLabel(line.kind)}
             </span>
-            <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-[#4a4035] dark:text-zinc-300" title={line.text}>
+            <span className="min-w-0 whitespace-pre-wrap font-mono text-[#4a4035] dark:text-zinc-300" title={line.text}>
               {line.text}
             </span>
           </div>
@@ -3234,7 +3234,7 @@ export function ChatView({
                                       <span className="text-xs font-medium text-amber-700">{pct}%</span>
                                     </div>
                                   )}
-                                  {task.body && <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>}
+                                  {task.body && <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap">{task.body}</p>}
                                 </div>
                               )}
 
@@ -3244,7 +3244,7 @@ export function ChatView({
                                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                                     {task.kind === 'summary' ? t('chat.result') : task.kind === 'blocked' ? t('chat.blocked') : t('chat.review')}
                                   </p>
-                                  <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
+                                  <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap">{task.body}</p>
                                 </div>
                               )}
 
@@ -3264,7 +3264,7 @@ export function ChatView({
                               {task.kind === 'run' && task.body && (
                                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('chat.details')}</p>
-                                  <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{task.body}</p>
+                                  <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap">{task.body}</p>
                                 </div>
                               )}
                             </div>
@@ -3445,7 +3445,7 @@ export function ChatView({
                               }
                               // plain text
                               if (!block.text?.trim()) return null
-                              return <MarkdownWithMath key={bi} className="break-words leading-relaxed">{block.text}</MarkdownWithMath>
+                              return <MarkdownWithMath key={bi} className="leading-relaxed">{block.text}</MarkdownWithMath>
                             })}
 
                             {actionButtons.length > 0 && (
