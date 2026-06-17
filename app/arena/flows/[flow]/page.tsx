@@ -6,7 +6,6 @@ import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BookOpenCheck, Camera, ClipboardCheck, FileText, MessageSquareText, RefreshCw, Save } from 'lucide-react'
 import { ArenaNav } from '@/components/arena/arena-nav'
-import { ChatFileUpload, type UploadedAsset } from '@/components/ui/chat-file-upload'
 import { ChatView, type ChatMessage as FeedChatMessage, type ChatRunStatus } from '@/components/ui/chat-view'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL } from '@/lib/api/base-url'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
@@ -30,12 +29,8 @@ type FlowConfig = {
   itemType: string
   accent: string
   icon: 'mistake' | 'photo' | 'daily' | 'mock' | 'system'
-  inputLabel: string
-  inputPlaceholder: string
-  primaryAction: string
   saveLabel: string
   workflow: string[]
-  examples: string[]
   promptPrefix: string
 }
 
@@ -49,12 +44,8 @@ const flowConfigs: Record<FlowId, FlowConfig> = {
     itemType: 'mistake',
     accent: 'from-amber-200 via-orange-300 to-rose-400',
     icon: 'mistake',
-    inputLabel: '粘贴错题、你的错误答案或老师批注',
-    inputPlaceholder: '例：这道函数题我把定义域漏掉了，原题是……我的解法是……',
-    primaryAction: '开始错题复盘',
     saveLabel: '保存为错题',
     workflow: ['识别题目', '定位错因', '重建解法', '生成变式', '安排复习'],
-    examples: ['数学错题复盘', '物理实验题错因', '面试回答漏洞复盘'],
     promptPrefix: '你是 WTT Arena 错题复盘 Coach。请按“题目重述 -> 错因诊断 -> 正确解法 -> 易错提醒 -> 同类变式 -> 复习计划”输出。',
   },
   'photo-question': {
@@ -66,12 +57,8 @@ const flowConfigs: Record<FlowId, FlowConfig> = {
     itemType: 'photo_question',
     accent: 'from-sky-200 via-cyan-300 to-teal-400',
     icon: 'photo',
-    inputLabel: '上传题目后补充说明，或直接粘贴 OCR 文本',
-    inputPlaceholder: '例：我上传的是一道圆锥曲线题，请先识别题意，再分步讲解。',
-    primaryAction: '开始拍照答疑',
     saveLabel: '保存为拍照题',
     workflow: ['上传题目', '识别题意', '公式/图形整理', '分步讲解', '加入错题本'],
-    examples: ['图片数学题', 'PDF 作业题', '截图里的公式题'],
     promptPrefix: '你是 WTT Arena 拍照答疑 Coach。请先根据用户提供的图片/文件名/OCR 文本还原题意；信息不足时明确要求用户补图或补文本；随后分步讲解并总结易错点。',
   },
   'daily-review': {
@@ -83,12 +70,8 @@ const flowConfigs: Record<FlowId, FlowConfig> = {
     itemType: 'daily_review',
     accent: 'from-lime-200 via-emerald-300 to-green-500',
     icon: 'daily',
-    inputLabel: '输入今天想复盘的范围，或让 Coach 根据学习档案生成计划',
-    inputPlaceholder: '例：今天复盘函数和导数，重点看我最近容易错的定义域、单调性和极值。',
-    primaryAction: '生成每日复盘',
     saveLabel: '保存复盘计划',
     workflow: ['读取目标', '生成短练', '追踪掌握度', '安排复习', '输出明日计划'],
-    examples: ['今日数学复盘', '面试知识点复盘', '一周薄弱点总结'],
     promptPrefix: '你是 WTT Arena 每日复盘 Coach。请生成一个 10-20 分钟的复盘计划，包含今日目标、短练任务、检查问题、掌握度判断和下次复习建议。',
   },
   'mock-interview': {
@@ -100,12 +83,8 @@ const flowConfigs: Record<FlowId, FlowConfig> = {
     itemType: 'interview_answer',
     accent: 'from-violet-200 via-fuchsia-300 to-pink-500',
     icon: 'mock',
-    inputLabel: '输入面试题和你的回答',
-    inputPlaceholder: '例：题目：解释一次 Linux write 系统调用路径。我的回答：……',
-    primaryAction: '开始模拟面试',
     saveLabel: '保存面试复盘',
     workflow: ['提出问题', '用户回答', '0-10 评分', '补强答案', '继续追问'],
-    examples: ['AI 面试', 'Linux Kernel 面试', 'Android Framework 面试'],
     promptPrefix: '你是 WTT Arena 面试官。请把用户回答当作候选人回答评分：先给 0-10 分，再指出亮点、缺口、误区，补一版更强答案，并给下一轮追问。',
   },
   'system-design-interview': {
@@ -117,12 +96,8 @@ const flowConfigs: Record<FlowId, FlowConfig> = {
     itemType: 'system_design_interview',
     accent: 'from-slate-200 via-blue-300 to-indigo-500',
     icon: 'system',
-    inputLabel: '输入系统设计题目、业务约束或你的方案',
-    inputPlaceholder: '例：设计一个多 Agent 协作消息总线，需要支持 10 万在线 Agent、实时状态和任务可靠投递。',
-    primaryAction: '开始系统设计',
     saveLabel: '保存设计复盘',
     workflow: ['澄清需求', '估算规模', '设计架构', '分析瓶颈', '复盘取舍'],
-    examples: ['LLM 推理服务', 'Agent Fabric 总线', '实时协作系统'],
     promptPrefix: '你是 WTT Arena 系统设计面试官。请按“需求澄清 -> 规模估算 -> 核心架构 -> 数据模型 -> 瓶颈与容灾 -> 成本与取舍 -> 追问”组织。',
   },
 }
@@ -186,8 +161,6 @@ export default function ArenaFlowPage() {
   const [topicId, setTopicId] = useState('')
   const [arenaAgentId, setArenaAgentId] = useState('')
   const [messages, setMessages] = useState<FeedChatMessage[]>([])
-  const [subject, setSubject] = useState('')
-  const [uploadedAssets, setUploadedAssets] = useState<UploadedAsset[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
@@ -290,29 +263,15 @@ export default function ArenaFlowPage() {
     setNotice('')
     try {
       const { topicId: nextTopicId, agentId: activeArenaAgentId } = await ensureTopic()
-      const fileLine = uploadedAssets.length
-        ? [
-            '\n\n附件/图片/OCR材料：',
-            uploadedAssets.map((asset) => asset.markdownToken).join('\n\n'),
-          ].join('\n')
-        : ''
-      const subjectLine = subject.trim() ? `\n\n主题/学科：${subject.trim()}` : ''
-      const visibleMessage = [
-        subjectLine,
-        fileLine,
-        text,
-      ].filter(Boolean).join('\n').trim()
       const arenaAgentContext = [
         `[WTT Arena Flow Context]`,
         `flow_id: ${config.id}`,
         `flow_domain: ${config.domain}`,
         config.promptPrefix,
         `工作流步骤：${config.workflow.join(' -> ')}`,
-        subject.trim() ? `主题/学科：${subject.trim()}` : '',
-        uploadedAssets.length
-          ? '请直接基于用户消息里的附件 URL、图片和抽取文本进行题目识别、OCR/图像理解、分步讲解；如果图片无法读取，再要求用户补充文字。'
-          : '',
-        '请在回答末尾给出“是否建议保存到学习档案”和“下次复习建议”。',
+        '请你自动判断学段、学科、子学科、知识点、题型、错因或面试方向；不要要求用户先选择主题/科目。',
+        '如果用户消息包含图片、文件 URL 或抽取文本，请直接进行题目识别、OCR/图像理解、分步讲解；信息不足时再要求用户补充。',
+        '请在回答末尾给出结构化建议：是否建议保存到学习档案、自动归类、知识点、错因/风险、下次复习建议。',
         `[/WTT Arena Flow Context]`,
       ].filter(Boolean).join('\n')
       setTyping({
@@ -331,7 +290,7 @@ export default function ArenaFlowPage() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          content: visibleMessage,
+          content: text,
           content_type: 'text',
           semantic_type: 'post',
           sender_type: 'HUMAN',
@@ -339,9 +298,7 @@ export default function ArenaFlowPage() {
             arena_flow_id: config.id,
             flow_domain: config.domain,
             arena_agent_context: arenaAgentContext,
-            attachment_names: uploadedAssets.map((asset) => asset.filename),
-            attachment_urls: uploadedAssets.map((asset) => asset.url),
-            attachment_types: uploadedAssets.map((asset) => asset.mimeType),
+            auto_classify: true,
           },
         }),
       })
@@ -377,17 +334,16 @@ export default function ArenaFlowPage() {
         headers,
         body: JSON.stringify({
           item_type: config.itemType,
-          title: subject.trim() || config.title,
+          title: config.title,
           content,
           answer,
-          subject: subject.trim() || undefined,
-          knowledge_points: subject.trim() ? [subject.trim()] : [],
+          subject: undefined,
+          knowledge_points: [],
           error_reasons: config.id === 'mistake-review' ? ['待复盘错因'] : [],
           source_metadata: {
             source_type: config.id,
             flow_id: config.id,
-            attachment_names: uploadedAssets.map((asset) => asset.filename),
-            attachment_urls: uploadedAssets.map((asset) => asset.url),
+            auto_classify: true,
           },
         }),
       })
@@ -450,58 +406,10 @@ export default function ArenaFlowPage() {
                   </span>
                 ))}
               </div>
-              <label className="mt-5 block text-sm font-black text-slate-800 dark:text-gray-200">主题/学科/岗位，可选</label>
-              <input
-                value={subject}
-                onChange={(event) => setSubject(event.target.value)}
-                placeholder="主题/学科/岗位，可选"
-                className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111]"
-              />
-              {config.id === 'photo-question' && (
-                <div className="mt-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-sm text-slate-500 transition hover:border-[#3ce8e2] dark:border-gray-700 dark:bg-[#111] dark:text-gray-400">
-                  <Camera className="mb-2 h-6 w-6" />
-                  <span className="font-bold">上传图片/PDF 给 Arena Agent 识别</span>
-                  <span className="mt-1 text-xs">图片会生成可访问 URL；PDF/文本会尽量抽取正文，Agent 负责 OCR、理解和讲解。</span>
-                  <ChatFileUpload
-                    compact
-                    cameraCapture
-                    accept="image/*,.pdf,.txt,.md,.doc,.docx,.pptx"
-                    disabled={loading}
-                    className="mt-3 justify-center"
-                    onUploaded={(asset) => setUploadedAssets((prev) => [...prev, asset])}
-                  />
-                </div>
-              )}
-              {!!uploadedAssets.length && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {uploadedAssets.map((asset, index) => (
-                    <span key={`${asset.url}-${index}`} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 dark:border-gray-800 dark:bg-[#111] dark:text-gray-300">
-                      {asset.filename}
-                      <button
-                        type="button"
-                        className="font-black text-slate-400 hover:text-rose-500"
-                        onClick={() => setUploadedAssets((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}
-                        aria-label={`移除 ${asset.filename}`}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
               {notice && <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-gray-800 dark:bg-[#111] dark:text-gray-300">{notice}</p>}
-              <div className="mt-3 flex flex-wrap gap-2">
-                {config.examples.map((example) => (
-                  <button
-                    key={example}
-                    type="button"
-                    onClick={() => setSubject(example)}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111] dark:text-gray-300"
-                  >
-                    {example}
-                  </button>
-                ))}
-              </div>
+              <p className="mt-4 rounded-2xl border border-[#3ce8e2]/25 bg-[#efffff] px-4 py-3 text-sm leading-6 text-slate-600 dark:border-[#3ce8e2]/20 dark:bg-[#101818] dark:text-gray-300">
+                直接在下方 Chat 输入题目、回答、截图或文件。Agent 会自动归类学段/学科/知识点/面试方向，并写入学习档案。
+              </p>
             </div>
           </section>
 
@@ -518,6 +426,7 @@ export default function ArenaFlowPage() {
               topicType="p2p"
               runStatus={typing}
               compactUi
+              enableCameraCapture
               currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
               agentRoleLabelMap={arenaAgentId ? { [arenaAgentId]: '我的 Cloud Agent' } : {}}
               extraHeaderActions={(

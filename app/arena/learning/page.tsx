@@ -15,14 +15,6 @@ type DashboardState = {
   schedules: ArenaReviewSchedule[]
 }
 
-const filters = [
-  { id: 'all', label: '全部' },
-  { id: 'mistake', label: '错题' },
-  { id: 'photo_question', label: '拍照题' },
-  { id: 'interview_answer', label: '面试' },
-  { id: 'daily_review', label: '复盘' },
-]
-
 function formatDate(value?: string | null) {
   if (!value) return '待定'
   try {
@@ -55,12 +47,65 @@ function statusText(status?: string) {
   return '新记录'
 }
 
+function normalizedText(value: unknown) {
+  return String(value || '').trim()
+}
+
+function itemDomain(item: ArenaLearningItem) {
+  const metadata = item.source_metadata || {}
+  const type = item.item_type || ''
+  const skill = item.skill_id || ''
+  const domain = normalizedText(metadata.flow_domain || metadata.domain)
+  if (domain === 'interview' || type.includes('interview') || skill.includes('interview')) return '面试项目'
+  if (domain === 'education' || ['mistake', 'photo_question', 'daily_review'].includes(type) || skill.startsWith('education')) return '教育学科项目'
+  return '通用沉淀'
+}
+
+function itemSubcategory(item: ArenaLearningItem) {
+  const metadata = item.source_metadata || {}
+  const structured = item.structured || {}
+  const candidates = [
+    metadata.stage,
+    metadata.subject,
+    metadata.sub_subject,
+    metadata.category,
+    structured.stage,
+    structured.subject,
+    structured.sub_subject,
+    item.stage,
+    item.subject,
+    item.knowledge_points?.[0],
+    structured.knowledge_points?.[0],
+    item.skill_id,
+    item.item_type,
+  ]
+  const picked = candidates.map(normalizedText).find(Boolean)
+  if (!picked) return itemDomain(item) === '面试项目' ? '综合面试' : '自动归类'
+  return picked
+}
+
+function groupLearningItems(items: ArenaLearningItem[]) {
+  const domainMap = new Map<string, Map<string, ArenaLearningItem[]>>()
+  for (const item of items) {
+    const domain = itemDomain(item)
+    const sub = itemSubcategory(item)
+    if (!domainMap.has(domain)) domainMap.set(domain, new Map())
+    const subMap = domainMap.get(domain)!
+    subMap.set(sub, [...(subMap.get(sub) || []), item])
+  }
+  const preferred = ['教育学科项目', '面试项目', '通用沉淀']
+  return Array.from(domainMap.entries()).sort((a, b) => {
+    const ai = preferred.indexOf(a[0])
+    const bi = preferred.indexOf(b[0])
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+  })
+}
+
 export default function ArenaLearningDashboardPage() {
   const { data: session, status } = useSession()
   const token = session?.accessToken as string | undefined
   const [state, setState] = useState<DashboardState>({ profile: null, items: [], schedules: [] })
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState('all')
   const [expandedId, setExpandedId] = useState<string>('')
   const [busyItemId, setBusyItemId] = useState<string>('')
   const [notice, setNotice] = useState('')
@@ -123,7 +168,7 @@ export default function ArenaLearningDashboardPage() {
     if (!item.due_at) return true
     return new Date(item.due_at).getTime() <= Date.now() + 24 * 60 * 60 * 1000
   })
-  const visibleItems = state.items.filter((item) => filter === 'all' || item.item_type === filter || item.skill_id === filter)
+  const groupedItems = groupLearningItems(state.items)
 
   return (
     <main className="min-h-[100dvh] bg-[#f7f5f0] px-3 py-6 text-slate-950 dark:bg-[#151515] dark:text-white sm:px-5 lg:px-8">
@@ -173,37 +218,53 @@ export default function ArenaLearningDashboardPage() {
                 </Link>
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                {filters.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setFilter(item.id)}
-                    className={`rounded-full px-3 py-1.5 text-xs font-black transition ${filter === item.id ? 'bg-[#3ce8e2] text-black' : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-[#3ce8e2] dark:border-gray-800 dark:bg-[#111] dark:text-gray-300'}`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                {groupedItems.length ? groupedItems.map(([domain, subMap]) => (
+                  <div key={domain} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-gray-800 dark:bg-[#111]">
+                    <p className="text-sm font-black text-slate-800 dark:text-gray-100">{domain}</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">{Array.from(subMap.values()).flat().length} 条沉淀 · {subMap.size} 个子类</p>
+                  </div>
+                )) : (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:border-gray-800 dark:bg-[#111] dark:text-gray-400">
+                    Agent 会在对话后自动归类学科、子学科、知识点和面试方向。
+                  </div>
+                )}
               </div>
               {notice && <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-gray-800 dark:bg-[#111] dark:text-gray-300">{notice}</p>}
             </section>
 
             <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-3">
-                {visibleItems.length === 0 && (
+                {state.items.length === 0 && (
                   <p className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 dark:border-gray-800 dark:bg-[#1e1e1e] dark:text-gray-400">还没有对应记录。进入教育或面试 Flow，和 Arena Coach 对话后可以保存到学习档案。</p>
                 )}
-                {visibleItems.map((item) => (
-                  <LearningItemCard
-                    key={item.id}
-                    item={item}
-                    expanded={expandedId === item.id}
-                    busy={busyItemId === item.id}
-                    dueAt={state.schedules.find((schedule) => schedule.learning_item_id === item.id)?.due_at}
-                    onToggle={() => setExpandedId((current) => current === item.id ? '' : item.id)}
-                    onReview={(rating) => updateItem(item.id, `/arena/learning/items/${encodeURIComponent(item.id)}/review`, { rating })}
-                    onSimilar={() => updateItem(item.id, `/arena/learning/items/${encodeURIComponent(item.id)}/generate-similar`)}
-                  />
+                {groupedItems.map(([domain, subMap]) => (
+                  <section key={domain} className="space-y-3 rounded-[2rem] border border-slate-200 bg-white/70 p-3 dark:border-gray-800 dark:bg-[#171717]">
+                    <div className="flex items-center justify-between px-2 py-1">
+                      <h2 className="text-xl font-black text-slate-950 dark:text-white">{domain}</h2>
+                      <span className="rounded-full bg-[#3ce8e2]/15 px-2.5 py-1 text-xs font-black text-[#008f8f] dark:text-[#3ce8e2]">{Array.from(subMap.values()).flat().length} 条</span>
+                    </div>
+                    {Array.from(subMap.entries()).map(([subcategory, items]) => (
+                      <div key={`${domain}:${subcategory}`} className="space-y-2 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-3 dark:border-gray-800 dark:bg-[#111]">
+                        <div className="flex items-center justify-between gap-3 px-1">
+                          <h3 className="truncate text-sm font-black text-slate-700 dark:text-gray-200">{subcategory}</h3>
+                          <span className="shrink-0 text-xs font-bold text-slate-400">{items.length} 条</span>
+                        </div>
+                        {items.map((item) => (
+                          <LearningItemCard
+                            key={item.id}
+                            item={item}
+                            expanded={expandedId === item.id}
+                            busy={busyItemId === item.id}
+                            dueAt={state.schedules.find((schedule) => schedule.learning_item_id === item.id)?.due_at}
+                            onToggle={() => setExpandedId((current) => current === item.id ? '' : item.id)}
+                            onReview={(rating) => updateItem(item.id, `/arena/learning/items/${encodeURIComponent(item.id)}/review`, { rating })}
+                            onSimilar={() => updateItem(item.id, `/arena/learning/items/${encodeURIComponent(item.id)}/generate-similar`)}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </section>
                 ))}
               </div>
 
