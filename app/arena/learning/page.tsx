@@ -41,6 +41,23 @@ function itemAnswer(item: ArenaLearningItem) {
   return String(item.structured?.coach_answer || item.answer || '')
 }
 
+function itemAgentSummary(item: ArenaLearningItem) {
+  const structured = item.structured || {}
+  return String(
+    structured.summary
+      || structured.final_answer
+      || structured.coach_answer
+      || item.answer
+      || ''
+  )
+}
+
+function toTextList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((entry) => String(entry || '').trim()).filter(Boolean)
+  const text = String(value || '').trim()
+  return text ? [text] : []
+}
+
 function statusText(status?: string) {
   if (status === 'mastered') return '已掌握'
   if (status === 'reviewing') return '复习中'
@@ -352,6 +369,16 @@ function LearningItemCard({
   const points = structured.knowledge_points?.length ? structured.knowledge_points : item.knowledge_points
   const mistakes = structured.mistake_reason?.length ? structured.mistake_reason : item.error_reasons
   const similar = Array.isArray(structured.similar_questions) ? structured.similar_questions : []
+  const summary = itemAgentSummary(item)
+  const coachAnswer = itemAnswer(item)
+  const reviewPlan = String(structured.review_plan || structured.next_review || '').trim()
+  const cautions = [
+    ...toTextList(structured.cautions),
+    ...toTextList(structured.attention_points),
+    ...toTextList(structured.key_warnings),
+    ...toTextList(structured.common_pitfalls),
+  ]
+  const sourceQuestion = itemQuestion(item)
 
   return (
     <article className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-[#1e1e1e]">
@@ -363,31 +390,33 @@ function LearningItemCard({
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500 dark:bg-[#111] dark:text-gray-400">复习：{formatDate(dueAt)}</span>
           </div>
           <h2 className="mt-3 text-xl font-black text-slate-950 dark:text-white">{itemLabel(item)}</h2>
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-gray-400">{itemQuestion(item) || itemAnswer(item) || '暂无正文'}</p>
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-gray-400">{summary || coachAnswer || '暂无 Agent 总结'}</p>
         </div>
         <ChevronDown className={`mt-1 h-5 w-5 shrink-0 text-slate-400 transition ${expanded ? 'rotate-180' : ''}`} />
       </button>
 
       {expanded && (
         <div className="border-t border-slate-200 px-5 pb-5 pt-4 dark:border-gray-800">
-          <div className="grid gap-4 md:grid-cols-2">
-            <DetailBlock title="题目 / Prompt" content={itemQuestion(item)} fallback="暂无题面。" />
-            <DetailBlock title="Agent 讲解" content={itemAnswer(item)} fallback="暂无讲解。" />
-            <DetailList title="知识点" items={points || []} fallback="暂无知识点。" />
-            <DetailList title="错因 / 风险" items={mistakes || []} fallback="暂无错因记录。" />
+          <div className="space-y-4">
+            <DetailBlock
+              title="Agent 总结"
+              content={summary || coachAnswer}
+              fallback="暂无 Agent 总结。后续保存学习档案时会优先沉淀讲解摘要。"
+              featured
+            />
+            {coachAnswer && coachAnswer !== summary && (
+              <DetailBlock title="相关讲解" content={coachAnswer} fallback="暂无讲解。" />
+            )}
+            <div className="grid gap-4 md:grid-cols-2">
+              <DetailList title="注意事项" items={cautions.length ? cautions : mistakes || []} fallback="暂无注意事项。" />
+              <DetailList title="知识点" items={points || []} fallback="暂无知识点。" />
+            </div>
           </div>
 
-          {!!structured.final_answer && (
-            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100">
-              <p className="mb-1 text-xs font-black uppercase tracking-[0.18em]">Final Answer</p>
-              {structured.final_answer}
-            </div>
-          )}
-
-          {!!structured.review_plan && (
+          {!!reviewPlan && (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
-              <p className="mb-1 text-xs font-black uppercase tracking-[0.18em]">Review Plan</p>
-              {String(structured.review_plan)}
+              <p className="mb-1 text-xs font-black uppercase tracking-[0.18em]">复习建议</p>
+              {reviewPlan}
             </div>
           )}
 
@@ -408,6 +437,13 @@ function LearningItemCard({
             </div>
           )}
 
+          {sourceQuestion && (
+            <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-gray-800 dark:bg-[#151515] dark:text-gray-400">
+              <summary className="cursor-pointer text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-400">原始题目 / 来源</summary>
+              <p className="mt-3 whitespace-pre-wrap leading-6">{sourceQuestion}</p>
+            </details>
+          )}
+
           <div className="mt-5 flex flex-wrap gap-2">
             <button type="button" disabled={busy} onClick={() => onReview('again')} className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-400/20 dark:text-rose-200">再练</button>
             <button type="button" disabled={busy} onClick={() => onReview('good')} className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-400/20 dark:text-emerald-200">已掌握</button>
@@ -423,11 +459,11 @@ function LearningItemCard({
   )
 }
 
-function DetailBlock({ title, content, fallback }: { title: string; content?: string; fallback: string }) {
+function DetailBlock({ title, content, fallback, featured = false }: { title: string; content?: string; fallback: string; featured?: boolean }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-[#151515]">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-gray-400">{title}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-gray-300">{content || fallback}</p>
+    <div className={`rounded-2xl border p-4 ${featured ? 'border-[#3ce8e2]/30 bg-[#efffff] dark:border-[#3ce8e2]/20 dark:bg-[#101818]' : 'border-slate-200 bg-slate-50 dark:border-gray-800 dark:bg-[#151515]'}`}>
+      <p className={`text-xs font-black uppercase tracking-[0.18em] ${featured ? 'text-[#008f8f] dark:text-[#3ce8e2]' : 'text-slate-500 dark:text-gray-400'}`}>{title}</p>
+      <p className={`mt-2 whitespace-pre-wrap text-sm leading-6 ${featured ? 'text-slate-800 dark:text-gray-100' : 'text-slate-700 dark:text-gray-300'}`}>{content || fallback}</p>
     </div>
   )
 }
