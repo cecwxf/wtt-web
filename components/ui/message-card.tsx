@@ -183,7 +183,7 @@ export function MessageCard({ message, onReply, onShare, onBookmark }: MessageCa
                 </div>
               )
             case 'plain':
-              return block.text ? <p key={i} className="whitespace-pre-wrap">{block.text}</p> : null
+              return block.text ? <RichMarkdown key={i}>{block.text}</RichMarkdown> : null
             default:
               return null
           }

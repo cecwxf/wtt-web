@@ -117,8 +117,49 @@ function normalizeInlineOrderedLists(markdown: string): string {
     .join('')
 }
 
+function normalizeSoftLineBreaks(markdown: string): string {
+  return String(markdown || '')
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
+    .map((segment, index) => {
+      if (index % 2 === 1) return segment
+
+      return segment
+        .split(/(\n\s*\n+)/)
+        .map((block) => {
+          if (!block || /^\n\s*\n+$/.test(block)) return block
+          const lines = block.split('\n')
+          if (lines.length <= 1) return block
+
+          const hasHardBreak = lines.some((line, lineIndex) => lineIndex < lines.length - 1 && /(?: {2,}|\\)$/.test(line))
+          const hasMarkdownStructure = lines.some((line) => {
+            const trimmed = line.trim()
+            return (
+              !trimmed ||
+              /^#{1,6}\s/.test(trimmed) ||
+              /^>\s?/.test(trimmed) ||
+              /^[-*+]\s+/.test(trimmed) ||
+              /^\d+[.)]\s+/.test(trimmed) ||
+              /^[-*_]{3,}$/.test(trimmed) ||
+              /^\|.*\|$/.test(trimmed) ||
+              /^:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)*$/.test(trimmed) ||
+              /^<\/?[a-z][\s>]/i.test(trimmed) ||
+              /^(\$\$|\\\[|\\\]|\\begin\{|\\end\{)/.test(trimmed)
+            )
+          })
+
+          if (hasHardBreak || hasMarkdownStructure) return block
+          return lines.map((line) => line.trim()).filter(Boolean).join(' ')
+        })
+        .join('')
+    })
+    .join('')
+}
+
 export function RichMarkdown({ children, className }: RichMarkdownProps) {
-  const markdown = useMemo(() => normalizeMarkdownMath(normalizeInlineOrderedLists(children || '')), [children])
+  const markdown = useMemo(
+    () => normalizeMarkdownMath(normalizeSoftLineBreaks(normalizeInlineOrderedLists(children || ''))),
+    [children],
+  )
 
   return (
     <div className={[baseClassName, className].filter(Boolean).join(' ')}>
