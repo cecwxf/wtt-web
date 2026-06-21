@@ -118,39 +118,53 @@ function normalizeInlineOrderedLists(markdown: string): string {
 }
 
 function normalizeSoftLineBreaks(markdown: string): string {
+  const isStructuralLine = (line: string) => {
+    const trimmed = line.trim()
+    return (
+      !trimmed ||
+      /^#{1,6}\s/.test(trimmed) ||
+      /^>\s?/.test(trimmed) ||
+      /^[-*+]\s+/.test(trimmed) ||
+      /^\d+[.)]\s+/.test(trimmed) ||
+      /^[-*_]{3,}$/.test(trimmed) ||
+      /^\|.*\|$/.test(trimmed) ||
+      /^:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)*$/.test(trimmed) ||
+      /^<\/?[a-z][\s>]/i.test(trimmed) ||
+      /^(\$\$|\\\[|\\\]|\\begin\{|\\end\{)/.test(trimmed)
+    )
+  }
+
+  const canJoinFlowLine = (previous: string, next: string) => {
+    if (!previous.trim() || !next.trim()) return false
+    if (/(?: {2,}|\\)$/.test(previous)) return false
+    if (isStructuralLine(next)) return false
+    return true
+  }
+
+  const canContinuePreviousLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!isStructuralLine(trimmed)) return true
+    return /^[-*+]\s+/.test(trimmed) || /^\d+[.)]\s+/.test(trimmed)
+  }
+
   return String(markdown || '')
     .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
     .map((segment, index) => {
       if (index % 2 === 1) return segment
 
-      return segment
-        .split(/(\n\s*\n+)/)
-        .map((block) => {
-          if (!block || /^\n\s*\n+$/.test(block)) return block
-          const lines = block.split('\n')
-          if (lines.length <= 1) return block
+      const lines = segment.split('\n')
+      if (lines.length <= 1) return segment
 
-          const hasHardBreak = lines.some((line, lineIndex) => lineIndex < lines.length - 1 && /(?: {2,}|\\)$/.test(line))
-          const hasMarkdownStructure = lines.some((line) => {
-            const trimmed = line.trim()
-            return (
-              !trimmed ||
-              /^#{1,6}\s/.test(trimmed) ||
-              /^>\s?/.test(trimmed) ||
-              /^[-*+]\s+/.test(trimmed) ||
-              /^\d+[.)]\s+/.test(trimmed) ||
-              /^[-*_]{3,}$/.test(trimmed) ||
-              /^\|.*\|$/.test(trimmed) ||
-              /^:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)*$/.test(trimmed) ||
-              /^<\/?[a-z][\s>]/i.test(trimmed) ||
-              /^(\$\$|\\\[|\\\]|\\begin\{|\\end\{)/.test(trimmed)
-            )
-          })
-
-          if (hasHardBreak || hasMarkdownStructure) return block
-          return lines.map((line) => line.trim()).filter(Boolean).join(' ')
-        })
-        .join('')
+      const out: string[] = []
+      for (const line of lines) {
+        const previous = out[out.length - 1]
+        if (previous !== undefined && canJoinFlowLine(previous, line) && canContinuePreviousLine(previous)) {
+          out[out.length - 1] = `${previous.trimEnd()} ${line.trimStart()}`
+        } else {
+          out.push(line)
+        }
+      }
+      return out.join('\n')
     })
     .join('')
 }

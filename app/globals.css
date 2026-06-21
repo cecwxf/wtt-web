@@ -52,9 +52,10 @@ body {
   line-height: 1.82;
   letter-spacing: -0.003em;
   word-break: normal;
-  overflow-wrap: normal;
-  line-break: strict;
+  overflow-wrap: break-word;
+  line-break: auto;
   hyphens: none;
+  text-wrap: pretty;
 }
 
 .wtt-message-bubble--agent {
@@ -71,18 +72,20 @@ body {
   font-family: var(--wtt-chat-font, var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif);
   letter-spacing: -0.003em;
   word-break: normal;
-  overflow-wrap: normal;
-  line-break: strict;
+  overflow-wrap: break-word;
+  line-break: auto;
   hyphens: none;
+  text-wrap: pretty;
 }
 
 .wtt-rich-markdown :where(p, li) {
   white-space: normal;
   line-height: 1.82;
   word-break: normal;
-  overflow-wrap: normal;
-  line-break: strict;
+  overflow-wrap: break-word;
+  line-break: auto;
   hyphens: none;
+  text-wrap: pretty;
 }
 
 .wtt-rich-markdown :where(strong) {
