@@ -1,8 +1,7 @@
 'use client'
 
 import ReactMarkdown from 'react-markdown'
-import type { ReactNode } from 'react'
-import { useMemo } from 'react'
+import { isValidElement, useMemo, useState, type ReactNode } from 'react'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -16,12 +15,11 @@ type RichMarkdownProps = {
 const baseClassName = [
   'wtt-rich-markdown prose max-w-none dark:prose-invert',
   'prose-slate dark:prose-zinc',
-  'prose-p:my-2.5 prose-p:whitespace-pre-wrap prose-p:leading-[1.82]',
+  'prose-p:my-2.5 prose-p:whitespace-normal prose-p:leading-[1.82]',
   'text-slate-800 dark:text-zinc-100',
   'prose-headings:mt-5 prose-headings:mb-2 prose-headings:font-semibold prose-headings:tracking-[-0.015em]',
   'prose-ul:my-2.5 prose-ol:my-2.5 prose-li:my-1',
   'prose-blockquote:my-4 prose-blockquote:rounded-r-xl prose-blockquote:border-l-4 prose-blockquote:border-[#d8cfc0] prose-blockquote:bg-[#f8f3ea]/70 prose-blockquote:px-3 prose-blockquote:py-1 prose-blockquote:text-[#5b5348] dark:prose-blockquote:border-zinc-700 dark:prose-blockquote:bg-zinc-900/70 dark:prose-blockquote:text-zinc-300',
-  'prose-pre:my-4 prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:border prose-pre:border-[#e4d9ca] prose-pre:bg-[#faf7f1] prose-pre:p-0 prose-pre:text-slate-800 dark:prose-pre:border-zinc-800 dark:prose-pre:bg-zinc-950 dark:prose-pre:text-zinc-100',
   'prose-code:before:content-none prose-code:after:content-none',
   'prose-table:my-3 prose-table:block prose-table:w-full prose-table:overflow-x-auto prose-table:rounded-lg prose-table:border prose-table:border-slate-200 dark:prose-table:border-zinc-800',
   'prose-thead:bg-slate-50 dark:prose-thead:bg-zinc-900',
@@ -38,8 +36,66 @@ function codeText(children: unknown): string {
   return String(children)
 }
 
+function nodeText(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(nodeText).join('')
+  if (isValidElement<{ children?: ReactNode }>(node)) return nodeText(node.props.children)
+  return ''
+}
+
 function joinClassName(...classes: Array<string | undefined | false>) {
   return classes.filter(Boolean).join(' ')
+}
+
+async function copyToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
+
+function CopyablePre({ children }: { children: ReactNode }) {
+  const [copied, setCopied] = useState(false)
+  const text = nodeText(children).replace(/\n$/, '')
+
+  const handleCopy = async () => {
+    if (!text) return
+    try {
+      await copyToClipboard(text)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1200)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className="group relative my-4 overflow-hidden rounded-xl border border-[#e4d9ca] bg-[#faf7f1] shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex items-center justify-end border-b border-[#e9dfd2] bg-[#f5efe6] px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="rounded-md border border-[#dfd3c3] bg-white px-2 py-1 text-[11px] font-semibold text-[#6d6256] shadow-sm transition hover:border-[#cbbca9] hover:text-[#2f342f] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-white"
+          aria-label="Copy code"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="m-0 overflow-x-auto bg-transparent p-3 text-xs leading-5 text-slate-800 dark:text-zinc-100">
+        {children}
+      </pre>
+    </div>
+  )
 }
 
 function normalizeInlineOrderedLists(markdown: string): string {
@@ -78,11 +134,7 @@ export function RichMarkdown({ children, className }: RichMarkdownProps) {
             )
           },
           pre({ children: preChildren }) {
-            return (
-              <pre className="my-4 overflow-x-auto rounded-xl border border-[#e4d9ca] bg-[#faf7f1] p-3 text-xs leading-5 text-slate-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                {preChildren}
-              </pre>
-            )
+            return <CopyablePre>{preChildren}</CopyablePre>
           },
           code({ inline, className: codeClassName, children: codeChildren, ...props }: {
             inline?: boolean
