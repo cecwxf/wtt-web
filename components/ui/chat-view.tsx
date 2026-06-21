@@ -3234,7 +3234,11 @@ export function ChatView({
                                       <span className="text-xs font-medium text-amber-700">{pct}%</span>
                                     </div>
                                   )}
-                                  {task.body && <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap">{task.body}</p>}
+                                  {task.body && (
+                                    <MarkdownWithMath className="text-[13px] leading-relaxed text-slate-700 dark:text-zinc-200 prose-p:my-1.5">
+                                      {task.body}
+                                    </MarkdownWithMath>
+                                  )}
                                 </div>
                               )}
 
@@ -3244,7 +3248,9 @@ export function ChatView({
                                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                                     {task.kind === 'summary' ? t('chat.result') : task.kind === 'blocked' ? t('chat.blocked') : t('chat.review')}
                                   </p>
-                                  <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap">{task.body}</p>
+                                  <MarkdownWithMath className="text-[13px] leading-relaxed text-slate-700 dark:text-zinc-200 prose-p:my-1.5">
+                                    {task.body}
+                                  </MarkdownWithMath>
                                 </div>
                               )}
 
@@ -3255,7 +3261,9 @@ export function ChatView({
                                   {task.assetUrl ? (
                                     <a href={task.assetUrl} target="_blank" rel="noreferrer" className="text-sm text-indigo-600 underline break-all hover:text-indigo-800">{task.assetUrl}</a>
                                   ) : (
-                                    <p className="text-[13px] break-all text-slate-600">{task.assetPath || task.body || '—'}</p>
+                                    <MarkdownWithMath className="text-[13px] leading-relaxed text-slate-600 dark:text-zinc-200 prose-p:my-1.5">
+                                      {task.assetPath || task.body || '—'}
+                                    </MarkdownWithMath>
                                   )}
                                 </div>
                               )}
@@ -3264,7 +3272,9 @@ export function ChatView({
                               {task.kind === 'run' && task.body && (
                                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('chat.details')}</p>
-                                  <p className="text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap">{task.body}</p>
+                                  <MarkdownWithMath className="text-[13px] leading-relaxed text-slate-700 dark:text-zinc-200 prose-p:my-1.5">
+                                    {task.body}
+                                  </MarkdownWithMath>
                                 </div>
                               )}
                             </div>
