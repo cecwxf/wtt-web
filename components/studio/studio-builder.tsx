@@ -322,7 +322,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   }, [selectedAgentId, topicId])
 
   const { state: wsState } = useWebSocket({
-    url: WS_BASE_URL,
+    url: selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=web` : '',
     enabled: !!selectedAgentId && !!token,
     token,
     onMessage: handleWsMessage,
