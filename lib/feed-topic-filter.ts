@@ -18,6 +18,7 @@ export function shouldHideFeedTopic(topic: Record<string, unknown>): boolean {
   const searchable = `${name}\n${description}\n${originType}\n${creatorAgentId}\n${collectTopicSearchText(topic)}`.toLowerCase()
 
   if (creatorAgentId === 'agent-16a45cf0dd8b') return true
+  if (name.toLowerCase().startsWith('studio:')) return true
   if (name === 'Arena Coach' || name.startsWith('Arena Coach:')) return true
   if (description.includes('Private Arena Coach chat')) return true
   if (

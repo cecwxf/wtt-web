@@ -1675,6 +1675,7 @@ function FeedPageInner() {
     return items
       .map((item) => (item && typeof item === 'object' ? item as Record<string, unknown> : null))
       .filter(Boolean)
+      .filter((row) => !shouldHideFeedTopic(row as Record<string, unknown>))
       .map((row) => {
         const topicId = String(row?.topic_id || row?.id || '')
         const agentLabels = Array.isArray(row?.agent_labels)
