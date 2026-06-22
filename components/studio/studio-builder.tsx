@@ -671,7 +671,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
       >
         <section className={[
           'min-h-0 overflow-hidden bg-[#fbfaf7] text-slate-950 dark:bg-[#111315] dark:text-white',
-          chatFullscreen ? 'flex-1 border-r-0' : '',
+          chatFullscreen ? 'h-full w-full flex-1 border-r-0' : '',
           previewFullscreen ? 'hidden' : '',
           !fullscreenMode ? 'border-r border-white/10 lg:basis-[var(--studio-chat-width)] lg:shrink-0' : '',
         ].filter(Boolean).join(' ')}>
@@ -760,8 +760,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
 
         <section className={[
           'min-h-0 flex-1 flex-col bg-slate-100 dark:bg-[#070b10]',
-          chatFullscreen ? 'hidden' : '',
-          previewFullscreen ? 'flex' : 'hidden lg:flex',
+          chatFullscreen ? 'hidden' : previewFullscreen ? 'flex' : 'hidden lg:flex',
         ].filter(Boolean).join(' ')}>
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white/80 px-4 dark:border-white/10 dark:bg-transparent">
             <div className="flex items-center gap-2">
