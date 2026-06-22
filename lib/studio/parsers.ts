@@ -72,11 +72,22 @@ export function projectFromTopic(topic: StudioTopic): StudioProject | null {
   const topicName = String(topic.name || '').trim()
   if (!topicId || !isStudioTopic(topic)) return null
   const lastMessage = String(topic.latest_message_content || topic.last_message_content || '').trim()
+  let memberAgentIds: string[] = []
+  if (Array.isArray(topic.member_agent_ids)) {
+    memberAgentIds = topic.member_agent_ids.map((agentId) => String(agentId || '').trim()).filter(Boolean)
+  } else if (Array.isArray(topic.agent_ids)) {
+    memberAgentIds = topic.agent_ids.map((agentId) => String(agentId || '').trim()).filter(Boolean)
+  } else if (Array.isArray(topic.members)) {
+    memberAgentIds = topic.members.map((member) => String(member.agent_id || '').trim()).filter(Boolean)
+  }
   return {
     topicId,
     topicName,
     title: studioTitleFromTopicName(topicName),
     description: String(topic.description || '').trim(),
+    topicType: String(topic.topic_type || topic.type || '').trim() || undefined,
+    creatorAgentId: String(topic.creator_agent_id || '').trim() || undefined,
+    memberAgentIds,
     createdAt: topic.created_at || undefined,
     updatedAt: topic.updated_at || topic.last_activity_at || topic.created_at || undefined,
     lastMessage: lastMessage || undefined,

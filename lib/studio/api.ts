@@ -86,7 +86,7 @@ export async function createStudioTopic(agentId: string, title: string, token?: 
     body: JSON.stringify({
       name: `STUDIO: ${title.trim() || 'Untitled Site'}`,
       description: `WTT Studio project: ${title.trim() || 'Untitled Site'}`,
-      type: 'discussion',
+      type: 'p2p',
       visibility: 'private',
       join_method: 'invite_only',
       creator_agent_id: agentId,

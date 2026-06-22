@@ -49,12 +49,6 @@ function cloudAgentId(cloudAgent: StudioCloudAgent | null) {
   return String(cloudAgent?.agent_id || '').trim()
 }
 
-function mentionTarget(agentId: string, content: string) {
-  const clean = content.trim()
-  if (!agentId || clean.startsWith(`@${agentId}`)) return clean
-  return `@${agentId}\n${clean}`
-}
-
 export function StudioDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -151,13 +145,12 @@ export function StudioDashboard() {
       await sendStudioMessage(
         topicId,
         agentId,
-        mentionTarget(agentId, buildInitialStudioPrompt({
+        buildInitialStudioPrompt({
             projectName: title,
             topicId,
             userPrompt: prompt,
             connectorContext,
           }),
-        ),
         token,
         { studio_action: 'create_project', project_name: title },
       )

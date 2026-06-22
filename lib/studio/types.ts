@@ -3,7 +3,11 @@ export type StudioTopic = {
   topic_id?: string
   name?: string
   description?: string | null
+  type?: string | null
+  topic_type?: string | null
   creator_agent_id?: string | null
+  member_agent_ids?: string[]
+  agent_ids?: string[]
   members?: Array<{ agent_id?: string; display_name?: string; role?: string }>
   created_at?: string | null
   updated_at?: string | null
@@ -37,6 +41,9 @@ export type StudioProject = StudioProjectLinks & {
   topicName: string
   title: string
   description?: string
+  topicType?: string
+  creatorAgentId?: string
+  memberAgentIds?: string[]
   createdAt?: string
   updatedAt?: string
   lastMessage?: string

@@ -25,7 +25,6 @@ import {
   fetchStudioConnectorPromptContext,
   fetchStudioMessages,
   fetchStudioTopics,
-  joinStudioTopic,
   sendStudioMessage,
 } from '@/lib/studio/api'
 import {
@@ -77,6 +76,25 @@ function chooseStudioAgent(agents: StudioAgent[], stats: StudioAgentStats | null
   )
 }
 
+function chooseProjectAgent(
+  project: StudioProject | null,
+  agents: StudioAgent[],
+  stats: StudioAgentStats | null,
+  cloudAgent: StudioCloudAgent | null,
+) {
+  const cloudAgents = agents.filter((agent) => isCloudAgent(agent, stats))
+  const cloudIds = new Set(cloudAgents.map((agent) => agent.agent_id))
+  const onlineIds = onlineAgentIds(stats)
+  const projectMembers = project?.memberAgentIds?.filter((agentId) => cloudIds.has(agentId)) || []
+  const creatorAgentId = String(project?.creatorAgentId || '').trim()
+
+  return (
+    projectMembers.find((agentId) => onlineIds.has(agentId)) ||
+    (creatorAgentId && cloudIds.has(creatorAgentId) ? creatorAgentId : '') ||
+    chooseStudioAgent(agents, stats, cloudAgent)
+  )
+}
+
 function toChatMessage(message: StudioMessage): ChatMessage {
   return {
     message_id: String(message.message_id || message.id || `${message.timestamp || message.created_at || ''}:${String(message.content || '').length}`),
@@ -89,12 +107,6 @@ function toChatMessage(message: StudioMessage): ChatMessage {
     timestamp: String(message.timestamp || message.created_at || new Date().toISOString()),
     semantic_type: String((message as { semantic_type?: string }).semantic_type || 'post'),
   }
-}
-
-function mentionTarget(agentId: string, content: string) {
-  const clean = content.trim()
-  if (!agentId || clean.startsWith(`@${agentId}`)) return clean
-  return `@${agentId}\n${clean}`
 }
 
 export function StudioBuilder({ topicId }: { topicId: string }) {
@@ -130,17 +142,6 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     setMessages(loaded)
   }, [selectedAgentId, token, topicId])
 
-  const ensureTopicMember = useCallback(async (agentId: string) => {
-    if (!token || !agentId) return
-    try {
-      await joinStudioTopic(topicId, agentId, token)
-    } catch (err) {
-      // Existing Studio topics may be invite-only. If another claimed agent is
-      // already OWNER/ADMIN, join succeeds; otherwise continue with current member.
-      console.warn('Studio topic join skipped', err)
-    }
-  }, [token, topicId])
-
   useEffect(() => {
     if (status === 'loading') return
     if (!token) {
@@ -159,25 +160,36 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
         ])
         if (cancelled) return
         setAgentStats(stats)
-        const chosenAgent = chooseStudioAgent(agents, stats, cloud)
-        setSelectedAgentId(chosenAgent)
-        if (!chosenAgent) {
+        const initialAgent = chooseStudioAgent(agents, stats, cloud)
+        if (!initialAgent) {
           setLoading(false)
           return
         }
-        const topics = await fetchStudioTopics(chosenAgent, token).catch(async () => {
+        let topics = await fetchStudioTopics(initialAgent, token).catch(async () => {
           const fallbackAgent = String(cloud.agent_id || '').trim()
-          return fallbackAgent && fallbackAgent !== chosenAgent ? fetchStudioTopics(fallbackAgent, token) : []
+          return fallbackAgent && fallbackAgent !== initialAgent ? fetchStudioTopics(fallbackAgent, token) : []
         })
+        const fallbackAgent = String(cloud.agent_id || '').trim()
+        if (fallbackAgent && fallbackAgent !== initialAgent && !topics.some((topic) => String(topic.topic_id || topic.id || '') === topicId)) {
+          const fallbackTopics = await fetchStudioTopics(fallbackAgent, token).catch(() => [])
+          const seen = new Set(topics.map((topic) => String(topic.topic_id || topic.id || '')))
+          topics = [...topics, ...fallbackTopics.filter((topic) => !seen.has(String(topic.topic_id || topic.id || '')))]
+        }
         if (cancelled) return
         const found = topics.map(projectFromTopic).filter(Boolean).find((item) => item?.topicId === topicId) || null
-        setProject(found || {
+        const nextProject = found || {
           topicId,
           topicName: 'STUDIO: Untitled Site',
           title: studioTitleFromTopicName('Untitled Site'),
-        })
-        await ensureTopicMember(chosenAgent)
-        const loadedMessages = await fetchStudioMessages(topicId, chosenAgent, token)
+        }
+        setProject(nextProject)
+        const projectAgent = chooseProjectAgent(nextProject, agents, stats, cloud)
+        setSelectedAgentId(projectAgent)
+        if (!projectAgent) {
+          setLoading(false)
+          return
+        }
+        const loadedMessages = await fetchStudioMessages(topicId, projectAgent, token)
         if (!cancelled) setMessages(loadedMessages)
         setLoading(false)
       } catch (err) {
@@ -191,7 +203,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     return () => {
       cancelled = true
     }
-  }, [ensureTopicMember, status, token, topicId])
+  }, [status, token, topicId])
 
   useEffect(() => {
     if (!token || !selectedAgentId) return
@@ -222,11 +234,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     setSending(true)
     setError('')
     try {
-      await ensureTopicMember(selectedAgentId)
-      const shouldPassSlash = options?.slashType === 'agent_passthrough' && content.trim().startsWith('/')
-      const payload = shouldPassSlash
-        ? mentionTarget(selectedAgentId, content)
-        : mentionTarget(selectedAgentId, content)
+      const payload = content.trim()
       await sendStudioMessage(topicId, selectedAgentId, payload, token, {
         studio_action: action,
         studio_topic_id: topicId,
@@ -321,7 +329,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
             loading={loading && chatMessages.length === 0}
             wsConnected={isSelectedOnline}
             accessToken={token}
-            topicType="discussion"
+            topicType="p2p"
             compactUi
             currentAgentIsCloud
             workspaceAgentName={selectedAgentId || undefined}
@@ -337,7 +345,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-700">WTT Studio</p>
                 <h2 className="mt-2 text-2xl font-black text-slate-950">Start building with your Cloud Agent</h2>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
-                  输入你要生成或修改的网站。Studio 会自动 @ 当前在线 Cloud Agent，并把 connector context 注入到任务中。
+                  输入你要生成或修改的网站。Studio 会把任务作为普通 Cloud Agent 对话发送，并把 connector context 注入到任务中。
                 </p>
               </div>
             )}
