@@ -2,10 +2,9 @@
 
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
-  Bot,
   ExternalLink,
   Github,
   Globe2,
@@ -14,21 +13,22 @@ import {
   PlugZap,
   RefreshCw,
   Rocket,
-  Send,
   Smartphone,
   Sparkles,
 } from 'lucide-react'
-import { RichMarkdown } from '@/components/ui/rich-markdown'
+import { ChatView, type ChatMessage, type ChatSendOptions } from '@/components/ui/chat-view'
 import { StudioConnectorsPanel } from '@/components/studio/studio-connectors-panel'
 import {
+  fetchStudioAgentStats,
+  fetchStudioAgents,
   fetchStudioCloudAgent,
   fetchStudioConnectorPromptContext,
   fetchStudioMessages,
   fetchStudioTopics,
+  joinStudioTopic,
   sendStudioMessage,
 } from '@/lib/studio/api'
 import {
-  compactMessagePreview,
   enrichProjectWithMessages,
   projectFromTopic,
   studioTitleFromTopicName,
@@ -40,40 +40,75 @@ import {
   buildPublishPrompt,
   studioWorkspace,
 } from '@/lib/studio/prompts'
-import type { StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
+import type { StudioAgent, StudioAgentStats, StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
 
 function sessionToken(session: unknown) {
   return (session as { accessToken?: string } | null)?.accessToken || ''
 }
 
-function messageKey(message: StudioMessage, index: number) {
-  return String(message.message_id || message.id || `${message.timestamp || index}-${index}`)
+function isCloudAgent(agent: StudioAgent, stats: StudioAgentStats | null) {
+  const runtime = stats?.runtimes?.[agent.agent_id]
+  return (
+    String(agent.binding_method || agent.bound_via || '') === 'cloud_trial' ||
+    Boolean(agent.is_cloud_sandbox) ||
+    Boolean(agent.cloud_host_agent_id) ||
+    String(runtime?.provider || '').includes('cloudflare_sandbox')
+  )
 }
 
-function isHuman(message: StudioMessage) {
-  return String(message.sender_type || '').toLowerCase() === 'human'
+function onlineAgentIds(stats: StudioAgentStats | null) {
+  const ids = new Set((stats?.online_agents || []).map(String))
+  for (const [agentId, runtime] of Object.entries(stats?.runtimes || {})) {
+    if (typeof runtime.last_heartbeat_secs_ago === 'number' && runtime.last_heartbeat_secs_ago <= 90) {
+      ids.add(agentId)
+    }
+  }
+  return ids
 }
 
-function lastAgentActivity(messages: StudioMessage[]) {
-  const agent = [...messages].reverse().find((message) => !isHuman(message) && String(message.content || '').trim())
-  return agent?.content || ''
+function chooseStudioAgent(agents: StudioAgent[], stats: StudioAgentStats | null, cloudAgent: StudioCloudAgent | null) {
+  const cloudAgents = agents.filter((agent) => isCloudAgent(agent, stats))
+  const onlineIds = onlineAgentIds(stats)
+  return (
+    cloudAgents.find((agent) => onlineIds.has(agent.agent_id))?.agent_id ||
+    String(cloudAgent?.agent_id || '').trim() ||
+    cloudAgents[0]?.agent_id ||
+    ''
+  )
+}
+
+function toChatMessage(message: StudioMessage): ChatMessage {
+  return {
+    message_id: String(message.message_id || message.id || `${message.timestamp || message.created_at || ''}:${String(message.content || '').length}`),
+    topic_id: message.topic_id,
+    sender_id: String(message.sender_id || ''),
+    sender_display_name: message.sender_display_name || undefined,
+    sender_type: String(message.sender_type || '').toLowerCase() === 'human' ? 'human' : 'agent',
+    content: String(message.content || ''),
+    encrypted: false,
+    timestamp: String(message.timestamp || message.created_at || new Date().toISOString()),
+    semantic_type: String((message as { semantic_type?: string }).semantic_type || 'post'),
+  }
+}
+
+function mentionTarget(agentId: string, content: string) {
+  const clean = content.trim()
+  if (!agentId || clean.startsWith(`@${agentId}`)) return clean
+  return `@${agentId}\n${clean}`
 }
 
 export function StudioBuilder({ topicId }: { topicId: string }) {
   const { data: session, status } = useSession()
   const token = sessionToken(session)
-  const [cloudAgent, setCloudAgent] = useState<StudioCloudAgent | null>(null)
+  const [agentStats, setAgentStats] = useState<StudioAgentStats | null>(null)
+  const [selectedAgentId, setSelectedAgentId] = useState('')
   const [project, setProject] = useState<StudioProject | null>(null)
   const [messages, setMessages] = useState<StudioMessage[]>([])
-  const [input, setInput] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [connectorsOpen, setConnectorsOpen] = useState(false)
-  const bottomRef = useRef<HTMLDivElement | null>(null)
-
-  const agentId = String(cloudAgent?.agent_id || '').trim()
 
   const enrichedProject = useMemo(() => {
     const fallback: StudioProject = {
@@ -84,6 +119,27 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     }
     return enrichProjectWithMessages(project || fallback, messages)
   }, [messages, project, topicId])
+
+  const chatMessages = useMemo(() => messages.map(toChatMessage), [messages])
+  const selectedRuntime = selectedAgentId ? agentStats?.runtimes?.[selectedAgentId] : undefined
+  const isSelectedOnline = selectedAgentId ? onlineAgentIds(agentStats).has(selectedAgentId) : false
+
+  const refreshMessages = useCallback(async (agentId = selectedAgentId) => {
+    if (!token || !agentId) return
+    const loaded = await fetchStudioMessages(topicId, agentId, token)
+    setMessages(loaded)
+  }, [selectedAgentId, token, topicId])
+
+  const ensureTopicMember = useCallback(async (agentId: string) => {
+    if (!token || !agentId) return
+    try {
+      await joinStudioTopic(topicId, agentId, token)
+    } catch (err) {
+      // Existing Studio topics may be invite-only. If another claimed agent is
+      // already OWNER/ADMIN, join succeeds; otherwise continue with current member.
+      console.warn('Studio topic join skipped', err)
+    }
+  }, [token, topicId])
 
   useEffect(() => {
     if (status === 'loading') return
@@ -96,18 +152,23 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
       setLoading(true)
       setError('')
       try {
-        const cloud = await fetchStudioCloudAgent(token)
+        const [cloud, agents, stats] = await Promise.all([
+          fetchStudioCloudAgent(token),
+          fetchStudioAgents(token).catch(() => []),
+          fetchStudioAgentStats(token).catch(() => null),
+        ])
         if (cancelled) return
-        setCloudAgent(cloud)
-        const aid = String(cloud.agent_id || '').trim()
-        if (!aid) {
+        setAgentStats(stats)
+        const chosenAgent = chooseStudioAgent(agents, stats, cloud)
+        setSelectedAgentId(chosenAgent)
+        if (!chosenAgent) {
           setLoading(false)
           return
         }
-        const [topics, loadedMessages] = await Promise.all([
-          fetchStudioTopics(aid, token),
-          fetchStudioMessages(topicId, aid, token),
-        ])
+        const topics = await fetchStudioTopics(chosenAgent, token).catch(async () => {
+          const fallbackAgent = String(cloud.agent_id || '').trim()
+          return fallbackAgent && fallbackAgent !== chosenAgent ? fetchStudioTopics(fallbackAgent, token) : []
+        })
         if (cancelled) return
         const found = topics.map(projectFromTopic).filter(Boolean).find((item) => item?.topicId === topicId) || null
         setProject(found || {
@@ -115,7 +176,9 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           topicName: 'STUDIO: Untitled Site',
           title: studioTitleFromTopicName('Untitled Site'),
         })
-        setMessages(loadedMessages)
+        await ensureTopicMember(chosenAgent)
+        const loadedMessages = await fetchStudioMessages(topicId, chosenAgent, token)
+        if (!cancelled) setMessages(loadedMessages)
         setLoading(false)
       } catch (err) {
         if (!cancelled) {
@@ -128,42 +191,24 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     return () => {
       cancelled = true
     }
-  }, [status, token, topicId])
+  }, [ensureTopicMember, status, token, topicId])
 
   useEffect(() => {
-    if (!token || !agentId) return
+    if (!token || !selectedAgentId) return
     const timer = window.setInterval(async () => {
       try {
-        const loaded = await fetchStudioMessages(topicId, agentId, token)
+        const [stats, loaded] = await Promise.all([
+          fetchStudioAgentStats(token).catch(() => null),
+          fetchStudioMessages(topicId, selectedAgentId, token),
+        ])
+        if (stats) setAgentStats(stats)
         setMessages(loaded)
       } catch {
         // Keep Studio usable during transient backend or sandbox wake delays.
       }
-    }, sending ? 2500 : 6000)
+    }, sending ? 2500 : 5000)
     return () => window.clearInterval(timer)
-  }, [agentId, sending, token, topicId])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages.length])
-
-  async function submitPrompt(content: string, action: string) {
-    if (!token || !agentId || sending || !content.trim()) return
-    setSending(true)
-    setError('')
-    try {
-      await sendStudioMessage(topicId, agentId, content, token, {
-        studio_action: action,
-        studio_topic_id: topicId,
-      })
-      const loaded = await fetchStudioMessages(topicId, agentId, token)
-      setMessages(loaded)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send message')
-    } finally {
-      setSending(false)
-    }
-  }
+  }, [selectedAgentId, sending, token, topicId])
 
   async function connectorContext() {
     if (!token) return ''
@@ -172,12 +217,32 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
       .catch(() => '')
   }
 
-  async function handleSend(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const raw = input.trim()
-    if (!raw) return
-    setInput('')
-    await submitPrompt(buildFollowupStudioPrompt(topicId, raw, await connectorContext()), 'followup')
+  async function submitPrompt(content: string, action: string, replyTo?: string, options?: ChatSendOptions) {
+    if (!token || !selectedAgentId || sending || !content.trim()) return
+    setSending(true)
+    setError('')
+    try {
+      await ensureTopicMember(selectedAgentId)
+      const shouldPassSlash = options?.slashType === 'agent_passthrough' && content.trim().startsWith('/')
+      const payload = shouldPassSlash
+        ? mentionTarget(selectedAgentId, content)
+        : mentionTarget(selectedAgentId, content)
+      await sendStudioMessage(topicId, selectedAgentId, payload, token, {
+        studio_action: action,
+        studio_topic_id: topicId,
+        reply_to: replyTo,
+        ...(options?.slashType ? { slash_type: options.slashType, slash_command: options.slashCommand || content } : {}),
+      })
+      await refreshMessages(selectedAgentId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send message')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const handleChatSend = async (content: string, replyTo?: string, options?: ChatSendOptions) => {
+    await submitPrompt(buildFollowupStudioPrompt(topicId, content, await connectorContext()), 'followup', replyTo, options)
   }
 
   if (status === 'loading' || loading) {
@@ -215,7 +280,9 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           </Link>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">{enrichedProject.title}</p>
-            <p className="truncate text-xs text-slate-500">{studioWorkspace(topicId)}</p>
+            <p className="truncate text-xs text-slate-500">
+              {selectedAgentId ? `Agent ${selectedAgentId}${isSelectedOnline ? ' · online' : ' · offline'}` : 'No Cloud Agent available'} · {studioWorkspace(topicId)}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -231,9 +298,6 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
               Published
             </a>
           )}
-          <span className="rounded-full bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100">
-            {cloudAgent?.status || 'cloud-agent'}
-          </span>
           <button
             type="button"
             onClick={() => setConnectorsOpen(true)}
@@ -245,100 +309,70 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[440px_minmax(0,1fr)]">
-        <section className="flex min-h-0 flex-col border-r border-white/10 bg-[#0f171f]">
-          <div className="shrink-0 border-b border-white/10 p-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview')}
-                disabled={sending || !agentId}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Preview
-              </button>
-              <button
-                type="button"
-                onClick={async () => submitPrompt(buildPublishPrompt(topicId, await connectorContext()), 'publish')}
-                disabled={sending || !agentId}
-                className="inline-flex items-center gap-2 rounded-full border border-emerald-200/20 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-200/10 disabled:opacity-50"
-              >
-                <Rocket className="h-3.5 w-3.5" />
-                Publish
-              </button>
-              <button
-                type="button"
-                onClick={async () => submitPrompt(buildGithubPrompt(topicId, enrichedProject.title, await connectorContext()), 'github')}
-                disabled={sending || !agentId}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
-              >
-                <Github className="h-3.5 w-3.5" />
-                GitHub
-              </button>
-            </div>
-            {error && <p className="mt-3 rounded-xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs leading-5 text-red-100">{error}</p>}
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            {messages.length === 0 ? (
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm leading-6 text-slate-400">
-                <Bot className="mb-4 h-7 w-7 text-cyan-200" />
-                Project topic is ready. Ask the Agent to build the first screen, add components, or start a dev server.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {messages.map((message, index) => {
-                  const human = isHuman(message)
-                  return (
-                    <article
-                      key={messageKey(message, index)}
-                      className={[
-                        'rounded-3xl border p-4',
-                        human ? 'border-cyan-200/15 bg-cyan-200/[0.06]' : 'border-white/10 bg-white/[0.045]',
-                      ].join(' ')}
-                    >
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                          {human ? 'You' : 'Agent'}
-                        </p>
-                        <time className="text-[11px] text-slate-600">{String(message.timestamp || message.created_at || '').slice(0, 19).replace('T', ' ')}</time>
-                      </div>
-                      <RichMarkdown className="text-sm">{String(message.content || '')}</RichMarkdown>
-                    </article>
-                  )
-                })}
-                <div ref={bottomRef} />
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(460px,0.9fr)_minmax(0,1.1fr)]">
+        <section className="min-h-0 overflow-hidden border-r border-white/10 bg-[#fbfaf7] text-slate-950">
+          {error && <p className="m-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</p>}
+          <ChatView
+            topicName={enrichedProject.title}
+            topicId={topicId}
+            messages={chatMessages}
+            currentAgentId={selectedAgentId}
+            onSendMessage={handleChatSend}
+            loading={loading && chatMessages.length === 0}
+            wsConnected={isSelectedOnline}
+            accessToken={token}
+            topicType="discussion"
+            compactUi
+            currentAgentIsCloud
+            workspaceAgentName={selectedAgentId || undefined}
+            workspaceWorkdir={studioWorkspace(topicId)}
+            currentAgentRuntime={{
+              adapter: selectedRuntime?.adapter || 'cloud-agent',
+              model: selectedRuntime?.current_model || selectedRuntime?.model_id || selectedRuntime?.model || 'studio-agent',
+              reasoning_effort: selectedRuntime?.reasoning_effort || 'medium',
+            }}
+            agentRoleLabelMap={selectedAgentId ? { [selectedAgentId]: 'WTT Studio Agent' } : {}}
+            emptyState={(
+              <div className="mx-auto max-w-xl rounded-3xl border border-dashed border-cyan-300/40 bg-cyan-50 p-5 text-left">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-700">WTT Studio</p>
+                <h2 className="mt-2 text-2xl font-black text-slate-950">Start building with your Cloud Agent</h2>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  输入你要生成或修改的网站。Studio 会自动 @ 当前在线 Cloud Agent，并把 connector context 注入到任务中。
+                </p>
               </div>
             )}
-          </div>
-
-          <form onSubmit={handleSend} className="shrink-0 border-t border-white/10 bg-[#0c1219] p-4">
-            <div className="rounded-3xl border border-white/10 bg-black/20 p-2">
-              <textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                    event.currentTarget.form?.requestSubmit()
-                  }
-                }}
-                className="max-h-52 min-h-[92px] w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-slate-600"
-                placeholder="Describe a change, e.g. make it feel more premium, add pricing, wire GitHub publish..."
-              />
-              <div className="flex items-center justify-between gap-3 border-t border-white/10 px-2 pt-2">
-                <p className="truncate text-[11px] text-slate-500">{compactMessagePreview(lastAgentActivity(messages), 90)}</p>
+            extraHeaderActions={(
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
                 <button
-                  type="submit"
-                  disabled={sending || !input.trim() || !agentId}
-                  className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                  type="button"
+                  onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview')}
+                  disabled={sending || !selectedAgentId}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300 disabled:opacity-50"
                 >
-                  {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                  Send
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => submitPrompt(buildPublishPrompt(topicId, await connectorContext()), 'publish')}
+                  disabled={sending || !selectedAgentId}
+                  className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-black text-emerald-700 hover:border-emerald-300 disabled:opacity-50"
+                >
+                  <Rocket className="h-3.5 w-3.5" />
+                  Publish
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => submitPrompt(buildGithubPrompt(topicId, enrichedProject.title, await connectorContext()), 'github')}
+                  disabled={sending || !selectedAgentId}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300 disabled:opacity-50"
+                >
+                  <Github className="h-3.5 w-3.5" />
+                  GitHub
                 </button>
               </div>
-            </div>
-          </form>
+            )}
+          />
         </section>
 
         <section className="hidden min-h-0 flex-col bg-[#070b10] lg:flex">
@@ -389,7 +423,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                 <button
                   type="button"
                   onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview')}
-                  disabled={sending || !agentId}
+                  disabled={sending || !selectedAgentId}
                   className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-50"
                 >
                   <RefreshCw className="h-4 w-4" />

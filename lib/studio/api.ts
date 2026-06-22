@@ -1,6 +1,8 @@
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import type {
   StudioBilling,
+  StudioAgent,
+  StudioAgentStats,
   StudioCloudAgent,
   StudioConnector,
   StudioConnectorCatalogItem,
@@ -48,6 +50,33 @@ export async function fetchStudioTopics(agentId: string, token?: string | null) 
     { headers: headers(token), cache: 'no-store' },
   )
   return parseJson<StudioTopic[]>(response, 'Failed to load Studio projects')
+}
+
+export async function fetchStudioAgents(token?: string | null) {
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
+    headers: headers(token),
+    cache: 'no-store',
+  })
+  return parseJson<StudioAgent[]>(response, 'Failed to load agents')
+}
+
+export async function fetchStudioAgentStats(token?: string | null) {
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/stats`, {
+    headers: headers(token),
+    cache: 'no-store',
+  })
+  return parseJson<StudioAgentStats>(response, 'Failed to load agent stats')
+}
+
+export async function joinStudioTopic(topicId: string, agentId: string, token?: string | null) {
+  const response = await fetch(
+    `${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/join?agent_id=${encodeURIComponent(agentId)}`,
+    {
+      method: 'POST',
+      headers: headers(token),
+    },
+  )
+  return parseJson<{ message: string; member_id?: string }>(response, 'Failed to join Studio topic')
 }
 
 export async function createStudioTopic(agentId: string, title: string, token?: string | null) {

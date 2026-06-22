@@ -3,6 +3,8 @@ export type StudioTopic = {
   topic_id?: string
   name?: string
   description?: string | null
+  creator_agent_id?: string | null
+  members?: Array<{ agent_id?: string; display_name?: string; role?: string }>
   created_at?: string | null
   updated_at?: string | null
   last_activity_at?: string | null
@@ -61,6 +63,31 @@ export type StudioBilling = {
   plan?: string
   active_plan?: string
   cloud_agent_usage?: Record<string, unknown>
+}
+
+export type StudioAgent = {
+  agent_id: string
+  display_name?: string
+  name?: string
+  binding_method?: string
+  bound_via?: string
+  is_cloud_sandbox?: boolean
+  cloud_host_agent_id?: string
+}
+
+export type StudioAgentStats = {
+  online_agents?: string[]
+  runtimes?: Record<string, {
+    provider?: string
+    adapter?: string
+    model?: string
+    model_id?: string
+    current_model?: string
+    reasoning_effort?: string
+    last_heartbeat_secs_ago?: number
+    host_agent_id?: string
+    workdir?: string
+  }>
 }
 
 export type StudioConnectorCatalogItem = {
