@@ -2,20 +2,24 @@
 
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
+import { useTheme } from 'next-themes'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   ArrowLeft,
   ExternalLink,
   Github,
   Globe2,
+  Languages,
   Loader2,
   Maximize2,
   Minimize2,
   Monitor,
+  Moon,
   PlugZap,
   RefreshCw,
   Smartphone,
   Sparkles,
+  Sun,
 } from 'lucide-react'
 import { ChatView, type ChatMessage, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
 import { StudioConnectorsPanel } from '@/components/studio/studio-connectors-panel'
@@ -43,6 +47,7 @@ import {
   studioWorkspace,
 } from '@/lib/studio/prompts'
 import type { StudioAgent, StudioAgentStats, StudioBilling, StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
+import { useI18n } from '@/lib/i18n-provider'
 
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
 const AGENT_STATUS_CARD_MAX_LINES = 14
@@ -266,6 +271,8 @@ function toChatMessage(message: StudioMessage): ChatMessage {
 
 export function StudioBuilder({ topicId }: { topicId: string }) {
   const { data: session, status } = useSession()
+  const { theme, setTheme } = useTheme()
+  const { locale, setLocale } = useI18n()
   const token = sessionToken(session)
   const [agentStats, setAgentStats] = useState<StudioAgentStats | null>(null)
   const [selectedAgentId, setSelectedAgentId] = useState('')
@@ -297,6 +304,66 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const selectedRuntime = selectedAgentId ? agentStats?.runtimes?.[selectedAgentId] : undefined
   const isSelectedOnline = selectedAgentId ? onlineAgentIds(agentStats).has(selectedAgentId) : false
   const fullscreenMode = chatFullscreen ? 'chat' : previewFullscreen ? 'preview' : null
+  const zh = locale === 'zh'
+  const copy = zh ? {
+    loading: '正在加载 WTT Studio...',
+    signInTitle: '登录后继续',
+    signInDesc: 'WTT Studio 复用你的 WTT 账号、Cloud Agent 和会员权益。',
+    signIn: '登录',
+    noAgent: '没有可用 Cloud Agent',
+    online: '在线',
+    offline: '离线',
+    connectors: 'Connectors',
+    emptyEyebrow: 'WTT Studio',
+    emptyTitle: '用你的 Cloud Agent 开始构建',
+    emptyDesc: '输入你要生成或修改的网站。Studio 会把任务作为普通 Cloud Agent 对话发送，并把 connector context 注入到任务中。',
+    preview: 'Preview',
+    github: 'GitHub',
+    chatMax: 'Chat 全屏',
+    chatExit: '退出 Chat 全屏',
+    max: 'Max',
+    exit: 'Exit',
+    resize: '拖拽调整 Chat / Preview 宽度',
+    livePreview: 'Live Preview',
+    previewReady: 'Cloud Agent Preview URL',
+    previewWaiting: '等待 Preview URL',
+    previewMax: 'Preview 全屏',
+    previewExit: '退出 Preview 全屏',
+    noPreview: '还没有预览',
+    noPreviewDesc: '让 Agent 启动 dev server 并返回 Cloud Agent Preview URL，最新 URL 会自动显示在这里。',
+    requestPreview: '请求预览',
+    themeTitle: '切换明暗模式',
+    langTitle: 'Switch to English',
+  } : {
+    loading: 'Loading WTT Studio...',
+    signInTitle: 'Sign in to continue',
+    signInDesc: 'WTT Studio reuses your WTT account, Cloud Agent, and membership.',
+    signIn: 'Sign in',
+    noAgent: 'No Cloud Agent available',
+    online: 'online',
+    offline: 'offline',
+    connectors: 'Connectors',
+    emptyEyebrow: 'WTT Studio',
+    emptyTitle: 'Start building with your Cloud Agent',
+    emptyDesc: 'Describe the website you want to generate or modify. Studio sends it as a normal Cloud Agent chat and injects connector context.',
+    preview: 'Preview',
+    github: 'GitHub',
+    chatMax: 'Maximize Chat',
+    chatExit: 'Exit Chat fullscreen',
+    max: 'Max',
+    exit: 'Exit',
+    resize: 'Drag to resize Chat / Preview',
+    livePreview: 'Live Preview',
+    previewReady: 'Cloud Agent Preview URL',
+    previewWaiting: 'Waiting for preview URL',
+    previewMax: 'Maximize Preview',
+    previewExit: 'Exit Preview fullscreen',
+    noPreview: 'No preview yet',
+    noPreviewDesc: 'Ask the Agent to start a dev server and return a Cloud Agent Preview URL. The latest URL will render here automatically.',
+    requestPreview: 'Request preview',
+    themeTitle: 'Toggle light/dark mode',
+    langTitle: '切换为中文',
+  }
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STUDIO_PANE_WIDTH_KEY)
@@ -525,10 +592,10 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
 
   if (status === 'loading' || loading) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#0c1117] text-white">
-        <div className="flex items-center gap-3 text-sm text-slate-300">
-          <Loader2 className="h-5 w-5 animate-spin text-cyan-200" />
-          Loading WTT Studio...
+      <main className="grid min-h-screen place-items-center bg-[#f6f1e8] text-slate-950 dark:bg-[#0c1117] dark:text-white">
+        <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <Loader2 className="h-5 w-5 animate-spin text-cyan-600 dark:text-cyan-200" />
+          {copy.loading}
         </div>
       </main>
     )
@@ -536,13 +603,13 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
 
   if (!token) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#0c1117] px-4 text-white">
-        <div className="max-w-md rounded-3xl border border-white/10 bg-white/[0.06] p-6 text-center">
-          <Sparkles className="mx-auto h-8 w-8 text-cyan-200" />
-          <h1 className="mt-4 text-2xl font-semibold">Sign in to continue</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">WTT Studio reuses your existing WTT account, Cloud Agent, and billing.</p>
-          <Link href={`/login?callbackUrl=/studio/projects/${encodeURIComponent(topicId)}`} className="mt-5 inline-flex rounded-full bg-white px-5 py-3 text-sm font-bold text-slate-950">
-            Sign in
+      <main className="grid min-h-screen place-items-center bg-[#f6f1e8] px-4 text-slate-950 dark:bg-[#0c1117] dark:text-white">
+        <div className="max-w-md rounded-3xl border border-slate-200 bg-white/80 p-6 text-center shadow-xl dark:border-white/10 dark:bg-white/[0.06]">
+          <Sparkles className="mx-auto h-8 w-8 text-cyan-600 dark:text-cyan-200" />
+          <h1 className="mt-4 text-2xl font-semibold">{copy.signInTitle}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{copy.signInDesc}</p>
+          <Link href={`/login?callbackUrl=/studio/projects/${encodeURIComponent(topicId)}`} className="mt-5 inline-flex rounded-full bg-slate-950 px-5 py-3 text-sm font-bold text-white dark:bg-white dark:text-slate-950">
+            {copy.signIn}
           </Link>
         </div>
       </main>
@@ -550,33 +617,50 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   }
 
   return (
-    <main className={`flex h-screen min-h-screen flex-col overflow-hidden bg-[#0b1117] text-white ${fullscreenMode ? 'fixed inset-0 z-[90]' : ''}`}>
-      <header className={`${fullscreenMode ? 'hidden' : 'flex'} h-16 shrink-0 items-center justify-between border-b border-white/10 bg-[#0e151d]/95 px-4 backdrop-blur`}>
+    <main className={`flex h-screen min-h-screen flex-col overflow-hidden bg-[#f6f1e8] text-slate-950 dark:bg-[#0b1117] dark:text-white ${fullscreenMode ? 'fixed inset-0 z-[90]' : ''}`}>
+      <header className={`${fullscreenMode ? 'hidden' : 'flex'} h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white/85 px-4 backdrop-blur dark:border-white/10 dark:bg-[#0e151d]/95`}>
         <div className="flex min-w-0 items-center gap-3">
-          <Link href="/studio" className="rounded-full border border-white/10 p-2 text-slate-300 transition hover:bg-white/10">
+          <Link href="/studio" className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">{enrichedProject.title}</p>
-            <p className="truncate text-xs text-slate-500">
-              {selectedAgentId ? `Agent ${selectedAgentId}${isSelectedOnline ? ' · online' : ' · offline'}` : 'No Cloud Agent available'} · {studioWorkspace(topicId)}
+            <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">{enrichedProject.title}</p>
+            <p className="truncate text-xs text-slate-500 dark:text-slate-500">
+              {selectedAgentId ? `Agent ${selectedAgentId}${isSelectedOnline ? ` · ${copy.online}` : ` · ${copy.offline}`}` : copy.noAgent} · {studioWorkspace(topicId)}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {enrichedProject.githubRepoUrl && (
-            <a href={enrichedProject.githubRepoUrl} target="_blank" rel="noreferrer" className="hidden items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 sm:inline-flex">
+            <a href={enrichedProject.githubRepoUrl} target="_blank" rel="noreferrer" className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-200 dark:hover:bg-white/10 sm:inline-flex">
               <Github className="h-3.5 w-3.5" />
-              GitHub
+              {copy.github}
             </a>
           )}
           <button
             type="button"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10"
+            title={copy.themeTitle}
+          >
+            {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLocale(zh ? 'en' : 'zh')}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10"
+            title={copy.langTitle}
+          >
+            <Languages className="h-3.5 w-3.5" />
+            {zh ? '中' : 'EN'}
+          </button>
+          <button
+            type="button"
             onClick={() => setConnectorsOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-200/10"
+            className="inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-700 hover:bg-cyan-100 dark:border-cyan-200/20 dark:bg-transparent dark:text-cyan-100 dark:hover:bg-cyan-200/10"
           >
             <PlugZap className="h-3.5 w-3.5" />
-            Connectors
+            {copy.connectors}
           </button>
         </div>
       </header>
@@ -586,7 +670,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
         style={{ '--studio-chat-width': `${chatPaneWidth}%` } as CSSProperties}
       >
         <section className={[
-          'min-h-0 overflow-hidden bg-[#fbfaf7] text-slate-950',
+          'min-h-0 overflow-hidden bg-[#fbfaf7] text-slate-950 dark:bg-[#111315] dark:text-white',
           chatFullscreen ? 'flex-1 border-r-0' : '',
           previewFullscreen ? 'hidden' : '',
           !fullscreenMode ? 'border-r border-white/10 lg:basis-[var(--studio-chat-width)] lg:shrink-0' : '',
@@ -620,12 +704,10 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
             }}
             agentRoleLabelMap={selectedAgentId ? { [selectedAgentId]: 'WTT Studio Agent' } : {}}
             emptyState={(
-              <div className="mx-auto max-w-xl rounded-3xl border border-dashed border-cyan-300/40 bg-cyan-50 p-5 text-left">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-700">WTT Studio</p>
-                <h2 className="mt-2 text-2xl font-black text-slate-950">Start building with your Cloud Agent</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  输入你要生成或修改的网站。Studio 会把任务作为普通 Cloud Agent 对话发送，并把 connector context 注入到任务中。
-                </p>
+              <div className="mx-auto max-w-xl rounded-3xl border border-dashed border-cyan-300/40 bg-cyan-50 p-5 text-left dark:border-cyan-300/20 dark:bg-cyan-950/20">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-200">{copy.emptyEyebrow}</p>
+                <h2 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{copy.emptyTitle}</h2>
+                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{copy.emptyDesc}</p>
               </div>
             )}
             extraHeaderActions={(
@@ -637,7 +719,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300 disabled:opacity-50"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
-                  Preview
+                  {copy.preview}
                 </button>
                 <button
                   type="button"
@@ -646,7 +728,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300 disabled:opacity-50"
                 >
                   <Github className="h-3.5 w-3.5" />
-                  GitHub
+                  {copy.github}
                 </button>
                 <button
                   type="button"
@@ -655,10 +737,10 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                     setChatFullscreen((value) => !value)
                   }}
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300"
-                  title={chatFullscreen ? '退出 Chat 全屏' : 'Chat 全屏'}
+                  title={chatFullscreen ? copy.chatExit : copy.chatMax}
                 >
                   {chatFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                  {chatFullscreen ? 'Exit' : 'Max'}
+                  {chatFullscreen ? copy.exit : copy.max}
                 </button>
               </div>
             )}
@@ -669,38 +751,38 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize chat and preview panes"
-          title="拖拽调整 Chat / Preview 宽度"
+          title={copy.resize}
           onPointerDown={startPaneResize}
-          className={`${fullscreenMode ? 'hidden' : 'hidden lg:flex'} w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-white/10 bg-[#0d141b] transition hover:bg-cyan-300/15`}
+          className={`${fullscreenMode ? 'hidden' : 'hidden lg:flex'} w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-slate-200 bg-slate-100 transition hover:bg-cyan-100 dark:border-white/10 dark:bg-[#0d141b] dark:hover:bg-cyan-300/15`}
         >
-          <span className="h-12 w-0.5 rounded-full bg-white/25" />
+          <span className="h-12 w-0.5 rounded-full bg-slate-400/50 dark:bg-white/25" />
         </div>
 
         <section className={[
-          'min-h-0 flex-1 flex-col bg-[#070b10]',
+          'min-h-0 flex-1 flex-col bg-slate-100 dark:bg-[#070b10]',
           chatFullscreen ? 'hidden' : '',
           previewFullscreen ? 'flex' : 'hidden lg:flex',
         ].filter(Boolean).join(' ')}>
-          <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white/80 px-4 dark:border-white/10 dark:bg-transparent">
             <div className="flex items-center gap-2">
-              <span className="rounded-full bg-emerald-300/10 p-2 text-emerald-100">
+              <span className="rounded-full bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-300/10 dark:text-emerald-100">
                 <Globe2 className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-sm font-semibold text-white">Live Preview</p>
-                <p className="text-xs text-slate-500">{enrichedProject.previewUrl ? 'Cloud Agent Preview URL' : 'Waiting for preview URL'}</p>
+                <p className="text-sm font-semibold text-slate-950 dark:text-white">{copy.livePreview}</p>
+                <p className="text-xs text-slate-500">{enrichedProject.previewUrl ? copy.previewReady : copy.previewWaiting}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setDevice(device === 'desktop' ? 'mobile' : 'desktop')}
-                className="rounded-full border border-white/10 p-2 text-slate-300 hover:bg-white/10"
+                className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10"
               >
                 {device === 'desktop' ? <Monitor className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
               </button>
               {enrichedProject.previewUrl && (
-                <a href={enrichedProject.previewUrl} target="_blank" rel="noreferrer" className="rounded-full border border-white/10 p-2 text-slate-300 hover:bg-white/10">
+                <a href={enrichedProject.previewUrl} target="_blank" rel="noreferrer" className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10">
                   <ExternalLink className="h-4 w-4" />
                 </a>
               )}
@@ -710,8 +792,8 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   setChatFullscreen(false)
                   setPreviewFullscreen((value) => !value)
                 }}
-                className="rounded-full border border-white/10 p-2 text-slate-300 hover:bg-white/10"
-                title={previewFullscreen ? '退出 Preview 全屏' : 'Preview 全屏'}
+                className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10"
+                title={previewFullscreen ? copy.previewExit : copy.previewMax}
               >
                 {previewFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
@@ -733,20 +815,18 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                 />
               </div>
             ) : (
-              <div className="max-w-md rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center">
-                <Globe2 className="mx-auto h-10 w-10 text-cyan-200" />
-                <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white">No preview yet</h2>
-                <p className="mt-3 text-sm leading-7 text-slate-400">
-                  Ask the Agent to start a dev server and return a Cloud Agent Preview URL. The latest URL will render here automatically.
-                </p>
+              <div className="max-w-md rounded-[2rem] border border-slate-200 bg-white/80 p-8 text-center dark:border-white/10 dark:bg-white/[0.04]">
+                <Globe2 className="mx-auto h-10 w-10 text-cyan-600 dark:text-cyan-200" />
+                <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">{copy.noPreview}</h2>
+                <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{copy.noPreviewDesc}</p>
                 <button
                   type="button"
                   onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview', undefined, undefined, '生成或刷新预览链接')}
                   disabled={sending || !selectedAgentId}
-                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-50"
+                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  Request preview
+                  {copy.requestPreview}
                 </button>
               </div>
             )}
