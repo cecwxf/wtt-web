@@ -58,6 +58,7 @@ export type StudioCloudAgent = {
   sandbox_id?: string
   agent_type?: string
   model_id?: string
+  sandbox_billing?: Record<string, unknown>
 }
 
 export type StudioBilling = {

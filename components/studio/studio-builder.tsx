@@ -9,6 +9,8 @@ import {
   Github,
   Globe2,
   Loader2,
+  Maximize2,
+  Minimize2,
   Monitor,
   PlugZap,
   RefreshCw,
@@ -22,6 +24,7 @@ import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import {
   fetchStudioAgentStats,
   fetchStudioAgents,
+  fetchStudioBilling,
   fetchStudioCloudAgent,
   fetchStudioConnectorPromptContext,
   fetchStudioMessages,
@@ -39,7 +42,7 @@ import {
   buildPreviewPrompt,
   studioWorkspace,
 } from '@/lib/studio/prompts'
-import type { StudioAgent, StudioAgentStats, StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
+import type { StudioAgent, StudioAgentStats, StudioBilling, StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
 
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
 const AGENT_STATUS_CARD_MAX_LINES = 14
@@ -269,12 +272,16 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const [project, setProject] = useState<StudioProject | null>(null)
   const [messages, setMessages] = useState<StudioMessage[]>([])
   const [typingState, setTypingState] = useState<TopicTypingState | null>(null)
+  const [billing, setBilling] = useState<StudioBilling | null>(null)
+  const [cloudAgentState, setCloudAgentState] = useState<StudioCloudAgent | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [connectorsOpen, setConnectorsOpen] = useState(false)
   const [chatPaneWidth, setChatPaneWidth] = useState(48)
+  const [chatFullscreen, setChatFullscreen] = useState(false)
+  const [previewFullscreen, setPreviewFullscreen] = useState(false)
 
   const enrichedProject = useMemo(() => {
     const fallback: StudioProject = {
@@ -289,6 +296,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const chatMessages = useMemo(() => messages.map(toChatMessage), [messages])
   const selectedRuntime = selectedAgentId ? agentStats?.runtimes?.[selectedAgentId] : undefined
   const isSelectedOnline = selectedAgentId ? onlineAgentIds(agentStats).has(selectedAgentId) : false
+  const fullscreenMode = chatFullscreen ? 'chat' : previewFullscreen ? 'preview' : null
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STUDIO_PANE_WIDTH_KEY)
@@ -402,13 +410,16 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
       setLoading(true)
       setError('')
       try {
-        const [cloud, agents, stats] = await Promise.all([
+        const [cloud, agents, stats, billingState] = await Promise.all([
           fetchStudioCloudAgent(token),
           fetchStudioAgents(token).catch(() => []),
           fetchStudioAgentStats(token).catch(() => null),
+          fetchStudioBilling(token).catch(() => null),
         ])
         if (cancelled) return
+        setCloudAgentState(cloud)
         setAgentStats(stats)
+        if (billingState) setBilling(billingState)
         const initialAgent = chooseStudioAgent(agents, stats, cloud)
         if (!initialAgent) {
           setLoading(false)
@@ -459,16 +470,18 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     if (!token || !selectedAgentId) return
     const timer = window.setInterval(async () => {
       try {
-        const [stats, loaded] = await Promise.all([
+        const [stats, loaded, billingState] = await Promise.all([
           fetchStudioAgentStats(token).catch(() => null),
           fetchStudioMessages(topicId, selectedAgentId, token),
+          fetchStudioBilling(token).catch(() => null),
         ])
         if (stats) setAgentStats(stats)
         setMessages(loaded)
+        if (billingState) setBilling(billingState)
       } catch {
         // Keep Studio usable during transient backend or sandbox wake delays.
       }
-    }, sending ? 2500 : 5000)
+    }, sending ? 2500 : 30000)
     return () => window.clearInterval(timer)
   }, [selectedAgentId, sending, token, topicId])
 
@@ -493,6 +506,8 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
         ...(options?.slashType ? { slash_type: options.slashType, slash_command: options.slashCommand || content } : {}),
       })
       await refreshMessages(selectedAgentId)
+      const billingState = await fetchStudioBilling(token).catch(() => null)
+      if (billingState) setBilling(billingState)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message')
     } finally {
@@ -535,8 +550,8 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   }
 
   return (
-    <main className="flex h-screen min-h-screen flex-col overflow-hidden bg-[#0b1117] text-white">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-[#0e151d]/95 px-4 backdrop-blur">
+    <main className={`flex h-screen min-h-screen flex-col overflow-hidden bg-[#0b1117] text-white ${fullscreenMode ? 'fixed inset-0 z-[90]' : ''}`}>
+      <header className={`${fullscreenMode ? 'hidden' : 'flex'} h-16 shrink-0 items-center justify-between border-b border-white/10 bg-[#0e151d]/95 px-4 backdrop-blur`}>
         <div className="flex min-w-0 items-center gap-3">
           <Link href="/studio" className="rounded-full border border-white/10 p-2 text-slate-300 transition hover:bg-white/10">
             <ArrowLeft className="h-4 w-4" />
@@ -570,7 +585,12 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
         className="flex min-h-0 flex-1 flex-col lg:flex-row"
         style={{ '--studio-chat-width': `${chatPaneWidth}%` } as CSSProperties}
       >
-        <section className="min-h-0 overflow-hidden border-r border-white/10 bg-[#fbfaf7] text-slate-950 lg:basis-[var(--studio-chat-width)] lg:shrink-0">
+        <section className={[
+          'min-h-0 overflow-hidden bg-[#fbfaf7] text-slate-950',
+          chatFullscreen ? 'flex-1 border-r-0' : '',
+          previewFullscreen ? 'hidden' : '',
+          !fullscreenMode ? 'border-r border-white/10 lg:basis-[var(--studio-chat-width)] lg:shrink-0' : '',
+        ].filter(Boolean).join(' ')}>
           {error && <p className="m-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</p>}
           <ChatView
             topicName={enrichedProject.title}
@@ -584,7 +604,13 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
             topicType="p2p"
             runStatus={runStatus}
             compactUi
+            enableCameraCapture
             currentAgentIsCloud
+            cloudSandboxBilling={selectedAgentId ? {
+              ...((cloudAgentState as { sandbox_billing?: Record<string, unknown> } | null)?.sandbox_billing || {}),
+              cloud_agent_usage: billing?.cloud_agent_usage,
+              entitlement: billing?.entitlement,
+            } : null}
             workspaceAgentName={selectedAgentId || undefined}
             workspaceWorkdir={studioWorkspace(topicId)}
             currentAgentRuntime={{
@@ -622,6 +648,18 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   <Github className="h-3.5 w-3.5" />
                   GitHub
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewFullscreen(false)
+                    setChatFullscreen((value) => !value)
+                  }}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300"
+                  title={chatFullscreen ? '退出 Chat 全屏' : 'Chat 全屏'}
+                >
+                  {chatFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  {chatFullscreen ? 'Exit' : 'Max'}
+                </button>
               </div>
             )}
           />
@@ -633,12 +671,16 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           aria-label="Resize chat and preview panes"
           title="拖拽调整 Chat / Preview 宽度"
           onPointerDown={startPaneResize}
-          className="hidden w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-white/10 bg-[#0d141b] transition hover:bg-cyan-300/15 lg:flex"
+          className={`${fullscreenMode ? 'hidden' : 'hidden lg:flex'} w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-white/10 bg-[#0d141b] transition hover:bg-cyan-300/15`}
         >
           <span className="h-12 w-0.5 rounded-full bg-white/25" />
         </div>
 
-        <section className="hidden min-h-0 flex-1 flex-col bg-[#070b10] lg:flex">
+        <section className={[
+          'min-h-0 flex-1 flex-col bg-[#070b10]',
+          chatFullscreen ? 'hidden' : '',
+          previewFullscreen ? 'flex' : 'hidden lg:flex',
+        ].filter(Boolean).join(' ')}>
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-emerald-300/10 p-2 text-emerald-100">
@@ -662,16 +704,30 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   <ExternalLink className="h-4 w-4" />
                 </a>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  setChatFullscreen(false)
+                  setPreviewFullscreen((value) => !value)
+                }}
+                className="rounded-full border border-white/10 p-2 text-slate-300 hover:bg-white/10"
+                title={previewFullscreen ? '退出 Preview 全屏' : 'Preview 全屏'}
+              >
+                {previewFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 place-items-center overflow-auto p-5">
+          <div className={`grid min-h-0 flex-1 place-items-center overflow-auto ${previewFullscreen ? 'p-2' : 'p-5'}`}>
             {enrichedProject.previewUrl ? (
               <div className={device === 'mobile' ? 'h-full w-[390px] max-w-full' : 'h-full w-full'}>
                 <iframe
                   key={enrichedProject.previewUrl}
                   src={enrichedProject.previewUrl}
-                  className="h-full min-h-[720px] w-full rounded-[1.6rem] border border-white/10 bg-white shadow-2xl"
+                  className={[
+                    'h-full w-full bg-white shadow-2xl',
+                    previewFullscreen ? 'min-h-0 rounded-xl border border-white/10' : 'min-h-[720px] rounded-[1.6rem] border border-white/10',
+                  ].join(' ')}
                   title={`${enrichedProject.title} preview`}
                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
                 />
