@@ -9,7 +9,7 @@ type VisualFeedbackInput = {
   topicId: string
   previewUrl: string
   note: string
-  device: 'desktop' | 'mobile'
+  device: 'desktop' | 'tablet' | 'mobile'
   rect: {
     xPct: number
     yPct: number
@@ -23,6 +23,8 @@ type VisualFeedbackInput = {
   connectorContext?: string
 }
 
+export type StudioAppExportTarget = 'pwa' | 'android-apk' | 'ios-project'
+
 export function studioWorkspace(topicId: string) {
   return `/home/wttagent/wtt-sites/${topicId}`
 }
@@ -30,6 +32,16 @@ export function studioWorkspace(topicId: string) {
 function connectorBlock(connectorContext?: string) {
   const clean = String(connectorContext || '').trim()
   return clean ? `\n\n${clean}` : ''
+}
+
+function responsivePwaRules(workspace: string) {
+  return [
+    `- 代码必须保留在 ${workspace}。`,
+    '- 默认必须兼容 desktop / tablet / mobile 三档视口，不允许出现横向滚动、按钮过小、文字溢出或首屏拥挤。',
+    '- 使用移动优先的响应式布局：360px、768px、1280px 三档都要可用，图片/卡片/导航需要自适应。',
+    '- 默认生成 PWA 基础能力：manifest.json、移动端 viewport、主题色、可安装图标说明；如使用 Vite/React，请在 public/ 或根目录放置对应资源。',
+    '- 完成后请自检并说明 desktop/tablet/mobile 三档是否检查过。',
+  ].join('\n')
 }
 
 export function buildInitialStudioPrompt({ projectName, topicId, userPrompt, connectorContext }: InitialPromptInput) {
@@ -45,10 +57,12 @@ export function buildInitialStudioPrompt({ projectName, topicId, userPrompt, con
     '你是 WTT Studio 的网站生成 Agent。请严格按下面规则工作：',
     `1. 所有项目代码必须放在 ${workspace}，不要污染用户其他目录。`,
     '2. 默认使用 Vite + React + Tailwind 或更轻量的静态 HTML/CSS/JS，优先保证可运行、可预览、可继续迭代。',
-    '3. 如果用户要求可视化网页、动画、应用原型或站点，请启动 dev server 并生成 Cloud Agent Preview URL。Preview URL 必须以 Markdown 链接返回，格式为：[Cloud Agent Preview](https://...)。',
-    '4. 当前 Studio 默认以 Preview URL 作为可分享预览产物，不需要单独发布流程。',
-    '5. 如果用户要求 GitHub，请创建或更新用户对应仓库，并用 [GITHUB_REPO](https://github.com/...) 与 [COMMIT](https://github.com/.../commit/...) 返回结果。',
-    '6. 每次回复先给出关键结果，再列出改动文件、运行方式和下一步建议。',
+    '3. 所有新项目默认必须是响应式 Web + PWA-ready，不需要用户额外说明。',
+    responsivePwaRules(workspace),
+    '4. 如果用户要求可视化网页、动画、应用原型或站点，请启动 dev server 并生成 Cloud Agent Preview URL。Preview URL 必须以 Markdown 链接返回，格式为：[Cloud Agent Preview](https://...)。',
+    '5. 当前 Studio 默认以 Preview URL 作为可分享预览产物，不需要单独发布流程。',
+    '6. 如果用户要求 GitHub，请创建或更新用户对应仓库，并用 [GITHUB_REPO](https://github.com/...) 与 [COMMIT](https://github.com/.../commit/...) 返回结果。',
+    '7. 每次回复先给出关键结果，再列出改动文件、运行方式和下一步建议。',
     connectorBlock(connectorContext),
     '',
     '用户需求：',
@@ -64,6 +78,8 @@ export function buildFollowupStudioPrompt(topicId: string, userPrompt: string, c
     '[/WTT_STUDIO_CONTINUE]',
     '',
     `请在现有项目目录 ${workspace} 中继续迭代，不要重建到其他目录。`,
+    '继续保持响应式 Web + PWA-ready 约束：',
+    responsivePwaRules(workspace),
     '如果改动影响页面效果，请保持或重新生成 Cloud Agent Preview URL，并以 [Cloud Agent Preview](https://...) 返回。',
     connectorBlock(connectorContext),
     '',
@@ -96,6 +112,57 @@ export function buildPreviewPrompt(topicId: string, connectorContext?: string) {
     '',
     '请启动或重启当前项目的 dev server，并返回最新 Cloud Agent Preview URL：',
     '[Cloud Agent Preview](https://...)',
+    '同时快速检查 desktop/tablet/mobile 三档预览，如果发现响应式问题请先修复再返回链接。',
+    connectorBlock(connectorContext),
+  ].join('\n')
+}
+
+export function buildAppExportPrompt(topicId: string, target: StudioAppExportTarget, connectorContext?: string) {
+  const workspace = studioWorkspace(topicId)
+  const targetText = {
+    pwa: 'PWA 安装包',
+    'android-apk': 'Android APK',
+    'ios-project': 'iOS Project',
+  }[target]
+  const targetRules = target === 'pwa'
+    ? [
+        '1. 把当前网站整理成 PWA-ready：manifest.json、icons、theme-color、viewport、基础离线说明。',
+        '2. 如果已有构建脚本，请运行 build；如果没有，请补齐最小可用脚本。',
+        '3. 产物放到 dist/ 或 build/，并说明用户如何部署或添加到手机主屏幕。',
+      ]
+    : target === 'android-apk'
+      ? [
+          '1. 优先使用 Capacitor 将现有 Web 项目封装为 Android App，不要重写业务代码。',
+          '2. 如果环境缺少 Android SDK/Gradle 或 Cloud Sandbox 不适合完整构建，请生成完整 Capacitor Android 工程，并明确列出缺失依赖和本地构建命令。',
+          '3. 如果能成功构建 APK，请把 APK 放在项目 artifacts/ 目录，并用 [file:app.apk](...) 或明确路径返回。',
+          '4. Android App 应加载同一套响应式 Web UI，启动图标、应用名、包名需要合理设置。',
+        ]
+      : [
+          '1. iOS 不要承诺云端签名 IPA，除非用户提供 Apple Developer 证书和 provisioning profile。',
+          '2. 优先使用 Capacitor 生成可打开的 iOS/Xcode 工程，复用现有 Web 项目。',
+          '3. 生成 ios/ 工程和 README_IOS.md，说明 Xcode 打开、证书配置、真机/TestFlight 构建步骤。',
+          '4. 如果环境无法安装 CocoaPods/Xcode 依赖，请保留工程配置和清晰的本地构建说明。',
+        ]
+
+  return [
+    '[WTT_STUDIO_APP_EXPORT]',
+    `workspace=${workspace}`,
+    `target=${target}`,
+    '[/WTT_STUDIO_APP_EXPORT]',
+    '',
+    `请把当前 Studio 项目导出为 ${targetText}。`,
+    '通用要求：',
+    responsivePwaRules(workspace),
+    '目标要求：',
+    ...targetRules,
+    '预览规则：',
+    '- Studio 中的移动端/桌面预览仍使用当前 Web Preview URL；Android/iOS 导出应复用同一套响应式 Web 代码。',
+    '- 如果导出后需要重新启动 dev server，请保持可访问的 Cloud Agent Preview URL，方便用户先预览 UI 再下载 App 产物。',
+    '完成后请返回：',
+    '- 导出结果或产物路径',
+    '- 已执行的命令',
+    '- 如果有 Preview URL，请继续返回 [Cloud Agent Preview](https://...)',
+    '- Android/iOS 如不能在当前 sandbox 完成最终二进制构建，请明确说明阻塞项，不要假装已生成。',
     connectorBlock(connectorContext),
   ].join('\n')
 }
@@ -122,8 +189,9 @@ export function buildVisualFeedbackPrompt({ topicId, previewUrl, note, device, r
     `1. 只修改现有项目目录 ${workspace}，不要重建到其他目录。`,
     '2. 用浏览器/Playwright/DOM 检查 preview_url 中对应区域。选区坐标是相对当前 iframe viewport 的百分比。',
     '3. 结合用户反馈定位相关组件、样式、文案、布局或交互，然后修改源码。',
-    '4. 保持或重启 dev server，并返回最新 Cloud Agent Preview URL：[Cloud Agent Preview](https://...)。',
-    '5. 回复中简要说明修改了哪个区域、改了哪些文件。',
+    '4. 修改时继续保持 desktop/tablet/mobile 响应式和 PWA-ready 约束。',
+    '5. 保持或重启 dev server，并返回最新 Cloud Agent Preview URL：[Cloud Agent Preview](https://...)。',
+    '6. 回复中简要说明修改了哪个区域、改了哪些文件。',
     connectorBlock(connectorContext),
     '',
     '用户反馈：',

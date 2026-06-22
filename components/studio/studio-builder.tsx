@@ -6,7 +6,9 @@ import { useTheme } from 'next-themes'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   ArrowLeft,
+  ChevronDown,
   Crosshair,
+  Download,
   ExternalLink,
   Github,
   Globe2,
@@ -16,11 +18,13 @@ import {
   Minimize2,
   Monitor,
   Moon,
+  Package,
   PlugZap,
   RefreshCw,
   Smartphone,
   Sparkles,
   Sun,
+  Tablet,
 } from 'lucide-react'
 import { ChatView, type ChatMessage, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
 import { StudioConnectorsPanel } from '@/components/studio/studio-connectors-panel'
@@ -42,10 +46,12 @@ import {
   studioTitleFromTopicName,
 } from '@/lib/studio/parsers'
 import {
+  buildAppExportPrompt,
   buildFollowupStudioPrompt,
   buildGithubPrompt,
   buildPreviewPrompt,
   buildVisualFeedbackPrompt,
+  type StudioAppExportTarget,
   studioWorkspace,
 } from '@/lib/studio/prompts'
 import type { StudioAgent, StudioAgentStats, StudioBilling, StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
@@ -79,6 +85,8 @@ type PreviewDragState = {
   startX: number
   startY: number
 }
+
+type StudioPreviewDevice = 'desktop' | 'tablet' | 'mobile'
 
 function sessionToken(session: unknown) {
   return (session as { accessToken?: string } | null)?.accessToken || ''
@@ -327,8 +335,9 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
-  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const [device, setDevice] = useState<StudioPreviewDevice>('desktop')
   const [connectorsOpen, setConnectorsOpen] = useState(false)
+  const [appExportOpen, setAppExportOpen] = useState(false)
   const [chatPaneWidth, setChatPaneWidth] = useState(48)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [previewFullscreen, setPreviewFullscreen] = useState(false)
@@ -367,6 +376,14 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     emptyDesc: '输入你要生成或修改的网站。Studio 会把任务作为普通 Cloud Agent 对话发送，并把 connector context 注入到任务中。',
     preview: 'Preview',
     github: 'GitHub',
+    exportApp: '导出 App',
+    exportPwa: 'PWA 包',
+    exportAndroid: 'Android APK',
+    exportIos: 'iOS 工程',
+    exportHint: '由 Cloud Agent 在当前项目中生成移动端导出产物',
+    desktop: '桌面',
+    tablet: '平板',
+    mobile: '手机',
     chatMax: 'Chat 全屏',
     chatExit: '退出 Chat 全屏',
     max: 'Max',
@@ -403,6 +420,14 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     emptyDesc: 'Describe the website you want to generate or modify. Studio sends it as a normal Cloud Agent chat and injects connector context.',
     preview: 'Preview',
     github: 'GitHub',
+    exportApp: 'Export App',
+    exportPwa: 'PWA Package',
+    exportAndroid: 'Android APK',
+    exportIos: 'iOS Project',
+    exportHint: 'Ask Cloud Agent to create mobile export artifacts from this project',
+    desktop: 'Desktop',
+    tablet: 'Tablet',
+    mobile: 'Mobile',
     chatMax: 'Maximize Chat',
     chatExit: 'Exit Chat fullscreen',
     max: 'Max',
@@ -426,6 +451,18 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     themeTitle: 'Toggle light/dark mode',
     langTitle: '切换为中文',
   }
+
+  const previewDevices = [
+    { id: 'desktop' as const, label: copy.desktop, Icon: Monitor },
+    { id: 'tablet' as const, label: copy.tablet, Icon: Tablet },
+    { id: 'mobile' as const, label: copy.mobile, Icon: Smartphone },
+  ]
+
+  const appExportTargets = [
+    { id: 'pwa' as const, label: copy.exportPwa },
+    { id: 'android-apk' as const, label: copy.exportAndroid },
+    { id: 'ios-project' as const, label: copy.exportIos },
+  ]
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STUDIO_PANE_WIDTH_KEY)
@@ -720,6 +757,18 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     setPreviewInspectMode(false)
   }
 
+  const sendAppExport = async (target: StudioAppExportTarget) => {
+    const label = appExportTargets.find((item) => item.id === target)?.label || target
+    setAppExportOpen(false)
+    await submitPrompt(
+      buildAppExportPrompt(topicId, target, await connectorContext()),
+      `export_${target}`,
+      undefined,
+      undefined,
+      zh ? `导出 ${label}` : `Export ${label}`,
+    )
+  }
+
   if (status === 'loading' || loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#f6f1e8] text-slate-950 dark:bg-[#0c1117] dark:text-white">
@@ -860,6 +909,35 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   <Github className="h-3.5 w-3.5" />
                   {copy.github}
                 </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setAppExportOpen((value) => !value)}
+                    disabled={sending || !selectedAgentId}
+                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300 disabled:opacity-50"
+                    title={copy.exportHint}
+                  >
+                    <Package className="h-3.5 w-3.5" />
+                    {copy.exportApp}
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                  {appExportOpen && (
+                    <div className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl dark:border-white/10 dark:bg-slate-950">
+                      <p className="px-3 py-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400">{copy.exportHint}</p>
+                      {appExportTargets.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => void sendAppExport(item.id)}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-700 dark:text-slate-200 dark:hover:bg-cyan-300/10 dark:hover:text-cyan-100"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -903,12 +981,35 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <div className="hidden items-center rounded-full border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-transparent sm:flex">
+                {previewDevices.map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setDevice(id)}
+                    className={[
+                      'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-black transition',
+                      device === id
+                        ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950'
+                        : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10',
+                    ].join(' ')}
+                    title={label}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">{label}</span>
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
-                onClick={() => setDevice(device === 'desktop' ? 'mobile' : 'desktop')}
-                className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10"
+                onClick={() => {
+                  const index = previewDevices.findIndex((item) => item.id === device)
+                  setDevice(previewDevices[(index + 1) % previewDevices.length]?.id || 'desktop')
+                }}
+                className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10 sm:hidden"
+                title={previewDevices.find((item) => item.id === device)?.label}
               >
-                {device === 'desktop' ? <Monitor className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
+                {device === 'desktop' ? <Monitor className="h-4 w-4" /> : device === 'tablet' ? <Tablet className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
               </button>
               {enrichedProject.previewUrl && (
                 <a href={enrichedProject.previewUrl} target="_blank" rel="noreferrer" className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10">
@@ -950,7 +1051,14 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
 
           <div className={`grid min-h-0 flex-1 place-items-center overflow-auto ${previewFullscreen ? 'p-2' : 'p-5'}`}>
             {enrichedProject.previewUrl ? (
-              <div className={`relative ${device === 'mobile' ? 'h-full w-[390px] max-w-full' : 'h-full w-full'}`}>
+              <div className={[
+                'relative',
+                device === 'mobile'
+                  ? 'h-full w-[390px] max-w-full'
+                  : device === 'tablet'
+                    ? 'h-full w-[820px] max-w-full'
+                    : 'h-full w-full',
+              ].join(' ')}>
                 <iframe
                   key={enrichedProject.previewUrl}
                   src={enrichedProject.previewUrl}

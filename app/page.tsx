@@ -60,8 +60,8 @@ const productPillars = [
     href: '/studio',
     zhTitle: 'WTT Studio',
     enTitle: 'WTT Studio',
-    zhDesc: '类似 Lovable 的网站生成入口：用 Cloud Agent 对话生成网页、动画和应用原型，通过 Preview URL 全球预览，并可发布或提交 GitHub。',
-    enDesc: 'A Lovable-style website builder: talk to your Cloud Agent to generate sites, animations, and app prototypes, preview globally with Preview URL, then publish or commit to GitHub.',
+    zhDesc: '类似 Lovable 的网站生成入口：用 Cloud Agent 对话生成响应式 Web、PWA、动画和应用原型，通过 Preview URL 全球预览，并可导出 Android/iOS 工程或提交 GitHub。',
+    enDesc: 'A Lovable-style website builder: talk to your Cloud Agent to generate responsive Web, PWA, animations, and app prototypes, preview globally with Preview URL, then export Android/iOS projects or commit to GitHub.',
     icon: PenTool,
   },
   {
