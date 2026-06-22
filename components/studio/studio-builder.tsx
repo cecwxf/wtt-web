@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useTheme } from 'next-themes'
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   ArrowLeft,
+  Crosshair,
   ExternalLink,
   Github,
   Globe2,
@@ -44,6 +45,7 @@ import {
   buildFollowupStudioPrompt,
   buildGithubPrompt,
   buildPreviewPrompt,
+  buildVisualFeedbackPrompt,
   studioWorkspace,
 } from '@/lib/studio/prompts'
 import type { StudioAgent, StudioAgentStats, StudioBilling, StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
@@ -64,6 +66,18 @@ type TopicTypingState = {
   statusLines?: ChatRunStatus['lines']
   startedAt: number
   expiresAt: number
+}
+
+type PreviewSelectionRect = {
+  xPct: number
+  yPct: number
+  widthPct: number
+  heightPct: number
+}
+
+type PreviewDragState = {
+  startX: number
+  startY: number
 }
 
 function sessionToken(session: unknown) {
@@ -217,6 +231,35 @@ function clampStudioPaneWidth(value: number) {
   return Math.min(70, Math.max(32, value))
 }
 
+function clampPercent(value: number) {
+  return Math.min(100, Math.max(0, value))
+}
+
+function previewSelectionFromPoints(startX: number, startY: number, currentX: number, currentY: number, rect: DOMRect): PreviewSelectionRect {
+  const left = Math.min(startX, currentX)
+  const top = Math.min(startY, currentY)
+  const right = Math.max(startX, currentX)
+  const bottom = Math.max(startY, currentY)
+  return {
+    xPct: clampPercent((left / rect.width) * 100),
+    yPct: clampPercent((top / rect.height) * 100),
+    widthPct: clampPercent(((right - left) / rect.width) * 100),
+    heightPct: clampPercent(((bottom - top) / rect.height) * 100),
+  }
+}
+
+function normalizePreviewSelection(selection: PreviewSelectionRect): PreviewSelectionRect {
+  const minSize = 3
+  const widthPct = Math.max(selection.widthPct, minSize)
+  const heightPct = Math.max(selection.heightPct, minSize)
+  return {
+    xPct: Math.min(selection.xPct, 100 - widthPct),
+    yPct: Math.min(selection.yPct, 100 - heightPct),
+    widthPct,
+    heightPct,
+  }
+}
+
 function studioMetadata(message: StudioMessage): Record<string, unknown> {
   const raw = message.metadata
   if (!raw) return {}
@@ -289,6 +332,11 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const [chatPaneWidth, setChatPaneWidth] = useState(48)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [previewFullscreen, setPreviewFullscreen] = useState(false)
+  const [previewInspectMode, setPreviewInspectMode] = useState(false)
+  const [previewSelection, setPreviewSelection] = useState<PreviewSelectionRect | null>(null)
+  const [previewViewport, setPreviewViewport] = useState<{ width: number; height: number } | null>(null)
+  const [previewFeedback, setPreviewFeedback] = useState('')
+  const previewDragRef = useRef<PreviewDragState | null>(null)
 
   const enrichedProject = useMemo(() => {
     const fallback: StudioProject = {
@@ -329,6 +377,13 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     previewWaiting: '等待 Preview URL',
     previewMax: 'Preview 全屏',
     previewExit: '退出 Preview 全屏',
+    inspect: '圈选',
+    inspectOn: '退出圈选',
+    inspectHint: '拖拽圈选预览中的区域，然后填写修改意见。',
+    feedbackPlaceholder: '例如：这个按钮太小，改成更醒目的主按钮，并调整和标题的间距。',
+    sendFeedback: '发送给 Agent 修改',
+    clearSelection: '清除',
+    selectionLabel: '已选区域',
     noPreview: '还没有预览',
     noPreviewDesc: '让 Agent 启动 dev server 并返回 Cloud Agent Preview URL，最新 URL 会自动显示在这里。',
     requestPreview: '请求预览',
@@ -358,6 +413,13 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     previewWaiting: 'Waiting for preview URL',
     previewMax: 'Maximize Preview',
     previewExit: 'Exit Preview fullscreen',
+    inspect: 'Inspect',
+    inspectOn: 'Exit Inspect',
+    inspectHint: 'Drag on the preview to select an area, then describe what should change.',
+    feedbackPlaceholder: 'Example: make this button more prominent and improve spacing under the headline.',
+    sendFeedback: 'Send to Agent',
+    clearSelection: 'Clear',
+    selectionLabel: 'Selected area',
     noPreview: 'No preview yet',
     noPreviewDesc: 'Ask the Agent to start a dev server and return a Cloud Agent Preview URL. The latest URL will render here automatically.',
     requestPreview: 'Request preview',
@@ -374,6 +436,11 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   useEffect(() => {
     window.localStorage.setItem(STUDIO_PANE_WIDTH_KEY, String(Math.round(chatPaneWidth)))
   }, [chatPaneWidth])
+
+  useEffect(() => {
+    setPreviewSelection(null)
+    setPreviewFeedback('')
+  }, [enrichedProject.previewUrl])
 
   const startPaneResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -397,6 +464,42 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     document.body.style.userSelect = 'none'
     window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp, { once: true })
+  }, [])
+
+  const startPreviewSelection = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!previewInspectMode) return
+    const targetRect = event.currentTarget.getBoundingClientRect()
+    if (!targetRect.width || !targetRect.height) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    const startX = Math.min(Math.max(event.clientX - targetRect.left, 0), targetRect.width)
+    const startY = Math.min(Math.max(event.clientY - targetRect.top, 0), targetRect.height)
+    previewDragRef.current = { startX, startY }
+    setPreviewViewport({ width: Math.round(targetRect.width), height: Math.round(targetRect.height) })
+    setPreviewSelection(normalizePreviewSelection(previewSelectionFromPoints(startX, startY, startX, startY, targetRect)))
+  }, [previewInspectMode])
+
+  const movePreviewSelection = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = previewDragRef.current
+    if (!drag || !previewInspectMode) return
+    const targetRect = event.currentTarget.getBoundingClientRect()
+    if (!targetRect.width || !targetRect.height) return
+    event.preventDefault()
+    const currentX = Math.min(Math.max(event.clientX - targetRect.left, 0), targetRect.width)
+    const currentY = Math.min(Math.max(event.clientY - targetRect.top, 0), targetRect.height)
+    setPreviewViewport({ width: Math.round(targetRect.width), height: Math.round(targetRect.height) })
+    setPreviewSelection(previewSelectionFromPoints(drag.startX, drag.startY, currentX, currentY, targetRect))
+  }, [previewInspectMode])
+
+  const finishPreviewSelection = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!previewDragRef.current) return
+    previewDragRef.current = null
+    setPreviewSelection((selection) => selection ? normalizePreviewSelection(selection) : selection)
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
   }, [])
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
@@ -588,6 +691,33 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
       return
     }
     await submitPrompt(buildFollowupStudioPrompt(topicId, content, await connectorContext()), 'followup', replyTo, options, content)
+  }
+
+  const sendPreviewFeedback = async () => {
+    const note = previewFeedback.trim()
+    const previewUrl = String(enrichedProject.previewUrl || '').trim()
+    if (!previewUrl || !previewSelection || !previewViewport || !note) {
+      setError(zh ? '请先圈选预览区域并填写修改意见。' : 'Select a preview area and describe the requested change first.')
+      return
+    }
+    await submitPrompt(
+      buildVisualFeedbackPrompt({
+        topicId,
+        previewUrl,
+        note,
+        device,
+        rect: normalizePreviewSelection(previewSelection),
+        viewport: previewViewport,
+        connectorContext: await connectorContext(),
+      }),
+      'visual_feedback',
+      undefined,
+      undefined,
+      zh ? `修改预览选区：${note}` : `Revise selected preview area: ${note}`,
+    )
+    setPreviewFeedback('')
+    setPreviewSelection(null)
+    setPreviewInspectMode(false)
   }
 
   if (status === 'loading' || loading) {
@@ -785,6 +915,25 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   <ExternalLink className="h-4 w-4" />
                 </a>
               )}
+              {enrichedProject.previewUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewInspectMode((value) => !value)
+                    setPreviewSelection(null)
+                    setPreviewFeedback('')
+                  }}
+                  className={[
+                    'inline-flex items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold transition',
+                    previewInspectMode
+                      ? 'border-cyan-500 bg-cyan-100 text-cyan-800 dark:border-cyan-300/60 dark:bg-cyan-300/15 dark:text-cyan-100'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  <Crosshair className="h-3.5 w-3.5" />
+                  {previewInspectMode ? copy.inspectOn : copy.inspect}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -801,7 +950,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
 
           <div className={`grid min-h-0 flex-1 place-items-center overflow-auto ${previewFullscreen ? 'p-2' : 'p-5'}`}>
             {enrichedProject.previewUrl ? (
-              <div className={device === 'mobile' ? 'h-full w-[390px] max-w-full' : 'h-full w-full'}>
+              <div className={`relative ${device === 'mobile' ? 'h-full w-[390px] max-w-full' : 'h-full w-full'}`}>
                 <iframe
                   key={enrichedProject.previewUrl}
                   src={enrichedProject.previewUrl}
@@ -812,6 +961,71 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   title={`${enrichedProject.title} preview`}
                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
                 />
+                {previewInspectMode && (
+                  <div
+                    className="absolute inset-0 z-10 cursor-crosshair rounded-[1.6rem] bg-cyan-400/5"
+                    onPointerDown={startPreviewSelection}
+                    onPointerMove={movePreviewSelection}
+                    onPointerUp={finishPreviewSelection}
+                    onPointerCancel={finishPreviewSelection}
+                  >
+                    {!previewSelection && (
+                      <div className="absolute left-4 top-4 max-w-xs rounded-2xl border border-cyan-200/70 bg-white/90 px-4 py-3 text-xs font-semibold leading-5 text-cyan-900 shadow-xl backdrop-blur dark:border-cyan-300/20 dark:bg-slate-950/85 dark:text-cyan-100">
+                        {copy.inspectHint}
+                      </div>
+                    )}
+                    {previewSelection && (
+                      <div
+                        className="absolute rounded-xl border-2 border-cyan-300 bg-cyan-300/15 shadow-[0_0_0_9999px_rgba(8,47,73,0.24)]"
+                        style={{
+                          left: `${previewSelection.xPct}%`,
+                          top: `${previewSelection.yPct}%`,
+                          width: `${previewSelection.widthPct}%`,
+                          height: `${previewSelection.heightPct}%`,
+                        }}
+                      >
+                        <span className="absolute -top-7 left-0 rounded-full bg-cyan-300 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-cyan-950 shadow">
+                          {copy.selectionLabel}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {previewInspectMode && previewSelection && (
+                  <div className="absolute bottom-4 left-4 right-4 z-20 rounded-3xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur dark:border-white/10 dark:bg-slate-950/95">
+                    <textarea
+                      value={previewFeedback}
+                      onChange={(event) => setPreviewFeedback(event.target.value)}
+                      className="min-h-[76px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-950 outline-none placeholder:text-slate-400 focus:border-cyan-400 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-slate-500"
+                      placeholder={copy.feedbackPlaceholder}
+                    />
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] text-slate-500">
+                        {previewViewport ? `${Math.round(previewSelection.xPct)}%, ${Math.round(previewSelection.yPct)}% · ${Math.round(previewSelection.widthPct)}% x ${Math.round(previewSelection.heightPct)}% · ${previewViewport.width}x${previewViewport.height}` : ''}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPreviewSelection(null)
+                            setPreviewFeedback('')
+                          }}
+                          className="rounded-full border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                        >
+                          {copy.clearSelection}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void sendPreviewFeedback()}
+                          disabled={sending || !previewFeedback.trim()}
+                          className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950"
+                        >
+                          {sending ? copy.loading : copy.sendFeedback}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="max-w-md rounded-[2rem] border border-slate-200 bg-white/80 p-8 text-center dark:border-white/10 dark:bg-white/[0.04]">

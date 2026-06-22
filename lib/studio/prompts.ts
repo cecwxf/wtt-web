@@ -5,6 +5,24 @@ type InitialPromptInput = {
   connectorContext?: string
 }
 
+type VisualFeedbackInput = {
+  topicId: string
+  previewUrl: string
+  note: string
+  device: 'desktop' | 'mobile'
+  rect: {
+    xPct: number
+    yPct: number
+    widthPct: number
+    heightPct: number
+  }
+  viewport: {
+    width: number
+    height: number
+  }
+  connectorContext?: string
+}
+
 export function studioWorkspace(topicId: string) {
   return `/home/wttagent/wtt-sites/${topicId}`
 }
@@ -79,5 +97,36 @@ export function buildPreviewPrompt(topicId: string, connectorContext?: string) {
     '请启动或重启当前项目的 dev server，并返回最新 Cloud Agent Preview URL：',
     '[Cloud Agent Preview](https://...)',
     connectorBlock(connectorContext),
+  ].join('\n')
+}
+
+export function buildVisualFeedbackPrompt({ topicId, previewUrl, note, device, rect, viewport, connectorContext }: VisualFeedbackInput) {
+  const workspace = studioWorkspace(topicId)
+  const rectJson = JSON.stringify({
+    xPct: Number(rect.xPct.toFixed(2)),
+    yPct: Number(rect.yPct.toFixed(2)),
+    widthPct: Number(rect.widthPct.toFixed(2)),
+    heightPct: Number(rect.heightPct.toFixed(2)),
+  })
+  return [
+    '[WTT_STUDIO_VISUAL_FEEDBACK]',
+    `workspace=${workspace}`,
+    `preview_url=${previewUrl}`,
+    `device=${device}`,
+    `viewport=${viewport.width}x${viewport.height}`,
+    `selection_rect_percent=${rectJson}`,
+    '[/WTT_STUDIO_VISUAL_FEEDBACK]',
+    '',
+    '用户在 Preview 页面中圈选了一个区域，并要求你基于该区域继续修改网站。',
+    '请按下面流程处理：',
+    `1. 只修改现有项目目录 ${workspace}，不要重建到其他目录。`,
+    '2. 用浏览器/Playwright/DOM 检查 preview_url 中对应区域。选区坐标是相对当前 iframe viewport 的百分比。',
+    '3. 结合用户反馈定位相关组件、样式、文案、布局或交互，然后修改源码。',
+    '4. 保持或重启 dev server，并返回最新 Cloud Agent Preview URL：[Cloud Agent Preview](https://...)。',
+    '5. 回复中简要说明修改了哪个区域、改了哪些文件。',
+    connectorBlock(connectorContext),
+    '',
+    '用户反馈：',
+    note.trim(),
   ].join('\n')
 }
