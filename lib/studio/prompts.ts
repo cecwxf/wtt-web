@@ -117,32 +117,13 @@ export function buildPreviewPrompt(topicId: string, connectorContext?: string) {
   ].join('\n')
 }
 
-export function buildAppExportPrompt(topicId: string, target: StudioAppExportTarget, connectorContext?: string) {
+export function buildAppExportPrompt(
+  topicId: string,
+  target: StudioAppExportTarget,
+  connectorContext?: string,
+  skillContext?: string,
+) {
   const workspace = studioWorkspace(topicId)
-  const targetText = {
-    pwa: 'PWA 安装包',
-    'android-apk': 'Android APK',
-    'ios-project': 'iOS Project',
-  }[target]
-  const targetRules = target === 'pwa'
-    ? [
-        '1. 把当前网站整理成 PWA-ready：manifest.json、icons、theme-color、viewport、基础离线说明。',
-        '2. 如果已有构建脚本，请运行 build；如果没有，请补齐最小可用脚本。',
-        '3. 产物放到 dist/ 或 build/，并说明用户如何部署或添加到手机主屏幕。',
-      ]
-    : target === 'android-apk'
-      ? [
-          '1. 优先使用 Capacitor 将现有 Web 项目封装为 Android App，不要重写业务代码。',
-          '2. 如果环境缺少 Android SDK/Gradle 或 Cloud Sandbox 不适合完整构建，请生成完整 Capacitor Android 工程，并明确列出缺失依赖和本地构建命令。',
-          '3. 如果能成功构建 APK，请把 APK 放在项目 artifacts/ 目录，并用 [file:app.apk](...) 或明确路径返回。',
-          '4. Android App 应加载同一套响应式 Web UI，启动图标、应用名、包名需要合理设置。',
-        ]
-      : [
-          '1. iOS 不要承诺云端签名 IPA，除非用户提供 Apple Developer 证书和 provisioning profile。',
-          '2. 优先使用 Capacitor 生成可打开的 iOS/Xcode 工程，复用现有 Web 项目。',
-          '3. 生成 ios/ 工程和 README_IOS.md，说明 Xcode 打开、证书配置、真机/TestFlight 构建步骤。',
-          '4. 如果环境无法安装 CocoaPods/Xcode 依赖，请保留工程配置和清晰的本地构建说明。',
-        ]
 
   return [
     '[WTT_STUDIO_APP_EXPORT]',
@@ -150,20 +131,10 @@ export function buildAppExportPrompt(topicId: string, target: StudioAppExportTar
     `target=${target}`,
     '[/WTT_STUDIO_APP_EXPORT]',
     '',
-    `请把当前 Studio 项目导出为 ${targetText}。`,
-    '通用要求：',
-    responsivePwaRules(workspace),
-    '目标要求：',
-    ...targetRules,
-    '预览规则：',
-    '- Studio 中的移动端/桌面预览仍使用当前 Web Preview URL；Android/iOS 导出应复用同一套响应式 Web 代码。',
-    '- 如果导出后需要重新启动 dev server，请保持可访问的 Cloud Agent Preview URL，方便用户先预览 UI 再下载 App 产物。',
-    '完成后请返回：',
-    '- 导出结果或产物路径',
-    '- 已执行的命令',
-    '- 如果有 Preview URL，请继续返回 [Cloud Agent Preview](https://...)',
-    '- Android/iOS 如不能在当前 sandbox 完成最终二进制构建，请明确说明阻塞项，不要假装已生成。',
+    'Use the built-in WTT Studio skill: wtt-studio-app-export.',
+    'Export the current project according to the target above. Keep the same responsive Web/PWA codebase and keep or refresh the Cloud Agent Preview URL when useful.',
     connectorBlock(connectorContext),
+    connectorBlock(skillContext),
   ].join('\n')
 }
 

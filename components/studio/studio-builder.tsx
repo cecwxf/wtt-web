@@ -32,12 +32,14 @@ import { WS_BASE_URL } from '@/lib/api/base-url'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import {
   fetchStudioAgentStats,
+  fetchStudioAgentSkillPromptContext,
   fetchStudioAgents,
   fetchStudioBilling,
   fetchStudioCloudAgent,
   fetchStudioConnectorPromptContext,
   fetchStudioMessages,
   fetchStudioTopics,
+  installStudioAgentSkill,
   sendStudioMessage,
 } from '@/lib/studio/api'
 import {
@@ -289,6 +291,7 @@ function legacyStudioDisplayContent(content: string) {
   if (userNeed?.[1]?.trim()) return userNeed[1].trim()
   if (text.includes('[WTT_STUDIO_PREVIEW]')) return '生成或刷新预览链接'
   if (text.includes('[WTT_STUDIO_GITHUB]')) return '提交当前网站到 GitHub'
+  if (text.includes('[WTT_STUDIO_APP_EXPORT]')) return '导出 App'
 
   const withoutHeader = text
     .replace(/\[WTT_STUDIO_[^\]]+\][\s\S]*?\[\/WTT_STUDIO_[^\]]+\]\s*/g, '')
@@ -338,6 +341,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const [device, setDevice] = useState<StudioPreviewDevice>('desktop')
   const [connectorsOpen, setConnectorsOpen] = useState(false)
   const [appExportOpen, setAppExportOpen] = useState(false)
+  const [previewDeviceOpen, setPreviewDeviceOpen] = useState(false)
   const [chatPaneWidth, setChatPaneWidth] = useState(48)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [previewFullscreen, setPreviewFullscreen] = useState(false)
@@ -381,6 +385,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     exportAndroid: 'Android APK',
     exportIos: 'iOS 工程',
     exportHint: '由 Cloud Agent 在当前项目中生成移动端导出产物',
+    deviceSelect: '选择预览设备',
     desktop: '桌面',
     tablet: '平板',
     mobile: '手机',
@@ -425,6 +430,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     exportAndroid: 'Android APK',
     exportIos: 'iOS Project',
     exportHint: 'Ask Cloud Agent to create mobile export artifacts from this project',
+    deviceSelect: 'Select preview device',
     desktop: 'Desktop',
     tablet: 'Tablet',
     mobile: 'Mobile',
@@ -760,14 +766,24 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const sendAppExport = async (target: StudioAppExportTarget) => {
     const label = appExportTargets.find((item) => item.id === target)?.label || target
     setAppExportOpen(false)
+    const skillId = 'wtt-studio-app-export'
+    const adapter = selectedRuntime?.adapter || 'claude-code'
+    await installStudioAgentSkill(selectedAgentId, skillId, token, adapter)
+    const [connectors, skill] = await Promise.all([
+      connectorContext(),
+      fetchStudioAgentSkillPromptContext(selectedAgentId, skillId, token),
+    ])
     await submitPrompt(
-      buildAppExportPrompt(topicId, target, await connectorContext()),
+      buildAppExportPrompt(topicId, target, connectors, skill.prompt_context),
       `export_${target}`,
       undefined,
       undefined,
       zh ? `导出 ${label}` : `Export ${label}`,
     )
   }
+
+  const activePreviewDevice = previewDevices.find((item) => item.id === device) || previewDevices[0]
+  const ActivePreviewDeviceIcon = activePreviewDevice.Icon
 
   if (status === 'loading' || loading) {
     return (
@@ -971,51 +987,48 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           chatFullscreen ? 'hidden' : previewFullscreen ? 'flex' : 'hidden lg:flex',
         ].filter(Boolean).join(' ')}>
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white/80 px-4 dark:border-white/10 dark:bg-transparent">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <span className="rounded-full bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-300/10 dark:text-emerald-100">
                 <Globe2 className="h-4 w-4" />
               </span>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-950 dark:text-white">{copy.livePreview}</p>
                 <p className="text-xs text-slate-500">{enrichedProject.previewUrl ? copy.previewReady : copy.previewWaiting}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="hidden items-center rounded-full border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-transparent sm:flex">
-                {previewDevices.map(({ id, label, Icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setDevice(id)}
-                    className={[
-                      'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-black transition',
-                      device === id
-                        ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950'
-                        : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10',
-                    ].join(' ')}
-                    title={label}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span className="hidden xl:inline">{label}</span>
-                  </button>
-                ))}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPreviewDeviceOpen((value) => !value)}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-2 text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10"
+                  title={copy.deviceSelect}
+                >
+                  <ActivePreviewDeviceIcon className="h-4 w-4" />
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+                {previewDeviceOpen && (
+                  <div className="absolute left-0 top-full z-30 mt-2 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl dark:border-white/10 dark:bg-slate-950">
+                    {previewDevices.map(({ id, label, Icon }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          setDevice(id)
+                          setPreviewDeviceOpen(false)
+                        }}
+                        className={[
+                          'flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition',
+                          device === id
+                            ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950'
+                            : 'text-slate-600 hover:bg-cyan-50 hover:text-cyan-700 dark:text-slate-200 dark:hover:bg-cyan-300/10 dark:hover:text-cyan-100',
+                        ].join(' ')}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const index = previewDevices.findIndex((item) => item.id === device)
-                  setDevice(previewDevices[(index + 1) % previewDevices.length]?.id || 'desktop')
-                }}
-                className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10 sm:hidden"
-                title={previewDevices.find((item) => item.id === device)?.label}
-              >
-                {device === 'desktop' ? <Monitor className="h-4 w-4" /> : device === 'tablet' ? <Tablet className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
-              </button>
-              {enrichedProject.previewUrl && (
-                <a href={enrichedProject.previewUrl} target="_blank" rel="noreferrer" className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10">
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              )}
               {enrichedProject.previewUrl && (
                 <button
                   type="button"
@@ -1032,8 +1045,15 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                   ].join(' ')}
                 >
                   <Crosshair className="h-3.5 w-3.5" />
-                  {previewInspectMode ? copy.inspectOn : copy.inspect}
+                  <span className="hidden sm:inline">{previewInspectMode ? copy.inspectOn : copy.inspect}</span>
                 </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {enrichedProject.previewUrl && (
+                <a href={enrichedProject.previewUrl} target="_blank" rel="noreferrer" className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/10">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
               )}
               <button
                 type="button"

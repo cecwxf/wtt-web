@@ -8,6 +8,7 @@ import type {
   StudioConnectorCatalogItem,
   StudioConnectorPromptContext,
   StudioMessage,
+  StudioSkillPromptContext,
   StudioTopic,
 } from './types'
 
@@ -129,6 +130,31 @@ export async function sendStudioMessage(
     },
   )
   return parseJson<StudioMessage>(response, 'Failed to send Studio message')
+}
+
+export async function installStudioAgentSkill(agentId: string, skillId: string, token?: string | null, adapter = 'claude-code') {
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(agentId)}/skills/install`, {
+    method: 'POST',
+    headers: headers(token),
+    body: JSON.stringify({
+      skill_id: skillId,
+      adapter,
+      source: 'wtt-built-in',
+    }),
+  })
+  return parseJson<{ agent_id: string; skill: { id: string; installed: boolean }; install_status?: Record<string, unknown> }>(
+    response,
+    'Failed to install Studio skill',
+  )
+}
+
+export async function fetchStudioAgentSkillPromptContext(agentId: string, skillId: string, token?: string | null) {
+  const params = new URLSearchParams({ skill_id: skillId, agent_id: agentId })
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/skills/prompt-context?${params.toString()}`, {
+    headers: headers(token),
+    cache: 'no-store',
+  })
+  return parseJson<StudioSkillPromptContext>(response, 'Failed to load Studio skill context')
 }
 
 export async function fetchStudioConnectorCatalog() {

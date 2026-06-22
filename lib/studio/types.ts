@@ -128,3 +128,17 @@ export type StudioConnectorPromptContext = {
   active_providers: string[]
   prompt_context: string
 }
+
+export type StudioSkillPromptContext = {
+  skill: {
+    id: string
+    name?: string
+    description?: string
+    adapters?: string[]
+    tags?: string[]
+    source?: string
+    builtin?: boolean
+  }
+  install_status?: Record<string, unknown>
+  prompt_context: string
+}
