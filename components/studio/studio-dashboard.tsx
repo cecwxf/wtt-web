@@ -139,6 +139,7 @@ export function StudioDashboard() {
       const topic = await createStudioTopic(agentId, title, token)
       const topicId = String(topic.topic_id || topic.id || '').trim()
       if (!topicId) throw new Error('Studio topic was created without topic_id')
+      const userPrompt = prompt.trim() || `创建网站：${title}`
       const connectorContext = await fetchStudioConnectorPromptContext(topicId, token)
         .then((data) => data.prompt_context)
         .catch(() => '')
@@ -148,11 +149,11 @@ export function StudioDashboard() {
         buildInitialStudioPrompt({
             projectName: title,
             topicId,
-            userPrompt: prompt,
+            userPrompt,
             connectorContext,
           }),
         token,
-        { studio_action: 'create_project', project_name: title },
+        { studio_action: 'create_project', project_name: title, display_content: userPrompt },
       )
       router.push(`/studio/projects/${encodeURIComponent(topicId)}`)
     } catch (err) {

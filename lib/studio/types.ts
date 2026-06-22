@@ -26,7 +26,7 @@ export type StudioMessage = {
   content?: string
   timestamp?: string
   created_at?: string
-  metadata?: Record<string, unknown> | null
+  metadata?: Record<string, unknown> | string | null
 }
 
 export type StudioProjectLinks = {

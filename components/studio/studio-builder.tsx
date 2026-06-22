@@ -95,6 +95,45 @@ function chooseProjectAgent(
   )
 }
 
+function studioMetadata(message: StudioMessage): Record<string, unknown> {
+  const raw = message.metadata
+  if (!raw) return {}
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}
+    } catch {
+      return {}
+    }
+  }
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {}
+}
+
+function legacyStudioDisplayContent(content: string) {
+  const text = String(content || '').trim()
+  if (!text.includes('[WTT_STUDIO_')) return text
+  const userNeed = text.match(/用户需求：\s*([\s\S]*)$/)
+  if (userNeed?.[1]?.trim()) return userNeed[1].trim()
+  if (text.includes('[WTT_STUDIO_PREVIEW]')) return '生成或刷新预览链接'
+  if (text.includes('[WTT_STUDIO_PUBLISH]')) return '发布当前网站'
+  if (text.includes('[WTT_STUDIO_GITHUB]')) return '提交当前网站到 GitHub'
+
+  const withoutHeader = text
+    .replace(/\[WTT_STUDIO_[^\]]+\][\s\S]*?\[\/WTT_STUDIO_[^\]]+\]\s*/g, '')
+    .trim()
+  const blocks = withoutHeader.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean)
+  return blocks[blocks.length - 1] || text
+}
+
+function displayStudioMessageContent(message: StudioMessage) {
+  const metadata = studioMetadata(message)
+  const displayContent = metadata.display_content ?? metadata.displayContent
+  if (typeof displayContent === 'string' && displayContent.trim()) return displayContent.trim()
+  const senderType = String(message.sender_type || '').toLowerCase()
+  const content = String(message.content || '')
+  return senderType === 'human' ? legacyStudioDisplayContent(content) : content
+}
+
 function toChatMessage(message: StudioMessage): ChatMessage {
   return {
     message_id: String(message.message_id || message.id || `${message.timestamp || message.created_at || ''}:${String(message.content || '').length}`),
@@ -102,7 +141,7 @@ function toChatMessage(message: StudioMessage): ChatMessage {
     sender_id: String(message.sender_id || ''),
     sender_display_name: message.sender_display_name || undefined,
     sender_type: String(message.sender_type || '').toLowerCase() === 'human' ? 'human' : 'agent',
-    content: String(message.content || ''),
+    content: displayStudioMessageContent(message),
     encrypted: false,
     timestamp: String(message.timestamp || message.created_at || new Date().toISOString()),
     semantic_type: String((message as { semantic_type?: string }).semantic_type || 'post'),
@@ -229,7 +268,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
       .catch(() => '')
   }
 
-  async function submitPrompt(content: string, action: string, replyTo?: string, options?: ChatSendOptions) {
+  async function submitPrompt(content: string, action: string, replyTo?: string, options?: ChatSendOptions, displayContent?: string) {
     if (!token || !selectedAgentId || sending || !content.trim()) return
     setSending(true)
     setError('')
@@ -239,6 +278,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
         studio_action: action,
         studio_topic_id: topicId,
         reply_to: replyTo,
+        display_content: displayContent?.trim() || content.trim(),
         ...(options?.slashType ? { slash_type: options.slashType, slash_command: options.slashCommand || content } : {}),
       })
       await refreshMessages(selectedAgentId)
@@ -250,7 +290,11 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   }
 
   const handleChatSend = async (content: string, replyTo?: string, options?: ChatSendOptions) => {
-    await submitPrompt(buildFollowupStudioPrompt(topicId, content, await connectorContext()), 'followup', replyTo, options)
+    if (options?.slashType === 'agent_passthrough' && content.trim().startsWith('/')) {
+      await submitPrompt(content, 'slash', replyTo, options, content)
+      return
+    }
+    await submitPrompt(buildFollowupStudioPrompt(topicId, content, await connectorContext()), 'followup', replyTo, options, content)
   }
 
   if (status === 'loading' || loading) {
@@ -353,7 +397,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
               <div className="flex flex-wrap items-center justify-end gap-1.5">
                 <button
                   type="button"
-                  onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview')}
+                  onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview', undefined, undefined, '生成或刷新预览链接')}
                   disabled={sending || !selectedAgentId}
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300 disabled:opacity-50"
                 >
@@ -362,7 +406,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                 </button>
                 <button
                   type="button"
-                  onClick={async () => submitPrompt(buildPublishPrompt(topicId, await connectorContext()), 'publish')}
+                  onClick={async () => submitPrompt(buildPublishPrompt(topicId, await connectorContext()), 'publish', undefined, undefined, '发布当前网站')}
                   disabled={sending || !selectedAgentId}
                   className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-black text-emerald-700 hover:border-emerald-300 disabled:opacity-50"
                 >
@@ -371,7 +415,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                 </button>
                 <button
                   type="button"
-                  onClick={async () => submitPrompt(buildGithubPrompt(topicId, enrichedProject.title, await connectorContext()), 'github')}
+                  onClick={async () => submitPrompt(buildGithubPrompt(topicId, enrichedProject.title, await connectorContext()), 'github', undefined, undefined, '提交当前网站到 GitHub')}
                   disabled={sending || !selectedAgentId}
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300 disabled:opacity-50"
                 >
@@ -430,7 +474,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                 </p>
                 <button
                   type="button"
-                  onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview')}
+                  onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview', undefined, undefined, '生成或刷新预览链接')}
                   disabled={sending || !selectedAgentId}
                   className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-50"
                 >
