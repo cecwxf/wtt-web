@@ -28,7 +28,7 @@ export function buildInitialStudioPrompt({ projectName, topicId, userPrompt, con
     `1. 所有项目代码必须放在 ${workspace}，不要污染用户其他目录。`,
     '2. 默认使用 Vite + React + Tailwind 或更轻量的静态 HTML/CSS/JS，优先保证可运行、可预览、可继续迭代。',
     '3. 如果用户要求可视化网页、动画、应用原型或站点，请启动 dev server 并生成 Cloud Agent Preview URL。Preview URL 必须以 Markdown 链接返回，格式为：[Cloud Agent Preview](https://...)。',
-    '4. 如果用户要求发布，请执行构建/发布流程，并用 [PUBLISHED_SITE](https://...) 返回公开地址。',
+    '4. 当前 Studio 默认以 Preview URL 作为可分享预览产物，不需要单独发布流程。',
     '5. 如果用户要求 GitHub，请创建或更新用户对应仓库，并用 [GITHUB_REPO](https://github.com/...) 与 [COMMIT](https://github.com/.../commit/...) 返回结果。',
     '6. 每次回复先给出关键结果，再列出改动文件、运行方式和下一步建议。',
     connectorBlock(connectorContext),
@@ -50,19 +50,6 @@ export function buildFollowupStudioPrompt(topicId: string, userPrompt: string, c
     connectorBlock(connectorContext),
     '',
     userPrompt.trim(),
-  ].join('\n')
-}
-
-export function buildPublishPrompt(topicId: string, connectorContext?: string) {
-  const workspace = studioWorkspace(topicId)
-  return [
-    '[WTT_STUDIO_PUBLISH]',
-    `workspace=${workspace}`,
-    '[/WTT_STUDIO_PUBLISH]',
-    '',
-    '请构建当前网站并发布为全球可访问 URL。发布成功后只用 Markdown 链接返回：',
-    '[PUBLISHED_SITE](https://...)',
-    connectorBlock(connectorContext),
   ].join('\n')
 }
 

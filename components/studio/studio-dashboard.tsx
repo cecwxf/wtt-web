@@ -15,7 +15,6 @@ import {
   Lock,
   PlugZap,
   Plus,
-  Rocket,
   Sparkles,
   Wand2,
 } from 'lucide-react'
@@ -194,13 +193,13 @@ export function StudioDashboard() {
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs font-semibold text-cyan-100">
               <Sparkles className="h-3.5 w-3.5" />
-              Prompt → Cloud Agent → Preview URL → Publish
+              Prompt → Cloud Agent → Preview URL → GitHub
             </div>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.04] tracking-[-0.06em] text-white sm:text-6xl">
               Build websites by talking to your WTT Cloud Agent.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
-              WTT Studio 复用现有 WTT 登录、会员、Cloud Agent、Topic 和 Preview URL。每个项目就是一个 Topic，代码运行在你的 Cloudflare Sandbox，生成后可以预览、发布，并提交到 GitHub。
+              WTT Studio 复用现有 WTT 登录、会员、Cloud Agent、Topic 和 Preview URL。每个项目就是一个 Topic，代码运行在你的 Cloudflare Sandbox，生成后直接通过 Preview URL 预览，并可提交到 GitHub。
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               {token ? (
@@ -249,7 +248,7 @@ export function StudioDashboard() {
                   { title: 'Prompt-first builder', desc: '输入自然语言，Agent 生成站点、组件、动画和应用原型。', Icon: Code2 },
                   { title: 'Live preview', desc: 'Cloud Agent 通过 Preview URL 给出全球可访问的实时预览。', Icon: Globe2 },
                   { title: 'Project history', desc: '每个 Studio 项目绑定 Topic，对话、改动和链接可追溯。', Icon: Cloud },
-                  { title: 'Publish & GitHub', desc: '发布地址和 GitHub 仓库用标准 Markdown 标记回传。', Icon: Github },
+                  { title: 'GitHub handoff', desc: '需要版本管理时，Agent 可把项目提交到你的 GitHub 仓库。', Icon: Github },
                 ].map(({ title, desc, Icon }) => (
                   <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
                     <div className="flex items-start gap-3">
@@ -323,7 +322,6 @@ export function StudioDashboard() {
                 </div>
                 <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
                   {project.previewUrl && <span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-emerald-100">Preview</span>}
-                  {project.publishedUrl && <span className="rounded-full bg-sky-300/10 px-2.5 py-1 text-sky-100">Published</span>}
                   {project.githubRepoUrl && <span className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200">GitHub</span>}
                 </div>
               </Link>
@@ -385,7 +383,7 @@ export function StudioDashboard() {
                 disabled={!canCreate}
                 className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                 Create and start
               </button>
             </div>

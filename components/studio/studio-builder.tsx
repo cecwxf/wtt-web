@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   ArrowLeft,
   ExternalLink,
@@ -12,7 +12,6 @@ import {
   Monitor,
   PlugZap,
   RefreshCw,
-  Rocket,
   Smartphone,
   Sparkles,
 } from 'lucide-react'
@@ -38,7 +37,6 @@ import {
   buildFollowupStudioPrompt,
   buildGithubPrompt,
   buildPreviewPrompt,
-  buildPublishPrompt,
   studioWorkspace,
 } from '@/lib/studio/prompts'
 import type { StudioAgent, StudioAgentStats, StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
@@ -46,6 +44,7 @@ import type { StudioAgent, StudioAgentStats, StudioCloudAgent, StudioMessage, St
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
 const AGENT_STATUS_CARD_MAX_LINES = 14
 const AGENT_STATUS_COMPLETE_HOLD_MS = 4500
+const STUDIO_PANE_WIDTH_KEY = 'wtt:studio:chat-pane-width'
 
 type TopicTypingState = {
   agentId: string
@@ -206,6 +205,10 @@ function statusKindFromTypingEvent(record: Record<string, unknown>): string | un
   return eventString(record, ['status_kind', 'statusKind', 'kind', 'event_kind', 'eventKind', 'phase', 'type', 'status']) || undefined
 }
 
+function clampStudioPaneWidth(value: number) {
+  return Math.min(70, Math.max(32, value))
+}
+
 function studioMetadata(message: StudioMessage): Record<string, unknown> {
   const raw = message.metadata
   if (!raw) return {}
@@ -226,7 +229,6 @@ function legacyStudioDisplayContent(content: string) {
   const userNeed = text.match(/用户需求：\s*([\s\S]*)$/)
   if (userNeed?.[1]?.trim()) return userNeed[1].trim()
   if (text.includes('[WTT_STUDIO_PREVIEW]')) return '生成或刷新预览链接'
-  if (text.includes('[WTT_STUDIO_PUBLISH]')) return '发布当前网站'
   if (text.includes('[WTT_STUDIO_GITHUB]')) return '提交当前网站到 GitHub'
 
   const withoutHeader = text
@@ -272,6 +274,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const [sending, setSending] = useState(false)
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [connectorsOpen, setConnectorsOpen] = useState(false)
+  const [chatPaneWidth, setChatPaneWidth] = useState(48)
 
   const enrichedProject = useMemo(() => {
     const fallback: StudioProject = {
@@ -286,6 +289,40 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const chatMessages = useMemo(() => messages.map(toChatMessage), [messages])
   const selectedRuntime = selectedAgentId ? agentStats?.runtimes?.[selectedAgentId] : undefined
   const isSelectedOnline = selectedAgentId ? onlineAgentIds(agentStats).has(selectedAgentId) : false
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(STUDIO_PANE_WIDTH_KEY)
+    const parsed = saved ? Number(saved) : NaN
+    if (Number.isFinite(parsed)) setChatPaneWidth(clampStudioPaneWidth(parsed))
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(STUDIO_PANE_WIDTH_KEY, String(Math.round(chatPaneWidth)))
+  }, [chatPaneWidth])
+
+  const startPaneResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const container = event.currentTarget.parentElement
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    if (!rect.width) return
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      const nextWidth = ((moveEvent.clientX - rect.left) / rect.width) * 100
+      setChatPaneWidth(clampStudioPaneWidth(nextWidth))
+    }
+
+    const handleUp = () => {
+      window.removeEventListener('pointermove', handleMove)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp, { once: true })
+  }, [])
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
     const rawEvent = msg as unknown as Record<string, unknown>
@@ -518,12 +555,6 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
               GitHub
             </a>
           )}
-          {enrichedProject.publishedUrl && (
-            <a href={enrichedProject.publishedUrl} target="_blank" rel="noreferrer" className="hidden items-center gap-2 rounded-full border border-emerald-200/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-200/10 sm:inline-flex">
-              <Globe2 className="h-3.5 w-3.5" />
-              Published
-            </a>
-          )}
           <button
             type="button"
             onClick={() => setConnectorsOpen(true)}
@@ -535,8 +566,11 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(460px,0.9fr)_minmax(0,1.1fr)]">
-        <section className="min-h-0 overflow-hidden border-r border-white/10 bg-[#fbfaf7] text-slate-950">
+      <div
+        className="flex min-h-0 flex-1 flex-col lg:flex-row"
+        style={{ '--studio-chat-width': `${chatPaneWidth}%` } as CSSProperties}
+      >
+        <section className="min-h-0 overflow-hidden border-r border-white/10 bg-[#fbfaf7] text-slate-950 lg:basis-[var(--studio-chat-width)] lg:shrink-0">
           {error && <p className="m-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</p>}
           <ChatView
             topicName={enrichedProject.title}
@@ -581,15 +615,6 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                 </button>
                 <button
                   type="button"
-                  onClick={async () => submitPrompt(buildPublishPrompt(topicId, await connectorContext()), 'publish', undefined, undefined, '发布当前网站')}
-                  disabled={sending || !selectedAgentId}
-                  className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-black text-emerald-700 hover:border-emerald-300 disabled:opacity-50"
-                >
-                  <Rocket className="h-3.5 w-3.5" />
-                  Publish
-                </button>
-                <button
-                  type="button"
                   onClick={async () => submitPrompt(buildGithubPrompt(topicId, enrichedProject.title, await connectorContext()), 'github', undefined, undefined, '提交当前网站到 GitHub')}
                   disabled={sending || !selectedAgentId}
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-600 hover:border-cyan-300 disabled:opacity-50"
@@ -602,7 +627,18 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           />
         </section>
 
-        <section className="hidden min-h-0 flex-col bg-[#070b10] lg:flex">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat and preview panes"
+          title="拖拽调整 Chat / Preview 宽度"
+          onPointerDown={startPaneResize}
+          className="hidden w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-white/10 bg-[#0d141b] transition hover:bg-cyan-300/15 lg:flex"
+        >
+          <span className="h-12 w-0.5 rounded-full bg-white/25" />
+        </div>
+
+        <section className="hidden min-h-0 flex-1 flex-col bg-[#070b10] lg:flex">
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-emerald-300/10 p-2 text-emerald-100">
