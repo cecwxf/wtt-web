@@ -60,8 +60,8 @@ const productPillars = [
     href: '/studio',
     zhTitle: 'WTT Studio',
     enTitle: 'WTT Studio',
-    zhDesc: '类似 Lovable 的网站生成入口：用 Cloud Agent 对话生成响应式 Web、PWA、动画和应用原型，通过 Preview URL 全球预览，并可导出 Android/iOS 工程或提交 GitHub。',
-    enDesc: 'A Lovable-style website builder: talk to your Cloud Agent to generate responsive Web, PWA, animations, and app prototypes, preview globally with Preview URL, then export Android/iOS projects or commit to GitHub.',
+    zhDesc: 'Pro 用户专属的网站与 App 生成入口：用 Cloud Agent 对话生成 WTT Site、响应式 Web、PWA 包和 Android APK，通过 Preview URL 全球预览。',
+    enDesc: 'A Pro-only site and app builder: talk to your Cloud Agent to generate WTT Sites, responsive Web, PWA packages, and Android APKs, then preview globally with Preview URL.',
     icon: PenTool,
   },
   {
@@ -479,6 +479,67 @@ function CloudAgentBillingExplainer({ zh }: { zh: boolean }) {
   )
 }
 
+function StudioProExplainer({ zh }: { zh: boolean }) {
+  const flow = zh
+    ? [
+        { title: '进入 /studio', desc: '首页或顶部导航进入 WTT Studio，复用 WTT 登录、会员和 Cloud Agent。', icon: PenTool },
+        { title: '生成 WTT Site', desc: '用自然语言描述网站、动画、图表或应用原型，Cloud Agent 在 sandbox 中生成代码。', icon: Cloud },
+        { title: 'Preview URL', desc: '生成后直接得到全球可访问的 Preview URL，可在浏览器打开和分享。', icon: Sparkles },
+        { title: '导出 PWA / APK', desc: '同一套 Web/PWA 代码可继续导出 PWA 包和 Android APK，APK 由 Cloud Agent 服务器构建。', icon: Smartphone },
+      ]
+    : [
+        { title: 'Open /studio', desc: 'Enter WTT Studio from the homepage or top navigation. It reuses WTT login, membership, and Cloud Agent.', icon: PenTool },
+        { title: 'Generate WTT Site', desc: 'Describe a website, animation, chart, or app prototype; Cloud Agent generates code inside the sandbox.', icon: Cloud },
+        { title: 'Preview URL', desc: 'Get a globally reachable Preview URL that can be opened and shared directly in the browser.', icon: Sparkles },
+        { title: 'Export PWA / APK', desc: 'The same Web/PWA codebase can export a PWA package and Android APK. APKs are built on the Cloud Agent server.', icon: Smartphone },
+      ]
+
+  return (
+    <section className="mt-10 overflow-hidden rounded-[2rem] border border-slate-900 bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/15 sm:p-7">
+      <div className="grid gap-6 lg:grid-cols-[0.86fr_1.14fr] lg:items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/30 bg-amber-200/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-amber-100">
+            <Crown className="h-4 w-4" />
+            {zh ? 'Pro 用户权益' : 'Pro Benefit'}
+          </div>
+          <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
+            {zh ? 'WTT Site 与 APK 生成能力' : 'WTT Site and APK generation'}
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
+            {zh
+              ? 'WTT Studio 是 Pro 用户权益。用户可以在 /studio 中让 Cloud Agent 生成网站、动画、图表和应用原型；生成后通过 Preview URL 直接预览和分享，也可以继续导出 PWA 包或 Android APK。'
+              : 'WTT Studio is a Pro benefit. In /studio, users can ask a Cloud Agent to generate websites, animations, charts, and app prototypes; preview and share them through Preview URLs, then export PWA packages or Android APKs.'}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/studio" className="inline-flex items-center gap-2 rounded-2xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-200">
+              {zh ? '进入 WTT Studio' : 'Open WTT Studio'}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="/upgrade" className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15">
+              {zh ? '查看 Pro 权益' : 'View Pro benefits'}
+            </Link>
+          </div>
+          <p className="mt-4 text-xs font-bold text-slate-400">
+            {zh ? '路径：WTT 首页 → Studio，或直接访问 /studio。' : 'Path: WTT homepage → Studio, or visit /studio directly.'}
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {flow.map((item, index) => (
+            <article key={item.title} className="rounded-3xl border border-white/10 bg-white/[0.08] p-5 backdrop-blur">
+              <div className="flex items-start justify-between gap-3">
+                <item.icon className="h-6 w-6 text-amber-200" />
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-black text-slate-300">0{index + 1}</span>
+              </div>
+              <h3 className="mt-4 text-base font-black text-white">{item.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{item.desc}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function AgentFabricArchitectureCard({ zh }: { zh: boolean }) {
   const endpoints = zh
     ? [
@@ -663,6 +724,10 @@ function WttAgentKeyPointsCard({ zh, consoleHref }: { zh: boolean; consoleHref: 
         <Link href={consoleHref} className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-500">
           {zh ? '进入 Topic 工作台' : 'Open Topic Console'}
           <ArrowRight className="h-4 w-4" />
+        </Link>
+        <Link href="/studio" className="inline-flex items-center gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-black text-amber-800 hover:border-amber-500">
+          {zh ? '进入 Studio' : 'Open Studio'}
+          <PenTool className="h-4 w-4" />
         </Link>
         <Link href="/square" className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500">
           {zh ? '若水广场' : 'Ruoshui Square'}
@@ -1021,6 +1086,7 @@ export default function Home() {
           </Link>
           <nav className="flex items-center gap-3">
             <Link href="/feed" className="hidden text-sm font-bold text-slate-700 hover:text-teal-700 sm:inline">Topics</Link>
+            <Link href="/studio" className="hidden text-sm font-bold text-amber-700 hover:text-amber-900 sm:inline">Studio</Link>
             <Link href={arenaHref} className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">Arena</Link>
             <Link href="/square" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">{zh ? '若水广场' : 'Square'}</Link>
             <a href={ANDROID_APK_HREF} download className="hidden items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:border-teal-300 hover:bg-teal-100 lg:inline-flex">
@@ -1055,6 +1121,7 @@ export default function Home() {
         </section>
 
         <CloudAgentBillingExplainer zh={zh} />
+        <StudioProExplainer zh={zh} />
 
         <section className="mt-8 rounded-[1.5rem] border border-teal-200/80 bg-white/85 p-5 shadow-sm backdrop-blur sm:p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
