@@ -16,8 +16,10 @@ import {
   Smartphone,
   Sparkles,
 } from 'lucide-react'
-import { ChatView, type ChatMessage, type ChatSendOptions } from '@/components/ui/chat-view'
+import { ChatView, type ChatMessage, type ChatRunStatus, type ChatSendOptions } from '@/components/ui/chat-view'
 import { StudioConnectorsPanel } from '@/components/studio/studio-connectors-panel'
+import { WS_BASE_URL } from '@/lib/api/base-url'
+import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 import {
   fetchStudioAgentStats,
   fetchStudioAgents,
@@ -40,6 +42,22 @@ import {
   studioWorkspace,
 } from '@/lib/studio/prompts'
 import type { StudioAgent, StudioAgentStats, StudioCloudAgent, StudioMessage, StudioProject } from '@/lib/studio/types'
+
+const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
+const AGENT_STATUS_CARD_MAX_LINES = 14
+const AGENT_STATUS_COMPLETE_HOLD_MS = 4500
+
+type TopicTypingState = {
+  agentId: string
+  agentName?: string
+  statusText?: string
+  statusKind?: string
+  adapter?: string
+  model?: string
+  statusLines?: ChatRunStatus['lines']
+  startedAt: number
+  expiresAt: number
+}
 
 function sessionToken(session: unknown) {
   return (session as { accessToken?: string } | null)?.accessToken || ''
@@ -93,6 +111,99 @@ function chooseProjectAgent(
     (creatorAgentId && cloudIds.has(creatorAgentId) ? creatorAgentId : '') ||
     chooseStudioAgent(agents, stats, cloudAgent)
   )
+}
+
+function appendTypingStatus(
+  existing: TopicTypingState | null,
+  update: {
+    agentId?: string
+    agentName?: string
+    statusText?: string
+    statusKind?: string
+    adapter?: string
+    model?: string
+    ttlMs?: number
+  },
+  now: number,
+): TopicTypingState {
+  const text = String(update.statusText || '').trim()
+  const kind = String(update.statusKind || '').trim() || undefined
+  const lines = existing?.statusLines ? [...existing.statusLines] : []
+
+  if (text) {
+    const last = lines[lines.length - 1]
+    if (last && last.text === text && last.kind === kind) {
+      lines[lines.length - 1] = { ...last, ts: now }
+    } else {
+      lines.push({ id: `${now}-${lines.length}-${kind || 'status'}`, text, kind, ts: now })
+    }
+  }
+
+  return {
+    agentId: update.agentId || existing?.agentId || '',
+    agentName: update.agentName || existing?.agentName,
+    statusText: text || existing?.statusText,
+    statusKind: kind || existing?.statusKind,
+    adapter: update.adapter || existing?.adapter,
+    model: update.model || existing?.model,
+    statusLines: lines.slice(-AGENT_STATUS_CARD_MAX_LINES),
+    startedAt: existing?.startedAt || now,
+    expiresAt: now + (update.ttlMs || AGENT_TYPING_STALE_MS),
+  }
+}
+
+function completeTypingStatus(existing: TopicTypingState | null, agentId?: string, messageTimestamp?: string) {
+  if (!existing) return null
+  if (agentId && existing.agentId && existing.agentId !== agentId) return existing
+  if (messageTimestamp) {
+    const messageTime = new Date(messageTimestamp).getTime()
+    if (Number.isFinite(messageTime) && messageTime + 2000 < existing.startedAt) return existing
+  }
+  return appendTypingStatus(existing, {
+    agentId: agentId || existing.agentId,
+    statusText: 'Agent 已回复',
+    statusKind: 'response',
+    ttlMs: AGENT_STATUS_COMPLETE_HOLD_MS,
+  }, Date.now())
+}
+
+function collectNestedRecords(value: unknown, out: Record<string, unknown>[] = [], depth = 0): Record<string, unknown>[] {
+  if (!value || typeof value !== 'object' || depth > 3) return out
+  const record = value as Record<string, unknown>
+  out.push(record)
+  for (const key of ['payload', 'data', 'event', 'item', 'message', 'delta', 'metadata', 'detail']) {
+    collectNestedRecords(record[key], out, depth + 1)
+  }
+  return out
+}
+
+function eventString(record: Record<string, unknown>, keys: string[]): string {
+  const records = collectNestedRecords(record)
+  for (const key of keys) {
+    for (const source of records) {
+      const value = source[key]
+      if (value == null) continue
+      if (typeof value === 'string' && value.trim()) return value.trim()
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    }
+  }
+  return ''
+}
+
+function statusTextFromTypingEvent(record: Record<string, unknown>): string | undefined {
+  const direct = eventString(record, ['status_text', 'statusText', 'activity_text', 'activityText', 'message', 'detail', 'text', 'summary', 'description', 'progress'])
+  if (direct) return direct
+  const command = eventString(record, ['command', 'cmd', 'shell_command'])
+  if (command) return `执行命令：${command}`
+  const tool = eventString(record, ['tool', 'tool_name', 'toolName', 'name'])
+  if (tool) return `调用工具：${tool}`
+  const phase = eventString(record, ['phase', 'stage', 'step', 'status'])
+  if (phase) return `阶段：${phase}`
+  return undefined
+}
+
+function statusKindFromTypingEvent(record: Record<string, unknown>): string | undefined {
+  return eventString(record, ['status_kind', 'statusKind', 'kind', 'event_kind', 'eventKind', 'phase', 'type', 'status']) || undefined
 }
 
 function studioMetadata(message: StudioMessage): Record<string, unknown> {
@@ -155,6 +266,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [project, setProject] = useState<StudioProject | null>(null)
   const [messages, setMessages] = useState<StudioMessage[]>([])
+  const [typingState, setTypingState] = useState<TopicTypingState | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -174,6 +286,67 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const chatMessages = useMemo(() => messages.map(toChatMessage), [messages])
   const selectedRuntime = selectedAgentId ? agentStats?.runtimes?.[selectedAgentId] : undefined
   const isSelectedOnline = selectedAgentId ? onlineAgentIds(agentStats).has(selectedAgentId) : false
+
+  const handleWsMessage = useCallback((msg: WsMessage) => {
+    const rawEvent = msg as unknown as Record<string, unknown>
+    const incomingTopicId = String(rawEvent.topic_id || (rawEvent.message as { topic_id?: string } | undefined)?.topic_id || '')
+    if (incomingTopicId && incomingTopicId !== topicId) return
+
+    if (rawEvent.type === 'typing') {
+      const state = String(rawEvent.state || 'start').toLowerCase()
+      if (state === 'stop') return
+      const agentId = String(rawEvent.agent_id || selectedAgentId || '')
+      const agentName = String(rawEvent.agent_display_name || '') || agentId || undefined
+      const ttlMsRaw = Number(rawEvent.ttl_ms || 0)
+      const ttlMs = Number.isFinite(ttlMsRaw) && ttlMsRaw > 0 ? Math.max(ttlMsRaw, 30000) : undefined
+      setTypingState((prev) => appendTypingStatus(prev, {
+        agentId,
+        agentName,
+        statusText: statusTextFromTypingEvent(rawEvent),
+        statusKind: statusKindFromTypingEvent(rawEvent),
+        adapter: String(rawEvent.adapter || '').trim() || undefined,
+        model: String(rawEvent.model || rawEvent.model_id || rawEvent.current_model || '').trim() || undefined,
+        ttlMs,
+      }, Date.now()))
+      return
+    }
+
+    if (rawEvent.type === 'new_message' && rawEvent.message && typeof rawEvent.message === 'object') {
+      const message = rawEvent.message as Record<string, unknown>
+      const senderType = String(message.sender_type || '').toLowerCase()
+      const senderId = String(message.sender_id || '')
+      if (senderType === 'agent' || (!!selectedAgentId && senderId === selectedAgentId)) {
+        setTypingState((prev) => completeTypingStatus(prev, senderId, String(message.created_at || '')))
+      }
+    }
+  }, [selectedAgentId, topicId])
+
+  const { state: wsState } = useWebSocket({
+    url: WS_BASE_URL,
+    enabled: !!selectedAgentId && !!token,
+    token,
+    onMessage: handleWsMessage,
+  })
+
+  const runStatus = useMemo<ChatRunStatus | null>(() => {
+    if (!typingState) return null
+    const lines = typingState.statusLines?.length
+      ? typingState.statusLines
+      : typingState.statusText
+        ? [{ id: `${typingState.startedAt}-status`, text: typingState.statusText, kind: typingState.statusKind, ts: typingState.startedAt }]
+        : []
+    return {
+      agentId: typingState.agentId,
+      agentName: typingState.agentName || typingState.agentId || 'Agent',
+      adapter: typingState.adapter,
+      model: typingState.model,
+      wsState,
+      statusText: typingState.statusText || '等待 Agent 状态更新',
+      statusKind: typingState.statusKind,
+      startedAt: typingState.startedAt,
+      lines,
+    }
+  }, [typingState, wsState])
 
   const refreshMessages = useCallback(async (agentId = selectedAgentId) => {
     if (!token || !agentId) return
@@ -222,6 +395,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           title: studioTitleFromTopicName('Untitled Site'),
         }
         setProject(nextProject)
+        setTypingState(null)
         const projectAgent = chooseProjectAgent(nextProject, agents, stats, cloud)
         setSelectedAgentId(projectAgent)
         if (!projectAgent) {
@@ -371,9 +545,10 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
             currentAgentId={selectedAgentId}
             onSendMessage={handleChatSend}
             loading={loading && chatMessages.length === 0}
-            wsConnected={isSelectedOnline}
+            wsConnected={wsState === 'connected' || isSelectedOnline}
             accessToken={token}
             topicType="p2p"
+            runStatus={runStatus}
             compactUi
             currentAgentIsCloud
             workspaceAgentName={selectedAgentId || undefined}
