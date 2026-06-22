@@ -13,16 +13,19 @@ import {
   Globe2,
   Loader2,
   Lock,
+  PlugZap,
   Plus,
   Rocket,
   Sparkles,
   Wand2,
 } from 'lucide-react'
 import { WttLogo } from '@/components/ui/wtt-logo'
+import { StudioConnectorsPanel } from '@/components/studio/studio-connectors-panel'
 import {
   createStudioTopic,
   fetchStudioBilling,
   fetchStudioCloudAgent,
+  fetchStudioConnectorPromptContext,
   fetchStudioMessages,
   fetchStudioTopics,
   sendStudioMessage,
@@ -59,6 +62,7 @@ export function StudioDashboard() {
   const [creating, setCreating] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [prompt, setPrompt] = useState('')
+  const [connectorsOpen, setConnectorsOpen] = useState(false)
 
   const agentId = cloudAgentId(cloudAgent)
   const paid = isPaidPlan(billing, cloudAgent)
@@ -135,6 +139,9 @@ export function StudioDashboard() {
       const topic = await createStudioTopic(agentId, title, token)
       const topicId = String(topic.topic_id || topic.id || '').trim()
       if (!topicId) throw new Error('Studio topic was created without topic_id')
+      const connectorContext = await fetchStudioConnectorPromptContext(topicId, token)
+        .then((data) => data.prompt_context)
+        .catch(() => '')
       await sendStudioMessage(
         topicId,
         agentId,
@@ -142,6 +149,7 @@ export function StudioDashboard() {
           projectName: title,
           topicId,
           userPrompt: prompt,
+          connectorContext,
         }),
         token,
         { studio_action: 'create_project', project_name: title },
@@ -208,6 +216,16 @@ export function StudioDashboard() {
                   Sign in to Studio
                   <ArrowRight className="h-4 w-4" />
                 </Link>
+              )}
+              {token && (
+                <button
+                  type="button"
+                  onClick={() => setConnectorsOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-100/40 hover:bg-cyan-200/10"
+                >
+                  <PlugZap className="h-4 w-4" />
+                  Connectors
+                </button>
               )}
               <Link href="/feed" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/30 hover:bg-white/10">
                 Manage Agents
@@ -372,6 +390,13 @@ export function StudioDashboard() {
             </div>
           </form>
         </div>
+      )}
+      {token && (
+        <StudioConnectorsPanel
+          open={connectorsOpen}
+          token={token}
+          onClose={() => setConnectorsOpen(false)}
+        />
       )}
     </main>
   )

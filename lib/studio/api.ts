@@ -1,5 +1,13 @@
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
-import type { StudioBilling, StudioCloudAgent, StudioMessage, StudioTopic } from './types'
+import type {
+  StudioBilling,
+  StudioCloudAgent,
+  StudioConnector,
+  StudioConnectorCatalogItem,
+  StudioConnectorPromptContext,
+  StudioMessage,
+  StudioTopic,
+} from './types'
 
 function headers(token?: string | null): HeadersInit {
   const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -92,4 +100,56 @@ export async function sendStudioMessage(
     },
   )
   return parseJson<StudioMessage>(response, 'Failed to send Studio message')
+}
+
+export async function fetchStudioConnectorCatalog() {
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/studio/connectors/catalog`, { cache: 'no-store' })
+  return parseJson<{ items: StudioConnectorCatalogItem[] }>(response, 'Failed to load connector catalog')
+}
+
+export async function fetchStudioConnectors(projectTopicId = '', token?: string | null) {
+  const params = new URLSearchParams()
+  if (projectTopicId) params.set('project_topic_id', projectTopicId)
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/studio/connectors${params.size ? `?${params.toString()}` : ''}`, {
+    headers: headers(token),
+    cache: 'no-store',
+  })
+  return parseJson<{ items: StudioConnector[] }>(response, 'Failed to load connectors')
+}
+
+export async function upsertStudioConnector(
+  data: {
+    provider: string
+    project_topic_id?: string
+    name?: string
+    status?: string
+    credentials?: Record<string, string>
+    metadata?: Record<string, unknown>
+  },
+  token?: string | null,
+) {
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/studio/connectors`, {
+    method: 'POST',
+    headers: headers(token),
+    body: JSON.stringify(data),
+  })
+  return parseJson<StudioConnector>(response, 'Failed to save connector')
+}
+
+export async function deleteStudioConnector(connectorId: string, token?: string | null) {
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/studio/connectors/${encodeURIComponent(connectorId)}`, {
+    method: 'DELETE',
+    headers: headers(token),
+  })
+  return parseJson<{ ok: boolean; id: string }>(response, 'Failed to delete connector')
+}
+
+export async function fetchStudioConnectorPromptContext(projectTopicId = '', token?: string | null) {
+  const params = new URLSearchParams()
+  if (projectTopicId) params.set('project_topic_id', projectTopicId)
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/studio/connectors/prompt-context${params.size ? `?${params.toString()}` : ''}`, {
+    headers: headers(token),
+    cache: 'no-store',
+  })
+  return parseJson<StudioConnectorPromptContext>(response, 'Failed to load connector context')
 }

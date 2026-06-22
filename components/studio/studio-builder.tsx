@@ -11,6 +11,7 @@ import {
   Globe2,
   Loader2,
   Monitor,
+  PlugZap,
   RefreshCw,
   Rocket,
   Send,
@@ -18,8 +19,10 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { RichMarkdown } from '@/components/ui/rich-markdown'
+import { StudioConnectorsPanel } from '@/components/studio/studio-connectors-panel'
 import {
   fetchStudioCloudAgent,
+  fetchStudioConnectorPromptContext,
   fetchStudioMessages,
   fetchStudioTopics,
   sendStudioMessage,
@@ -67,6 +70,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const [connectorsOpen, setConnectorsOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   const agentId = String(cloudAgent?.agent_id || '').trim()
@@ -161,12 +165,19 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
     }
   }
 
+  async function connectorContext() {
+    if (!token) return ''
+    return fetchStudioConnectorPromptContext(topicId, token)
+      .then((data) => data.prompt_context)
+      .catch(() => '')
+  }
+
   async function handleSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const raw = input.trim()
     if (!raw) return
     setInput('')
-    await submitPrompt(buildFollowupStudioPrompt(topicId, raw), 'followup')
+    await submitPrompt(buildFollowupStudioPrompt(topicId, raw, await connectorContext()), 'followup')
   }
 
   if (status === 'loading' || loading) {
@@ -223,6 +234,14 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           <span className="rounded-full bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100">
             {cloudAgent?.status || 'cloud-agent'}
           </span>
+          <button
+            type="button"
+            onClick={() => setConnectorsOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-200/10"
+          >
+            <PlugZap className="h-3.5 w-3.5" />
+            Connectors
+          </button>
         </div>
       </header>
 
@@ -232,7 +251,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => submitPrompt(buildPreviewPrompt(topicId), 'preview')}
+                onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview')}
                 disabled={sending || !agentId}
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
               >
@@ -241,7 +260,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
               </button>
               <button
                 type="button"
-                onClick={() => submitPrompt(buildPublishPrompt(topicId), 'publish')}
+                onClick={async () => submitPrompt(buildPublishPrompt(topicId, await connectorContext()), 'publish')}
                 disabled={sending || !agentId}
                 className="inline-flex items-center gap-2 rounded-full border border-emerald-200/20 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-200/10 disabled:opacity-50"
               >
@@ -250,7 +269,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
               </button>
               <button
                 type="button"
-                onClick={() => submitPrompt(buildGithubPrompt(topicId, enrichedProject.title), 'github')}
+                onClick={async () => submitPrompt(buildGithubPrompt(topicId, enrichedProject.title, await connectorContext()), 'github')}
                 disabled={sending || !agentId}
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
               >
@@ -369,7 +388,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
                 </p>
                 <button
                   type="button"
-                  onClick={() => submitPrompt(buildPreviewPrompt(topicId), 'preview')}
+                  onClick={async () => submitPrompt(buildPreviewPrompt(topicId, await connectorContext()), 'preview')}
                   disabled={sending || !agentId}
                   className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-50"
                 >
@@ -381,6 +400,14 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           </div>
         </section>
       </div>
+      {token && (
+        <StudioConnectorsPanel
+          open={connectorsOpen}
+          token={token}
+          projectTopicId={topicId}
+          onClose={() => setConnectorsOpen(false)}
+        />
+      )}
     </main>
   )
 }

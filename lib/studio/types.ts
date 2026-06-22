@@ -62,3 +62,34 @@ export type StudioBilling = {
   active_plan?: string
   cloud_agent_usage?: Record<string, unknown>
 }
+
+export type StudioConnectorCatalogItem = {
+  id: string
+  name: string
+  description: string
+  scope: 'user' | 'project' | string
+  required: string[]
+  optional: string[]
+  agent_notes?: string
+}
+
+export type StudioConnector = {
+  id: string
+  provider: string
+  name: string
+  status: 'active' | 'disabled' | string
+  scope: string
+  project_topic_id: string
+  metadata?: Record<string, unknown>
+  configured_env_keys: string[]
+  missing_required_env_keys: string[]
+  has_credentials: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export type StudioConnectorPromptContext = {
+  items: StudioConnector[]
+  active_providers: string[]
+  prompt_context: string
+}
