@@ -3003,14 +3003,14 @@ export function ChatView({
           <div className="flex shrink-0 items-center gap-1">
             {showCloudBilling && (
               <div
-                className="hidden max-w-[360px] items-center gap-1 overflow-hidden rounded-full border border-emerald-200 bg-emerald-50/75 px-2 py-1 text-[10px] font-semibold leading-none text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300 sm:flex"
+                className="hidden max-w-[420px] items-center gap-1 overflow-hidden rounded-full border border-emerald-200 bg-emerald-50/75 px-2 py-1 text-[10px] font-semibold leading-none text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300 sm:flex"
                 title={cloudBillingText}
               >
                 <Bell className="h-3 w-3 shrink-0" />
                 <span className="min-w-0 overflow-hidden">
                   <span
                     className="inline-flex min-w-max gap-8 whitespace-nowrap"
-                    style={{ animation: 'wtt-cloud-billing-marquee 12s linear infinite' }}
+                    style={{ animation: 'wtt-cloud-billing-marquee 36s linear infinite' }}
                   >
                     <span>{cloudBillingText}</span>
                     <span aria-hidden="true">{cloudBillingText}</span>
