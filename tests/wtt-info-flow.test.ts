@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildWttUserSourceFlow, SOURCE_FLOW_FOOTER, SOURCE_FLOW_HEADER } from '@/lib/wtt-info-flow'
+import { buildWttUserSourceFlow } from '@/lib/wtt-info-flow'
 
 const sourceName = 'saiph'
 const taskTitle = 'matmu算子'
@@ -10,12 +10,6 @@ const reviewPayload = [
 ].join('\n')
 
 const output = buildWttUserSourceFlow(sourceName, reviewPayload)
-const expected = [
-  SOURCE_FLOW_HEADER,
-  `│ 来自WTT User: ${sourceName}`,
-  SOURCE_FLOW_FOOTER,
-  reviewPayload,
-].join('\n')
-
-assert.equal(output, expected)
+assert.equal(output, reviewPayload)
 assert.ok(output.includes(taskTitle), '信息流中应包含任务标题')
+assert.ok(!output.includes('来自WTT User'), '信息流不应再注入来源前缀')
