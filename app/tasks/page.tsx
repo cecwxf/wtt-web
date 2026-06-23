@@ -44,11 +44,13 @@ interface TaskItem {
   usage_total_tokens?: number
 }
 
-interface TokenStat {
-  total_chars?: number
-  estimated_tokens?: number
-  message_count?: number
-  exact_tokens?: number
+interface AgentUsageSummary {
+  requests?: number
+  input_tokens?: number
+  output_tokens?: number
+  cache_tokens?: number
+  total_tokens?: number
+  last_used_at?: string | null
 }
 
 interface RawTopicRecord {
@@ -338,12 +340,6 @@ function TasksPageInner() {
     { refreshInterval: 15_000, revalidateOnFocus: true, dedupingInterval: 5_000 },
   )
 
-  const { data: tokenStatsRaw = {} } = useSWR(
-    token ? ['tasks-runtime-map-token-stats', token] : null,
-    async () => fetchJson<Record<string, TokenStat>>(`${CLIENT_WTT_API_BASE}/tasks/token-stats`, token, {}),
-    { refreshInterval: 30_000, revalidateOnFocus: true, dedupingInterval: 10_000 },
-  )
-
   const { data: groupsRaw = [], mutate: mutateGroups } = useSWR(
     token ? ['tasks-my-groups', token] : null,
     async () => fetchJson<RawTopicRecord[]>(`${CLIENT_WTT_API_BASE}/topics/my-groups`, token, []),
@@ -413,6 +409,11 @@ function TasksPageInner() {
     return raw || {}
   }, [statsData])
 
+  const agentUsageMap = useMemo<Record<string, AgentUsageSummary>>(
+    () => ((statsData?.agent_usage || {}) as Record<string, AgentUsageSummary>),
+    [statsData],
+  )
+
   const hostGroups = useMemo<HostGroup[]>(() => {
     const map = new Map<string, HostGroup>()
 
@@ -454,8 +455,8 @@ function TasksPageInner() {
       host.tasks = hostTasks
       host.runningTasks = runningTasks
       host.tokenTotal = host.agents.reduce((sum, agent) => {
-        const stat = agentStats[agent.agent_id]
-        return sum + (stat?.total || 0)
+        const usage = agentUsageMap[agent.agent_id]
+        return sum + Number(usage?.total_tokens || 0)
       }, 0)
       host.executionMs = hostTasks.reduce((sum, task) => sum + taskDurationMs(task), 0)
       host.runtimeCount = host.agents.filter((agent) => Boolean(agentRuntimeMap[agent.agent_id])).length
@@ -487,7 +488,7 @@ function TasksPageInner() {
       if (a.busy !== b.busy) return b.busy - a.busy
       return a.label.localeCompare(b.label)
     })
-  }, [agentRuntimeMap, agentTasks, agents, onlineAgentIds, tasks, tokenStatsRaw])
+  }, [agentRuntimeMap, agentUsageMap, agents, onlineAgentIds, tasks])
 
   useEffect(() => {
     setSelectedHostId((current) => initialHostId(hostGroups, current))
@@ -718,6 +719,7 @@ function TasksPageInner() {
                     const online = onlineAgentIds.has(agent.agent_id)
                     const model = runtime?.current_model || runtime?.model_id || runtime?.model || ''
                     const adapter = runtime?.adapter || runtime?.kind || (agent.is_cloud_sandbox ? 'cloud-agent' : 'agent')
+                    const usage = agentUsageMap[agent.agent_id]
                     const roleTemplate = agent.role_template as Record<string, string> | undefined
                     const roleLabel = agent.role_template_id
                       ? String(roleTemplate?.shortLabel || roleTemplate?.label || '')
@@ -750,6 +752,7 @@ function TasksPageInner() {
                         <div className="mt-3 space-y-1.5 text-[11px] text-slate-500 dark:text-zinc-400">
                           <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Adapter:</span> {adapter}</p>
                           {model && <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Model:</span> {model}</p>}
+                          <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Tokens:</span> {formatTokens(Number(usage?.total_tokens || 0))} / {Number(usage?.requests || 0)} runs</p>
                           <p className="truncate"><span className="font-bold text-slate-700 dark:text-zinc-200">Workdir:</span> {runtime?.workdir || runtime?.workdir_name || runtime?.git?.repo || '-'}</p>
                         </div>
                         <div className="mt-3 flex items-center justify-between text-[11px]">

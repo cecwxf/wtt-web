@@ -100,6 +100,13 @@ interface CurrentAgentRuntimeInfo {
   reasoning_effort?: string
   thinking_mode?: string
   last_heartbeat_secs_ago?: number
+  usage_totals?: {
+    requests?: number
+    input_tokens?: number
+    output_tokens?: number
+    cache_tokens?: number
+    total_tokens?: number
+  }
 }
 
 interface AgentSkillCandidate {
@@ -1214,6 +1221,22 @@ function cloudAgentQuotaText(billing?: CloudSandboxBilling | null) {
   const blockedUntil = blockExpired ? '' : blockedUntilRaw
   const resetText = blockedUntil ? `限制中，恢复时间 ${blockedUntil}` : '连续窗口 3 小时后重置'
   return `Cloud Agent 按 request 额度计算：本月 ${monthlyCount}/${monthlyLimit} 次，连续 ${windowCount}/${windowLimit} 次，${resetText}`
+}
+
+function formatUsageTokens(value?: number) {
+  const num = Math.max(0, Number(value || 0))
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`
+  return String(Math.round(num))
+}
+
+function agentUsageText(runtime?: CurrentAgentRuntimeInfo) {
+  const usage = runtime?.usage_totals
+  if (!usage) return ''
+  const tokens = Number(usage.total_tokens || 0)
+  const requests = Number(usage.requests || 0)
+  if (!tokens && !requests) return ''
+  return `${formatUsageTokens(tokens)} tokens · ${requests} runs`
 }
 
 function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatus; floating?: boolean }) {
@@ -3699,6 +3722,15 @@ export function ChatView({
           <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {activeAgentLabel}
           </span>
+          {currentAgentIsCloud && agentUsageText(currentAgentRuntime) && (
+            <span
+              className="inline-flex min-w-0 max-w-[220px] shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+              title="Cloud Agent 近 30 天实际模型 token 消耗"
+            >
+              <span>⚡</span>
+              <span className="truncate">{agentUsageText(currentAgentRuntime)}</span>
+            </span>
+          )}
           <button
             type="button"
             onClick={() => {
