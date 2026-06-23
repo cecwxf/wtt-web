@@ -1461,12 +1461,12 @@ export function ChatView({
     const load = async () => {
       try {
         const fetchRange = async (range: 'today' | 'month') => {
-          const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/usage/summary?range=${range}&agent_id=${encodeURIComponent(currentAgentId)}`, {
+          const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/usage/summary?range=${range}`, {
             headers: { Authorization: `Bearer ${accessToken}` },
           })
           if (!response.ok) throw new Error(`usage ${range} failed`)
           const data = await response.json()
-          return (data?.agents?.[currentAgentId] || null) as AgentTokenUsageSummary | null
+          return (data?.totals || null) as AgentTokenUsageSummary | null
         }
         const [today, month] = await Promise.all([fetchRange('today'), fetchRange('month')])
         if (!cancelled) setAgentTokenUsage({ today: today || undefined, month: month || undefined })
