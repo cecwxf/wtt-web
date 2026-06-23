@@ -30,14 +30,7 @@ import {
 } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import {
-  ANDROID_APK_ABI,
-  ANDROID_APK_CAPABILITY_EN,
-  ANDROID_APK_CAPABILITY_ZH,
-  ANDROID_APK_HREF,
-  ANDROID_APK_LIMITATION_EN,
-  ANDROID_APK_LIMITATION_ZH,
-  ANDROID_APK_VERSION,
-  ANDROID_APK_VERSION_CODE,
+  ANDROID_APK_DOWNLOADS,
 } from '@/lib/android-apk'
 import { useI18n } from '@/lib/i18n-provider'
 import { WttLogo } from '@/components/ui/wtt-logo'
@@ -1089,9 +1082,9 @@ export default function Home() {
             <Link href="/studio" className="hidden text-sm font-bold text-amber-700 hover:text-amber-900 sm:inline">Studio</Link>
             <Link href={arenaHref} className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">Arena</Link>
             <Link href="/square" className="hidden text-sm text-slate-600 hover:text-slate-950 md:inline">{zh ? '若水广场' : 'Square'}</Link>
-            <a href={ANDROID_APK_HREF} download className="hidden items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:border-teal-300 hover:bg-teal-100 lg:inline-flex">
+            <a href="#android-downloads" className="hidden items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:border-teal-300 hover:bg-teal-100 lg:inline-flex">
               <Smartphone className="h-3.5 w-3.5" />
-              Android v{ANDROID_APK_VERSION}
+              Android APKs
             </a>
             <button
               type="button"
@@ -1123,31 +1116,51 @@ export default function Home() {
         <CloudAgentBillingExplainer zh={zh} />
         <StudioProExplainer zh={zh} />
 
-        <section className="mt-8 rounded-[1.5rem] border border-teal-200/80 bg-white/85 p-5 shadow-sm backdrop-blur sm:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <section id="android-downloads" className="mt-8 rounded-[1.5rem] border border-teal-200/80 bg-white/85 p-5 shadow-sm backdrop-blur sm:p-6">
+          <div className="flex flex-col gap-5">
             <div className="flex min-w-0 gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-teal-200">
                 <Smartphone className="h-6 w-6" />
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-700">
-                  Android APK · v{ANDROID_APK_VERSION} · {ANDROID_APK_ABI} · versionCode {ANDROID_APK_VERSION_CODE}
+                  Android APK · arm64-v8a
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-950">
-                  {zh ? 'WTT 移动端下载' : 'Download WTT Mobile'}
+                  {zh ? 'WTT 移动端下载' : 'Download WTT Mobile Apps'}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {zh ? ANDROID_APK_CAPABILITY_ZH : ANDROID_APK_CAPABILITY_EN}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-amber-700">
-                  {zh ? ANDROID_APK_LIMITATION_ZH : ANDROID_APK_LIMITATION_EN}
+                  {zh ? 'WTT Android、WTT Arena、WTT Studio 均提供独立 APK，复用同一套 WTT 账户、会员和后端能力。' : 'WTT Android, WTT Arena, and WTT Studio are available as separate APKs and share the same WTT account, membership, and backend.'}
                 </p>
               </div>
             </div>
-            <a href={ANDROID_APK_HREF} download className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800">
-              <Smartphone className="h-4 w-4" />
-              {zh ? '下载 Android APK' : 'Download Android APK'}
-            </a>
+            <div className="grid gap-3 md:grid-cols-3">
+              {ANDROID_APK_DOWNLOADS.map((apk) => (
+                <div key={apk.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-black text-slate-950">{apk.title}</h3>
+                      <p className="mt-1 text-[11px] font-black uppercase tracking-[0.12em] text-teal-700">
+                        v{apk.version} · {apk.abi} · versionCode {apk.versionCode}
+                      </p>
+                    </div>
+                    <Smartphone className="h-5 w-5 shrink-0 text-teal-700" />
+                  </div>
+                  <p className="mt-3 min-h-12 text-sm leading-6 text-slate-600">
+                    {zh ? apk.capabilityZh : apk.capabilityEn}
+                  </p>
+                  {apk.limitationZh ? (
+                    <p className="mt-1 text-xs leading-5 text-amber-700">
+                      {zh ? apk.limitationZh : apk.limitationEn}
+                    </p>
+                  ) : null}
+                  <a href={apk.href} download className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white hover:bg-slate-800">
+                    <Smartphone className="h-4 w-4" />
+                    {zh ? '下载 APK' : 'Download APK'}
+                  </a>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
