@@ -427,6 +427,7 @@ export default function ArenaFlowPage() {
               runStatus={typing}
               compactUi
               enableCameraCapture
+              currentAgentIsCloud={Boolean(arenaAgentId)}
               currentAgentRuntime={{ adapter: 'generic', model: 'arena-coach', reasoning_effort: 'medium' }}
               agentRoleLabelMap={arenaAgentId ? { [arenaAgentId]: '我的 Cloud Agent' } : {}}
               extraHeaderActions={(

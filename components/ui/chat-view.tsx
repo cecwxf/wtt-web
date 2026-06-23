@@ -109,6 +109,21 @@ interface CurrentAgentRuntimeInfo {
   }
 }
 
+interface AgentTokenUsageSummary {
+  requests?: number
+  input_tokens?: number
+  output_tokens?: number
+  cache_tokens?: number
+  total_tokens?: number
+  last_used_at?: string | null
+  source?: string
+}
+
+interface AgentTokenUsageSnapshot {
+  today?: AgentTokenUsageSummary
+  month?: AgentTokenUsageSummary
+}
+
 interface AgentSkillCandidate {
   id: string
   name: string
@@ -1230,13 +1245,15 @@ function formatUsageTokens(value?: number) {
   return String(Math.round(num))
 }
 
-function agentUsageText(runtime?: CurrentAgentRuntimeInfo) {
-  const usage = runtime?.usage_totals
-  if (!usage) return ''
-  const tokens = Number(usage.total_tokens || 0)
-  const requests = Number(usage.requests || 0)
-  if (!tokens && !requests) return ''
-  return `${formatUsageTokens(tokens)} tokens · ${requests} runs`
+function formatAgentTokenUsageText(usage?: AgentTokenUsageSnapshot | null) {
+  const todayTokens = Number(usage?.today?.total_tokens || 0)
+  const monthTokens = Number(usage?.month?.total_tokens || 0)
+  const todayRequests = Number(usage?.today?.requests || 0)
+  const monthRequests = Number(usage?.month?.requests || 0)
+  if (!todayTokens && !monthTokens && !todayRequests && !monthRequests) {
+    return '模型 token：今日 0，本月 0'
+  }
+  return `模型 token：今日 ${formatUsageTokens(todayTokens)} / ${todayRequests} 次，本月 ${formatUsageTokens(monthTokens)} / ${monthRequests} 次`
 }
 
 function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatus; floating?: boolean }) {
@@ -1414,6 +1431,7 @@ export function ChatView({
   const [mentionStartPos, setMentionStartPos] = useState(-1)
   // Daily cross-user @mention quota (read-only display).
   const [mentionQuota, setMentionQuota] = useState<{ limit: number; used: number; remaining: number } | null>(null)
+  const [agentTokenUsage, setAgentTokenUsage] = useState<AgentTokenUsageSnapshot | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -1433,6 +1451,36 @@ export function ChatView({
     // refresh when the mention dropdown opens (so it reflects the latest count)
     return () => { cancelled = true }
   }, [accessToken, mentionOpen])
+
+  useEffect(() => {
+    if (!accessToken || !currentAgentIsCloud || !currentAgentId) {
+      setAgentTokenUsage(null)
+      return
+    }
+    let cancelled = false
+    const load = async () => {
+      try {
+        const fetchRange = async (range: 'today' | 'month') => {
+          const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/usage/summary?range=${range}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+          if (!response.ok) throw new Error(`usage ${range} failed`)
+          const data = await response.json()
+          return (data?.agents?.[currentAgentId] || null) as AgentTokenUsageSummary | null
+        }
+        const [today, month] = await Promise.all([fetchRange('today'), fetchRange('month')])
+        if (!cancelled) setAgentTokenUsage({ today: today || undefined, month: month || undefined })
+      } catch {
+        if (!cancelled) setAgentTokenUsage(null)
+      }
+    }
+    load()
+    const timer = window.setInterval(load, 60_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [accessToken, currentAgentId, currentAgentIsCloud, messages.length])
 
 
   const focusComposerInput = useCallback(() => {
@@ -1553,8 +1601,9 @@ export function ChatView({
     : 'Runtime default'
   const displayEffort = currentRuntimePref?.effort || normalizeRuntimeEffort(currentAgentRuntime) || defaultEffort || 'off'
   const displayEffortLabel = REASONING_EFFORTS.find((e) => e.id === displayEffort)?.label || displayEffort
-  const showCloudBilling = Boolean(currentAgentIsCloud)
-  const cloudBillingText = cloudAgentQuotaText(cloudSandboxBilling)
+  const cloudTokenUsageText = formatAgentTokenUsageText(agentTokenUsage)
+  const cloudBillingText = [cloudAgentQuotaText(cloudSandboxBilling), cloudTokenUsageText].filter(Boolean).join(' ｜ ')
+  const showCloudBilling = Boolean(currentAgentIsCloud && cloudBillingText)
   const skillAdapterLabel = activeAgentLabel
 
   const mentionCandidates = useMemo(() => {
@@ -2940,7 +2989,7 @@ export function ChatView({
           <div className="flex shrink-0 items-center gap-1">
             {showCloudBilling && (
               <div
-                className="hidden max-w-[220px] items-center gap-1 overflow-hidden rounded-full border border-emerald-200 bg-emerald-50/75 px-2 py-1 text-[10px] font-semibold leading-none text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300 sm:flex"
+                className="hidden max-w-[360px] items-center gap-1 overflow-hidden rounded-full border border-emerald-200 bg-emerald-50/75 px-2 py-1 text-[10px] font-semibold leading-none text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300 sm:flex"
                 title={cloudBillingText}
               >
                 <Bell className="h-3 w-3 shrink-0" />
@@ -3722,15 +3771,6 @@ export function ChatView({
           <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {activeAgentLabel}
           </span>
-          {currentAgentIsCloud && agentUsageText(currentAgentRuntime) && (
-            <span
-              className="inline-flex min-w-0 max-w-[220px] shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
-              title="Cloud Agent 近 30 天实际模型 token 消耗"
-            >
-              <span>⚡</span>
-              <span className="truncate">{agentUsageText(currentAgentRuntime)}</span>
-            </span>
-          )}
           <button
             type="button"
             onClick={() => {

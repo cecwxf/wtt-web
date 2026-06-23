@@ -2809,6 +2809,7 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
                   topicType="p2p"
                   runStatus={arenaRunStatus}
                   compactUi
+                  currentAgentIsCloud={Boolean(arenaAgentId)}
                   currentAgentRuntime={{
                     adapter: arenaAgentAdapter,
                     model: arenaAgentRuntime?.current_model || arenaAgentRuntime?.model_id || arenaAgentRuntime?.model || 'arena-coach',
