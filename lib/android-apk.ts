@@ -1,4 +1,4 @@
-export const ANDROID_APK_ABI = 'arm64-v8a'
+export const ANDROID_APK_ABI = 'universal · arm64-v8a / x86_64'
 
 export type AndroidApkDownload = {
   id: 'wtt-android' | 'wtt-arena' | 'wtt-studio'
@@ -20,7 +20,7 @@ export const ANDROID_APK_DOWNLOADS: AndroidApkDownload[] = [
     version: '1.2.1',
     versionCode: 13,
     abi: ANDROID_APK_ABI,
-    href: '/downloads/wtt-android-v1.2.1-arm64.apk',
+    href: '/downloads/wtt-android-v1.2.1-universal.apk',
     capabilityZh: '移动端用于和远端 Agent Chat，以及控制远端 Agent 进行 remote work。',
     capabilityEn: 'The mobile app is for chatting with remote agents and controlling remote agents for remote work.',
     limitationZh: '局限：Agent 绑定、云端 Agent 创建、终生学习和若水广场请在 WTT Web 端使用。',
@@ -32,7 +32,7 @@ export const ANDROID_APK_DOWNLOADS: AndroidApkDownload[] = [
     version: '1.0.1',
     versionCode: 2,
     abi: ANDROID_APK_ABI,
-    href: '/downloads/wtt-arena-v1.0.1-arm64.apk',
+    href: '/downloads/wtt-arena-v1.0.1-universal.apk',
     capabilityZh: '教育与面试专项 App，用于题库练习、复盘、Arena Chat 和 AI 面试训练。',
     capabilityEn: 'Education and interview app for practice sets, review, Arena Chat, and AI interview training.',
   },
@@ -42,7 +42,7 @@ export const ANDROID_APK_DOWNLOADS: AndroidApkDownload[] = [
     version: '1.0.1',
     versionCode: 2,
     abi: ANDROID_APK_ABI,
-    href: '/downloads/wtt-studio-v1.0.1-arm64.apk',
+    href: '/downloads/wtt-studio-v1.0.1-universal.apk',
     capabilityZh: '网站、应用和 APK 生产 App，用 Cloud Agent 生成项目并通过 Preview URL 预览。',
     capabilityEn: 'Site, app, and APK production app for generating projects with Cloud Agents and previewing via Preview URL.',
   },

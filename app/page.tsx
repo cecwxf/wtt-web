@@ -1124,7 +1124,7 @@ export default function Home() {
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-700">
-                  Android APK · arm64-v8a
+                  Android APK · universal · arm64-v8a / x86_64
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-950">
                   {zh ? 'WTT 移动端下载' : 'Download WTT Mobile Apps'}
