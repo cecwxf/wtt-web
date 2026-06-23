@@ -107,6 +107,8 @@ interface CloudAgentState {
 type BillingMe = {
   entitlement?: {
     plan?: string
+    ends_at?: string | null
+    is_trial?: boolean
     limits?: {
       window_limit?: number
       monthly_limit?: number
@@ -117,6 +119,16 @@ type BillingMe = {
     monthly_count?: number
     blocked_until?: string | null
   }
+}
+
+function formatProTrialText(endsAt?: string | null): string {
+  if (!endsAt) return '你正在使用新用户 Pro 试用，可使用 Cloud Agent、Arena 和 Studio。'
+  const expiresAt = new Date(endsAt).getTime()
+  if (!Number.isFinite(expiresAt)) return '你正在使用新用户 Pro 试用，可使用 Cloud Agent、Arena 和 Studio。'
+  const remainingMs = expiresAt - Date.now()
+  if (remainingMs <= 0) return 'Pro 试用已结束，续费后可继续使用 Cloud Agent、Arena 和 Studio。'
+  const days = Math.ceil(remainingMs / 86_400_000)
+  return `新用户 Pro 试用剩余 ${days} 天。试用结束后将自动回到 Free，续费后可继续使用 Cloud Agent、Arena 和 Studio。`
 }
 
 type WttConnectAdapter = 'codex' | 'claude-code' | 'gemini'
@@ -1962,6 +1974,7 @@ function FeedPageInner() {
   )
   const billingPlan = String(billingRaw?.entitlement?.plan || '').toLowerCase()
   const billingLoaded = Boolean(billingRaw?.entitlement)
+  const proTrialActive = billingPlan === 'pro' && Boolean(billingRaw?.entitlement?.is_trial)
   const cloudAgentNeedsRenewal = billingLoaded && hasCloudAgentRecord && billingPlan !== 'pro'
   const sleepingCloudHostIds = useMemo(() => {
     const state = (cloudAgentStateRaw || {}) as CloudAgentState
@@ -3070,6 +3083,20 @@ function FeedPageInner() {
         <div className="flex h-full">
           {/* Main content area */}
           <div className="flex min-w-0 flex-1 flex-col">
+            {proTrialActive && (
+              <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{formatProTrialText(billingRaw?.entitlement?.ends_at)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setForceOpenSettingsPage('membership')}
+                    className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-[11px] font-bold text-emerald-800 shadow-sm transition hover:bg-emerald-100 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-100 dark:hover:bg-emerald-400/20"
+                  >
+                    转为正式 Pro
+                  </button>
+                </div>
+              </div>
+            )}
             {cloudAgentNeedsRenewal && (
               <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
                 <div className="flex flex-wrap items-center justify-between gap-2">

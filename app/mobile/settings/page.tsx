@@ -14,6 +14,7 @@ type BillingMe = {
     plan?: string
     status?: string
     ends_at?: string | null
+    is_trial?: boolean
     limits?: { window_limit?: number; monthly_limit?: number }
   }
   cloud_agent_usage?: {
@@ -21,6 +22,16 @@ type BillingMe = {
     monthly_count?: number
     blocked_until?: string | null
   }
+}
+
+function formatTrialText(endsAt?: string | null): string {
+  if (!endsAt) return 'Pro 试用中'
+  const expiresAt = new Date(endsAt).getTime()
+  if (!Number.isFinite(expiresAt)) return 'Pro 试用中'
+  const remainingMs = expiresAt - Date.now()
+  if (remainingMs <= 0) return 'Pro 试用已结束'
+  const days = Math.ceil(remainingMs / 86_400_000)
+  return `Pro 试用剩余 ${days} 天`
 }
 
 export default function MobileSettingsPage() {
@@ -70,6 +81,8 @@ export default function MobileSettingsPage() {
 
   const plan = String(billing?.entitlement?.plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free'
   const isPro = plan === 'Pro'
+  const isTrial = Boolean(billing?.entitlement?.is_trial)
+  const membershipLabel = isTrial ? 'Pro 试用用户' : `${plan} 用户`
   const mobileFeedHref = isAndroidWebView ? '/mobile/feed?source=android' : '/mobile/feed'
   const fullWebFeedHref = isAndroidWebView ? '/feed?source=android' : '/feed'
   const upgradeHref = isAndroidWebView ? '/upgrade?source=android' : '/upgrade?source=mobile'
@@ -116,10 +129,13 @@ export default function MobileSettingsPage() {
               <CreditCard className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-base font-semibold">{plan} 用户</p>
+              <p className="text-base font-semibold">{membershipLabel}</p>
               <p className="mt-1 text-xs font-medium leading-5 text-slate-500">
                 Cloud Agent 本月 {billing?.cloud_agent_usage?.monthly_count || 0}/{billing?.entitlement?.limits?.monthly_limit || 500} 次，连续 {billing?.cloud_agent_usage?.window_count || 0}/{billing?.entitlement?.limits?.window_limit || 30} 次。
               </p>
+              {isTrial && (
+                <p className="mt-1 text-xs font-bold text-amber-700">{formatTrialText(billing?.entitlement?.ends_at)}</p>
+              )}
               {billing?.entitlement?.ends_at && (
                 <p className="mt-1 text-[11px] font-medium text-slate-400">有效期至 {billing.entitlement.ends_at}</p>
               )}
@@ -129,7 +145,7 @@ export default function MobileSettingsPage() {
 
         <a href={upgradeHref} className="flex items-center gap-3 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white">
           <CreditCard className="h-5 w-5" />
-          <span className="min-w-0 flex-1">{isPro ? '续费 Pro 会员' : '升级 Pro 会员'}</span>
+          <span className="min-w-0 flex-1">{isTrial ? '转为正式 Pro 会员' : isPro ? '续费 Pro 会员' : '升级 Pro 会员'}</span>
           <ExternalLink className="h-4 w-4 opacity-80" />
         </a>
 

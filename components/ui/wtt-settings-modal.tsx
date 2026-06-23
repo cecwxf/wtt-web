@@ -94,6 +94,7 @@ type BillingMe = {
     plan?: string;
     status?: string;
     ends_at?: string | null;
+    is_trial?: boolean;
     limits?: {
       window_limit?: number;
       monthly_limit?: number;
@@ -116,6 +117,16 @@ function normalizeCloudAgentUsageForDisplay(billing?: BillingMe | null) {
     monthly_count: Number(usage?.monthly_count || 0),
     blocked_until: blockExpired ? null : blockedUntilRaw,
   };
+}
+
+function formatTrialText(endsAt?: string | null): string {
+  if (!endsAt) return "新用户 Pro 试用中";
+  const expiresAt = new Date(endsAt).getTime();
+  if (!Number.isFinite(expiresAt)) return "新用户 Pro 试用中";
+  const remainingMs = expiresAt - Date.now();
+  if (remainingMs <= 0) return "Pro 试用已结束";
+  const days = Math.ceil(remainingMs / 86_400_000);
+  return `新用户 Pro 试用剩余 ${days} 天`;
 }
 
 type CheckoutSession = {
@@ -400,7 +411,10 @@ export function WttSettingsModal({
     () => PAGE_ITEMS.filter((item) => item.key !== "metrics" || canViewMetrics),
     [canViewMetrics],
   );
-  const isPaidPlan = billing?.entitlement?.plan === "pro";
+  const isProPlan = billing?.entitlement?.plan === "pro";
+  const isTrialPlan = isProPlan && Boolean(billing?.entitlement?.is_trial);
+  const isPaidPlan = isProPlan;
+  const isFormalPaidPlan = isProPlan && !isTrialPlan;
   const billingUsage = normalizeCloudAgentUsageForDisplay(billing);
   const hasCloudAgentRecord = hasCloudAgent || Boolean(cloudAgentInfo?.has_cloud_agent);
   const cloudAgentModelLabel = useMemo(() => {
@@ -850,7 +864,7 @@ export function WttSettingsModal({
       setCheckoutError(t("settings.sessionExpired"));
       return;
     }
-    if (isPaidPlan) {
+    if (isFormalPaidPlan) {
       setCheckoutError("当前账号已经是 Pro 会员，无需重复支付。");
       return;
     }
@@ -1528,7 +1542,7 @@ export function WttSettingsModal({
                   <div className="rounded-lg border border-slate-200 bg-white p-3">
                     <p className="text-slate-400">当前计划</p>
                     <p className="mt-1 text-lg font-bold text-indigo-600">
-                      {(billing?.entitlement?.plan || "free").toUpperCase()}
+                      {isTrialPlan ? "PRO TRIAL" : (billing?.entitlement?.plan || "free").toUpperCase()}
                     </p>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-white p-3">
@@ -1544,6 +1558,11 @@ export function WttSettingsModal({
                     </p>
                   </div>
                 </div>
+                {isTrialPlan && (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                    {formatTrialText(billing?.entitlement?.ends_at)}。试用结束后将自动回到 Free，转为正式 Pro 后可继续使用 Cloud Agent、Arena 和 Studio。
+                  </div>
+                )}
               </div>
 
               {checkoutError && (
@@ -1600,7 +1619,7 @@ export function WttSettingsModal({
                 </div>
               )}
 
-              {isPaidPlan && (
+              {isFormalPaidPlan && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                   当前账号已是 Pro 会员，有效期内无需重复支付。
                 </div>
@@ -1628,7 +1647,7 @@ export function WttSettingsModal({
                       <p>云 Agent + 技术面试 + 教育板块 + 高考板块</p>
                       <p>DeepSeek + Claude Code 请求额度：30 次连续请求，本月共 500 次</p>
                     </div>
-                    {!isPaidPlan ? (
+                    {!isFormalPaidPlan ? (
                       <div className="mt-4 grid gap-2">
                         <button
                           onClick={() => void handleCheckout(item.plan, "one_time")}
@@ -1636,7 +1655,7 @@ export function WttSettingsModal({
                           className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-600 disabled:opacity-60"
                         >
                           {checkoutLoading === `${item.plan}:one_time` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                          立即支付，开通 1 个月
+                          {isTrialPlan ? "转为正式 Pro，开通 1 个月" : "立即支付，开通 1 个月"}
                         </button>
                       </div>
                     ) : (
