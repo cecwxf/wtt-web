@@ -1461,7 +1461,7 @@ export function ChatView({
     const load = async () => {
       try {
         const fetchRange = async (range: 'today' | 'month') => {
-          const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/usage/summary?range=${range}`, {
+          const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/usage/summary?range=${range}&agent_id=${encodeURIComponent(currentAgentId)}`, {
             headers: { Authorization: `Bearer ${accessToken}` },
           })
           if (!response.ok) throw new Error(`usage ${range} failed`)
@@ -1475,12 +1475,26 @@ export function ChatView({
       }
     }
     load()
-    const timer = window.setInterval(load, 60_000)
+    const active = Boolean(sending || runStatus)
+    const catchupTimers = [2_000, 6_000, 12_000].map((delay) => window.setTimeout(load, delay))
+    const timer = window.setInterval(load, active ? 3_000 : 30_000)
     return () => {
       cancelled = true
+      catchupTimers.forEach((timerId) => window.clearTimeout(timerId))
       window.clearInterval(timer)
     }
-  }, [accessToken, currentAgentId, currentAgentIsCloud, messages.length])
+  }, [
+    accessToken,
+    currentAgentId,
+    currentAgentIsCloud,
+    messages.length,
+    runStatus,
+    runStatus?.lines.length,
+    runStatus?.startedAt,
+    runStatus?.statusKind,
+    runStatus?.statusText,
+    sending,
+  ])
 
 
   const focusComposerInput = useCallback(() => {
