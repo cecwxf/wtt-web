@@ -2360,7 +2360,13 @@ function FeedPageInner() {
       fetch(`${CLIENT_WTT_API_BASE}/messages/p2p?sender_id=${encodeURIComponent(humanSender)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-        body: JSON.stringify({ target_agent_id: aid, content: '[system:p2p_init]', content_type: 'text', semantic_type: 'system' }),
+        body: JSON.stringify({
+          target_agent_id: aid,
+          content: '[system:p2p_init]',
+          content_type: 'text',
+          semantic_type: 'system',
+          metadata: { cloud_no_auto_wake: true },
+        }),
       }).then(async (response) => {
         const payload = await response.json().catch(() => ({}))
         const topicId = String((payload as { topic_id?: unknown }).topic_id || '').trim()
