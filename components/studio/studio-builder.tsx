@@ -716,7 +716,12 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
         studio_topic_id: topicId,
         reply_to: replyTo,
         display_content: displayContent?.trim() || content.trim(),
-        ...(options?.slashType ? { slash_type: options.slashType, slash_command: options.slashCommand || content } : {}),
+        ...(options?.slashType ? {
+          slash_type: options.slashType,
+          slash_command: options.slashCommand || content,
+          ...(options.commandFamily ? { command_family: options.commandFamily } : {}),
+          ...(options.skillId ? { skill_id: options.skillId } : {}),
+        } : {}),
       })
       await refreshMessages(selectedAgentId)
       const billingState = await fetchStudioBilling(token).catch(() => null)

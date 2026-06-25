@@ -2316,11 +2316,15 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           agent_passthrough: isSlashCommand,
           slash_type: isSlashCommand ? 'agent_passthrough' : undefined,
           slash_command: isSlashCommand ? (options?.slashCommand || arenaSlashName(message)) : undefined,
+          command_family: isSlashCommand ? options?.commandFamily : undefined,
+          skill_id: isSlashCommand ? options?.skillId : undefined,
           metadata: {
             attachment_types: attachmentTypes,
             ...(isSlashCommand ? {
-            command_scope: 'single_agent',
-            command_target_agent_id: activeArenaAgentId,
+              command_scope: 'single_agent',
+              command_target_agent_id: activeArenaAgentId,
+              ...(options?.commandFamily ? { command_family: options.commandFamily } : {}),
+              ...(options?.skillId ? { skill_id: options.skillId } : {}),
             } : {}),
           },
         }),
@@ -2331,6 +2335,8 @@ export default function ArenaChallengePage({ params }: { params: { id: string } 
           await publishArenaRaw(topicId, message, {
             slash_type: 'agent_passthrough',
             slash_command: options?.slashCommand || arenaSlashName(message),
+            ...(options?.commandFamily ? { command_family: options.commandFamily } : {}),
+            ...(options?.skillId ? { skill_id: options.skillId } : {}),
             command_scope: 'single_agent',
             command_target_agent_id: activeArenaAgentId,
           }, activeArenaAgentId)

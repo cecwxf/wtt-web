@@ -2503,6 +2503,8 @@ function FeedPageInner() {
     if (options?.slashType || isSlashCommand) {
       metadata.slash_type = options?.slashType || 'agent_passthrough'
       metadata.slash_command = options?.slashCommand || content.trim().split(/\s+/, 1)[0] || content.trim()
+      if (options?.commandFamily) metadata.command_family = options.commandFamily
+      if (options?.skillId) metadata.skill_id = options.skillId
     }
     if (options?.kbMode && options.kbTaskId) {
       metadata.kb_mode = true

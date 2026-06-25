@@ -49,6 +49,8 @@ export interface ChatMessage {
 export interface ChatSendOptions {
   slashType?: 'agent_passthrough'
   slashCommand?: string
+  commandFamily?: string
+  skillId?: string
   kbMode?: boolean
   kbTaskId?: string
   kbScope?: 'personal'
@@ -267,7 +269,7 @@ function labelForRuntimeModel(modelId: string, adapter: ReturnType<typeof normal
 }
 
 type SlashCommandMode = 'local' | 'passthrough'
-type SlashCommandFamily = 'wtt' | 'codex' | 'claude-code' | 'gemini' | 'generic'
+type SlashCommandFamily = 'wtt' | 'codex' | 'claude-code' | 'gemini' | 'generic' | 'skill'
 
 type SlashCommandDef = {
   cmd: string
@@ -275,6 +277,8 @@ type SlashCommandDef = {
   icon: string
   mode?: SlashCommandMode
   family?: SlashCommandFamily
+  skillId?: string
+  source?: string
 }
 
 const LOCAL_SLASH_COMMANDS: SlashCommandDef[] = [
@@ -1415,6 +1419,7 @@ export function ChatView({
   const [slashFilter, setSlashFilter] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
   const [slashResult, setSlashResult] = useState<string | null>(null)
+  const [dynamicSlashCommands, setDynamicSlashCommands] = useState<SlashCommandDef[]>([])
   const [skillModalOpen, setSkillModalOpen] = useState(false)
   const [skillSearch, setSkillSearch] = useState('')
   const [skillCompatibleOnly, setSkillCompatibleOnly] = useState(true)
@@ -1801,6 +1806,10 @@ export function ChatView({
     for (const command of [...LOCAL_SLASH_COMMANDS, ...runtimeCommands]) {
       deduped.set(command.cmd, command)
     }
+    for (const command of dynamicSlashCommands) {
+      if (!command.cmd || deduped.has(command.cmd)) continue
+      deduped.set(command.cmd, command)
+    }
     if (isNonTaskDiscussTopic) {
       deduped.set(WTT_GOAL_COMMAND.cmd, WTT_GOAL_COMMAND)
     }
@@ -1809,7 +1818,7 @@ export function ChatView({
     // In non-task discuss topics, model switching must be blocked to avoid all
     // agents reacting to the same slash command.
     return commands.filter((c) => !isModelCommand(c.cmd))
-  }, [activeAgentAdapter, isNonTaskDiscussTopic, isModelCommand])
+  }, [activeAgentAdapter, dynamicSlashCommands, isNonTaskDiscussTopic, isModelCommand])
 
   // Slash command filtering
   const filteredCommands = slashFilter
@@ -1846,6 +1855,45 @@ export function ChatView({
           ]
     return commands.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd)))
   }, [activeAgentAdapter, isModelCommand, isNonTaskDiscussTopic])
+
+  useEffect(() => {
+    if (!accessToken || !currentAgentId) {
+      setDynamicSlashCommands([])
+      return
+    }
+    const controller = new AbortController()
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        params.set('adapter', activeAgentAdapter)
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(currentAgentId)}/slash-commands?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error(`slash commands failed (${response.status})`)
+        const data = await response.json()
+        const commands: Array<Record<string, unknown>> = Array.isArray(data.commands) ? data.commands : []
+        const normalized = commands.map((item: Record<string, unknown>): SlashCommandDef => {
+          const rawCmd = String(item?.cmd || item?.command || '').trim()
+          const cmd = rawCmd.startsWith('/') ? rawCmd : rawCmd ? `/${rawCmd}` : ''
+          return {
+            cmd,
+            desc: String(item?.desc || item?.description || item?.name || 'Agent skill command').trim(),
+            icon: String(item?.icon || '🧪'),
+            mode: 'passthrough',
+            family: 'skill',
+            skillId: String(item?.skill_id || item?.skillId || item?.id || '').trim(),
+            source: String(item?.source || '').trim(),
+          }
+        }).filter((item) => item.cmd.startsWith('/') && item.cmd.length > 1)
+        setDynamicSlashCommands(normalized)
+      } catch {
+        if (!controller.signal.aborted) setDynamicSlashCommands([])
+      }
+    }
+    load()
+    return () => controller.abort()
+  }, [accessToken, activeAgentAdapter, currentAgentId])
 
   useEffect(() => {
     if (!skillModalOpen || !accessToken || !currentAgentId) return
@@ -2122,9 +2170,15 @@ export function ChatView({
   const sendPassthroughSlash = useCallback(async (command: string, opts?: { silent?: boolean }) => {
     setSending(true)
     try {
+      const slashCommand = command.trim().split(/\s+/, 1)[0] || command.trim()
+      const dynamicCommand = dynamicSlashCommands.find((item) => item.cmd.toLowerCase() === slashCommand.toLowerCase())
       await onSendMessage(command, undefined, {
         slashType: 'agent_passthrough',
-        slashCommand: command.trim().split(/\s+/, 1)[0] || command.trim(),
+        slashCommand,
+        ...(dynamicCommand?.family === 'skill' ? {
+          commandFamily: 'skill',
+          skillId: dynamicCommand.skillId,
+        } : {}),
       })
       setSlashResult(opts?.silent ? `↗ Sent to Agent: ${command}` : `✅ Sent ${command}`)
     } catch (error) {
@@ -2133,7 +2187,7 @@ export function ChatView({
     } finally {
       setSending(false)
     }
-  }, [onSendMessage])
+  }, [dynamicSlashCommands, onSendMessage])
 
   // Scroll to bottom on initial load and topic change
   useEffect(() => {
