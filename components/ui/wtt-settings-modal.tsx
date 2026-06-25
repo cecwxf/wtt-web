@@ -14,6 +14,7 @@ import {
   Loader2,
   Lock,
   ExternalLink,
+  MessageCircle,
   RefreshCw,
   Save,
   Smartphone,
@@ -30,6 +31,7 @@ type SettingsPage =
   | "profile"
   | "membership"
   | "binding"
+  | "ilink"
   | "llm-proxy"
   | "metrics"
   | "notifications"
@@ -60,6 +62,29 @@ interface MobileLoginSession {
   expires_in_seconds: number;
 }
 
+interface ILinkSession {
+  id?: string;
+  session_id: string;
+  status: "pending" | "scanned" | "connected" | "expired" | "disconnected";
+  qr_text?: string;
+  display_name?: string;
+  expires_at?: string | null;
+  expires_in_seconds?: number;
+}
+
+interface ILinkStatus {
+  connected: boolean;
+  account?: ILinkSession | null;
+  state?: {
+    current_agent_id?: string | null;
+    current_topic_id?: string | null;
+    default_agent_id?: string | null;
+    kb_mode?: boolean;
+    notify_enabled?: boolean;
+  };
+  agents?: Array<{ agent_id: string; display_name: string; is_primary?: boolean }>;
+}
+
 interface WttSettingsModalProps {
   open: boolean;
   onClose: () => void;
@@ -78,6 +103,7 @@ const PAGE_ITEMS: Array<{
   { key: "profile", labelKey: "settings.profile", icon: User },
   { key: "membership", labelKey: "settings.membership", icon: CreditCard },
   { key: "binding", labelKey: "settings.binding", icon: Bot },
+  { key: "ilink", labelKey: "settings.ilink", icon: MessageCircle },
   { key: "llm-proxy", labelKey: "settings.llmProxy", icon: KeyRound },
   { key: "metrics", labelKey: "settings.metrics", icon: Activity },
   { key: "notifications", labelKey: "settings.notifications", icon: Bell },
@@ -362,6 +388,12 @@ export function WttSettingsModal({
   const [mobileLoginError, setMobileLoginError] = useState("");
   const [mobileLoginInfo, setMobileLoginInfo] = useState("");
   const [mobileLoginLoading, setMobileLoginLoading] = useState(false);
+  const [ilinkStatus, setIlinkStatus] = useState<ILinkStatus | null>(null);
+  const [ilinkSession, setIlinkSession] = useState<ILinkSession | null>(null);
+  const [ilinkLoading, setIlinkLoading] = useState(false);
+  const [ilinkError, setIlinkError] = useState("");
+  const [ilinkInfo, setIlinkInfo] = useState("");
+  const [ilinkSaving, setIlinkSaving] = useState(false);
 
   const [existingAgentId, setExistingAgentId] = useState("");
   const [existingAgentToken, setExistingAgentToken] = useState("");
@@ -421,6 +453,28 @@ export function WttSettingsModal({
     const modelId = cloudAgentInfo?.model_id || "";
     return cloudModels.find((item) => item.id === modelId)?.label || modelId || "-";
   }, [cloudAgentInfo?.model_id, cloudModels]);
+  const ilinkAgentOptions = useMemo(() => {
+    const rows = ilinkStatus?.agents && ilinkStatus.agents.length > 0
+      ? ilinkStatus.agents
+      : agents.map((agent) => ({
+          agent_id: agent.agent_id,
+          display_name: agent.display_name,
+          is_primary: agent.is_primary,
+        }));
+    const seen = new Set<string>();
+    return rows.filter((agent) => {
+      const id = String(agent.agent_id || "");
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [agents, ilinkStatus?.agents]);
+  const ilinkState = ilinkStatus?.state;
+  const ilinkConnected = Boolean(ilinkStatus?.connected);
+  const ilinkCurrentAgentName = useMemo(() => {
+    const agentId = ilinkState?.current_agent_id || ilinkState?.default_agent_id || "";
+    return ilinkAgentOptions.find((agent) => agent.agent_id === agentId)?.display_name || agentId || "未设置";
+  }, [ilinkAgentOptions, ilinkState?.current_agent_id, ilinkState?.default_agent_id]);
 
   const loadBilling = useCallback(async () => {
     if (!accessToken) return;
@@ -495,6 +549,135 @@ export function WttSettingsModal({
     }
   }, [accessToken, t]);
 
+  const loadIlinkStatus = useCallback(async () => {
+    if (!accessToken) return;
+    setIlinkLoading(true);
+    setIlinkError("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/ilink/status`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setIlinkError(typeof data.detail === "string" ? data.detail : "微信 Bot 状态加载失败");
+        return;
+      }
+      setIlinkStatus(data as ILinkStatus);
+    } catch {
+      setIlinkError(t("settings.networkError"));
+    } finally {
+      setIlinkLoading(false);
+    }
+  }, [accessToken, t]);
+
+  const createIlinkSession = useCallback(async () => {
+    if (!accessToken) {
+      setIlinkError(t("settings.sessionExpired"));
+      return;
+    }
+    setIlinkLoading(true);
+    setIlinkError("");
+    setIlinkInfo("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/ilink/sessions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setIlinkError(typeof data.detail === "string" ? data.detail : "微信 Bot 登录会话创建失败");
+        return;
+      }
+      setIlinkSession(data as ILinkSession);
+      setIlinkInfo("请使用微信扫描二维码完成 iLink Bot 连接。");
+      await loadIlinkStatus();
+    } catch {
+      setIlinkError(t("settings.networkError"));
+    } finally {
+      setIlinkLoading(false);
+    }
+  }, [accessToken, loadIlinkStatus, t]);
+
+  const mockConnectIlink = useCallback(async () => {
+    if (!accessToken || !ilinkSession?.session_id) return;
+    setIlinkLoading(true);
+    setIlinkError("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/ilink/sessions/${encodeURIComponent(ilinkSession.session_id)}/mock-connect`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ display_name: "WeChat Bot" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setIlinkError(typeof data.detail === "string" ? data.detail : "模拟连接失败");
+        return;
+      }
+      setIlinkStatus(data as ILinkStatus);
+      setIlinkInfo("微信 Bot 已连接。真实 iLink SDK 接入后会由扫码回调自动完成。");
+    } catch {
+      setIlinkError(t("settings.networkError"));
+    } finally {
+      setIlinkLoading(false);
+    }
+  }, [accessToken, ilinkSession?.session_id, t]);
+
+  const saveIlinkSettings = useCallback(async (patch: Record<string, unknown>) => {
+    if (!accessToken) return;
+    setIlinkSaving(true);
+    setIlinkError("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/ilink/settings`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(patch),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setIlinkError(typeof data.detail === "string" ? data.detail : "微信 Bot 设置保存失败");
+        return;
+      }
+      setIlinkStatus(data as ILinkStatus);
+      setIlinkInfo("设置已保存。");
+    } catch {
+      setIlinkError(t("settings.networkError"));
+    } finally {
+      setIlinkSaving(false);
+    }
+  }, [accessToken, t]);
+
+  const disconnectIlink = useCallback(async () => {
+    if (!accessToken) return;
+    setIlinkLoading(true);
+    setIlinkError("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/ilink/disconnect`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setIlinkError(typeof data.detail === "string" ? data.detail : "断开失败");
+        return;
+      }
+      setIlinkStatus(data as ILinkStatus);
+      setIlinkSession(null);
+      setIlinkInfo("微信 Bot 已断开。");
+    } catch {
+      setIlinkError(t("settings.networkError"));
+    } finally {
+      setIlinkLoading(false);
+    }
+  }, [accessToken, t]);
+
   useEffect(() => {
     if (activePage !== "membership") return;
     void loadBilling();
@@ -549,6 +732,40 @@ export function WttSettingsModal({
     void loadBilling();
     void loadLlmProxy();
   }, [activePage, loadBilling, loadLlmProxy]);
+
+  useEffect(() => {
+    if (activePage !== "ilink") return;
+    void loadIlinkStatus();
+  }, [activePage, loadIlinkStatus]);
+
+  useEffect(() => {
+    if (!open || activePage !== "ilink" || !accessToken || !ilinkSession?.session_id) return;
+    if (ilinkSession.status === "connected" || ilinkSession.status === "expired") return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/ilink/sessions/${encodeURIComponent(ilinkSession.session_id)}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || cancelled) return;
+        setIlinkSession(data as ILinkSession);
+        if ((data as ILinkSession).status === "connected") {
+          await loadIlinkStatus();
+          setIlinkInfo("微信 Bot 已连接。");
+        }
+      } catch {
+        // keep the QR visible; explicit refresh handles errors
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 3000);
+    void poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [accessToken, activePage, ilinkSession?.session_id, ilinkSession?.status, loadIlinkStatus, open]);
 
   // Load profile from backend
   useEffect(() => {
@@ -1878,6 +2095,204 @@ export function WttSettingsModal({
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activePage === "ilink" && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${ilinkConnected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      <p className="text-sm font-semibold text-slate-800">
+                        {ilinkConnected ? "微信 Bot 已连接" : "微信 Bot 未连接"}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      连接后可在微信私聊 WTT Bot，消息会进入当前 WTT Agent 私聊；/new 新开话题，/agents 查看可用 Agent，/kb on|off 切换知识库模式。
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      onClick={() => void loadIlinkStatus()}
+                      disabled={ilinkLoading || !accessToken}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+                    >
+                      {ilinkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      刷新
+                    </button>
+                    {ilinkConnected && (
+                      <button
+                        onClick={() => void disconnectIlink()}
+                        disabled={ilinkLoading || !accessToken}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        断开
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {(ilinkError || ilinkInfo) && (
+                  <div className="mt-4 space-y-2">
+                    {ilinkError && (
+                      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                        {ilinkError}
+                      </p>
+                    )}
+                    {ilinkInfo && (
+                      <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                        {ilinkInfo}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {!ilinkConnected && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                    <div className="flex min-h-48 w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-4 md:w-56">
+                      {ilinkSession?.qr_text?.startsWith("http") ? (
+                        <img
+                          src={ilinkSession.qr_text}
+                          alt="WeChat Bot QR code"
+                          className="h-40 w-40 max-h-48 max-w-48 rounded-lg object-contain"
+                        />
+                      ) : ilinkSession?.qr_text ? (
+                        <QRCodeSVG value={ilinkSession.qr_text} size={168} />
+                      ) : ilinkSession?.session_id ? (
+                        <div className="text-center text-xs leading-5 text-slate-500">
+                          <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-slate-300" />
+                          正在生成微信二维码
+                        </div>
+                      ) : (
+                        <div className="text-center text-xs leading-5 text-slate-500">
+                          <MessageCircle className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+                          点击生成二维码
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800">扫码绑定个人微信</p>
+                      <p className="mt-2 text-xs leading-5 text-slate-500">
+                        二维码有效期约 10 分钟。绑定成功后，微信中的文本、图片和文件会同步到当前 WTT 对话；语音在微信侧有转写时会转成文字发送。
+                      </p>
+                      {ilinkSession?.status && (
+                        <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                          <div className="rounded-lg border border-slate-200 bg-white p-3">
+                            <p className="text-slate-400">状态</p>
+                            <p className="mt-1 font-semibold text-slate-800">{ilinkSession.status}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white p-3">
+                            <p className="text-slate-400">剩余时间</p>
+                            <p className="mt-1 font-semibold text-slate-800">{ilinkSession.expires_in_seconds || 0}s</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void createIlinkSession()}
+                          disabled={ilinkLoading || !accessToken}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
+                        >
+                          {ilinkLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          {ilinkSession?.qr_text ? "刷新二维码" : "生成二维码"}
+                        </button>
+                        {process.env.NODE_ENV !== "production" && ilinkSession?.session_id && (
+                          <button
+                            onClick={() => void mockConnectIlink()}
+                            disabled={ilinkLoading || !accessToken}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+                          >
+                            模拟连接
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">微信消息路由</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      默认进入个人私聊 Topic；WTT Web 中也能看到这些 Topic 和最近对话。群聊 /goal 暂不在微信私聊中执行。
+                    </p>
+                  </div>
+                  {ilinkSaving && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="block rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <span className="text-xs font-semibold text-slate-700">默认 Agent</span>
+                    <select
+                      value={ilinkState?.default_agent_id || ilinkState?.current_agent_id || ""}
+                      onChange={(event) => void saveIlinkSettings({ default_agent_id: event.target.value })}
+                      disabled={ilinkSaving || ilinkAgentOptions.length === 0 || !accessToken}
+                      className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 disabled:opacity-60"
+                    >
+                      <option value="">自动选择 Cloud/主 Agent</option>
+                      {ilinkAgentOptions.map((agent) => (
+                        <option key={agent.agent_id} value={agent.agent_id}>
+                          {agent.display_name || agent.agent_id}{agent.is_primary ? " · Primary" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mt-2 block text-[11px] leading-4 text-slate-400">
+                      当前：{ilinkCurrentAgentName}
+                    </span>
+                  </label>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                    <p className="font-semibold text-slate-700">当前 Topic</p>
+                    <p className="mt-2 break-all font-mono text-[11px] text-slate-500">
+                      {ilinkState?.current_topic_id || "微信第一次发消息后自动创建"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => void saveIlinkSettings({ kb_mode: !Boolean(ilinkState?.kb_mode ?? true) })}
+                  disabled={ilinkSaving || !accessToken}
+                  className={`rounded-xl border p-4 text-left transition disabled:opacity-60 ${
+                    (ilinkState?.kb_mode ?? true)
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-slate-800">个人知识库模式</span>
+                    {(ilinkState?.kb_mode ?? true) && <Check className="h-4 w-4 text-emerald-600" />}
+                  </span>
+                  <span className="mt-2 block text-xs leading-5 text-slate-500">
+                    开启时，微信文件自动进入个人默认知识库，普通问题也按知识库模式交给 Agent 分析。
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveIlinkSettings({ notify_enabled: !Boolean(ilinkState?.notify_enabled ?? true) })}
+                  disabled={ilinkSaving || !accessToken}
+                  className={`rounded-xl border p-4 text-left transition disabled:opacity-60 ${
+                    (ilinkState?.notify_enabled ?? true)
+                      ? "border-cyan-200 bg-cyan-50"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-slate-800">Agent 回复同步到微信</span>
+                    {(ilinkState?.notify_enabled ?? true) && <Check className="h-4 w-4 text-cyan-600" />}
+                  </span>
+                  <span className="mt-2 block text-xs leading-5 text-slate-500">
+                    只同步当前微信会话 Topic 中的 Agent 回复；长回复会自动分段发送，不做摘要截断。
+                  </span>
+                </button>
               </div>
             </div>
           )}
