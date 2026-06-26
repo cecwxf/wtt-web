@@ -32,6 +32,7 @@ type SettingsPage =
   | "membership"
   | "binding"
   | "ilink"
+  | "feishu"
   | "llm-proxy"
   | "metrics"
   | "notifications"
@@ -85,6 +86,31 @@ interface ILinkStatus {
   agents?: Array<{ agent_id: string; display_name: string; is_primary?: boolean }>;
 }
 
+interface FeishuSession {
+  session_id: string;
+  bind_code: string;
+  expires_at: string;
+  qr_text?: string;
+  instructions?: string;
+}
+
+interface FeishuAccount {
+  id: string;
+  tenant_key?: string;
+  open_id?: string;
+  union_id?: string | null;
+  p2p_chat_id?: string | null;
+  display_name?: string | null;
+  status: "connected" | "disconnected" | string;
+  last_seen_at?: string | null;
+  created_at?: string | null;
+}
+
+interface FeishuStatus {
+  connected: boolean;
+  accounts: FeishuAccount[];
+}
+
 interface WttSettingsModalProps {
   open: boolean;
   onClose: () => void;
@@ -104,6 +130,7 @@ const PAGE_ITEMS: Array<{
   { key: "membership", labelKey: "settings.membership", icon: CreditCard },
   { key: "binding", labelKey: "settings.binding", icon: Bot },
   { key: "ilink", labelKey: "settings.ilink", icon: MessageCircle },
+  { key: "feishu", labelKey: "settings.feishu", icon: MessageCircle },
   { key: "llm-proxy", labelKey: "settings.llmProxy", icon: KeyRound },
   { key: "metrics", labelKey: "settings.metrics", icon: Activity },
   { key: "notifications", labelKey: "settings.notifications", icon: Bell },
@@ -394,6 +421,11 @@ export function WttSettingsModal({
   const [ilinkError, setIlinkError] = useState("");
   const [ilinkInfo, setIlinkInfo] = useState("");
   const [ilinkSaving, setIlinkSaving] = useState(false);
+  const [feishuStatus, setFeishuStatus] = useState<FeishuStatus | null>(null);
+  const [feishuSession, setFeishuSession] = useState<FeishuSession | null>(null);
+  const [feishuLoading, setFeishuLoading] = useState(false);
+  const [feishuError, setFeishuError] = useState("");
+  const [feishuInfo, setFeishuInfo] = useState("");
 
   const [existingAgentId, setExistingAgentId] = useState("");
   const [existingAgentToken, setExistingAgentToken] = useState("");
@@ -471,6 +503,11 @@ export function WttSettingsModal({
   }, [agents, ilinkStatus?.agents]);
   const ilinkState = ilinkStatus?.state;
   const ilinkConnected = Boolean(ilinkStatus?.connected);
+  const feishuConnected = Boolean(feishuStatus?.connected);
+  const feishuAccount = useMemo(
+    () => feishuStatus?.accounts?.find((account) => account.status === "connected") || feishuStatus?.accounts?.[0] || null,
+    [feishuStatus?.accounts],
+  );
   const ilinkCurrentAgentName = useMemo(() => {
     const agentId = ilinkState?.current_agent_id || ilinkState?.default_agent_id || "";
     return ilinkAgentOptions.find((agent) => agent.agent_id === agentId)?.display_name || agentId || "未设置";
@@ -678,6 +715,93 @@ export function WttSettingsModal({
     }
   }, [accessToken, t]);
 
+  const loadFeishuStatus = useCallback(async (options?: { silent?: boolean }): Promise<FeishuStatus | null> => {
+    if (!accessToken) return null;
+    if (!options?.silent) {
+      setFeishuLoading(true);
+      setFeishuError("");
+    }
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/feishu/status`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (!options?.silent) {
+          setFeishuError(typeof data.detail === "string" ? data.detail : "飞书 Bot 状态加载失败");
+        }
+        return null;
+      }
+      const nextStatus = data as FeishuStatus;
+      setFeishuStatus(nextStatus);
+      return nextStatus;
+    } catch {
+      if (!options?.silent) {
+        setFeishuError(t("settings.networkError"));
+      }
+      return null;
+    } finally {
+      if (!options?.silent) {
+        setFeishuLoading(false);
+      }
+    }
+  }, [accessToken, t]);
+
+  const createFeishuSession = useCallback(async () => {
+    if (!accessToken) {
+      setFeishuError(t("settings.sessionExpired"));
+      return;
+    }
+    setFeishuLoading(true);
+    setFeishuError("");
+    setFeishuInfo("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/feishu/sessions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setFeishuError(typeof data.detail === "string" ? data.detail : "飞书 Bot 绑定码创建失败");
+        return;
+      }
+      setFeishuSession(data as FeishuSession);
+      setFeishuInfo("请扫码打开 WTT 飞书 Bot，并发送绑定命令完成连接。");
+      await loadFeishuStatus({ silent: true });
+    } catch {
+      setFeishuError(t("settings.networkError"));
+    } finally {
+      setFeishuLoading(false);
+    }
+  }, [accessToken, loadFeishuStatus, t]);
+
+  const disconnectFeishu = useCallback(async () => {
+    if (!accessToken) return;
+    setFeishuLoading(true);
+    setFeishuError("");
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/integrations/feishu/disconnect`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setFeishuError(typeof data.detail === "string" ? data.detail : "飞书 Bot 断开失败");
+        return;
+      }
+      setFeishuStatus(data as FeishuStatus);
+      setFeishuSession(null);
+      setFeishuInfo("飞书 Bot 已断开。");
+      await loadFeishuStatus({ silent: true });
+    } catch {
+      setFeishuError(t("settings.networkError"));
+    } finally {
+      setFeishuLoading(false);
+    }
+  }, [accessToken, loadFeishuStatus, t]);
+
   useEffect(() => {
     if (activePage !== "membership") return;
     void loadBilling();
@@ -739,6 +863,11 @@ export function WttSettingsModal({
   }, [activePage, loadIlinkStatus]);
 
   useEffect(() => {
+    if (activePage !== "feishu") return;
+    void loadFeishuStatus();
+  }, [activePage, loadFeishuStatus]);
+
+  useEffect(() => {
     if (!open || activePage !== "ilink" || !accessToken || !ilinkSession?.session_id) return;
     if (ilinkSession.status === "connected" || ilinkSession.status === "expired") return;
     let cancelled = false;
@@ -766,6 +895,27 @@ export function WttSettingsModal({
       window.clearInterval(timer);
     };
   }, [accessToken, activePage, ilinkSession?.session_id, ilinkSession?.status, loadIlinkStatus, open]);
+
+  useEffect(() => {
+    if (!open || activePage !== "feishu" || !accessToken || !feishuSession?.session_id || feishuConnected) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const nextStatus = await loadFeishuStatus({ silent: true });
+        if (!cancelled && nextStatus?.connected) {
+          setFeishuInfo("飞书 Bot 已连接。");
+        }
+      } catch {
+        // keep bind code visible; explicit refresh handles errors
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 3000);
+    void poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [accessToken, activePage, feishuConnected, feishuSession?.session_id, loadFeishuStatus, open]);
 
   // Load profile from backend
   useEffect(() => {
@@ -2293,6 +2443,161 @@ export function WttSettingsModal({
                     只同步当前微信会话 Topic 中的 Agent 回复；长回复会自动分段发送，不做摘要截断。
                   </span>
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activePage === "feishu" && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${feishuConnected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      <p className="text-sm font-semibold text-slate-800">
+                        {feishuConnected ? "飞书 Bot 已连接" : "飞书 Bot 未连接"}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      连接后可在飞书私聊 WTT Bot，消息会进入当前 WTT Agent 私聊；/new 新开话题，/agents 查看可用 Agent，/group 可在飞书群中绑定 WTT 群聊。
+                    </p>
+                    {feishuAccount && (
+                      <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <p className="text-slate-400">飞书 Open ID</p>
+                          <p className="mt-1 break-all font-mono text-[11px] font-semibold text-slate-700">{feishuAccount.open_id || "-"}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <p className="text-slate-400">最近活动</p>
+                          <p className="mt-1 font-semibold text-slate-700">
+                            {feishuAccount.last_seen_at ? new Date(feishuAccount.last_seen_at).toLocaleString() : "-"}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      onClick={() => void loadFeishuStatus()}
+                      disabled={feishuLoading || !accessToken}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+                    >
+                      {feishuLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      刷新
+                    </button>
+                    {feishuConnected && (
+                      <button
+                        onClick={() => void disconnectFeishu()}
+                        disabled={feishuLoading || !accessToken}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        断开
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {(feishuError || feishuInfo) && (
+                  <div className="mt-4 space-y-2">
+                    {feishuError && (
+                      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                        {feishuError}
+                      </p>
+                    )}
+                    {feishuInfo && (
+                      <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                        {feishuInfo}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {!feishuConnected && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                    <div className="flex min-h-48 w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-4 md:w-56">
+                      {feishuSession?.qr_text ? (
+                        feishuSession.qr_text.startsWith("http") ? (
+                          <QRCodeSVG value={feishuSession.qr_text} size={168} />
+                        ) : (
+                          <QRCodeSVG value={feishuSession.qr_text} size={168} />
+                        )
+                      ) : (
+                        <div className="text-center text-xs leading-5 text-slate-500">
+                          <MessageCircle className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+                          点击生成二维码
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800">扫码绑定个人飞书</p>
+                      <p className="mt-2 text-xs leading-5 text-slate-500">
+                        二维码用于打开 WTT 飞书 Bot。打开后请发送绑定命令，完成后即可在飞书中和 WTT Agent 对话。
+                      </p>
+                      {feishuSession?.bind_code && (
+                        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                          <p className="text-xs font-semibold text-slate-700">绑定命令</p>
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <code className="min-w-0 flex-1 break-all rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-800">
+                              /bind {feishuSession.bind_code}
+                            </code>
+                            <button
+                              onClick={() => void handleCopy(`/bind ${feishuSession.bind_code}`, "绑定命令已复制")}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                            >
+                              <ClipboardCopy className="h-3.5 w-3.5" />
+                              复制
+                            </button>
+                          </div>
+                          <p className="mt-2 text-[11px] leading-4 text-slate-400">
+                            有效期至 {new Date(feishuSession.expires_at).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void createFeishuSession()}
+                          disabled={feishuLoading || !accessToken}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
+                        >
+                          {feishuLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          {feishuSession?.bind_code ? "刷新绑定码" : "生成绑定码"}
+                        </button>
+                        {feishuSession?.qr_text?.startsWith("http") && (
+                          <a
+                            href={feishuSession.qr_text}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            打开飞书 Bot
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-800">飞书消息路由</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                    <p className="font-semibold text-slate-700">私聊</p>
+                    <p className="mt-2 leading-5 text-slate-500">
+                      默认进入个人 WTT Agent 私聊 Topic；WTT Web 中也会展示这些 Topic 和最近对话。
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                    <p className="font-semibold text-slate-700">群聊</p>
+                    <p className="mt-2 leading-5 text-slate-500">
+                      将 WTT Bot 拉入飞书群后发送 /group，可把该群映射为 WTT 群聊；后续群消息按默认 @all 路由。
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

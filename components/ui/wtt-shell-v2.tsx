@@ -87,7 +87,7 @@ interface WttShellV2Props {
   children: ReactNode
 }
 
-type SettingsPage = 'profile' | 'membership' | 'binding' | 'ilink' | 'llm-proxy' | 'metrics' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
+type SettingsPage = 'profile' | 'membership' | 'binding' | 'ilink' | 'feishu' | 'llm-proxy' | 'metrics' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
 type ShellWidths = {
   agent: number

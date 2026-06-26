@@ -35,7 +35,7 @@ import {
 import { useI18n } from '@/lib/i18n-provider'
 import { WttLogo } from '@/components/ui/wtt-logo'
 
-type SettingsPage = 'profile' | 'membership' | 'binding' | 'ilink' | 'llm-proxy' | 'metrics' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
+type SettingsPage = 'profile' | 'membership' | 'binding' | 'ilink' | 'feishu' | 'llm-proxy' | 'metrics' | 'notifications' | 'poll' | 'privacy' | 'appearance' | 'api' | 'about'
 
 type BillingMe = {
   entitlement?: {
