@@ -2013,12 +2013,6 @@ export default function MobileFeedPage() {
           </div>
         )}
 
-        {fixedChatMode && selectedTopicRunStatus && (
-          <div className="mx-3 mt-2">
-            <MobileAgentRunStatusCard status={selectedTopicRunStatus} compact />
-          </div>
-        )}
-
         {!fixedChatMode && isGroupTopic(selectedTopic) && selectedTopicMembers.length > 0 && (
           <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <Users className="h-4 w-4 shrink-0 text-slate-600" />
@@ -2104,7 +2098,7 @@ export default function MobileFeedPage() {
         </div>
 
         <footer className="shrink-0 border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {!fixedChatMode && selectedTopicRunStatus && (
+          {selectedTopicRunStatus && (
             <div className="mb-2">
               <MobileAgentRunStatusCard status={selectedTopicRunStatus} />
             </div>
