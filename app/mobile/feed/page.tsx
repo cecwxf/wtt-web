@@ -23,6 +23,9 @@ type MobileSlashCommand = {
   cmd: string
   desc: string
   family: 'WTT' | 'Codex' | 'Claude' | 'Gemini' | 'Agent'
+  mode?: 'local' | 'passthrough'
+  skillId?: string
+  source?: string
 }
 
 const MOBILE_SLASH_COMMANDS: MobileSlashCommand[] = [
@@ -1094,6 +1097,59 @@ export default function MobileFeedPage() {
     [agents, selectedAgent, topicActorAgentId],
   )
 
+  const slashAgentId = topicActorAgentId || selectedAgentId
+  const slashAgentAdapter = useMemo(() => {
+    if (!slashAgentId) return ''
+    const runtime = runtimeMap[slashAgentId]
+    return String(runtime?.adapter || runtime?.provider || '').trim()
+  }, [runtimeMap, slashAgentId])
+
+  const { data: dynamicSlashRaw } = useSWR(
+    token && slashAgentId ? ['mobile-slash-commands', token, slashAgentId, slashAgentAdapter] : null,
+    async () => {
+      const params = new URLSearchParams()
+      if (slashAgentAdapter) params.set('adapter', slashAgentAdapter)
+      const suffix = params.toString() ? `?${params.toString()}` : ''
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/${encodeURIComponent(slashAgentId)}/slash-commands${suffix}`, {
+        headers: authHeaders(token),
+        cache: 'no-store',
+      })
+      if (!res.ok) return []
+      const data = await res.json()
+      return Array.isArray(data?.commands) ? data.commands as Array<Record<string, unknown>> : []
+    },
+    { refreshInterval: 30000, revalidateOnFocus: true },
+  )
+
+  const dynamicSlashCommands = useMemo<MobileSlashCommand[]>(() => {
+    const raw = Array.isArray(dynamicSlashRaw) ? dynamicSlashRaw : []
+    return raw
+      .flatMap((item) => {
+        const rawCmd = String(item.cmd || item.command || '').trim()
+        const cmd = rawCmd.startsWith('/') ? rawCmd : rawCmd ? `/${rawCmd}` : ''
+        if (!cmd || cmd === '/') return []
+        return [{
+          cmd,
+          desc: String(item.desc || item.description || item.name || 'Agent skill command').trim(),
+          family: 'Agent' as const,
+          mode: 'passthrough' as const,
+          skillId: String(item.skill_id || item.skillId || item.id || '').trim(),
+          source: String(item.source || '').trim(),
+        }]
+      })
+  }, [dynamicSlashRaw])
+
+  const availableSlashCommands = useMemo(() => {
+    const rows = [...MOBILE_SLASH_COMMANDS, ...dynamicSlashCommands]
+    const seen = new Set<string>()
+    return rows.filter((command) => {
+      const key = command.cmd.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [dynamicSlashCommands])
+
   const roleLabelForAgent = useCallback((agentId?: string) => {
     const id = String(agentId || '').trim()
     if (!id) return ''
@@ -1157,10 +1213,10 @@ export default function MobileFeedPage() {
   const filteredSlashCommands = useMemo(() => {
     const q = slashFilter.trim().toLowerCase()
     const rows = q
-      ? MOBILE_SLASH_COMMANDS.filter((command) => `${command.cmd} ${command.desc} ${command.family}`.toLowerCase().includes(q))
-      : MOBILE_SLASH_COMMANDS
+      ? availableSlashCommands.filter((command) => `${command.cmd} ${command.desc} ${command.family} ${command.source || ''}`.toLowerCase().includes(q))
+      : availableSlashCommands
     return rows.slice(0, 10)
-  }, [slashFilter])
+  }, [availableSlashCommands, slashFilter])
 
   useEffect(() => {
     if (!selectedTopicId) return
@@ -1516,6 +1572,24 @@ export default function MobileFeedPage() {
       }, now),
     }))
     try {
+      const isSlashCommand = content.trim().startsWith('/')
+      const slashCommand = isSlashCommand ? content.trim().split(/\s+/, 1)[0] || content.trim() : ''
+      const dynamicSlash = slashCommand
+        ? dynamicSlashCommands.find((command) => command.cmd.toLowerCase() === slashCommand.toLowerCase())
+        : undefined
+      const metadata: Record<string, unknown> = {}
+      if (isSlashCommand) {
+        metadata.slash_type = 'agent_passthrough'
+        metadata.slash_command = slashCommand
+        if (dynamicSlash?.skillId) {
+          metadata.command_family = 'skill'
+          metadata.skill_id = dynamicSlash.skillId
+        }
+        if (!sourceTaskId && isGroupTopic(selectedTopic)) {
+          metadata.command_scope = 'single_agent'
+          metadata.command_target_agent_id = sourceAgentId
+        }
+      }
       let res: Response
       if (sourceTaskId) {
         res = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${sourceTaskId}/chat/send`, {
@@ -1526,6 +1600,7 @@ export default function MobileFeedPage() {
             sender_type: 'HUMAN',
             semantic_type: 'post',
             auto_run: true,
+            ...(Object.keys(metadata).length ? { metadata } : {}),
           }),
         })
       } else {
@@ -1538,6 +1613,7 @@ export default function MobileFeedPage() {
             semantic_type: 'post',
             sender_type: 'HUMAN',
             sender_id: humanSender(session),
+            ...(Object.keys(metadata).length ? { metadata } : {}),
           }),
         })
       }
@@ -1584,7 +1660,7 @@ export default function MobileFeedPage() {
     } finally {
       setSending(false)
     }
-  }, [agents, closeComposerSuggestions, draft, labelForAgentInTopic, mutateGroupTopics, mutateMessages, mutateRecentTopics, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
+  }, [agents, closeComposerSuggestions, draft, dynamicSlashCommands, labelForAgentInTopic, mutateGroupTopics, mutateMessages, mutateRecentTopics, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopic, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
 
   const createDefaultTask = useCallback(async () => {
     if (!token || !selectedAgentId || creatingTask) return
