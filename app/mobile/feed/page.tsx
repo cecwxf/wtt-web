@@ -10,6 +10,11 @@ import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock
 import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
 import { attachmentMimeType } from '@/lib/media/mime'
+import {
+  isTerminalMobileStatusKind,
+  shouldCloseWaitingStatusFromAgentReply,
+  shouldPollMobileMessages,
+} from '@/lib/mobile-chat-status'
 import { proxyMediaUrl, toThumbnailUrl } from '@/lib/rich-content'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
 
@@ -426,15 +431,7 @@ function taskStatusText(status?: string, title?: string): string {
 }
 
 function isTerminalStatusKind(kind?: string): boolean {
-  const normalized = String(kind || '').toLowerCase()
-  return normalized.includes('done')
-    || normalized.includes('complete')
-    || normalized.includes('review')
-    || normalized.includes('blocked')
-    || normalized.includes('cancelled')
-    || normalized.includes('error')
-    || normalized.includes('fail')
-    || normalized.includes('response')
+  return isTerminalMobileStatusKind(kind)
 }
 
 function adapterStatusLabel(adapter?: string): string {
@@ -1113,6 +1110,8 @@ export default function MobileFeedPage() {
   const selectedTaskId = selectedTopic?.task_id
     ? String(selectedTopic.task_id)
     : (selectedTopicId ? createdTaskIdsByTopic[selectedTopicId] || '' : '')
+  const selectedTypingState = selectedTopicId ? typingByTopic[selectedTopicId] : undefined
+  const pollSelectedMessages = shouldPollMobileMessages(selectedTypingState)
 
   const { data: messagesRaw, mutate: mutateMessages } = useSWR(
     token && selectedAgentId && selectedTopicId ? ['mobile-messages', token, selectedAgentId, selectedTopicId] : null,
@@ -1125,7 +1124,7 @@ export default function MobileFeedPage() {
       if (!res.ok) return []
       return res.json()
     },
-    { refreshInterval: 0, revalidateOnFocus: true },
+    { refreshInterval: pollSelectedMessages ? 2000 : 0, revalidateOnFocus: true },
   )
 
   const messages = useMemo(() => normalizeMessages(messagesRaw), [messagesRaw])
@@ -1136,12 +1135,25 @@ export default function MobileFeedPage() {
     setTypingByTopic((prev) => {
       let nextState = prev[selectedTopicId]
       let changed = false
+      let latestAgentMessage: { id: string; senderId: string; senderName?: string; ts: number } | null = null
       for (const item of messagesRaw) {
         const rec = item as Record<string, unknown>
         const progress = statusFromProgressMessage(rec.content, nextState?.adapter)
-        if (!progress) continue
+        const senderType = String(rec.sender_type || '').toLowerCase()
         const rowTime = new Date(String(rec.timestamp || rec.created_at || '')).getTime()
         const ts = Number.isFinite(rowTime) ? rowTime : now
+        if (senderType === 'agent' && !progress) {
+          const id = String(rec.message_id || rec.id || '')
+          if (id && (!latestAgentMessage || ts >= latestAgentMessage.ts)) {
+            latestAgentMessage = {
+              id,
+              senderId: String(rec.sender_id || selectedAgentId),
+              senderName: rec.sender_display_name ? String(rec.sender_display_name) : undefined,
+              ts,
+            }
+          }
+        }
+        if (!progress) continue
         if (ts + STATUS_STALE_MS < now) continue
         const senderId = String(rec.sender_id || selectedAgentId)
         nextState = appendTypingStatus(nextState, {
@@ -1152,6 +1164,21 @@ export default function MobileFeedPage() {
           adapter: nextState?.adapter,
           ttlMs: 60000,
         }, Math.max(now, ts))
+        changed = true
+      }
+      if (
+        latestAgentMessage
+        &&
+        shouldCloseWaitingStatusFromAgentReply(nextState, latestAgentMessage, now, STATUS_STALE_MS)
+      ) {
+        nextState = appendTypingStatus(nextState, {
+          agentId: latestAgentMessage.senderId,
+          agentName: latestAgentMessage.senderName || displayName(agents.find((agent) => agent.agent_id === latestAgentMessage.senderId)),
+          statusText: 'Agent 已回复',
+          statusKind: 'response',
+          adapter: nextState.adapter,
+          ttlMs: COMPLETE_HOLD_MS,
+        }, Math.max(now, latestAgentMessage.ts))
         changed = true
       }
       if (!changed || !nextState) return prev
@@ -1767,6 +1794,16 @@ export default function MobileFeedPage() {
         const detail = typeof data.detail === 'string' ? data.detail : `发送失败 (${res.status})`
         throw new Error(detail)
       }
+      setTypingByTopic((prev) => ({
+        ...prev,
+        [sourceTopicId]: appendTypingStatus(prev[sourceTopicId], {
+          agentId: sourceAgentId,
+          agentName: labelForAgentInTopic(sourceAgentId, displayName(sourceAgent)),
+          statusText: '消息已投递，等待 Agent 执行',
+          statusKind: 'accepted',
+          ttlMs: 120000,
+        }, Date.now()),
+      }))
       if (sourceTaskId) {
         const optimisticTitle = titleFromFirstMessage(content)
         if (optimisticTitle !== 'New Task') {
