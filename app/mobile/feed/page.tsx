@@ -756,6 +756,12 @@ function fixedTopicFromSearch(search: string): string {
   return String(params.get('fixed_topic_id') || params.get('topic_id') || params.get('topicId') || params.get('topic') || '').trim()
 }
 
+function agentFromSearch(search: string): string {
+  if (!search) return ''
+  const params = new URLSearchParams(search)
+  return String(params.get('agent_id') || params.get('agentId') || '').trim()
+}
+
 export default function MobileFeedPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -931,25 +937,25 @@ export default function MobileFeedPage() {
   const onlineAgents = useMemo(() => new Set(((statsRaw as Record<string, unknown> | null)?.online_agents as string[] | undefined) || []), [statsRaw])
 
   useEffect(() => {
+    if (fixedChatMode && selectedAgentId && !agents.some((a) => a.agent_id === selectedAgentId)) return
     if (!selectedAgentId && agents.length) setSelectedAgentId(agents[0].agent_id)
     if (selectedAgentId && agents.length && !agents.some((a) => a.agent_id === selectedAgentId)) {
       pendingCreatedTopicIdRef.current = ''
       setSelectedAgentId(agents[0].agent_id)
       setSelectedTopicId('')
     }
-  }, [agents, selectedAgentId])
+  }, [agents, fixedChatMode, selectedAgentId])
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !agents.length) return
+    if (typeof window === 'undefined') return
     const key = window.location.search
     if (!key || deepLinkAgentAppliedRef.current === key) return
-    const params = new URLSearchParams(key)
-    const agentFromUrl = String(params.get('agent_id') || params.get('agentId') || '').trim()
+    const agentFromUrl = agentFromSearch(key)
     if (!agentFromUrl) {
       deepLinkAgentAppliedRef.current = key
       return
     }
-    if (agents.some((agent) => agent.agent_id === agentFromUrl)) {
+    if (fixedChatMode || agents.some((agent) => agent.agent_id === agentFromUrl)) {
       deepLinkAgentAppliedRef.current = key
       if (selectedAgentId !== agentFromUrl) {
         pendingCreatedTopicIdRef.current = ''
@@ -957,7 +963,7 @@ export default function MobileFeedPage() {
         setSelectedTopicId('')
       }
     }
-  }, [agents, selectedAgentId])
+  }, [agents, fixedChatMode, selectedAgentId])
 
   const selectedAgent = useMemo(() => agents.find((a) => a.agent_id === selectedAgentId) || null, [agents, selectedAgentId])
 
