@@ -77,6 +77,8 @@ type TopicRecord = {
   task_id?: string
   task_title?: string
   task_type?: string
+  task_status?: string
+  runner_agent_id?: string
   unread_count?: number
   last_activity_at?: string
   last_message_at?: string
@@ -384,6 +386,10 @@ function statusFromProgressMessage(contentRaw: unknown, adapterRaw?: unknown): {
 
 function mobileStatusKindLabel(kind?: string): string {
   const normalized = String(kind || '').toLowerCase()
+  if (normalized.includes('todo')) return '待执行'
+  if (normalized.includes('doing') || normalized.includes('running')) return '执行中'
+  if (normalized.includes('review')) return '待验收'
+  if (normalized.includes('blocked')) return '阻塞'
   if (normalized.includes('queued')) return '排队'
   if (normalized.includes('command')) return '命令'
   if (normalized.includes('tool')) return '工具'
@@ -392,6 +398,30 @@ function mobileStatusKindLabel(kind?: string): string {
   if (normalized.includes('complete') || normalized.includes('done')) return '完成'
   if (normalized.includes('error') || normalized.includes('fail')) return '异常'
   return '运行'
+}
+
+function taskStatusText(status?: string, title?: string): string {
+  const normalized = String(status || '').toLowerCase()
+  const subject = title ? `「${title}」` : '当前任务'
+  if (normalized === 'todo') return `${subject}已创建，等待 Agent 接收`
+  if (normalized === 'doing') return `${subject}执行中`
+  if (normalized === 'review') return `${subject}已完成执行，等待验收`
+  if (normalized === 'done') return `${subject}已完成`
+  if (normalized === 'blocked') return `${subject}已阻塞`
+  if (normalized === 'cancelled') return `${subject}已取消`
+  return normalized ? `${subject}状态：${normalized}` : ''
+}
+
+function isTerminalStatusKind(kind?: string): boolean {
+  const normalized = String(kind || '').toLowerCase()
+  return normalized.includes('done')
+    || normalized.includes('complete')
+    || normalized.includes('review')
+    || normalized.includes('blocked')
+    || normalized.includes('cancelled')
+    || normalized.includes('error')
+    || normalized.includes('fail')
+    || normalized.includes('response')
 }
 
 function filenameFromUrl(url: string): string {
@@ -1354,21 +1384,39 @@ export default function MobileFeedPage() {
   const selectedTopicRunStatus = useMemo(() => {
     if (!selectedTopicId) return null
     const typing = typingByTopic[selectedTopicId]
-    if (!typing) return null
-    const agentName = typing.agentName || displayName(agents.find((agent) => agent.agent_id === typing.agentId)) || 'Agent'
-    const lines = typing.statusLines?.length
-      ? typing.statusLines
-      : typing.statusText
-        ? [{ id: `${typing.startedAt}-status`, text: typing.statusText, kind: typing.statusKind, ts: typing.startedAt }]
-        : []
+    if (typing) {
+      const agentName = typing.agentName || displayName(agents.find((agent) => agent.agent_id === typing.agentId)) || 'Agent'
+      const lines = typing.statusLines?.length
+        ? typing.statusLines
+        : typing.statusText
+          ? [{ id: `${typing.startedAt}-status`, text: typing.statusText, kind: typing.statusKind, ts: typing.startedAt }]
+          : []
+      return {
+        ...typing,
+        agentName,
+        statusText: typing.statusText || '等待 Agent 状态更新',
+        lines,
+        wsState,
+      }
+    }
+    if (!selectedTopic?.task_id) return null
+    const status = String(selectedTopic.task_status || '').trim()
+    const text = taskStatusText(status, compactTopicTitle(selectedTopic))
+    if (!status || !text) return null
+    const agentId = String(selectedTopic.runner_agent_id || topicActorAgentId || selectedAgentId || '').trim()
+    const agent = agents.find((item) => item.agent_id === agentId) || topicActorAgent || selectedAgent
+    const now = Date.now()
     return {
-      ...typing,
-      agentName,
-      statusText: typing.statusText || '等待 Agent 状态更新',
-      lines,
+      agentId,
+      agentName: displayName(agent) || 'Agent',
+      statusText: text,
+      statusKind: status,
+      lines: [{ id: `${selectedTopicId}-${status}`, text, kind: status, ts: now }],
+      startedAt: now,
+      expiresAt: Number.MAX_SAFE_INTEGER,
       wsState,
     }
-  }, [agents, selectedTopicId, typingByTopic, wsState])
+  }, [agents, selectedAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgent, topicActorAgentId, typingByTopic, wsState])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -1974,7 +2022,7 @@ export default function MobileFeedPage() {
           {selectedTopicRunStatus && (
             <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-slate-800">
               <div className="flex min-w-0 items-center gap-2">
-                <Loader2 className={`h-4 w-4 shrink-0 text-blue-600 ${selectedTopicRunStatus.statusKind === 'response' ? '' : 'animate-spin'}`} />
+                <Loader2 className={`h-4 w-4 shrink-0 text-blue-600 ${isTerminalStatusKind(selectedTopicRunStatus.statusKind) ? '' : 'animate-spin'}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-xs font-semibold text-slate-900">{appendRoleLabel(selectedTopicRunStatus.agentName, roleLabelForAgent(selectedTopicRunStatus.agentId))}</span>
