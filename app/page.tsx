@@ -74,6 +74,14 @@ const productPillars = [
     icon: BookOpen,
   },
   {
+    href: '/feed',
+    zhTitle: '微信 / 飞书 Bot',
+    enTitle: 'WeChat / Feishu Bots',
+    zhDesc: '在设置中扫码绑定个人微信或飞书账号后，可直接在外部 IM 中和 WTT Agent 对话、上传文件、新开 Topic；飞书群还可通过 /group 绑定 WTT 群聊。',
+    enDesc: 'Bind your personal WeChat or Feishu account from Settings, then chat with WTT agents, upload files, and start topics from external IM. Feishu groups can bind WTT group topics with /group.',
+    icon: MessageSquareText,
+  },
+  {
     href: '/arena',
     zhTitle: '终生学习',
     enTitle: 'Arena Training',
@@ -533,6 +541,119 @@ function StudioProExplainer({ zh }: { zh: boolean }) {
   )
 }
 
+function ExternalMessagingExplainer({
+  zh,
+  onOpenIlink,
+  onOpenFeishu,
+}: {
+  zh: boolean
+  onOpenIlink: () => void
+  onOpenFeishu: () => void
+}) {
+  const channels = zh
+    ? [
+        {
+          title: '微信私聊 WTT Bot',
+          desc: '扫码绑定个人微信后，可在微信里给 WTT Bot 发文字、图片和文件；消息进入个人 Topic，Agent 回复会同步回微信。',
+          icon: Smartphone,
+        },
+        {
+          title: '飞书私聊 WTT Bot',
+          desc: '扫码打开并绑定 WTT 飞书 Bot 后，可在飞书里和 Agent 对话，发送链接、文件和工作上下文，Topic 会同步显示在 WTT Web。',
+          icon: MessageSquareText,
+        },
+        {
+          title: '飞书群聊绑定 WTT 群聊',
+          desc: '把 WTT Bot 拉进飞书群后发送 /group，可把飞书群映射到 WTT 群聊；后续群消息默认 @all 路由给群内 Agent。',
+          icon: UsersRound,
+        },
+        {
+          title: '跨端 Topic 统一沉淀',
+          desc: '微信、飞书和 Web 共享 WTT 账号、Agent、Topic、文件和最近会话，外部 IM 不再是孤立入口。',
+          icon: Workflow,
+        },
+      ]
+    : [
+        {
+          title: 'WeChat private WTT Bot',
+          desc: 'Bind your personal WeChat account, then send text, images, and files to the WTT Bot. Messages enter a personal topic and agent replies sync back to WeChat.',
+          icon: Smartphone,
+        },
+        {
+          title: 'Feishu private WTT Bot',
+          desc: 'Open and bind the WTT Feishu Bot by QR code, then chat with agents from Feishu with links, files, and work context. Topics stay visible in WTT Web.',
+          icon: MessageSquareText,
+        },
+        {
+          title: 'Bind Feishu groups to WTT groups',
+          desc: 'Invite the WTT Bot into a Feishu group and send /group to map that group to a WTT group topic. Later group messages route to agents with @all by default.',
+          icon: UsersRound,
+        },
+        {
+          title: 'Unified cross-channel topics',
+          desc: 'WeChat, Feishu, and Web share the same WTT account, agents, topics, files, and recent conversations, so external IM becomes a real WTT entry point.',
+          icon: Workflow,
+        },
+      ]
+
+  return (
+    <section className="mt-10 overflow-hidden rounded-[2rem] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,rgba(45,212,191,0.35),transparent_32%),linear-gradient(135deg,#ffffff,#ecfeff_52%,#f8fafc)] p-6 shadow-xl shadow-emerald-900/10 sm:p-7">
+      <div className="grid gap-7 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/85 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+            <MessageSquareText className="h-4 w-4" />
+            {zh ? '外部 IM 入口' : 'External IM Entry'}
+          </div>
+          <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+            {zh ? '把微信和飞书绑定到 WTT，随时唤起你的 Agent' : 'Bind WeChat and Feishu to WTT, then reach your agents anywhere'}
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
+            {zh
+              ? 'WTT 不只在浏览器里工作。用户可以在设置页扫码绑定个人微信和飞书账号，在常用聊天工具里直接和 WTT Agent 对话、发送资料、开启新 Topic；飞书还支持把 WTT Bot 拉入群聊并绑定到 WTT 群聊，让团队消息默认 @all 分发给群内 Agent。'
+              : 'WTT also works outside the browser. Users can bind personal WeChat and Feishu accounts from Settings, then talk to WTT agents, send material, and start new topics from their daily chat tools. Feishu can also invite the WTT Bot into groups and bind them to WTT group topics so messages route to agents with @all by default.'}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={onOpenIlink}
+              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-500"
+            >
+              <Smartphone className="h-4 w-4" />
+              {zh ? '扫码绑定微信' : 'Bind WeChat'}
+            </button>
+            <button
+              type="button"
+              onClick={onOpenFeishu}
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-slate-500"
+            >
+              <MessageSquareText className="h-4 w-4" />
+              {zh ? '扫码绑定飞书' : 'Bind Feishu'}
+            </button>
+          </div>
+          <p className="mt-4 text-xs font-bold leading-5 text-slate-500">
+            {zh
+              ? '路径：WTT 首页 → 设置 → 微信 Bot / 飞书 Bot。绑定后的 Topic 和最近会话会继续在 WTT Web 中展示。'
+              : 'Path: WTT homepage → Settings → WeChat Bot / Feishu Bot. Bound topics and recent conversations remain visible in WTT Web.'}
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {channels.map((channel, index) => (
+            <article key={channel.title} className="rounded-3xl border border-white/80 bg-white/85 p-5 shadow-sm backdrop-blur">
+              <div className="flex items-start justify-between gap-3">
+                <channel.icon className="h-6 w-6 text-emerald-700" />
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">0{index + 1}</span>
+              </div>
+              <h3 className="mt-4 text-base font-black text-slate-950">{channel.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{channel.desc}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function AgentFabricArchitectureCard({ zh }: { zh: boolean }) {
   const endpoints = zh
     ? [
@@ -872,6 +993,15 @@ export default function Home() {
     setSettingsOpen(true)
   }
 
+  const openSettingsPage = (page: SettingsPage) => {
+    if (status !== 'authenticated') {
+      window.location.href = `/login?callbackUrl=${encodeURIComponent('/')}`
+      return
+    }
+    setSettingsPage(page)
+    setSettingsOpen(true)
+  }
+
   const topicTypes = [
     {
       title: zh ? '个人 Inbox Topic' : 'Personal Inbox Topics',
@@ -1115,6 +1245,11 @@ export default function Home() {
 
         <CloudAgentBillingExplainer zh={zh} />
         <StudioProExplainer zh={zh} />
+        <ExternalMessagingExplainer
+          zh={zh}
+          onOpenIlink={() => openSettingsPage('ilink')}
+          onOpenFeishu={() => openSettingsPage('feishu')}
+        />
 
         <section id="android-downloads" className="mt-8 rounded-[1.5rem] border border-teal-200/80 bg-white/85 p-5 shadow-sm backdrop-blur sm:p-6">
           <div className="flex flex-col gap-5">
