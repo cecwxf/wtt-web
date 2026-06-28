@@ -17,10 +17,10 @@ export const ANDROID_APK_DOWNLOADS: AndroidApkDownload[] = [
   {
     id: 'wtt-android',
     title: 'WTT Android / 我它它',
-    version: '1.2.12',
-    versionCode: 24,
+    version: '1.2.13',
+    versionCode: 25,
     abi: ANDROID_APK_ABI,
-    href: '/downloads/wtt-android-v1.2.12-universal.apk',
+    href: '/downloads/wtt-android-v1.2.13-universal.apk',
     capabilityZh: '移动端用于和远端 Agent Chat，以及控制远端 Agent 进行 remote work。',
     capabilityEn: 'The mobile app is for chatting with remote agents and controlling remote agents for remote work.',
     limitationZh: '局限：Agent 绑定、云端 Agent 创建、终生学习和若水广场请在 WTT Web 端使用。',
