@@ -1,6 +1,9 @@
 export type StudioTopic = {
   id?: string
   topic_id?: string
+  task_id?: string
+  task_title?: string
+  task_type?: string
   name?: string
   description?: string | null
   type?: string | null
@@ -38,6 +41,7 @@ export type StudioProjectLinks = {
 
 export type StudioProject = StudioProjectLinks & {
   topicId: string
+  taskId?: string
   topicName: string
   title: string
   description?: string

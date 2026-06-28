@@ -10,7 +10,8 @@ function cleanUrl(url: string) {
 }
 
 export function isStudioTopic(topic: StudioTopic) {
-  return String(topic.name || '').trim().toLowerCase().startsWith(STUDIO_TOPIC_PREFIX.toLowerCase())
+  const name = String(topic.task_title || topic.name || '').trim()
+  return name.toLowerCase().startsWith(STUDIO_TOPIC_PREFIX.toLowerCase())
 }
 
 export function studioTopicName(title: string) {
@@ -71,6 +72,7 @@ export function projectFromTopic(topic: StudioTopic): StudioProject | null {
   const topicId = String(topic.topic_id || topic.id || '').trim()
   const topicName = String(topic.name || '').trim()
   if (!topicId || !isStudioTopic(topic)) return null
+  const displayTopicName = String(topic.task_title || topicName).trim()
   const lastMessage = String(topic.latest_message_content || topic.last_message_content || '').trim()
   let memberAgentIds: string[] = []
   if (Array.isArray(topic.member_agent_ids)) {
@@ -82,8 +84,9 @@ export function projectFromTopic(topic: StudioTopic): StudioProject | null {
   }
   return {
     topicId,
+    taskId: String(topic.task_id || '').trim() || undefined,
     topicName,
-    title: studioTitleFromTopicName(topicName),
+    title: studioTitleFromTopicName(displayTopicName),
     description: String(topic.description || '').trim(),
     topicType: String(topic.topic_type || topic.type || '').trim() || undefined,
     creatorAgentId: String(topic.creator_agent_id || '').trim() || undefined,

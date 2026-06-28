@@ -223,6 +223,7 @@ export function StudioDashboard() {
     try {
       const topic = await createStudioTopic(agentId, title, token)
       const topicId = String(topic.topic_id || topic.id || '').trim()
+      const taskId = String(topic.task_id || '').trim()
       if (!topicId) throw new Error('Studio topic was created without topic_id')
       const userPrompt = prompt.trim() || `创建网站：${title}`
       const connectorContext = await fetchStudioConnectorPromptContext(topicId, token)
@@ -239,6 +240,7 @@ export function StudioDashboard() {
           }),
         token,
         { studio_action: 'create_project', project_name: title, display_content: userPrompt },
+        taskId,
       )
       router.push(`/studio/projects/${encodeURIComponent(topicId)}`)
     } catch (err) {

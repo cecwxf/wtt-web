@@ -81,19 +81,36 @@ export async function joinStudioTopic(topicId: string, agentId: string, token?: 
 }
 
 export async function createStudioTopic(agentId: string, title: string, token?: string | null) {
-  const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/`, {
+  const cleanTitle = title.trim() || 'Untitled Site'
+  const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
     method: 'POST',
     headers: headers(token),
     body: JSON.stringify({
-      name: `STUDIO: ${title.trim() || 'Untitled Site'}`,
-      description: `WTT Studio project: ${title.trim() || 'Untitled Site'}`,
-      type: 'p2p',
-      visibility: 'private',
-      join_method: 'invite_only',
-      creator_agent_id: agentId,
+      title: `STUDIO: ${cleanTitle}`,
+      description: `WTT Studio project: ${cleanTitle}`,
+      task_mode: 'single',
+      task_type: 'general',
+      priority: 'P1',
+      status: 'todo',
+      exec_mode: 'reasoning',
+      owner_agent_id: agentId,
+      runner_agent_id: agentId,
     }),
   })
-  return parseJson<StudioTopic>(response, 'Failed to create Studio project')
+  const task = await parseJson<Record<string, unknown>>(response, 'Failed to create Studio project')
+  const topicId = String(task.topic_id || '')
+  return {
+    id: topicId,
+    topic_id: topicId,
+    name: `STUDIO: ${cleanTitle}`,
+    description: `WTT Studio project: ${cleanTitle}`,
+    type: 'discussion',
+    topic_type: 'discussion',
+    task_id: String(task.id || task.task_id || ''),
+    task_title: `STUDIO: ${cleanTitle}`,
+    task_type: String(task.task_type || 'general'),
+    creator_agent_id: agentId,
+  } satisfies StudioTopic
 }
 
 export async function fetchStudioMessages(topicId: string, agentId: string, token?: string | null) {
@@ -111,7 +128,27 @@ export async function sendStudioMessage(
   content: string,
   token?: string | null,
   metadata: Record<string, unknown> = {},
+  taskId?: string,
 ) {
+  const cleanTaskId = String(taskId || metadata.task_id || metadata.taskId || '').trim()
+  if (cleanTaskId) {
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/tasks/${encodeURIComponent(cleanTaskId)}/chat/send`, {
+      method: 'POST',
+      headers: headers(token),
+      body: JSON.stringify({
+        content,
+        sender_type: 'HUMAN',
+        semantic_type: 'post',
+        auto_run: true,
+        metadata: {
+          source: 'wtt-studio',
+          studio_topic_id: topicId,
+          ...metadata,
+        },
+      }),
+    })
+    return parseJson<StudioMessage>(response, 'Failed to send Studio message')
+  }
   const response = await fetch(
     `${CLIENT_WTT_API_BASE}/topics/${encodeURIComponent(topicId)}/messages?agent_id=${encodeURIComponent(agentId)}`,
     {

@@ -722,7 +722,7 @@ export function StudioBuilder({ topicId }: { topicId: string }) {
           ...(options.commandFamily ? { command_family: options.commandFamily } : {}),
           ...(options.skillId ? { skill_id: options.skillId } : {}),
         } : {}),
-      })
+      }, project?.taskId)
       await refreshMessages(selectedAgentId)
       const billingState = await fetchStudioBilling(token).catch(() => null)
       if (billingState) setBilling(billingState)
