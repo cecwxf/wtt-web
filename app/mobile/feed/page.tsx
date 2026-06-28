@@ -143,6 +143,19 @@ type TypingState = {
   expiresAt: number
 }
 
+type MobileRunStatus = {
+  agentId: string
+  agentName: string
+  adapter?: string
+  model?: string
+  statusText?: string
+  statusKind?: string
+  lines: TypingState['statusLines']
+  startedAt: number
+  expiresAt: number
+  wsState: string
+}
+
 type BillingMe = {
   entitlement?: {
     plan?: string
@@ -422,6 +435,49 @@ function isTerminalStatusKind(kind?: string): boolean {
     || normalized.includes('error')
     || normalized.includes('fail')
     || normalized.includes('response')
+}
+
+function adapterStatusLabel(adapter?: string): string {
+  const value = String(adapter || '').trim()
+  if (value === 'claude-code') return 'Claude Code'
+  if (value === 'codex') return 'Codex'
+  if (value === 'gemini') return 'Gemini'
+  return value
+}
+
+function MobileAgentRunStatusCard({ status, compact = false }: { status: MobileRunStatus; compact?: boolean }) {
+  const terminal = isTerminalStatusKind(status.statusKind)
+  const lines = status.lines.slice(compact ? -4 : -6)
+  const subtitle = [adapterStatusLabel(status.adapter), status.model].filter(Boolean).join(' · ')
+
+  return (
+    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-slate-800 shadow-sm">
+      <div className="flex min-w-0 items-start gap-2">
+        <Loader2 className={`mt-0.5 h-4 w-4 shrink-0 text-blue-600 ${terminal ? '' : 'animate-spin'}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-xs font-semibold text-slate-900">{status.agentName}</span>
+            <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
+              {mobileStatusKindLabel(status.statusKind)}
+            </span>
+            {subtitle && <span className="min-w-0 truncate text-[10px] font-medium text-slate-400">{subtitle}</span>}
+            <span className="shrink-0 text-[10px] font-medium text-slate-400">WS {status.wsState}</span>
+          </div>
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] font-medium leading-5 text-slate-700">{status.statusText}</p>
+        </div>
+      </div>
+      {lines.length > 0 && (
+        <div className="mt-2 max-h-28 space-y-1 overflow-y-auto border-t border-blue-100 pt-2">
+          {lines.map((line) => (
+            <div key={line.id} className="grid grid-cols-[44px_minmax(0,1fr)] gap-2 text-[11px] font-medium leading-4 text-slate-600">
+              <span className="rounded-md bg-white px-1.5 py-0.5 text-center text-[10px] font-bold text-blue-700">{mobileStatusKindLabel(line.kind)}</span>
+              <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-slate-700">{line.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function filenameFromUrl(url: string): string {
@@ -1293,7 +1349,8 @@ export default function MobileFeedPage() {
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
     const rawEvent = msg as unknown as Record<string, unknown>
-    if (rawEvent.type === 'typing') {
+    const rawType = String(rawEvent.type || '').toLowerCase()
+    if (rawType === 'typing') {
       const tid = String(rawEvent.topic_id || '')
       if (!tid) return
       if (String(rawEvent.state || 'start').toLowerCase() === 'stop') return
@@ -1313,6 +1370,28 @@ export default function MobileFeedPage() {
           statusKind: statusKindFromTypingEvent(rawEvent),
           ttlMs,
         }, now),
+      }))
+      return
+    }
+    if (['task_status', 'task_update', 'run_status', 'agent_status'].includes(rawType)) {
+      const rawTaskId = String(rawEvent.task_id || rawEvent.taskId || '').trim()
+      const tid = String(rawEvent.topic_id || rawEvent.topicId || (rawTaskId && rawTaskId === selectedTopic?.task_id ? selectedTopicId : '')).trim()
+      if (!tid) return
+      const aid = String(rawEvent.agent_id || rawEvent.runner_agent_id || topicActorAgentId || selectedAgentId)
+      const title = eventString(rawEvent, ['task_title', 'title', 'name']) || compactTopicTitle(selectedTopic)
+      const status = eventString(rawEvent, ['status', 'task_status', 'state']) || rawType
+      const statusText = statusTextFromTypingEvent(rawEvent) || taskStatusText(status, title) || 'Agent 状态更新'
+      setTypingByTopic((prev) => ({
+        ...prev,
+        [tid]: appendTypingStatus(prev[tid], {
+          agentId: aid,
+          agentName: appendRoleLabel(labelForAgentInTopic(aid), roleLabelForAgent(aid)),
+          adapter: String(rawEvent.adapter || '').trim() || undefined,
+          model: String(rawEvent.model || rawEvent.model_id || rawEvent.current_model || '').trim() || undefined,
+          statusText,
+          statusKind: statusKindFromTypingEvent(rawEvent) || status,
+          ttlMs: isTerminalStatusKind(status) ? COMPLETE_HOLD_MS : 120000,
+        }, Date.now()),
       }))
       return
     }
@@ -1376,7 +1455,7 @@ export default function MobileFeedPage() {
         }))
       }
     }
-  }, [labelForAgentInTopic, mutateMessages, roleLabelForAgent, selectedAgentId, selectedTopicId, updateTopicUnreadCache])
+  }, [labelForAgentInTopic, mutateMessages, roleLabelForAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgentId, updateTopicUnreadCache])
 
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=mobile-web` : ''
   const { state: wsState } = useWebSocket({ url: wsUrl, enabled: Boolean(token && selectedAgentId), token, onMessage: handleWsMessage })
@@ -1934,6 +2013,12 @@ export default function MobileFeedPage() {
           </div>
         )}
 
+        {fixedChatMode && selectedTopicRunStatus && (
+          <div className="mx-3 mt-2">
+            <MobileAgentRunStatusCard status={selectedTopicRunStatus} compact />
+          </div>
+        )}
+
         {!fixedChatMode && isGroupTopic(selectedTopic) && selectedTopicMembers.length > 0 && (
           <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <Users className="h-4 w-4 shrink-0 text-slate-600" />
@@ -2019,32 +2104,9 @@ export default function MobileFeedPage() {
         </div>
 
         <footer className="shrink-0 border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {selectedTopicRunStatus && (
-            <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-slate-800">
-              <div className="flex min-w-0 items-center gap-2">
-                <Loader2 className={`h-4 w-4 shrink-0 text-blue-600 ${isTerminalStatusKind(selectedTopicRunStatus.statusKind) ? '' : 'animate-spin'}`} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-xs font-semibold text-slate-900">{appendRoleLabel(selectedTopicRunStatus.agentName, roleLabelForAgent(selectedTopicRunStatus.agentId))}</span>
-                    <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
-                      {mobileStatusKindLabel(selectedTopicRunStatus.statusKind)}
-                    </span>
-                    <span className="shrink-0 text-[10px] font-medium text-slate-400">WS {selectedTopicRunStatus.wsState}</span>
-                  </div>
-                  <p className="mt-0.5 truncate text-[12px] font-medium text-slate-700">{selectedTopicRunStatus.statusText}</p>
-                </div>
-              </div>
-              {selectedTopicRunStatus.lines.length > 1 && (
-                <div className="mt-2 space-y-1 border-t border-blue-100 pt-2">
-                  {selectedTopicRunStatus.lines.slice(-2).map((line) => (
-                    <div key={line.id} className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-slate-500">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-300" />
-                      <span className="shrink-0 text-slate-400">{mobileStatusKindLabel(line.kind)}</span>
-                      <span className="min-w-0 flex-1 truncate">{line.text}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          {!fixedChatMode && selectedTopicRunStatus && (
+            <div className="mb-2">
+              <MobileAgentRunStatusCard status={selectedTopicRunStatus} />
             </div>
           )}
           {failedSend && (
