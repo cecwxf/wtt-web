@@ -749,6 +749,13 @@ function isBrowserOnline(): boolean {
   return navigator.onLine !== false
 }
 
+function fixedTopicFromSearch(search: string): string {
+  if (!search) return ''
+  const params = new URLSearchParams(search)
+  if (params.get('fixed_chat') !== '1' && params.get('embed_chat') !== '1') return ''
+  return String(params.get('fixed_topic_id') || params.get('topic_id') || params.get('topicId') || params.get('topic') || '').trim()
+}
+
 export default function MobileFeedPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -788,6 +795,10 @@ export default function MobileFeedPage() {
     const params = new URLSearchParams(window.location.search)
     return params.get('fixed_chat') === '1' || params.get('embed_chat') === '1'
   })
+  const [fixedTopicId, setFixedTopicId] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return fixedTopicFromSearch(window.location.search)
+  })
   const [imagePreview, setImagePreview] = useState<{ url: string; label: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
@@ -825,6 +836,7 @@ export default function MobileFeedPage() {
     const params = new URLSearchParams(window.location.search)
     setIsAndroidWebView(String(params.get('source') || '').toLowerCase() === 'android')
     setFixedChatMode(params.get('fixed_chat') === '1' || params.get('embed_chat') === '1')
+    setFixedTopicId(fixedTopicFromSearch(window.location.search))
   }, [])
 
   useEffect(() => {
@@ -1070,6 +1082,13 @@ export default function MobileFeedPage() {
   }, [mutateGroupTopics, mutateRecentTopics, mutateTopics])
 
   useEffect(() => {
+    if (fixedChatMode) {
+      if (fixedTopicId && selectedTopicId !== fixedTopicId) {
+        pendingCreatedTopicIdRef.current = fixedTopicId
+        setSelectedTopicId(fixedTopicId)
+      }
+      return
+    }
     if (!selectedTopicId && topics.length) {
       setSelectedTopicId(topicId(topics[0]))
       return
@@ -1084,7 +1103,7 @@ export default function MobileFeedPage() {
     if (pendingCreatedTopicIdRef.current === selectedTopicId) {
       pendingCreatedTopicIdRef.current = ''
     }
-  }, [selectedTopicId, topics])
+  }, [fixedChatMode, fixedTopicId, selectedTopicId, topics])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !topics.length) return
@@ -1093,6 +1112,13 @@ export default function MobileFeedPage() {
     const params = new URLSearchParams(key)
     const topicFromUrl = String(params.get('topic_id') || params.get('topicId') || params.get('topic') || '').trim()
     const taskFromUrl = String(params.get('task_id') || params.get('taskId') || params.get('task') || '').trim()
+    if (fixedChatMode && topicFromUrl) {
+      deepLinkTopicAppliedRef.current = key
+      pendingCreatedTopicIdRef.current = topicFromUrl
+      setFixedTopicId(topicFromUrl)
+      setSelectedTopicId(topicFromUrl)
+      return
+    }
     if (!topicFromUrl && !taskFromUrl) {
       deepLinkTopicAppliedRef.current = key
       return
@@ -1105,7 +1131,7 @@ export default function MobileFeedPage() {
     if (!matched) return
     deepLinkTopicAppliedRef.current = key
     setSelectedTopicId(topicId(matched))
-  }, [topics])
+  }, [fixedChatMode, topics])
 
   const selectedTopic = useMemo(() => topics.find((t) => topicId(t) === selectedTopicId) || null, [selectedTopicId, topics])
   const selectedTaskId = selectedTopic?.task_id
