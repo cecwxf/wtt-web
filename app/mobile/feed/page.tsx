@@ -699,6 +699,11 @@ export default function MobileFeedPage() {
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionStartPos, setMentionStartPos] = useState(-1)
   const [isAndroidWebView, setIsAndroidWebView] = useState(false)
+  const [fixedChatMode, setFixedChatMode] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const params = new URLSearchParams(window.location.search)
+    return params.get('fixed_chat') === '1' || params.get('embed_chat') === '1'
+  })
   const [imagePreview, setImagePreview] = useState<{ url: string; label: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
@@ -735,6 +740,7 @@ export default function MobileFeedPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     setIsAndroidWebView(String(params.get('source') || '').toLowerCase() === 'android')
+    setFixedChatMode(params.get('fixed_chat') === '1' || params.get('embed_chat') === '1')
   }, [])
 
   useEffect(() => {
@@ -781,11 +787,12 @@ export default function MobileFeedPage() {
   }, [])
 
   const openSelector = useCallback(() => {
+    if (fixedChatMode) return
     setSearch('')
     setSelectorStep('hosts')
     setSelectedHost('')
     setSelectorOpen(true)
-  }, [])
+  }, [fixedChatMode])
 
   const openImagePreview = useCallback((url: string, label: string) => {
     const imageUrl = proxyMediaUrl(url)
@@ -1837,10 +1844,12 @@ export default function MobileFeedPage() {
     <main className="flex h-[100dvh] overflow-hidden bg-white text-[#0d0d0d] antialiased">
       <section className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3">
-          <button onClick={openSelector} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="选择主机 / Agent / Topic">
-            <FolderTree className="h-5 w-5" />
-          </button>
-          <button onClick={openSelector} className="min-w-0 flex-1 text-left">
+          {!fixedChatMode && (
+            <button onClick={openSelector} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="选择主机 / Agent / Topic">
+              <FolderTree className="h-5 w-5" />
+            </button>
+          )}
+          <div className="min-w-0 flex-1 text-left">
             <div className="flex min-w-0 items-center gap-2">
               <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500" />
               <div className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-6">{compactTopicTitle(selectedTopic)}</div>
@@ -1850,20 +1859,24 @@ export default function MobileFeedPage() {
               <span className="min-w-0 truncate">{selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '选择 Agent'}</span>
               {selectedTopicMeta && <span className="shrink-0 text-slate-300">·</span>}
               {selectedTopicMeta && <span className="min-w-0 truncate">{selectedTopicMeta}</span>}
-              <ChevronDown className="h-3 w-3 shrink-0" />
+              {!fixedChatMode && <ChevronDown className="h-3 w-3 shrink-0" />}
             </div>
-          </button>
-          <button
-            onClick={() => void createDefaultTask()}
-            disabled={!selectedAgentId || creatingTask}
-            className="rounded-xl p-2 text-slate-700 hover:bg-slate-100 disabled:text-slate-300"
-            aria-label="新建对话"
-          >
-            <SquarePen className={`h-5 w-5 ${creatingTask ? 'animate-pulse' : ''}`} />
-          </button>
-          <button onClick={() => setSettingsOpen(true)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="设置">
-            <Settings className="h-5 w-5" />
-          </button>
+          </div>
+          {!fixedChatMode && (
+            <>
+              <button
+                onClick={() => void createDefaultTask()}
+                disabled={!selectedAgentId || creatingTask}
+                className="rounded-xl p-2 text-slate-700 hover:bg-slate-100 disabled:text-slate-300"
+                aria-label="新建对话"
+              >
+                <SquarePen className={`h-5 w-5 ${creatingTask ? 'animate-pulse' : ''}`} />
+              </button>
+              <button onClick={() => setSettingsOpen(true)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="设置">
+                <Settings className="h-5 w-5" />
+              </button>
+            </>
+          )}
         </header>
 
         {!browserOnline && (
@@ -1873,7 +1886,7 @@ export default function MobileFeedPage() {
           </div>
         )}
 
-        {isGroupTopic(selectedTopic) && selectedTopicMembers.length > 0 && (
+        {!fixedChatMode && isGroupTopic(selectedTopic) && selectedTopicMembers.length > 0 && (
           <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <Users className="h-4 w-4 shrink-0 text-slate-600" />
             <span className="shrink-0 text-[11px] font-semibold text-slate-700">群聊</span>
@@ -2213,7 +2226,7 @@ export default function MobileFeedPage() {
         </div>
       )}
 
-      {selectorOpen && (
+      {!fixedChatMode && selectorOpen && (
         <MobileSheet title={selectorTitle} onClose={() => closeSheet('selector')}>
           <div className="sticky top-0 z-10 bg-white pb-2">
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
@@ -2444,7 +2457,7 @@ export default function MobileFeedPage() {
         </MobileSheet>
       )}
 
-      {settingsOpen && (
+      {!fixedChatMode && settingsOpen && (
         <MobileSheet title="设置" onClose={() => closeSheet('settings')}>
           <div className="space-y-3">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
