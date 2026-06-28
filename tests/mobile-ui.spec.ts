@@ -286,6 +286,23 @@ test('mobile group topic send uses an owned member agent', async ({ page }) => {
   expect(new URL(postUrls[0]).searchParams.get('agent_id')).toBe('agent-2')
 })
 
+test('fixed mobile chat hides topic title and group member chrome', async ({ page }) => {
+  await mockAuthenticatedMobileApi(page, {
+    topicMembers: [
+      { agent_id: 'agent-1', display_name: 'Alice Agent', role: 'owner' },
+      { agent_id: 'agent-2', display_name: 'Build Agent', role: 'member' },
+    ],
+  })
+  await page.goto('/mobile/feed?source=android&fixed_chat=1&topic_id=topic-group&agent_id=agent-1')
+
+  await expect(page.getByText('Hello from mobile')).toBeVisible()
+  await expect(page.getByText('Research Group')).toHaveCount(0)
+  await expect(page.getByText('Alice Agent · 群聊 · 2 成员')).toHaveCount(0)
+  await expect(page.getByText('群聊', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('2 成员')).toHaveCount(0)
+  await expect(page.getByLabel('选择主机 / Agent / Topic')).toHaveCount(0)
+})
+
 test('mobile composer uploads and sends file attachments', async ({ page }) => {
   const mediaSignRequests: Array<{ headers: Record<string, string>; body: unknown }> = []
   const mediaCommitRequests: Array<{ headers: Record<string, string>; body: unknown }> = []

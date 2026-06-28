@@ -2008,26 +2008,24 @@ export default function MobileFeedPage() {
   return (
     <main className="flex h-[100dvh] overflow-hidden bg-white text-[#0d0d0d] antialiased">
       <section className="relative flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3">
-          {!fixedChatMode && (
+        {!fixedChatMode && (
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3">
             <button onClick={openSelector} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="选择主机 / Agent / Topic">
               <FolderTree className="h-5 w-5" />
             </button>
-          )}
-          <div className="min-w-0 flex-1 text-left">
-            <div className="flex min-w-0 items-center gap-2">
-              <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500" />
-              <div className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-6">{compactTopicTitle(selectedTopic)}</div>
+            <div className="min-w-0 flex-1 text-left">
+              <div className="flex min-w-0 items-center gap-2">
+                <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500" />
+                <div className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-6">{compactTopicTitle(selectedTopic)}</div>
+              </div>
+              <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] font-medium leading-4 text-slate-500">
+                <span className={`h-2 w-2 shrink-0 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                <span className="min-w-0 truncate">{selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '选择 Agent'}</span>
+                {selectedTopicMeta && <span className="shrink-0 text-slate-300">·</span>}
+                {selectedTopicMeta && <span className="min-w-0 truncate">{selectedTopicMeta}</span>}
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              </div>
             </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] font-medium leading-4 text-slate-500">
-              <span className={`h-2 w-2 shrink-0 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className="min-w-0 truncate">{selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '选择 Agent'}</span>
-              {selectedTopicMeta && <span className="shrink-0 text-slate-300">·</span>}
-              {selectedTopicMeta && <span className="min-w-0 truncate">{selectedTopicMeta}</span>}
-              {!fixedChatMode && <ChevronDown className="h-3 w-3 shrink-0" />}
-            </div>
-          </div>
-          {!fixedChatMode && (
             <>
               <button
                 onClick={() => void createDefaultTask()}
@@ -2041,8 +2039,8 @@ export default function MobileFeedPage() {
                 <Settings className="h-5 w-5" />
               </button>
             </>
-          )}
-        </header>
+          </header>
+        )}
 
         {!browserOnline && (
           <div className="mx-3 mt-2 flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-medium text-orange-800">
