@@ -12,6 +12,7 @@ import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
 import { attachmentMimeType } from '@/lib/media/mime'
 import {
   isTerminalMobileStatusKind,
+  normalizeMobileProgressStatusKind,
   shouldCloseWaitingStatusFromAgentReply,
   shouldPollMobileMessages,
 } from '@/lib/mobile-chat-status'
@@ -386,11 +387,11 @@ function statusFromProgressMessage(contentRaw: unknown, adapterRaw?: unknown): {
   if (!action && !status) return null
 
   const [group, detail = ''] = action.split(/:(.+)/)
-  const kind = group || status || 'running'
+  const kind = normalizeMobileProgressStatusKind(group, detail, status)
   const actor = adapterDisplayName(adapterRaw)
   if (group === 'session') {
     if (detail.includes('thread.started') || detail.includes('turn.started')) return { text: `${actor} 会话已启动`, kind: 'session' }
-    if (detail.includes('completed')) return { text: `${actor} 会话已完成`, kind: 'session' }
+    if (detail.includes('completed')) return { text: `${actor} 会话已完成`, kind }
     return { text: `${actor} 会话状态：${detail || status}`, kind: 'session' }
   }
   if (group === 'response') {

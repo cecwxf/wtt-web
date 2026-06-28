@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import {
+  normalizeMobileProgressStatusKind,
   shouldCloseWaitingStatusFromAgentReply,
   shouldPollMobileMessages,
 } from '../lib/mobile-chat-status'
@@ -48,4 +49,10 @@ test('closes the waiting state when a fresh agent reply arrives', () => {
     id: 'old-agent-message',
     ts: now - 20 * 60 * 1000,
   }, now)).toBe(false)
+})
+
+test('normalizes completed runtime progress as terminal', () => {
+  expect(normalizeMobileProgressStatusKind('turn', 'response completed', 'running')).toBe('complete')
+  expect(normalizeMobileProgressStatusKind('session', 'thread.started', 'running')).toBe('session')
+  expect(normalizeMobileProgressStatusKind('tool', 'read_file', 'running')).toBe('tool')
 })

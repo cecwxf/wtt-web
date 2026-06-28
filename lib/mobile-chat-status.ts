@@ -45,3 +45,13 @@ export function shouldCloseWaitingStatusFromAgentReply(
       && reply.ts + 5000 >= status.startedAt,
   )
 }
+
+export function normalizeMobileProgressStatusKind(group?: string, detail?: string, status?: string): string {
+  const fallback = String(group || status || 'running').trim() || 'running'
+  const combined = `${group || ''} ${detail || ''} ${status || ''}`.toLowerCase()
+  if (combined.includes('cancelled')) return 'cancelled'
+  if (combined.includes('blocked')) return 'blocked'
+  if (combined.includes('error') || combined.includes('failed') || combined.includes('failure')) return 'error'
+  if (combined.includes('completed') || combined.includes('complete') || combined.includes('done')) return 'complete'
+  return fallback
+}
