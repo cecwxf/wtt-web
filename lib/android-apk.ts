@@ -39,10 +39,10 @@ export const ANDROID_APK_DOWNLOADS: AndroidApkDownload[] = [
   {
     id: 'wtt-studio',
     title: 'WTT Studio / 闪创',
-    version: '1.0.18',
-    versionCode: 19,
+    version: '1.0.19',
+    versionCode: 20,
     abi: ANDROID_APK_ABI,
-    href: '/downloads/wtt-studio-v1.0.18-universal.apk',
+    href: '/downloads/wtt-studio-v1.0.19-universal.apk',
     capabilityZh: '网站、应用和 APK 生产 App，用 Cloud Agent 生成项目并通过 Preview URL 预览。',
     capabilityEn: 'Site, app, and APK production app for generating projects with Cloud Agents and previewing via Preview URL.',
   },

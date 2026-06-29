@@ -1147,9 +1147,11 @@ export default function MobileFeedPage() {
   const pollSelectedMessages = shouldPollMobileMessages(selectedTypingState)
 
   const { data: messagesRaw, mutate: mutateMessages } = useSWR(
-    token && selectedAgentId && selectedTopicId ? ['mobile-messages', token, selectedAgentId, selectedTopicId] : null,
+    token && selectedAgentId && selectedTopicId ? ['mobile-messages', token, selectedAgentId, selectedTopicId, selectedTaskId, fixedChatMode] : null,
     async () => {
-      const params = new URLSearchParams({ limit: '80', agent_id: selectedAgentId })
+      const historyLimit = fixedChatMode || selectedTaskId ? '500' : '80'
+      const params = new URLSearchParams({ limit: historyLimit, agent_id: selectedAgentId })
+      if (fixedChatMode || selectedTaskId) params.set('include_history', 'true')
       const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?${params.toString()}`, {
         headers: authHeaders(token),
         cache: 'no-store',
