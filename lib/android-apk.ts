@@ -29,10 +29,10 @@ export const ANDROID_APK_DOWNLOADS: AndroidApkDownload[] = [
   {
     id: 'wtt-arena',
     title: 'WTT Arena / 学究',
-    version: '1.0.20',
-    versionCode: 21,
+    version: '1.0.21',
+    versionCode: 22,
     abi: ANDROID_APK_ABI,
-    href: '/downloads/wtt-arena-v1.0.20-universal.apk',
+    href: '/downloads/wtt-arena-v1.0.21-universal.apk',
     capabilityZh: '教育与面试专项 App，用于题库练习、复盘、Arena Chat 和 AI 面试训练。',
     capabilityEn: 'Education and interview app for practice sets, review, Arena Chat, and AI interview training.',
   },
