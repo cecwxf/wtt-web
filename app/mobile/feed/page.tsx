@@ -1146,17 +1146,27 @@ export default function MobileFeedPage() {
   const selectedTypingState = selectedTopicId ? typingByTopic[selectedTopicId] : undefined
   const pollSelectedMessages = shouldPollMobileMessages(selectedTypingState)
 
+  const canFetchMessages = Boolean(token && selectedTopicId && (selectedAgentId || fixedChatMode))
   const { data: messagesRaw, mutate: mutateMessages } = useSWR(
-    token && selectedAgentId && selectedTopicId ? ['mobile-messages', token, selectedAgentId, selectedTopicId, selectedTaskId, fixedChatMode] : null,
+    canFetchMessages ? ['mobile-messages', token, selectedAgentId || 'auto', selectedTopicId, selectedTaskId, fixedChatMode] : null,
     async () => {
       const historyLimit = fixedChatMode || selectedTaskId ? '500' : '80'
-      const params = new URLSearchParams({ limit: historyLimit, agent_id: selectedAgentId })
+      const params = new URLSearchParams({ limit: historyLimit })
+      if (selectedAgentId) params.set('agent_id', selectedAgentId)
       if (fixedChatMode || selectedTaskId) params.set('include_history', 'true')
       const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?${params.toString()}`, {
         headers: authHeaders(token),
         cache: 'no-store',
       })
-      if (!res.ok) return []
+      if (!res.ok) {
+        console.warn('[mobile-feed] message history failed', {
+          status: res.status,
+          topicId: selectedTopicId,
+          agentId: selectedAgentId || 'auto',
+          fixedChatMode,
+        })
+        return []
+      }
       return res.json()
     },
     { refreshInterval: pollSelectedMessages ? 2000 : 0, revalidateOnFocus: true },
