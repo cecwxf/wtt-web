@@ -1572,6 +1572,26 @@ function FeedPageInner() {
     },
   )
 
+  const clearRecentTopicUnread = useCallback((topicId: string) => {
+    void mutateRecentTopics((current: unknown) => {
+      const clearItem = (item: unknown) => {
+        if (!item || typeof item !== 'object') return item
+        const row = item as Record<string, unknown>
+        const id = String(row.topic_id ?? row.id ?? '')
+        return id === topicId ? { ...row, unread_count: 0 } : item
+      }
+
+      if (Array.isArray(current)) return current.map(clearItem)
+      if (current && typeof current === 'object') {
+        const payload = current as Record<string, unknown>
+        if (Array.isArray(payload.items)) {
+          return { ...payload, items: payload.items.map(clearItem) }
+        }
+      }
+      return current
+    }, false)
+  }, [mutateRecentTopics])
+
   // Keep ref in sync for WS handler (avoids circular dependency)
   useEffect(() => {
     subscribedTopicsRef.current = { raw: subscribedTopicsRaw ?? null, mutate: mutateTopics }
@@ -1594,7 +1614,8 @@ function FeedPageInner() {
     lastReadSyncRef.current = { topicId: selectedTopicId, ts: now }
     void mutateTopics()
     void mutateGroupTopics()
-  }, [selectedTopicId, feedRaw, mutateGroupTopics, mutateTopics])
+    void mutateRecentTopics()
+  }, [selectedTopicId, feedRaw, mutateGroupTopics, mutateRecentTopics, mutateTopics])
 
   // Poll pending P2P requests for notifications
   // session.userId is the WTT backend UUID; session.user.id may not be set by NextAuth
@@ -3023,7 +3044,8 @@ function FeedPageInner() {
 
     // Optimistic unread-clear for immediate red badge feedback.
     updateTopicUnreadCaches(topicId, (row) => ({ ...row, unread_count: 0 }))
-  }, [setSelectedTopicId, updateTopicUnreadCaches])
+    clearRecentTopicUnread(topicId)
+  }, [clearRecentTopicUnread, setSelectedTopicId, updateTopicUnreadCaches])
 
   if (status === 'loading') {
     return (
