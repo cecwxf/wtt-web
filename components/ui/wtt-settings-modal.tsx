@@ -346,6 +346,7 @@ const CLOUD_AGENT_FALLBACK_MODELS: CloudModelOption[] = [
   { id: "deepseek-v4-pro[1m]", label: "DeepSeek V4 Pro", supports_reasoning: true, tier: "standard" },
   { id: "anthropic/claude-opus-4.7", label: "Claude Opus 4.7", supports_reasoning: true, tier: "premium" },
   { id: "anthropic/claude-sonnet-4.7", label: "Claude Sonnet 4.7", supports_reasoning: true, tier: "standard" },
+  { id: "openai-codex/gpt-5.6-sol", label: "GPT-5.6 Sol", supports_reasoning: true, tier: "premium" },
   { id: "openai-codex/gpt-5.5", label: "GPT-5.5", supports_reasoning: true, tier: "premium" },
 ];
 
