@@ -13,6 +13,7 @@ async function mockFeedApi(
   options: {
     onMediaSign?: (body: unknown) => void
     onMediaCommit?: (body: unknown) => void
+    messageResponses?: Array<Array<Record<string, unknown>>>
   } = {},
 ) {
   await page.route('**/api/auth/session', async (route) => {
@@ -85,7 +86,8 @@ async function mockFeedApi(
         })
         return
       }
-      await fulfillJson(route, [
+      const sequencedMessages = options.messageResponses?.shift()
+      await fulfillJson(route, sequencedMessages || [
         {
           message_id: 'message-1',
           topic_id: 'topic-p2p',
@@ -141,6 +143,28 @@ async function mockFeedApi(
     await fulfillJson(route, {})
   })
 }
+
+test('desktop chat keeps history across an empty polling response', async ({ page }) => {
+  const history = [{
+    message_id: 'message-persisted',
+    topic_id: 'topic-p2p',
+    sender_id: 'agent-1',
+    sender_display_name: 'Alice Agent',
+    sender_type: 'agent',
+    content: 'Desktop persisted history',
+    timestamp: '2026-06-11T01:01:00.000Z',
+  }]
+  const messageResponses = [history, []]
+  await mockFeedApi(page, { messageResponses })
+  await page.addInitScript(() => {
+    localStorage.setItem('wtt_selected_topic_id', 'topic-p2p')
+  })
+
+  await page.goto('/feed?agent_id=agent-1')
+  await expect(page.getByText('Desktop persisted history')).toBeVisible()
+  await expect.poll(() => messageResponses.length, { timeout: 12_000 }).toBe(0)
+  await expect(page.getByText('Desktop persisted history')).toBeVisible()
+})
 
 test('desktop chat file attachment opens picker and uploads', async ({ page }) => {
   const mediaSignRequests: unknown[] = []

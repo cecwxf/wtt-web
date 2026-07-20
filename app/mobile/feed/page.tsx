@@ -18,6 +18,11 @@ import {
 } from '@/lib/mobile-chat-status'
 import { proxyMediaUrl, toThumbnailUrl } from '@/lib/rich-content'
 import { useWebSocket, type WsMessage } from '@/lib/useWebSocket'
+import {
+  mergeMessageHistory,
+  readCachedMessageHistory,
+  writeCachedMessageHistory,
+} from '@/lib/chat-history'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
@@ -1147,32 +1152,49 @@ export default function MobileFeedPage() {
   const pollSelectedMessages = shouldPollMobileMessages(selectedTypingState)
 
   const canFetchMessages = Boolean(token && selectedTopicId && (selectedAgentId || fixedChatMode))
+  const messageHistoryOwner = `${selectedAgentId || 'auto'}:${selectedTaskId || ''}:${fixedChatMode ? 'fixed' : 'feed'}`
+  const messageHistoryRef = useRef<Map<string, unknown[]>>(new Map())
+  const messageHistoryKey = `${selectedTopicId || ''}:${messageHistoryOwner}`
   const { data: messagesRaw, mutate: mutateMessages } = useSWR(
     canFetchMessages ? ['mobile-messages', token, selectedAgentId || 'auto', selectedTopicId, selectedTaskId, fixedChatMode] : null,
     async () => {
-      const historyLimit = fixedChatMode || selectedTaskId ? '500' : '80'
+      // Load a useful history window once, then keep polling responses small and
+      // merge them into the per-topic cache.
+      const cachedHistory = messageHistoryRef.current.get(messageHistoryKey)
+        || readCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner)
+      const historyLimit = cachedHistory?.length ? '100' : '500'
       const params = new URLSearchParams({ limit: historyLimit })
       if (selectedAgentId) params.set('agent_id', selectedAgentId)
-      if (fixedChatMode || selectedTaskId) params.set('include_history', 'true')
+      params.set('include_history', 'true')
       const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?${params.toString()}`, {
         headers: authHeaders(token),
         cache: 'no-store',
       })
       if (!res.ok) {
-        console.warn('[mobile-feed] message history failed', {
-          status: res.status,
-          topicId: selectedTopicId,
-          agentId: selectedAgentId || 'auto',
-          fixedChatMode,
-        })
-        return []
+        throw new Error(`Message history request failed (${res.status})`)
       }
-      return res.json()
+      const incoming = await res.json()
+      const merged = mergeMessageHistory(cachedHistory, Array.isArray(incoming) ? incoming : [])
+      messageHistoryRef.current.set(messageHistoryKey, merged)
+      writeCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner, merged)
+      return merged
     },
-    { refreshInterval: pollSelectedMessages ? 2000 : 0, revalidateOnFocus: true },
+    {
+      refreshInterval: pollSelectedMessages ? 2000 : 0,
+      revalidateOnFocus: true,
+      keepPreviousData: false,
+      fallbackData: readCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner),
+    },
   )
 
   const messages = useMemo(() => normalizeMessages(messagesRaw), [messagesRaw])
+
+  useEffect(() => {
+    if (!selectedTopicId || !Array.isArray(messagesRaw)) return
+    const merged = mergeMessageHistory(messageHistoryRef.current.get(messageHistoryKey), messagesRaw)
+    messageHistoryRef.current.set(messageHistoryKey, merged)
+    writeCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner, merged)
+  }, [messageHistoryKey, messageHistoryOwner, messagesRaw, selectedTopicId])
 
   useEffect(() => {
     if (!selectedTopicId || !Array.isArray(messagesRaw)) return
@@ -1512,7 +1534,7 @@ export default function MobileFeedPage() {
     if (incomingTopicId === selectedTopicId) {
       void mutateMessages((current: unknown) => {
         const list = normalizeMessages(current)
-        if (list.some((m) => m.message_id === incoming.message_id)) return current
+        if (list.some((m) => m.message_id === incoming.message_id)) return list
         return [...list, incoming]
       }, false)
       if (incoming.sender_type === 'agent') {

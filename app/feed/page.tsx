@@ -32,6 +32,7 @@ import {
   serializeAgentRoleTemplate,
   type AgentRoleTemplate,
 } from '@/lib/agent-role-templates'
+import { mergeMessageHistory } from '@/lib/chat-history'
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
@@ -187,7 +188,8 @@ function readCachedTopicMessages(topicId?: string | null, agentId?: string | nul
 function writeCachedTopicMessages(topicId?: string | null, agentId?: string | null, data?: unknown): void {
   if (typeof window === 'undefined' || !topicId || !agentId || !Array.isArray(data)) return
   try {
-    window.sessionStorage.setItem(topicMessagesCacheKey(topicId, agentId), JSON.stringify({ ts: Date.now(), data }))
+    const merged = mergeMessageHistory(readCachedTopicMessages(topicId, agentId), data)
+    window.sessionStorage.setItem(topicMessagesCacheKey(topicId, agentId), JSON.stringify({ ts: Date.now(), data: merged }))
   } catch {
     // Ignore quota/private-mode storage failures.
   }
@@ -1010,7 +1012,7 @@ function FeedPageInner() {
   const { data: feedRaw, error, mutate } = useSWR(
     selectedAgentId && session?.accessToken && selectedTopicId ? ['topic-messages', selectedTopicId, selectedAgentId, session.accessToken] : null,
     async () => {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100&agent_id=${encodeURIComponent(selectedAgentId)}`, {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/topics/${selectedTopicId}/messages?limit=100&include_history=true&agent_id=${encodeURIComponent(selectedAgentId)}`, {
         headers: {
           Authorization: `Bearer ${session?.accessToken}`,
         },
@@ -1029,7 +1031,9 @@ function FeedPageInner() {
       refreshInterval: wsConnectedForPoll ? 0 : 5000,
       dedupingInterval: 10000,
       revalidateOnFocus: false,
-      keepPreviousData: true,
+      // Per-topic fallbackData already prevents blank loading states. Reusing the
+      // previous SWR key can briefly render another topic's history here.
+      keepPreviousData: false,
       fallbackData: readCachedTopicMessages(selectedTopicId, selectedAgentId),
       onSuccess: (data) => writeCachedTopicMessages(selectedTopicId, selectedAgentId, data),
     }
@@ -1399,26 +1403,13 @@ function FeedPageInner() {
 
       const topicChanged = prevTopicRef.current !== selectedTopicId
       prevTopicRef.current = selectedTopicId
-      if (topicChanged || normalized.length === 0) {
-        // Full replace on topic switch or empty data
+      if (topicChanged) {
         setAllMessages(normalized)
-      } else {
-        setAllMessages((prev) => {
-          if (prev.length === 0) return normalized
-          // Merge: preserve DOM/scroll position during polling refreshes
-          const existingIds = new Set(prev.map(m => m.message_id))
-          const newMsgs = normalized.filter(m => !existingIds.has(m.message_id))
-          if (newMsgs.length === 0 && prev.length === normalized.length) return prev
-          const normalizedMap = new Map(normalized.map(m => [m.message_id, m]))
-          const merged = prev
-            .filter(m => normalizedMap.has(m.message_id))
-            .map(m => normalizedMap.get(m.message_id)!)
-          for (const m of newMsgs) merged.push(m)
-          merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-          return merged
-        })
+        setHasOlder(normalized.length >= 100)
+      } else if (normalized.length > 0) {
+        setAllMessages((prev) => mergeMessageHistory(prev, normalized))
+        setHasOlder((previous) => previous || normalized.length >= 100)
       }
-      setHasOlder(normalized.length >= 100)
       if (selectedTopicId) {
         setTypingByTopic((prev) => {
           const existing = prev[selectedTopicId]

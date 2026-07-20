@@ -64,6 +64,7 @@ async function mockAuthenticatedMobileApi(
     topics?: typeof mockTopics
     topicMembers?: Array<{ agent_id: string; display_name?: string; role?: string }>
     messages?: Array<Record<string, unknown>>
+    messageResponses?: Array<Array<Record<string, unknown>>>
     mediaCommitUrl?: string
     onTopicMessagePost?: (url: string, body: unknown) => void
     onMediaSign?: (headers: Record<string, string>, body: unknown) => void
@@ -124,7 +125,8 @@ async function mockAuthenticatedMobileApi(
       })
       return
     }
-    await fulfillJson(route, options.messages || [
+    const sequencedMessages = options.messageResponses?.shift()
+    await fulfillJson(route, sequencedMessages || options.messages || [
       {
         message_id: 'message-1',
         topic_id: 'topic-task',
@@ -217,6 +219,29 @@ async function mockAuthenticatedMobileApi(
     })
   })
 }
+
+test('mobile chat keeps rendered history across a transient empty refresh', async ({ page }) => {
+  const history = [
+    {
+      message_id: 'message-persisted',
+      topic_id: 'topic-task',
+      sender_id: 'agent-1',
+      sender_display_name: 'Alice Agent',
+      sender_type: 'agent',
+      content: 'Persisted history message',
+      timestamp: '2026-06-06T01:01:00.000Z',
+    },
+  ]
+  const messageResponses = [history, []]
+  await mockAuthenticatedMobileApi(page, { messageResponses })
+  await page.goto('/mobile/feed?source=android&topic_id=topic-task&agent_id=agent-1')
+
+  await expect(page.getByText('Persisted history message')).toBeVisible()
+  await page.locator('textarea').fill('trigger refresh')
+  await page.getByLabel('发送消息').click()
+  await expect.poll(() => messageResponses.length).toBe(0)
+  await expect(page.getByText('Persisted history message')).toBeVisible()
+})
 
 test('mobile login renders compact auth UI', async ({ page }) => {
   await page.goto('/mobile/login?callbackUrl=/mobile/feed')
