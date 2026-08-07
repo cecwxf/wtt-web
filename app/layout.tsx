@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import { NextAuthProvider } from "@/lib/session-provider";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { I18nProvider } from "@/lib/i18n-provider";
+import { Analytics } from '@vercel/analytics/next';
 
 // Register local variable fonts and expose them via CSS variables.
 const geistSans = localFont({
@@ -52,6 +53,7 @@ export default function RootLayout({
         </NextAuthProvider>
         </I18nProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
