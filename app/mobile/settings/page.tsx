@@ -74,12 +74,14 @@ export default function MobileSettingsPage() {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       })
-      if (!res.ok) return null
+      if (!res.ok) throw new Error(`Billing status unavailable (${res.status})`)
       return res.json() as Promise<BillingMe>
     },
   )
 
-  const plan = String(billing?.entitlement?.plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free'
+  const plan = billing?.entitlement
+    ? (String(billing.entitlement.plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free')
+    : '...'
   const isPro = plan === 'Pro'
   const isTrial = Boolean(billing?.entitlement?.is_trial)
   const membershipLabel = isTrial ? 'Pro 试用用户' : `${plan} 用户`

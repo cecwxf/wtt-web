@@ -1435,7 +1435,7 @@ export default function MobileFeedPage() {
     token ? ['mobile-billing', token] : null,
     async () => {
       const res = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, { headers: authHeaders(token), cache: 'no-store' })
-      if (!res.ok) return null
+      if (!res.ok) throw new Error(`Billing status unavailable (${res.status})`)
       return res.json() as Promise<BillingMe>
     },
     { refreshInterval: 5 * 60_000 },
@@ -2669,7 +2669,7 @@ export default function MobileFeedPage() {
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs font-semibold uppercase text-slate-400">Account</p>
               <p className="mt-1 text-base font-semibold text-slate-900">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
-              <p className="mt-1 text-xs font-medium text-slate-500">{billing?.entitlement?.plan === 'pro' ? 'Pro' : 'Free'} · {quotaText(billing)}</p>
+              <p className="mt-1 text-xs font-medium text-slate-500">{billing?.entitlement ? (billing.entitlement.plan === 'pro' ? 'Pro' : 'Free') : '...'} · {quotaText(billing)}</p>
               <p className="mt-1 text-[11px] font-medium text-slate-400">网络 {browserOnline ? '在线' : '离线'} · WebSocket {wsState}</p>
             </div>
             <a href="/feed" className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-900">打开完整 Web Feed</a>

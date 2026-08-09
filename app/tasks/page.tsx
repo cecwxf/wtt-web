@@ -346,9 +346,13 @@ function TasksPageInner() {
     { refreshInterval: 30_000, revalidateOnFocus: true, dedupingInterval: 5_000 },
   )
 
-  const { data: billingRaw = null } = useSWR(
+  const { data: billingRaw } = useSWR(
     token ? ['tasks-billing', token] : null,
-    async () => fetchJson<Record<string, unknown> | null>(`${CLIENT_WTT_API_BASE}/billing/me`, token, null),
+    async () => {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/billing/me`, { headers: authHeaders(token), cache: 'no-store' })
+      if (!response.ok) throw new Error(`Billing status unavailable (${response.status})`)
+      return response.json() as Promise<Record<string, unknown>>
+    },
     { refreshInterval: 60_000, dedupingInterval: 20_000 },
   )
 
@@ -527,7 +531,8 @@ function TasksPageInner() {
   const totalExecutionMs = hostGroups.reduce((sum, host) => sum + host.executionMs, 0)
   const activeHosts = hostGroups.filter((host) => host.online > 0).length
   const newestActivity = newestTimestamp(tasks, groupTopics)
-  const planLabel = String(((billingRaw?.entitlement as Record<string, unknown> | undefined)?.plan || 'free')).toLowerCase() === 'pro' ? 'Pro' : 'Free'
+  const taskPlan = (billingRaw?.entitlement as Record<string, unknown> | undefined)?.plan
+  const planLabel = taskPlan === undefined ? '...' : (String(taskPlan).toLowerCase() === 'pro' ? 'Pro' : 'Free')
 
   const refreshAll = async () => {
     await Promise.allSettled([

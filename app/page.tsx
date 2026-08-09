@@ -949,19 +949,20 @@ export default function Home() {
   const zh = locale === 'zh'
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('membership')
-  const [billingPlan, setBillingPlan] = useState<'free' | 'pro'>('free')
+  const [billingPlan, setBillingPlan] = useState<'unknown' | 'free' | 'pro'>('unknown')
   const consoleHref = status === 'authenticated' ? '/feed' : '/login'
   const protectedHref = (href: string) => status === 'authenticated' ? href : `/login?callbackUrl=${encodeURIComponent(href)}`
   const arenaHref = protectedHref('/arena')
   const accessToken = (session as { accessToken?: string } | null)?.accessToken
   const planLabel = useMemo(() => {
     if (billingPlan === 'pro') return 'Pro'
-    return 'Free'
+    if (billingPlan === 'free') return 'Free'
+    return '...'
   }, [billingPlan])
 
   useEffect(() => {
     if (status !== 'authenticated' || !accessToken) {
-      setBillingPlan('free')
+      setBillingPlan(status === 'unauthenticated' ? 'free' : 'unknown')
       return
     }
 
@@ -969,15 +970,16 @@ export default function Home() {
     fetch(`${CLIENT_WTT_API_BASE}/billing/me`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
-      .then((response) => response.ok ? response.json() : null)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Billing status unavailable (${response.status})`)
+        return response.json()
+      })
       .then((data: BillingMe | null) => {
         if (cancelled) return
         const plan = String(data?.entitlement?.plan || 'free').toLowerCase()
         setBillingPlan(plan === 'pro' ? 'pro' : 'free')
       })
-      .catch(() => {
-        if (!cancelled) setBillingPlan('free')
-      })
+      .catch(() => undefined)
 
     return () => {
       cancelled = true

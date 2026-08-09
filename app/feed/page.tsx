@@ -1966,16 +1966,14 @@ function FeedPageInner() {
         headers: { Authorization: `Bearer ${session?.accessToken}` },
         cache: 'no-store',
       })
-      if (!response.ok) return null
+      if (!response.ok) throw new Error(`Billing status unavailable (${response.status})`)
       return response.json() as Promise<BillingMe>
     },
     { refreshInterval: 30_000, revalidateOnFocus: true, dedupingInterval: 5_000 }
   )
-  const planLabel = useMemo(() => {
-    const plan = String(billingRaw?.entitlement?.plan || 'free').toLowerCase()
-    if (plan === 'pro') return 'Pro'
-    return 'Free'
-  }, [billingRaw?.entitlement?.plan])
+  const planLabel = !billingRaw?.entitlement
+    ? '...'
+    : (String(billingRaw.entitlement.plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free')
   const hasCloudAgentRecord = useMemo(
     () => agents.some((agent) => (
       (agent.binding_method || agent.bound_via || '') === 'cloud_trial'

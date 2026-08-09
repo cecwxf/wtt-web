@@ -3,6 +3,7 @@ import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
 import TwitterProvider from "next-auth/providers/twitter"
 import CredentialsProvider from "next-auth/providers/credentials"
+import type { JWT } from "next-auth/jwt"
 import { NEXT_AUTH_SECRET } from "@/lib/auth/next-auth-secret"
 
 const WTT_API_URL =
@@ -13,6 +14,50 @@ const WTT_API_URL =
 const ENABLE_TEST_LOGIN = process.env.ENABLE_TEST_LOGIN === 'true'
 const TEST_ADMIN_IDENTIFIER = process.env.TEST_ADMIN_IDENTIFIER || 'test-admin'
 const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-admin-pass'
+const ACCESS_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000
+const REFRESH_RETRY_DELAY_MS = 60 * 1000
+
+type WttAuthTokenResponse = {
+  access_token?: string
+  token?: string
+  refresh_token?: string
+  access_token_expires_at?: string
+  expires_in?: number
+}
+
+function accessTokenExpiry(data: WttAuthTokenResponse): number {
+  const explicit = Date.parse(String(data.access_token_expires_at || ''))
+  if (Number.isFinite(explicit)) return explicit
+  const expiresIn = Number(data.expires_in || 0)
+  return Date.now() + (expiresIn > 0 ? expiresIn * 1000 : 30 * 24 * 60 * 60 * 1000)
+}
+
+async function refreshWttAccessToken(token: JWT): Promise<JWT> {
+  const refreshToken = String(token.refreshToken || '')
+  const accessToken = String(token.accessToken || '')
+  const response = await fetch(`${WTT_API_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(refreshToken
+      ? { refresh_token: refreshToken }
+      : { access_token: accessToken }),
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    throw new Error(`WTT token refresh failed (${response.status})`)
+  }
+  const data = await response.json() as WttAuthTokenResponse
+  const nextAccessToken = data.access_token || data.token
+  if (!nextAccessToken) throw new Error('WTT token refresh returned no access token')
+  return {
+    ...token,
+    accessToken: nextAccessToken,
+    refreshToken: data.refresh_token || token.refreshToken,
+    accessTokenExpiresAt: accessTokenExpiry(data),
+    refreshRetryAt: undefined,
+    accessTokenRefreshError: undefined,
+  }
+}
 
 const authOptions: NextAuthOptions = {
   secret: NEXT_AUTH_SECRET,
@@ -65,6 +110,7 @@ const authOptions: NextAuthOptions = {
             email: 'test-admin@local',
             name: 'Test Admin',
             accessToken: `test-admin-token-${Date.now()}`,
+            accessTokenExpiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
           }
         }
 
@@ -101,6 +147,8 @@ const authOptions: NextAuthOptions = {
             phone: data.phone ?? null,
             name: data.display_name,
             accessToken: data.access_token ?? data.token,
+            refreshToken: data.refresh_token,
+            accessTokenExpiresAt: accessTokenExpiry(data),
           }
         } catch (error) {
           console.error("Login error:", error)
@@ -137,6 +185,8 @@ const authOptions: NextAuthOptions = {
           if (response.ok) {
             const data = await response.json()
             user.accessToken = data.access_token
+            user.refreshToken = data.refresh_token
+            user.accessTokenExpiresAt = accessTokenExpiry(data)
             user.id = data.user?.id ?? data.user_id ?? user.id
           } else {
             const err = await response.text()
@@ -153,20 +203,44 @@ const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.accessToken = user.accessToken
+        token.refreshToken = user.refreshToken
+        token.accessTokenExpiresAt = user.accessTokenExpiresAt
         token.userId = user.id
         token.userName = (user.name as string | undefined) || (user.email as string | undefined) || `user_${String(user.id || '').slice(0, 8)}`
         if ((user as unknown as Record<string, unknown>).githubToken) {
           token.githubToken = (user as unknown as Record<string, unknown>).githubToken
         }
+        token.refreshRetryAt = undefined
+        token.accessTokenRefreshError = undefined
       }
       if (!token.userName && token.userId) {
         token.userName = `user_${String(token.userId).slice(0, 8)}`
       }
-      return token
+      if (user || !token.accessToken) return token
+      if (String(token.accessToken).startsWith('test-admin-token-')) return token
+
+      const now = Date.now()
+      const expiresAt = Number(token.accessTokenExpiresAt || 0)
+      const needsLegacyMigration = !token.refreshToken
+      const needsAccessRefresh = !expiresAt || expiresAt <= now + ACCESS_TOKEN_REFRESH_BUFFER_MS
+      if (!needsLegacyMigration && !needsAccessRefresh) return token
+      if (Number(token.refreshRetryAt || 0) > now) return token
+
+      try {
+        return await refreshWttAccessToken(token)
+      } catch (error) {
+        console.error('WTT access token refresh error:', error)
+        return {
+          ...token,
+          refreshRetryAt: now + REFRESH_RETRY_DELAY_MS,
+          accessTokenRefreshError: 'RefreshAccessTokenError',
+        }
+      }
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string
       session.userId = token.userId as string
+      session.accessTokenRefreshError = token.accessTokenRefreshError as string | undefined
       if (token.githubToken) {
         ;(session as unknown as Record<string, unknown>).githubToken = token.githubToken
       }
@@ -182,6 +256,7 @@ const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: "jwt",
+    maxAge: 180 * 24 * 60 * 60,
   },
 }
 
