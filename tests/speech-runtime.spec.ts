@@ -1,0 +1,82 @@
+import { expect, test } from "@playwright/test";
+import { cleanSpeechText } from "../lib/speech/runtime";
+import { browserAsrModel } from "../lib/speech/model-manifest";
+
+test("speech reading removes code, tables, links, and markdown decoration", () => {
+  const source = [
+    "# 结论",
+    "请查看 [说明](https://example.com/docs) 和 https://example.com/raw。",
+    "| name | value |",
+    "| --- | --- |",
+    "| hidden | row |",
+    "```ts",
+    "const secret = true",
+    "```",
+    "**可以朗读的正文**",
+    "[WTT_INTERNAL]",
+    "private runtime metadata",
+    "[/WTT_INTERNAL]",
+  ].join("\n");
+
+  const cleaned = cleanSpeechText(source);
+  expect(cleaned).toContain("结论");
+  expect(cleaned).toContain("说明");
+  expect(cleaned).toContain("可以朗读的正文");
+  expect(cleaned).not.toContain("secret");
+  expect(cleaned).not.toContain("https://");
+  expect(cleaned).not.toContain("|");
+  expect(cleaned).not.toContain("private runtime metadata");
+});
+
+test("desktop sherpa worker loads its pinned model and decodes locally", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.WTT_SPEECH_MODEL_SMOKE !== "1",
+    "Run explicitly because the pinned model is about 60 MB",
+  );
+  test.setTimeout(240_000);
+  await page.goto("/");
+  const finalText = await page.evaluate(async (model) => {
+    const worker = new Worker("/workers/wtt-sherpa-online-worker.js");
+    try {
+      return await new Promise<string>((resolve, reject) => {
+        const timeout = window.setTimeout(
+          () => reject(new Error("Speech worker smoke timed out")),
+          220_000,
+        );
+        worker.onerror = (event) =>
+          reject(new Error(event.message || "Speech worker failed"));
+        worker.onmessage = (
+          event: MessageEvent<{
+            state?: string;
+            text?: string;
+            error?: string;
+          }>,
+        ) => {
+          if (event.data.state === "error") {
+            window.clearTimeout(timeout);
+            reject(new Error(event.data.error || "Speech worker failed"));
+          } else if (event.data.state === "ready") {
+            worker.postMessage({ type: "start" });
+            const samples = new Float32Array(16_000);
+            worker.postMessage({ type: "audio", samples }, [samples.buffer]);
+            worker.postMessage({ type: "finish" });
+          } else if (event.data.state === "final") {
+            window.clearTimeout(timeout);
+            resolve(String(event.data.text || ""));
+          }
+        };
+        worker.postMessage({
+          type: "init",
+          allowDownload: true,
+          modelId: model.id,
+          files: model.files,
+        });
+      });
+    } finally {
+      worker.terminate();
+    }
+  }, browserAsrModel);
+  expect(finalText).toBe("");
+});

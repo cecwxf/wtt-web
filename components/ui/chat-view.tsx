@@ -21,6 +21,7 @@ import { AgentTerminalPane } from '@/components/ui/agent-terminal-modal'
 import { SandboxWorkspacePanel } from '@/components/ui/sandbox-workspace-panel'
 import { KnowledgeBasePanel } from '@/components/ui/knowledge-base-panel'
 import { RichMarkdown } from '@/components/ui/rich-markdown'
+import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
 
 export interface ChatMessage {
   message_id: string
@@ -3632,6 +3633,9 @@ export function ChatView({
                           <Reply className="h-3 w-3" />
                           回复
                         </button>
+                        {message.sender_type === 'agent' && (
+                          <SpeechReadButton text={message.content || ''} />
+                        )}
                         {isDesktop() && message.sender_type === 'agent' && (
                           <button
                             type="button"
@@ -4030,6 +4034,12 @@ export function ChatView({
           >
             {composerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
+
+          <SpeechInputControl
+            value={draft}
+            onChange={handleDraftChange}
+            inputRef={textareaRef}
+          />
 
           <textarea
             ref={textareaRef}

@@ -23,6 +23,7 @@ import {
   readCachedMessageHistory,
   writeCachedMessageHistory,
 } from '@/lib/chat-history'
+import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
@@ -2178,6 +2179,7 @@ export default function MobileFeedPage() {
                           {isMine ? 'You' : 'AI'}
                         </span>
                         <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-400">{shortTime(message.timestamp)}</span>
+                        {!isMine && <SpeechReadButton text={message.content || ''} />}
                       </div>
                       <div className={`w-full rounded-2xl px-3 py-2 text-[14px] leading-7 ${
                         isMine ? 'bg-slate-100 text-[#0d0d0d]' : 'bg-white text-[#0d0d0d]'
@@ -2366,6 +2368,11 @@ export default function MobileFeedPage() {
               rows={1}
               placeholder={isGroupTopic(selectedTopic) ? '发送到群聊...' : selectedTopic?.task_id ? '给 Agent 发送任务...' : '发送消息...'}
               className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] font-medium leading-6 outline-none placeholder:text-slate-400"
+            />
+            <SpeechInputControl
+              value={draft}
+              onChange={updateComposerDraft}
+              inputRef={composerRef}
             />
             <button
               onClick={() => void sendMessage()}

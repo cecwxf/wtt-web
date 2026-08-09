@@ -445,3 +445,68 @@ test('android mobile settings keeps recovery controls visible', async ({ page })
   await expect(page.getByRole('button', { name: '清缓存并重新登录' })).toBeVisible()
   await expect(page.getByRole('button').first()).toBeVisible()
 })
+
+test('android speech bridge updates the draft and restores it on cancel', async ({ page }) => {
+  await page.addInitScript(() => {
+    const target = window as typeof window & {
+      __WTT_NATIVE_SPEECH__?: { version: number; platform: 'android' }
+      __speechMessages?: string[]
+      ReactNativeWebView?: { postMessage: (message: string) => void }
+    }
+    target.__WTT_NATIVE_SPEECH__ = { version: 1, platform: 'android' }
+    target.__speechMessages = []
+    target.ReactNativeWebView = {
+      postMessage: (message) => target.__speechMessages?.push(message),
+    }
+  })
+  await mockAuthenticatedMobileApi(page)
+  await page.goto('/mobile/feed?source=android&topic_id=topic-p2p&agent_id=agent-1')
+
+  const textarea = page.locator('textarea')
+  await textarea.fill('prefix suffix')
+  await textarea.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(7, 7))
+  await page.getByLabel('语音输入').click()
+  await expect.poll(() => page.evaluate(() => {
+    const messages = (window as typeof window & { __speechMessages?: string[] }).__speechMessages || []
+    return messages.map((message) => JSON.parse(message).command)
+  })).toContain('start-asr')
+
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('wtt-native-speech', {
+    detail: { state: 'listening', model: 'asr' },
+  })))
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('wtt-native-speech', {
+    detail: { state: 'partial', model: 'asr', text: '语音' },
+  })))
+  await expect(textarea).toHaveValue('prefix 语音suffix')
+  await page.getByLabel('取消语音输入').click()
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('wtt-native-speech', {
+    detail: { state: 'cancelled', model: 'asr' },
+  })))
+  await expect(textarea).toHaveValue('prefix suffix')
+
+  await expect(page.getByLabel('朗读回复').first()).toBeVisible()
+  await page.getByLabel('朗读回复').first().click()
+  await expect.poll(() => page.evaluate(() => {
+    const messages = (window as typeof window & { __speechMessages?: string[] }).__speechMessages || []
+    return messages.map((message) => JSON.parse(message).command)
+  })).toContain('speak')
+})
+
+test('desktop speech asks before downloading its local model', async ({ browser }) => {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/125 Safari/537.36',
+  })
+  const page = await context.newPage()
+  await mockAuthenticatedMobileApi(page)
+  let prompt = ''
+  page.on('dialog', async (dialog) => {
+    prompt = dialog.message()
+    await dialog.dismiss()
+  })
+  await page.goto('/mobile/feed?topic_id=topic-p2p&agent_id=agent-1')
+  await page.getByLabel('语音输入').click()
+  await expect.poll(() => prompt).toMatch(/60|离线语音识别|offline speech recognition/i)
+  await expect(page.getByLabel('语音输入')).toBeVisible()
+  await context.close()
+})
