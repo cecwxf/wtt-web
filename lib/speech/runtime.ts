@@ -4,6 +4,7 @@ import { browserAsrModel } from "./model-manifest";
 
 export type SpeechState =
   | "ready"
+  | "cached"
   | "model-required"
   | "downloading"
   | "initializing"
@@ -115,6 +116,7 @@ class BrowserAsrEngine {
     const worker = new Worker("/workers/wtt-sherpa-online-worker.js");
     worker.onmessage = (message: MessageEvent<SpeechRuntimeEvent>) => {
       const event = message.data;
+      if (event.state === "cached") return;
       if (event.state === "ready" && this.starting) {
         void this.startCapture();
         return;
@@ -148,6 +150,14 @@ class BrowserAsrEngine {
     };
     this.worker = worker;
     return worker;
+  }
+
+  prefetch() {
+    this.ensureWorker().postMessage({
+      type: "prefetch",
+      modelId: browserAsrModel.id,
+      files: browserAsrModel.files,
+    });
   }
 
   start(allowDownload = false) {
@@ -261,6 +271,14 @@ class SpeechRuntime {
       "wtt-native-speech",
       this.handleNativeEvent as EventListener,
     );
+    if (!nativeAvailable() && !isMobileBrowser()) {
+      window.setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          this.browserAsr ??= new BrowserAsrEngine(this.emit);
+          this.browserAsr.prefetch();
+        }
+      }, 2_000);
+    }
   }
 
   subscribe(listener: (event: SpeechRuntimeEvent) => void) {

@@ -84,14 +84,16 @@ async function downloadFile(cache, file, fileIndex, fileCount, aggregate) {
         (total, value) => total + value,
         0,
       );
-      post("downloading", {
-        model: "asr",
-        downloadedBytes,
-        totalBytes: aggregate.total,
-        progress: Math.min(1, downloadedBytes / aggregate.total),
-        fileIndex: fileIndex + 1,
-        fileCount,
-      });
+      if (!aggregate.silent) {
+        post("downloading", {
+          model: "asr",
+          downloadedBytes,
+          totalBytes: aggregate.total,
+          progress: Math.min(1, downloadedBytes / aggregate.total),
+          fileIndex: fileIndex + 1,
+          fileCount,
+        });
+      }
     }
     blob = new Blob(chunks, { type: "application/octet-stream" });
   }
@@ -131,6 +133,27 @@ async function modelObjectUrls(files) {
     ),
   );
   return blobs.map((blob) => URL.createObjectURL(blob));
+}
+
+async function prefetch(message) {
+  const files = Array.isArray(message.files) ? message.files : [];
+  if (!files.length) throw new Error("Speech model manifest is empty");
+  if (!(await modelIsCached(files))) {
+    if (!("caches" in self))
+      throw new Error("Browser model cache is unavailable");
+    const cache = await caches.open(CACHE_NAME);
+    const aggregate = {
+      loaded: files.map(() => 0),
+      total: files.reduce((total, file) => total + file.size, 0),
+      silent: true,
+    };
+    await Promise.all(
+      files.map((file, index) =>
+        downloadFile(cache, file, index, files.length, aggregate),
+      ),
+    );
+  }
+  post("cached", { model: "asr" });
 }
 
 function waitForRuntime() {
@@ -258,7 +281,8 @@ function finish() {
 self.onmessage = async (event) => {
   const message = event.data || {};
   try {
-    if (message.type === "init") await initialize(message);
+    if (message.type === "prefetch") await prefetch(message);
+    else if (message.type === "init") await initialize(message);
     else if (message.type === "start") resetStream();
     else if (message.type === "audio") accept(message.samples);
     else if (message.type === "finish") finish();

@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run speech:prepare",
     "build": "node -r ./scripts/rename-fallback.cjs ./node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",
     "smoke:slash": "bash ./scripts/smoke-slash.sh",
-    "test:mobile-ui": "playwright test tests/mobile-ui.spec.ts"
+    "test:mobile-ui": "playwright test tests/mobile-ui.spec.ts",
+    "speech:prepare": "node ./scripts/prepare-browser-speech-model.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

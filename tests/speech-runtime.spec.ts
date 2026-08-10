@@ -80,3 +80,38 @@ test("desktop sherpa worker loads its pinned model and decodes locally", async (
   }, browserAsrModel);
   expect(finalText).toBe("");
 });
+
+test("desktop sherpa worker supports silent model prefetch", async ({ page }) => {
+  test.skip(
+    process.env.WTT_SPEECH_MODEL_SMOKE !== "1",
+    "Run explicitly because the pinned model is about 60 MB",
+  );
+  test.setTimeout(180_000);
+  await page.goto("/");
+  const states = await page.evaluate(async (model) => {
+    const worker = new Worker("/workers/wtt-sherpa-online-worker.js");
+    try {
+      return await new Promise<string[]>((resolve, reject) => {
+        const observed: string[] = [];
+        const timeout = window.setTimeout(
+          () => reject(new Error("Speech model prefetch timed out")),
+          160_000,
+        );
+        worker.onerror = (event) => reject(new Error(event.message || "Speech worker failed"));
+        worker.onmessage = (event: MessageEvent<{ state?: string; error?: string }>) => {
+          const state = String(event.data.state || "");
+          observed.push(state);
+          if (state === "error") reject(new Error(event.data.error || "Speech prefetch failed"));
+          if (state === "cached") {
+            window.clearTimeout(timeout);
+            resolve(observed);
+          }
+        };
+        worker.postMessage({ type: "prefetch", modelId: model.id, files: model.files });
+      });
+    } finally {
+      worker.terminate();
+    }
+  }, browserAsrModel);
+  expect(states).toEqual(["cached"]);
+});
