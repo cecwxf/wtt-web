@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cleanSpeechText } from "../lib/speech/runtime";
 import { browserAsrModel } from "../lib/speech/model-manifest";
 
@@ -28,16 +30,43 @@ test("speech reading removes code, tables, links, and markdown decoration", () =
   expect(cleaned).not.toContain("private runtime metadata");
 });
 
-test("desktop sherpa worker loads its pinned model and decodes locally", async ({
+test("desktop sherpa worker recognizes speech with the pinned model locally", async ({
   page,
 }) => {
   test.skip(
     process.env.WTT_SPEECH_MODEL_SMOKE !== "1",
-    "Run explicitly because the pinned model is about 60 MB",
+    "Run explicitly because the pinned high-accuracy model is about 226 MiB",
   );
   test.setTimeout(240_000);
+  const sampleAudio = execFileSync(
+    "curl",
+    [
+      "--fail",
+      "--location",
+      "--silent",
+      "--show-error",
+      "--retry",
+      "4",
+      "--retry-all-errors",
+      "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/8e40c43232a1c5c66c82111efc5820d3accca11b/test_wavs/0.wav",
+    ],
+    { maxBuffer: 1024 * 1024 },
+  );
+  expect(createHash("sha256").update(sampleAudio).digest("hex")).toBe(
+    "7d93384ca14702cc584a7a33fe2fed92e89e708549161cb12ea38c916882103b",
+  );
+  await page.route("**/speech-model-test.wav", (route) =>
+    route.fulfill({ body: sampleAudio, contentType: "audio/wav" }),
+  );
   await page.goto("/");
   const finalText = await page.evaluate(async (model) => {
+    const audioResponse = await fetch("/speech-model-test.wav");
+    const audioContext = new AudioContext({ sampleRate: 16_000 });
+    const decoded = await audioContext.decodeAudioData(
+      await audioResponse.arrayBuffer(),
+    );
+    const samples = new Float32Array(decoded.getChannelData(0));
+    await audioContext.close();
     const worker = new Worker("/workers/wtt-sherpa-online-worker.js");
     try {
       return await new Promise<string>((resolve, reject) => {
@@ -59,7 +88,6 @@ test("desktop sherpa worker loads its pinned model and decodes locally", async (
             reject(new Error(event.data.error || "Speech worker failed"));
           } else if (event.data.state === "ready") {
             worker.postMessage({ type: "start" });
-            const samples = new Float32Array(16_000);
             worker.postMessage({ type: "audio", samples }, [samples.buffer]);
             worker.postMessage({ type: "finish" });
           } else if (event.data.state === "final") {
@@ -78,13 +106,13 @@ test("desktop sherpa worker loads its pinned model and decodes locally", async (
       worker.terminate();
     }
   }, browserAsrModel);
-  expect(finalText).toBe("");
+  expect(finalText).toContain("昨天");
 });
 
 test("desktop sherpa worker supports silent model prefetch", async ({ page }) => {
   test.skip(
     process.env.WTT_SPEECH_MODEL_SMOKE !== "1",
-    "Run explicitly because the pinned model is about 60 MB",
+    "Run explicitly because the pinned high-accuracy model is about 226 MiB",
   );
   test.setTimeout(180_000);
   await page.goto("/");

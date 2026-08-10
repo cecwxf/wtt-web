@@ -198,7 +198,7 @@ function waitForRuntime() {
 
 async function initialize(message) {
   const files = Array.isArray(message.files) ? message.files : [];
-  const modelId = String(message.modelId || "wtt-zipformer");
+  const modelId = String(message.modelId || "wtt-paraformer");
   if (!files.length) throw new Error("Speech model manifest is empty");
   if (recognizer && initializedModel === modelId) {
     post("ready", { model: "asr" });
@@ -226,11 +226,10 @@ async function initialize(message) {
     files.map((file, index) => [file.path, urls[index]]),
   );
   const loadedModel = await self.SherpaOnnx.ASR.loadModel({
-    type: "transducer",
+    type: "paraformer",
     modelDir: "/wtt-asr",
     encoder: byPath["encoder.onnx"],
     decoder: byPath["decoder.onnx"],
-    joiner: byPath["joiner.onnx"],
     tokens: byPath["tokens.txt"],
     debug: 0,
   });
@@ -241,8 +240,8 @@ async function initialize(message) {
     decodingMethod: "greedy_search",
     maxActivePaths: 4,
     enableEndpoint: 1,
-    rule1MinTrailingSilence: 1.8,
-    rule2MinTrailingSilence: 0.9,
+    rule1MinTrailingSilence: 2.4,
+    rule2MinTrailingSilence: 1.2,
     rule3MinUtteranceLength: 20,
   });
   if (!recognizer || !recognizer.handle)
