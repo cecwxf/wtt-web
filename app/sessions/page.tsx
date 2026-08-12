@@ -24,6 +24,7 @@ import {
   Search,
   Sparkles,
   TerminalSquare,
+  Zap,
 } from 'lucide-react'
 
 import { ChatView, type ChatMessage, type ChatRunStatus } from '@/components/ui/chat-view'
@@ -49,6 +50,15 @@ interface CliSessionRow {
   last_error: string
   message_count: number
   imported_event_count: number
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cache_read_tokens: number
+    cache_write_tokens: number
+    reasoning_tokens: number
+    total_tokens: number
+    source: string
+  }
   agent_online?: boolean
 }
 
@@ -112,6 +122,13 @@ function projectName(pathValue: string) {
   return clean.split(/[\\/]/).filter(Boolean).pop() || 'Unknown project'
 }
 
+function formatTokenCount(value?: number) {
+  const count = Number(value || 0)
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 1 : 2)}M`
+  if (count >= 1_000) return `${(count / 1_000).toFixed(count >= 100_000 ? 0 : 1)}K`
+  return String(count)
+}
+
 function SessionPageInner() {
   const { data: authSession, status } = useSession()
   const router = useRouter()
@@ -173,7 +190,10 @@ function SessionPageInner() {
   )
 
   useEffect(() => {
-    if (!detail?.session || detail.session.import_status !== 'catalogued' || !token) return
+    if (!detail?.session || !token) return
+    const needsInitialSync = detail.session.import_status === 'catalogued'
+      || (detail.session.import_status === 'ready' && !detail.session.usage?.source)
+    if (!needsInitialSync) return
     if (importRequestedRef.current.has(detail.session.id)) return
     importRequestedRef.current.add(detail.session.id)
     void fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(detail.session.id)}/import`, {
@@ -361,6 +381,7 @@ function SessionPageInner() {
                 </div>
                 <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
                   <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{relativeTime(row.source_updated_at, zh)}</span>
+                  <span className="ml-auto mr-3 flex items-center gap-1 font-bold text-amber-600 dark:text-amber-300"><Zap className="h-3 w-3" />{formatTokenCount(row.usage?.total_tokens)}</span>
                   <span className={`flex items-center gap-1 font-bold ${row.agent_online ? 'text-emerald-600' : 'text-slate-400'}`}><span className={`h-1.5 w-1.5 rounded-full ${row.agent_online ? 'bg-emerald-500' : 'bg-slate-300'}`} />{row.agent_online ? (zh ? '可继续' : 'Resumable') : (zh ? '离线' : 'Offline')}</span>
                 </div>
               </button>
@@ -388,10 +409,19 @@ function SessionPageInner() {
                     {detail.session.git_branch && <span className="flex items-center gap-1"><GitBranch className="h-3 w-3" />{detail.session.git_branch}</span>}
                   </div>
                 </div>
-                {detail.session.import_status === 'error' && <button onClick={() => void importSelected()} disabled={!detail.session.agent_online} className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700 disabled:opacity-40 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"><RefreshCw className="h-3.5 w-3.5" />{zh ? '重试导入' : 'Retry import'}</button>}
+                <button onClick={() => void importSelected()} disabled={!detail.session.agent_online || detail.session.import_status === 'importing'} className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700 disabled:opacity-40 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300" title={zh ? '从原生 CLI 会话同步历史及 Token 用量' : 'Sync history and Token usage from the native CLI session'}><RefreshCw className={`h-3.5 w-3.5 ${detail.session.import_status === 'importing' ? 'animate-spin' : ''}`} />{zh ? '同步' : 'Sync'}</button>
                 <button onClick={() => void sendMessage(zh ? '请总结当前会话的目标、关键决策、已完成工作、未解决问题和下一步行动。' : 'Summarize this session: goals, key decisions, completed work, unresolved issues, and next actions.')} disabled={!detail.session.agent_online || detail.session.run_status === 'running'} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black text-slate-600 hover:border-sky-300 hover:text-sky-700 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300"><Sparkles className="h-3.5 w-3.5" />{zh ? '总结' : 'Summarize'}</button>
                 <button onClick={() => downloadSession(detail)} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:text-sky-700 dark:border-zinc-800"><Download className="h-3.5 w-3.5" /></button>
               </div>
+              {detail.session.usage?.total_tokens > 0 && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-amber-100 bg-amber-50/70 px-4 py-1.5 text-[10px] font-bold text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-200">
+                  <span className="flex items-center gap-1"><Zap className="h-3 w-3" />Token {formatTokenCount(detail.session.usage.total_tokens)}</span>
+                  <span>{zh ? '输入' : 'Input'} {formatTokenCount(detail.session.usage.input_tokens)}</span>
+                  <span>{zh ? '输出' : 'Output'} {formatTokenCount(detail.session.usage.output_tokens)}</span>
+                  <span>{zh ? '缓存' : 'Cache'} {formatTokenCount(detail.session.usage.cache_read_tokens + detail.session.usage.cache_write_tokens)}</span>
+                  {detail.session.usage.reasoning_tokens > 0 && <span>{zh ? '推理' : 'Reasoning'} {formatTokenCount(detail.session.usage.reasoning_tokens)}</span>}
+                </div>
+              )}
               {detail.session.import_status === 'importing' && <div className="flex items-center gap-2 border-b border-sky-100 bg-sky-50 px-4 py-2 text-[11px] font-bold text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300"><Loader2 className="h-3.5 w-3.5 animate-spin" />{zh ? '正在从原主机按需导入历史记录' : 'Importing history from the source host'}</div>}
               <div className="min-h-0 flex-1">
                 <ChatView
