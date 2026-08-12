@@ -16,6 +16,7 @@ import {
   Crown,
   GraduationCap,
   HardDrive,
+  History,
   MessageSquareText,
   Monitor,
   PenTool,
@@ -49,6 +50,14 @@ const WttSettingsModal = dynamic(
 )
 
 const productPillars = [
+  {
+    href: '/sessions',
+    zhTitle: 'CLI 会话库',
+    enTitle: 'CLI Sessions',
+    zhDesc: '集中查看、搜索和总结你在不同主机上直接使用 Codex / Claude Code CLI 产生的历史会话，并从 WTT Web 继续原生会话。',
+    enDesc: 'Browse, search, and summarize native Codex / Claude Code CLI history across hosts, then continue the original session from WTT Web.',
+    icon: History,
+  },
   {
     href: '/studio',
     zhTitle: 'WTT Studio',
