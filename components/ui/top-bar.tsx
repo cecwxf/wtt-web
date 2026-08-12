@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, FileEdit, KanbanSquare, Plus, Sun, Moon, Languages, Compass, Trophy } from 'lucide-react'
+import { Bell, FileEdit, KanbanSquare, Plus, Sun, Moon, Languages, Compass, Trophy, TerminalSquare } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { SearchBar } from './search-bar'
@@ -67,6 +67,15 @@ export function TopBar({ onSelectTopic, onSubscribeTopic, subscribedTopicIds, on
         >
           <KanbanSquare className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{t('top.tasks')}</span>
+        </Link>
+
+        <Link
+          href="/sessions"
+          className="inline-flex items-center gap-1.5 rounded-full border border-sky-200/80 bg-sky-50/80 px-2 py-1.5 text-xs text-sky-700 transition hover:bg-sky-100 hover:text-sky-800 dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-300 dark:hover:bg-sky-950/40 dark:hover:text-sky-200 xl:px-2.5"
+          title={locale === 'zh' ? 'CLI 会话' : 'CLI Sessions'}
+        >
+          <TerminalSquare className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{locale === 'zh' ? 'CLI 会话' : 'CLI Sessions'}</span>
         </Link>
 
         <Link
