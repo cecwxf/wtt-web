@@ -14,6 +14,7 @@ import {
   Clock3,
   CloudOff,
   Code2,
+  Combine,
   Download,
   FolderGit2,
   Home,
@@ -24,6 +25,7 @@ import {
   Search,
   Sparkles,
   TerminalSquare,
+  X,
   Zap,
 } from 'lucide-react'
 
@@ -80,6 +82,12 @@ interface CliSessionDetailResponse {
   session: CliSessionRow
   events: CliSessionEvent[]
   event_total: number
+}
+
+interface FusionCreateResponse {
+  accepted: boolean
+  fusion: { id: string; status: string }
+  target_session: CliSessionRow
 }
 
 function authHeaders(token?: string, json = false): Record<string, string> {
@@ -142,6 +150,13 @@ function SessionPageInner() {
   const [discovering, setDiscovering] = useState(false)
   const [actionError, setActionError] = useState('')
   const [eventLimit, setEventLimit] = useState(500)
+  const [fusionMode, setFusionMode] = useState(false)
+  const [fusionSourceIds, setFusionSourceIds] = useState<string[]>([])
+  const [fusionOpen, setFusionOpen] = useState(false)
+  const [fusionTarget, setFusionTarget] = useState('')
+  const [fusionPath, setFusionPath] = useState('')
+  const [fusionTitle, setFusionTitle] = useState('')
+  const [fusionSubmitting, setFusionSubmitting] = useState(false)
   const importRequestedRef = useRef(new Set<string>())
   const selectedId = searchParams.get('sessionId') || ''
 
@@ -177,6 +192,16 @@ function SessionPageInner() {
     return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label))
   }, [listData?.items])
 
+  const fusionSources = useMemo(() => (listData?.items || []).filter((row) => fusionSourceIds.includes(row.id)), [fusionSourceIds, listData?.items])
+  const fusionTargets = useMemo(() => {
+    const targets = new Map<string, CliSessionRow>()
+    for (const row of listData?.items || []) {
+      if (!row.agent_online) continue
+      targets.set(`${row.agent_id}|${row.adapter}`, row)
+    }
+    return Array.from(targets.entries())
+  }, [listData?.items])
+
   useEffect(() => setEventLimit(500), [selectedId])
 
   const detailUrl = token && selectedId ? `${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(selectedId)}?event_limit=${eventLimit}` : null
@@ -191,6 +216,7 @@ function SessionPageInner() {
 
   useEffect(() => {
     if (!detail?.session || !token) return
+    if (['queued', 'running'].includes(detail.session.run_status) || detail.session.native_session_id.startsWith('fusion-pending-')) return
     const needsInitialSync = detail.session.import_status === 'catalogued'
       || (detail.session.import_status === 'ready' && !detail.session.usage?.source)
     if (!needsInitialSync) return
@@ -263,6 +289,53 @@ function SessionPageInner() {
     await mutateDetail()
     await mutateList()
   }, [mutateDetail, mutateList, selectedId, token])
+
+  const toggleFusionSource = useCallback((sessionId: string) => {
+    setFusionSourceIds((current) => current.includes(sessionId)
+      ? current.filter((value) => value !== sessionId)
+      : current.length < 8 ? [...current, sessionId] : current)
+  }, [])
+
+  const openFusionDialog = useCallback(() => {
+    if (fusionSourceIds.length < 2) return
+    const preferred = fusionSources.find((row) => row.agent_online) || fusionSources[0]
+    const targetKey = preferred ? `${preferred.agent_id}|${preferred.adapter}` : fusionTargets[0]?.[0] || ''
+    setFusionTarget(targetKey)
+    setFusionPath(preferred?.project_path || '')
+    setFusionTitle(zh ? `融合记忆 · ${fusionSources[0]?.title || 'CLI 会话'}` : `Fused memory · ${fusionSources[0]?.title || 'CLI session'}`)
+    setFusionOpen(true)
+  }, [fusionSourceIds.length, fusionSources, fusionTargets, zh])
+
+  const createFusion = useCallback(async () => {
+    if (!token || fusionSubmitting || fusionSourceIds.length < 2 || !fusionTarget || !fusionPath.trim()) return
+    const [targetAgentId, targetAdapter] = fusionTarget.split('|')
+    setFusionSubmitting(true)
+    setActionError('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/fusions`, {
+        method: 'POST',
+        headers: authHeaders(token, true),
+        body: JSON.stringify({
+          source_session_ids: fusionSourceIds,
+          target_agent_id: targetAgentId,
+          target_adapter: targetAdapter,
+          project_path: fusionPath.trim(),
+          title: fusionTitle.trim() || 'Fused CLI memory',
+        }),
+      })
+      if (!response.ok) throw new Error(await responseText(response))
+      const result = await response.json() as FusionCreateResponse
+      setFusionOpen(false)
+      setFusionMode(false)
+      setFusionSourceIds([])
+      await mutateList()
+      router.push(`/sessions?sessionId=${encodeURIComponent(result.target_session.id)}`)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setFusionSubmitting(false)
+    }
+  }, [fusionPath, fusionSourceIds, fusionSubmitting, fusionTarget, fusionTitle, mutateList, router, token])
 
   const chatMessages = useMemo<ChatMessage[]>(() => (detail?.events || [])
     .filter((event) => ['message', 'error'].includes(event.kind))
@@ -359,6 +432,16 @@ function SessionPageInner() {
               <button key={value} onClick={() => setAdapterFilter(value)} className={`flex-1 rounded-lg px-2 py-1.5 text-[10px] font-black ${adapterFilter === value ? 'bg-white text-slate-900 shadow-sm dark:bg-zinc-800 dark:text-white' : 'text-slate-500'}`}>{label}</button>
             ))}
           </div>
+          <div className="mb-3 flex items-center gap-2">
+            {!fusionMode ? (
+              <button onClick={() => setFusionMode(true)} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-black text-sky-800 hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200"><Combine className="h-3.5 w-3.5" />{zh ? '融合 CLI 记忆' : 'Fuse CLI memory'}</button>
+            ) : (
+              <>
+                <button onClick={openFusionDialog} disabled={fusionSourceIds.length < 2} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2 text-[10px] font-black text-white disabled:opacity-40"><Combine className="h-3.5 w-3.5" />{zh ? `融合所选 (${fusionSourceIds.length}/8)` : `Fuse selected (${fusionSourceIds.length}/8)`}</button>
+                <button onClick={() => { setFusionMode(false); setFusionSourceIds([]) }} className="rounded-xl border border-slate-200 p-2 text-slate-500 dark:border-zinc-800"><X className="h-3.5 w-3.5" /></button>
+              </>
+            )}
+          </div>
           {(listError || actionError) && <p className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">{actionError || listError?.message}</p>}
           {listLoading && <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-sky-600" /></div>}
           {!listLoading && !visibleSessions.length && (
@@ -370,8 +453,9 @@ function SessionPageInner() {
           )}
           <div className="space-y-2">
             {visibleSessions.map((row) => (
-              <button key={row.id} onClick={() => router.push(`/sessions?sessionId=${encodeURIComponent(row.id)}`)} className={`group w-full rounded-2xl border p-3 text-left transition ${selectedId === row.id ? 'border-sky-300 bg-white shadow-[0_8px_30px_rgba(14,165,233,0.12)] dark:border-sky-500/60 dark:bg-zinc-900' : 'border-transparent bg-white/55 hover:border-slate-200 hover:bg-white dark:bg-zinc-900/35 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'}`}>
+              <button key={row.id} onClick={() => fusionMode ? toggleFusionSource(row.id) : router.push(`/sessions?sessionId=${encodeURIComponent(row.id)}`)} className={`group w-full rounded-2xl border p-3 text-left transition ${fusionSourceIds.includes(row.id) ? 'border-cyan-400 bg-cyan-50 shadow-[0_8px_24px_rgba(6,182,212,0.13)] dark:border-cyan-500 dark:bg-cyan-950/25' : selectedId === row.id ? 'border-sky-300 bg-white shadow-[0_8px_30px_rgba(14,165,233,0.12)] dark:border-sky-500/60 dark:bg-zinc-900' : 'border-transparent bg-white/55 hover:border-slate-200 hover:bg-white dark:bg-zinc-900/35 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'}`}>
                 <div className="flex items-start gap-3">
+                  {fusionMode && <span className={`mt-2 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-black ${fusionSourceIds.includes(row.id) ? 'border-cyan-500 bg-cyan-500 text-white' : 'border-slate-300 text-transparent dark:border-zinc-600'}`}>✓</span>}
                   <div className={`mt-0.5 rounded-xl p-2 ${row.adapter === 'codex' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300'}`}>{row.adapter === 'codex' ? <Code2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}</div>
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-xs font-black leading-5">{row.title}</p>
@@ -444,6 +528,30 @@ function SessionPageInner() {
           )}
         </section>
       </section>
+      {fusionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !fusionSubmitting) setFusionOpen(false) }}>
+          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-950">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-sm font-black">{zh ? '创建融合 CLI 会话' : 'Create fused CLI session'}</p><p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-zinc-400">{zh ? `将 ${fusionSourceIds.length} 个可见历史融合到一个全新的原生会话。源会话不会被修改。` : `Initialize one new native session from ${fusionSourceIds.length} visible histories. Source sessions remain unchanged.`}</p></div>
+              <button onClick={() => setFusionOpen(false)} disabled={fusionSubmitting} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-900"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-4 max-h-28 space-y-1 overflow-y-auto rounded-2xl bg-slate-50 p-3 dark:bg-zinc-900/70">
+              {fusionSources.map((row, index) => <p key={row.id} className="truncate text-[10px] font-semibold text-slate-600 dark:text-zinc-300"><span className="mr-2 text-cyan-600">{index + 1}</span>{row.adapter} · {row.title}</p>)}
+            </div>
+            <label className="mt-4 block text-[10px] font-black uppercase tracking-wider text-slate-500">{zh ? '目标 Agent / Adapter' : 'Target Agent / adapter'}
+              <select value={fusionTarget} onChange={(event) => { setFusionTarget(event.target.value); const row = fusionTargets.find(([key]) => key === event.target.value)?.[1]; if (row?.project_path) setFusionPath(row.project_path) }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900">
+                {fusionTargets.map(([key, row]) => <option key={key} value={key}>{row.host_name || row.agent_id} · {row.agent_id} · {row.adapter}</option>)}
+              </select>
+            </label>
+            <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-slate-500">{zh ? '新会话标题' : 'New session title'}<input value={fusionTitle} onChange={(event) => setFusionTitle(event.target.value)} maxLength={500} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900" /></label>
+            <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-slate-500">{zh ? '目标工作目录' : 'Target workspace'}<input value={fusionPath} onChange={(event) => setFusionPath(event.target.value)} maxLength={4000} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900" /></label>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button onClick={() => setFusionOpen(false)} disabled={fusionSubmitting} className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-900">{zh ? '取消' : 'Cancel'}</button>
+              <button onClick={() => void createFusion()} disabled={fusionSubmitting || !fusionTarget || !fusionPath.trim()} className="flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-sky-600/20 disabled:opacity-40">{fusionSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Combine className="h-4 w-4" />}{zh ? '创建新原生会话' : 'Create native session'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
