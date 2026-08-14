@@ -111,6 +111,13 @@ interface SessionWorkspaceGroup {
   sessions: CliSessionRow[]
 }
 
+interface SessionHostGroup {
+  key: string
+  name: string
+  workspaces: SessionWorkspaceGroup[]
+  sessionCount: number
+}
+
 function authHeaders(token?: string, json = false): Record<string, string> {
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -240,25 +247,40 @@ function SessionPageInner() {
     { refreshInterval: discovering ? 2000 : 10_000, revalidateOnFocus: true },
   )
 
-  const workspaceGroups = useMemo<SessionWorkspaceGroup[]>(() => {
-    const groups = new Map<string, SessionWorkspaceGroup>()
+  const hostGroups = useMemo<SessionHostGroup[]>(() => {
+    const hosts = new Map<string, Map<string, SessionWorkspaceGroup>>()
     for (const row of listData?.items || []) {
+      const host = row.host_name?.trim() || (zh ? '未知主机' : 'Unknown host')
       const path = row.project_path || (zh ? '未知工作区' : 'Unknown workspace')
-      const key = path
-      const group = groups.get(key) || { key, path, name: projectName(path), sessions: [] }
+      const workspaces = hosts.get(host) || new Map<string, SessionWorkspaceGroup>()
+      const key = `workspace:${host}:${path}`
+      const group = workspaces.get(path) || { key, path, name: projectName(path), sessions: [] }
       group.sessions.push(row)
-      groups.set(key, group)
+      workspaces.set(path, group)
+      hosts.set(host, workspaces)
     }
-    return Array.from(groups.values())
-      .map((group) => ({ ...group, sessions: group.sessions.sort((a, b) => String(b.source_updated_at || '').localeCompare(String(a.source_updated_at || ''))) }))
-      .sort((a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path))
+    return Array.from(hosts.entries())
+      .map(([host, workspaces]) => {
+        const groupedWorkspaces = Array.from(workspaces.values())
+          .map((group) => ({ ...group, sessions: group.sessions.sort((a, b) => String(b.source_updated_at || '').localeCompare(String(a.source_updated_at || ''))) }))
+          .sort((a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path))
+        return {
+          key: `host:${host}`,
+          name: host,
+          workspaces: groupedWorkspaces,
+          sessionCount: groupedWorkspaces.reduce((total, workspace) => total + workspace.sessions.length, 0),
+        }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name))
   }, [listData?.items, zh])
 
   useEffect(() => {
     if (!selectedId) return
-    const selectedGroup = workspaceGroups.find((group) => group.sessions.some((session) => session.id === selectedId))
-    if (selectedGroup) setWorkspaceExpanded(selectedGroup.key, true)
-  }, [selectedId, setWorkspaceExpanded, workspaceGroups])
+    const selectedHost = hostGroups.find((host) => host.workspaces.some((workspace) => workspace.sessions.some((session) => session.id === selectedId)))
+    const selectedWorkspace = selectedHost?.workspaces.find((workspace) => workspace.sessions.some((session) => session.id === selectedId))
+    if (selectedHost) setWorkspaceExpanded(selectedHost.key, true)
+    if (selectedWorkspace) setWorkspaceExpanded(selectedWorkspace.key, true)
+  }, [hostGroups, selectedId, setWorkspaceExpanded])
 
   const fusionSources = useMemo(() => (listData?.items || []).filter((row) => fusionSourceIds.includes(row.id)), [fusionSourceIds, listData?.items])
   const fusionTargets = useMemo(() => {
@@ -566,23 +588,39 @@ function SessionPageInner() {
           </div>
           <div className={styles.sessionList}>
             {(listError || actionError) && <p className={styles.errorText}>{actionError || listError?.message}</p>}
-            {!listLoading && workspaceGroups.length === 0 && <p className={styles.emptyList}>{zh ? '尚未发现 CLI 会话。点击扫描读取已绑定主机的原生历史。' : 'No CLI sessions found. Scan bound hosts to read native history.'}</p>}
-            {workspaceGroups.map((group, index) => {
-              const open = Boolean(query) || expandedWorkspaces.has(group.key) || group.sessions.some((session) => session.id === selectedId) || (expandedWorkspaces.size === 0 && index === 0)
+            {!listLoading && hostGroups.length === 0 && <p className={styles.emptyList}>{zh ? '尚未发现 CLI 会话。点击扫描读取已绑定主机的原生历史。' : 'No CLI sessions found. Scan bound hosts to read native history.'}</p>}
+            {hostGroups.map((host, hostIndex) => {
+              const hostHasSelected = host.workspaces.some((workspace) => workspace.sessions.some((session) => session.id === selectedId))
+              const hostOpen = Boolean(query) || expandedWorkspaces.has(host.key) || hostHasSelected || (expandedWorkspaces.size === 0 && hostIndex === 0)
               return (
-                <details key={group.key} className={styles.workspaceGroup} open={open} onToggle={(event) => setWorkspaceExpanded(group.key, event.currentTarget.open)}>
-                  <summary className={styles.workspaceSummary} title={group.path}>
-                    <span className={styles.workspaceIcon}>W</span>
-                    <span className={styles.workspaceLabel}><strong>{group.name}</strong><span>{group.path}</span></span>
-                    <span className={styles.workspaceCount}>{group.sessions.length}</span>
+                <details key={host.key} className={styles.hostGroup} open={hostOpen} onToggle={(event) => setWorkspaceExpanded(host.key, event.currentTarget.open)}>
+                  <summary className={styles.hostSummary} title={host.name}>
+                    <span className={styles.hostIcon}>H</span>
+                    <span className={styles.hostLabel}><strong>{host.name}</strong><span>{host.workspaces.length} workspaces</span></span>
+                    <span className={styles.workspaceCount}>{host.sessionCount}</span>
                   </summary>
-                  <div className={styles.workspaceSessions}>
-                    {group.sessions.map((row) => (
-                      <button type="button" key={row.id} className={`${styles.sessionRow} ${selectedId === row.id || fusionSourceIds.includes(row.id) ? styles.sessionRowActive : ''}`} onClick={() => fusionMode ? toggleFusionSource(row.id) : router.push(`/sessions?sessionId=${encodeURIComponent(row.id)}`)}>
-                        {fusionMode ? <span className={styles.sessionSelect}>{fusionSourceIds.includes(row.id) ? '✓' : '□'}</span> : <span className={styles.sessionGlyph}>{row.adapter === 'codex' ? 'Cx' : 'Cl'}</span>}
-                        <span className={styles.sessionCopy}><strong>{row.title || 'Untitled session'}</strong><span>{row.adapter} · {relativeTime(row.source_updated_at, zh)} · {formatTokenCount(row.usage?.total_tokens)} tok</span></span>
-                      </button>
-                    ))}
+                  <div className={styles.hostWorkspaces}>
+                    {host.workspaces.map((workspace, workspaceIndex) => {
+                      const workspaceHasSelected = workspace.sessions.some((session) => session.id === selectedId)
+                      const workspaceOpen = Boolean(query) || expandedWorkspaces.has(workspace.key) || workspaceHasSelected || (hostOpen && workspaceIndex === 0)
+                      return (
+                        <details key={workspace.key} className={styles.workspaceGroup} open={workspaceOpen} onToggle={(event) => setWorkspaceExpanded(workspace.key, event.currentTarget.open)}>
+                          <summary className={styles.workspaceSummary} title={workspace.path}>
+                            <span className={styles.workspaceIcon}>W</span>
+                            <span className={styles.workspaceLabel}><strong>{workspace.name}</strong><span>{workspace.path}</span></span>
+                            <span className={styles.workspaceCount}>{workspace.sessions.length}</span>
+                          </summary>
+                          <div className={styles.workspaceSessions}>
+                            {workspace.sessions.map((row) => (
+                              <button type="button" key={row.id} className={`${styles.sessionRow} ${selectedId === row.id || fusionSourceIds.includes(row.id) ? styles.sessionRowActive : ''}`} onClick={() => fusionMode ? toggleFusionSource(row.id) : router.push(`/sessions?sessionId=${encodeURIComponent(row.id)}`)}>
+                                {fusionMode ? <span className={styles.sessionSelect}>{fusionSourceIds.includes(row.id) ? '✓' : '□'}</span> : <span className={styles.sessionGlyph}>{row.adapter === 'codex' ? 'Cx' : 'Cl'}</span>}
+                                <span className={styles.sessionCopy}><strong>{row.title || 'Untitled session'}</strong><span>{row.adapter} · {relativeTime(row.source_updated_at, zh)} · {formatTokenCount(row.usage?.total_tokens)} tok</span></span>
+                              </button>
+                            ))}
+                          </div>
+                        </details>
+                      )
+                    })}
                   </div>
                 </details>
               )
