@@ -106,7 +106,6 @@ interface CreateSessionResponse {
 
 interface SessionWorkspaceGroup {
   key: string
-  host: string
   path: string
   name: string
   sessions: CliSessionRow[]
@@ -244,16 +243,15 @@ function SessionPageInner() {
   const workspaceGroups = useMemo<SessionWorkspaceGroup[]>(() => {
     const groups = new Map<string, SessionWorkspaceGroup>()
     for (const row of listData?.items || []) {
-      const host = row.host_name || row.agent_id
       const path = row.project_path || (zh ? '未知工作区' : 'Unknown workspace')
-      const key = `${host}::${path}`
-      const group = groups.get(key) || { key, host, path, name: projectName(path), sessions: [] }
+      const key = path
+      const group = groups.get(key) || { key, path, name: projectName(path), sessions: [] }
       group.sessions.push(row)
       groups.set(key, group)
     }
     return Array.from(groups.values())
       .map((group) => ({ ...group, sessions: group.sessions.sort((a, b) => String(b.source_updated_at || '').localeCompare(String(a.source_updated_at || ''))) }))
-      .sort((a, b) => a.name.localeCompare(b.name) || a.host.localeCompare(b.host))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path))
   }, [listData?.items, zh])
 
   useEffect(() => {
@@ -573,9 +571,9 @@ function SessionPageInner() {
               const open = Boolean(query) || expandedWorkspaces.has(group.key) || group.sessions.some((session) => session.id === selectedId) || (expandedWorkspaces.size === 0 && index === 0)
               return (
                 <details key={group.key} className={styles.workspaceGroup} open={open} onToggle={(event) => setWorkspaceExpanded(group.key, event.currentTarget.open)}>
-                  <summary className={styles.workspaceSummary} title={`${group.host} · ${group.path}`}>
+                  <summary className={styles.workspaceSummary} title={group.path}>
                     <span className={styles.workspaceIcon}>W</span>
-                    <span className={styles.workspaceLabel}><strong>{group.name}</strong><span>{group.host} · {group.path}</span></span>
+                    <span className={styles.workspaceLabel}><strong>{group.name}</strong><span>{group.path}</span></span>
                     <span className={styles.workspaceCount}>{group.sessions.length}</span>
                   </summary>
                   <div className={styles.workspaceSessions}>
