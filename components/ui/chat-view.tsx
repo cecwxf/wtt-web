@@ -616,6 +616,7 @@ interface ChatViewProps {
   knowledgeTargetAgentId?: string
   knowledgeContextType?: 'chat' | 'task'
   enableCameraCapture?: boolean
+  slashCommandOverrides?: Array<{ cmd: string; desc: string; icon?: string }>
 }
 
 interface AgentProfileSummary {
@@ -1358,6 +1359,7 @@ export function ChatView({
   knowledgeTargetAgentId,
   knowledgeContextType,
   enableCameraCapture = false,
+  slashCommandOverrides,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -1796,6 +1798,15 @@ export function ChatView({
   }, [])
 
   const availableSlashCommands = useMemo(() => {
+    if (slashCommandOverrides) {
+      return slashCommandOverrides.map((command): SlashCommandDef => ({
+        cmd: command.cmd,
+        desc: command.desc,
+        icon: command.icon || '⌘',
+        mode: 'passthrough',
+        family: activeAgentAdapter === 'codex' ? 'codex' : activeAgentAdapter === 'claude-code' ? 'claude-code' : undefined,
+      }))
+    }
     const runtimeCommands = activeAgentAdapter === 'codex'
       ? CODEX_SLASH_COMMANDS
       : activeAgentAdapter === 'claude-code'
@@ -1819,7 +1830,7 @@ export function ChatView({
     // In non-task discuss topics, model switching must be blocked to avoid all
     // agents reacting to the same slash command.
     return commands.filter((c) => !isModelCommand(c.cmd))
-  }, [activeAgentAdapter, dynamicSlashCommands, isNonTaskDiscussTopic, isModelCommand])
+  }, [activeAgentAdapter, dynamicSlashCommands, isNonTaskDiscussTopic, isModelCommand, slashCommandOverrides])
 
   // Slash command filtering
   const filteredCommands = slashFilter
@@ -1827,6 +1838,12 @@ export function ChatView({
     : availableSlashCommands
 
   const quickSlashActions = useMemo(() => {
+    if (slashCommandOverrides) {
+      return slashCommandOverrides
+        .filter((item) => !['/help', '/new', '/clear'].includes(item.cmd))
+        .slice(0, 4)
+        .map((item) => ({ label: item.cmd.slice(1), cmd: item.cmd }))
+    }
     const commands = activeAgentAdapter === 'codex'
       ? [
           { label: 'Codex Status', cmd: '/status' },
@@ -1855,10 +1872,10 @@ export function ChatView({
             { label: 'Compact', cmd: '/compact' },
           ]
     return commands.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd)))
-  }, [activeAgentAdapter, isModelCommand, isNonTaskDiscussTopic])
+  }, [activeAgentAdapter, isModelCommand, isNonTaskDiscussTopic, slashCommandOverrides])
 
   useEffect(() => {
-    if (!accessToken || !currentAgentId) {
+    if (slashCommandOverrides || !accessToken || !currentAgentId) {
       setDynamicSlashCommands([])
       return
     }
@@ -1894,7 +1911,7 @@ export function ChatView({
     }
     load()
     return () => controller.abort()
-  }, [accessToken, activeAgentAdapter, currentAgentId])
+  }, [accessToken, activeAgentAdapter, currentAgentId, slashCommandOverrides])
 
   useEffect(() => {
     if (!skillModalOpen || !accessToken || !currentAgentId) return

@@ -21,8 +21,10 @@ import {
   Loader2,
   MessageSquareText,
   MonitorUp,
+  Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   TerminalSquare,
   X,
@@ -88,6 +90,27 @@ interface FusionCreateResponse {
   accepted: boolean
   fusion: { id: string; status: string }
   target_session: CliSessionRow
+}
+
+interface RuntimeOption {
+  value: string
+  model: string
+  label: string
+  description?: string
+  reasoning_efforts?: Array<{ value: string; label: string; description?: string }>
+  default_reasoning_effort?: string
+}
+
+interface CliSessionRuntime {
+  adapter: 'codex' | 'claude-code'
+  access_levels: Array<'read-only' | 'workspace-write' | 'full-access'>
+  commands: Array<{ name: string; description: string }>
+  models: { current?: { model?: string }; options: RuntimeOption[] }
+  workspaces: Array<{ path: string; name: string }>
+}
+
+interface CreateSessionResponse {
+  session: CliSessionRow
 }
 
 function authHeaders(token?: string, json = false): Record<string, string> {
@@ -157,6 +180,15 @@ function SessionPageInner() {
   const [fusionPath, setFusionPath] = useState('')
   const [fusionTitle, setFusionTitle] = useState('')
   const [fusionSubmitting, setFusionSubmitting] = useState(false)
+  const [workspaceAccess, setWorkspaceAccess] = useState<'read-only' | 'workspace-write' | 'full-access'>('workspace-write')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [reasoningEffort, setReasoningEffort] = useState('')
+  const [newSessionOpen, setNewSessionOpen] = useState(false)
+  const [newSessionAgent, setNewSessionAgent] = useState('')
+  const [newSessionAdapter, setNewSessionAdapter] = useState<'codex' | 'claude-code'>('codex')
+  const [newSessionPath, setNewSessionPath] = useState('')
+  const [newSessionTitle, setNewSessionTitle] = useState('New Session')
+  const [newSessionSubmitting, setNewSessionSubmitting] = useState(false)
   const importRequestedRef = useRef(new Set<string>())
   const selectedId = searchParams.get('sessionId') || ''
 
@@ -201,6 +233,13 @@ function SessionPageInner() {
     }
     return Array.from(targets.entries())
   }, [listData?.items])
+  const sessionTargets = useMemo(() => {
+    const targets = new Map<string, CliSessionRow>()
+    for (const row of listData?.items || []) {
+      if (row.agent_online) targets.set(`${row.agent_id}|${row.adapter}`, row)
+    }
+    return Array.from(targets.values())
+  }, [listData?.items])
 
   useEffect(() => setEventLimit(500), [selectedId])
 
@@ -214,9 +253,36 @@ function SessionPageInner() {
     },
   )
 
+  const runtimeUrl = token && selectedId && detail?.session.agent_online
+    ? `${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(selectedId)}/runtime`
+    : null
+  const { data: runtime, error: runtimeError, isLoading: runtimeLoading } = useSWR<CliSessionRuntime>(
+    runtimeUrl,
+    (url: string) => readJson(url, token),
+    { revalidateOnFocus: false, dedupingInterval: 30_000 },
+  )
+  const selectedModelOption = useMemo(
+    () => runtime?.models.options.find((option) => option.value === selectedModel),
+    [runtime?.models.options, selectedModel],
+  )
+  const workspaceOptions = useMemo(() => {
+    const paths = new Set<string>()
+    for (const item of runtime?.workspaces || []) if (item.path) paths.add(item.path)
+    for (const item of listData?.items || []) if (item.project_path) paths.add(item.project_path)
+    return Array.from(paths)
+  }, [listData?.items, runtime?.workspaces])
+
+  useEffect(() => {
+    if (!runtime) return
+    const model = runtime.models.current?.model || runtime.models.options[0]?.value || ''
+    setSelectedModel(model)
+    const option = runtime.models.options.find((item) => item.value === model)
+    setReasoningEffort(option?.default_reasoning_effort || option?.reasoning_efforts?.[0]?.value || '')
+  }, [runtime])
+
   useEffect(() => {
     if (!detail?.session || !token) return
-    if (['queued', 'running'].includes(detail.session.run_status) || detail.session.native_session_id.startsWith('fusion-pending-')) return
+    if (['queued', 'running'].includes(detail.session.run_status) || detail.session.native_session_id.startsWith('fusion-pending-') || detail.session.native_session_id.startsWith('draft-')) return
     const needsInitialSync = detail.session.import_status === 'catalogued'
       || (detail.session.import_status === 'ready' && !detail.session.usage?.source)
     if (!needsInitialSync) return
@@ -276,19 +342,73 @@ function SessionPageInner() {
   const sendMessage = useCallback(async (content: string) => {
     if (!token || !selectedId) return
     setActionError('')
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(selectedId)}/messages`, {
+    const isCommand = content.trim().startsWith('/')
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(selectedId)}/${isCommand ? 'commands' : 'messages'}`, {
       method: 'POST',
       headers: authHeaders(token, true),
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        ...(isCommand ? { line: content } : { content }),
+        workspace_access: workspaceAccess,
+        model_config: {
+          ...(selectedModel ? { model: selectedModel } : {}),
+          ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+        },
+      }),
     })
     if (!response.ok) {
       const message = await responseText(response)
       setActionError(message)
       throw new Error(message)
     }
+    const result = await response.json()
+    if (result?.new_session?.id) {
+      await mutateList()
+      router.push(`/sessions?sessionId=${encodeURIComponent(result.new_session.id)}`)
+      return
+    }
     await mutateDetail()
     await mutateList()
-  }, [mutateDetail, mutateList, selectedId, token])
+  }, [mutateDetail, mutateList, reasoningEffort, router, selectedId, selectedModel, token, workspaceAccess])
+
+  const openNewSession = useCallback(() => {
+    const source = detail?.session || (listData?.items || []).find((row) => row.agent_online)
+    if (!source) {
+      setActionError(zh ? '没有在线的已绑定 Agent' : 'No online bound Agent is available')
+      return
+    }
+    setNewSessionAgent(source.agent_id)
+    setNewSessionAdapter(source.adapter)
+    setNewSessionPath(source.project_path || runtime?.workspaces?.[0]?.path || '')
+    setNewSessionTitle(zh ? '新会话' : 'New Session')
+    setNewSessionOpen(true)
+  }, [detail?.session, listData?.items, runtime?.workspaces, zh])
+
+  const createSession = useCallback(async () => {
+    if (!token || !newSessionAgent || !newSessionPath.trim() || newSessionSubmitting) return
+    setNewSessionSubmitting(true)
+    setActionError('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/new`, {
+        method: 'POST',
+        headers: authHeaders(token, true),
+        body: JSON.stringify({
+          agent_id: newSessionAgent,
+          adapter: newSessionAdapter,
+          project_path: newSessionPath.trim(),
+          title: newSessionTitle.trim() || 'New Session',
+        }),
+      })
+      if (!response.ok) throw new Error(await responseText(response))
+      const result = await response.json() as CreateSessionResponse
+      setNewSessionOpen(false)
+      await mutateList()
+      router.push(`/sessions?sessionId=${encodeURIComponent(result.session.id)}`)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setNewSessionSubmitting(false)
+    }
+  }, [mutateList, newSessionAdapter, newSessionAgent, newSessionPath, newSessionSubmitting, newSessionTitle, router, token])
 
   const toggleFusionSource = useCallback((sessionId: string) => {
     setFusionSourceIds((current) => current.includes(sessionId)
@@ -426,6 +546,7 @@ function SessionPageInner() {
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? '搜索会话、项目、ID' : 'Search sessions, projects, IDs'} className="w-full bg-transparent py-2.5 text-xs outline-none" />
             </label>
             <button onClick={() => void mutateList()} className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 hover:text-sky-600 dark:border-zinc-800 dark:bg-zinc-900"><RefreshCw className="h-4 w-4" /></button>
+            <button onClick={openNewSession} className="rounded-xl bg-sky-600 p-2.5 text-white shadow-sm hover:bg-sky-700" title={zh ? '新建 CLI Session' : 'New CLI Session'}><Plus className="h-4 w-4" /></button>
           </div>
           <div className="mb-3 flex gap-1 rounded-xl bg-slate-200/60 p-1 dark:bg-zinc-900">
             {[['', zh ? '全部' : 'All'], ['codex', 'Codex'], ['claude-code', 'Claude']].map(([value, label]) => (
@@ -507,6 +628,23 @@ function SessionPageInner() {
                 </div>
               )}
               {detail.session.import_status === 'importing' && <div className="flex items-center gap-2 border-b border-sky-100 bg-sky-50 px-4 py-2 text-[11px] font-bold text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300"><Loader2 className="h-3.5 w-3.5 animate-spin" />{zh ? '正在从原主机按需导入历史记录' : 'Importing history from the source host'}</div>}
+              <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-1.5 text-[10px] dark:border-zinc-900 dark:bg-zinc-950">
+                <span className="flex items-center gap-1 font-black text-slate-500 dark:text-zinc-400"><ShieldCheck className="h-3.5 w-3.5" />{zh ? '工作区权限' : 'Workspace access'}</span>
+                <select value={workspaceAccess} onChange={(event) => setWorkspaceAccess(event.target.value as typeof workspaceAccess)} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-bold outline-none dark:border-zinc-800 dark:bg-zinc-900">
+                  <option value="read-only">Read Only</option>
+                  <option value="workspace-write">Workspace Write</option>
+                  <option value="full-access">Full Access</option>
+                </select>
+                <select value={selectedModel} onChange={(event) => { const value = event.target.value; setSelectedModel(value); const option = runtime?.models.options.find((item) => item.value === value); setReasoningEffort(option?.default_reasoning_effort || option?.reasoning_efforts?.[0]?.value || '') }} disabled={!runtime?.models.options.length} className="min-w-32 max-w-56 rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-bold outline-none disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900">
+                  {!runtime?.models.options.length && <option value="">{runtimeLoading ? (zh ? '加载模型…' : 'Loading models…') : (zh ? '原生默认模型' : 'Native default')}</option>}
+                  {runtime?.models.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+                <select value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value)} disabled={!selectedModelOption?.reasoning_efforts?.length} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-bold outline-none disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900">
+                  {!selectedModelOption?.reasoning_efforts?.length && <option value="">{zh ? '默认推理' : 'Default reasoning'}</option>}
+                  {selectedModelOption?.reasoning_efforts?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+                {runtimeError && <span className="truncate text-rose-500" title={runtimeError.message}>{zh ? '运行配置加载失败' : 'Runtime controls unavailable'}</span>}
+              </div>
               <div className="min-h-0 flex-1">
                 <ChatView
                   topicName={detail.session.title}
@@ -521,6 +659,8 @@ function SessionPageInner() {
                   accessToken={token}
                   topicType="cli_session"
                   runStatus={runStatus}
+                  currentAgentRuntime={{ adapter: detail.session.adapter, model: selectedModel || runtime?.models.current?.model, reasoning_effort: reasoningEffort }}
+                  slashCommandOverrides={(runtime?.commands || []).map((command) => ({ cmd: command.name, desc: command.description }))}
                   emptyState={<div className="text-center"><Bot className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-2 text-xs text-slate-500">{zh ? '该会话暂时没有可展示的用户/Agent消息' : 'No visible user or agent messages in this session'}</p></div>}
                 />
               </div>
@@ -528,6 +668,28 @@ function SessionPageInner() {
           )}
         </section>
       </section>
+      {newSessionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !newSessionSubmitting) setNewSessionOpen(false) }}>
+          <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-950">
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-sm font-black">{zh ? '新建 CLI Session' : 'New CLI Session'}</p><p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">{zh ? '选择已绑定主机、Agent 类型和工作目录。第一条消息会创建真实原生会话。' : 'Choose a bound host, adapter, and workspace. The first turn creates the native session.'}</p></div>
+              <button onClick={() => setNewSessionOpen(false)} disabled={newSessionSubmitting} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-900"><X className="h-4 w-4" /></button>
+            </div>
+            <label className="mt-4 block text-[10px] font-black uppercase tracking-wider text-slate-500">Agent / Adapter
+              <select value={`${newSessionAgent}|${newSessionAdapter}`} onChange={(event) => { const [agentId, adapter] = event.target.value.split('|'); const target = sessionTargets.find((item) => item.agent_id === agentId && item.adapter === adapter); setNewSessionAgent(agentId); setNewSessionAdapter(adapter as typeof newSessionAdapter); if (target?.project_path) setNewSessionPath(target.project_path) }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900">
+                {sessionTargets.map((row) => <option key={`${row.agent_id}|${row.adapter}`} value={`${row.agent_id}|${row.adapter}`}>{row.host_name || row.agent_id} · {row.adapter}</option>)}
+              </select>
+            </label>
+            <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-slate-500">{zh ? '标题' : 'Title'}<input value={newSessionTitle} onChange={(event) => setNewSessionTitle(event.target.value)} maxLength={500} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900" /></label>
+            <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-slate-500">Workspace<input value={newSessionPath} onChange={(event) => setNewSessionPath(event.target.value)} list="cli-session-workspaces" maxLength={4000} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900" /></label>
+            <datalist id="cli-session-workspaces">{workspaceOptions.map((value) => <option key={value} value={value} />)}</datalist>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setNewSessionOpen(false)} disabled={newSessionSubmitting} className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-900">{zh ? '取消' : 'Cancel'}</button>
+              <button onClick={() => void createSession()} disabled={newSessionSubmitting || !newSessionAgent || !newSessionPath.trim()} className="flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-sky-600/20 disabled:opacity-40">{newSessionSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{zh ? '创建' : 'Create'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {fusionOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !fusionSubmitting) setFusionOpen(false) }}>
           <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-950">
