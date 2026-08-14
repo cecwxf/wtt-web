@@ -8,33 +8,24 @@ import useSWR from 'swr'
 import {
   Bot,
   ArrowLeft,
-  Boxes,
   GitBranch,
-  ChevronRight,
-  Clock3,
   CloudOff,
-  Code2,
   Combine,
   Download,
   FolderGit2,
-  Home,
   Loader2,
-  MessageSquareText,
-  MonitorUp,
   Plus,
   RefreshCw,
   Search,
-  ShieldCheck,
   Sparkles,
-  TerminalSquare,
   X,
-  Zap,
 } from 'lucide-react'
 
 import { ChatView, type ChatMessage, type ChatRunStatus } from '@/components/ui/chat-view'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
+import styles from './sessions-local.module.css'
 
 interface CliSessionRow {
   id: string
@@ -113,6 +104,14 @@ interface CreateSessionResponse {
   session: CliSessionRow
 }
 
+interface SessionWorkspaceGroup {
+  key: string
+  host: string
+  path: string
+  name: string
+  sessions: CliSessionRow[]
+}
+
 function authHeaders(token?: string, json = false): Record<string, string> {
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -168,8 +167,10 @@ function SessionPageInner() {
   const zh = locale === 'zh'
   const token = authSession?.accessToken
   const [query, setQuery] = useState('')
-  const [hostFilter, setHostFilter] = useState('')
   const [adapterFilter, setAdapterFilter] = useState('')
+  const [leftCollapsed, setLeftCollapsed] = useState(false)
+  const [rightCollapsed, setRightCollapsed] = useState(false)
+  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(new Set())
   const [discovering, setDiscovering] = useState(false)
   const [actionError, setActionError] = useState('')
   const [eventLimit, setEventLimit] = useState(500)
@@ -196,6 +197,41 @@ function SessionPageInner() {
     if (status === 'unauthenticated') router.replace('/login?callbackUrl=%2Fsessions')
   }, [router, status])
 
+  useEffect(() => {
+    setLeftCollapsed(window.localStorage.getItem('wtt-local-left-collapsed') === '1')
+    setRightCollapsed(window.localStorage.getItem('wtt-local-right-collapsed') === '1')
+    try {
+      const stored = JSON.parse(window.localStorage.getItem('wtt-local-workspaces') || '[]')
+      if (Array.isArray(stored)) setExpandedWorkspaces(new Set(stored.map(String)))
+    } catch {
+      setExpandedWorkspaces(new Set())
+    }
+  }, [])
+
+  const togglePanel = useCallback((side: 'left' | 'right') => {
+    if (side === 'left') {
+      setLeftCollapsed((current) => {
+        window.localStorage.setItem('wtt-local-left-collapsed', current ? '0' : '1')
+        return !current
+      })
+      return
+    }
+    setRightCollapsed((current) => {
+      window.localStorage.setItem('wtt-local-right-collapsed', current ? '0' : '1')
+      return !current
+    })
+  }, [])
+
+  const setWorkspaceExpanded = useCallback((key: string, open: boolean) => {
+    setExpandedWorkspaces((current) => {
+      const next = new Set(current)
+      if (open) next.add(key)
+      else next.delete(key)
+      window.localStorage.setItem('wtt-local-workspaces', JSON.stringify(Array.from(next)))
+      return next
+    })
+  }, [])
+
   const listUrl = token
     ? `${CLIENT_WTT_API_BASE}/cli-sessions?limit=500${query ? `&q=${encodeURIComponent(query)}` : ''}${adapterFilter ? `&adapter=${encodeURIComponent(adapterFilter)}` : ''}`
     : null
@@ -205,24 +241,26 @@ function SessionPageInner() {
     { refreshInterval: discovering ? 2000 : 10_000, revalidateOnFocus: true },
   )
 
-  const visibleSessions = useMemo(() => {
-    const rows = listData?.items || []
-    if (!hostFilter) return rows
-    return rows.filter((row) => (row.host_name || row.agent_id) === hostFilter)
-  }, [hostFilter, listData?.items])
-
-  const hosts = useMemo(() => {
-    const groups = new Map<string, { key: string; label: string; total: number; online: number; projects: Set<string> }>()
+  const workspaceGroups = useMemo<SessionWorkspaceGroup[]>(() => {
+    const groups = new Map<string, SessionWorkspaceGroup>()
     for (const row of listData?.items || []) {
-      const key = row.host_name || row.agent_id
-      const group = groups.get(key) || { key, label: row.host_name || row.agent_id, total: 0, online: 0, projects: new Set<string>() }
-      group.total += 1
-      if (row.agent_online) group.online += 1
-      group.projects.add(projectName(row.project_path))
+      const host = row.host_name || row.agent_id
+      const path = row.project_path || (zh ? '未知工作区' : 'Unknown workspace')
+      const key = `${host}::${path}`
+      const group = groups.get(key) || { key, host, path, name: projectName(path), sessions: [] }
+      group.sessions.push(row)
       groups.set(key, group)
     }
-    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label))
-  }, [listData?.items])
+    return Array.from(groups.values())
+      .map((group) => ({ ...group, sessions: group.sessions.sort((a, b) => String(b.source_updated_at || '').localeCompare(String(a.source_updated_at || ''))) }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.host.localeCompare(b.host))
+  }, [listData?.items, zh])
+
+  useEffect(() => {
+    if (!selectedId) return
+    const selectedGroup = workspaceGroups.find((group) => group.sessions.some((session) => session.id === selectedId))
+    if (selectedGroup) setWorkspaceExpanded(selectedGroup.key, true)
+  }, [selectedId, setWorkspaceExpanded, workspaceGroups])
 
   const fusionSources = useMemo(() => (listData?.items || []).filter((row) => fusionSourceIds.includes(row.id)), [fusionSourceIds, listData?.items])
   const fusionTargets = useMemo(() => {
@@ -488,185 +526,154 @@ function SessionPageInner() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_34%),linear-gradient(135deg,#f7f6f1,#edf4f7)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_34%),linear-gradient(135deg,#09090b,#111827)] dark:text-zinc-100">
-      <header className="flex h-14 items-center justify-between border-b border-white/70 bg-white/75 px-4 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/75">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-zinc-800 dark:hover:text-white" title={zh ? '主页' : 'Home'}><Home className="h-4 w-4" /></Link>
-          <div className="h-6 w-px bg-slate-200 dark:bg-zinc-800" />
-          <div className="flex items-center gap-2">
-            <div className="rounded-xl bg-sky-600 p-2 text-white shadow-lg shadow-sky-600/20"><TerminalSquare className="h-4 w-4" /></div>
-            <div>
-              <h1 className="text-sm font-black tracking-tight">CLI Sessions</h1>
-              <p className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Codex · Claude Code</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <Link href="/feed" className="rounded-xl px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">Feed</Link>
-          <button onClick={toggleLocale} className="rounded-xl px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">{zh ? 'EN' : '中'}</button>
-          <ThemeToggle />
-        </div>
+    <main className={styles.page}>
+      <header className={styles.topbar}>
+        <Link href="/" className={styles.brandLink} title={zh ? '返回 WTT 主页' : 'Back to WTT home'}>
+          <span className={styles.brandMark}>W</span>
+          <span className={styles.brandCopy}><strong>WTT Connect</strong><span>Local Session Fabric</span></span>
+        </Link>
+        <button type="button" className={`${styles.panelToggle} ${leftCollapsed ? styles.panelToggleActive : ''}`} onClick={() => togglePanel('left')}>
+          {leftCollapsed ? '›' : '‹'} Sessions
+        </button>
+        <span className={styles.topbarSpacer} />
+        <button type="button" className={`${styles.panelToggle} ${rightCollapsed ? styles.panelToggleActive : ''}`} onClick={() => togglePanel('right')}>
+          Usage {rightCollapsed ? '‹' : '›'}
+        </button>
+        <Link href="/feed" className={`${styles.iconButton} ${styles.desktopOnly}`}>Feed</Link>
+        <button type="button" onClick={toggleLocale} className={styles.iconButton}>{zh ? 'EN' : '中'}</button>
+        <ThemeToggle />
+        <button type="button" className={`${styles.iconButton} ${styles.desktopOnly}`} disabled={!detail} onClick={() => detail && downloadSession(detail)}>Session log下载</button>
       </header>
 
-      <section className="grid h-[calc(100vh-3.5rem)] grid-cols-1 overflow-hidden lg:grid-cols-[220px_330px_minmax(0,1fr)]">
-        <aside className="hidden overflow-y-auto border-r border-white/80 bg-white/55 p-3 backdrop-blur-lg dark:border-white/10 dark:bg-zinc-950/45 lg:block">
-          <button
-            onClick={discover}
-            disabled={discovering}
-            className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 py-3 text-xs font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-60 dark:bg-sky-500 dark:text-slate-950"
-          >
-            {discovering ? <Loader2 className="h-4 w-4 animate-spin" /> : <MonitorUp className="h-4 w-4" />}
-            {zh ? '扫描已绑定主机' : 'Scan bound hosts'}
-          </button>
-          <button onClick={() => setHostFilter('')} className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold ${!hostFilter ? 'bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-200' : 'text-slate-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-900'}`}>
-            <span className="flex items-center gap-2"><Boxes className="h-4 w-4" />{zh ? '全部会话' : 'All sessions'}</span>
-            <span>{listData?.total || 0}</span>
-          </button>
-          <p className="mb-2 mt-5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{zh ? '主机 / 项目' : 'Hosts / projects'}</p>
-          <div className="space-y-1">
-            {hosts.map((host, index) => (
-              <button key={host.key} onClick={() => setHostFilter(host.key)} className={`w-full rounded-2xl border px-3 py-3 text-left transition ${hostFilter === host.key ? 'border-sky-300 bg-white shadow-sm dark:border-sky-500/60 dark:bg-zinc-900' : 'border-transparent hover:border-slate-200 hover:bg-white/70 dark:hover:border-zinc-800 dark:hover:bg-zinc-900/70'}`}>
-                <div className="flex items-center gap-2">
-                  <div className={`h-7 w-1 rounded-full ${['bg-sky-400', 'bg-emerald-400', 'bg-amber-400', 'bg-rose-400'][index % 4]}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-black">{host.label}</p>
-                    <p className="mt-0.5 text-[10px] text-slate-500 dark:text-zinc-400">{host.online ? zh ? '在线' : 'Online' : zh ? '离线' : 'Offline'} · {host.total} sessions</p>
+      <section className={`${styles.shell} ${leftCollapsed ? styles.leftCollapsed : ''} ${rightCollapsed ? styles.rightCollapsed : ''} ${selectedId ? styles.mobileSelected : ''}`}>
+        <aside className={styles.sidebar}>
+          <div className={styles.sidebarHead}>
+            <div><p className={styles.eyebrow}>Native history</p><h1 className={styles.sidebarTitle}>Sessions</h1></div>
+            <button type="button" className={styles.iconButton} onClick={discover} disabled={discovering}>{discovering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (zh ? '扫描' : 'Scan')}</button>
+          </div>
+          <button type="button" className={styles.newSessionButton} onClick={openNewSession}><Plus className="h-4 w-4" /> New Session</button>
+          <nav className={styles.adapterFilter} aria-label="Agent harness">
+            {[
+              { value: '', mark: 'All', label: zh ? '全部' : 'All' },
+              { value: 'codex', mark: 'Cx', label: 'Codex' },
+              { value: 'claude-code', mark: 'Cl', label: 'Claude' },
+            ].map((item) => <button key={item.value} type="button" className={adapterFilter === item.value ? styles.adapterActive : ''} onClick={() => setAdapterFilter(item.value)}><span>{item.mark}</span>{item.label}</button>)}
+            <button type="button" disabled title={zh ? '远端 DSH Session 尚未启用' : 'Remote DSH sessions are not enabled'}><span>Ds</span>DSH</button>
+          </nav>
+          <label className={styles.search}><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder={zh ? '标题、工作区、ID' : 'Title, workspace, ID'} /></label>
+          <div className={styles.workspaceActions}><span>Workspaces</span><button type="button" className={styles.quietButton} onClick={openNewSession}>+ Workspace</button></div>
+          <div className={styles.sessionActions}>
+            <span>{listLoading ? (zh ? '读取中…' : 'Loading…') : `${listData?.total || 0} sessions`}</span>
+            {!fusionMode ? <button type="button" className={styles.quietButton} onClick={() => setFusionMode(true)}>Merge memory</button> : <button type="button" className={styles.quietButton} onClick={() => { if (fusionSourceIds.length >= 2) openFusionDialog(); else { setFusionMode(false); setFusionSourceIds([]) } }}>{fusionSourceIds.length >= 2 ? `Merge (${fusionSourceIds.length})` : 'Cancel'}</button>}
+          </div>
+          <div className={styles.sessionList}>
+            {(listError || actionError) && <p className={styles.errorText}>{actionError || listError?.message}</p>}
+            {!listLoading && workspaceGroups.length === 0 && <p className={styles.emptyList}>{zh ? '尚未发现 CLI 会话。点击扫描读取已绑定主机的原生历史。' : 'No CLI sessions found. Scan bound hosts to read native history.'}</p>}
+            {workspaceGroups.map((group, index) => {
+              const open = Boolean(query) || expandedWorkspaces.has(group.key) || group.sessions.some((session) => session.id === selectedId) || (expandedWorkspaces.size === 0 && index === 0)
+              return (
+                <details key={group.key} className={styles.workspaceGroup} open={open} onToggle={(event) => setWorkspaceExpanded(group.key, event.currentTarget.open)}>
+                  <summary className={styles.workspaceSummary} title={`${group.host} · ${group.path}`}>
+                    <span className={styles.workspaceIcon}>W</span>
+                    <span className={styles.workspaceLabel}><strong>{group.name}</strong><span>{group.host} · {group.path}</span></span>
+                    <span className={styles.workspaceCount}>{group.sessions.length}</span>
+                  </summary>
+                  <div className={styles.workspaceSessions}>
+                    {group.sessions.map((row) => (
+                      <button type="button" key={row.id} className={`${styles.sessionRow} ${selectedId === row.id || fusionSourceIds.includes(row.id) ? styles.sessionRowActive : ''}`} onClick={() => fusionMode ? toggleFusionSource(row.id) : router.push(`/sessions?sessionId=${encodeURIComponent(row.id)}`)}>
+                        {fusionMode ? <span className={styles.sessionSelect}>{fusionSourceIds.includes(row.id) ? '✓' : '□'}</span> : <span className={styles.sessionGlyph}>{row.adapter === 'codex' ? 'Cx' : 'Cl'}</span>}
+                        <span className={styles.sessionCopy}><strong>{row.title || 'Untitled session'}</strong><span>{row.adapter} · {relativeTime(row.source_updated_at, zh)} · {formatTokenCount(row.usage?.total_tokens)} tok</span></span>
+                      </button>
+                    ))}
                   </div>
-                </div>
-                <p className="mt-2 truncate pl-3 text-[10px] text-slate-400">{Array.from(host.projects).slice(0, 3).join(' · ')}</p>
-              </button>
-            ))}
+                </details>
+              )
+            })}
           </div>
         </aside>
 
-        <section className={`${selectedId ? 'hidden lg:block' : 'block'} overflow-y-auto border-r border-white/80 bg-[#f8fafb]/80 p-3 dark:border-white/10 dark:bg-zinc-950/65`}>
-          <div className="mb-3 flex gap-2">
-            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-zinc-800 dark:bg-zinc-900">
-              <Search className="h-3.5 w-3.5 text-slate-400" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? '搜索会话、项目、ID' : 'Search sessions, projects, IDs'} className="w-full bg-transparent py-2.5 text-xs outline-none" />
-            </label>
-            <button onClick={() => void mutateList()} className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 hover:text-sky-600 dark:border-zinc-800 dark:bg-zinc-900"><RefreshCw className="h-4 w-4" /></button>
-            <button onClick={openNewSession} className="rounded-xl bg-sky-600 p-2.5 text-white shadow-sm hover:bg-sky-700" title={zh ? '新建 CLI Session' : 'New CLI Session'}><Plus className="h-4 w-4" /></button>
-          </div>
-          <div className="mb-3 flex gap-1 rounded-xl bg-slate-200/60 p-1 dark:bg-zinc-900">
-            {[['', zh ? '全部' : 'All'], ['codex', 'Codex'], ['claude-code', 'Claude']].map(([value, label]) => (
-              <button key={value} onClick={() => setAdapterFilter(value)} className={`flex-1 rounded-lg px-2 py-1.5 text-[10px] font-black ${adapterFilter === value ? 'bg-white text-slate-900 shadow-sm dark:bg-zinc-800 dark:text-white' : 'text-slate-500'}`}>{label}</button>
-            ))}
-          </div>
-          <div className="mb-3 flex items-center gap-2">
-            {!fusionMode ? (
-              <button onClick={() => setFusionMode(true)} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-black text-sky-800 hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200"><Combine className="h-3.5 w-3.5" />{zh ? '融合 CLI 记忆' : 'Fuse CLI memory'}</button>
-            ) : (
-              <>
-                <button onClick={openFusionDialog} disabled={fusionSourceIds.length < 2} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2 text-[10px] font-black text-white disabled:opacity-40"><Combine className="h-3.5 w-3.5" />{zh ? `融合所选 (${fusionSourceIds.length}/8)` : `Fuse selected (${fusionSourceIds.length}/8)`}</button>
-                <button onClick={() => { setFusionMode(false); setFusionSourceIds([]) }} className="rounded-xl border border-slate-200 p-2 text-slate-500 dark:border-zinc-800"><X className="h-3.5 w-3.5" /></button>
-              </>
-            )}
-          </div>
-          {(listError || actionError) && <p className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">{actionError || listError?.message}</p>}
-          {listLoading && <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-sky-600" /></div>}
-          {!listLoading && !visibleSessions.length && (
-            <div className="rounded-3xl border border-dashed border-slate-300 bg-white/60 p-7 text-center dark:border-zinc-700 dark:bg-zinc-900/50">
-              <TerminalSquare className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-3 text-xs font-black">{zh ? '尚未发现CLI会话' : 'No CLI sessions discovered'}</p>
-              <p className="mt-1 text-[11px] leading-5 text-slate-500">{zh ? '点击扫描后，在线主机上的wtt-connect会读取本地Codex和Claude Code会话目录。' : 'Scan to let wtt-connect read local Codex and Claude Code session catalogs on online hosts.'}</p>
-            </div>
-          )}
-          <div className="space-y-2">
-            {visibleSessions.map((row) => (
-              <button key={row.id} onClick={() => fusionMode ? toggleFusionSource(row.id) : router.push(`/sessions?sessionId=${encodeURIComponent(row.id)}`)} className={`group w-full rounded-2xl border p-3 text-left transition ${fusionSourceIds.includes(row.id) ? 'border-cyan-400 bg-cyan-50 shadow-[0_8px_24px_rgba(6,182,212,0.13)] dark:border-cyan-500 dark:bg-cyan-950/25' : selectedId === row.id ? 'border-sky-300 bg-white shadow-[0_8px_30px_rgba(14,165,233,0.12)] dark:border-sky-500/60 dark:bg-zinc-900' : 'border-transparent bg-white/55 hover:border-slate-200 hover:bg-white dark:bg-zinc-900/35 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'}`}>
-                <div className="flex items-start gap-3">
-                  {fusionMode && <span className={`mt-2 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-black ${fusionSourceIds.includes(row.id) ? 'border-cyan-500 bg-cyan-500 text-white' : 'border-slate-300 text-transparent dark:border-zinc-600'}`}>✓</span>}
-                  <div className={`mt-0.5 rounded-xl p-2 ${row.adapter === 'codex' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300'}`}>{row.adapter === 'codex' ? <Code2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}</div>
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-xs font-black leading-5">{row.title}</p>
-                    <p className="mt-1 truncate text-[10px] font-semibold text-slate-500 dark:text-zinc-400">{projectName(row.project_path)}{row.git_branch ? ` · ${row.git_branch}` : ''}</p>
-                  </div>
-                  <ChevronRight className="mt-2 h-3.5 w-3.5 text-slate-300 transition group-hover:translate-x-0.5" />
-                </div>
-                <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
-                  <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{relativeTime(row.source_updated_at, zh)}</span>
-                  <span className="ml-auto mr-3 flex items-center gap-1 font-bold text-amber-600 dark:text-amber-300"><Zap className="h-3 w-3" />{formatTokenCount(row.usage?.total_tokens)}</span>
-                  <span className={`flex items-center gap-1 font-bold ${row.agent_online ? 'text-emerald-600' : 'text-slate-400'}`}><span className={`h-1.5 w-1.5 rounded-full ${row.agent_online ? 'bg-emerald-500' : 'bg-slate-300'}`} />{row.agent_online ? (zh ? '可继续' : 'Resumable') : (zh ? '离线' : 'Offline')}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className={`${selectedId ? 'block' : 'hidden lg:block'} min-w-0 bg-white/85 dark:bg-zinc-950/90`}>
+        <section className={styles.conversation}>
           {!detail?.session ? (
-            <div className="flex h-full items-center justify-center p-8 text-center">
-              <div><MessageSquareText className="mx-auto h-10 w-10 text-slate-200 dark:text-zinc-800" /><p className="mt-3 text-sm font-black">{detailError?.message || (zh ? '选择一个CLI会话' : 'Select a CLI session')}</p></div>
+            <div className={styles.emptyState}>
+              <div className={styles.orbit} aria-hidden="true"><span /><span /><span /></div>
+              <p className={styles.eyebrow}>One surface, native memory</p>
+              <h2>{detailError?.message || (zh ? '从 CLI 停止的位置继续。' : 'Continue where the CLI stopped.')}</h2>
+              <p>{zh ? '选择 Codex 或 Claude Code Session。WTT 读取原生历史，并把新对话写回同一个 Session。' : 'Select a Codex or Claude Code session. WTT reads native history and writes new turns back to the same session.'}</p>
             </div>
           ) : (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-2 dark:border-zinc-900">
-                <button onClick={() => router.push('/sessions')} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-zinc-900" title={zh ? '返回会话列表' : 'Back to sessions'}><ArrowLeft className="h-4 w-4" /></button>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 dark:text-zinc-400">
-                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 uppercase dark:bg-zinc-900">{detail.session.adapter}</span>
-                    <span className="truncate">{detail.session.host_name || detail.session.agent_id}</span>
-                    {!detail.session.agent_online && <CloudOff className="h-3 w-3 text-rose-400" />}
-                  </div>
-                  <div className="mt-1 flex items-center gap-3 truncate text-[10px] text-slate-400">
-                    <span className="flex items-center gap-1 truncate"><FolderGit2 className="h-3 w-3" />{detail.session.project_path || 'Unknown project'}</span>
-                    {detail.session.git_branch && <span className="flex items-center gap-1"><GitBranch className="h-3 w-3" />{detail.session.git_branch}</span>}
-                  </div>
+            <div className={styles.sessionView}>
+              <header className={styles.sessionHeader}>
+                <button type="button" onClick={() => router.push('/sessions')} className={`${styles.iconButton} lg:hidden`} title={zh ? '返回会话列表' : 'Back to sessions'}><ArrowLeft className="h-4 w-4" /></button>
+                <div className={styles.sessionHeaderMain}>
+                  <span className={styles.adapterBadge}>{detail.session.adapter} · {detail.session.agent_online ? (zh ? '在线' : 'online') : (zh ? '离线' : 'offline')}</span>
+                  <h2>{detail.session.title || 'Untitled session'}</h2>
+                  <p><FolderGit2 className="mr-1 inline h-3 w-3" />{detail.session.project_path || 'Unknown workspace'}{detail.session.git_branch ? <> · <GitBranch className="inline h-3 w-3" /> {detail.session.git_branch}</> : null}</p>
                 </div>
-                <button onClick={() => void importSelected()} disabled={!detail.session.agent_online || detail.session.import_status === 'importing'} className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700 disabled:opacity-40 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300" title={zh ? '从原生 CLI 会话同步历史及 Token 用量' : 'Sync history and Token usage from the native CLI session'}><RefreshCw className={`h-3.5 w-3.5 ${detail.session.import_status === 'importing' ? 'animate-spin' : ''}`} />{zh ? '同步' : 'Sync'}</button>
-                <button onClick={() => void sendMessage(zh ? '请总结当前会话的目标、关键决策、已完成工作、未解决问题和下一步行动。' : 'Summarize this session: goals, key decisions, completed work, unresolved issues, and next actions.')} disabled={!detail.session.agent_online || detail.session.run_status === 'running'} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black text-slate-600 hover:border-sky-300 hover:text-sky-700 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300"><Sparkles className="h-3.5 w-3.5" />{zh ? '总结' : 'Summarize'}</button>
-                <button onClick={() => downloadSession(detail)} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:text-sky-700 dark:border-zinc-800"><Download className="h-3.5 w-3.5" /></button>
-              </div>
-              {detail.session.usage?.total_tokens > 0 && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-amber-100 bg-amber-50/70 px-4 py-1.5 text-[10px] font-bold text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-200">
-                  <span className="flex items-center gap-1"><Zap className="h-3 w-3" />Token {formatTokenCount(detail.session.usage.total_tokens)}</span>
-                  <span>{zh ? '输入' : 'Input'} {formatTokenCount(detail.session.usage.input_tokens)}</span>
-                  <span>{zh ? '输出' : 'Output'} {formatTokenCount(detail.session.usage.output_tokens)}</span>
-                  <span>{zh ? '缓存' : 'Cache'} {formatTokenCount(detail.session.usage.cache_read_tokens + detail.session.usage.cache_write_tokens)}</span>
-                  {detail.session.usage.reasoning_tokens > 0 && <span>{zh ? '推理' : 'Reasoning'} {formatTokenCount(detail.session.usage.reasoning_tokens)}</span>}
+                <div className={styles.sessionHeaderActions}>
+                  <code className={styles.sessionId} title={detail.session.native_session_id}>{detail.session.native_session_id}</code>
+                  {!detail.session.agent_online && <CloudOff className="h-4 w-4" />}
+                  <button type="button" className={styles.iconButton} onClick={() => void importSelected()} disabled={!detail.session.agent_online || detail.session.import_status === 'importing'} title={zh ? '同步原生历史' : 'Sync native history'}><RefreshCw className={`h-3.5 w-3.5 ${detail.session.import_status === 'importing' ? 'animate-spin' : ''}`} /></button>
+                  <button type="button" className={`${styles.iconButton} ${styles.desktopOnly}`} onClick={() => void sendMessage(zh ? '请总结当前会话的目标、关键决策、已完成工作、未解决问题和下一步行动。' : 'Summarize this session: goals, key decisions, completed work, unresolved issues, and next actions.')} disabled={!detail.session.agent_online || detail.session.run_status === 'running'}><Sparkles className="h-3.5 w-3.5" /></button>
+                  <button type="button" className={`${styles.iconButton} ${styles.desktopOnly}`} onClick={() => downloadSession(detail)}><Download className="h-3.5 w-3.5" /></button>
                 </div>
-              )}
-              {detail.session.import_status === 'importing' && <div className="flex items-center gap-2 border-b border-sky-100 bg-sky-50 px-4 py-2 text-[11px] font-bold text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300"><Loader2 className="h-3.5 w-3.5 animate-spin" />{zh ? '正在从原主机按需导入历史记录' : 'Importing history from the source host'}</div>}
-              <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-1.5 text-[10px] dark:border-zinc-900 dark:bg-zinc-950">
-                <span className="flex items-center gap-1 font-black text-slate-500 dark:text-zinc-400"><ShieldCheck className="h-3.5 w-3.5" />{zh ? '工作区权限' : 'Workspace access'}</span>
-                <select value={workspaceAccess} onChange={(event) => setWorkspaceAccess(event.target.value as typeof workspaceAccess)} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-bold outline-none dark:border-zinc-800 dark:bg-zinc-900">
-                  <option value="read-only">Read Only</option>
-                  <option value="workspace-write">Workspace Write</option>
-                  <option value="full-access">Full Access</option>
-                </select>
-                <select value={selectedModel} onChange={(event) => { const value = event.target.value; setSelectedModel(value); const option = runtime?.models.options.find((item) => item.value === value); setReasoningEffort(option?.default_reasoning_effort || option?.reasoning_efforts?.[0]?.value || '') }} disabled={!runtime?.models.options.length} className="min-w-32 max-w-56 rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-bold outline-none disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900">
-                  {!runtime?.models.options.length && <option value="">{runtimeLoading ? (zh ? '加载模型…' : 'Loading models…') : (zh ? '原生默认模型' : 'Native default')}</option>}
-                  {runtime?.models.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-                <select value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value)} disabled={!selectedModelOption?.reasoning_efforts?.length} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-bold outline-none disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900">
-                  {!selectedModelOption?.reasoning_efforts?.length && <option value="">{zh ? '默认推理' : 'Default reasoning'}</option>}
-                  {selectedModelOption?.reasoning_efforts?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-                {runtimeError && <span className="truncate text-rose-500" title={runtimeError.message}>{zh ? '运行配置加载失败' : 'Runtime controls unavailable'}</span>}
-              </div>
-              <div className="min-h-0 flex-1">
+              </header>
+              <div className={styles.conversationBody}>
+                {detail.session.import_status === 'importing' && <div className={styles.notice}>{zh ? '正在从原主机按需导入历史记录…' : 'Importing history from the source host…'}</div>}
                 <ChatView
                   topicName={detail.session.title}
                   messages={chatMessages}
                   currentAgentId={detail.session.agent_id}
                   onSendMessage={sendMessage}
                   onLoadOlder={async () => setEventLimit((value) => Math.min(value + 500, 5000))}
+                  onExport={() => downloadSession(detail)}
                   hasOlder={(detail.event_total || 0) > (detail.events?.length || 0) && eventLimit < 5000}
                   loading={detail.session.import_status === 'importing'}
                   compactUi
+                  hideHeader
                   wsConnected={Boolean(detail.session.agent_online)}
                   accessToken={token}
                   topicType="cli_session"
                   runStatus={runStatus}
                   currentAgentRuntime={{ adapter: detail.session.adapter, model: selectedModel || runtime?.models.current?.model, reasoning_effort: reasoningEffort }}
                   slashCommandOverrides={(runtime?.commands || []).map((command) => ({ cmd: command.name, desc: command.description }))}
+                  composerAccessory={<div className={styles.runtimeAccessory}>
+                    <label className={styles.control}><span>Access workspace</span><select value={workspaceAccess} onChange={(event) => setWorkspaceAccess(event.target.value as typeof workspaceAccess)}><option value="full-access">Full Access</option><option value="read-only">Read Only</option><option value="workspace-write">Workspace Write</option></select></label>
+                    <label className={styles.control}><span>Model</span><select value={selectedModel} onChange={(event) => { const value = event.target.value; setSelectedModel(value); const option = runtime?.models.options.find((item) => item.value === value); setReasoningEffort(option?.default_reasoning_effort || option?.reasoning_efforts?.[0]?.value || '') }} disabled={!runtime?.models.options.length}><option value="">{runtimeLoading ? (zh ? '加载中…' : 'Loading…') : (zh ? '原生默认' : 'Native / default')}</option>{runtime?.models.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                    <label className={styles.control}><span>Thinking</span><select value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value)} disabled={!selectedModelOption?.reasoning_efforts?.length}><option value="">Default</option>{selectedModelOption?.reasoning_efforts?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                    {runtimeError && <span className={styles.errorText} title={runtimeError.message}>{zh ? '运行配置不可用' : 'Runtime controls unavailable'}</span>}
+                  </div>}
                   emptyState={<div className="text-center"><Bot className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-2 text-xs text-slate-500">{zh ? '该会话暂时没有可展示的用户/Agent消息' : 'No visible user or agent messages in this session'}</p></div>}
                 />
               </div>
             </div>
           )}
         </section>
+
+        <aside className={styles.inspector}>
+          <p className={styles.eyebrow}>Remote telemetry</p>
+          <h2>Usage</h2>
+          <div className={styles.usageGrid}>
+            <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.total_tokens)}</strong><span>Total</span></div>
+            <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.input_tokens)}</strong><span>Input</span></div>
+            <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.output_tokens)}</strong><span>Output</span></div>
+            <div className={styles.usageCell}><strong>{formatTokenCount((detail?.session.usage?.cache_read_tokens || 0) + (detail?.session.usage?.cache_write_tokens || 0))}</strong><span>Cache</span></div>
+          </div>
+          <section className={styles.inspectorSection}>
+            <h3>Session integrity</h3>
+            <dl className={styles.metaList}>
+              <div><dt>Source</dt><dd>Native CLI logs</dd></div>
+              <div><dt>Host</dt><dd>{detail?.session.host_name || detail?.session.agent_id || '—'}</dd></div>
+              <div><dt>Adapter</dt><dd>{detail?.session.adapter || '—'}</dd></div>
+              <div><dt>Runtime</dt><dd className={detail?.session.agent_online ? styles.online : styles.offline}>{detail?.session.agent_online ? 'Online' : 'Offline'}</dd></div>
+              <div><dt>Storage</dt><dd>Read only until you send</dd></div>
+            </dl>
+          </section>
+          <section className={styles.inspectorSection}>
+            <h3>Memory fusion</h3>
+            <p>{zh ? '在左栏选择 2 到 8 个 Session。融合会保留完整源历史，并创建一个新的原生目标 Session。' : 'Select two to eight sessions in the left rail. Fusion preserves source archives and creates one new native target session.'}</p>
+            <button type="button" className={styles.quietButton} onClick={() => setFusionMode(true)}>{zh ? '选择 Session' : 'Select sessions'}</button>
+          </section>
+        </aside>
       </section>
       {newSessionOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !newSessionSubmitting) setNewSessionOpen(false) }}>

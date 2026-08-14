@@ -617,6 +617,8 @@ interface ChatViewProps {
   knowledgeContextType?: 'chat' | 'task'
   enableCameraCapture?: boolean
   slashCommandOverrides?: Array<{ cmd: string; desc: string; icon?: string }>
+  hideHeader?: boolean
+  composerAccessory?: React.ReactNode
 }
 
 interface AgentProfileSummary {
@@ -1360,6 +1362,8 @@ export function ChatView({
   knowledgeContextType,
   enableCameraCapture = false,
   slashCommandOverrides,
+  hideHeader = false,
+  composerAccessory,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -2972,7 +2976,7 @@ export function ChatView({
           </div>
         </div>
       )}
-      <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pt-1' : 'px-4 pt-2'}`}>
+      {!hideHeader && <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pt-1' : 'px-4 pt-2'}`}>
         <div className={`flex items-start justify-between ${compactUi ? 'gap-1.5' : 'gap-3'}`}>
           <div className="min-w-0 flex-1">
             <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
@@ -3113,7 +3117,7 @@ export function ChatView({
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
       <div className="min-h-0 flex flex-1 overflow-hidden bg-[#fbfaf7] dark:bg-zinc-950">
         <div className="relative min-w-0 flex flex-1 flex-col">
@@ -3838,6 +3842,8 @@ export function ChatView({
             </button>
           </div>
         )}
+
+        {composerAccessory}
 
         {/* Compact status bar: actual runtime model / think / adapter-aware slash */}
         <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
