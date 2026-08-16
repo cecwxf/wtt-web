@@ -197,6 +197,27 @@ function projectName(pathValue: string) {
   return clean.split(/[\\/]/).filter(Boolean).pop() || 'Unknown project'
 }
 
+function defaultFusionTitle(sources: CliSessionRow[], zh: boolean) {
+  const generic = new Set(['new session', 'untitled session', 'cli session', '新会话', '未命名会话', 'cli 会话'])
+  const meaningful: string[] = []
+  const seen = new Set<string>()
+  for (const source of sources) {
+    const title = source.title.trim().replace(/\s+/g, ' ')
+    const normalized = title.toLocaleLowerCase()
+    if (!title || generic.has(normalized) || seen.has(normalized)) continue
+    seen.add(normalized)
+    meaningful.push(title.slice(0, 120))
+    if (meaningful.length === 2) break
+  }
+  const prefix = zh ? '融合记忆' : 'Fused memory'
+  if (meaningful.length) return `${prefix} · ${meaningful.join(' + ')}`
+  const refs = sources.slice(0, 2).map((source) => {
+    const adapter = source.adapter === 'claude-code' ? 'Claude' : 'Codex'
+    return `${adapter} ${source.native_session_id.slice(0, 8)}`
+  })
+  return `${prefix} · ${refs.join(' + ') || 'CLI'}`
+}
+
 function formatTokenCount(value?: number) {
   const count = Number(value || 0)
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 1 : 2)}M`
@@ -593,7 +614,7 @@ function SessionPageInner() {
     const targetKey = preferred ? `${preferred.agent_id}|${preferred.adapter}` : fusionTargets[0]?.[0] || ''
     setFusionTarget(targetKey)
     setFusionPath(preferred?.project_path || '')
-    setFusionTitle(zh ? `融合记忆 · ${fusionSources[0]?.title || 'CLI 会话'}` : `Fused memory · ${fusionSources[0]?.title || 'CLI session'}`)
+    setFusionTitle(defaultFusionTitle(fusionSources, zh))
     setFusionOpen(true)
   }, [fusionSourceIds.length, fusionSources, fusionTargets, zh])
 
