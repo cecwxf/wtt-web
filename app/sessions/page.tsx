@@ -129,10 +129,24 @@ interface CreateSessionResponse {
   session: CliSessionRow
 }
 
+interface CliWorkspaceRow {
+  id: string
+  agent_id: string
+  host_name: string
+  path: string
+  name: string
+  agent_online?: boolean
+}
+
+interface CliWorkspaceListResponse {
+  items: CliWorkspaceRow[]
+}
+
 interface SessionWorkspaceGroup {
   key: string
   path: string
   name: string
+  agentId: string
   sessions: CliSessionRow[]
 }
 
@@ -221,6 +235,11 @@ function SessionPageInner() {
   const [newSessionPath, setNewSessionPath] = useState('')
   const [newSessionTitle, setNewSessionTitle] = useState('New Session')
   const [newSessionSubmitting, setNewSessionSubmitting] = useState(false)
+  const [workspaceOpen, setWorkspaceOpen] = useState(false)
+  const [workspaceAgent, setWorkspaceAgent] = useState('')
+  const [workspacePath, setWorkspacePath] = useState('')
+  const [workspaceName, setWorkspaceName] = useState('')
+  const [workspaceSubmitting, setWorkspaceSubmitting] = useState(false)
   const importRequestedRef = useRef(new Set<string>())
   const selectedId = searchParams.get('sessionId') || ''
 
@@ -271,6 +290,12 @@ function SessionPageInner() {
     (url: string) => readJson(url, token),
     { refreshInterval: discovering ? 2000 : 10_000, revalidateOnFocus: true },
   )
+  const workspaceUrl = token ? `${CLIENT_WTT_API_BASE}/cli-sessions/workspaces` : null
+  const { data: workspaceData, error: workspaceError, mutate: mutateWorkspaces } = useSWR<CliWorkspaceListResponse>(
+    workspaceUrl,
+    (url: string) => readJson(url, token),
+    { refreshInterval: 30_000, revalidateOnFocus: true },
+  )
 
   const hostGroups = useMemo<SessionHostGroup[]>(() => {
     const hosts = new Map<string, Map<string, SessionWorkspaceGroup>>()
@@ -279,9 +304,29 @@ function SessionPageInner() {
       const path = row.project_path || (zh ? '未知工作区' : 'Unknown workspace')
       const workspaces = hosts.get(host) || new Map<string, SessionWorkspaceGroup>()
       const key = `workspace:${host}:${path}`
-      const group = workspaces.get(path) || { key, path, name: projectName(path), sessions: [] }
+      const group = workspaces.get(path) || { key, path, name: projectName(path), agentId: row.agent_id, sessions: [] }
       group.sessions.push(row)
       workspaces.set(path, group)
+      hosts.set(host, workspaces)
+    }
+    for (const workspace of workspaceData?.items || []) {
+      if (query && !`${workspace.name}\n${workspace.path}\n${workspace.host_name}`.toLowerCase().includes(query.toLowerCase())) continue
+      const host = workspace.host_name?.trim() || (zh ? '未知主机' : 'Unknown host')
+      const workspaces = hosts.get(host) || new Map<string, SessionWorkspaceGroup>()
+      const key = `workspace:${host}:${workspace.path}`
+      const existing = workspaces.get(workspace.path)
+      if (existing) {
+        if (workspace.name) existing.name = workspace.name
+        if (!existing.agentId) existing.agentId = workspace.agent_id
+      } else {
+        workspaces.set(workspace.path, {
+          key,
+          path: workspace.path,
+          name: workspace.name || projectName(workspace.path),
+          agentId: workspace.agent_id,
+          sessions: [],
+        })
+      }
       hosts.set(host, workspaces)
     }
     return Array.from(hosts.entries())
@@ -297,7 +342,7 @@ function SessionPageInner() {
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [listData?.items, zh])
+  }, [listData?.items, query, workspaceData?.items, zh])
 
   useEffect(() => {
     if (!selectedId) return
@@ -320,6 +365,13 @@ function SessionPageInner() {
     const targets = new Map<string, CliSessionRow>()
     for (const row of listData?.items || []) {
       if (row.agent_online) targets.set(`${row.agent_id}|${row.adapter}`, row)
+    }
+    return Array.from(targets.values())
+  }, [listData?.items])
+  const workspaceTargets = useMemo(() => {
+    const targets = new Map<string, CliSessionRow>()
+    for (const row of listData?.items || []) {
+      if (row.agent_online && !targets.has(row.agent_id)) targets.set(row.agent_id, row)
     }
     return Array.from(targets.values())
   }, [listData?.items])
@@ -352,8 +404,9 @@ function SessionPageInner() {
     const paths = new Set<string>()
     for (const item of runtime?.workspaces || []) if (item.path) paths.add(item.path)
     for (const item of listData?.items || []) if (item.project_path) paths.add(item.project_path)
+    for (const item of workspaceData?.items || []) if (item.path) paths.add(item.path)
     return Array.from(paths)
-  }, [listData?.items, runtime?.workspaces])
+  }, [listData?.items, runtime?.workspaces, workspaceData?.items])
 
   useEffect(() => {
     if (!runtime) return
@@ -453,18 +506,53 @@ function SessionPageInner() {
     await mutateList()
   }, [mutateDetail, mutateList, reasoningEffort, router, selectedId, selectedModel, token, workspaceAccess])
 
-  const openNewSession = useCallback(() => {
-    const source = detail?.session || (listData?.items || []).find((row) => row.agent_online)
+  const openNewSession = useCallback((workspace?: SessionWorkspaceGroup) => {
+    const workspaceSource = workspace
+      ? (listData?.items || []).find((row) => row.agent_id === workspace.agentId && row.agent_online)
+      : undefined
+    const source = workspaceSource || detail?.session || (listData?.items || []).find((row) => row.agent_online)
     if (!source) {
       setActionError(zh ? '没有在线的已绑定 Agent' : 'No online bound Agent is available')
       return
     }
     setNewSessionAgent(source.agent_id)
     setNewSessionAdapter(source.adapter)
-    setNewSessionPath(source.project_path || runtime?.workspaces?.[0]?.path || '')
+    setNewSessionPath(workspace?.path || source.project_path || runtime?.workspaces?.[0]?.path || '')
     setNewSessionTitle(zh ? '新会话' : 'New Session')
     setNewSessionOpen(true)
   }, [detail?.session, listData?.items, runtime?.workspaces, zh])
+
+  const openWorkspace = useCallback(() => {
+    const source = detail?.session.agent_online ? detail.session : workspaceTargets[0]
+    if (!source) {
+      setActionError(zh ? '没有在线的已绑定 Agent' : 'No online bound Agent is available')
+      return
+    }
+    setWorkspaceAgent(source.agent_id)
+    setWorkspacePath('')
+    setWorkspaceName('')
+    setWorkspaceOpen(true)
+  }, [detail?.session, workspaceTargets, zh])
+
+  const createWorkspace = useCallback(async () => {
+    if (!token || !workspaceAgent || !workspacePath.trim() || workspaceSubmitting) return
+    setWorkspaceSubmitting(true)
+    setActionError('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/workspaces`, {
+        method: 'POST',
+        headers: authHeaders(token, true),
+        body: JSON.stringify({ agent_id: workspaceAgent, path: workspacePath.trim(), name: workspaceName.trim() }),
+      })
+      if (!response.ok) throw new Error(await responseText(response))
+      setWorkspaceOpen(false)
+      await mutateWorkspaces()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setWorkspaceSubmitting(false)
+    }
+  }, [mutateWorkspaces, token, workspaceAgent, workspaceName, workspacePath, workspaceSubmitting])
 
   const createSession = useCallback(async () => {
     if (!token || !newSessionAgent || !newSessionPath.trim() || newSessionSubmitting) return
@@ -606,7 +694,7 @@ function SessionPageInner() {
               <button type="button" className={styles.railCollapseButton} onClick={() => togglePanel('left')} title={zh ? '收起左侧栏' : 'Collapse session rail'} aria-label={zh ? '收起左侧栏' : 'Collapse session rail'}>‹</button>
             </div>
           </div>
-          <button type="button" className={styles.newSessionButton} onClick={openNewSession}><Plus className="h-4 w-4" /> New Session</button>
+          <button type="button" className={styles.newSessionButton} onClick={() => openNewSession()}><Plus className="h-4 w-4" /> New Session</button>
           <nav className={styles.adapterFilter} aria-label="Agent harness">
             {[
               { value: '', mark: 'All', label: zh ? '全部' : 'All' },
@@ -616,13 +704,13 @@ function SessionPageInner() {
             <button type="button" disabled title={zh ? '远端 DSH Session 尚未启用' : 'Remote DSH sessions are not enabled'}><span>Ds</span>DSH</button>
           </nav>
           <label className={styles.search}><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder={zh ? '标题、工作区、ID' : 'Title, workspace, ID'} /></label>
-          <div className={styles.workspaceActions}><span>Workspaces</span><button type="button" className={styles.quietButton} onClick={openNewSession}>+ Workspace</button></div>
+          <div className={styles.workspaceActions}><span>Workspaces</span><button type="button" className={styles.quietButton} onClick={openWorkspace}>+ Workspace</button></div>
           <div className={styles.sessionActions}>
             <span>{listLoading ? (zh ? '读取中…' : 'Loading…') : `${listData?.total || 0} sessions`}</span>
             {!fusionMode ? <button type="button" className={styles.quietButton} onClick={() => setFusionMode(true)}>Merge memory</button> : <button type="button" className={styles.quietButton} onClick={() => { if (fusionSourceIds.length >= 2) openFusionDialog(); else { setFusionMode(false); setFusionSourceIds([]) } }}>{fusionSourceIds.length >= 2 ? `Merge (${fusionSourceIds.length})` : 'Cancel'}</button>}
           </div>
           <div className={styles.sessionList}>
-            {(listError || actionError) && <p className={styles.errorText}>{actionError || listError?.message}</p>}
+            {(listError || workspaceError || actionError) && <p className={styles.errorText}>{actionError || listError?.message || workspaceError?.message}</p>}
             {!listLoading && hostGroups.length === 0 && <p className={styles.emptyList}>{zh ? '尚未发现 CLI 会话。点击扫描读取已绑定主机的原生历史。' : 'No CLI sessions found. Scan bound hosts to read native history.'}</p>}
             {hostGroups.map((host, hostIndex) => {
               const hostHasSelected = host.workspaces.some((workspace) => workspace.sessions.some((session) => session.id === selectedId))
@@ -646,6 +734,7 @@ function SessionPageInner() {
                             <span className={styles.workspaceCount}>{workspace.sessions.length}</span>
                           </summary>
                           <div className={styles.workspaceSessions}>
+                            {workspace.sessions.length === 0 && <button type="button" className={styles.emptyWorkspaceAction} onClick={() => openNewSession(workspace)}><Plus className="h-3 w-3" />{zh ? '在此新建 Session' : 'New session here'}</button>}
                             {workspace.sessions.map((row) => (
                               <button type="button" key={row.id} className={`${styles.sessionRow} ${selectedId === row.id || fusionSourceIds.includes(row.id) ? styles.sessionRowActive : ''}`} onClick={() => fusionMode ? toggleFusionSource(row.id) : router.push(`/sessions?sessionId=${encodeURIComponent(row.id)}`)}>
                                 {fusionMode ? <span className={styles.sessionSelect}>{fusionSourceIds.includes(row.id) ? '✓' : '□'}</span> : <span className={styles.sessionGlyph}>{row.adapter === 'codex' ? 'Cx' : 'Cl'}</span>}
@@ -747,6 +836,27 @@ function SessionPageInner() {
           </section>
         </aside>
       </section>
+      {workspaceOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !workspaceSubmitting) setWorkspaceOpen(false) }}>
+          <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-950">
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-sm font-black">{zh ? '创建 Workspace' : 'Create Workspace'}</p><p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-zinc-400">{zh ? '在已绑定主机上创建工作目录；缺失的父目录会一并创建，但不会创建 Session。' : 'Create a directory on a bound host, including missing parents. This does not create a session.'}</p></div>
+              <button onClick={() => setWorkspaceOpen(false)} disabled={workspaceSubmitting} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-900"><X className="h-4 w-4" /></button>
+            </div>
+            <label className="mt-4 block text-[10px] font-black uppercase tracking-wider text-slate-500">{zh ? '主机' : 'Host'}
+              <select value={workspaceAgent} onChange={(event) => setWorkspaceAgent(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900">
+                {workspaceTargets.map((row) => <option key={row.agent_id} value={row.agent_id}>{row.host_name || row.agent_id}</option>)}
+              </select>
+            </label>
+            <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-slate-500">{zh ? '目录路径' : 'Directory path'}<input value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} maxLength={4000} placeholder="/home/user/project" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900" /></label>
+            <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-slate-500">{zh ? '名称（可选）' : 'Name (optional)'}<input value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={255} placeholder={workspacePath ? projectName(workspacePath) : ''} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900" /></label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setWorkspaceOpen(false)} disabled={workspaceSubmitting} className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-900">{zh ? '取消' : 'Cancel'}</button>
+              <button onClick={() => void createWorkspace()} disabled={workspaceSubmitting || !workspaceAgent || !workspacePath.trim()} className="flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-sky-600/20 disabled:opacity-40">{workspaceSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{zh ? '创建' : 'Create'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {newSessionOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !newSessionSubmitting) setNewSessionOpen(false) }}>
           <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-950">

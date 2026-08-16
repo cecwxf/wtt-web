@@ -169,6 +169,8 @@
 .workspaceLabel span { margin-top: 2px; color: var(--muted); font: 9px var(--mono); }
 .workspaceCount { min-width: 19px; padding: 2px 5px; border-radius: 999px; color: var(--teal); background: var(--teal-soft); font: 9px var(--mono); text-align: center; }
 .workspaceSessions { position: relative; margin-left: 18px; padding-left: 11px; border-left: 1px solid color-mix(in srgb, var(--teal) 27%, var(--line)); }
+.emptyWorkspaceAction { display: flex; width: 100%; align-items: center; justify-content: center; gap: 5px; margin: 4px 0 7px; padding: 7px; border: 1px dashed var(--line); border-radius: 9px; color: var(--muted); background: transparent; font-size: 10px; }
+.emptyWorkspaceAction:hover { border-color: color-mix(in srgb, var(--teal) 55%, var(--line)); color: var(--teal); background: color-mix(in srgb, var(--teal) 7%, transparent); }
 .sessionRow { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 7px; width: 100%; margin: 3px 0; padding: 10px 9px; border: 1px solid transparent; border-radius: 11px; color: var(--ink); background: transparent; text-align: left; }
 .sessionRow::before { content: ""; position: absolute; top: 21px; left: -12px; width: 9px; border-top: 1px solid color-mix(in srgb, var(--teal) 27%, var(--line)); }
 .sessionRow:hover { background: color-mix(in srgb, var(--teal-soft) 55%, transparent); }
