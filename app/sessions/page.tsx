@@ -62,6 +62,17 @@ interface CliSessionEvent {
   role: 'user' | 'assistant' | 'system'
   kind: 'message' | 'tool' | 'status' | 'error' | string
   content: string
+  metadata?: {
+    fusion_source?: {
+      index: number
+      session_id?: string
+      adapter: string
+      native_session_id: string
+      title: string
+      project_path?: string
+    }
+    [key: string]: unknown
+  } | null
   source_created_at?: string | null
   created_at?: string | null
 }
@@ -75,6 +86,20 @@ interface CliSessionDetailResponse {
   session: CliSessionRow
   events: CliSessionEvent[]
   event_total: number
+  fusion?: {
+    id: string
+    title: string
+    source_count: number
+    sources: Array<{
+      id: string
+      ordinal: number
+      adapter: string
+      native_session_id: string
+      title: string
+      project_path: string
+      event_total: number
+    }>
+  }
 }
 
 interface FusionCreateResponse {
@@ -517,14 +542,21 @@ function SessionPageInner() {
 
   const chatMessages = useMemo<ChatMessage[]>(() => (detail?.events || [])
     .filter((event) => ['message', 'error'].includes(event.kind))
-    .map((event) => ({
-      message_id: event.id,
-      sender_id: event.role === 'user' ? 'wtt-user' : detail?.session.agent_id || 'cli-agent',
-      sender_display_name: event.role === 'user' ? (zh ? '你' : 'You') : detail?.session.adapter === 'codex' ? 'Codex' : 'Claude Code',
-      sender_type: event.role === 'user' ? 'human' : 'agent',
-      content: event.kind === 'error' ? `执行失败：${event.content}` : event.content,
-      timestamp: event.source_created_at || event.created_at || new Date().toISOString(),
-    })), [detail?.events, detail?.session.adapter, detail?.session.agent_id, zh])
+    .map((event) => {
+      const source = event.metadata?.fusion_source
+      const sourceLabel = source ? ` · ${source.title}` : ''
+      const adapter = source?.adapter || detail?.session.adapter
+      return {
+        message_id: event.id,
+        sender_id: event.role === 'user' ? 'wtt-user' : source?.native_session_id || detail?.session.agent_id || 'cli-agent',
+        sender_display_name: event.role === 'user'
+          ? `${zh ? '你' : 'You'}${sourceLabel}`
+          : `${adapter === 'codex' ? 'Codex' : 'Claude Code'}${sourceLabel}`,
+        sender_type: event.role === 'user' ? 'human' : 'agent',
+        content: event.kind === 'error' ? `执行失败：${event.content}` : event.content,
+        timestamp: event.source_created_at || event.created_at || new Date().toISOString(),
+      } satisfies ChatMessage
+    }), [detail?.events, detail?.session.adapter, detail?.session.agent_id, zh])
 
   const runStatus = useMemo<ChatRunStatus | null>(() => {
     const current = detail?.session
@@ -774,12 +806,7 @@ function downloadSession(detail: CliSessionDetailResponse) {
     `- Host: ${detail.session.host_name || detail.session.agent_id}`,
     `- Project: ${detail.session.project_path}`,
     '',
-    ...detail.events.filter((event) => ['message', 'error'].includes(event.kind)).flatMap((event) => [
-      `## ${event.role === 'user' ? 'User' : event.role === 'assistant' ? 'Assistant' : 'System'}`,
-      '',
-      event.content,
-      '',
-    ]),
+    ...fusionMarkdownEvents(detail.events),
   ]
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -788,6 +815,27 @@ function downloadSession(detail: CliSessionDetailResponse) {
   anchor.download = `${detail.session.title.replace(/[^\w\u4e00-\u9fff-]+/g, '-').slice(0, 80) || 'cli-session'}.md`
   anchor.click()
   URL.revokeObjectURL(url)
+}
+
+function fusionMarkdownEvents(events: CliSessionEvent[]) {
+  const lines: string[] = []
+  let previousSource = ''
+  for (const event of events.filter((item) => ['message', 'error'].includes(item.kind))) {
+    const source = event.metadata?.fusion_source
+    const sourceKey = source ? `${source.adapter}:${source.native_session_id}` : ''
+    if (sourceKey !== previousSource) {
+      if (source) lines.push(`## Source ${source.index + 1}: ${source.title}`, '', `_${source.adapter}:${source.native_session_id}_`, '')
+      else if (previousSource) lines.push('## Fused session', '')
+      previousSource = sourceKey
+    }
+    lines.push(
+      `### ${event.role === 'user' ? 'User' : event.role === 'assistant' ? 'Assistant' : 'System'}`,
+      '',
+      event.content,
+      '',
+    )
+  }
+  return lines
 }
 
 export default function CliSessionsPage() {
