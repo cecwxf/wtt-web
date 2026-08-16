@@ -569,7 +569,10 @@ function SessionPageInner() {
         <aside className={styles.sidebar}>
           <div className={styles.sidebarHead}>
             <div><p className={styles.eyebrow}>Native history</p><h1 className={styles.sidebarTitle}>Sessions</h1></div>
-            <button type="button" className={styles.iconButton} onClick={discover} disabled={discovering}>{discovering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (zh ? '扫描' : 'Scan')}</button>
+            <div className={styles.sidebarHeadActions}>
+              <button type="button" className={styles.iconButton} onClick={discover} disabled={discovering}>{discovering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (zh ? '扫描' : 'Scan')}</button>
+              <button type="button" className={styles.railCollapseButton} onClick={() => togglePanel('left')} title={zh ? '收起左侧栏' : 'Collapse session rail'} aria-label={zh ? '收起左侧栏' : 'Collapse session rail'}>‹</button>
+            </div>
           </div>
           <button type="button" className={styles.newSessionButton} onClick={openNewSession}><Plus className="h-4 w-4" /> New Session</button>
           <nav className={styles.adapterFilter} aria-label="Agent harness">
@@ -666,6 +669,7 @@ function SessionPageInner() {
                   loading={detail.session.import_status === 'importing'}
                   compactUi
                   hideHeader
+                  hideRuntimeBadges
                   wsConnected={Boolean(detail.session.agent_online)}
                   accessToken={token}
                   topicType="cli_session"

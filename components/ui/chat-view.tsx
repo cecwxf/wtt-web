@@ -619,6 +619,7 @@ interface ChatViewProps {
   slashCommandOverrides?: Array<{ cmd: string; desc: string; icon?: string }>
   hideHeader?: boolean
   composerAccessory?: React.ReactNode
+  hideRuntimeBadges?: boolean
 }
 
 interface AgentProfileSummary {
@@ -1364,6 +1365,7 @@ export function ChatView({
   slashCommandOverrides,
   hideHeader = false,
   composerAccessory,
+  hideRuntimeBadges = false,
 }: ChatViewProps) {
   const { t } = useI18n()
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -3843,25 +3845,28 @@ export function ChatView({
           </div>
         )}
 
-        {composerAccessory}
-
         {/* Compact status bar: actual runtime model / think / adapter-aware slash */}
         <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
-          <span
-            className="flex min-w-0 max-w-[220px] shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-            title={`Current runtime model: ${displayModelId || displayModelLabel}`}
-          >
-            <span>🤖</span>
-            <span className="truncate font-medium">{displayModelLabel}</span>
-          </span>
+          {composerAccessory}
+          {!hideRuntimeBadges && (
+            <>
+              <span
+                className="flex min-w-0 max-w-[220px] shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                title={`Current runtime model: ${displayModelId || displayModelLabel}`}
+              >
+                <span>🤖</span>
+                <span className="truncate font-medium">{displayModelLabel}</span>
+              </span>
 
-          <span
-            className="flex shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-            title={`Current think mode: ${displayEffortLabel}`}
-          >
-            <span>🧠</span>
-            <span className="font-medium">{displayEffortLabel}</span>
-          </span>
+              <span
+                className="flex shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                title={`Current think mode: ${displayEffortLabel}`}
+              >
+                <span>🧠</span>
+                <span className="font-medium">{displayEffortLabel}</span>
+              </span>
+            </>
+          )}
 
           <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {activeAgentLabel}
