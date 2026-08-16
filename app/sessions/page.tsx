@@ -209,13 +209,12 @@ function defaultFusionTitle(sources: CliSessionRow[], zh: boolean) {
     meaningful.push(title.slice(0, 120))
     if (meaningful.length === 2) break
   }
-  const prefix = zh ? '融合记忆' : 'Fused memory'
-  if (meaningful.length) return `${prefix} · ${meaningful.join(' + ')}`
+  if (meaningful.length) return meaningful.join(' + ')
   const refs = sources.slice(0, 2).map((source) => {
     const adapter = source.adapter === 'claude-code' ? 'Claude' : 'Codex'
     return `${adapter} ${source.native_session_id.slice(0, 8)}`
   })
-  return `${prefix} · ${refs.join(' + ') || 'CLI'}`
+  return refs.join(' + ') || (zh ? 'CLI 会话' : 'CLI session')
 }
 
 function formatTokenCount(value?: number) {
