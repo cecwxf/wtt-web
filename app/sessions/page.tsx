@@ -652,17 +652,21 @@ function SessionPageInner() {
     .filter((event) => ['message', 'error'].includes(event.kind))
     .map((event) => {
       const source = event.metadata?.fusion_source
-      const sourceLabel = source ? ` · ${source.title}` : ''
       const adapter = source?.adapter || detail?.session.adapter
       return {
         message_id: event.id,
         sender_id: event.role === 'user' ? 'wtt-user' : source?.native_session_id || detail?.session.agent_id || 'cli-agent',
         sender_display_name: event.role === 'user'
-          ? `${zh ? '你' : 'You'}${sourceLabel}`
-          : `${adapter === 'codex' ? 'Codex' : 'Claude Code'}${sourceLabel}`,
+          ? (zh ? '你' : 'You')
+          : source ? (zh ? '助手' : 'Assistant') : adapter === 'codex' ? 'Codex' : 'Claude Code',
         sender_type: event.role === 'user' ? 'human' : 'agent',
         content: event.kind === 'error' ? `执行失败：${event.content}` : event.content,
         timestamp: event.source_created_at || event.created_at || new Date().toISOString(),
+        cli_source: source ? {
+          adapter: source.adapter,
+          session_title: source.title,
+          native_session_id: source.native_session_id,
+        } : undefined,
       } satisfies ChatMessage
     }), [detail?.events, detail?.session.adapter, detail?.session.agent_id, zh])
 

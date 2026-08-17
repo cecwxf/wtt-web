@@ -45,6 +45,11 @@ export interface ChatMessage {
   is_cloud_sandbox?: boolean
   is_streaming?: boolean
   stream_id?: string
+  cli_source?: {
+    adapter: string
+    session_title: string
+    native_session_id: string
+  }
 }
 
 export interface ChatSendOptions {
@@ -3327,6 +3332,22 @@ export function ChatView({
                             <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${isMine ? 'bg-[#f1eee7] text-[#766f64] dark:bg-zinc-800 dark:text-zinc-400' : 'bg-[#eee8dd] text-[#9a4b00] dark:bg-zinc-800 dark:text-amber-300'}`}>
                               {isMine ? 'You' : 'AI'}
                             </span>
+                            {message.cli_source && (
+                              <>
+                                <span
+                                  className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${message.cli_source.adapter === 'codex' ? 'bg-sky-100 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300'}`}
+                                  title={`${message.cli_source.adapter}:${message.cli_source.native_session_id}`}
+                                >
+                                  {message.cli_source.adapter === 'codex' ? 'Codex' : 'Claude Code'}
+                                </span>
+                                <span
+                                  className="min-w-0 truncate rounded bg-[#f1eee7] px-1.5 py-0.5 text-[9px] font-medium text-[#766f64] dark:bg-zinc-800 dark:text-zinc-400"
+                                  title={`${message.cli_source.session_title} · ${message.cli_source.native_session_id}`}
+                                >
+                                  {message.cli_source.session_title || message.cli_source.native_session_id.slice(0, 8)}
+                                </span>
+                              </>
+                            )}
                           </p>
                         )}
 
