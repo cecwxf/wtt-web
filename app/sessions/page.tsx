@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 
 import { ChatView, type ChatMessage, type ChatRunStatus } from '@/components/ui/chat-view'
+import { CliWorkspaceExplorer } from '@/components/ui/cli-workspace-explorer'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
@@ -235,6 +236,7 @@ function SessionPageInner() {
   const [adapterFilter, setAdapterFilter] = useState('')
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
+  const [inspectorTab, setInspectorTab] = useState<'explore' | 'usage'>('explore')
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(new Set())
   const [discovering, setDiscovering] = useState(false)
   const [actionError, setActionError] = useState('')
@@ -701,7 +703,7 @@ function SessionPageInner() {
         </button>
         <span className={styles.topbarSpacer} />
         <button type="button" className={`${styles.panelToggle} ${rightCollapsed ? styles.panelToggleActive : ''}`} onClick={() => togglePanel('right')}>
-          Usage {rightCollapsed ? '‹' : '›'}
+          Explore {rightCollapsed ? '‹' : '›'}
         </button>
         <Link href="/feed" className={`${styles.iconButton} ${styles.desktopOnly}`}>Feed</Link>
         <button type="button" onClick={toggleLocale} className={styles.iconButton}>{zh ? 'EN' : '中'}</button>
@@ -835,29 +837,39 @@ function SessionPageInner() {
         </section>
 
         <aside className={styles.inspector}>
-          <p className={styles.eyebrow}>Remote telemetry</p>
-          <h2>Usage</h2>
-          <div className={styles.usageGrid}>
-            <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.total_tokens)}</strong><span>Total</span></div>
-            <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.input_tokens)}</strong><span>Input</span></div>
-            <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.output_tokens)}</strong><span>Output</span></div>
-            <div className={styles.usageCell}><strong>{formatTokenCount((detail?.session.usage?.cache_read_tokens || 0) + (detail?.session.usage?.cache_write_tokens || 0))}</strong><span>Cache</span></div>
+          <div className={styles.inspectorTabs} role="tablist" aria-label={zh ? '右侧面板' : 'Inspector'}>
+            <button type="button" className={inspectorTab === 'explore' ? styles.inspectorTabActive : ''} onClick={() => setInspectorTab('explore')}>Explore</button>
+            <button type="button" className={inspectorTab === 'usage' ? styles.inspectorTabActive : ''} onClick={() => setInspectorTab('usage')}>Usage</button>
           </div>
-          <section className={styles.inspectorSection}>
-            <h3>Session integrity</h3>
-            <dl className={styles.metaList}>
-              <div><dt>Source</dt><dd>Native CLI logs</dd></div>
-              <div><dt>Host</dt><dd>{detail?.session.host_name || detail?.session.agent_id || '—'}</dd></div>
-              <div><dt>Adapter</dt><dd>{detail?.session.adapter || '—'}</dd></div>
-              <div><dt>Runtime</dt><dd className={detail?.session.agent_online ? styles.online : styles.offline}>{detail?.session.agent_online ? 'Online' : 'Offline'}</dd></div>
-              <div><dt>Storage</dt><dd>Read only until you send</dd></div>
-            </dl>
-          </section>
-          <section className={styles.inspectorSection}>
-            <h3>Memory fusion</h3>
-            <p>{zh ? '在左栏选择 2 到 8 个 Session。融合会保留完整源历史，并创建一个新的原生目标 Session。' : 'Select two to eight sessions in the left rail. Fusion preserves source archives and creates one new native target session.'}</p>
-            <button type="button" className={styles.quietButton} onClick={() => setFusionMode(true)}>{zh ? '选择 Session' : 'Select sessions'}</button>
-          </section>
+          {inspectorTab === 'explore' ? (
+            detail?.session ? <CliWorkspaceExplorer sessionId={detail.session.id} workspaceRoot={detail.session.project_path} online={Boolean(detail.session.agent_online)} accessToken={token} zh={zh} /> : <div className={styles.inspectorEmpty}>{zh ? '选择一个 Session 浏览其 Workspace' : 'Select a session to explore its workspace.'}</div>
+          ) : (
+            <div className={styles.inspectorBody}>
+              <p className={styles.eyebrow}>Remote telemetry</p>
+              <h2>Usage</h2>
+              <div className={styles.usageGrid}>
+                <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.total_tokens)}</strong><span>Total</span></div>
+                <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.input_tokens)}</strong><span>Input</span></div>
+                <div className={styles.usageCell}><strong>{formatTokenCount(detail?.session.usage?.output_tokens)}</strong><span>Output</span></div>
+                <div className={styles.usageCell}><strong>{formatTokenCount((detail?.session.usage?.cache_read_tokens || 0) + (detail?.session.usage?.cache_write_tokens || 0))}</strong><span>Cache</span></div>
+              </div>
+              <section className={styles.inspectorSection}>
+                <h3>Session integrity</h3>
+                <dl className={styles.metaList}>
+                  <div><dt>Source</dt><dd>Native CLI logs</dd></div>
+                  <div><dt>Host</dt><dd>{detail?.session.host_name || detail?.session.agent_id || '—'}</dd></div>
+                  <div><dt>Adapter</dt><dd>{detail?.session.adapter || '—'}</dd></div>
+                  <div><dt>Runtime</dt><dd className={detail?.session.agent_online ? styles.online : styles.offline}>{detail?.session.agent_online ? 'Online' : 'Offline'}</dd></div>
+                  <div><dt>Storage</dt><dd>Read only until you send</dd></div>
+                </dl>
+              </section>
+              <section className={styles.inspectorSection}>
+                <h3>Memory fusion</h3>
+                <p>{zh ? '在左栏选择 2 到 8 个 Session。融合会保留完整源历史，并创建一个新的原生目标 Session。' : 'Select two to eight sessions in the left rail. Fusion preserves source archives and creates one new native target session.'}</p>
+                <button type="button" className={styles.quietButton} onClick={() => setFusionMode(true)}>{zh ? '选择 Session' : 'Select sessions'}</button>
+              </section>
+            </div>
+          )}
         </aside>
       </section>
       {workspaceOpen && (
