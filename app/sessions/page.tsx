@@ -892,7 +892,7 @@ function SessionPageInner() {
             <button type="button" className={inspectorTab === 'usage' ? styles.inspectorTabActive : ''} onClick={() => setInspectorTab('usage')}>Usage</button>
           </div>
           {inspectorTab === 'explore' ? (
-            detail?.session ? <CliWorkspaceExplorer sessionId={detail.session.id} workspaceRoot={detail.session.project_path} online={Boolean(detail.session.agent_online)} accessToken={token} zh={zh} /> : <div className={styles.inspectorEmpty}>{zh ? '选择一个 Session 浏览其 Workspace' : 'Select a session to explore its workspace.'}</div>
+            detail?.session ? <CliWorkspaceExplorer sessionId={detail.session.id} workspaceRoot={detail.session.project_path} online={Boolean(detail.session.agent_online)} accessToken={token} workspaceAccess={workspaceAccess} zh={zh} /> : <div className={styles.inspectorEmpty}>{zh ? '选择一个 Session 浏览其 Workspace' : 'Select a session to explore its workspace.'}</div>
           ) : (
             <div className={styles.inspectorBody}>
               <p className={styles.eyebrow}>Remote telemetry</p>

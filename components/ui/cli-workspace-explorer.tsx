@@ -11,9 +11,12 @@ import {
   ImageIcon,
   Loader2,
   Minus,
+  Pencil,
   Plus,
   RefreshCw,
+  Save,
   WrapText,
+  X,
 } from 'lucide-react'
 
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
@@ -51,6 +54,9 @@ interface WorkspaceReadResponse {
   content?: string
   content_base64?: string
   content_html?: string
+  editable?: boolean
+  edit_limit_bytes?: number
+  content_etag?: string
 }
 
 interface CliWorkspaceExplorerProps {
@@ -58,6 +64,7 @@ interface CliWorkspaceExplorerProps {
   workspaceRoot: string
   online: boolean
   accessToken?: string
+  workspaceAccess: 'read-only' | 'workspace-write' | 'full-access'
   zh: boolean
 }
 
@@ -121,13 +128,16 @@ async function readApi<T>(url: string, accessToken?: string): Promise<T> {
   throw new Error(typeof detail === 'string' ? detail : body?.message || `Request failed (${response.status})`)
 }
 
-export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessToken, zh }: CliWorkspaceExplorerProps) {
+export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessToken, workspaceAccess, zh }: CliWorkspaceExplorerProps) {
   const [directories, setDirectories] = useState<Record<string, WorkspaceEntry[]>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<WorkspaceReadResponse | null>(null)
   const [fileLoading, setFileLoading] = useState(false)
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [saving, setSaving] = useState(false)
   const [fontSize, setFontSize] = useState(() => loadStoredNumber('wtt-cli-explorer-font-size', 11))
   const [wrapLines, setWrapLines] = useState(() => typeof window === 'undefined' || window.localStorage.getItem('wtt-cli-explorer-wrap') !== '0')
   const [imageFit, setImageFit] = useState(() => typeof window === 'undefined' || window.localStorage.getItem('wtt-cli-explorer-image-fit') !== 'actual')
@@ -187,6 +197,8 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     setExpanded(new Set())
     setSelected(null)
     setError('')
+    setEditing(false)
+    setEditContent('')
   }, [sessionId, workspaceRoot])
 
   useEffect(() => {
@@ -215,7 +227,11 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
         `${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/read?${query}`,
         accessToken,
       )
-      if (generation.current === currentGeneration) setSelected(result)
+      if (generation.current === currentGeneration) {
+        setSelected(result)
+        setEditing(false)
+        setEditContent('')
+      }
     } catch (requestError) {
       if (generation.current === currentGeneration) setError(requestError instanceof Error ? requestError.message : String(requestError))
     } finally {
@@ -229,6 +245,74 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     setSelected(null)
     void loadDirectory('', true)
   }, [loadDirectory])
+
+  const closeFile = useCallback(() => {
+    if (editing && editContent !== (selected?.content || '') && !window.confirm(zh ? '放弃未保存的修改？' : 'Discard unsaved changes?')) return
+    setSelected(null)
+    setEditing(false)
+    setEditContent('')
+    setError('')
+  }, [editContent, editing, selected?.content, zh])
+
+  const beginEdit = useCallback(() => {
+    if (!selected?.editable || typeof selected.content !== 'string' || workspaceAccess === 'read-only') return
+    setEditing(true)
+    setEditContent(selected.content)
+    setError('')
+  }, [selected, workspaceAccess])
+
+  const cancelEdit = useCallback(() => {
+    if (editContent !== (selected?.content || '') && !window.confirm(zh ? '放弃未保存的修改？' : 'Discard unsaved changes?')) return
+    setEditing(false)
+    setEditContent('')
+    setError('')
+  }, [editContent, selected?.content, zh])
+
+  const saveEdit = useCallback(async () => {
+    if (!selected?.editable || typeof selected.content !== 'string' || !editing || saving || !accessToken) return
+    if (workspaceAccess === 'read-only') {
+      setError(zh ? '保存前请选择 Workspace Write 或 Full Access。' : 'Select Workspace Write or Full Access before saving.')
+      return
+    }
+    if (editContent === selected.content) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/write`, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          path: selected.path,
+          content: editContent,
+          expected_modified_at: selected.modified_at,
+          expected_etag: selected.content_etag || '',
+          workspace_access: workspaceAccess,
+        }),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        const detail = body?.detail
+        throw new Error(typeof detail === 'string' ? detail : body?.message || `Save failed (${response.status})`)
+      }
+      const saved = await response.json() as WorkspaceReadResponse
+      setSelected(saved)
+      setEditing(false)
+      setEditContent('')
+      const separator = saved.path.lastIndexOf('/')
+      const parent = separator >= 0 ? saved.path.slice(0, separator) : ''
+      setDirectories((current) => {
+        const next = { ...current }
+        delete next[parent]
+        return next
+      })
+      void loadDirectory(parent, true)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : String(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }, [accessToken, editContent, editing, loadDirectory, saving, selected, sessionId, workspaceAccess, zh])
 
   const rootName = useMemo(() => workspaceRoot.split('/').filter(Boolean).at(-1) || workspaceRoot || 'workspace', [workspaceRoot])
   const selectedVisual = selected ? fileVisual(selected.name) : null
@@ -273,7 +357,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-3 flex items-center gap-2 border-b border-slate-200 pb-3 dark:border-zinc-800">
         {selected ? (
-          <button type="button" onClick={() => setSelected(null)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800" title={zh ? '返回目录' : 'Back to files'}><ArrowLeft className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={closeFile} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800" title={zh ? '返回目录' : 'Back to files'}><ArrowLeft className="h-3.5 w-3.5" /></button>
         ) : <Folder className="h-4 w-4 text-amber-500" />}
         <div className="min-w-0 flex-1"><strong className="block truncate text-xs">{selected?.name || rootName}</strong><span className="block truncate font-mono text-[9px] text-slate-400" title={selected?.path || workspaceRoot}>{selected?.path || workspaceRoot}</span></div>
         {!selected && <button type="button" onClick={refresh} disabled={loadingPaths.has('')} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-zinc-800" title={zh ? '刷新' : 'Refresh'}><RefreshCw className={`h-3.5 w-3.5 ${loadingPaths.has('') ? 'animate-spin' : ''}`} /></button>}
@@ -296,9 +380,30 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
               </> : null}
               {selected.preview_kind === 'text' ? <button type="button" onClick={toggleWrap} className={`flex h-7 items-center gap-1 rounded-md border px-2 text-[8px] font-semibold ${wrapLines ? 'border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300' : 'border-slate-200 dark:border-zinc-800'}`} title={zh ? '自动换行' : 'Wrap long lines'}><WrapText className="h-3 w-3" />{wrapLines ? (zh ? '换行' : 'Wrap') : (zh ? '不换行' : 'No wrap')}</button> : null}
               {selected.preview_kind === 'image' ? <button type="button" onClick={toggleImageFit} className={`h-7 rounded-md border px-2 text-[8px] font-semibold ${imageFit ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-slate-200 dark:border-zinc-800'}`}>{imageFit ? 'Fit' : 'Actual'}</button> : null}
+              {selected.editable && !editing ? <button type="button" onClick={beginEdit} disabled={workspaceAccess === 'read-only'} className="flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[8px] font-semibold hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-800 dark:hover:border-sky-800 dark:hover:bg-sky-950/40" title={workspaceAccess === 'read-only' ? (zh ? '请选择 Workspace Write 或 Full Access' : 'Select Workspace Write or Full Access') : (zh ? '编辑文件' : 'Edit file')}><Pencil className="h-3 w-3" />Edit</button> : null}
+              {editing ? <>
+                <button type="button" onClick={cancelEdit} disabled={saving} className="flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[8px] font-semibold hover:bg-slate-50 disabled:opacity-40 dark:border-zinc-800 dark:hover:bg-zinc-900"><X className="h-3 w-3" />{zh ? '取消' : 'Cancel'}</button>
+                <button type="button" onClick={() => void saveEdit()} disabled={saving || editContent === (selected.content || '')} className="flex h-7 items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-2 text-[8px] font-semibold text-sky-700 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300"><Save className={`h-3 w-3 ${saving ? 'animate-pulse' : ''}`} />{saving ? (zh ? '保存中' : 'Saving') : (zh ? '保存' : 'Save')}</button>
+              </> : null}
             </div>
           </div>
-          {selected.preview_kind === 'pdf' && selected.content_base64 ? (
+          {editing ? (
+            <textarea
+              value={editContent}
+              onChange={(event) => setEditContent(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+                  event.preventDefault()
+                  void saveEdit()
+                }
+              }}
+              spellCheck={false}
+              autoFocus
+              className="block min-h-[calc(100vh-13rem)] w-full resize-none border-0 bg-[#171c22] px-4 py-3 font-mono leading-6 text-zinc-200 caret-cyan-300 outline-none ring-inset focus:ring-1 focus:ring-cyan-700"
+              style={{ fontSize: `${fontSize}px`, tabSize: 2, whiteSpace: wrapLines ? 'pre-wrap' : 'pre', overflowWrap: wrapLines ? 'anywhere' : 'normal' }}
+              aria-label={zh ? `编辑 ${selected.name}` : `Edit ${selected.name}`}
+            />
+          ) : selected.preview_kind === 'pdf' && selected.content_base64 ? (
             <div className="bg-zinc-700 p-3"><iframe src={`data:${selected.content_type};base64,${selected.content_base64}`} title={selected.name} className="h-[calc(100vh-13rem)] min-h-[32rem] w-full rounded border-0 bg-white shadow-2xl" /></div>
           ) : selected.preview_kind === 'docx' && selected.content_html !== undefined ? (
             <iframe srcDoc={documentPreviewHtml(selected.content_html, selected.name, fontSize)} sandbox="" title={selected.name} className="h-[calc(100vh-13rem)] min-h-[32rem] w-full border-0 bg-slate-200" />
