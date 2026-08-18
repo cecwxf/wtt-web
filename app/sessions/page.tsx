@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import useSWR from 'swr'
 import {
   Bot,
@@ -236,6 +236,9 @@ function SessionPageInner() {
   const [adapterFilter, setAdapterFilter] = useState('')
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
+  const [leftWidth, setLeftWidth] = useState(290)
+  const [rightWidth, setRightWidth] = useState(340)
+  const [panelWidthsReady, setPanelWidthsReady] = useState(false)
   const [inspectorTab, setInspectorTab] = useState<'explore' | 'usage'>('explore')
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(new Set())
   const [discovering, setDiscovering] = useState(false)
@@ -263,6 +266,7 @@ function SessionPageInner() {
   const [workspaceName, setWorkspaceName] = useState('')
   const [workspaceSubmitting, setWorkspaceSubmitting] = useState(false)
   const importRequestedRef = useRef(new Set<string>())
+  const shellRef = useRef<HTMLElement>(null)
   const selectedId = searchParams.get('sessionId') || ''
 
   useEffect(() => {
@@ -272,6 +276,11 @@ function SessionPageInner() {
   useEffect(() => {
     setLeftCollapsed(window.localStorage.getItem('wtt-local-left-collapsed') === '1')
     setRightCollapsed(window.localStorage.getItem('wtt-local-right-collapsed') === '1')
+    const storedLeft = Number(window.localStorage.getItem('wtt-sessions-left-width'))
+    const storedRight = Number(window.localStorage.getItem('wtt-sessions-right-width'))
+    if (Number.isFinite(storedLeft) && storedLeft >= 220 && storedLeft <= 640) setLeftWidth(Math.round(storedLeft))
+    if (Number.isFinite(storedRight) && storedRight >= 220 && storedRight <= 640) setRightWidth(Math.round(storedRight))
+    setPanelWidthsReady(true)
     try {
       const stored = JSON.parse(window.localStorage.getItem('wtt-local-workspaces') || '[]')
       if (Array.isArray(stored)) setExpandedWorkspaces(new Set(stored.map(String)))
@@ -293,6 +302,41 @@ function SessionPageInner() {
       return !current
     })
   }, [])
+
+  const startPanelResize = useCallback((side: 'left' | 'right', event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || !shellRef.current) return
+    event.preventDefault()
+    const shell = shellRef.current
+    const bounds = shell.getBoundingClientRect()
+    const otherWidth = side === 'left' ? (rightCollapsed ? 0 : rightWidth) : (leftCollapsed ? 0 : leftWidth)
+    const onMove = (pointerEvent: PointerEvent) => {
+      const requested = side === 'left' ? pointerEvent.clientX - bounds.left : bounds.right - pointerEvent.clientX
+      const maximum = Math.max(220, Math.min(640, bounds.width - otherWidth - 420))
+      const width = Math.round(Math.min(maximum, Math.max(220, requested)))
+      if (side === 'left') setLeftWidth(width)
+      else setRightWidth(width)
+    }
+    const onStop = () => {
+      shell.classList.remove(styles.panelResizing)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onStop)
+      window.removeEventListener('pointercancel', onStop)
+    }
+    shell.classList.add(styles.panelResizing)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onStop, { once: true })
+    window.addEventListener('pointercancel', onStop, { once: true })
+  }, [leftCollapsed, leftWidth, rightCollapsed, rightWidth])
+
+  useEffect(() => {
+    if (!panelWidthsReady) return
+    window.localStorage.setItem('wtt-sessions-left-width', String(leftWidth))
+  }, [leftWidth, panelWidthsReady])
+
+  useEffect(() => {
+    if (!panelWidthsReady) return
+    window.localStorage.setItem('wtt-sessions-right-width', String(rightWidth))
+  }, [panelWidthsReady, rightWidth])
 
   const setWorkspaceExpanded = useCallback((key: string, open: boolean) => {
     setExpandedWorkspaces((current) => {
@@ -711,7 +755,11 @@ function SessionPageInner() {
         <button type="button" className={`${styles.iconButton} ${styles.desktopOnly}`} disabled={!detail} onClick={() => detail && downloadSession(detail)}>Session log下载</button>
       </header>
 
-      <section className={`${styles.shell} ${leftCollapsed ? styles.leftCollapsed : ''} ${rightCollapsed ? styles.rightCollapsed : ''} ${selectedId ? styles.mobileSelected : ''}`}>
+      <section
+        ref={shellRef}
+        className={`${styles.shell} ${leftCollapsed ? styles.leftCollapsed : ''} ${rightCollapsed ? styles.rightCollapsed : ''} ${selectedId ? styles.mobileSelected : ''}`}
+        style={{ '--sessions-left-width': `${leftWidth}px`, '--sessions-right-width': `${rightWidth}px` } as CSSProperties}
+      >
         <aside className={styles.sidebar}>
           <div className={styles.sidebarHead}>
             <div><p className={styles.eyebrow}>Native history</p><h1 className={styles.sidebarTitle}>Sessions</h1></div>
@@ -777,6 +825,7 @@ function SessionPageInner() {
             })}
           </div>
         </aside>
+        <button type="button" role="separator" aria-orientation="vertical" aria-label={zh ? '调整 Session 与对话栏宽度' : 'Resize Sessions and Chat panels'} className={`${styles.panelResizer} ${styles.leftPanelResizer}`} onPointerDown={(event) => startPanelResize('left', event)} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setLeftWidth((value) => Math.min(640, Math.max(220, value + (event.key === 'ArrowRight' ? 16 : -16)))) } }} />
 
         <section className={styles.conversation}>
           {!detail?.session ? (
@@ -835,6 +884,7 @@ function SessionPageInner() {
             </div>
           )}
         </section>
+        <button type="button" role="separator" aria-orientation="vertical" aria-label={zh ? '调整对话与 Explore 栏宽度' : 'Resize Chat and Explore panels'} className={`${styles.panelResizer} ${styles.rightPanelResizer}`} onPointerDown={(event) => startPanelResize('right', event)} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setRightWidth((value) => Math.min(640, Math.max(220, value + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />
 
         <aside className={styles.inspector}>
           <div className={styles.inspectorTabs} role="tablist" aria-label={zh ? '右侧面板' : 'Inspector'}>

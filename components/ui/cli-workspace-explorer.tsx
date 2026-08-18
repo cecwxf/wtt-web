@@ -38,8 +38,11 @@ interface WorkspaceReadResponse {
   content_type: string
   truncated?: boolean
   previewable: boolean
+  preview_kind?: 'text' | 'image' | 'pdf' | 'docx'
+  preview_error?: string
   content?: string
   content_base64?: string
+  content_html?: string
 }
 
 interface CliWorkspaceExplorerProps {
@@ -55,6 +58,16 @@ function formatBytes(value?: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[character] || character)
+}
+
+function documentPreviewHtml(content: string, title: string) {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'"><title>${escapeHtml(title)}</title><style>body{margin:0;padding:24px;color:#1f2926;background:#fff;font:15px/1.7 Georgia,'Times New Roman',serif}p{margin:0 0 1em}h1,h2,h3{line-height:1.25}table{max-width:100%;border-collapse:collapse}td,th{border:1px solid #d9ddd9;padding:6px 8px}img{max-width:100%}</style></head><body>${content}</body></html>`
 }
 
 async function readApi<T>(url: string, accessToken?: string): Promise<T> {
@@ -203,11 +216,15 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
       {fileLoading ? <div className="grid flex-1 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-sky-500" /></div> : selected ? (
         <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-[9px] text-slate-400 dark:border-zinc-900"><span>{selected.content_type}</span><span>{formatBytes(selected.size)}</span></div>
-          {selected.content_base64 ? (
+          {selected.preview_kind === 'pdf' && selected.content_base64 ? (
+            <iframe src={`data:${selected.content_type};base64,${selected.content_base64}`} title={selected.name} className="h-[calc(100vh-13rem)] min-h-[32rem] w-full border-0 bg-white" />
+          ) : selected.preview_kind === 'docx' && selected.content_html !== undefined ? (
+            <iframe srcDoc={documentPreviewHtml(selected.content_html, selected.name)} sandbox="" title={selected.name} className="h-[calc(100vh-13rem)] min-h-[32rem] w-full border-0 bg-white" />
+          ) : selected.content_base64 ? (
             // The source is a runtime data URL, so Next Image optimization cannot apply.
             // eslint-disable-next-line @next/next/no-img-element
             <img src={`data:${selected.content_type};base64,${selected.content_base64}`} alt={selected.name} className="h-auto max-w-full object-contain p-2" />
-          ) : selected.previewable && selected.content !== undefined ? <pre className="min-w-max whitespace-pre p-3 font-mono text-[10px] leading-5 text-slate-800 dark:text-zinc-200">{selected.content}</pre> : <div className="grid min-h-40 place-items-center px-5 text-center text-[11px] leading-5 text-slate-400"><div><File className="mx-auto mb-2 h-6 w-6" />{zh ? '该二进制文件不支持在线预览' : 'Binary preview is not available for this file.'}</div></div>}
+          ) : selected.previewable && selected.content !== undefined ? <pre className="min-w-max whitespace-pre p-3 font-mono text-[10px] leading-5 text-slate-800 dark:text-zinc-200">{selected.content}</pre> : <div className="grid min-h-40 place-items-center px-5 text-center text-[11px] leading-5 text-slate-400"><div><File className="mx-auto mb-2 h-6 w-6" />{selected.preview_error || (zh ? '该二进制文件不支持在线预览' : 'Binary preview is not available for this file.')}</div></div>}
           {selected.truncated && <div className="sticky bottom-0 border-t border-amber-200 bg-amber-50 px-3 py-2 text-[9px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/70 dark:text-amber-200">{zh ? '文件较大，仅显示前 2 MiB。' : 'Large file: showing the first 2 MiB.'}</div>}
         </div>
       ) : (
