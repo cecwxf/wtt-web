@@ -26,6 +26,11 @@ const WorkspaceCodePreview = dynamic(
   { ssr: false, loading: () => <div className="grid min-h-40 place-items-center bg-[#171c22] text-[10px] text-zinc-500">Loading syntax colors...</div> },
 )
 
+const PdfViewer = dynamic(
+  () => import('@/components/ui/pdf-viewer'),
+  { ssr: false, loading: () => <div className="grid min-h-[32rem] place-items-center bg-slate-100 text-[10px] text-slate-400 dark:bg-zinc-900"><Loader2 className="h-5 w-5 animate-spin text-sky-500" /></div> },
+)
+
 interface WorkspaceEntry {
   name: string
   path: string
@@ -51,6 +56,7 @@ interface WorkspaceReadResponse {
   previewable: boolean
   preview_kind?: 'text' | 'image' | 'pdf' | 'docx'
   preview_error?: string
+  streamable?: boolean
   content?: string
   content_base64?: string
   content_html?: string
@@ -316,6 +322,9 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
 
   const rootName = useMemo(() => workspaceRoot.split('/').filter(Boolean).at(-1) || workspaceRoot || 'workspace', [workspaceRoot])
   const selectedVisual = selected ? fileVisual(selected.name) : null
+  const selectedPdfUrl = selected?.preview_kind === 'pdf' && selected.streamable
+    ? `${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/content?${new URLSearchParams({ path: selected.path })}`
+    : ''
 
   const renderEntries = (parentPath = '', depth = 0) => {
     const entries = directories[parentPath] || []
@@ -403,8 +412,8 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
               style={{ fontSize: `${fontSize}px`, tabSize: 2, whiteSpace: wrapLines ? 'pre-wrap' : 'pre', overflowWrap: wrapLines ? 'anywhere' : 'normal' }}
               aria-label={zh ? `编辑 ${selected.name}` : `Edit ${selected.name}`}
             />
-          ) : selected.preview_kind === 'pdf' && selected.content_base64 ? (
-            <div className="bg-zinc-700 p-3"><iframe src={`data:${selected.content_type};base64,${selected.content_base64}`} title={selected.name} className="h-[calc(100vh-13rem)] min-h-[32rem] w-full rounded border-0 bg-white shadow-2xl" /></div>
+          ) : selected.preview_kind === 'pdf' && selectedPdfUrl ? (
+            <div className="min-h-[32rem] bg-zinc-700 p-3"><PdfViewer url={selectedPdfUrl} authorization={accessToken ? `Bearer ${accessToken}` : undefined} expanded /></div>
           ) : selected.preview_kind === 'docx' && selected.content_html !== undefined ? (
             <iframe srcDoc={documentPreviewHtml(selected.content_html, selected.name, fontSize)} sandbox="" title={selected.name} className="h-[calc(100vh-13rem)] min-h-[32rem] w-full border-0 bg-slate-200" />
           ) : selected.content_base64 ? (

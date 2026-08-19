@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect, memo } from 'react'
+import { useState, useRef, useCallback, useEffect, memo, useMemo } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -10,6 +10,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 interface PdfViewerProps {
   url: string
   expanded?: boolean
+  authorization?: string
 }
 
 /** Lazy page — only renders when near the viewport */
@@ -48,14 +49,29 @@ const LazyPage = memo(function LazyPage({ pageNumber, width }: { pageNumber: num
   )
 })
 
-export default function PdfViewer({ url, expanded }: PdfViewerProps) {
+export default function PdfViewer({ url, expanded, authorization }: PdfViewerProps) {
   const [numPages, setNumPages] = useState(0)
   const [pageWidth, setPageWidth] = useState(800)
   const containerRef = useRef<HTMLDivElement>(null)
+  const source = useMemo(() => authorization
+    ? { url, httpHeaders: { Authorization: authorization }, withCredentials: false }
+    : url, [authorization, url])
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages)
   }, [])
+
+  const openInNewTab = useCallback(async () => {
+    if (!authorization) {
+      window.open(url, '_blank', 'noopener,noreferrer')
+      return
+    }
+    const response = await fetch(url, { headers: { Authorization: authorization } })
+    if (!response.ok) return
+    const objectUrl = URL.createObjectURL(await response.blob())
+    window.open(objectUrl, '_blank', 'noopener,noreferrer')
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+  }, [authorization, url])
 
   useEffect(() => {
     const el = containerRef.current
@@ -74,7 +90,7 @@ export default function PdfViewer({ url, expanded }: PdfViewerProps) {
       style={expanded ? undefined : { height: '75vh' }}
     >
       <Document
-        file={url}
+        file={source}
         onLoadSuccess={onDocumentLoadSuccess}
         loading={
           <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
@@ -88,9 +104,9 @@ export default function PdfViewer({ url, expanded }: PdfViewerProps) {
         error={
           <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm gap-2">
             <p>Unable to render PDF inline.</p>
-            <a href={url} target="_blank" rel="noopener noreferrer" className="text-indigo-500 underline text-xs">
+            <button type="button" onClick={openInNewTab} className="text-indigo-500 underline text-xs">
               Open in new tab ↗
-            </a>
+            </button>
           </div>
         }
       >
