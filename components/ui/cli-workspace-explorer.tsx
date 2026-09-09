@@ -10,11 +10,13 @@ import {
   Folder,
   ImageIcon,
   Loader2,
+  MoreHorizontal,
   Minus,
   Pencil,
   Plus,
   RefreshCw,
   Save,
+  Trash2,
   WrapText,
   X,
 } from 'lucide-react'
@@ -72,6 +74,12 @@ interface CliWorkspaceExplorerProps {
   accessToken?: string
   workspaceAccess: 'read-only' | 'workspace-write' | 'full-access'
   zh: boolean
+}
+
+interface ExplorerContextMenu {
+  entry: WorkspaceEntry
+  x: number
+  y: number
 }
 
 function formatBytes(value?: number) {
@@ -144,6 +152,8 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
   const [editing, setEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [saving, setSaving] = useState(false)
+  const [mutating, setMutating] = useState(false)
+  const [contextMenu, setContextMenu] = useState<ExplorerContextMenu | null>(null)
   const [fontSize, setFontSize] = useState(() => loadStoredNumber('wtt-cli-explorer-font-size', 11))
   const [wrapLines, setWrapLines] = useState(() => typeof window === 'undefined' || window.localStorage.getItem('wtt-cli-explorer-wrap') !== '0')
   const [imageFit, setImageFit] = useState(() => typeof window === 'undefined' || window.localStorage.getItem('wtt-cli-explorer-image-fit') !== 'actual')
@@ -205,7 +215,21 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     setError('')
     setEditing(false)
     setEditContent('')
+    setContextMenu(null)
   }, [sessionId, workspaceRoot])
+
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = () => setContextMenu(null)
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [contextMenu])
 
   useEffect(() => {
     if (online && accessToken && !directories['']) void loadDirectory('')
@@ -320,6 +344,82 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     }
   }, [accessToken, editContent, editing, loadDirectory, saving, selected, sessionId, workspaceAccess, zh])
 
+  const refreshEntryParent = useCallback(async (entryPath: string) => {
+    const separator = entryPath.lastIndexOf('/')
+    const parent = separator >= 0 ? entryPath.slice(0, separator) : ''
+    setDirectories((current) => {
+      const next = { ...current }
+      for (const key of Object.keys(next)) {
+        if (key === parent || key === entryPath || key.startsWith(`${entryPath}/`)) delete next[key]
+      }
+      return next
+    })
+    setExpanded((current) => new Set(Array.from(current).filter((item) => item !== entryPath && !item.startsWith(`${entryPath}/`))))
+    await loadDirectory(parent, true)
+  }, [loadDirectory])
+
+  const mutateEntry = useCallback(async (operation: 'rename' | 'delete', entry: WorkspaceEntry, newName?: string) => {
+    if (!accessToken || mutating || workspaceAccess === 'read-only') return
+    if (selected?.path === entry.path && editing && editContent !== (selected.content || '')) {
+      const discard = window.confirm(zh ? '该文件有未保存修改，是否放弃修改并继续？' : 'Discard unsaved changes and continue?')
+      if (!discard) return
+    }
+    setContextMenu(null)
+    setMutating(true)
+    setError('')
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/${operation}`, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          path: entry.path,
+          workspace_access: workspaceAccess,
+          ...(newName ? { new_name: newName } : {}),
+        }),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        const detail = body?.detail
+        throw new Error(typeof detail === 'string' ? detail : body?.message || `${operation} failed (${response.status})`)
+      }
+      if (selected?.path === entry.path) {
+        setSelected(null)
+        setEditing(false)
+        setEditContent('')
+      }
+      await refreshEntryParent(entry.path)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : String(requestError))
+    } finally {
+      setMutating(false)
+    }
+  }, [accessToken, editContent, editing, mutating, refreshEntryParent, selected, sessionId, workspaceAccess, zh])
+
+  const renameEntry = useCallback((entry: WorkspaceEntry) => {
+    if (workspaceAccess === 'read-only') return
+    const value = window.prompt(zh ? '输入新名称' : 'Enter a new name', entry.name)
+    const newName = value?.trim()
+    if (!newName || newName === entry.name) return
+    void mutateEntry('rename', entry, newName)
+  }, [mutateEntry, workspaceAccess, zh])
+
+  const deleteEntry = useCallback((entry: WorkspaceEntry) => {
+    if (workspaceAccess === 'read-only') return
+    const message = entry.type === 'directory'
+      ? (zh ? `删除目录“${entry.name}”及其中所有内容？此操作无法撤销。` : `Delete “${entry.name}” and all of its contents? This cannot be undone.`)
+      : (zh ? `删除“${entry.name}”？此操作无法撤销。` : `Delete “${entry.name}”? This cannot be undone.`)
+    if (window.confirm(message)) void mutateEntry('delete', entry)
+  }, [mutateEntry, workspaceAccess, zh])
+
+  const openContextMenu = useCallback((entry: WorkspaceEntry, clientX: number, clientY: number) => {
+    setContextMenu({
+      entry,
+      x: Math.max(8, Math.min(clientX, window.innerWidth - 176)),
+      y: Math.max(8, Math.min(clientY, window.innerHeight - 126)),
+    })
+  }, [])
+
   const rootName = useMemo(() => workspaceRoot.split('/').filter(Boolean).at(-1) || workspaceRoot || 'workspace', [workspaceRoot])
   const selectedVisual = selected ? fileVisual(selected.name) : null
   const selectedPdfUrl = selected?.preview_kind === 'pdf' && selected.streamable
@@ -343,6 +443,10 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
             className="group flex w-full min-w-0 items-center gap-1.5 rounded-lg py-1.5 pr-2 text-left text-[11px] text-slate-700 hover:bg-sky-50 hover:text-sky-800 dark:text-zinc-300 dark:hover:bg-sky-950/35 dark:hover:text-sky-200"
             style={{ paddingLeft: `${8 + depth * 14}px` }}
             onClick={() => directory ? void toggleDirectory(entry) : entry.type === 'file' ? void openFile(entry) : undefined}
+            onContextMenu={(event) => {
+              event.preventDefault()
+              openContextMenu(entry, event.clientX, event.clientY)
+            }}
             disabled={entry.type === 'symlink' || fileLoading}
             title={entry.path}
           >
@@ -390,6 +494,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
               {selected.preview_kind === 'text' ? <button type="button" onClick={toggleWrap} className={`flex h-7 items-center gap-1 rounded-md border px-2 text-[8px] font-semibold ${wrapLines ? 'border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300' : 'border-slate-200 dark:border-zinc-800'}`} title={zh ? '自动换行' : 'Wrap long lines'}><WrapText className="h-3 w-3" />{wrapLines ? (zh ? '换行' : 'Wrap') : (zh ? '不换行' : 'No wrap')}</button> : null}
               {selected.preview_kind === 'image' ? <button type="button" onClick={toggleImageFit} className={`h-7 rounded-md border px-2 text-[8px] font-semibold ${imageFit ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-slate-200 dark:border-zinc-800'}`}>{imageFit ? 'Fit' : 'Actual'}</button> : null}
               {selected.editable && !editing ? <button type="button" onClick={beginEdit} disabled={workspaceAccess === 'read-only'} className="flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[8px] font-semibold hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-800 dark:hover:border-sky-800 dark:hover:bg-sky-950/40" title={workspaceAccess === 'read-only' ? (zh ? '请选择 Workspace Write 或 Full Access' : 'Select Workspace Write or Full Access') : (zh ? '编辑文件' : 'Edit file')}><Pencil className="h-3 w-3" />Edit</button> : null}
+              {!editing ? <button type="button" onClick={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); openContextMenu({ path: selected.path, name: selected.name, type: 'file', size: selected.size, modified_at: selected.modified_at }, bounds.right, bounds.bottom) }} className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-zinc-800 dark:hover:border-sky-800 dark:hover:bg-sky-950/40" title={zh ? '更多文件操作' : 'More file actions'}><MoreHorizontal className="h-3.5 w-3.5" /></button> : null}
               {editing ? <>
                 <button type="button" onClick={cancelEdit} disabled={saving} className="flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[8px] font-semibold hover:bg-slate-50 disabled:opacity-40 dark:border-zinc-800 dark:hover:bg-zinc-900"><X className="h-3 w-3" />{zh ? '取消' : 'Cancel'}</button>
                 <button type="button" onClick={() => void saveEdit()} disabled={saving || editContent === (selected.content || '')} className="flex h-7 items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-2 text-[8px] font-semibold text-sky-700 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300"><Save className={`h-3 w-3 ${saving ? 'animate-pulse' : ''}`} />{saving ? (zh ? '保存中' : 'Saving') : (zh ? '保存' : 'Save')}</button>
@@ -438,6 +543,24 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
           {directories['']?.length === 0 && !loadingPaths.has('') ? <div className="py-10 text-center text-xs text-slate-400"><ImageIcon className="mx-auto mb-2 h-5 w-5" />{zh ? 'Workspace 为空' : 'Workspace is empty'}</div> : null}
         </div>
       )}
+      {contextMenu ? (
+        <div
+          role="menu"
+          aria-label={zh ? '文件操作' : 'Workspace entry actions'}
+          className="fixed z-[100] w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button type="button" role="menuitem" onClick={() => {
+            setContextMenu(null)
+            if (contextMenu.entry.type === 'directory') void toggleDirectory(contextMenu.entry)
+            else void openFile(contextMenu.entry)
+          }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] text-slate-700 hover:bg-sky-50 hover:text-sky-700 dark:text-zinc-200 dark:hover:bg-sky-950/40 dark:hover:text-sky-300"><File className="h-3.5 w-3.5" />{contextMenu.entry.type === 'directory' ? (zh ? '打开目录' : 'Open folder') : (zh ? '打开' : 'Open')}</button>
+          <div className="my-1 h-px bg-slate-100 dark:bg-zinc-800" />
+          <button type="button" role="menuitem" disabled={workspaceAccess === 'read-only' || mutating} onClick={() => renameEntry(contextMenu.entry)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] text-slate-700 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-35 dark:text-zinc-200 dark:hover:bg-sky-950/40 dark:hover:text-sky-300"><Pencil className="h-3.5 w-3.5" />{zh ? '重命名' : 'Rename'}</button>
+          <button type="button" role="menuitem" disabled={workspaceAccess === 'read-only' || mutating} onClick={() => deleteEntry(contextMenu.entry)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-35 dark:text-rose-400 dark:hover:bg-rose-950/30"><Trash2 className="h-3.5 w-3.5" />{zh ? '删除' : 'Delete'}</button>
+        </div>
+      ) : null}
     </div>
   )
 }
