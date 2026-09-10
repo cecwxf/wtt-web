@@ -1468,7 +1468,7 @@ export function WttSettingsModal({
   };
 
   const buildWttConnectCommand = (
-    adapter: "codex" | "claude-code" | "gemini",
+    adapter: "codex" | "claude-code" | "gemini" | "dsh",
     agentId: string,
     agentToken: string,
   ) => {
@@ -1480,7 +1480,14 @@ export function WttSettingsModal({
           "gemini",
           "",
         ]
-      : [];
+      : adapter === "dsh"
+        ? [
+            "# Install DeepSeek Harness and configure its model credential first:",
+            "npm install -g @deepseek-ai/dsh",
+            "# export DEEPSEEK_API_KEY=your_key",
+            "",
+          ]
+        : [];
     return [
       `# WTT ${adapter} agent binding`,
       "npm install -g wtt-connect",
@@ -1499,6 +1506,8 @@ export function WttSettingsModal({
     buildWttConnectCommand("claude-code", agentId, agentToken),
     "",
     buildWttConnectCommand("gemini", agentId, agentToken),
+    "",
+    buildWttConnectCommand("dsh", agentId, agentToken),
   ].join("\n");
 
   const shellQuote = (value: string) => `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -1507,6 +1516,7 @@ export function WttSettingsModal({
     { id: "codex" as const, label: "Codex" },
     { id: "claude-code" as const, label: "Claude Code" },
     { id: "gemini" as const, label: "Gemini CLI" },
+    { id: "dsh" as const, label: "DeepSeek Harness" },
   ];
 
   const createMobileLoginQr = async () => {
@@ -2900,12 +2910,12 @@ export function WttSettingsModal({
                 <div className="space-y-4">
                   <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
                     <p className="text-sm font-semibold text-teal-900">
-                      wtt-connect 一键绑定 Codex / Claude Code / Gemini
+                      wtt-connect 一键绑定 Codex / Claude Code / Gemini / DeepSeek Harness
                     </p>
                     <p className="mt-1 text-xs leading-5 text-teal-700">
-                      在 Agent 所在主机复制执行对应命令即可绑定。Codex、Claude Code、Gemini 默认以全权限模式启动，不再弹任务确认；Gemini 需要先在本机完成 Google OAuth 授权。
+                      在 Agent 所在主机复制执行对应命令即可绑定。Codex、Claude Code、Gemini 和 DSH 默认以全权限模式启动；Gemini 需要先完成 Google OAuth，DSH 需要先配置 DeepSeek API Key。
                     </p>
-                    <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                       {wttConnectAdapters.map((adapter) => (
                         <div key={adapter.id} className="rounded-lg border border-teal-200 bg-white p-3">
                           <div className="mb-2 flex items-center justify-between gap-2">

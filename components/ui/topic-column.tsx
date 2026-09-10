@@ -146,7 +146,7 @@ function newClientOperationId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-type WttConnectAdapterId = 'codex' | 'claude-code' | 'gemini'
+type WttConnectAdapterId = 'codex' | 'claude-code' | 'gemini' | 'dsh'
 
 type ProvisionedWttConnectAgent = {
   agent_id: string
@@ -180,6 +180,7 @@ const WTT_CONNECT_ADAPTERS: Array<{ id: WttConnectAdapterId; label: string; note
   { id: 'codex', label: 'Codex', note: '使用 Codex CLI，本机登录 ChatGPT/OpenAI 后启动。' },
   { id: 'claude-code', label: 'Claude Code', note: '使用 Claude Code，可走本机订阅或 WTT LLM Proxy。' },
   { id: 'gemini', label: 'Gemini CLI', note: 'Gemini 通常需要先在该主机完成 Google OAuth。' },
+  { id: 'dsh', label: 'DeepSeek Harness', note: '使用原生 DSH session，需要在主机配置 DeepSeek API Key。' },
 ]
 
 const MAX_GROUP_AGENTS = 30
@@ -352,7 +353,14 @@ function buildWttConnectCommand(adapter: WttConnectAdapterId, agentId: string, a
         'gemini',
         '',
       ]
-    : []
+    : adapter === 'dsh'
+      ? [
+          '# Install DeepSeek Harness and configure its model credential first:',
+          'npm install -g @deepseek-ai/dsh',
+          '# export DEEPSEEK_API_KEY=your_key',
+          '',
+        ]
+      : []
   return [
     '# Step 1: install / update wtt-connect',
     'npm install -g wtt-connect',
@@ -2773,7 +2781,7 @@ export function TopicColumn(props: TopicColumnProps) {
                 <div className="rounded-xl border border-[#eee6da] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
                   <p className="text-xs font-black text-slate-700 dark:text-zinc-200">{zh ? '第二步' : 'Step 2'}</p>
                   <p className="mt-1 text-sm font-black text-slate-900 dark:text-zinc-100">
-                    {zh ? '选择 Codex / Claude Code / Gemini 启动' : 'Choose Codex / Claude Code / Gemini'}
+                    {zh ? '选择 Codex / Claude Code / Gemini / DeepSeek Harness 启动' : 'Choose Codex / Claude Code / Gemini / DeepSeek Harness'}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-400">
                     {zh ? '一个 Agent 只能绑定一个 adapter。生成凭证后选择其中一种命令执行。' : 'One Agent can bind to only one adapter. After generating credentials, choose exactly one command to run.'}
@@ -2795,11 +2803,11 @@ export function TopicColumn(props: TopicColumnProps) {
 
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
                   {zh
-                    ? '注意：一个 agent_id/token 只能启动一个 adapter。请选择 Codex、Claude Code 或 Gemini 中的一个，不要同时执行多个启动命令。'
-                    : 'Note: one agent_id/token should start one adapter only. Choose Codex, Claude Code, or Gemini. Do not run multiple startup commands for the same agent.'}
+                    ? '注意：一个 agent_id/token 只能启动一个 adapter。请选择 Codex、Claude Code、Gemini 或 DeepSeek Harness 中的一个，不要同时执行多个启动命令。'
+                    : 'Note: one agent_id/token should start one adapter only. Choose Codex, Claude Code, Gemini, or DeepSeek Harness. Do not run multiple startup commands for the same agent.'}
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   {WTT_CONNECT_ADAPTERS.map((adapter) => {
                     const active = bindAgentAdapter === adapter.id
                     return (
