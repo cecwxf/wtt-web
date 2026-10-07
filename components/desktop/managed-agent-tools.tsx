@@ -7,6 +7,7 @@ import { FolderOpen, Globe, Loader2, Terminal, Upload, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { CliWorkspaceExplorer } from '@/components/ui/cli-workspace-explorer'
 import { useI18n } from '@/lib/i18n-provider'
+import { downloadNativeWorkspaceFile } from '@/lib/native-files'
 
 const TerminalPane = dynamic(() => import('@/components/ui/agent-terminal-modal').then(module => module.AgentTerminalPane), { ssr: false })
 type Tools = { files: 'off' | 'read-only' | 'workspace-write'; terminal: boolean }
@@ -53,6 +54,10 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
     transfer.current = controller
     setDownloadError(''); setProgress(0)
     try {
+      if (await downloadNativeWorkspaceFile({ agentId, path, filename: name }, {
+        signal: controller.signal,
+        onProgress: value => { if (live.current) setProgress(value.total ? Math.min(100, Math.round(value.loaded / value.total * 100)) : 0) },
+      })) return
       const response = await fetch(`${apiBase}/content?${new URLSearchParams({ path, download: 'true' })}`, {
         headers: { Authorization: `Bearer ${token}` }, signal: controller.signal, cache: 'no-store', redirect: 'error',
       })
@@ -79,8 +84,9 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
       link.href = url; link.download = name; link.rel = 'noreferrer'; link.click()
       setTimeout(() => URL.revokeObjectURL(url), 60000)
     } catch (value) {
+      const cancelled = controller.signal.aborted || (value instanceof Error && value.name === 'AbortError')
       controller.abort()
-      if (live.current && !(value instanceof DOMException && value.name === 'AbortError')) setDownloadError(en ? 'Download failed. Retry.' : '下载失败，请重试。')
+      if (live.current && !cancelled) setDownloadError(en ? 'Download failed. Retry.' : '下载失败，请重试。')
     } finally {
       transfer.current = null
       if (live.current) setProgress(null)

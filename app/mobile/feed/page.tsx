@@ -1261,6 +1261,16 @@ export default function MobileFeedPage() {
   const messages = useMemo(() => normalizeMessages(messagesRaw), [messagesRaw])
 
   useEffect(() => {
+    const resume = () => {
+      if (!token || !selectionReady) return
+      void mutateAgents(); void mutateStats(); void mutateTopics(); void mutateGroupTopics(); void mutateRecentTopics()
+      if (canFetchMessages) void mutateMessages()
+    }
+    window.addEventListener('wtt-native-resume', resume)
+    return () => window.removeEventListener('wtt-native-resume', resume)
+  }, [token, selectionReady, canFetchMessages, mutateAgents, mutateStats, mutateTopics, mutateGroupTopics, mutateRecentTopics, mutateMessages])
+
+  useEffect(() => {
     if (!selectedTopicId || !Array.isArray(messagesRaw)) return
     const merged = mergeMessageHistory(messageHistoryRef.current.get(messageHistoryKey), messagesRaw)
     messageHistoryRef.current.set(messageHistoryKey, merged)

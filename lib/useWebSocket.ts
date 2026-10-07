@@ -107,6 +107,7 @@ export function useWebSocket({
   const pendingRef = useRef<Map<string, PendingRequest>>(new Map())
   const mountedRef = useRef(true)
   const tokenRef = useRef(token)
+  const lastReceivedAt = useRef(0)
   onMessageRef.current = onMessage
   tokenRef.current = token
 
@@ -155,6 +156,7 @@ export function useWebSocket({
         ws.send(JSON.stringify({ action: 'auth', token: tokenRef.current }))
       }
       setState('connected')
+      lastReceivedAt.current = Date.now()
       retryRef.current = 0
       heartbeatRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send('ping')
@@ -162,6 +164,7 @@ export function useWebSocket({
     }
 
     ws.onmessage = (event) => {
+      lastReceivedAt.current = Date.now()
       if (event.data === 'pong') return
       try {
         const parsed: WsMessage = JSON.parse(event.data)
@@ -211,7 +214,16 @@ export function useWebSocket({
       mountedRef.current = false
       cleanup()
     }
-  }, [enabled, url, connect, cleanup])
+  }, [enabled, url, connect, cleanup, token])
+
+  useEffect(() => {
+    const resume = () => {
+      if (!enabled || !url || !mountedRef.current) return
+      if (wsRef.current?.readyState !== WebSocket.OPEN || Date.now() - lastReceivedAt.current > heartbeatInterval * 2) connect()
+    }
+    window.addEventListener('wtt-native-resume', resume)
+    return () => window.removeEventListener('wtt-native-resume', resume)
+  }, [connect, enabled, heartbeatInterval, url])
 
   /**
    * Send an action via WebSocket and await the result.
