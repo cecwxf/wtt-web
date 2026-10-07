@@ -25,6 +25,7 @@ import {
   writeCachedMessageHistory,
 } from '@/lib/chat-history'
 import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
+import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
@@ -2213,6 +2214,7 @@ export default function MobileFeedPage() {
         </div>
 
         <footer className="shrink-0 border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <ToolApprovalPanel topicId={selectedTopicId} accessToken={token} activeRun={Boolean(selectedTopicRunStatus)} enabled={Boolean(selectedTopicId)} />
           {selectedTopicRunStatus && (
             <div className="mb-2">
               <MobileAgentRunStatusCard status={selectedTopicRunStatus} />

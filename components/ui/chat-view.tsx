@@ -22,6 +22,7 @@ import { SandboxWorkspacePanel } from '@/components/ui/sandbox-workspace-panel'
 import { KnowledgeBasePanel } from '@/components/ui/knowledge-base-panel'
 import { RichMarkdown } from '@/components/ui/rich-markdown'
 import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
+import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
 import desktopStyles from './chat-view-desktop.module.css'
 
 export interface ChatMessage {
@@ -1221,6 +1222,7 @@ function runStatusKindLabel(kind?: string): string {
   const k = String(kind || '').trim()
   if (!k) return '运行'
   if (k === 'queued') return '排队'
+  if (k === 'waiting_approval') return '待授权'
   if (k === 'running') return '运行'
   if (k === 'command') return '命令'
   if (k === 'tool') return '工具'
@@ -3858,6 +3860,7 @@ export function ChatView({
       )}
 
       <div className={`${desktopStyles.composer} border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6`}>
+        <ToolApprovalPanel topicId={topicId} accessToken={accessToken} activeRun={Boolean(runStatus)} enabled={activeTab === 'chat'} />
         {activeTab === 'chat' && runStatus && !composerExpanded && (
           <div className="mb-2 max-w-xl">
             <AgentRunStatusCard status={runStatus} floating />

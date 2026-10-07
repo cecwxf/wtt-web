@@ -15,6 +15,11 @@ const STORAGE_KEY = 'wtt-web.locale'
 
 const messages: Record<Locale, Record<string, string>> = {
   zh: {
+    'chat.toolApproval': '工具授权',
+    'chat.approvalAllowOnce': '批准一次',
+    'chat.approvalDeny': '拒绝',
+    'chat.approvalUnavailable': '无法读取待授权操作，正在重试。',
+    'chat.approvalDecisionFailed': '授权未确认，请检查操作是否已处理或过期。',
     'common.close': '关闭',
     'common.cancel': '取消',
     'common.save': '保存',
@@ -575,6 +580,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'economy.creditsBalance': '当前积分',
   },
   en: {
+    'chat.toolApproval': 'Tool Approval',
+    'chat.approvalAllowOnce': 'Allow Once',
+    'chat.approvalDeny': 'Deny',
+    'chat.approvalUnavailable': 'Unable to load pending approvals. Retrying.',
+    'chat.approvalDecisionFailed': 'Decision not confirmed. The request may be handled or expired.',
     'common.close': 'Close',
     'common.cancel': 'Cancel',
     'common.save': 'Save',
