@@ -106,9 +106,36 @@ export interface SearchMatch {
   lineContent: string;
 }
 
+export interface DesktopHostState {
+  enabled?: boolean;
+  state: 'signed_out' | 'authorizing' | 'registered' | 'expired';
+  hostId?: string;
+  userId?: string;
+  expiresAt?: string;
+}
+
+export interface DesktopHostBridge {
+  status(): Promise<DesktopHostState>;
+  authorize(userId: string): Promise<{
+    transactionId: string;
+    request: {
+      installation_id: string;
+      installation_key_hash: string;
+      code_challenge: string;
+      display_name: string;
+      environment: 'native' | 'wsl';
+      platform: 'darwin' | 'linux' | 'win32';
+      client_version: string;
+    };
+  }>;
+  finishAuthorization(receipt: { transactionId: string; enrollmentId: string }): Promise<DesktopHostState>;
+  signOut(): Promise<DesktopHostState>;
+}
+
 interface WttDesktopBridge {
   isDesktop: true;
   platform: string;
+  host?: DesktopHostBridge;
   fs: {
     openFileDialog: (options?: {
       title?: string;

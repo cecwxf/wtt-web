@@ -26,6 +26,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from "@/lib/api/base-url";
 import { useI18n } from "@/lib/i18n-provider";
 import { Avatar } from "@/components/ui/avatar";
+import { AccountHostsPanel } from "@/components/desktop/account-hosts-panel";
 
 type SettingsPage =
   | "profile"
@@ -2644,6 +2645,7 @@ export function WttSettingsModal({
 
           {activePage === "binding" && (
             <div className="space-y-3">
+              <AccountHostsPanel accessToken={accessToken} onChanged={onBindingChanged} />
               <div className="relative rounded-xl border border-cyan-200 bg-cyan-50 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
