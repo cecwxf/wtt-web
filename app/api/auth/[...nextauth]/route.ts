@@ -218,6 +218,14 @@ const authOptions: NextAuthOptions = {
       }
       if (user || !token.accessToken) return token
       if (String(token.accessToken).startsWith('test-admin-token-')) return token
+      if (token.mobileWebSessionId) {
+        // This child session has no refresh credential. Only the native owner
+        // can replace it through a fresh single-use grant.
+        if (Number(token.accessTokenExpiresAt || 0) <= Date.now()) {
+          return { ...token, accessToken: undefined, accessTokenRefreshError: 'NativeSessionExpired' }
+        }
+        return token
+      }
 
       const now = Date.now()
       const expiresAt = Number(token.accessTokenExpiresAt || 0)

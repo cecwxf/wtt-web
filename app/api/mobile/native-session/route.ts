@@ -21,20 +21,52 @@ function displayName(raw: Record<string, unknown>) {
 }
 
 export async function POST(request: NextRequest) {
-  const accessToken = bearerToken(request)
-  if (!accessToken) {
-    return NextResponse.json({ detail: 'Missing bearer token' }, { status: 401 })
+  let accessToken = bearerToken(request)
+  let user: Record<string, unknown>
+  let maxAge = SESSION_MAX_AGE
+  let mobileWebSessionId: string | undefined
+  const headers = { 'Cache-Control': 'no-store', Pragma: 'no-cache' }
+  try {
+    if (accessToken) {
+      // Older installed clients still use the bearer bridge during migration.
+      const upstream = await fetch(`${WTT_API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store', signal: AbortSignal.timeout(10_000),
+      })
+      if (!upstream.ok) return NextResponse.json({ detail: 'Invalid bearer token' }, { status: 401, headers })
+      user = await upstream.json()
+    } else {
+      if (request.headers.get('origin') !== request.nextUrl.origin || !request.headers.get('content-type')?.startsWith('application/json')) {
+        return NextResponse.json({ detail: 'Same-origin JSON request required' }, { status: 403, headers })
+      }
+      if (Number(request.headers.get('content-length')) > 2048) return NextResponse.json({ detail: 'Invalid grant' }, { status: 400, headers })
+      const raw = await request.text()
+      if (raw.length > 2048) return NextResponse.json({ detail: 'Invalid grant' }, { status: 400, headers })
+      let body: { ticket?: unknown; code_verifier?: unknown }
+      try { body = JSON.parse(raw) } catch { return NextResponse.json({ detail: 'Invalid grant' }, { status: 400, headers }) }
+      if (!body || typeof body.ticket !== 'string' || !/^[\w-]{43}$/.test(body.ticket)
+        || typeof body.code_verifier !== 'string' || !/^[\w-]{43,128}$/.test(body.code_verifier)) {
+        return NextResponse.json({ detail: 'Invalid grant' }, { status: 400, headers })
+      }
+      const upstream = await fetch(`${WTT_API_URL}/auth/mobile-web/exchange`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket: body.ticket, code_verifier: body.code_verifier, web_origin: request.nextUrl.origin }),
+        cache: 'no-store', signal: AbortSignal.timeout(10_000),
+      })
+      if (!upstream.ok) return NextResponse.json({ detail: 'Invalid or expired grant' }, { status: upstream.status >= 500 ? 503 : 401, headers })
+      const result = await upstream.json()
+      if (typeof result.access_token !== 'string' || typeof result.session_id !== 'string'
+        || !Number.isInteger(result.expires_in) || result.expires_in <= 0 || result.expires_in > 28800) {
+        return NextResponse.json({ detail: 'Invalid session response' }, { status: 502, headers })
+      }
+      accessToken = result.access_token
+      maxAge = result.expires_in
+      mobileWebSessionId = result.session_id
+      user = result.user
+    }
+  } catch {
+    return NextResponse.json({ detail: 'Session service unavailable' }, { status: 503, headers })
   }
-
-  const upstream = await fetch(`${WTT_API_URL}/auth/me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: 'no-store',
-  })
-  if (!upstream.ok) {
-    return NextResponse.json({ detail: 'Invalid bearer token' }, { status: 401 })
-  }
-
-  const user = (await upstream.json().catch(() => ({}))) as Record<string, unknown>
+  if (!user || typeof user !== 'object') return NextResponse.json({ detail: 'Invalid user payload' }, { status: 502, headers })
   const userId = String(user.id || user.user_id || '')
   if (!userId) {
     return NextResponse.json({ detail: 'Invalid user payload' }, { status: 502 })
@@ -51,10 +83,11 @@ export async function POST(request: NextRequest) {
       email: user.email ? String(user.email) : undefined,
       sub: userId,
       iat: now,
-      exp: now + SESSION_MAX_AGE,
+      exp: now + maxAge,
+      ...(mobileWebSessionId ? { mobileWebSessionId, accessTokenExpiresAt: (now + maxAge) * 1000 } : {}),
       jti: crypto.randomUUID(),
     },
-    maxAge: SESSION_MAX_AGE,
+    maxAge,
   })
 
   const secure = request.nextUrl.protocol === 'https:' || process.env.NODE_ENV === 'production'
@@ -63,13 +96,15 @@ export async function POST(request: NextRequest) {
     sameSite: 'lax' as const,
     secure,
     path: '/',
-    maxAge: SESSION_MAX_AGE,
+    maxAge,
   }
   const jar = cookies()
-  jar.set('next-auth.session-token', sessionToken, cookieOptions)
-  if (secure) {
-    jar.set('__Secure-next-auth.session-token', sessionToken, cookieOptions)
+  // Remove old chunks as well as the alternate cookie name on account changes.
+  for (const cookie of jar.getAll()) {
+    if (/^(?:__Secure-)?next-auth\.session-token(?:\.\d+)?$/.test(cookie.name)) {
+      jar.set(cookie.name, '', { ...cookieOptions, maxAge: 0 })
+    }
   }
-
-  return NextResponse.json({ ok: true, userId })
+  jar.set(secure ? '__Secure-next-auth.session-token' : 'next-auth.session-token', sessionToken, cookieOptions)
+  return NextResponse.json({ ok: true, userId }, { headers })
 }
