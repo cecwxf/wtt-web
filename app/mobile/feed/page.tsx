@@ -774,6 +774,7 @@ export default function MobileFeedPage() {
   const { data: session, status } = useSession()
   const sessionToken = session?.accessToken as string | undefined
   const [nativeAccessToken, setNativeAccessToken] = useState('')
+  const [nativeSessionReady, setNativeSessionReady] = useState(false)
   const token = sessionToken || nativeAccessToken || undefined
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState('')
@@ -835,7 +836,14 @@ export default function MobileFeedPage() {
   }, [])
 
   useEffect(() => {
+    const ready = () => setNativeSessionReady(true)
+    window.addEventListener('wtt-native-session-ready', ready)
+    return () => window.removeEventListener('wtt-native-session-ready', ready)
+  }, [])
+
+  useEffect(() => {
     if (status === 'unauthenticated' && !nativeAccessToken) {
+      if ((window as Window & { __WTT_NATIVE_SESSION_PENDING__?: boolean }).__WTT_NATIVE_SESSION_PENDING__ && !nativeSessionReady) return
       const source = typeof window !== 'undefined'
         ? String(new URLSearchParams(window.location.search).get('source') || '').toLowerCase()
         : ''
@@ -843,7 +851,7 @@ export default function MobileFeedPage() {
         ? '/mobile/login?callbackUrl=/mobile/feed&source=android'
         : '/mobile/login?callbackUrl=/mobile/feed')
     }
-  }, [nativeAccessToken, router, status])
+  }, [nativeAccessToken, nativeSessionReady, router, status])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)

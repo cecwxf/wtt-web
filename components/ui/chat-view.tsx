@@ -1532,16 +1532,23 @@ export function ChatView({
     if (autoFocusNonce === undefined) return
     let cancelled = false
     const timers: number[] = []
+    const keepUserFocus = (event: Event) => {
+      if (event.target !== textareaRef.current) cancelled = true
+    }
+    document.addEventListener('pointerdown', keepUserFocus, true)
+    document.addEventListener('keydown', keepUserFocus, true)
     ;[0, 120, 280, 520].forEach((delay) => {
       const timer = window.setTimeout(() => {
         if (cancelled) return
-        focusComposerInput()
+        if (focusComposerInput()) cancelled = true
       }, delay)
       timers.push(timer)
     })
     return () => {
       cancelled = true
       timers.forEach((t) => window.clearTimeout(t))
+      document.removeEventListener('pointerdown', keepUserFocus, true)
+      document.removeEventListener('keydown', keepUserFocus, true)
     }
   }, [autoFocusNonce, topicId, focusComposerInput])
 

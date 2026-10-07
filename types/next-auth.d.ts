@@ -2,6 +2,8 @@ import NextAuth, { DefaultSession } from "next-auth"
 
 declare module "next-auth" {
   interface Session {
+    mobileWebSessionId?: string
+    accessTokenExpiresAt?: number
     accessToken?: string
     accessTokenRefreshError?: string
     userId?: string
@@ -19,6 +21,7 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
+    mobileWebSessionId?: string
     accessToken?: string
     refreshToken?: string
     accessTokenExpiresAt?: number

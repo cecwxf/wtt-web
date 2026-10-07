@@ -202,6 +202,7 @@ const authOptions: NextAuthOptions = {
     },
     async jwt({ token, user }) {
       if (user) {
+        token.mobileWebSessionId = undefined
         token.accessToken = user.accessToken
         token.refreshToken = user.refreshToken
         token.accessTokenExpiresAt = user.accessTokenExpiresAt
@@ -249,6 +250,8 @@ const authOptions: NextAuthOptions = {
       session.accessToken = token.accessToken as string
       session.userId = token.userId as string
       session.accessTokenRefreshError = token.accessTokenRefreshError as string | undefined
+      session.mobileWebSessionId = token.mobileWebSessionId as string | undefined
+      session.accessTokenExpiresAt = token.accessTokenExpiresAt as number | undefined
       if (token.githubToken) {
         ;(session as unknown as Record<string, unknown>).githubToken = token.githubToken
       }
