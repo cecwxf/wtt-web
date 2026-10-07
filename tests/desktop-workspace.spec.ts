@@ -1,4 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
+import { _electron } from 'playwright'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 async function setup(page: Page, { disabled = false, dark = false, locale = 'en' } = {}) {
   const sent: Array<{ path: string; body: Record<string, unknown> }> = []
@@ -156,4 +160,40 @@ test('narrow dark workspace drawer closes with Escape and content does not overf
   await page.keyboard.press('Escape')
   await expect(dialog).not.toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('packaged Electron renders the actual shared workspace and sends from its composer', async ({ baseURL }) => {
+  test.skip(!process.env.WTT_TEST_ELECTRON_EXECUTABLE, 'Set an explicit packaged Electron executable for native UI verification')
+  test.setTimeout(60_000)
+  const directory = await mkdtemp(join(tmpdir(), 'wtt-workspace-electron-'))
+  let application: Awaited<ReturnType<typeof _electron.launch>> | undefined
+  try {
+    await writeFile(join(directory, 'config.json'), JSON.stringify({ frontendUrl: baseURL, apiUrl: baseURL, notificationsEnabled: false }))
+    const env: Record<string, string> = { WTT_DESKTOP_HOSTS_ENABLED: '0' }
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined && !['ELECTRON_RUN_AS_NODE', 'WTT_DESKTOP_HOSTS_ENABLED'].includes(key)) env[key] = value
+    }
+    application = await _electron.launch({ executablePath: process.env.WTT_TEST_ELECTRON_EXECUTABLE, args: [`--user-data-dir=${directory}`], env })
+    const page = await application.firstWindow()
+    const sent = await setup(page)
+    await page.goto(`${baseURL}/desktop?agentId=agent-one&topic=topic-one`)
+    await expect(page.getByText('Verified history for topic-one')).toBeVisible()
+    expect(await application.evaluate(({ app }) => app.isPackaged)).toBe(true)
+    expect(await application.evaluate(({ app }) => app.getPath('userData'))).toBe(directory)
+    expect(await page.evaluate(() => typeof window.wttDesktop?.host?.status)).toBe('function')
+    expect(await page.evaluate(() => typeof (window as unknown as { require?: unknown }).require)).toBe('undefined')
+    const composer = page.locator('textarea').first()
+    await composer.fill('Packaged desktop UI verification')
+    await composer.press('Enter')
+    await expect.poll(() => sent.length).toBe(1)
+    expect(sent[0]).toMatchObject({ path: '/topics/topic-one/messages', body: { content: 'Packaged desktop UI verification' } })
+    const recent = page.locator('aside nav').getByRole('region', { name: 'Recent', exact: true })
+    await recent.getByRole('link', { name: /Release notes/ }).click()
+    await expect(page.getByText('Verified history for topic-two')).toBeVisible()
+    await expect(page.getByText('Verified history for topic-one')).not.toBeVisible()
+    await page.screenshot({ path: 'test-results/desktop-workspace-packaged-electron.png', fullPage: true })
+  } finally {
+    if (application) await application.close()
+    await rm(directory, { recursive: true, force: true })
+  }
 })
