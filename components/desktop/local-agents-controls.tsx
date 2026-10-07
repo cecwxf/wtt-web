@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, FolderOpen, Loader2, Play, RefreshCw, Square, X } from 'lucide-react'
-import { getDesktopBridge, type DesktopAgentProfile, type DesktopRuntimeState } from '@/lib/desktop'
+import { getDesktopBridge, type DesktopAgentProfile, type DesktopRuntimeState, type DesktopRemoteTools } from '@/lib/desktop'
+import { RemoteToolsSelection } from './remote-tools-selection'
 import { useI18n } from '@/lib/i18n-provider'
 
 const authenticationHelp: Record<string, string> = {
@@ -28,6 +29,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   const [profiles, setProfiles] = useState<DesktopAgentProfile[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [access, setAccess] = useState<'workspace-write' | 'full-access'>('workspace-write')
+  const [remoteTools, setRemoteTools] = useState<DesktopRemoteTools>({ files: 'off', terminal: false })
   const [runtime, setRuntime] = useState<DesktopRuntimeState>({ state: 'loading', agents: [] })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -71,7 +73,8 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
         setProfiles(found)
         setSelected(found.filter(profile => profile.available && (!profile.requiresFullAccess || access === 'full-access')).map(profile => profile.adapter))
       } else {
-        const state = await bridge.startAgents!({ adapters: selected, workspaceAccess: access })
+        const state = await bridge.startAgents!({ adapters: selected, workspaceAccess: access,
+          ...(bridge.remoteToolsSupported ? { remoteTools } : {}) })
         if (!active.current) return
         setRuntime(state)
       }
@@ -85,7 +88,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
           ? (en ? 'Install a desktop build containing the Agent runtime.' : '请安装包含 Agent 运行环境的桌面版本。')
           : (en ? 'Local Agent operation failed. Check the desktop connection and retry.' : '本机 Agent 操作失败，请检查桌面连接后重试。'))
     } finally { if (active.current) setBusy(false) }
-  }, [bridge, busy, en, access, selected, onChanged])
+  }, [bridge, busy, en, access, selected, remoteTools, onChanged])
 
   useEffect(() => {
     if (!supported || busy || runtime.state !== 'stopped' || profiles.length || automaticallyDetected.current) return
@@ -125,6 +128,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
         <option value="full-access">{en ? 'Full local execution' : '完整本机执行权限'}</option>
       </select>
     </label>
+    {bridge?.remoteToolsSupported && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy || running} en={en} />}
     {runtime.autoStart !== undefined && <p className="text-xs text-[var(--muted-foreground)]">{runtime.autoStart
       ? (en ? 'Automatic resume enabled' : '已启用自动恢复')
       : (en ? 'Automatic resume disabled' : '已关闭自动恢复')}</p>}

@@ -27,6 +27,7 @@ import {
 } from '@/lib/chat-history'
 import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
 import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
+import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
@@ -2182,6 +2183,8 @@ export default function MobileFeedPage() {
             </>
           </header>
         )}
+
+        {!fixedChatMode && <ManagedAgentTools agentId={selectedAgentId} agentName={selectedAgent ? compactAgentName(selectedAgent) : undefined} token={token} />}
 
         {!browserOnline && (
           <div className="mx-3 mt-2 flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-medium text-orange-800">

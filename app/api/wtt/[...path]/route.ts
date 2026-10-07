@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { Agent as HttpAgent, request as httpRequest } from 'node:http'
 import { Agent as HttpsAgent, request as httpsRequest } from 'node:https'
+import { Readable } from 'node:stream'
 import { DEFAULT_WTT_API_ORIGIN } from '@/lib/api/base-url'
 
 const UPSTREAM_BASE =
@@ -10,6 +11,7 @@ const UPSTREAM_BASE =
 
 const REQUEST_TIMEOUT_MS = 15000
 const LONG_CONTROL_PLANE_TIMEOUT_MS = 60000
+export const maxDuration = 300
 const RETRYABLE_ERROR_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH'])
 const RETRYABLE_UPSTREAM_STATUSES = new Set([408, 429, 500, 502, 503, 504])
 
@@ -51,6 +53,39 @@ function isWorkspacePath(path: string[]): boolean {
 
 function isAgentOperationPath(path: string[]): boolean {
   return path[0] === 'agent-operations'
+}
+
+function isWorkspaceContentPath(path: string[]): boolean {
+  return (path.length === 4 && path[0] === 'cli-sessions' && path[2] === 'workspace' && path[3] === 'content')
+    || (path.length === 5 && path[0] === 'hosts' && path[1] === 'agents' && path[3] === 'workspace' && path[4] === 'content')
+}
+
+function requestWorkspaceStream(urlString: string, method: string, headers: Headers, signal: AbortSignal): Promise<Response> {
+  const url = new URL(urlString)
+  const secure = url.protocol === 'https:'
+  return new Promise((resolve, reject) => {
+    const req = (secure ? httpsRequest : httpRequest)({
+      protocol: url.protocol, hostname: url.hostname, port: url.port || (secure ? 443 : 80),
+      path: `${url.pathname}${url.search}`, method, headers: Object.fromEntries(headers),
+      agent: secure ? HTTPS_AGENT : HTTP_AGENT,
+    }, upstream => {
+      const outgoing = new Headers()
+      Object.entries(upstream.headers).forEach(([key, value]) => {
+        if (value !== undefined) outgoing.set(key, Array.isArray(value) ? value.join(',') : String(value))
+      })
+      upstream.once('close', () => signal.removeEventListener('abort', abort))
+      resolve(new Response(method === 'HEAD' ? null : Readable.toWeb(upstream) as ReadableStream<Uint8Array>, {
+        status: upstream.statusCode || 502, headers: filterResponseHeaders(outgoing),
+      }))
+      if (method === 'HEAD') upstream.resume()
+    })
+    const abort = () => req.destroy(new Error('Workspace transfer cancelled'))
+    signal.addEventListener('abort', abort, { once: true })
+    req.once('error', error => { signal.removeEventListener('abort', abort); reject(error) })
+    req.setTimeout(30000, () => req.destroy(new Error('Workspace stream stalled')))
+    if (signal.aborted) abort()
+    req.end()
+  })
 }
 
 function shouldRetry(error: unknown): boolean {
@@ -211,6 +246,11 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
     'upgrade',
     'expect',
   ].forEach((h) => headers.delete(h))
+
+  if (['GET', 'HEAD'].includes(request.method) && isWorkspaceContentPath(path)) {
+    try { return await requestWorkspaceStream(url, request.method, headers, request.signal) }
+    catch { return Response.json({ detail: 'Workspace stream unavailable; retry' }, { status: 502 }) }
+  }
 
   const hasBody = !['GET', 'HEAD'].includes(request.method.toUpperCase())
   const body = hasBody ? Buffer.from(await request.arrayBuffer()) : undefined

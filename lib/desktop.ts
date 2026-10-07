@@ -124,7 +124,8 @@ export interface DesktopHostBridge {
   runtimeStatus?(): Promise<DesktopRuntimeState>;
   discoverAgents?(): Promise<DesktopAgentProfile[]>;
   selectAgentWorkspace?(adapter: string, reset?: boolean): Promise<{ adapter: string; workspaceName: string } | null>;
-  startAgents?(selection: { adapters: string[]; workspaceAccess: 'workspace-write' | 'full-access' }): Promise<DesktopRuntimeState>;
+  remoteToolsSupported?: boolean;
+  startAgents?(selection: { adapters: string[]; workspaceAccess: 'workspace-write' | 'full-access'; remoteTools?: DesktopRemoteTools }): Promise<DesktopRuntimeState>;
   stopAgents?(): Promise<DesktopRuntimeState>;
   onRuntimeState?(callback: (state: DesktopRuntimeState) => void): () => void;
   authorize(userId: string): Promise<{
@@ -151,6 +152,11 @@ export interface DesktopAgentProfile {
   version: string;
   requiresFullAccess: boolean;
   workspaceName?: string;
+}
+
+export interface DesktopRemoteTools {
+  files: 'off' | 'read-only' | 'workspace-write';
+  terminal: boolean;
 }
 
 export interface DesktopRuntimeState {

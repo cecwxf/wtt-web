@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, Check, ChevronRight, FolderOpen, Laptop, Loader2, RefreshCw, X } from 'lucide-react'
-import { getDesktopBridge, type DesktopAgentProfile, type DesktopHostState, type DesktopRuntimeState } from '@/lib/desktop'
+import { getDesktopBridge, type DesktopAgentProfile, type DesktopHostState, type DesktopRuntimeState, type DesktopRemoteTools } from '@/lib/desktop'
+import { RemoteToolsSelection } from './remote-tools-selection'
 import { DesktopHostsApi, HostRequestError } from '@/lib/desktop-hosts'
 import { useI18n } from '@/lib/i18n-provider'
 
@@ -30,6 +31,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
   const [profiles, setProfiles] = useState<DesktopAgentProfile[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [access, setAccess] = useState<'workspace-write' | 'full-access'>('workspace-write')
+  const [remoteTools, setRemoteTools] = useState<DesktopRemoteTools>({ files: 'off', terminal: false })
   const [error, setError] = useState('')
   const [choosingWorkspace, setChoosingWorkspace] = useState(false)
   const busy = choosingWorkspace || ['authorizing', 'detecting', 'starting'].includes(phase)
@@ -120,7 +122,8 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
     setError(''); setPhase('starting')
     const current = () => mounted.current
     try {
-      const state = await bridge.startAgents({ adapters: selected, workspaceAccess: access })
+      const state = await bridge.startAgents({ adapters: selected, workspaceAccess: access,
+        ...(bridge.remoteToolsSupported ? { remoteTools } : {}) })
       if (!current()) return
       setRuntime(state)
       setPhase('ready')
@@ -170,6 +173,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
         </div>}
         {busy && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={17} className="animate-spin" />{choosingWorkspace ? (en ? 'Choose a workspace...' : '请选择工作目录…') : phase === 'authorizing' ? (en ? 'Authorizing this computer...' : '正在登记本机，请确认系统授权…') : phase === 'detecting' ? (en ? 'Detecting installed Agents...' : '正在检测已安装的 Agent…') : (en ? 'Connecting Agents...' : '正在接入 Agent，请确认执行权限…')}</p>}
         {phase === 'selection' && <>
+          {bridge?.remoteToolsSupported && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy} en={en} />}
           <fieldset disabled={busy} className="space-y-3"><legend className="mb-2 text-sm font-medium">{en ? 'Agents' : 'Agent'}</legend>{profiles.map(profile => <div key={profile.profile_id} className="flex min-h-12 flex-wrap items-center gap-3 border-b border-zinc-100 py-2 dark:border-zinc-800">
             <label className="flex min-w-0 flex-1 basis-40 items-center gap-3">
             <input type="checkbox" disabled={!profile.available || (profile.requiresFullAccess && access !== 'full-access')} checked={selected.includes(profile.adapter)} onChange={event => setSelected(previous => event.target.checked ? [...previous, profile.adapter] : previous.filter(adapter => adapter !== profile.adapter))} className="h-4 w-4 accent-emerald-600" />

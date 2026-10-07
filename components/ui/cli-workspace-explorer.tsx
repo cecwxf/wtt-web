@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
+  Download,
   File,
   Folder,
   ImageIcon,
@@ -69,6 +70,9 @@ interface WorkspaceReadResponse {
 
 interface CliWorkspaceExplorerProps {
   sessionId: string
+  workspaceApiBase?: string
+  previewMode?: boolean
+  onDownload?: (path: string, name: string) => void
   workspaceRoot: string
   online: boolean
   accessToken?: string
@@ -142,7 +146,8 @@ async function readApi<T>(url: string, accessToken?: string): Promise<T> {
   throw new Error(typeof detail === 'string' ? detail : body?.message || `Request failed (${response.status})`)
 }
 
-export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessToken, workspaceAccess, zh }: CliWorkspaceExplorerProps) {
+export function CliWorkspaceExplorer({ sessionId, workspaceApiBase, previewMode = false, onDownload, workspaceRoot, online, accessToken, workspaceAccess, zh }: CliWorkspaceExplorerProps) {
+  const apiBase = workspaceApiBase || `${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace`
   const [directories, setDirectories] = useState<Record<string, WorkspaceEntry[]>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
@@ -189,7 +194,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     try {
       const query = new URLSearchParams({ path: relativePath || '.' })
       const result = await readApi<WorkspaceListResponse>(
-        `${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/list?${query}`,
+        `${apiBase}/list?${query}`,
         accessToken,
       )
       if (generation.current !== currentGeneration) return
@@ -205,7 +210,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
         })
       }
     }
-  }, [accessToken, directories, online, sessionId])
+  }, [accessToken, directories, online, apiBase])
 
   useEffect(() => {
     generation.current += 1
@@ -216,7 +221,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     setEditing(false)
     setEditContent('')
     setContextMenu(null)
-  }, [sessionId, workspaceRoot])
+  }, [sessionId, workspaceRoot, apiBase, accessToken])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -254,7 +259,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     try {
       const query = new URLSearchParams({ path: entry.path })
       const result = await readApi<WorkspaceReadResponse>(
-        `${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/read?${query}`,
+        `${apiBase}/read?${query}`,
         accessToken,
       )
       if (generation.current === currentGeneration) {
@@ -267,7 +272,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     } finally {
       if (generation.current === currentGeneration) setFileLoading(false)
     }
-  }, [accessToken, online, sessionId])
+  }, [accessToken, online, apiBase])
 
   const refresh = useCallback(() => {
     setDirectories({})
@@ -308,7 +313,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     setSaving(true)
     setError('')
     try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/write`, {
+      const response = await fetch(`${apiBase}/write`, {
         method: 'POST',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -342,7 +347,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     } finally {
       setSaving(false)
     }
-  }, [accessToken, editContent, editing, loadDirectory, saving, selected, sessionId, workspaceAccess, zh])
+  }, [accessToken, editContent, editing, loadDirectory, saving, selected, apiBase, workspaceAccess, zh])
 
   const refreshEntryParent = useCallback(async (entryPath: string) => {
     const separator = entryPath.lastIndexOf('/')
@@ -368,7 +373,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     setMutating(true)
     setError('')
     try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/${operation}`, {
+      const response = await fetch(`${apiBase}/${operation}`, {
         method: 'POST',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -394,7 +399,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
     } finally {
       setMutating(false)
     }
-  }, [accessToken, editContent, editing, mutating, refreshEntryParent, selected, sessionId, workspaceAccess, zh])
+  }, [accessToken, editContent, editing, mutating, refreshEntryParent, selected, apiBase, workspaceAccess, zh])
 
   const renameEntry = useCallback((entry: WorkspaceEntry) => {
     if (workspaceAccess === 'read-only') return
@@ -423,7 +428,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
   const rootName = useMemo(() => workspaceRoot.split('/').filter(Boolean).at(-1) || workspaceRoot || 'workspace', [workspaceRoot])
   const selectedVisual = selected ? fileVisual(selected.name) : null
   const selectedPdfUrl = selected?.preview_kind === 'pdf' && selected.streamable
-    ? `${CLIENT_WTT_API_BASE}/cli-sessions/${encodeURIComponent(sessionId)}/workspace/content?${new URLSearchParams({ path: selected.path })}`
+    ? `${apiBase}/content?${new URLSearchParams({ path: selected.path })}`
     : ''
 
   const renderEntries = (parentPath = '', depth = 0) => {
@@ -478,7 +483,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
 
       {error && <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] leading-4 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/25 dark:text-rose-300">{error}</div>}
       {fileLoading ? <div className="grid flex-1 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-sky-500" /></div> : selected ? (
-        <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
           <div className="sticky top-0 z-10 flex min-h-10 items-center justify-between gap-2 border-b border-slate-100 bg-white/95 px-2 py-1.5 text-[9px] text-slate-400 backdrop-blur dark:border-zinc-900 dark:bg-zinc-950/95">
             <div className="flex min-w-0 items-center gap-2">
               {selectedVisual ? <span className={`min-w-8 shrink-0 rounded px-1 py-1 text-center font-mono text-[7px] font-bold leading-none ${selectedVisual.badge}`}>{selectedVisual.label}</span> : null}
@@ -486,6 +491,7 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
               <span className="shrink-0 font-mono">{formatBytes(selected.size)}</span>
             </div>
             <div className="flex shrink-0 items-center gap-1">
+              {onDownload && <button type="button" onClick={() => onDownload(selected.path, selected.name)} aria-label={zh ? '下载文件' : 'Download file'} title={zh ? '下载文件' : 'Download file'} className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 dark:border-zinc-800"><Download className="h-3.5 w-3.5" /></button>}
               {(selected.preview_kind === 'text' || selected.preview_kind === 'docx') ? <>
                 <button type="button" onClick={() => changeFontSize(-1)} className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-zinc-800 dark:hover:border-sky-800 dark:hover:bg-sky-950/40" title={zh ? '缩小字体' : 'Decrease font size'}><Minus className="h-3 w-3" /></button>
                 <span className="min-w-8 text-center font-mono text-[8px]">{fontSize}px</span>
@@ -517,6 +523,8 @@ export function CliWorkspaceExplorer({ sessionId, workspaceRoot, online, accessT
               style={{ fontSize: `${fontSize}px`, tabSize: 2, whiteSpace: wrapLines ? 'pre-wrap' : 'pre', overflowWrap: wrapLines ? 'anywhere' : 'normal' }}
               aria-label={zh ? `编辑 ${selected.name}` : `Edit ${selected.name}`}
             />
+          ) : previewMode && /\.html?$/i.test(selected.name) && typeof selected.content === 'string' && !selected.truncated ? (
+            <iframe title={selected.name} sandbox="allow-scripts" referrerPolicy="no-referrer" className="h-full min-h-80 w-full border-0 bg-white" srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none';">${selected.content}`} />
           ) : selected.preview_kind === 'pdf' && selectedPdfUrl ? (
             <div className="min-h-[32rem] bg-zinc-700 p-3"><PdfViewer url={selectedPdfUrl} authorization={accessToken ? `Bearer ${accessToken}` : undefined} expanded /></div>
           ) : selected.preview_kind === 'docx' && selected.content_html !== undefined ? (

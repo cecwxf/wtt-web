@@ -23,6 +23,7 @@ import { KnowledgeBasePanel } from '@/components/ui/knowledge-base-panel'
 import { RichMarkdown } from '@/components/ui/rich-markdown'
 import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
 import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
+import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
 import desktopStyles from './chat-view-desktop.module.css'
 
 export interface ChatMessage {
@@ -2798,6 +2799,7 @@ export function ChatView({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {!hideHeader && !currentAgentIsCloud && <ManagedAgentTools agentId={currentAgentId} agentName={workspaceAgentName} token={accessToken} />}
       <style>{`
         @keyframes wtt-cloud-billing-marquee {
           0% { transform: translateX(0); }
