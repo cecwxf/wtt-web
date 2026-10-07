@@ -119,6 +119,11 @@ export interface DesktopHostBridge {
   status(): Promise<DesktopHostState>;
   resume?(accessToken: string): Promise<DesktopHostState>;
   onState?(callback: (state: DesktopHostState) => void): () => void;
+  runtimeStatus?(): Promise<DesktopRuntimeState>;
+  discoverAgents?(): Promise<DesktopAgentProfile[]>;
+  startAgents?(selection: { adapters: string[]; workspaceAccess: 'workspace-write' | 'full-access' }): Promise<DesktopRuntimeState>;
+  stopAgents?(): Promise<DesktopRuntimeState>;
+  onRuntimeState?(callback: (state: DesktopRuntimeState) => void): () => void;
   authorize(userId: string): Promise<{
     transactionId: string;
     request: {
@@ -133,6 +138,21 @@ export interface DesktopHostBridge {
   }>;
   finishAuthorization(receipt: { transactionId: string; enrollmentId: string }): Promise<DesktopHostState>;
   signOut(): Promise<DesktopHostState>;
+}
+
+export interface DesktopAgentProfile {
+  profile_id: string;
+  adapter: string;
+  display_name: string;
+  available: boolean;
+  version: string;
+  requiresFullAccess: boolean;
+}
+
+export interface DesktopRuntimeState {
+  state: string;
+  error?: string | null;
+  agents: Array<{ profileId: string; adapter: string; agentId: string; state: string }>;
 }
 
 interface WttDesktopBridge {

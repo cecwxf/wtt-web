@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getDesktopBridge, type DesktopHostState } from '@/lib/desktop'
 import { DesktopHostsApi, HostRequestError, type AccountHost } from '@/lib/desktop-hosts'
 import { useI18n } from '@/lib/i18n-provider'
+import { LocalAgentsControls } from './local-agents-controls'
 
 const button = 'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-[var(--muted)] disabled:cursor-not-allowed disabled:opacity-50'
 
@@ -204,6 +205,7 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false }
         ))}
       </ul>
       {nextOffset !== null && <button type="button" className={button} disabled={loading || busy} onClick={() => void load(true, nextOffset)}>{en ? 'Load more' : '加载更多'}</button>}
+      {native?.state === 'registered' && <LocalAgentsControls key={native.userId} onChanged={() => { void load(); onChanged?.() }} />}
     </section>
   )
 }

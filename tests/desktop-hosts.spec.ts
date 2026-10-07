@@ -7,10 +7,10 @@ const host = {
   agents: [{ agent_id: 'agent-123456789abc', profile_id: 'codex-default', adapter: 'codex', display_name: 'Coding Agent' }],
 }
 
-async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'en'; dark?: boolean; empty?: boolean; disabled?: boolean; registered?: boolean; restoreFails?: boolean } = {}) {
+async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'en'; dark?: boolean; empty?: boolean; disabled?: boolean; registered?: boolean; restoreFails?: boolean; runtime?: boolean; runtimeCancel?: boolean } = {}) {
   const calls: Array<{ path: string; method: string; body: unknown }> = []
   const state = { hosts: options.empty ? [] : [host], fail: false, revoked: false, nextOffset: null as number | null, account: 'alice' as string | null }
-  await page.addInitScript(({ native, locale, dark, hostId, registered: initiallyRegistered, restoreFails }) => {
+  await page.addInitScript(({ native, locale, dark, hostId, registered: initiallyRegistered, restoreFails, runtime, runtimeCancel }) => {
     localStorage.setItem('wtt-web.locale', locale)
     localStorage.setItem('theme', dark ? 'dark' : 'light')
     if (native) {
@@ -20,12 +20,38 @@ async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'e
       const calls: string[] = []
       const listeners = new Set<(state: unknown) => void>()
       const snapshot = () => ({ enabled: true, protocolVersion: 2, state: unavailable ? 'unavailable' : registered ? 'registered' : 'signed_out', userId, ...(registered ? { hostId } : {}) })
-      const emit = () => { for (const listener of listeners) listener(snapshot()) }
+      const emit = () => { listeners.forEach(listener => listener(snapshot())) }
+      let runtimeState = { state: 'stopped', agents: [] as Array<{ profileId: string; adapter: string; agentId: string; state: string }> }
+      const runtimeListeners = new Set<(state: unknown) => void>()
       Object.assign(window, { __hostCalls: calls })
       Object.defineProperty(window, 'wttDesktop', {
         value: {
           isDesktop: true, platform: 'darwin',
           host: {
+            ...(runtime ? {
+              runtimeStatus: async () => runtimeState,
+              onRuntimeState: (listener: (state: unknown) => void) => { runtimeListeners.add(listener); return () => runtimeListeners.delete(listener) },
+              discoverAgents: async () => {
+                calls.push('discover')
+                return [
+                  { profile_id: 'desktop-codex', adapter: 'codex', display_name: 'Codex', available: true, version: '1.0 fixture', requiresFullAccess: false },
+                  { profile_id: 'desktop-pi', adapter: 'pi', display_name: 'Pi', available: true, version: '1.0 fixture', requiresFullAccess: true },
+                  { profile_id: 'desktop-claude', adapter: 'claude-code', display_name: 'Claude Code', available: false, version: '', requiresFullAccess: false },
+                ]
+              },
+              startAgents: async (selection: { adapters: string[]; workspaceAccess: string }) => {
+                calls.push(`start:${JSON.stringify(selection)}`)
+                if (runtimeCancel) { runtimeCancel = false; throw new Error('Local Agent operation cancelled') }
+                runtimeState = { state: 'running', agents: selection.adapters.map(adapter => ({ profileId: `desktop-${adapter}`, adapter, agentId: `agent-${adapter}`, state: 'online' })) }
+                runtimeListeners.forEach(listener => listener(runtimeState))
+                return runtimeState
+              },
+              stopAgents: async () => {
+                calls.push('stopAgents'); runtimeState = { state: 'stopped', agents: [] }
+                runtimeListeners.forEach(listener => listener(runtimeState))
+                return runtimeState
+              },
+            } : {}),
             status: async () => snapshot(),
             onState: (listener: (state: unknown) => void) => { listeners.add(listener); return () => listeners.delete(listener) },
             resume: async (token: string) => {
@@ -58,7 +84,7 @@ async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'e
         },
       })
     }
-  }, { native: options.native ?? false, locale: options.locale ?? 'zh', dark: options.dark ?? false, hostId, registered: options.registered ?? false, restoreFails: options.restoreFails ?? false })
+  }, { native: options.native ?? false, locale: options.locale ?? 'zh', dark: options.dark ?? false, hostId, registered: options.registered ?? false, restoreFails: options.restoreFails ?? false, runtime: options.runtime ?? false, runtimeCancel: options.runtimeCancel ?? false })
   await page.route('**/api/auth/session', route => route.fulfill({ json: state.account ? {
     user: { id: state.account, name: state.account, email: `${state.account}@example.test` }, userId: state.account,
     accessToken: `${state.account}-token`, expires: '2099-01-01T00:00:00.000Z',
@@ -163,6 +189,43 @@ test('ordinary browser lists computers without native authorization controls', a
   await expect(page.getByText('My MacBook')).toBeVisible()
   await expect(page.getByRole('button', { name: '启用本机', exact: true })).toHaveCount(0)
   await expect(page.getByText('Coding Agent')).toBeVisible()
+})
+
+test('local Agent controls detect adapters, respect access requirements and start/stop', async ({ page }) => {
+  await setup(page, { native: true, registered: true, runtime: true })
+  await page.goto('/desktop/setup')
+  const controls = page.getByRole('group', { name: '本机 Agent', exact: true })
+  await expect(controls.getByRole('button', { name: '启动本机 Agent' })).toBeDisabled()
+  await controls.getByRole('button', { name: '检测已安装 Agent' }).click()
+  await expect(controls.getByRole('checkbox', { name: 'Codex', exact: true })).toBeChecked()
+  await expect(controls.getByRole('checkbox', { name: 'Pi', exact: true })).toBeDisabled()
+  await expect(controls.getByRole('checkbox', { name: 'Claude Code', exact: true })).toBeDisabled()
+  await controls.getByRole('button', { name: '启动本机 Agent' }).click()
+  await expect(controls.getByText('在线', { exact: true })).toBeVisible()
+  await expect(controls.getByRole('combobox')).toBeDisabled()
+  await controls.getByRole('button', { name: '停止本机 Agent' }).click()
+  await expect(controls.getByRole('combobox')).toBeEnabled()
+  await controls.getByRole('combobox').selectOption('full-access')
+  await controls.getByRole('checkbox', { name: 'Pi', exact: true }).check()
+  await controls.getByRole('button', { name: '启动本机 Agent' }).click()
+  await expect(controls.getByText('在线', { exact: true })).toHaveCount(2)
+  const calls = await nativeCalls(page)
+  expect(calls).toContain('stopAgents')
+  expect(calls).toContain('start:{"adapters":["codex"],"workspaceAccess":"workspace-write"}')
+  expect(calls).toContain('start:{"adapters":["codex","pi"],"workspaceAccess":"full-access"}')
+  await page.screenshot({ path: 'test-results/desktop-local-agents-mobile.png', fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('cancelled native execution consent does not display a running Agent', async ({ page }) => {
+  await setup(page, { native: true, registered: true, runtime: true, runtimeCancel: true })
+  await page.goto('/desktop/setup')
+  const controls = page.getByRole('group', { name: '本机 Agent', exact: true })
+  await controls.getByRole('button', { name: '检测已安装 Agent' }).click()
+  await controls.getByRole('button', { name: '启动本机 Agent' }).click()
+  await expect(controls.getByRole('alert')).toHaveText('操作已取消。')
+  await expect(controls.getByRole('button', { name: '停止本机 Agent' })).toHaveCount(0)
+  await expect(controls.getByRole('button', { name: '启动本机 Agent' })).toBeEnabled()
 })
 
 test('revocation requires confirmation and preserves the listed history identity', async ({ page }) => {
