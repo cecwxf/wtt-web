@@ -7,9 +7,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
+import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, RefreshCw, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
+import { readMobileSelection, writeMobileSelection, type MobileSelection } from '@/lib/mobile-selection'
 import { attachmentMimeType } from '@/lib/media/mime'
 import {
   isTerminalMobileStatusKind,
@@ -777,6 +778,23 @@ export default function MobileFeedPage() {
   const [nativeAccessToken, setNativeAccessToken] = useState('')
   const [nativeSessionReady, setNativeSessionReady] = useState(false)
   const token = sessionToken || nativeAccessToken || undefined
+  const { data: nativeAccount } = useSWR<{ user_id?: string }>(
+    token && !session?.userId ? ['mobile-account', token] : null,
+    async () => {
+      const res = await fetch(`${CLIENT_WTT_API_BASE}/auth/me`, { headers: authHeaders(token), cache: 'no-store' })
+      if (!res.ok) throw new Error(`Account request failed (${res.status})`)
+      const identity = await res.json()
+      if (typeof identity?.user_id !== 'string' || !identity.user_id) throw new Error('Invalid account identity')
+      return identity
+    },
+    { revalidateOnFocus: false },
+  )
+  const accountId = session?.userId || nativeAccount?.user_id || ''
+  const selectionScope = accountId
+  const [selectionReadyScope, setSelectionReadyScope] = useState('')
+  const selectionReady = Boolean(selectionScope && selectionReadyScope === selectionScope)
+  const selectionOwnerRef = useRef('')
+  const rememberedSelectionRef = useRef<MobileSelection | null>(null)
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState('')
   const [draft, setDraft] = useState('')
@@ -826,6 +844,27 @@ export default function MobileFeedPage() {
   const sheetHistoryRef = useRef(false)
   const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
   const searchInteractiveRef = useRef(false)
+
+  useEffect(() => {
+    // A token refresh can briefly hide legacy identity. Wait to distinguish it from account switching.
+    if ((!accountId && token) || selectionOwnerRef.current === selectionScope) return
+    selectionOwnerRef.current = selectionScope
+    rememberedSelectionRef.current = readMobileSelection(accountId)
+    pendingCreatedTopicIdRef.current = ''
+    pendingRenameTaskRef.current = null
+    deepLinkAgentAppliedRef.current = ''
+    deepLinkTopicAppliedRef.current = ''
+    setSelectedAgentId('')
+    setSelectedTopicId('')
+    setSelectedHost('')
+    setDraft('')
+    setPendingAssets([])
+    setFailedSend(null)
+    setTypingByTopic({})
+    setOptimisticTaskTitles({})
+    setCreatedTaskIdsByTopic({})
+    setSelectionReadyScope(selectionScope)
+  }, [accountId, selectionScope, token])
 
   useEffect(() => {
     try {
@@ -927,11 +966,11 @@ export default function MobileFeedPage() {
     ),
   }), [openImagePreview])
 
-  const { data: agentsRaw } = useSWR(
+  const { data: agentsRaw, error: agentsError, mutate: mutateAgents } = useSWR(
     token ? ['mobile-agents', token] : null,
     async () => {
       const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, { headers: authHeaders(token), cache: 'no-store' })
-      if (!res.ok) return []
+      if (!res.ok) throw new Error(`Agent directory request failed (${res.status})`)
       return res.json() as Promise<AgentRecord[]>
     },
     { refreshInterval: 15000, revalidateOnFocus: true },
@@ -939,11 +978,11 @@ export default function MobileFeedPage() {
 
   const agents = useMemo(() => Array.isArray(agentsRaw) ? agentsRaw : [], [agentsRaw])
 
-  const { data: statsRaw } = useSWR(
+  const { data: statsRaw, error: statsError, mutate: mutateStats } = useSWR(
     token ? ['mobile-agent-stats', token] : null,
     async () => {
       const res = await fetch(`${CLIENT_WTT_API_BASE}/agents/stats`, { headers: authHeaders(token), cache: 'no-store' })
-      if (!res.ok) return null
+      if (!res.ok) throw new Error(`Agent status request failed (${res.status})`)
       return res.json()
     },
     { refreshInterval: 10000, revalidateOnFocus: true },
@@ -953,17 +992,28 @@ export default function MobileFeedPage() {
   const onlineAgents = useMemo(() => new Set(((statsRaw as Record<string, unknown> | null)?.online_agents as string[] | undefined) || []), [statsRaw])
 
   useEffect(() => {
+    if (!selectionReady || !Array.isArray(agentsRaw)) return
     if (fixedChatMode && selectedAgentId && !agents.some((a) => a.agent_id === selectedAgentId)) return
-    if (!selectedAgentId && agents.length) setSelectedAgentId(agents[0].agent_id)
-    if (selectedAgentId && agents.length && !agents.some((a) => a.agent_id === selectedAgentId)) {
+    if (!selectedAgentId && agents.length) {
+      const params = new URLSearchParams(window.location.search)
+      const explicitAgent = agentFromSearch(window.location.search)
+      const saved = rememberedSelectionRef.current
+      const hasExplicitSelection = ['agent_id', 'agentId', 'topic_id', 'topicId', 'topic', 'task_id', 'taskId', 'task'].some(key => params.has(key))
+      const agent = agents.find(item => item.agent_id === explicitAgent)
+        || (!hasExplicitSelection && agents.find(item => item.agent_id === saved?.agentId))
+        || agents[0]
+      setSelectedAgentId(agent.agent_id)
+      if (!fixedChatMode && !hasExplicitSelection && agent.agent_id === saved?.agentId) setSelectedTopicId(saved.topicId)
+    }
+    if (selectedAgentId && !agents.some((a) => a.agent_id === selectedAgentId)) {
       pendingCreatedTopicIdRef.current = ''
-      setSelectedAgentId(agents[0].agent_id)
+      setSelectedAgentId(agents[0]?.agent_id || '')
       setSelectedTopicId('')
     }
-  }, [agents, fixedChatMode, selectedAgentId])
+  }, [agents, agentsRaw, fixedChatMode, selectedAgentId, selectionReady])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || !selectionReady) return
     const key = window.location.search
     if (!key || deepLinkAgentAppliedRef.current === key) return
     const agentFromUrl = agentFromSearch(key)
@@ -979,44 +1029,44 @@ export default function MobileFeedPage() {
         setSelectedTopicId('')
       }
     }
-  }, [agents, fixedChatMode, selectedAgentId])
+  }, [agents, fixedChatMode, selectedAgentId, selectionReady])
 
   const selectedAgent = useMemo(() => agents.find((a) => a.agent_id === selectedAgentId) || null, [agents, selectedAgentId])
 
-  const { data: topicsRaw, mutate: mutateTopics } = useSWR(
-    token && selectedAgentId ? ['mobile-topics', token, selectedAgentId] : null,
+  const { data: topicsRaw, error: topicsError, mutate: mutateTopics } = useSWR(
+    token && selectionReady && selectedAgentId ? ['mobile-topics', token, selectedAgentId] : null,
     async () => {
       const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/subscribed?agent_id=${encodeURIComponent(selectedAgentId)}`, {
         headers: authHeaders(token),
         cache: 'no-store',
       })
-      if (!res.ok) return []
+      if (!res.ok) throw new Error(`Topic directory request failed (${res.status})`)
       return res.json() as Promise<TopicRecord[]>
     },
     { refreshInterval: 12000, revalidateOnFocus: true },
   )
 
-  const { data: groupTopicsRaw, mutate: mutateGroupTopics } = useSWR(
+  const { data: groupTopicsRaw, error: groupTopicsError, mutate: mutateGroupTopics } = useSWR(
     token ? ['mobile-group-topics', token] : null,
     async () => {
       const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/my-groups`, {
         headers: authHeaders(token),
         cache: 'no-store',
       })
-      if (!res.ok) return []
+      if (!res.ok) throw new Error(`Group directory request failed (${res.status})`)
       return res.json() as Promise<TopicRecord[]>
     },
     { refreshInterval: 30000, revalidateOnFocus: true },
   )
 
-  const { data: recentTopicsRaw, mutate: mutateRecentTopics } = useSWR(
+  const { data: recentTopicsRaw, error: recentTopicsError, mutate: mutateRecentTopics } = useSWR(
     token ? ['mobile-recent-topics', token] : null,
     async () => {
       const res = await fetch(`${CLIENT_WTT_API_BASE}/topics/my-recent?limit=10`, {
         headers: authHeaders(token),
         cache: 'no-store',
       })
-      if (!res.ok) return { items: [] }
+      if (!res.ok) throw new Error(`Recent directory request failed (${res.status})`)
       return res.json() as Promise<{ items?: RecentTopicRecord[] }>
     },
     { refreshInterval: 12000, revalidateOnFocus: true },
@@ -1104,6 +1154,7 @@ export default function MobileFeedPage() {
   }, [mutateGroupTopics, mutateRecentTopics, mutateTopics])
 
   useEffect(() => {
+    if (!selectionReady) return
     if (fixedChatMode) {
       if (fixedTopicId && selectedTopicId !== fixedTopicId) {
         pendingCreatedTopicIdRef.current = fixedTopicId
@@ -1111,24 +1162,27 @@ export default function MobileFeedPage() {
       }
       return
     }
-    if (!selectedTopicId && topics.length) {
+    if (!selectedTopicId && topics.length && topicsRaw !== undefined) {
       setSelectedTopicId(topicId(topics[0]))
       return
     }
-    if (!selectedTopicId || !topics.length) return
+    if (!selectedTopicId) return
     const topicExists = topics.some((t) => topicId(t) === selectedTopicId)
     if (!topicExists) {
       if (pendingCreatedTopicIdRef.current === selectedTopicId) return
-      setSelectedTopicId(topicId(topics[0]))
+      // Missing in one partial/failed directory is not proof the conversation vanished.
+      if (topicsRaw === undefined || groupTopicsRaw === undefined || recentTopicsRaw === undefined
+        || topicsError || groupTopicsError || recentTopicsError) return
+      setSelectedTopicId(topics.length ? topicId(topics[0]) : '')
       return
     }
     if (pendingCreatedTopicIdRef.current === selectedTopicId) {
       pendingCreatedTopicIdRef.current = ''
     }
-  }, [fixedChatMode, fixedTopicId, selectedTopicId, topics])
+  }, [fixedChatMode, fixedTopicId, groupTopicsError, groupTopicsRaw, recentTopicsError, recentTopicsRaw, selectedTopicId, selectionReady, topics, topicsError, topicsRaw])
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !topics.length) return
+    if (typeof window === 'undefined' || !selectionReady || !topics.length) return
     const key = window.location.search
     if (!key || deepLinkTopicAppliedRef.current === key) return
     const params = new URLSearchParams(key)
@@ -1153,26 +1207,31 @@ export default function MobileFeedPage() {
     if (!matched) return
     deepLinkTopicAppliedRef.current = key
     setSelectedTopicId(topicId(matched))
-  }, [fixedChatMode, topics])
+  }, [fixedChatMode, selectionReady, topics])
 
   const selectedTopic = useMemo(() => topics.find((t) => topicId(t) === selectedTopicId) || null, [selectedTopicId, topics])
+  useEffect(() => {
+    if (!accountId || !selectionReady || fixedChatMode || !selectedAgent || !selectedTopic) return
+    writeMobileSelection(accountId, { agentId: selectedAgentId, topicId: selectedTopicId })
+  }, [accountId, fixedChatMode, selectedAgent, selectedAgentId, selectedTopic, selectedTopicId, selectionReady])
   const selectedTaskId = selectedTopic?.task_id
     ? String(selectedTopic.task_id)
     : (selectedTopicId ? createdTaskIdsByTopic[selectedTopicId] || '' : '')
   const selectedTypingState = selectedTopicId ? typingByTopic[selectedTopicId] : undefined
   const pollSelectedMessages = shouldPollMobileMessages(selectedTypingState)
 
-  const canFetchMessages = Boolean(token && selectedTopicId && (selectedAgentId || fixedChatMode))
-  const messageHistoryOwner = `${selectedAgentId || 'auto'}:${selectedTaskId || ''}:${fixedChatMode ? 'fixed' : 'feed'}`
+  const canFetchMessages = Boolean(token && selectionReady && selectedTopicId && (selectedAgentId || fixedChatMode)
+    && (fixedChatMode || selectedTopic || pendingCreatedTopicIdRef.current === selectedTopicId))
+  const messageHistoryOwner = `${accountId}:${selectedAgentId || 'auto'}:${selectedTaskId || ''}:${fixedChatMode ? 'fixed' : 'feed'}`
   const messageHistoryRef = useRef<Map<string, unknown[]>>(new Map())
-  const messageHistoryKey = `${selectedTopicId || ''}:${messageHistoryOwner}`
+  const messageHistoryKey = `${selectionScope}:${selectedTopicId || ''}:${messageHistoryOwner}`
   const { data: messagesRaw, mutate: mutateMessages } = useSWR(
     canFetchMessages ? ['mobile-messages', token, selectedAgentId || 'auto', selectedTopicId, selectedTaskId, fixedChatMode] : null,
     async () => {
       // Load a useful history window once, then keep polling responses small and
       // merge them into the per-topic cache.
       const cachedHistory = messageHistoryRef.current.get(messageHistoryKey)
-        || readCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner)
+        || (accountId ? readCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner) : undefined)
       const historyLimit = cachedHistory?.length ? '100' : '500'
       const params = new URLSearchParams({ limit: historyLimit })
       if (selectedAgentId) params.set('agent_id', selectedAgentId)
@@ -1187,14 +1246,14 @@ export default function MobileFeedPage() {
       const incoming = await res.json()
       const merged = mergeMessageHistory(cachedHistory, Array.isArray(incoming) ? incoming : [])
       messageHistoryRef.current.set(messageHistoryKey, merged)
-      writeCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner, merged)
+      if (accountId) writeCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner, merged)
       return merged
     },
     {
       refreshInterval: pollSelectedMessages ? 2000 : 0,
       revalidateOnFocus: true,
       keepPreviousData: false,
-      fallbackData: readCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner),
+      fallbackData: canFetchMessages && accountId ? readCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner) : undefined,
     },
   )
 
@@ -1204,8 +1263,8 @@ export default function MobileFeedPage() {
     if (!selectedTopicId || !Array.isArray(messagesRaw)) return
     const merged = mergeMessageHistory(messageHistoryRef.current.get(messageHistoryKey), messagesRaw)
     messageHistoryRef.current.set(messageHistoryKey, merged)
-    writeCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner, merged)
-  }, [messageHistoryKey, messageHistoryOwner, messagesRaw, selectedTopicId])
+    if (accountId) writeCachedMessageHistory('mobile', selectedTopicId, messageHistoryOwner, merged)
+  }, [accountId, messageHistoryKey, messageHistoryOwner, messagesRaw, selectedTopicId])
 
   useEffect(() => {
     if (!selectedTopicId || !Array.isArray(messagesRaw)) return
@@ -1428,7 +1487,7 @@ export default function MobileFeedPage() {
   }, [availableSlashCommands, slashFilter])
 
   useEffect(() => {
-    if (!selectedTopicId) return
+    if (!selectionReady || !selectedTopic || !Array.isArray(topicsRaw)) return
     updateTopicUnreadCache(selectedTopicId, (topic) => {
       if (!Number(topic.unread_count || 0)) return topic
       return { ...topic, unread_count: 0 }
@@ -1440,7 +1499,7 @@ export default function MobileFeedPage() {
     if (prev && prev.topicId === selectedTopicId && now - prev.ts < 5000) return
     lastReadSyncRef.current = { topicId: selectedTopicId, ts: now }
     void mutateTopics()
-  }, [messagesRaw, mutateTopics, selectedTopicId, updateTopicUnreadCache])
+  }, [messagesRaw, mutateTopics, selectedTopic, selectedTopicId, selectionReady, topicsRaw, updateTopicUnreadCache])
 
   const { data: billing } = useSWR(
     token ? ['mobile-billing', token] : null,
@@ -1792,7 +1851,10 @@ export default function MobileFeedPage() {
     const sourceAgent = agents.find((agent) => agent.agent_id === sourceAgentId) || topicActorAgent
     const attachmentContent = sourceAssets.map((asset) => asset.token).join('\n\n')
     const content = retry?.content || [sourceDraft.trim(), attachmentContent].filter(Boolean).join('\n\n')
-    if (!content || !token || !sourceAgentId || !sourceTopicId || sending) return
+    if (!content || !token || !sourceAgentId || !sourceTopicId || sending || !selectionReady) return
+    if (!topics.some(topic => topicId(topic) === sourceTopicId)
+      && !(fixedChatMode && sourceTopicId === fixedTopicId)
+      && pendingCreatedTopicIdRef.current !== sourceTopicId) return
     if (!isBrowserOnline()) {
       setBrowserOnline(false)
       setFailedSend({
@@ -1922,7 +1984,7 @@ export default function MobileFeedPage() {
     } finally {
       setSending(false)
     }
-  }, [agents, closeComposerSuggestions, draft, dynamicSlashCommands, labelForAgentInTopic, mutateGroupTopics, mutateMessages, mutateRecentTopics, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopic, selectedTopicId, sending, session, token, topicActorAgent, topicActorAgentId])
+  }, [agents, closeComposerSuggestions, draft, dynamicSlashCommands, fixedChatMode, fixedTopicId, labelForAgentInTopic, mutateGroupTopics, mutateMessages, mutateRecentTopics, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopic, selectedTopicId, selectionReady, sending, session, token, topicActorAgent, topicActorAgentId, topics])
 
   const createDefaultTask = useCallback(async () => {
     if (!token || !selectedAgentId || creatingTask) return
@@ -2125,6 +2187,28 @@ export default function MobileFeedPage() {
           <div className="mx-3 mt-2 flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-medium text-orange-800">
             <WifiOff className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1">当前网络离线，草稿和附件会保留，恢复后可继续发送。</span>
+          </div>
+        )}
+
+        {browserOnline && (agentsError || statsError || topicsError || groupTopicsError || recentTopicsError) && (
+          <div role="status" className="mx-3 mt-2 flex items-center gap-2 border-b border-slate-200 px-1 py-2 text-xs text-slate-600">
+            <WifiOff className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 flex-1">目录暂时无法更新，当前对话已保留。</span>
+            <button
+              type="button"
+              aria-label="重新加载目录"
+              title="重新加载目录"
+              className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-700 hover:bg-slate-100"
+              onClick={() => {
+                void mutateAgents()
+                void mutateStats()
+                void mutateTopics()
+                void mutateGroupTopics()
+                void mutateRecentTopics()
+              }}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </div>
         )}
 
@@ -2389,7 +2473,7 @@ export default function MobileFeedPage() {
             />
             <button
               onClick={() => void sendMessage()}
-              disabled={(!draft.trim() && pendingAssets.length === 0) || sending || uploading || !selectedTopicId}
+              disabled={(!draft.trim() && pendingAssets.length === 0) || sending || uploading || !canFetchMessages}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0d0d0d] text-white disabled:bg-slate-300"
               aria-label="发送消息"
             >

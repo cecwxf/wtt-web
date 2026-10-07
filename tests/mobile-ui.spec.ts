@@ -74,6 +74,7 @@ async function mockAuthenticatedMobileApi(
   await page.route('**/api/auth/session', async (route) => {
     await fulfillJson(route, {
       user: { name: 'Mobile Tester', email: 'mobile@example.com' },
+      userId: 'mobile-tester',
       accessToken: 'test-access-token',
       expires: '2099-01-01T00:00:00.000Z',
     })
