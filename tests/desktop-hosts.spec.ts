@@ -138,6 +138,7 @@ test('host pagination preserves prior entries and deduplicates overlapping rows'
 })
 
 test('unsigned visitors use the existing WTT login with a return URL', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('wtt-web.locale', 'zh'))
   await page.route('**/api/auth/session', route => route.fulfill({ json: {} }))
   await page.goto('/desktop/setup')
   await expect(page.getByRole('link', { name: '登录 WTT', exact: true })).toHaveAttribute('href', '/login?callbackUrl=%2Fdesktop%2Fsetup')

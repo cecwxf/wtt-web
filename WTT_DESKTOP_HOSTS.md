@@ -26,7 +26,7 @@ shows an unavailable state. No Cloud Agent create/wake/model endpoints are used.
 - Production Next.js build and TypeScript check passed. Existing lint warnings
   in unrelated pages and existing Settings images remain; no new lint warning.
 - `npx playwright test tests/desktop-hosts.spec.ts tests/mobile-chat-status.spec.ts`
-  exercises the new browser UI and the existing mobile status contracts.
+  passed all 11 tests: 8 new browser UI scenarios and 3 existing mobile status contracts.
 - New coverage: onboarding public proof exchange, native vs ordinary browser,
   confirmation/cancellation of revocation, error preservation, disabled backend,
   pagination/deduplication, original login entry, English/dark and narrow layouts.
