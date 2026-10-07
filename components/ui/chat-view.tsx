@@ -22,6 +22,7 @@ import { SandboxWorkspacePanel } from '@/components/ui/sandbox-workspace-panel'
 import { KnowledgeBasePanel } from '@/components/ui/knowledge-base-panel'
 import { RichMarkdown } from '@/components/ui/rich-markdown'
 import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
+import desktopStyles from './chat-view-desktop.module.css'
 
 export interface ChatMessage {
   message_id: string
@@ -586,6 +587,7 @@ function extractActionQuickButtons(content: string): { body: string; buttons: Ac
 }
 
 interface ChatViewProps {
+  appearance?: 'default' | 'desktop'
   topicName: string
   topicId?: string
   taskId?: string
@@ -1331,6 +1333,7 @@ function avatarTone(seed: string, kind: 'agent' | 'human') {
 }
 
 export function ChatView({
+  appearance = 'default',
   topicName,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   topicId,
@@ -2780,7 +2783,8 @@ export function ChatView({
 
   return (
     <div
-      className={`wtt-chat-view relative flex h-full flex-col ${dragOver ? 'ring-2 ring-inset ring-indigo-400' : ''}`}
+      className={`wtt-chat-view relative flex h-full flex-col ${appearance === 'desktop' ? desktopStyles.desktop : ''} ${dragOver ? 'ring-2 ring-inset ring-indigo-400' : ''}`}
+      data-appearance={appearance}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -2983,7 +2987,7 @@ export function ChatView({
           </div>
         </div>
       )}
-      {!hideHeader && <div className={`border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pt-1' : 'px-4 pt-2'}`}>
+      {!hideHeader && <div className={`${desktopStyles.header} border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pt-1' : 'px-4 pt-2'}`}>
         <div className={`flex items-start justify-between ${compactUi ? 'gap-1.5' : 'gap-3'}`}>
           <div className="min-w-0 flex-1">
             <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
@@ -3126,11 +3130,11 @@ export function ChatView({
         </div>
       </div>}
 
-      <div className="min-h-0 flex flex-1 overflow-hidden bg-[#fbfaf7] dark:bg-zinc-950">
+      <div className={`${desktopStyles.surface} min-h-0 flex flex-1 overflow-hidden bg-[#fbfaf7] dark:bg-zinc-950`}>
         <div className="relative min-w-0 flex flex-1 flex-col">
       <div
         ref={scrollRef}
-        className={`min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
+        className={`${desktopStyles.surface} min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
           utilityTabActive
             ? 'overflow-hidden px-3 py-3 sm:px-4'
             : 'overflow-y-auto px-4 py-3 sm:px-6'
@@ -3235,13 +3239,13 @@ export function ChatView({
           </div>
         ) : groupedMessages.map((group) => (
           <div key={group.label} className="mb-4">
-            <div className="mb-3 flex items-center gap-3">
+            <div className={`${desktopStyles.dateDivider} mb-3 flex items-center gap-3`}>
               <div className="h-px flex-1 bg-[#eee9df] dark:bg-zinc-900" />
               <span className="rounded-full border border-[#e7e1d8] bg-[#fbfaf7] px-3 py-1 text-[11px] text-[#8a8378] shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-500">{group.label}</span>
               <div className="h-px flex-1 bg-[#eee9df] dark:bg-zinc-900" />
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-[#eee9df] bg-white/55 dark:border-zinc-900 dark:bg-zinc-950">
+            <div className={`${desktopStyles.messageGroup} overflow-hidden rounded-xl border border-[#eee9df] bg-white/55 dark:border-zinc-900 dark:bg-zinc-950`}>
               {group.messages.map((message) => {
                 const isMine = message.sender_type === 'human'
                 const baseLabel = senderLabelText(message.sender_display_name, message.sender_id)
@@ -3293,7 +3297,7 @@ export function ChatView({
                 }
 
                 return (
-                  <div key={message.message_id} className="group flex justify-start border-b border-[#eee9df] last:border-b-0 transition-colors hover:bg-[#f4f1eb]/70 dark:border-zinc-900 dark:hover:bg-zinc-900/60">
+                  <div key={message.message_id} className={`${desktopStyles.messageRow} group flex justify-start border-b border-[#eee9df] last:border-b-0 transition-colors hover:bg-[#f4f1eb]/70 dark:border-zinc-900 dark:hover:bg-zinc-900/60`}>
                     <div className="flex w-full max-w-none items-start gap-2.5 px-2 py-2.5">
                       {message.sender_type === 'agent' ? (
                         <button
@@ -3846,7 +3850,7 @@ export function ChatView({
         </div>
       )}
 
-      <div className="border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
+      <div className={`${desktopStyles.composer} border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6`}>
         {activeTab === 'chat' && runStatus && !composerExpanded && (
           <div className="mb-2 max-w-xl">
             <AgentRunStatusCard status={runStatus} floating />
@@ -4042,7 +4046,7 @@ export function ChatView({
               aria-label="关闭放大编辑框"
             />
           )}
-          <div className={`flex items-center rounded-xl border border-[#ded8ce] bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900 ${compactUi ? 'gap-1.5 px-1.5 py-1' : 'gap-2 px-2 py-2'} ${composerExpanded ? 'fixed inset-x-2 bottom-2 z-[120] rounded-2xl border-2 bg-white dark:bg-zinc-900 shadow-2xl' : ''}`}>
+          <div className={`${desktopStyles.composerInput} flex items-center rounded-xl border border-[#ded8ce] bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900 ${compactUi ? 'gap-1.5 px-1.5 py-1' : 'gap-2 px-2 py-2'} ${composerExpanded ? 'fixed inset-x-2 bottom-2 z-[120] rounded-2xl border-2 bg-white dark:bg-zinc-900 shadow-2xl' : ''}`}>
           <div className="relative" ref={attachMenuRef}>
             <button
               type="button"
@@ -4103,7 +4107,7 @@ export function ChatView({
           <button
             onClick={handleSend}
             disabled={sending || uploading || (!draft.trim() && pendingAssets.length === 0) || !currentAgentId}
-            className={`flex items-center justify-center rounded-full bg-[#f87500] text-white transition hover:bg-[#dc6900] disabled:cursor-not-allowed disabled:opacity-60 ${compactUi ? 'h-9 w-9' : 'h-10 w-10'}`}
+            className={`${desktopStyles.send} flex shrink-0 items-center justify-center rounded-full bg-[#f87500] text-white transition hover:bg-[#dc6900] disabled:cursor-not-allowed disabled:opacity-60 ${compactUi ? 'h-9 w-9' : 'h-10 w-10'}`}
             aria-label={t('chat.send')}
           >
             {sending ? '...' : <Send className={compactUi ? 'h-3.5 w-3.5' : 'h-4 w-4'} />}

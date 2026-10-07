@@ -1,0 +1,61 @@
+/* Only the opt-in desktop route changes appearance; chat behavior stays shared. */
+.desktop[data-appearance='desktop'] {
+  --wtt-chat-text: #27272a;
+  --wtt-chat-muted: #71717a;
+  --wtt-chat-surface: #ffffff;
+  --wtt-chat-surface-mine: #f4f4f5;
+  --wtt-chat-border: #e4e4e7;
+  letter-spacing: 0;
+}
+
+:global(.dark) .desktop[data-appearance='desktop'] {
+  --wtt-chat-text: #e4e4e7;
+  --wtt-chat-muted: #a1a1aa;
+  --wtt-chat-surface: #09090b;
+  --wtt-chat-surface-mine: #18181b;
+  --wtt-chat-border: #27272a;
+}
+
+.desktop .surface,
+.desktop .header,
+.desktop .composer {
+  background: var(--wtt-chat-surface);
+  border-color: var(--wtt-chat-border);
+}
+
+.desktop .header { padding: 8px 16px 0; }
+
+.desktop .messageGroup {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.desktop .messageRow {
+  border-color: transparent;
+  margin-bottom: 12px;
+}
+
+.desktop .messageRow:hover { background: var(--wtt-chat-surface-mine); }
+
+.desktop .dateDivider > div { background: var(--wtt-chat-border); }
+.desktop .dateDivider > span {
+  background: var(--wtt-chat-surface);
+  color: var(--wtt-chat-muted);
+  border: 0;
+  box-shadow: none;
+}
+
+.desktop :global(.wtt-message-bubble),
+.desktop :global(.wtt-rich-markdown) { letter-spacing: 0; }
+
+.desktop .composerInput {
+  background: var(--wtt-chat-surface-mine);
+  border-color: var(--wtt-chat-border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.desktop .composerInput:focus-within { border-color: #10b981; }
+.desktop .send { background: #047857; border-radius: 6px; }
+.desktop .send:hover:not(:disabled) { background: #065f46; }

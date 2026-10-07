@@ -24,7 +24,7 @@ interface P2PRequest {
   created_at: string
 }
 
-interface WttShellV2Props {
+export interface WttShellV2Props {
   agents: AgentItem[]
   selectedAgentId: string
   onAgentChange: (agentId: string) => void
