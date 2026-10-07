@@ -16,6 +16,11 @@ export async function signOut<R extends boolean = true>(options?: SignOutParams<
     }
   }
   try {
+    await getDesktopBridge()?.auth?.syncAccount()
+  } catch {
+    // Logout also completes if OS credential storage is temporarily unavailable.
+  }
+  try {
     // Run before NextAuth navigates away; a page unload cannot reliably await IPC.
     await getDesktopBridge()?.host?.signOut()
   } catch {

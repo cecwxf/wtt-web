@@ -27,6 +27,7 @@ import {
   ANDROID_APK_DOWNLOADS,
 } from "@/lib/android-apk";
 import { useI18n } from "@/lib/i18n-provider";
+import { getDesktopBridge } from "@/lib/desktop";
 
 type AuthTab = "signin" | "register";
 type SignInMethod = "phone-code" | "phone-password";
@@ -170,6 +171,8 @@ export default function LoginPage() {
   const [tab, setTab] = useState<AuthTab>("signin");
   const [signInMethod, setSignInMethod] = useState<SignInMethod>("phone-password");
   const [loading, setLoading] = useState(false);
+  const [nativePending, setNativePending] = useState(false);
+  const [savedDesktopAccount, setSavedDesktopAccount] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [phoneCodeSending, setPhoneCodeSending] = useState<PhoneCodePurpose | null>(null);
@@ -200,10 +203,33 @@ export default function LoginPage() {
 
   useEffect(() => {
     setCallbackUrl(normalizeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl")));
+    let current = true;
+    void getDesktopBridge()?.auth?.status().then(state => {
+      if (current) setSavedDesktopAccount(state.hasSavedAccount);
+    }).catch(() => {});
+    return () => { current = false; };
   }, []);
 
-  const handleOAuthSignIn = (provider: string) => {
-    signIn(provider, { callbackUrl });
+  const handleNativeLogin = async (provider?: 'github' | 'google' | 'twitter') => {
+    const auth = getDesktopBridge()?.auth;
+    if (!auth || nativePending) return;
+    setError("");
+    setNativePending(true);
+    setLoading(true);
+    try {
+      const result = provider ? await auth.login(provider) : await auth.restore();
+      if (!result.ok) setError(t("login.errorAuthFailed"));
+    } catch {
+      setError(t("login.errorAuthFailed"));
+    } finally {
+      setNativePending(false);
+      setLoading(false);
+    }
+  };
+
+  const handleOAuthSignIn = (provider: 'github' | 'google' | 'twitter') => {
+    if (getDesktopBridge()?.auth) void handleNativeLogin(provider);
+    else void signIn(provider, { callbackUrl });
   };
 
   useEffect(() => {
@@ -261,6 +287,7 @@ export default function LoginPage() {
 
   const handlePhoneCodeSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (nativePending) return;
     setError("");
     setInfo("");
     if (!signInPhone.trim() || !signInPhoneCode.trim()) {
@@ -289,6 +316,7 @@ export default function LoginPage() {
 
   const handlePhonePasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (nativePending) return;
     setError("");
     setInfo("");
     if (!signInPhone.trim() || !signInPhonePassword) {
@@ -317,6 +345,7 @@ export default function LoginPage() {
 
   const handlePhoneRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (nativePending) return;
     setError("");
     setInfo("");
     const displayName = registerName.trim();
@@ -835,6 +864,7 @@ export default function LoginPage() {
             <div className="space-y-2 lg:space-y-2.5">
               <button
                 onClick={() => handleOAuthSignIn("google")}
+                disabled={loading}
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -848,6 +878,7 @@ export default function LoginPage() {
 
               <button
                 onClick={() => handleOAuthSignIn("github")}
+                disabled={loading}
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
               >
                 <Github className="h-5 w-5" />
@@ -856,11 +887,24 @@ export default function LoginPage() {
 
               <button
                 onClick={() => handleOAuthSignIn("twitter")}
+                disabled={loading}
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50"
               >
                 <Twitter className="h-5 w-5" />
                 {t("login.continueTwitter")}
               </button>
+              {savedDesktopAccount && !nativePending && (
+                <button type="button" disabled={loading} onClick={() => void handleNativeLogin()}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700">
+                  <ArrowRight className="h-4 w-4" />{t("login.continueDesktop")}
+                </button>
+              )}
+              {nativePending && (
+                <button type="button" onClick={() => void getDesktopBridge()?.auth?.cancel().catch(() => {})}
+                  className="w-full py-2 text-sm font-medium text-slate-500">
+                  {t("common.cancel")}
+                </button>
+              )}
             </div>
           </>
         ) : (

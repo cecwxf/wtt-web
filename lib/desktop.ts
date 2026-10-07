@@ -163,6 +163,13 @@ export interface DesktopRuntimeState {
 interface WttDesktopBridge {
   isDesktop: true;
   platform: string;
+  auth?: {
+    status(): Promise<{ pending: boolean; hasSavedAccount: boolean }>;
+    login(provider: 'github' | 'google' | 'twitter'): Promise<{ ok: boolean; userId: string }>;
+    restore(): Promise<{ ok: boolean; userId?: string }>;
+    cancel(): Promise<void>;
+    syncAccount(userId?: string): Promise<void>;
+  };
   host?: DesktopHostBridge;
   fs: {
     openFileDialog: (options?: {
