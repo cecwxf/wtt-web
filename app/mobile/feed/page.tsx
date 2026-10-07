@@ -1585,7 +1585,9 @@ export default function MobileFeedPage() {
     if (!selectedTopic?.task_id) return null
     const status = String(selectedTopic.task_status || '').trim()
     const text = taskStatusText(status, compactTopicTitle(selectedTopic))
-    if (!status || !text) return null
+    // Task workflow state is not evidence that a CLI execution is still active.
+    // Only live execution events may display an ongoing run; keep review/results.
+    if (!status || !text || !isTerminalStatusKind(status)) return null
     const agentId = String(selectedTopic.runner_agent_id || topicActorAgentId || selectedAgentId || '').trim()
     const agent = agents.find((item) => item.agent_id === agentId) || topicActorAgent || selectedAgent
     const now = Date.now()

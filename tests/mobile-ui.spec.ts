@@ -446,6 +446,26 @@ test('android mobile settings keeps recovery controls visible', async ({ page })
   await expect(page.getByRole('button').first()).toBeVisible()
 })
 
+test('task business status does not resurrect an agent execution after a reply', async ({ page }) => {
+  await mockAuthenticatedMobileApi(page, {
+    topics: mockTopics.map((topic) => ({ ...topic, task_status: 'doing' })),
+  })
+  await page.goto('/mobile/feed?topic_id=topic-task&agent_id=agent-1')
+  await expect(page.getByText('Hello from mobile')).toBeVisible()
+  await expect(page.getByText(/I can see the mobile chat/)).toBeVisible()
+  await expect(page.locator('footer .animate-spin')).toHaveCount(0)
+  await expect(page.locator('footer')).not.toContainText('执行中')
+})
+
+test('terminal task business status remains visible without an execution spinner', async ({ page }) => {
+  await mockAuthenticatedMobileApi(page, {
+    topics: mockTopics.map((topic) => ({ ...topic, task_status: 'review' })),
+  })
+  await page.goto('/mobile/feed?topic_id=topic-task&agent_id=agent-1')
+  await expect(page.locator('footer')).toContainText('等待验收')
+  await expect(page.locator('footer .animate-spin')).toHaveCount(0)
+})
+
 test('android speech bridge updates the draft and restores it on cancel', async ({ page }) => {
   await page.addInitScript(() => {
     const target = window as typeof window & {
