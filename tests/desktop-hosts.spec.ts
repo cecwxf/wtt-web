@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import type { DesktopRuntimeState } from '../lib/desktop'
 
 const hostId = '11111111-1111-4111-8111-111111111111'
 const host = {
@@ -22,8 +23,12 @@ async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'e
       const listeners = new Set<(state: unknown) => void>()
       const snapshot = () => ({ enabled: !files, protocolVersion: files ? 3 : 2, accountVerified: verified, state: unavailable ? 'unavailable' : registered ? 'registered' : 'signed_out', userId, ...(registered ? { hostId } : {}) })
       const emit = () => { listeners.forEach(listener => listener(snapshot())) }
-      let runtimeState = { state: 'stopped', agents: [] as Array<{ profileId: string; adapter: string; agentId: string; state: string }> }
+      let runtimeState: DesktopRuntimeState = { state: 'stopped', agents: [] }
       const runtimeListeners = new Set<(state: unknown) => void>()
+      Object.assign(window, { __pushRuntime: (state: DesktopRuntimeState) => {
+        runtimeState = state
+        runtimeListeners.forEach(listener => listener(state))
+      } })
       Object.assign(window, { __hostCalls: calls })
       const fileState = { added: false, text: 'Hello from local WTT', readonly: false, delay: false, fail: false, release: null as (() => void) | null }
       Object.assign(window, { __files: fileState })
@@ -76,7 +81,7 @@ async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'e
                 return runtimeState
               },
               stopAgents: async () => {
-                calls.push('stopAgents'); runtimeState = { state: 'stopped', agents: [] }
+                calls.push('stopAgents'); runtimeState = { state: 'stopped', agents: [], autoStart: false }
                 runtimeListeners.forEach(listener => listener(runtimeState))
                 return runtimeState
               },
@@ -221,6 +226,25 @@ test('ordinary browser lists computers without native authorization controls', a
   await expect(page.getByText('Coding Agent')).toBeVisible()
 })
 
+test('mobile settings lists account computers and opens an Agent in the shared chat route', async ({ page }) => {
+  await setup(page)
+  await page.goto('/mobile/settings?source=android')
+  const panel = page.getByRole('region', { name: '我的主机' })
+  await expect(panel.getByText('My MacBook')).toBeVisible()
+  await expect(panel.getByRole('link', { name: '打开 Coding Agent' })).toHaveAttribute('href', '/mobile/feed?source=android&agent_id=agent-123456789abc')
+  await expect(panel.getByRole('button', { name: '启用本机', exact: true })).toHaveCount(0)
+  await expect(panel.getByRole('group', { name: '本机 Agent', exact: true })).toHaveCount(0)
+  await page.screenshot({ path: 'test-results/mobile-account-computers.png', fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('mobile settings hides the new host directory when its backend is not enabled', async ({ page }) => {
+  await setup(page, { disabled: true })
+  await page.goto('/mobile/settings')
+  await expect(page.getByRole('button', { name: '退出登录', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: '我的主机' })).toHaveCount(0)
+})
+
 test('local Agent controls detect adapters, respect access requirements and start/stop', async ({ page }) => {
   await setup(page, { native: true, registered: true, runtime: true })
   await page.goto('/desktop/setup')
@@ -236,6 +260,7 @@ test('local Agent controls detect adapters, respect access requirements and star
   await controls.getByRole('button', { name: '停止本机 Agent' }).click()
   await expect(controls.getByRole('combobox')).toBeEnabled()
   await controls.getByRole('combobox').selectOption('full-access')
+  await controls.getByRole('button', { name: '检测已安装 Agent' }).click()
   await controls.getByRole('checkbox', { name: 'Pi', exact: true }).check()
   await controls.getByRole('button', { name: '启动本机 Agent' }).click()
   await expect(controls.getByText('在线', { exact: true })).toHaveCount(2)
@@ -245,6 +270,38 @@ test('local Agent controls detect adapters, respect access requirements and star
   expect(calls).toContain('start:{"adapters":["codex","pi"],"workspaceAccess":"full-access"}')
   await page.screenshot({ path: 'test-results/desktop-local-agents-mobile.png', fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('automatic restore displays actual execution permissions and Stop does not race discovery', async ({ page }) => {
+  await setup(page, { native: true, registered: true, runtime: true })
+  await page.goto('/desktop/setup')
+  const controls = page.getByRole('group', { name: '本机 Agent', exact: true })
+  await expect(controls).toBeVisible()
+  await page.evaluate(() => (window as unknown as { __pushRuntime: (state: DesktopRuntimeState) => void }).__pushRuntime({
+    state: 'restoring', agents: [], autoStart: true, workspaceAccess: 'full-access', configuredAdapters: ['pi'],
+  }))
+  await expect(controls.getByText('正在恢复已授权 Agent…')).toBeVisible()
+  await expect(controls.getByText('已启用自动恢复')).toBeVisible()
+  await expect(controls.getByRole('combobox')).toHaveValue('full-access')
+  await expect(controls.getByRole('combobox')).toBeDisabled()
+  await page.screenshot({ path: 'test-results/desktop-auto-restore-mobile.png', fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await controls.getByRole('button', { name: '停止本机 Agent' }).click()
+  await expect(controls.getByText('已关闭自动恢复')).toBeVisible()
+  expect(await nativeCalls(page)).not.toContain('discover')
+  expect((await nativeCalls(page)).filter(call => call.startsWith('start:'))).toEqual([])
+})
+
+test('automatic restore configuration errors give an actionable localized status', async ({ page }) => {
+  await setup(page, { native: true, registered: true, runtime: true, locale: 'en' })
+  await page.goto('/desktop/setup')
+  const controls = page.getByRole('group', { name: 'Local Agents', exact: true })
+  await expect(controls).toBeVisible()
+  await page.evaluate(() => (window as unknown as { __pushRuntime: (state: DesktopRuntimeState) => void }).__pushRuntime({
+    state: 'configuration_required', agents: [], error: 'runtime_selection_changed', autoStart: true,
+  }))
+  await expect(controls.getByRole('status')).toHaveText('Installed Agents or permissions changed. Detect and authorize them again.')
+  await expect(controls.getByRole('button', { name: 'Detect installed Agents' })).toBeEnabled()
 })
 
 test('cancelled native execution consent does not display a running Agent', async ({ page }) => {

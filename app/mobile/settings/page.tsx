@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { Activity, ArrowLeft, Bot, CreditCard, ExternalLink, LogOut, Settings } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
+import { AccountHostsPanel } from '@/components/desktop/account-hosts-panel'
 
 const ANDROID_RESET_SESSION_MESSAGE = 'WTT_ANDROID_RESET_SESSION'
 
@@ -114,6 +115,7 @@ export default function MobileSettingsPage() {
       </header>
 
       <section className="mt-6 space-y-3">
+        <AccountHostsPanel accessToken={token} agentHref={agentId => `${mobileFeedHref}${isAndroidWebView ? '&' : '?'}agent_id=${encodeURIComponent(agentId)}`} />
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">

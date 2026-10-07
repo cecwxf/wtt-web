@@ -1,6 +1,7 @@
 'use client'
 
 import { AlertCircle, Check, Laptop, Loader2, LogOut, Monitor, Plus, RefreshCw, ShieldOff, X } from 'lucide-react'
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getDesktopBridge, type DesktopHostState } from '@/lib/desktop'
 import { DesktopHostsApi, HostRequestError, type AccountHost } from '@/lib/desktop-hosts'
@@ -9,7 +10,7 @@ import { LocalAgentsControls } from './local-agents-controls'
 
 const button = 'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-[var(--muted)] disabled:cursor-not-allowed disabled:opacity-50'
 
-export function AccountHostsPanel({ accessToken, onChanged, standalone = false }: { accessToken?: string; onChanged?: () => void; standalone?: boolean }) {
+export function AccountHostsPanel({ accessToken, onChanged, standalone = false, agentHref }: { accessToken?: string; onChanged?: () => void; standalone?: boolean; agentHref?: (agentId: string) => string }) {
   const { locale } = useI18n()
   const en = locale === 'en'
   const api = useMemo(() => new DesktopHostsApi(accessToken || ''), [accessToken])
@@ -196,7 +197,12 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false }
               </span>
               {host.status !== 'revoked' && <button type="button" className="shrink-0 rounded p-1 text-[var(--muted-foreground)] hover:text-red-600" disabled={busy} onClick={() => setRevoking(host.host_id)} aria-label={`${en ? 'Revoke' : '撤销授权'} ${host.display_name}`} title={en ? 'Revoke authorization' : '撤销授权'}><ShieldOff size={16} /></button>}
             </div>
-            {host.agents.length > 0 && <ul className="ml-7 mt-2 space-y-1">{host.agents.map(agent => <li key={agent.agent_id} className="flex flex-wrap gap-x-2 text-xs"><span className="break-all">{agent.display_name}</span><span className="text-[var(--muted-foreground)]">{agent.adapter}</span></li>)}</ul>}
+            {host.agents.length > 0 && <ul className="ml-7 mt-2 space-y-1">{host.agents.map(agent => <li key={agent.agent_id} className="flex flex-wrap items-center gap-x-2 text-xs">
+              {agentHref && host.status !== 'revoked'
+                ? <Link href={agentHref(agent.agent_id)} aria-label={`${en ? 'Open' : '打开'} ${agent.display_name}`} className="inline-flex min-h-9 items-center break-all rounded px-1 underline underline-offset-4 hover:bg-[var(--muted)]">{agent.display_name}</Link>
+                : <span className="break-all">{agent.display_name}</span>}
+              <span className="text-[var(--muted-foreground)]">{agent.adapter}</span>
+            </li>)}</ul>}
             {revoking === host.host_id && <div className="ml-7 mt-3 space-y-2" role="group" aria-label={en ? 'Confirm revocation' : '确认撤销'}>
               <p className="text-sm">{en ? 'Disconnect this computer? Chat history will be kept.' : '撤销这台主机的连接授权？聊天历史将保留。'}</p>
               <div className="flex gap-2"><button type="button" className={`${button} text-red-600`} disabled={busy} onClick={() => void revoke(host.host_id)}>{busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldOff size={15} />}{en ? 'Revoke' : '确认撤销'}</button><button type="button" className={button} disabled={busy} onClick={() => setRevoking(null)}><X size={15} />{en ? 'Cancel' : '取消'}</button></div>

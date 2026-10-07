@@ -154,6 +154,9 @@ export interface DesktopAgentProfile {
 export interface DesktopRuntimeState {
   state: string;
   error?: string | null;
+  autoStart?: boolean;
+  configuredAdapters?: string[];
+  workspaceAccess?: 'workspace-write' | 'full-access';
   agents: Array<{ profileId: string; adapter: string; agentId: string; state: string }>;
 }
 

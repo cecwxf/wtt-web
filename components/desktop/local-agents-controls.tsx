@@ -16,7 +16,8 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const active = useRef(false)
-  const running = ['starting', 'running', 'stopping'].includes(runtime.state)
+  const savedAccess = useRef<DesktopRuntimeState['workspaceAccess']>()
+  const running = ['restoring', 'starting', 'running', 'stopping'].includes(runtime.state)
   const supported = Boolean(bridge?.runtimeStatus && bridge?.discoverAgents && bridge?.startAgents && bridge?.stopAgents)
 
   useEffect(() => {
@@ -24,8 +25,16 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     active.current = true
     let current = true
     let pushed = false
-    const unsubscribe = bridge.onRuntimeState?.(state => { pushed = true; if (current) setRuntime(state) })
-    void bridge.runtimeStatus!().then(state => { if (current && !pushed) setRuntime(state) }).catch(() => {})
+    const receive = (state: DesktopRuntimeState) => {
+      if (!current) return
+      setRuntime(state)
+      if (state.workspaceAccess && savedAccess.current !== state.workspaceAccess) {
+        savedAccess.current = state.workspaceAccess
+        setAccess(state.workspaceAccess)
+      }
+    }
+    const unsubscribe = bridge.onRuntimeState?.(state => { pushed = true; receive(state) })
+    void bridge.runtimeStatus!().then(state => { if (!pushed) receive(state) }).catch(() => {})
     return () => { current = false; active.current = false; unsubscribe?.() }
   }, [bridge, supported])
 
@@ -33,12 +42,12 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     if (!bridge || busy) return
     setBusy(true); setError('')
     try {
-      if (action === 'discover' || action === 'stop') {
-        if (action === 'stop') {
-          const state = await bridge.stopAgents!()
-          if (!active.current) return
-          setRuntime(state)
-        }
+      if (action === 'stop') {
+        const state = await bridge.stopAgents!()
+        if (!active.current) return
+        setRuntime(state)
+        setProfiles([]); setSelected([])
+      } else if (action === 'discover') {
         const found = await bridge.discoverAgents!()
         if (!active.current) return
         setProfiles(found)
@@ -81,10 +90,20 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
         <option value="full-access">{en ? 'Full local execution' : '完整本机执行权限'}</option>
       </select>
     </label>
+    {runtime.autoStart !== undefined && <p className="text-xs text-[var(--muted-foreground)]">{runtime.autoStart
+      ? (en ? 'Automatic resume enabled' : '已启用自动恢复')
+      : (en ? 'Automatic resume disabled' : '已关闭自动恢复')}</p>}
+    {runtime.state === 'restoring' && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={15} className="animate-spin" />{en ? 'Restoring approved Agents...' : '正在恢复已授权 Agent…'}</p>}
     {busy && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={15} className="animate-spin" />{en ? 'Processing...' : '处理中…'}</p>}
     {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     {runtime.error && <p role="status" className="text-sm text-red-600 dark:text-red-400">{runtime.error === 'runtime_recovery_required'
       ? (en ? 'Runtime recovery required. Check outstanding processes before restarting.' : '运行环境需要恢复，请先检查尚未退出的进程。')
+      : runtime.error === 'runtime_selection_changed'
+      ? (en ? 'Installed Agents or permissions changed. Detect and authorize them again.' : '已安装 Agent 或权限发生变化，请重新检测并授权。')
+      : runtime.error === 'runtime_settings_unavailable'
+      ? (en ? 'Saved execution settings are unavailable. Check the OS keyring before restarting.' : '无法读取或保存执行设置，请先检查系统密钥存储。')
+      : runtime.error === 'runtime_auto_resume_failed'
+      ? (en ? 'Agent startup failed. Detect and start Agents again.' : 'Agent 启动失败，请重新检测并启动。')
       : (en ? 'Runtime connection interrupted or authorization unavailable.' : '运行连接已中断或主机授权不可用。')}</p>}
     <ul className="space-y-2">{profiles.map(profile => <li key={profile.profile_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <label className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.includes(profile.adapter)} disabled={busy || running || !profile.available || (profile.requiresFullAccess && access !== 'full-access')} onChange={event => setSelected(previous => event.target.checked ? [...previous, profile.adapter] : previous.filter(value => value !== profile.adapter))} />{profile.display_name}</label>
