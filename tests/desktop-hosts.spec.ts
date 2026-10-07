@@ -7,26 +7,55 @@ const host = {
   agents: [{ agent_id: 'agent-123456789abc', profile_id: 'codex-default', adapter: 'codex', display_name: 'Coding Agent' }],
 }
 
-async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'en'; dark?: boolean; empty?: boolean; disabled?: boolean; registered?: boolean; restoreFails?: boolean; runtime?: boolean; runtimeCancel?: boolean } = {}) {
+async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'en'; dark?: boolean; empty?: boolean; disabled?: boolean; registered?: boolean; restoreFails?: boolean; runtime?: boolean; runtimeCancel?: boolean; files?: boolean } = {}) {
   const calls: Array<{ path: string; method: string; body: unknown }> = []
   const state = { hosts: options.empty ? [] : [host], fail: false, revoked: false, nextOffset: null as number | null, account: 'alice' as string | null }
-  await page.addInitScript(({ native, locale, dark, hostId, registered: initiallyRegistered, restoreFails, runtime, runtimeCancel }) => {
+  await page.addInitScript(({ native, locale, dark, hostId, registered: initiallyRegistered, restoreFails, runtime, runtimeCancel, files }) => {
     localStorage.setItem('wtt-web.locale', locale)
     localStorage.setItem('theme', dark ? 'dark' : 'light')
     if (native) {
       let registered = initiallyRegistered
       let userId = 'alice'
       let unavailable = false
+      let verified = false
       const calls: string[] = []
       const listeners = new Set<(state: unknown) => void>()
-      const snapshot = () => ({ enabled: true, protocolVersion: 2, state: unavailable ? 'unavailable' : registered ? 'registered' : 'signed_out', userId, ...(registered ? { hostId } : {}) })
+      const snapshot = () => ({ enabled: !files, protocolVersion: files ? 3 : 2, accountVerified: verified, state: unavailable ? 'unavailable' : registered ? 'registered' : 'signed_out', userId, ...(registered ? { hostId } : {}) })
       const emit = () => { listeners.forEach(listener => listener(snapshot())) }
       let runtimeState = { state: 'stopped', agents: [] as Array<{ profileId: string; adapter: string; agentId: string; state: string }> }
       const runtimeListeners = new Set<(state: unknown) => void>()
       Object.assign(window, { __hostCalls: calls })
+      const fileState = { added: false, text: 'Hello from local WTT', readonly: false, delay: false, fail: false, release: null as (() => void) | null }
+      Object.assign(window, { __files: fileState })
+      const workspace = () => ({ path: '/project', name: 'My workspace', addedAt: '2026-10-07T00:00:00Z', fileCount: 1 })
       Object.defineProperty(window, 'wttDesktop', {
         value: {
           isDesktop: true, platform: 'darwin',
+          ...(files ? {
+            workspace: {
+              list: async () => userId === 'alice' && fileState.added ? [workspace()] : [],
+              recentFiles: async () => [],
+              trackRecent: async () => true,
+              add: async () => { calls.push('pick-folder'); fileState.added = true; return workspace() },
+              remove: async () => { fileState.added = false; return true },
+              updateMeta: async () => true,
+            },
+            localSync: { scanFolder: async () => ({ ok: true, files: [{ path: '/project/readme.md', relativePath: 'readme.md', name: 'readme.md', extension: '.md', size: 20, hash: 'fixture', mtime: '2026-10-07', isText: true }] }) },
+            fs: {
+              readFile: async () => {
+                calls.push('read-file')
+                const result = { ok: true, content: fileState.text, writable: !fileState.readonly }
+                if (fileState.delay) await new Promise<void>(resolve => { fileState.release = resolve })
+                return result
+              },
+              writeFile: async (_path: string, content: string) => {
+                calls.push('write-file')
+                if (fileState.fail) return { ok: false }
+                fileState.text = content
+                return { ok: true }
+              },
+            },
+          } : {}),
           host: {
             ...(runtime ? {
               runtimeStatus: async () => runtimeState,
@@ -59,6 +88,7 @@ async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'e
               calls.push(`resume:${userId}`)
               if (restoreFails) { restoreFails = false; unavailable = true; emit(); throw new Error('Native fixture network error') }
               unavailable = false
+              verified = true
               if (userId !== 'alice') registered = false
               emit()
               return snapshot()
@@ -79,12 +109,12 @@ async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'e
               emit()
               return snapshot()
             },
-            signOut: async () => { calls.push('signOut'); registered = false; unavailable = false; emit(); return snapshot() },
+            signOut: async () => { calls.push('signOut'); registered = false; verified = false; unavailable = false; emit(); return snapshot() },
           },
         },
       })
     }
-  }, { native: options.native ?? false, locale: options.locale ?? 'zh', dark: options.dark ?? false, hostId, registered: options.registered ?? false, restoreFails: options.restoreFails ?? false, runtime: options.runtime ?? false, runtimeCancel: options.runtimeCancel ?? false })
+  }, { native: options.native ?? false, locale: options.locale ?? 'zh', dark: options.dark ?? false, hostId, registered: options.registered ?? false, restoreFails: options.restoreFails ?? false, runtime: options.runtime ?? false, runtimeCancel: options.runtimeCancel ?? false, files: options.files ?? false })
   await page.route('**/api/auth/session', route => route.fulfill({ json: state.account ? {
     user: { id: state.account, name: state.account, email: `${state.account}@example.test` }, userId: state.account,
     accessToken: `${state.account}-token`, expires: '2099-01-01T00:00:00.000Z',
@@ -297,4 +327,73 @@ test('English dark desktop and narrow mobile layouts do not overflow', async ({ 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }
   await page.screenshot({ path: 'test-results/desktop-hosts-mobile-en.png', fullPage: true })
+})
+
+async function selectLocalFile(page: Page) {
+  await page.getByRole('button', { name: '添加文件夹', exact: true }).click()
+  await page.getByRole('button', { name: /My workspace/ }).click()
+  await page.getByRole('button', { name: /readme.md/ }).click()
+}
+
+test('local files verify the account without Agent enrollment and support edit/save', async ({ page }) => {
+  await setup(page, { native: true, files: true, empty: true })
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/desktop/setup')
+  await expect.poll(() => nativeCalls(page)).toContain('resume:alice')
+  await selectLocalFile(page)
+  const editor = page.getByRole('textbox', { name: '文件内容' })
+  await expect(editor).toHaveValue('Hello from local WTT')
+  await editor.fill('Edited file')
+  await page.getByRole('button', { name: '保存文件', exact: true }).click()
+  await expect(page.getByRole('button', { name: '保存文件', exact: true })).toBeDisabled()
+  expect(await page.evaluate(() => (window as unknown as { __files: { text: string } }).__files.text)).toBe('Edited file')
+  expect(await nativeCalls(page)).toContain('write-file')
+  await page.screenshot({ path: 'test-results/desktop-local-files.png', fullPage: true })
+  await page.getByRole('button', { name: /My workspace/ }).hover()
+  await page.getByRole('button', { name: '移除', exact: true }).click()
+  await expect(editor).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /My workspace/ })).toHaveCount(0)
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+})
+
+test('local read-only grants disable editing and failed saves retain the draft', async ({ page }) => {
+  await setup(page, { native: true, files: true })
+  await page.goto('/desktop/setup')
+  await page.evaluate(() => { (window as unknown as { __files: { readonly: boolean } }).__files.readonly = true })
+  await selectLocalFile(page)
+  await expect(page.getByRole('textbox', { name: '文件内容' })).toHaveAttribute('readonly', '')
+  await expect(page.getByRole('button', { name: '保存文件', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: '关闭文件', exact: true }).click()
+  await page.evaluate(() => {
+    const state = (window as unknown as { __files: { readonly: boolean; fail: boolean } }).__files
+    state.readonly = false; state.fail = true
+  })
+  await page.getByRole('button', { name: /readme.md/ }).click()
+  await page.getByRole('textbox', { name: '文件内容' }).fill('Keep this unsaved draft')
+  await page.getByRole('button', { name: '保存文件', exact: true }).click()
+  await expect(page.getByRole('alert').filter({ hasText: '无法保存' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '文件内容' })).toHaveValue('Keep this unsaved draft')
+})
+
+test('account switch clears local files and ignores a late previous-account read', async ({ page }) => {
+  const { state } = await setup(page, { native: true, files: true })
+  await page.goto('/desktop/setup')
+  await page.evaluate(() => { (window as unknown as { __files: { delay: boolean } }).__files.delay = true })
+  await selectLocalFile(page)
+  await expect.poll(() => nativeCalls(page)).toContain('read-file')
+  state.account = 'bob'
+  state.hosts = []
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await expect.poll(() => nativeCalls(page)).toContain('resume:bob')
+  await page.evaluate(() => { (window as unknown as { __files: { release: (() => void) | null } }).__files.release?.() })
+  await expect(page.getByRole('button', { name: /My workspace/ })).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: '文件内容' })).toHaveCount(0)
+  await expect(page.getByText('Hello from local WTT')).toHaveCount(0)
+  state.account = null
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await expect.poll(() => nativeCalls(page)).toContain('signOut')
+  await expect(page.getByRole('region', { name: '本机文件' })).toHaveCount(0)
 })

@@ -120,6 +120,7 @@ const messages: Record<Locale, Record<string, string>> = {
     'shell.logout': '退出登录',
 
     'desktop.localLibrary': '本地资料库',
+    'desktop.localFileError': '无法访问本地文件，请检查账号连接和目录授权后重试。',
     'desktop.addFolder': '添加文件夹',
     'desktop.removeFolder': '移除',
     'desktop.scanning': '扫描中...',
@@ -676,6 +677,7 @@ const messages: Record<Locale, Record<string, string>> = {
     'shell.logout': 'Logout',
 
     'desktop.localLibrary': 'Local Library',
+    'desktop.localFileError': 'Local files are unavailable. Check your account connection and folder permissions, then retry.',
     'desktop.addFolder': 'Add Folder',
     'desktop.removeFolder': 'Remove',
     'desktop.scanning': 'Scanning...',

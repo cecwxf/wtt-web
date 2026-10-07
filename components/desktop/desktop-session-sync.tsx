@@ -14,7 +14,9 @@ export function DesktopSessionSync() {
     let current = true
     void (async () => {
       const state = await host.status()
-      if (!current || !state.enabled) return
+      // v3 verifies the WTT account for local file permissions even when host
+      // execution onboarding is disabled. Older shells keep their old behavior.
+      if (!current || (!state.enabled && (state.protocolVersion ?? 0) < 3)) return
       if (status === 'authenticated' && token) await host.resume?.(token)
       else await host.signOut()
     })().catch(() => {

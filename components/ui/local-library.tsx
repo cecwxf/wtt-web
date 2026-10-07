@@ -291,9 +291,11 @@ function SearchResults({ results, onResultClick }: {
 
 interface LocalLibraryProps {
   onFileSelect?: (filePath: string, workspacePath: string) => void
+  onWorkspaceRemoved?: (workspacePath: string) => void
+  allowAnalyze?: boolean
 }
 
-export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
+export function LocalLibrary({ onFileSelect, onWorkspaceRemoved, allowAnalyze = true }: LocalLibraryProps) {
   const { t } = useI18n()
   const [collapsed, setCollapsed] = useState(false)
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([])
@@ -311,17 +313,24 @@ export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
   const [categoryFilter, setCategoryFilter] = useState<FileCategory | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [error, setError] = useState('')
+  const active = useRef(false)
 
   useEffect(() => {
     if (!isDesktop()) return
-    listWorkspaces().then(setWorkspaces)
-    getRecentFiles().then(setRecentFiles)
-  }, [])
+    active.current = true
+    let current = true
+    listWorkspaces().then(value => { if (current) setWorkspaces(value) }).catch(() => { if (current) setError(t('desktop.localFileError')) })
+    getRecentFiles().then(value => { if (current) setRecentFiles(value) }).catch(() => { if (current) setError(t('desktop.localFileError')) })
+    return () => { current = false; active.current = false }
+  }, [t])
 
   // Content search with debounce
   useEffect(() => {
+    let current = true
     if (searchMode !== 'content' || !searchQuery.trim() || workspaces.length === 0) {
       setContentResults([])
+      setContentSearching(false)
       return
     }
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -333,44 +342,59 @@ export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
           const matches = await searchWorkspace(ws.path, searchQuery, 20)
           allResults.push(...matches)
         }
-        setContentResults(allResults.slice(0, 50))
+        if (current) setContentResults(allResults.slice(0, 50))
+      } catch {
+        if (current) setError(t('desktop.localFileError'))
       } finally {
-        setContentSearching(false)
+        if (current) setContentSearching(false)
       }
     }, 400)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [searchQuery, searchMode, workspaces])
+    return () => { current = false; if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [searchQuery, searchMode, workspaces, t])
 
   const handleAdd = useCallback(async () => {
-    const ws = await addWorkspace()
-    if (ws) {
-      setWorkspaces(prev => {
-        if (prev.some(w => w.path === ws.path)) return prev
-        return [...prev, ws]
-      })
+    setError('')
+    try {
+      const ws = await addWorkspace()
+      if (ws && active.current) {
+        setWorkspaces(prev => {
+          if (prev.some(w => w.path === ws.path)) return prev
+          return [...prev, ws]
+        })
+      }
+    } catch {
+      if (active.current) setError(t('desktop.localFileError'))
     }
-  }, [])
+  }, [t])
 
   const handleRemove = useCallback(async (wsPath: string) => {
-    await removeWorkspace(wsPath)
-    setWorkspaces(prev => prev.filter(w => w.path !== wsPath))
-    setFileTrees(prev => {
-      const next = { ...prev }
-      delete next[wsPath]
-      return next
-    })
-    setExpandedWs(prev => { const n = new Set(prev); n.delete(wsPath); return n })
-  }, [])
+    try {
+      await removeWorkspace(wsPath)
+      if (!active.current) return
+      onWorkspaceRemoved?.(wsPath)
+      setWorkspaces(prev => prev.filter(w => w.path !== wsPath))
+      setFileTrees(prev => {
+        const next = { ...prev }
+        delete next[wsPath]
+        return next
+      })
+      setExpandedWs(prev => { const n = new Set(prev); n.delete(wsPath); return n })
+      const recent = await getRecentFiles()
+      if (active.current) setRecentFiles(recent)
+    } catch { if (active.current) setError(t('desktop.localFileError')) }
+  }, [onWorkspaceRemoved, t])
 
   const doScan = useCallback(async (wsPath: string) => {
     setScanning(prev => new Set(prev).add(wsPath))
     try {
       const result = await scanLocalFolder(wsPath, { includeBinary: true })
+      if (!active.current) return
+      if (!result) throw new Error('Scan failed')
       if (result) {
         const tree = buildFileTree(result.files)
         setFileTrees(prev => ({ ...prev, [wsPath]: tree }))
         const bridge = getDesktopBridge()
-        bridge?.workspace?.updateMeta(wsPath, {
+        await bridge?.workspace?.updateMeta(wsPath, {
           fileCount: result.files.length,
           lastScanAt: new Date().toISOString(),
         })
@@ -380,12 +404,12 @@ export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
             : w
         ))
       }
-    } catch (err) {
-      console.error('[LocalLibrary] Scan error:', err)
+    } catch {
+      if (active.current) setError(t('desktop.localFileError'))
     } finally {
       setScanning(prev => { const n = new Set(prev); n.delete(wsPath); return n })
     }
-  }, [])
+  }, [t])
 
   const handleToggleWorkspace = useCallback(async (wsPath: string) => {
     const willExpand = !expandedWs.has(wsPath)
@@ -414,24 +438,30 @@ export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
     })
   }, [])
 
-  const handleFileClick = useCallback((node: FileTreeNode) => {
+  const handleFileClick = useCallback(async (node: FileTreeNode) => {
     if (node.fullPath) {
-      const ws = workspaces.find(w => node.fullPath!.startsWith(w.path))
-      trackRecentFile({
-        path: node.fullPath,
-        name: node.name,
-        workspacePath: ws?.path ?? '',
-        extension: node.extension ?? '',
-      })
-      getRecentFiles().then(setRecentFiles)
-      if (onFileSelect) onFileSelect(node.fullPath, ws?.path ?? '')
+      const ws = workspaces.filter(w => node.fullPath!.startsWith(w.path + (w.path.includes('\\') ? '\\' : '/'))).sort((a, b) => b.path.length - a.path.length)[0]
+      try {
+        await trackRecentFile({
+          path: node.fullPath,
+          name: node.name,
+          workspacePath: ws?.path ?? '',
+          extension: node.extension ?? '',
+        })
+        const recent = await getRecentFiles()
+        if (!active.current) return
+        setRecentFiles(recent)
+        onFileSelect?.(node.fullPath, ws?.path ?? '')
+      } catch { if (active.current) setError(t('desktop.localFileError')) }
     }
-  }, [workspaces, onFileSelect])
+  }, [workspaces, onFileSelect, t])
 
-  const handleRecentFileClick = useCallback((rf: RecentFile) => {
-    trackRecentFile({ path: rf.path, name: rf.name, workspacePath: rf.workspacePath, extension: rf.extension })
-    if (onFileSelect) onFileSelect(rf.path, rf.workspacePath)
-  }, [onFileSelect])
+  const handleRecentFileClick = useCallback(async (rf: RecentFile) => {
+    try {
+      await trackRecentFile({ path: rf.path, name: rf.name, workspacePath: rf.workspacePath, extension: rf.extension })
+      if (active.current) onFileSelect?.(rf.path, rf.workspacePath)
+    } catch { if (active.current) setError(t('desktop.localFileError')) }
+  }, [onFileSelect, t])
 
   const handleAnalyzeFile = useCallback((node: FileTreeNode) => {
     if (!node.fullPath) return
@@ -469,15 +499,16 @@ export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
   return (
     <div className="border-b border-slate-200 dark:border-zinc-700">
       {/* Header */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
+      <div
         className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider hover:bg-slate-50 dark:hover:bg-zinc-800"
       >
-        {collapsed
-          ? <ChevronRight className="h-3 w-3" />
-          : <ChevronDown className="h-3 w-3" />}
-        <Library className="h-3.5 w-3.5" />
-        <span>{t('desktop.localLibrary')}</span>
+        <button onClick={() => setCollapsed(!collapsed)} className="flex min-w-0 items-center gap-2" aria-expanded={!collapsed}>
+          {collapsed
+            ? <ChevronRight className="h-3 w-3" />
+            : <ChevronDown className="h-3 w-3" />}
+          <Library className="h-3.5 w-3.5" />
+          <span>{t('desktop.localLibrary')}</span>
+        </button>
         <span className="ml-auto flex items-center gap-1">
           {!collapsed && (
             <>
@@ -505,7 +536,8 @@ export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
             <FolderPlus className="h-3.5 w-3.5" />
           </button>
         </span>
-      </button>
+      </div>
+      {error && <p role="alert" className="px-3 py-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
 
       {/* Content */}
       {!collapsed && (
@@ -613,13 +645,13 @@ export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
                       <span className="truncate">{rf.name}</span>
                       <span className="ml-auto text-[9px] text-slate-400 dark:text-zinc-500">{timeAgo(rf.accessedAt)}</span>
                     </button>
-                    <button
+                    {allowAnalyze && <button
                       onClick={() => handleAnalyzeRecent(rf)}
                       className="hidden shrink-0 rounded p-0.5 text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 group-hover/recent:block"
                       title="Analyze"
                     >
                       <Sparkles className="h-2.5 w-2.5" />
-                    </button>
+                    </button>}
                   </div>
                 ))}
               </div>
@@ -685,7 +717,7 @@ export function LocalLibrary({ onFileSelect }: LocalLibraryProps) {
                         expandedDirs={expandedDirs}
                         toggleDir={toggleDir}
                         onFileClick={handleFileClick}
-                        onAnalyze={handleAnalyzeFile}
+                        onAnalyze={allowAnalyze ? handleAnalyzeFile : undefined}
                         searchQuery={searchMode === 'name' ? searchQuery : ''}
                         categoryFilter={categoryFilter}
                       />

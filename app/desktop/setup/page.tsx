@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft, LogIn } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { AccountHostsPanel } from '@/components/desktop/account-hosts-panel'
+import { DesktopLocalFiles } from '@/components/desktop/desktop-local-files'
 import { useI18n } from '@/lib/i18n-provider'
 
 export default function DesktopSetupPage() {
@@ -17,6 +18,7 @@ export default function DesktopSetupPage() {
         <h1 className="text-lg font-semibold">WTT Desktop</h1>
       </header>
       {status === 'loading' ? <p role="status">{en ? 'Loading account...' : '正在加载账号…'}</p> : session?.accessToken ? <AccountHostsPanel accessToken={session.accessToken} standalone /> : <Link href="/login?callbackUrl=%2Fdesktop%2Fsetup" className="inline-flex items-center gap-2 rounded-md border border-zinc-200 px-4 py-2 dark:border-zinc-700"><LogIn size={17} />{en ? 'Sign in to WTT' : '登录 WTT'}</Link>}
+      <DesktopLocalFiles />
     </div>
   </main>
 }

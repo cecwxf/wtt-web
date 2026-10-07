@@ -20,6 +20,7 @@ interface ReadFileResult {
   content?: string;
   size?: number;
   error?: string;
+  writable?: boolean;
 }
 
 interface ReadDirResult {
@@ -109,6 +110,7 @@ export interface SearchMatch {
 export interface DesktopHostState {
   enabled?: boolean;
   protocolVersion?: number;
+  accountVerified?: boolean;
   state: 'signed_out' | 'authorizing' | 'registered' | 'expired' | 'unavailable';
   hostId?: string;
   userId?: string;
@@ -371,7 +373,8 @@ export async function searchWorkspace(
   const bridge = getDesktopBridge();
   if (!bridge?.workspace) return [];
   const result = await bridge.workspace.search(folderPath, query, maxResults);
-  return result.ok ? result.results : [];
+  if (!result.ok) throw new Error(result.error || 'Local search failed');
+  return result.results;
 }
 
 /**
@@ -394,7 +397,7 @@ export async function trackRecentFile(file: {
 }): Promise<void> {
   const bridge = getDesktopBridge();
   if (!bridge?.workspace) return;
-  bridge.workspace.trackRecent(file);
+  await bridge.workspace.trackRecent(file);
 }
 
 /**
