@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, Loader2, Play, RefreshCw, Square } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ExternalLink, FolderOpen, Loader2, Play, RefreshCw, Square, X } from 'lucide-react'
 import { getDesktopBridge, type DesktopAgentProfile, type DesktopRuntimeState } from '@/lib/desktop'
 import { useI18n } from '@/lib/i18n-provider'
 
@@ -28,10 +28,11 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   const [profiles, setProfiles] = useState<DesktopAgentProfile[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [access, setAccess] = useState<'workspace-write' | 'full-access'>('workspace-write')
-  const [runtime, setRuntime] = useState<DesktopRuntimeState>({ state: 'stopped', agents: [] })
+  const [runtime, setRuntime] = useState<DesktopRuntimeState>({ state: 'loading', agents: [] })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const active = useRef(false)
+  const automaticallyDetected = useRef(false)
   const savedAccess = useRef<DesktopRuntimeState['workspaceAccess']>()
   const running = ['restoring', 'starting', 'running', 'stopping'].includes(runtime.state)
   const supported = Boolean(bridge?.runtimeStatus && bridge?.discoverAgents && bridge?.startAgents && bridge?.stopAgents)
@@ -50,11 +51,11 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       }
     }
     const unsubscribe = bridge.onRuntimeState?.(state => { pushed = true; receive(state) })
-    void bridge.runtimeStatus!().then(state => { if (!pushed) receive(state) }).catch(() => {})
+    void bridge.runtimeStatus!().then(state => { if (!pushed) receive(state) }).catch(() => { if (current && !pushed) setRuntime({ state: 'error', agents: [] }) })
     return () => { current = false; active.current = false; unsubscribe?.() }
   }, [bridge, supported])
 
-  async function operate(action: 'discover' | 'start' | 'stop') {
+  const operate = useCallback(async (action: 'discover' | 'start' | 'stop') => {
     if (!bridge || busy) return
     setBusy(true); setError('')
     try {
@@ -63,6 +64,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
         if (!active.current) return
         setRuntime(state)
         setProfiles([]); setSelected([])
+        automaticallyDetected.current = false
       } else if (action === 'discover') {
         const found = await bridge.discoverAgents!()
         if (!active.current) return
@@ -83,6 +85,23 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
           ? (en ? 'Install a desktop build containing the Agent runtime.' : '请安装包含 Agent 运行环境的桌面版本。')
           : (en ? 'Local Agent operation failed. Check the desktop connection and retry.' : '本机 Agent 操作失败，请检查桌面连接后重试。'))
     } finally { if (active.current) setBusy(false) }
+  }, [bridge, busy, en, access, selected, onChanged])
+
+  useEffect(() => {
+    if (!supported || busy || runtime.state !== 'stopped' || profiles.length || automaticallyDetected.current) return
+    automaticallyDetected.current = true
+    void operate('discover')
+  }, [supported, busy, runtime.state, profiles.length, operate])
+
+  async function chooseWorkspace(adapter: string, reset = false) {
+    if (!bridge?.selectAgentWorkspace || busy || running) return
+    setBusy(true); setError('')
+    try {
+      const result = await bridge.selectAgentWorkspace(adapter, reset)
+      if (active.current && result) setProfiles(previous => previous.map(profile => profile.adapter === result.adapter ? { ...profile, workspaceName: result.workspaceName } : profile))
+    } catch {
+      if (active.current) setError(en ? 'Could not select the workspace. Retry.' : '工作目录选择未完成，请重试。')
+    } finally { if (active.current) setBusy(false) }
   }
 
   if (!supported) return null
@@ -90,7 +109,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h4 className="text-sm font-medium">{en ? 'Local Agents' : '本机 Agent'}</h4>
       <div className="flex items-center gap-2">
-        <button type="button" disabled={busy || running} onClick={() => void operate('discover')} title={en ? 'Detect installed Agents' : '检测已安装 Agent'} aria-label={en ? 'Detect installed Agents' : '检测已安装 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><RefreshCw size={16} /></button>
+        <button type="button" disabled={busy || running || runtime.state === 'loading'} onClick={() => void operate('discover')} title={en ? 'Detect installed Agents' : '检测已安装 Agent'} aria-label={en ? 'Detect installed Agents' : '检测已安装 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><RefreshCw size={16} /></button>
         {running
           ? <button type="button" disabled={busy || runtime.state === 'stopping'} onClick={() => void operate('stop')} title={en ? 'Stop local Agents' : '停止本机 Agent'} aria-label={en ? 'Stop local Agents' : '停止本机 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><Square size={16} /></button>
           : <button type="button" disabled={busy || !selected.length} onClick={() => void operate('start')} title={en ? 'Start local Agents' : '启动本机 Agent'} aria-label={en ? 'Start local Agents' : '启动本机 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><Play size={16} /></button>}
@@ -124,6 +143,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     <ul className="space-y-2">{profiles.map(profile => <li key={profile.profile_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <label className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.includes(profile.adapter)} disabled={busy || running || !profile.available || (profile.requiresFullAccess && access !== 'full-access')} onChange={event => setSelected(previous => event.target.checked ? [...previous, profile.adapter] : previous.filter(value => value !== profile.adapter))} />{profile.display_name}</label>
       <span className="break-all text-xs text-[var(--muted-foreground)]">{!profile.available ? (en ? 'Not installed' : '未安装') : profile.requiresFullAccess && access !== 'full-access' ? (en ? 'Full access required' : '需要完整执行权限') : profile.version}</span>
+      {profile.available && bridge?.selectAgentWorkspace && <div className="flex min-w-0 items-center gap-1"><button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile.adapter)} aria-label={`${en ? 'Workspace for' : '工作目录'} ${profile.display_name}`} title={profile.workspaceName || (en ? 'Isolated WTT workspace' : '独立 WTT 工作区')} className="inline-flex min-h-9 max-w-48 items-center gap-1 rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--muted)] disabled:opacity-50"><FolderOpen size={15} className="shrink-0" /><span className="truncate">{profile.workspaceName || (en ? 'Workspace' : '工作目录')}</span></button>{profile.workspaceName && <button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile.adapter, true)} aria-label={`${en ? 'Reset workspace for' : '恢复默认工作目录'} ${profile.display_name}`} title={en ? 'Use isolated WTT workspace' : '使用独立 WTT 工作区'} className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><X size={15} /></button>}</div>}
     </li>)}</ul>
     <ul className="space-y-2">{runtime.agents.map(agent => {
       const readiness = agent.readiness && Object.hasOwn(readinessText, agent.readiness) ? agent.readiness : 'unverified'

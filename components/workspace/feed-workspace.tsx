@@ -3086,6 +3086,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
         onRejectP2PRequest={handleRejectP2PRequest}
         onSelectWorkerTopic={handleSelectWorkerTopic}
         currentUserName={getHumanSender(session)}
+        currentUserId={session?.userId}
         agentSubAgents={agentSubAgents}
         maxSubAgents={maxSubAgents}
         agentStats={agentStats ?? undefined}

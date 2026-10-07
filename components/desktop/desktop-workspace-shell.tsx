@@ -11,6 +11,7 @@ import { CreateTopicModal } from '@/components/ui/create-topic-modal'
 import { DesktopHostsApi, HostRequestError } from '@/lib/desktop-hosts'
 import { getDesktopBridge } from '@/lib/desktop'
 import { useI18n } from '@/lib/i18n-provider'
+import { DesktopOnboarding } from './desktop-onboarding'
 
 const iconButton = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
 const rowClass = 'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
@@ -34,7 +35,7 @@ function Section({ title, icon, children, action }: { title: string; icon: React
 
 export function DesktopWorkspaceShell(props: WttShellV2Props) {
   // Directory/search state must never survive a change of authenticated account.
-  return <DesktopWorkspaceShellInner key={props.userToken || 'signed-out'} {...props} />
+  return <DesktopWorkspaceShellInner key={props.currentUserId || props.userToken || 'signed-out'} {...props} />
 }
 
 function DesktopWorkspaceShellInner(props: WttShellV2Props) {
@@ -173,6 +174,7 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
         <span className="truncate text-xs text-zinc-500">{selectedHost?.display_name || 'WTT'}</span><ChevronRight size={13} className="shrink-0 text-zinc-400" /><span className="min-w-0 flex-1 truncate text-sm font-medium">{selected?.display_name || (en ? 'Conversations' : '对话')}</span>
         <Link href="/desktop/setup" className={iconButton} title={en ? 'Computer settings' : '主机设置'} aria-label={en ? 'Computer settings' : '主机设置'}><Laptop size={17} /></Link>
       </header>
+      <DesktopOnboarding accessToken={props.userToken} userId={props.currentUserId} onChanged={() => { void mutate(); props.onBindingChanged?.() }} onAgentReady={id => props.onAgentChange(id)} />
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{props.children}</main>
     </div>
     <WttSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} activePage={settingsPage} onPageChange={setSettingsPage} agents={props.agents.map(agent => ({ ...agent, id: agent.agent_id, is_primary: false }))} selectedAgentId={props.selectedAgentId} onBindingChanged={props.onBindingChanged} />

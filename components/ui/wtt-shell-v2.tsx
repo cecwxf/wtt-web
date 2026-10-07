@@ -56,6 +56,7 @@ export interface WttShellV2Props {
   hideTopics?: boolean
   hideCreateTopic?: boolean
   currentUserName?: string
+  currentUserId?: string
   agentSubAgents?: AgentSubAgentMap
   maxSubAgents?: number
   agentStats?: AgentStatsMap

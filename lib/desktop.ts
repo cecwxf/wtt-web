@@ -123,6 +123,7 @@ export interface DesktopHostBridge {
   onState?(callback: (state: DesktopHostState) => void): () => void;
   runtimeStatus?(): Promise<DesktopRuntimeState>;
   discoverAgents?(): Promise<DesktopAgentProfile[]>;
+  selectAgentWorkspace?(adapter: string, reset?: boolean): Promise<{ adapter: string; workspaceName: string } | null>;
   startAgents?(selection: { adapters: string[]; workspaceAccess: 'workspace-write' | 'full-access' }): Promise<DesktopRuntimeState>;
   stopAgents?(): Promise<DesktopRuntimeState>;
   onRuntimeState?(callback: (state: DesktopRuntimeState) => void): () => void;
@@ -149,6 +150,7 @@ export interface DesktopAgentProfile {
   available: boolean;
   version: string;
   requiresFullAccess: boolean;
+  workspaceName?: string;
 }
 
 export interface DesktopRuntimeState {
