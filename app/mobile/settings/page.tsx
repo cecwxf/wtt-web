@@ -1,6 +1,7 @@
 'use client'
 
-import { signOut, useSession } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
+import { signOut } from '@/lib/sign-out'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import useSWR from 'swr'

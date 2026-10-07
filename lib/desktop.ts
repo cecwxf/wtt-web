@@ -108,7 +108,8 @@ export interface SearchMatch {
 
 export interface DesktopHostState {
   enabled?: boolean;
-  state: 'signed_out' | 'authorizing' | 'registered' | 'expired';
+  protocolVersion?: number;
+  state: 'signed_out' | 'authorizing' | 'registered' | 'expired' | 'unavailable';
   hostId?: string;
   userId?: string;
   expiresAt?: string;
@@ -116,6 +117,8 @@ export interface DesktopHostState {
 
 export interface DesktopHostBridge {
   status(): Promise<DesktopHostState>;
+  resume?(accessToken: string): Promise<DesktopHostState>;
+  onState?(callback: (state: DesktopHostState) => void): () => void;
   authorize(userId: string): Promise<{
     transactionId: string;
     request: {

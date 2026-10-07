@@ -69,11 +69,38 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false }
     setNextOffset(null)
     if (accessToken) void load()
     const bridge = getDesktopBridge()?.host
+    let active = true
+    let receivedState = false
+    const unsubscribe = bridge?.onState?.(state => {
+      receivedState = true
+      if (active && currentApi.current === api) setNative(state)
+    })
     void bridge?.status().then(state => {
-      if (mounted.current && currentApi.current === api) setNative(state)
+      // A push after this request is newer than its snapshot, even when the
+      // snapshot resolves last (for example during account restoration).
+      if (active && !receivedState && currentApi.current === api) setNative(state)
     }).catch(() => {})
-    return () => { mounted.current = false; generation.current += 1 }
+    return () => { active = false; mounted.current = false; generation.current += 1; unsubscribe?.() }
   }, [accessToken, api, load])
+
+  async function refresh() {
+    const bridge = getDesktopBridge()?.host
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      if (accessToken && bridge?.resume && native?.enabled) {
+        const state = await bridge.resume(accessToken)
+        if (!mounted.current || currentApi.current !== api) return
+        setNative(state)
+      }
+      await load()
+    } catch (value) {
+      if (mounted.current && currentApi.current === api) setError(describeError(value))
+    } finally {
+      if (mounted.current && currentApi.current === api) setBusy(false)
+    }
+  }
 
   async function authorize() {
     const bridge = getDesktopBridge()?.host
@@ -138,18 +165,19 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false }
         <h3 className="flex items-center gap-2 text-sm font-semibold"><Monitor size={17} />{en ? 'My computers' : '我的主机'}</h3>
         <div className="flex items-center gap-2">
           {native?.enabled && (
-            <button type="button" className={button} disabled={busy || available !== true || native.state === 'registered'} onClick={() => void authorize()}>
+            <button type="button" className={button} disabled={busy || available !== true || native.state === 'registered' || native.state === 'unavailable'} onClick={() => void authorize()}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : native.state === 'registered' ? <Check size={15} /> : <Plus size={15} />}
               {native.state === 'registered' ? (en ? 'Computer authorized' : '本机已授权') : (en ? 'Enable this computer' : '启用本机')}
             </button>
           )}
           {native?.state === 'registered' && <button type="button" className={button} aria-label={en ? 'Disconnect this computer' : '断开本机'} title={en ? 'Disconnect this computer' : '断开本机'} disabled={busy} onClick={() => void disconnect()}><LogOut size={15} /></button>}
-          <button type="button" className={button} aria-label={en ? 'Refresh computers' : '刷新主机'} title={en ? 'Refresh computers' : '刷新主机'} disabled={loading || busy} onClick={() => void load()}>
+          <button type="button" className={button} aria-label={en ? 'Refresh computers' : '刷新主机'} title={en ? 'Refresh computers' : '刷新主机'} disabled={loading || busy} onClick={() => void refresh()}>
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
       {error && <p role="alert" className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400"><AlertCircle size={16} className="mt-0.5 shrink-0" />{error}</p>}
+      {native?.state === 'unavailable' && <p role="status" className="text-sm text-[var(--muted-foreground)]">{en ? 'Computer connection unavailable. Refresh to retry.' : '本机连接暂不可用，请刷新重试。'}</p>}
       {available === false && <p className="text-sm text-[var(--muted-foreground)]">{en ? 'Host service is not enabled.' : '主机接入服务尚未启用。'}</p>}
       {loading && !hosts.length && <p role="status" className="text-sm text-[var(--muted-foreground)]">{en ? 'Loading computers...' : '正在加载主机…'}</p>}
       {!loading && available && !hosts.length && <p className="text-sm text-[var(--muted-foreground)]">{en ? 'No authorized computers.' : '暂无已授权主机。'}</p>}

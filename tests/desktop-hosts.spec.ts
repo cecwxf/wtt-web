@@ -7,21 +7,38 @@ const host = {
   agents: [{ agent_id: 'agent-123456789abc', profile_id: 'codex-default', adapter: 'codex', display_name: 'Coding Agent' }],
 }
 
-async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'en'; dark?: boolean; empty?: boolean; disabled?: boolean } = {}) {
+async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'en'; dark?: boolean; empty?: boolean; disabled?: boolean; registered?: boolean; restoreFails?: boolean } = {}) {
   const calls: Array<{ path: string; method: string; body: unknown }> = []
-  const state = { hosts: options.empty ? [] : [host], fail: false, revoked: false, nextOffset: null as number | null }
-  await page.addInitScript(({ native, locale, dark, hostId }) => {
+  const state = { hosts: options.empty ? [] : [host], fail: false, revoked: false, nextOffset: null as number | null, account: 'alice' as string | null }
+  await page.addInitScript(({ native, locale, dark, hostId, registered: initiallyRegistered, restoreFails }) => {
     localStorage.setItem('wtt-web.locale', locale)
     localStorage.setItem('theme', dark ? 'dark' : 'light')
     if (native) {
-      let registered = false
+      let registered = initiallyRegistered
+      let userId = 'alice'
+      let unavailable = false
+      const calls: string[] = []
+      const listeners = new Set<(state: unknown) => void>()
+      const snapshot = () => ({ enabled: true, protocolVersion: 2, state: unavailable ? 'unavailable' : registered ? 'registered' : 'signed_out', userId, ...(registered ? { hostId } : {}) })
+      const emit = () => { for (const listener of listeners) listener(snapshot()) }
+      Object.assign(window, { __hostCalls: calls })
       Object.defineProperty(window, 'wttDesktop', {
         value: {
           isDesktop: true, platform: 'darwin',
           host: {
-            status: async () => ({ enabled: true, state: registered ? 'registered' : 'signed_out', ...(registered ? { hostId, userId: 'alice' } : {}) }),
-            authorize: async (userId: string) => {
-              if (userId !== 'alice') throw new Error('Wrong account')
+            status: async () => snapshot(),
+            onState: (listener: (state: unknown) => void) => { listeners.add(listener); return () => listeners.delete(listener) },
+            resume: async (token: string) => {
+              userId = token.replace(/-token$/, '')
+              calls.push(`resume:${userId}`)
+              if (restoreFails) { restoreFails = false; unavailable = true; emit(); throw new Error('Native fixture network error') }
+              unavailable = false
+              if (userId !== 'alice') registered = false
+              emit()
+              return snapshot()
+            },
+            authorize: async (accountId: string) => {
+              if (accountId !== userId) throw new Error('Wrong account')
               return {
                 transactionId: 'transaction-from-native', request: {
                   installation_id: '22222222-2222-4222-8222-222222222222',
@@ -33,23 +50,25 @@ async function setup(page: Page, options: { native?: boolean; locale?: 'zh' | 'e
             finishAuthorization: async (receipt: { transactionId: string; enrollmentId: string }) => {
               if (receipt.transactionId !== 'transaction-from-native' || receipt.enrollmentId !== 'grant-from-server') throw new Error('Invalid receipt')
               registered = true
-              return { state: 'registered', userId: 'alice', hostId }
+              emit()
+              return snapshot()
             },
-            signOut: async () => { registered = false; return { state: 'signed_out' } },
+            signOut: async () => { calls.push('signOut'); registered = false; unavailable = false; emit(); return snapshot() },
           },
         },
       })
     }
-  }, { native: options.native ?? false, locale: options.locale ?? 'zh', dark: options.dark ?? false, hostId })
-  await page.route('**/api/auth/session', route => route.fulfill({ json: {
-    user: { name: 'Alice', email: 'alice@example.test' }, accessToken: 'alice-token', expires: '2099-01-01T00:00:00.000Z',
-  } }))
+  }, { native: options.native ?? false, locale: options.locale ?? 'zh', dark: options.dark ?? false, hostId, registered: options.registered ?? false, restoreFails: options.restoreFails ?? false })
+  await page.route('**/api/auth/session', route => route.fulfill({ json: state.account ? {
+    user: { id: state.account, name: state.account, email: `${state.account}@example.test` }, userId: state.account,
+    accessToken: `${state.account}-token`, expires: '2099-01-01T00:00:00.000Z',
+  } : {} }))
   await page.route('**/api/wtt/**', async route => {
     const req = route.request()
     const url = new URL(req.url())
     calls.push({ path: url.pathname, method: req.method(), body: req.postData() ? req.postDataJSON() : null })
-    expect(req.headers().authorization).toBe('Bearer alice-token')
-    if (url.pathname === '/api/wtt/auth/me') return route.fulfill({ json: { user_id: 'alice', display_name: 'Alice' } })
+    expect(req.headers().authorization).toBe(`Bearer ${state.account}-token`)
+    if (url.pathname === '/api/wtt/auth/me') return route.fulfill({ json: { user_id: state.account, display_name: state.account } })
     if (url.pathname === '/api/wtt/hosts/my') {
       if (options.disabled) return route.fulfill({ status: 404, json: { detail: 'disabled' } })
       if (state.fail) return route.fulfill({ status: 503, json: { detail: 'private server error' } })
@@ -82,6 +101,60 @@ test('desktop registers through public proofs and displays the same account host
   expect(JSON.stringify(grants[0].body)).not.toMatch(/host_token|installation_secret|code_verifier|owner_user_id/)
   await page.getByRole('button', { name: '断开本机', exact: true }).click()
   await expect(page.getByRole('button', { name: '启用本机', exact: true })).toBeEnabled()
+})
+
+async function nativeCalls(page: Page) {
+  return page.evaluate(() => (window as unknown as { __hostCalls: string[] }).__hostCalls)
+}
+
+test('global account synchronization restores the host without another enrollment', async ({ page }) => {
+  const { calls } = await setup(page, { native: true, registered: true })
+  await page.goto('/desktop/setup')
+  await expect(page.getByRole('button', { name: '本机已授权' })).toBeDisabled()
+  await expect.poll(() => nativeCalls(page)).toContain('resume:alice')
+  expect(calls.some(call => call.path.endsWith('/enrollments'))).toBe(false)
+})
+
+test('account switching and session expiration synchronize native authorization', async ({ page }) => {
+  const { state } = await setup(page, { native: true, registered: true })
+  await page.goto('/desktop/setup')
+  await expect.poll(() => nativeCalls(page)).toContain('resume:alice')
+  state.account = 'bob'
+  state.hosts = []
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await expect.poll(() => nativeCalls(page)).toContain('resume:bob')
+  await expect(page.getByText('My MacBook（本机）')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '启用本机', exact: true })).toBeEnabled()
+  state.account = null
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await expect.poll(() => nativeCalls(page)).toContain('signOut')
+  await expect(page.getByRole('link', { name: '登录 WTT', exact: true })).toBeVisible()
+})
+
+test('restore failure stays explicit and refresh retries without creating another host', async ({ page }) => {
+  const { calls } = await setup(page, { native: true, registered: true, restoreFails: true })
+  await page.goto('/desktop/setup')
+  await expect(page.getByText('本机连接暂不可用，请刷新重试。')).toBeVisible()
+  await expect(page.getByRole('button', { name: '启用本机', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: '刷新主机' }).click()
+  await expect(page.getByRole('button', { name: '本机已授权' })).toBeDisabled()
+  expect(calls.some(call => call.path.endsWith('/enrollments'))).toBe(false)
+})
+
+test('existing logout controls disconnect native authorization before NextAuth redirects', async ({ page }) => {
+  const { state } = await setup(page, { native: true, registered: true })
+  await page.route('**/api/auth/csrf', route => route.fulfill({ json: { csrfToken: 'fixture-csrf' } }))
+  let nativeWasDisconnected = false
+  await page.route('**/api/auth/signout', async route => {
+    nativeWasDisconnected = (await nativeCalls(page)).includes('signOut')
+    state.account = null
+    await route.fulfill({ json: { url: '/desktop/setup' } })
+  })
+  await page.goto('/mobile/settings')
+  await expect.poll(() => nativeCalls(page)).toContain('resume:alice')
+  await page.getByRole('button', { name: '退出登录', exact: true }).click()
+  await expect(page.getByRole('link', { name: '登录 WTT', exact: true })).toBeVisible()
+  expect(nativeWasDisconnected).toBe(true)
 })
 
 test('ordinary browser lists computers without native authorization controls', async ({ page }) => {

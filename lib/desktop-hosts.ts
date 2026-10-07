@@ -56,6 +56,11 @@ export class DesktopHostsApi {
     const identity = await this.request('/auth/me') as { user_id?: string }
     if (!identity?.user_id || typeof identity.user_id !== 'string') throw new Error('Invalid account identity')
     if (!isCurrent()) throw new Error('Authorization cancelled')
+    if (bridge.resume) {
+      const native = await bridge.resume(this.token)
+      if (!isCurrent()) throw new Error('Authorization cancelled')
+      if (native.userId !== identity.user_id) throw new Error('Host identity does not match account')
+    }
     const start = await bridge.authorize(identity.user_id)
     if (!isCurrent()) throw new Error('Authorization cancelled')
     const grant = await this.request('/hosts/enrollments', start.request) as { enrollment_id?: string }
