@@ -304,6 +304,39 @@ test('automatic restore configuration errors give an actionable localized status
   await expect(controls.getByRole('button', { name: 'Detect installed Agents' })).toBeEnabled()
 })
 
+for (const locale of ['zh', 'en'] as const) {
+  test(`Agent connection and execution readiness remain distinct (${locale})`, async ({ page }) => {
+    if (locale === 'en') await page.setViewportSize({ width: 1280, height: 800 })
+    await setup(page, { native: true, registered: true, runtime: true, locale, dark: locale === 'zh' })
+    await page.goto('/desktop/setup')
+    const controls = page.getByRole('group', { name: locale === 'en' ? 'Local Agents' : '本机 Agent', exact: true })
+    await expect(controls).toBeVisible()
+    const agents = [
+      { profileId: 'pi', adapter: 'pi', agentId: 'agent-pi', state: 'online', readiness: 'authentication_required' as const },
+      { profileId: 'dsh', adapter: 'dsh', agentId: 'agent-dsh', state: 'online', readiness: 'configuration_required' as const },
+      { profileId: 'codex', adapter: 'codex', agentId: 'agent-codex', state: 'online', readiness: 'verified' as const },
+      { profileId: 'legacy', adapter: 'gemini', agentId: 'agent-legacy', state: 'offline' },
+    ]
+    await page.evaluate(agents => (window as unknown as { __pushRuntime: (state: DesktopRuntimeState) => void }).__pushRuntime({ state: 'running', agents }), agents)
+    await expect(controls.getByText(locale === 'en' ? 'Online' : '在线', { exact: true })).toHaveCount(3)
+    await expect(controls.getByText(locale === 'en' ? 'CLI sign-in required' : '需要 CLI 登录', { exact: true })).toBeVisible()
+    await expect(controls.getByText(locale === 'en' ? 'CLI credentials required' : '需要配置 CLI 凭据', { exact: true })).toBeVisible()
+    await expect(controls.getByText(locale === 'en' ? 'Last execution succeeded' : '最近执行成功', { exact: true })).toBeVisible()
+    await expect(controls.getByText(locale === 'en' ? 'Execution not yet verified' : '待执行验证', { exact: true })).toBeVisible()
+    await expect(controls.getByRole('link', { name: locale === 'en' ? 'pi sign-in and configuration help' : 'pi 登录与配置帮助' })).toHaveAttribute('href', 'https://pi.dev/docs/latest/providers')
+    await expect(controls.getByRole('link', { name: locale === 'en' ? 'dsh sign-in and configuration help' : 'dsh 登录与配置帮助' })).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: `test-results/desktop-agent-readiness-${locale}.png`, fullPage: true })
+    await page.evaluate(agents => (window as unknown as { __pushRuntime: (state: DesktopRuntimeState) => void }).__pushRuntime({
+      state: 'running', agents: agents.map(agent => ({ ...agent, readiness: 'verified' })),
+    }), agents)
+    await expect(controls.getByText(locale === 'en' ? 'CLI sign-in required' : '需要 CLI 登录', { exact: true })).toHaveCount(0)
+    await expect(controls.getByRole('link')).toHaveCount(0)
+    await expect(controls.getByText(locale === 'en' ? 'Last execution succeeded' : '最近执行成功', { exact: true })).toHaveCount(4)
+    expect((await nativeCalls(page)).some(call => call.startsWith('start:'))).toBe(false)
+  })
+}
+
 test('cancelled native execution consent does not display a running Agent', async ({ page }) => {
   await setup(page, { native: true, registered: true, runtime: true, runtimeCancel: true })
   await page.goto('/desktop/setup')

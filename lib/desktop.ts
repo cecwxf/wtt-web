@@ -157,7 +157,8 @@ export interface DesktopRuntimeState {
   autoStart?: boolean;
   configuredAdapters?: string[];
   workspaceAccess?: 'workspace-write' | 'full-access';
-  agents: Array<{ profileId: string; adapter: string; agentId: string; state: string }>;
+  agents: Array<{ profileId: string; adapter: string; agentId: string; state: string;
+    readiness?: 'unverified' | 'verified' | 'authentication_required' | 'configuration_required' | 'execution_failed' }>;
 }
 
 interface WttDesktopBridge {

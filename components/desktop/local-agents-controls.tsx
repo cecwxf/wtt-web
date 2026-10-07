@@ -1,9 +1,25 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Play, RefreshCw, Square } from 'lucide-react'
+import { ExternalLink, Loader2, Play, RefreshCw, Square } from 'lucide-react'
 import { getDesktopBridge, type DesktopAgentProfile, type DesktopRuntimeState } from '@/lib/desktop'
 import { useI18n } from '@/lib/i18n-provider'
+
+const authenticationHelp: Record<string, string> = {
+  codex: 'https://developers.openai.com/codex/auth',
+  'claude-code': 'https://code.claude.com/docs/en/authentication',
+  pi: 'https://pi.dev/docs/latest/providers',
+  dsh: 'https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/providers.md',
+  gemini: 'https://geminicli.com/docs/get-started/authentication/',
+}
+
+const readinessText = {
+  unverified: ['待执行验证', 'Execution not yet verified'],
+  verified: ['最近执行成功', 'Last execution succeeded'],
+  authentication_required: ['需要 CLI 登录', 'CLI sign-in required'],
+  configuration_required: ['需要配置 CLI 凭据', 'CLI credentials required'],
+  execution_failed: ['最近执行失败', 'Last execution failed'],
+} as const
 
 export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   const bridge = getDesktopBridge()?.host
@@ -109,6 +125,19 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       <label className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.includes(profile.adapter)} disabled={busy || running || !profile.available || (profile.requiresFullAccess && access !== 'full-access')} onChange={event => setSelected(previous => event.target.checked ? [...previous, profile.adapter] : previous.filter(value => value !== profile.adapter))} />{profile.display_name}</label>
       <span className="break-all text-xs text-[var(--muted-foreground)]">{!profile.available ? (en ? 'Not installed' : '未安装') : profile.requiresFullAccess && access !== 'full-access' ? (en ? 'Full access required' : '需要完整执行权限') : profile.version}</span>
     </li>)}</ul>
-    <ul className="space-y-1">{runtime.agents.map(agent => <li key={agent.agentId} className="flex flex-wrap justify-between gap-2 text-xs"><span>{agent.adapter}</span><span>{agent.state === 'online' ? (en ? 'Online' : '在线') : agent.state === 'connecting' ? (en ? 'Connecting' : '连接中') : (en ? 'Offline' : '离线')}</span></li>)}</ul>
+    <ul className="space-y-2">{runtime.agents.map(agent => {
+      const readiness = agent.readiness && Object.hasOwn(readinessText, agent.readiness) ? agent.readiness : 'unverified'
+      const needsHelp = readiness === 'authentication_required' || readiness === 'configuration_required'
+      const helpUrl = Object.hasOwn(authenticationHelp, agent.adapter) ? authenticationHelp[agent.adapter] : undefined
+      const helpLabel = en ? `${agent.adapter} sign-in and configuration help` : `${agent.adapter} 登录与配置帮助`
+      return <li key={agent.agentId} className="flex flex-wrap items-start justify-between gap-2 text-xs">
+        <span>{agent.adapter}</span>
+        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
+          <span>{agent.state === 'online' ? (en ? 'Online' : '在线') : agent.state === 'connecting' ? (en ? 'Connecting' : '连接中') : (en ? 'Offline' : '离线')}</span>
+          <span className={needsHelp || readiness === 'execution_failed' ? 'text-red-600 dark:text-red-400' : 'text-[var(--muted-foreground)]'}>{readinessText[readiness][en ? 1 : 0]}</span>
+          {needsHelp && helpUrl && <a href={helpUrl} target="_blank" rel="noopener noreferrer" title={helpLabel} aria-label={helpLabel} className="shrink-0 rounded p-1 hover:bg-[var(--muted)]"><ExternalLink size={14} /></a>}
+        </div>
+      </li>
+    })}</ul>
   </div>
 }
