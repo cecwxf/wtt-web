@@ -165,8 +165,8 @@ interface WttDesktopBridge {
   platform: string;
   auth?: {
     status(): Promise<{ pending: boolean; hasSavedAccount: boolean }>;
-    login(provider: 'github' | 'google' | 'twitter'): Promise<{ ok: boolean; userId: string }>;
-    restore(): Promise<{ ok: boolean; userId?: string }>;
+    login(provider: 'github' | 'google' | 'twitter'): Promise<{ ok: boolean; userId?: string; errorCode?: 'credential_storage_unavailable' | 'credential_storage_recovery_required' }>;
+    restore(): Promise<{ ok: boolean; userId?: string; errorCode?: 'credential_storage_unavailable' | 'credential_storage_recovery_required' }>;
     cancel(): Promise<void>;
     syncAccount(userId?: string): Promise<void>;
   };

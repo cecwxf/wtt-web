@@ -218,7 +218,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const result = provider ? await auth.login(provider) : await auth.restore();
-      if (!result.ok) setError(t("login.errorAuthFailed"));
+      if (!result.ok) setError(t(result.errorCode === 'credential_storage_unavailable' ? 'login.errorCredentialStore'
+        : result.errorCode === 'credential_storage_recovery_required' ? 'login.errorCredentialRecovery' : 'login.errorAuthFailed'));
     } catch {
       setError(t("login.errorAuthFailed"));
     } finally {

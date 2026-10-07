@@ -59,3 +59,38 @@ test('ordinary web login has no desktop restore or native cancellation controls'
   await expect(page.getByRole('button', { name: 'Continue desktop sign-in' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0)
 })
+
+for (const code of ['credential_storage_unavailable', 'credential_storage_recovery_required'] as const) {
+  test(`native ${code} displays a safe actionable message and leaves sign-in usable`, async ({ page }) => {
+    await page.addInitScript(code => {
+      const values = window as unknown as Record<string, unknown>
+      values.wttDesktop = { isDesktop: true, auth: {
+        status: async () => ({ pending: false, hasSavedAccount: false }),
+        login: async () => ({ ok: false, errorCode: code, error: 'private-token-or-local-path' }),
+      } }
+    }, code)
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Continue with GitHub' }).click()
+    await expect(page.getByText(code === 'credential_storage_unavailable'
+      ? 'System credential storage is unavailable. Unlock or configure your OS keyring, then restart sign-in.'
+      : 'Saved desktop credentials could not be read. Restore your local secure storage and retry. Existing credentials have not been overwritten.')).toBeVisible()
+    await expect(page.getByText('private-token-or-local-path')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0)
+  })
+}
+
+test('the credential-store recovery action is localized in Chinese', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('wtt-web.locale', 'zh')
+    const values = window as unknown as Record<string, unknown>
+    values.wttDesktop = { isDesktop: true, auth: {
+      status: async () => ({ pending: false, hasSavedAccount: false }),
+      login: async () => ({ ok: false, errorCode: 'credential_storage_unavailable' }),
+    } }
+  })
+  await page.goto('/login')
+  await page.getByRole('button', { name: '使用 GitHub 继续' }).click()
+  await expect(page.getByText('无法访问系统安全存储。请解锁或配置系统钥匙串后重新登录。')).toBeVisible()
+  await expect(page.getByRole('button', { name: '使用 GitHub 继续' })).toBeEnabled()
+})
