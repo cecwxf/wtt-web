@@ -70,7 +70,13 @@ function ProjectShell(props: WttShellV2Props) {
   useEffect(() => {
     const handler = () => { void projects.mutate(); void roots.mutate(); void hosts.mutate() }
     const host = getDesktopBridge()?.host
-    const off = host?.onRuntimeState?.(handler)
+    let signature = ''
+    const off = host?.onRuntimeState?.(state => {
+      const next = JSON.stringify([state.state, state.agents.map(agent => [agent.profileId, agent.agentId, agent.state])])
+      if (next === signature) return
+      signature = next
+      handler()
+    })
     window.addEventListener('wtt-directory-changed', handler)
     return () => { off?.(); window.removeEventListener('wtt-directory-changed', handler) }
   }, [projects.mutate, roots.mutate, hosts.mutate])

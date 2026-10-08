@@ -48,7 +48,7 @@ function filterResponseHeaders(headers: Headers): Headers {
 }
 
 function isWorkspacePath(path: string[]): boolean {
-  return path.length >= 4 && path[0] === 'agents' && path[2] === 'workspace'
+  return path[0] === 'workspaces' || (path.length >= 4 && path[0] === 'agents' && path[2] === 'workspace')
 }
 
 function isAgentOperationPath(path: string[]): boolean {
@@ -58,6 +58,7 @@ function isAgentOperationPath(path: string[]): boolean {
 function isWorkspaceContentPath(path: string[]): boolean {
   return (path.length === 4 && path[0] === 'cli-sessions' && path[2] === 'workspace' && path[3] === 'content')
     || (path.length === 5 && path[0] === 'hosts' && path[1] === 'agents' && path[3] === 'workspace' && path[4] === 'content')
+    || (path.length === 4 && path[0] === 'workspaces' && path[2] === 'workspace' && path[3] === 'content')
 }
 
 function requestWorkspaceStream(urlString: string, method: string, headers: Headers, signal: AbortSignal): Promise<Response> {
