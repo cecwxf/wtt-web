@@ -9,6 +9,7 @@ import type { ManagedExecutionSummary } from '@/lib/managed-chat-progress'
 type Execution = {
   execution_id: string; message_id: string; topic_id: string; agent_id: string; state: string
   revision: number; stale: boolean; can_cancel: boolean; created_at: string; updated_at: string
+  session_recovery?: boolean; can_restart_session?: boolean
 }
 const active = new Set(['queued', 'accepted', 'running', 'waiting_approval', 'cancel_requested', 'result_pending'])
 const labels: Record<string, [string, string]> = {
@@ -28,6 +29,8 @@ function normalize(value: unknown, topicId: string): Execution[] {
       || typeof row.agent_id !== 'string' || row.agent_id.length > 255 || !labels[row.state]
       || !Number.isSafeInteger(row.revision) || row.revision < 1 || typeof row.stale !== 'boolean'
       || typeof row.can_cancel !== 'boolean' || !Number.isFinite(Date.parse(row.created_at)) || !Number.isFinite(Date.parse(row.updated_at))) throw new Error('Invalid execution status')
+    if ((row.session_recovery !== undefined && typeof row.session_recovery !== 'boolean')
+      || (row.can_restart_session !== undefined && typeof row.can_restart_session !== 'boolean')) throw new Error('Invalid session recovery status')
     return row as Execution
   })
 }
@@ -44,6 +47,7 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
+  const [confirmRestart, setConfirmRestart] = useState<string | null>(null)
   const decision = useRef<AbortController | null>(null)
   const rows = snapshot.scope === scope ? snapshot.rows : empty
   const hasActive = rows.some(row => active.has(row.state) && !row.stale)
@@ -53,7 +57,7 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
   }, [enabled, onSnapshot, rows])
 
   useEffect(() => {
-    setError(''); setBusy(null)
+    setError(''); setBusy(null); setConfirmRestart(null)
     return () => { decision.current?.abort(); decision.current = null }
   }, [scope])
 
@@ -144,6 +148,26 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
     }
   }
 
+  async function restartSession(row: Execution) {
+    if (busy || !accessToken || !row.can_restart_session) return
+    const controller = new AbortController()
+    decision.current = controller
+    setBusy(row.execution_id)
+    try {
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/hosts/chat-executions/${row.execution_id}/new-session`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store', redirect: 'error',
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
+      })
+      await response.body?.cancel().catch(() => {})
+      if (!response.ok) throw new Error()
+      if (!controller.signal.aborted) { setConfirmRestart(null); setError('') }
+    } catch {
+      if (!controller.signal.aborted) setError(en ? 'Session reset was not confirmed. Check the latest status before retrying.' : '会话重置尚未确认，请核对最新状态后重试。')
+    } finally {
+      if (!controller.signal.aborted) { setBusy(null); setRevision(value => value + 1) }
+    }
+  }
+
   if (!enabled || (!rows.length && !error)) return null
   const visible = rows.filter(row => active.has(row.state) || ['interrupted', 'failed'].includes(row.state)).slice(0, 8)
   if (!visible.length && rows[0]) visible.push(rows[0])
@@ -152,8 +176,9 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
       const pending = active.has(row.state) && !row.stale
       const Icon = row.stale || ['interrupted', 'failed'].includes(row.state) ? AlertTriangle : pending ? (['queued', 'accepted'].includes(row.state) ? Clock3 : Loader2) : CheckCircle2
       const name = agents.find(agent => agent.agent_id === row.agent_id)?.display_name || row.agent_id
-      const text = row.stale ? (en ? 'Host disconnected; result uncertain' : '主机失联，执行结果待核对') : labels[row.state][en ? 1 : 0]
-      return <div key={row.execution_id} className="flex min-h-8 min-w-0 items-center gap-2 py-1 text-xs text-zinc-600 dark:text-zinc-300">
+      const text = row.session_recovery ? (en ? 'Native session unavailable; history preserved' : '原生会话无法恢复，历史已保留')
+        : row.stale ? (en ? 'Host disconnected; result uncertain' : '主机失联，执行结果待核对') : labels[row.state][en ? 1 : 0]
+      return <div key={row.execution_id} className="py-1 text-xs text-zinc-600 dark:text-zinc-300"><div className="flex min-h-8 min-w-0 items-center gap-2">
         <Icon size={14} aria-hidden className={`shrink-0 ${pending && !['queued', 'accepted', 'waiting_approval'].includes(row.state) ? 'animate-spin' : ''}`} />
         <span title={name} className="max-w-[35%] truncate font-medium">{name}</span>
         <span className="min-w-0 flex-1 break-words">{text}</span>
@@ -161,6 +186,13 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
         {row.can_cancel && row.state !== 'cancel_requested' && <button type="button" disabled={Boolean(busy)} onClick={() => { void stop(row) }} aria-label={en ? `Stop ${name}` : `停止 ${name}`} title={en ? 'Stop execution' : '停止执行'} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800">
           {busy === row.execution_id ? <Loader2 size={13} className="animate-spin" /> : <Square size={12} />}
         </button>}
+        {row.can_restart_session && <button type="button" disabled={Boolean(busy)} onClick={() => setConfirmRestart(row.execution_id)} title={en ? 'Continue in a new session' : '新会话继续'} aria-label={en ? `Continue ${name} in a new session` : `${name} 新会话继续`} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800"><RefreshCw size={13} /></button>}
+      </div>
+      {confirmRestart === row.execution_id && row.can_restart_session && <div className="flex flex-wrap items-center gap-2 border-l-2 border-amber-400 pl-2 text-xs">
+        <p className="min-w-0 flex-1 basis-52">{en ? 'Native context will reset. Chat history stays, and the failed request will not rerun. Check earlier tool results before continuing.' : '只重置原生上下文，保留聊天记录，不重跑失败请求。继续前请核对之前的工具执行结果。'}</p>
+        <button type="button" disabled={Boolean(busy)} onClick={() => { void restartSession(row) }} className="inline-flex min-h-8 items-center gap-1 rounded px-2 hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800">{busy === row.execution_id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}{en ? 'New session' : '新会话继续'}</button>
+        <button type="button" disabled={Boolean(busy)} onClick={() => setConfirmRestart(null)} className="min-h-8 rounded px-2 hover:bg-zinc-100 dark:hover:bg-zinc-800">{en ? 'Cancel' : '取消'}</button>
+      </div>}
       </div>
     })}
     {error && <div role="alert" className="flex items-center gap-2 py-1 text-xs text-red-600 dark:text-red-400"><span>{error}</span><button type="button" onClick={() => setRevision(value => value + 1)} title={en ? 'Retry' : '重试'} aria-label={en ? 'Retry execution status' : '重试执行状态'} className="inline-flex h-7 w-7 items-center justify-center"><RefreshCw size={13} /></button></div>}
