@@ -1882,12 +1882,12 @@ function ChatViewContent({
     if (isNonTaskDiscussTopic) {
       deduped.set(WTT_GOAL_COMMAND.cmd, WTT_GOAL_COMMAND)
     }
-    const commands = Array.from(deduped.values()).filter(command => !workspaceProjectId || command.mode !== 'local')
+    const commands = Array.from(deduped.values())
     if (!isNonTaskDiscussTopic) return commands
     // In non-task discuss topics, model switching must be blocked to avoid all
     // agents reacting to the same slash command.
     return commands.filter((c) => !isModelCommand(c.cmd))
-  }, [activeAgentAdapter, dynamicSlashCommands, isNonTaskDiscussTopic, isModelCommand, slashCommandOverrides, workspaceProjectId])
+  }, [activeAgentAdapter, dynamicSlashCommands, isNonTaskDiscussTopic, isModelCommand, slashCommandOverrides])
 
   // Slash command filtering
   const filteredCommands = slashFilter
@@ -2060,7 +2060,7 @@ function ChatViewContent({
     if (!textarea || mentionStartPos < 0) return
     const before = draft.slice(0, mentionStartPos)
     const after = draft.slice(textarea.selectionStart)
-    const mention = member.agent_id === '__all__' ? '@all ' : `@${member.display_name} `
+    const mention = member.agent_id === '__all__' ? '@all ' : `@${workspaceProjectId ? member.agent_id : member.display_name} `
     const newDraft = before + mention + after
     setDraft(newDraft)
     setMentionOpen(false)
@@ -2072,7 +2072,7 @@ function ChatViewContent({
       textarea.focus()
       textarea.setSelectionRange(newCursorPos, newCursorPos)
     })
-  }, [draft, mentionStartPos])
+  }, [draft, mentionStartPos, workspaceProjectId])
 
   const quickReplyToMessage = useCallback((message: ChatMessage) => {
     const senderName = senderLabelText(message.sender_display_name, message.sender_id)
@@ -2087,7 +2087,8 @@ function ChatViewContent({
     })
 
     // Only inject @mention into draft, no quoted content
-    const mention = senderName ? `@${senderName} ` : ''
+    const mention = workspaceProjectId && message.sender_type === 'agent'
+      ? `@${message.sender_id} ` : senderName ? `@${senderName} ` : ''
     setDraft((prev) => {
       const base = prev.trim()
       return base ? `${base}\n\n${mention}` : mention
@@ -2101,15 +2102,11 @@ function ChatViewContent({
         t.setSelectionRange(end, end)
       }
     })
-  }, [])
+  }, [workspaceProjectId])
 
   const executeSlashCommand = useCallback(async (cmd: string, args: string) => {
     const apiBase = CLIENT_WTT_API_BASE
     setSlashResult(null)
-    if (workspaceProjectId && ['/new task', '/new code task', '/new research task', '/new topic', '/run', '/workers', '/goal'].includes(cmd)) {
-      setSlashResult('Command is unavailable in Workspace sessions.')
-      return
-    }
     try {
       switch (cmd) {
         case '/workers': {
@@ -2244,7 +2241,7 @@ function ChatViewContent({
     } catch (e) {
       setSlashResult(`❌ Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
-  }, [currentAgentId, propTaskId, accessToken, onTaskCreated, onTopicCreated, isNonTaskDiscussTopic, topicId, workspaceProjectId])
+  }, [currentAgentId, propTaskId, accessToken, onTaskCreated, onTopicCreated, isNonTaskDiscussTopic, topicId])
 
   const sendPassthroughSlash = useCallback(async (command: string, opts?: { silent?: boolean }) => {
     setSending(true)
