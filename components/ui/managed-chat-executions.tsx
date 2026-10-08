@@ -61,6 +61,7 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
     if (!enabled || !topicId || !accessToken) return
     let disposed = false
     let running = false
+    let refreshQueued = false
     let repeat = activeRun || hasActive
     let timer: ReturnType<typeof setTimeout> | undefined
     const controller = new AbortController()
@@ -89,17 +90,23 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
           }) }))
           setError('')
         }
-        repeat = next.some(row => active.has(row.state) && !row.stale)
+        repeat = activeRun || next.some(row => active.has(row.state) && !row.stale)
       } catch {
         if (!disposed && repeat) setError(en ? 'Execution status unavailable' : '执行状态暂不可用')
       } finally {
         running = false
-        if (!disposed && repeat) timer = setTimeout(() => { void load() }, 10000)
+        if (!disposed && refreshQueued) {
+          refreshQueued = false
+          void load()
+        } else if (!disposed && repeat) timer = setTimeout(() => { void load() }, 10000)
       }
     }
     const changed = (event: Event) => {
       const incomingTopic = (event as CustomEvent<{ topicId?: string }>).detail?.topicId
-      if (!incomingTopic || incomingTopic === topicId) void load()
+      if (!incomingTopic || incomingTopic === topicId) {
+        if (running) refreshQueued = true
+        else void load()
+      }
     }
     const focused = () => { if (document.visibilityState !== 'hidden') void load() }
     window.addEventListener('wtt-chat-execution-changed', changed)

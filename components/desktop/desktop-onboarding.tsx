@@ -37,6 +37,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
   const busy = choosingWorkspace || ['authorizing', 'detecting', 'starting'].includes(phase)
   const connected = runtime?.state === 'running' && Boolean(runtime.agents.length)
   const configured = Boolean(runtime?.configuredAdapters?.length)
+  const paused = configured && runtime?.state === 'stopped'
   const needsAttention = Boolean(runtime && ['error', 'configuration_required', 'authorization_required'].includes(runtime.state))
   const supported = Boolean(bridge?.resume && bridge.discoverAgents && bridge.startAgents && bridge.runtimeStatus)
 
@@ -155,9 +156,9 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
 
   if (!supported || !accessToken || !native?.enabled) return null
   return <>
-    {runtime && runtime.state !== 'restoring' && ((!connected && !configured) || needsAttention) && <div className="flex min-h-11 shrink-0 items-center gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
-      <Laptop size={16} className="shrink-0" /><span className="min-w-0 flex-1">{en ? 'Local Agents' : '本机 Agent'}</span>
-      <button onClick={() => needsAttention ? router.push('/desktop/setup') : setOpen(true)} className="inline-flex min-h-8 items-center gap-1 font-medium">{needsAttention ? (en ? 'Check Agent services' : '检查 Agent 服务') : (en ? 'Connect this computer' : '接入本机')}<ChevronRight size={15} /></button>
+    {runtime && runtime.state !== 'restoring' && ((!connected && !configured) || needsAttention || paused) && <div className="flex min-h-11 shrink-0 items-center gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+      <Laptop size={16} className="shrink-0" /><span className="min-w-0 flex-1">{paused ? (en ? 'Local Agents are stopped' : '本机 Agent 已停止') : (en ? 'Local Agents' : '本机 Agent')}</span>
+      <button onClick={() => needsAttention || paused ? router.push('/desktop/setup') : setOpen(true)} className="inline-flex min-h-8 items-center gap-1 font-medium">{paused ? (en ? 'Start local Agents' : '启动本机 Agent') : needsAttention ? (en ? 'Check Agent services' : '检查 Agent 服务') : (en ? 'Connect this computer' : '接入本机')}<ChevronRight size={15} /></button>
     </div>}
     <dialog ref={dialog} aria-labelledby="desktop-onboarding-title" onCancel={event => { if (busy) event.preventDefault(); else setOpen(false) }} onClose={() => setOpen(false)} className="m-auto max-h-[90dvh] w-[min(560px,calc(100vw-32px))] overflow-y-auto rounded-lg border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
       <header className="flex items-center gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
