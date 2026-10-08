@@ -960,14 +960,15 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
       }
 
       const fallback = list[0]
+      const selected = list.find(agent => agent.agent_id === directorySelectionRef.current) || fallback
 
       if (fallback) {
         // Only override if current selection is empty or no longer valid
         if (!directorySelectionRef.current || !list.some((a) => a.agent_id === directorySelectionRef.current)) {
           setSelectedAgentId(fallback.agent_id)
         }
-        if (fallback.api_key) {
-          wttApi.setToken(fallback.api_key)
+        if (selected?.api_key) {
+          wttApi.setToken(selected.api_key)
         }
       }
     } catch {
