@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, Check, ChevronRight, FolderOpen, Laptop, Loader2, RefreshCw, X } from 'lucide-react'
+import { AlertCircle, Check, ChevronRight, FolderOpen, Laptop, Loader2, RefreshCw, Settings2, X } from 'lucide-react'
 import { getDesktopBridge, type DesktopAgentProfile, type DesktopHostState, type DesktopRuntimeState, type DesktopRemoteTools } from '@/lib/desktop'
 import { RemoteToolsSelection } from './remote-tools-selection'
 import { DesktopHostsApi, HostRequestError } from '@/lib/desktop-hosts'
@@ -37,6 +37,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
   const busy = choosingWorkspace || ['authorizing', 'detecting', 'starting'].includes(phase)
   const connected = runtime?.state === 'running' && Boolean(runtime.agents.length)
   const configured = Boolean(runtime?.configuredAdapters?.length)
+  const needsAttention = Boolean(runtime && ['error', 'configuration_required', 'authorization_required'].includes(runtime.state))
   const supported = Boolean(bridge?.resume && bridge.discoverAgents && bridge.startAgents && bridge.runtimeStatus)
 
   useEffect(() => {
@@ -54,6 +55,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
     if (/cancelled|canceled/.test(message)) return en ? 'Setup cancelled.' : '已取消设置。'
     if (/keyring|credential storage|credentials could not/.test(message)) return en ? 'Allow WTT to access the system keyring, then retry.' : '请允许 WTT 访问系统密钥存储后重试。'
     if (/packaged agent runtime/.test(message)) return en ? 'The installed desktop package is missing its Agent runtime.' : '当前桌面安装包缺少 Agent 运行环境。'
+    if (/recovery|shutdown|initialization/.test(message)) return en ? 'Agent services need recovery. Open Agent settings to check and stop the previous runtime before restarting.' : 'Agent 服务需要恢复。请在 Agent 设置中检查并停止此前的服务，再重新启动。'
     return en ? 'Could not connect this computer. Retry.' : '本机接入未完成，请重试。'
   }, [en])
 
@@ -152,9 +154,9 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
 
   if (!supported || !accessToken || !native?.enabled) return null
   return <>
-    {!connected && !configured && <div className="flex min-h-11 shrink-0 items-center gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+    {((!connected && !configured) || needsAttention) && <div className="flex min-h-11 shrink-0 items-center gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
       <Laptop size={16} className="shrink-0" /><span className="min-w-0 flex-1">{en ? 'Local Agents' : '本机 Agent'}</span>
-      <button onClick={() => setOpen(true)} className="inline-flex min-h-8 items-center gap-1 font-medium">{en ? 'Connect this computer' : '接入本机'}<ChevronRight size={15} /></button>
+      <button onClick={() => needsAttention ? router.push('/desktop/setup') : setOpen(true)} className="inline-flex min-h-8 items-center gap-1 font-medium">{needsAttention ? (en ? 'Check Agent services' : '检查 Agent 服务') : (en ? 'Connect this computer' : '接入本机')}<ChevronRight size={15} /></button>
     </div>}
     <dialog ref={dialog} aria-labelledby="desktop-onboarding-title" onCancel={event => { if (busy) event.preventDefault(); else setOpen(false) }} onClose={() => setOpen(false)} className="m-auto max-h-[90dvh] w-[min(560px,calc(100vw-32px))] overflow-y-auto rounded-lg border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
       <header className="flex items-center gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
@@ -166,6 +168,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
           en ? 'Computer' : '主机登记', en ? 'Agents' : 'Agent 检测', en ? 'Connect' : '接入完成',
         ].map((label, index) => <li key={label} className={`flex items-center gap-2 ${phase === 'ready' || (index < 2 && ['selection', 'starting'].includes(phase)) ? 'text-emerald-700 dark:text-emerald-400' : ''}`}><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-current">{index + 1}</span><span>{label}</span></li>)}</ol>
         {error && <p role="alert" className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400"><AlertCircle size={16} className="mt-0.5 shrink-0" />{error}</p>}
+        {needsAttention && <div className="space-y-2"><p role="alert" className="text-sm text-red-600 dark:text-red-400">{en ? 'Agent services are not ready. Check the service state before continuing.' : 'Agent 服务尚未就绪，请检查服务状态后继续。'}</p><button type="button" onClick={() => { setOpen(false); router.push('/desktop/setup') }} className={button}><Settings2 size={16} />{en ? 'Agent settings' : 'Agent 设置'}</button></div>}
         {available === false && <p role="status" className="text-sm text-zinc-500">{en ? 'Computer access is not yet available for this account.' : '此账号暂未开通主机接入。'}</p>}
         {phase === 'intro' && <div className="space-y-4">
           <p className="text-sm text-zinc-600 dark:text-zinc-300">{en ? 'Use the Agents already installed on this computer with your WTT account.' : '将这台电脑上已有的 Agent 接入当前 WTT 账号。'}</p>
@@ -190,7 +193,15 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
           }} disabled={busy} className="min-h-10 rounded-md border border-zinc-200 bg-transparent px-2 dark:border-zinc-700"><option value="workspace-write">{en ? 'Workspace editing' : '工作区编辑'}</option><option value="full-access">{en ? 'Full local execution' : '完整本机执行权限'}</option></select></label>
           <div className="flex flex-wrap gap-2"><button disabled={busy || !selected.length} onClick={() => void start()} className={`${button} bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900`}><Check size={16} />{en ? 'Enable selected Agents' : '启用所选 Agent'}</button><button disabled={busy} onClick={() => void detect()} aria-label={en ? 'Detect again' : '重新检测'} title={en ? 'Detect again' : '重新检测'} className={button}><RefreshCw size={16} /></button></div>
         </>}
-        {phase === 'ready' && <div className="space-y-3"><p role="status" className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400"><Check size={17} />{en ? 'Agent services started' : 'Agent 服务已启动'}</p>{runtime?.agents.map(agent => <button key={agent.agentId} onClick={() => enter(agent.agentId)} className={`${button} w-full justify-between`}><span className="min-w-0 text-left"><span className="block">{profiles.find(profile => profile.profile_id === agent.profileId)?.display_name || agent.adapter}</span><span className="text-xs text-zinc-500">{agent.state === 'online' ? (en ? 'Online' : '在线') : (en ? 'Connecting' : '正在连接')}</span></span><span className="inline-flex items-center gap-1">{en ? 'Open chat' : '进入对话'}<ChevronRight size={16} /></span></button>)}</div>}
+        {phase === 'ready' && !needsAttention && <div className="space-y-3">
+          <p role="status" className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400"><Check size={17} />{en ? 'Agent services started' : 'Agent 服务已启动'}</p>
+          {runtime?.agents.map(agent => <button key={agent.agentId} disabled={agent.state !== 'online'} onClick={() => enter(agent.agentId)} className={`${button} w-full justify-between`}>
+            <span className="min-w-0 text-left"><span className="block">{profiles.find(profile => profile.profile_id === agent.profileId)?.display_name || agent.adapter}</span>
+              <span className="text-xs text-zinc-500">{agent.state === 'online' ? (en ? 'Online' : '在线') : agent.state === 'offline' ? (en ? 'Offline; reconnecting' : '离线，正在重连') : (en ? 'Connecting' : '正在连接')}</span>
+            </span>
+            <span className="inline-flex items-center gap-1">{en ? 'Open chat' : '进入对话'}<ChevronRight size={16} /></span>
+          </button>)}
+        </div>}
       </div>
     </dialog>
   </>

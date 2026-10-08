@@ -979,6 +979,12 @@ export default function MobileFeedPage() {
 
   const agents = useMemo(() => Array.isArray(agentsRaw) ? agentsRaw : [], [agentsRaw])
 
+  useEffect(() => {
+    const refreshDirectory = () => { if (token) void mutateAgents() }
+    window.addEventListener('wtt-directory-changed', refreshDirectory)
+    return () => window.removeEventListener('wtt-directory-changed', refreshDirectory)
+  }, [token, mutateAgents])
+
   const { data: statsRaw, error: statsError, mutate: mutateStats } = useSWR(
     token ? ['mobile-agent-stats', token] : null,
     async () => {

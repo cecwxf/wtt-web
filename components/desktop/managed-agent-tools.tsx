@@ -29,7 +29,7 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
   const [downloadError, setDownloadError] = useState('')
   const [refreshEpoch, setRefreshEpoch] = useState(0)
   const apiBase = `${CLIENT_WTT_API_BASE}/hosts/agents/${encodeURIComponent(agentId)}/workspace`
-  const { data, error } = useSWR<Tools | null>(token && agentId ? ['managed-agent-tools', agentId, token] : null, async () => {
+  const { data, error, mutate } = useSWR<Tools | null>(token && agentId ? ['managed-agent-tools', agentId, token] : null, async () => {
     const response = await fetch(`${CLIENT_WTT_API_BASE}/hosts/agents/${encodeURIComponent(agentId)}/tools`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', redirect: 'error' })
     if ([403, 404].includes(response.status)) return null
     if (!response.ok) throw new Error('Could not load remote tools')
@@ -37,6 +37,12 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
     if (!['off', 'read-only', 'workspace-write'].includes(value.files) || typeof value.terminal !== 'boolean') throw new Error('Invalid tool capabilities')
     return value
   }, { shouldRetryOnError: false, revalidateOnFocus: true })
+
+  useEffect(() => {
+    const refresh = () => { void mutate() }
+    window.addEventListener('wtt-directory-changed', refresh)
+    return () => window.removeEventListener('wtt-directory-changed', refresh)
+  }, [mutate])
 
   useEffect(() => {
     live.current = true

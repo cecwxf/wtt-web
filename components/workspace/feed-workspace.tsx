@@ -720,6 +720,12 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentsLoaded, setAgentsLoaded] = useState(false)
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
+  const directoryOwnerRef = useRef(session?.accessToken)
+  const directorySelectionRef = useRef(selectedAgentId)
+  const directoryRequestRef = useRef<AbortController | null>(null)
+  directoryOwnerRef.current = session?.accessToken
+  directorySelectionRef.current = selectedAgentId
+  useEffect(() => () => { directoryRequestRef.current?.abort() }, [])
   const [agentRoleMap, setAgentRoleMap] = useState<Record<string, string>>({})
   const [agentRoleTemplateMap, setAgentRoleTemplateMap] = useState<Record<string, AgentRoleTemplate>>({})
   const [selectedTopicId, _setSelectedTopicId] = useState<string | null>(() => {
@@ -880,16 +886,24 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
   } | null>(null)
 
   const loadAgents = useCallback(async () => {
+    const token = session?.accessToken
+    if (!token) return
+    directoryRequestRef.current?.abort()
+    const controller = new AbortController()
+    directoryRequestRef.current = controller
+    const current = () => !controller.signal.aborted && directoryOwnerRef.current === token
     try {
       const response = await fetch(`${CLIENT_WTT_API_BASE}/agents/my`, {
         headers: {
-          Authorization: `Bearer ${session?.accessToken ?? ''}`,
+          Authorization: `Bearer ${token}`,
         },
+        signal: controller.signal, cache: 'no-store',
       })
 
       if (!response.ok) return
 
       const data = await response.json()
+      if (!current()) return
       const list = normalizeAndFilterAgents(data)
       setAgents(list)
 
@@ -949,7 +963,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
 
       if (fallback) {
         // Only override if current selection is empty or no longer valid
-        if (!selectedAgentId || !list.some((a) => a.agent_id === selectedAgentId)) {
+        if (!directorySelectionRef.current || !list.some((a) => a.agent_id === directorySelectionRef.current)) {
           setSelectedAgentId(fallback.agent_id)
         }
         if (fallback.api_key) {
@@ -959,9 +973,15 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
     } catch {
       // Keep page resilient
     } finally {
-      setAgentsLoaded(true)
+      if (current()) setAgentsLoaded(true)
     }
-  }, [selectedAgentId, session?.accessToken, setSelectedAgentId])
+  }, [session?.accessToken, setSelectedAgentId])
+
+  useEffect(() => {
+    const refreshDirectory = () => { void loadAgents() }
+    window.addEventListener('wtt-directory-changed', refreshDirectory)
+    return () => window.removeEventListener('wtt-directory-changed', refreshDirectory)
+  }, [loadAgents])
 
   // Lookup map: agent_id → display_name (for enriching chat messages)
   const agentNameMap = useMemo(() => {

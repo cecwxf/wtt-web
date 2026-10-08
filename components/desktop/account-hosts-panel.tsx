@@ -85,6 +85,12 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false, 
     return () => { active = false; mounted.current = false; generation.current += 1; unsubscribe?.() }
   }, [accessToken, api, load])
 
+  useEffect(() => {
+    const refreshDirectory = () => { if (accessToken) void load() }
+    window.addEventListener('wtt-directory-changed', refreshDirectory)
+    return () => window.removeEventListener('wtt-directory-changed', refreshDirectory)
+  }, [accessToken, load])
+
   async function refresh() {
     const bridge = getDesktopBridge()?.host
     if (busy) return

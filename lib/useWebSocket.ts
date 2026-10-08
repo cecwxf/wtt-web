@@ -103,6 +103,7 @@ export function useWebSocket({
   const retryRef = useRef(0)
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const directoryRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onMessageRef = useRef(onMessage)
   const pendingRef = useRef<Map<string, PendingRequest>>(new Map())
   const mountedRef = useRef(true)
@@ -114,6 +115,7 @@ export function useWebSocket({
   const cleanup = useCallback(() => {
     if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null }
     if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null }
+    if (directoryRefreshRef.current) { clearTimeout(directoryRefreshRef.current); directoryRefreshRef.current = null }
     // Reject all pending requests
     pendingRef.current.forEach((p) => {
       clearTimeout(p.timer)
@@ -168,6 +170,14 @@ export function useWebSocket({
       if (event.data === 'pong') return
       try {
         const parsed: WsMessage = JSON.parse(event.data)
+
+        if (parsed.type === 'account_directory_changed') {
+          if (!directoryRefreshRef.current) directoryRefreshRef.current = setTimeout(() => {
+            directoryRefreshRef.current = null
+            if (mountedRef.current && wsRef.current === ws) window.dispatchEvent(new Event('wtt-directory-changed'))
+          }, 250)
+          return
+        }
 
         // Route action_result to pending promise
         if (parsed.type === 'action_result' && parsed.request_id) {

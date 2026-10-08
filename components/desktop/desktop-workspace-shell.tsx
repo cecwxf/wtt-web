@@ -76,7 +76,8 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
     const refresh = () => { void mutate(); props.onBindingChanged?.() }
     const offState = host?.onState?.(refresh)
     const offRuntime = host?.onRuntimeState?.(refresh)
-    return () => { offState?.(); offRuntime?.() }
+    window.addEventListener('wtt-directory-changed', refresh)
+    return () => { offState?.(); offRuntime?.(); window.removeEventListener('wtt-directory-changed', refresh) }
   }, [mutate, props.onBindingChanged])
 
   useEffect(() => {
