@@ -29,6 +29,7 @@ import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-con
 import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
 import { ManagedChatExecutions } from '@/components/ui/managed-chat-executions'
 import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
+import { getNativeNotifications } from '@/lib/native-notifications'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
@@ -460,27 +461,27 @@ function MobileAgentRunStatusCard({ status, compact = false }: { status: MobileR
   const subtitle = [adapterStatusLabel(status.adapter), status.model].filter(Boolean).join(' · ')
 
   return (
-    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-slate-800 shadow-sm">
+    <div className="rounded-2xl border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 text-slate-800 dark:text-zinc-200 shadow-sm">
       <div className="flex min-w-0 items-start gap-2">
         <Loader2 className={`mt-0.5 h-4 w-4 shrink-0 text-blue-600 ${terminal ? '' : 'animate-spin'}`} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-xs font-semibold text-slate-900">{status.agentName}</span>
-            <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
+            <span className="truncate text-xs font-semibold text-slate-900 dark:text-zinc-100">{status.agentName}</span>
+            <span className="shrink-0 rounded-full bg-white dark:bg-zinc-950 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
               {mobileStatusKindLabel(status.statusKind)}
             </span>
-            {subtitle && <span className="min-w-0 truncate text-[10px] font-medium text-slate-400">{subtitle}</span>}
-            <span className="shrink-0 text-[10px] font-medium text-slate-400">WS {status.wsState}</span>
+            {subtitle && <span className="min-w-0 truncate text-[10px] font-medium text-slate-400 dark:text-zinc-500">{subtitle}</span>}
+            <span className="shrink-0 text-[10px] font-medium text-slate-400 dark:text-zinc-500">WS {status.wsState}</span>
           </div>
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] font-medium leading-5 text-slate-700">{status.statusText}</p>
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] font-medium leading-5 text-slate-700 dark:text-zinc-200">{status.statusText}</p>
         </div>
       </div>
       {lines.length > 0 && (
-        <div className="mt-2 max-h-28 space-y-1 overflow-y-auto border-t border-blue-100 pt-2">
+        <div className="mt-2 max-h-28 space-y-1 overflow-y-auto border-t border-blue-100 dark:border-blue-900 pt-2">
           {lines.map((line) => (
-            <div key={line.id} className="grid grid-cols-[44px_minmax(0,1fr)] gap-2 text-[11px] font-medium leading-4 text-slate-600">
-              <span className="rounded-md bg-white px-1.5 py-0.5 text-center text-[10px] font-bold text-blue-700">{mobileStatusKindLabel(line.kind)}</span>
-              <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-slate-700">{line.text}</span>
+            <div key={line.id} className="grid grid-cols-[44px_minmax(0,1fr)] gap-2 text-[11px] font-medium leading-4 text-slate-600 dark:text-zinc-300">
+              <span className="rounded-md bg-white dark:bg-zinc-950 px-1.5 py-0.5 text-center text-[10px] font-bold text-blue-700">{mobileStatusKindLabel(line.kind)}</span>
+              <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-slate-700 dark:text-zinc-200">{line.text}</span>
             </div>
           ))}
         </div>
@@ -551,19 +552,19 @@ function MobileMarkdownLink({
         <button
           type="button"
           onClick={() => onImageOpen(imageUrl, meta.name)}
-          className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left align-top shadow-sm"
+          className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-left align-top shadow-sm"
           aria-label={`查看原图 ${meta.name}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={thumbUrl} alt={meta.name} className="h-24 w-36 bg-slate-100 object-cover" loading="lazy" />
-          <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500">{meta.name}</span>
+          <img src={thumbUrl} alt={meta.name} className="h-24 w-36 bg-slate-100 dark:bg-zinc-800 object-cover" loading="lazy" />
+          <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500 dark:text-zinc-400">{meta.name}</span>
         </button>
       )
     }
     const fileUrl = proxyMediaUrl(url)
     return (
-      <a href={fileUrl} target="_blank" rel="noreferrer" className="my-1 inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
-        <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-1 text-[10px] font-semibold text-slate-700">{meta.kind}</span>
+      <a href={fileUrl} target="_blank" rel="noreferrer" className="my-1 inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-zinc-200">
+        <span className="shrink-0 rounded-md bg-slate-100 dark:bg-zinc-800 px-1.5 py-1 text-[10px] font-semibold text-slate-700 dark:text-zinc-200">{meta.kind}</span>
         <span className="min-w-0 truncate">{meta.name}</span>
       </a>
     )
@@ -592,12 +593,12 @@ function MobileMarkdownImage({
     <button
       type="button"
       onClick={() => onImageOpen(imageUrl, label)}
-      className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left align-top shadow-sm"
+      className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-left align-top shadow-sm"
       aria-label={`查看原图 ${label}`}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={thumbUrl} alt={label} className="h-24 w-36 bg-slate-100 object-cover" loading="lazy" />
-      {label && <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500">{label}</span>}
+      <img src={thumbUrl} alt={label} className="h-24 w-36 bg-slate-100 dark:bg-zinc-800 object-cover" loading="lazy" />
+      {label && <span className="block truncate px-2 py-1 text-[10px] font-semibold text-slate-500 dark:text-zinc-400">{label}</span>}
     </button>
   )
 }
@@ -1613,6 +1614,17 @@ export default function MobileFeedPage() {
     }
     const incomingTopicId = incoming.topic_id || ''
     const displayable = shouldCountUnreadMessage(incoming)
+    if (displayable && incoming.sender_type === 'agent' && accountId && selectedAgentId && incomingTopicId) {
+      const bridge = getNativeNotifications()
+      if (bridge) {
+        const original = (rawEvent.message || rawEvent) as Record<string, unknown>
+        const body = original.encrypted ? 'Agent 有新回复 / New agent reply' : incoming.content
+          .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 160)
+        void bridge.show({ userId: accountId, messageId: incoming.message_id, topicId: incomingTopicId,
+          agentId: selectedAgentId, title: `${senderLabel(incoming)} · WTT`.slice(0, 200), body,
+          focused: incomingTopicId === selectedTopicId }).catch(() => {})
+      }
+    }
     const now = new Date().toISOString()
     if (incomingTopicId) {
       updateTopicUnreadCache(incomingTopicId, (topic) => {
@@ -1645,7 +1657,7 @@ export default function MobileFeedPage() {
         }))
       }
     }
-  }, [labelForAgentInTopic, mutateMessages, roleLabelForAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgentId, updateTopicUnreadCache])
+  }, [accountId, labelForAgentInTopic, mutateMessages, roleLabelForAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgentId, updateTopicUnreadCache])
 
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=mobile-web` : ''
   const { state: wsState } = useWebSocket({ url: wsUrl, enabled: Boolean(token && selectedAgentId), token, onMessage: handleWsMessage })
@@ -2169,23 +2181,23 @@ export default function MobileFeedPage() {
   }, [])
 
   if (status === 'loading') {
-    return <div className="flex min-h-[100dvh] items-center justify-center bg-white text-sm font-medium text-slate-500">Loading WTT...</div>
+    return <div className="flex min-h-[100dvh] items-center justify-center bg-white dark:bg-zinc-950 text-sm font-medium text-slate-500 dark:text-zinc-400">Loading WTT...</div>
   }
 
   return (
-    <main className="flex h-[100dvh] overflow-hidden bg-white text-[#0d0d0d] antialiased">
+    <main className="flex h-[100dvh] overflow-hidden bg-white dark:bg-zinc-950 text-[#0d0d0d] dark:text-zinc-100 antialiased">
       <section className="relative flex min-w-0 flex-1 flex-col">
         {!fixedChatMode && (
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3">
-            <button onClick={openSelector} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="选择主机 / Agent / Topic">
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3">
+            <button onClick={openSelector} className="rounded-xl p-2 text-slate-700 dark:text-zinc-200 hover:bg-slate-100" aria-label="选择主机 / Agent / Topic">
               <FolderTree className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1 text-left">
               <div className="flex min-w-0 items-center gap-2">
-                <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500" />
+                <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500 dark:text-zinc-400" />
                 <div className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-6">{compactTopicTitle(selectedTopic)}</div>
               </div>
-              <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] font-medium leading-4 text-slate-500">
+              <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] font-medium leading-4 text-slate-500 dark:text-zinc-400">
                 <span className={`h-2 w-2 shrink-0 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                 <span className="min-w-0 truncate">{selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '选择 Agent'}</span>
                 {selectedTopicMeta && <span className="shrink-0 text-slate-300">·</span>}
@@ -2197,12 +2209,12 @@ export default function MobileFeedPage() {
               <button
                 onClick={() => void createDefaultTask()}
                 disabled={!selectedAgentId || creatingTask}
-                className="rounded-xl p-2 text-slate-700 hover:bg-slate-100 disabled:text-slate-300"
+                className="rounded-xl p-2 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 disabled:text-slate-300"
                 aria-label="新建对话"
               >
                 <SquarePen className={`h-5 w-5 ${creatingTask ? 'animate-pulse' : ''}`} />
               </button>
-              <button onClick={() => setSettingsOpen(true)} className="rounded-xl p-2 text-slate-700 hover:bg-slate-100" aria-label="设置">
+              <button onClick={() => setSettingsOpen(true)} className="rounded-xl p-2 text-slate-700 dark:text-zinc-200 hover:bg-slate-100" aria-label="设置">
                 <Settings className="h-5 w-5" />
               </button>
             </>
@@ -2219,14 +2231,14 @@ export default function MobileFeedPage() {
         )}
 
         {browserOnline && (agentsError || statsError || topicsError || groupTopicsError || recentTopicsError) && (
-          <div role="status" className="mx-3 mt-2 flex items-center gap-2 border-b border-slate-200 px-1 py-2 text-xs text-slate-600">
+          <div role="status" className="mx-3 mt-2 flex items-center gap-2 border-b border-slate-200 dark:border-zinc-800 px-1 py-2 text-xs text-slate-600 dark:text-zinc-300">
             <WifiOff className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1">目录暂时无法更新，当前对话已保留。</span>
             <button
               type="button"
               aria-label="重新加载目录"
               title="重新加载目录"
-              className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-700 hover:bg-slate-100"
+              className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-700 dark:text-zinc-200 hover:bg-slate-100"
               onClick={() => {
                 void mutateAgents()
                 void mutateStats()
@@ -2241,19 +2253,19 @@ export default function MobileFeedPage() {
         )}
 
         {!fixedChatMode && isGroupTopic(selectedTopic) && selectedTopicMembers.length > 0 && (
-          <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <Users className="h-4 w-4 shrink-0 text-slate-600" />
-            <span className="shrink-0 text-[11px] font-semibold text-slate-700">群聊</span>
+          <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-3 py-2">
+            <Users className="h-4 w-4 shrink-0 text-slate-600 dark:text-zinc-300" />
+            <span className="shrink-0 text-[11px] font-semibold text-slate-700 dark:text-zinc-200">群聊</span>
             {selectedTopicMembers.slice(0, 8).map((member) => {
               const label = member.display_name || compactId(member.agent_id, 9, 4)
               return (
-                <span key={member.agent_id} className="max-w-32 shrink-0 truncate rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-600">
+                <span key={member.agent_id} className="max-w-32 shrink-0 truncate rounded-full bg-white dark:bg-zinc-950 px-2 py-1 text-[11px] font-medium text-slate-600 dark:text-zinc-300">
                   {appendRoleLabel(label, topicMemberRole(member))}
                 </span>
               )
             })}
             {selectedTopicMembers.length > 8 && (
-              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-500">+{selectedTopicMembers.length - 8}</span>
+              <span className="shrink-0 rounded-full bg-white dark:bg-zinc-950 px-2 py-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">+{selectedTopicMembers.length - 8}</span>
             )}
           </div>
         )}
@@ -2290,25 +2302,25 @@ export default function MobileFeedPage() {
                 <article key={message.message_id} className="group rounded-xl transition-colors hover:bg-slate-50">
                   <div className="flex items-start gap-2.5 px-2.5 py-2.5">
                     <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                      isMine ? 'bg-slate-100 text-slate-700' : 'bg-[#0d0d0d] text-white'
+                      isMine ? 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200' : 'bg-[#0d0d0d] text-white dark:bg-zinc-100 dark:text-zinc-950'
                     }`}>
                       {agentInitial(label)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="mb-0.5 flex min-w-0 items-center gap-1.5 px-1 text-[12px] font-medium text-slate-800">
+                      <div className="mb-0.5 flex min-w-0 items-center gap-1.5 px-1 text-[12px] font-medium text-slate-800 dark:text-zinc-200">
                         <span className="truncate">{label}</span>
                         <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
-                          isMine ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-600'
+                          isMine ? 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400' : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
                         }`}>
                           {isMine ? 'You' : 'AI'}
                         </span>
-                        <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-400">{shortTime(message.timestamp)}</span>
+                        <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-400 dark:text-zinc-500">{shortTime(message.timestamp)}</span>
                         {!isMine && <SpeechReadButton text={message.content || ''} />}
                       </div>
                       <div className={`w-full rounded-2xl px-3 py-2 text-[14px] leading-7 ${
-                        isMine ? 'bg-slate-100 text-[#0d0d0d]' : 'bg-white text-[#0d0d0d]'
+                        isMine ? 'bg-slate-100 dark:bg-zinc-800 text-[#0d0d0d] dark:text-zinc-100' : 'bg-white dark:bg-zinc-950 text-[#0d0d0d] dark:text-zinc-100'
                       }`}>
-                        <div className="prose prose-sm max-w-none break-words prose-p:my-1 prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:bg-slate-950 prose-pre:text-slate-100">
+                        <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-1 prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:bg-slate-950 prose-pre:text-slate-100">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={mobileMarkdownComponents}
@@ -2325,7 +2337,7 @@ export default function MobileFeedPage() {
           )}
         </div>
 
-        <footer className="shrink-0 border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <footer className="shrink-0 border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <ToolApprovalPanel topicId={selectedTopicId} accessToken={token} activeRun={Boolean(selectedTopicRunStatus)} enabled={Boolean(selectedTopicId)} />
           <ManagedChatExecutions topicId={selectedTopicId} accessToken={token} activeRun={Boolean(selectedTopicRunStatus)} enabled={Boolean(selectedTopicId)} agents={agents.map(agent => ({ agent_id: agent.agent_id, display_name: labelForAgentInTopic(agent.agent_id) }))} />
           {selectedTopicRunStatus && (
@@ -2336,10 +2348,10 @@ export default function MobileFeedPage() {
           {failedSend && (
             <div className="mb-2 flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
               <span className="min-w-0 flex-1 truncate">{failedSend.error || '发送失败'}</span>
-              <button onClick={() => void sendMessage(failedSend)} disabled={sending} className="shrink-0 rounded-full bg-white px-3 py-1 text-rose-700 disabled:text-slate-300">
+              <button onClick={() => void sendMessage(failedSend)} disabled={sending} className="shrink-0 rounded-full bg-white dark:bg-zinc-950 px-3 py-1 text-rose-700 disabled:text-slate-300">
                 重试
               </button>
-              <button onClick={() => setFailedSend(null)} className="shrink-0 rounded-full bg-white p-1 text-rose-400" aria-label="关闭发送失败提示">
+              <button onClick={() => setFailedSend(null)} className="shrink-0 rounded-full bg-white dark:bg-zinc-950 p-1 text-rose-400" aria-label="关闭发送失败提示">
                 <X className="h-3 w-3" />
               </button>
             </div>
@@ -2347,20 +2359,20 @@ export default function MobileFeedPage() {
           {pendingAssets.length > 0 && (
             <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
               {pendingAssets.map((asset, index) => (
-                <div key={`${asset.url}-${index}`} className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2">
+                <div key={`${asset.url}-${index}`} className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-2 py-2">
                   {asset.kind === 'image' ? (
                     <button type="button" onClick={() => openImagePreview(asset.url, asset.filename)} className="shrink-0 rounded-xl" aria-label={`查看原图 ${asset.filename}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={toThumbnailUrl(asset.url)} alt={asset.filename} className="h-10 w-10 rounded-xl object-cover" />
                     </button>
                   ) : (
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[10px] font-semibold text-slate-700">FILE</span>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-zinc-800 text-[10px] font-semibold text-slate-700 dark:text-zinc-200">FILE</span>
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold text-slate-800">{asset.filename}</span>
-                    <span className="block text-[10px] font-medium uppercase text-slate-400">{asset.kind}</span>
+                    <span className="block truncate text-xs font-semibold text-slate-800 dark:text-zinc-200">{asset.filename}</span>
+                    <span className="block text-[10px] font-medium uppercase text-slate-400 dark:text-zinc-500">{asset.kind}</span>
                   </span>
-                  <button onClick={() => setPendingAssets((prev) => prev.filter((_, i) => i !== index))} className="rounded-full bg-white p-1 text-slate-400">
+                  <button onClick={() => setPendingAssets((prev) => prev.filter((_, i) => i !== index))} className="rounded-full bg-white dark:bg-zinc-950 p-1 text-slate-400 dark:text-zinc-500">
                     <X className="h-3 w-3" />
                   </button>
                 </div>
@@ -2368,7 +2380,7 @@ export default function MobileFeedPage() {
             </div>
           )}
           {uploading && (
-            <div className="mb-2 flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+            <div className="mb-2 flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-zinc-200">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               <span>正在上传 {uploadProgress ?? 0}%</span>
             </div>
@@ -2379,52 +2391,52 @@ export default function MobileFeedPage() {
             </div>
           )}
           {slashOpen && filteredSlashCommands.length > 0 && (
-            <div className="mb-2 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 bg-white py-1 text-sm shadow-xl">
+            <div className="mb-2 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-1 text-sm shadow-xl">
               {filteredSlashCommands.map((command, index) => (
                 <button
                   key={command.cmd}
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => insertSlashCommand(command)}
-                  className={`flex w-full items-center gap-2 px-3 py-2.5 text-left ${index === slashIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                  className={`flex w-full items-center gap-2 px-3 py-2.5 text-left ${index === slashIndex ? 'bg-slate-100 dark:bg-zinc-800' : 'hover:bg-slate-50'}`}
                 >
-                  <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600">{command.family}</span>
+                  <span className="shrink-0 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:text-zinc-300">{command.family}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-slate-900">{command.cmd}</span>
-                    <span className="block truncate text-xs font-medium text-slate-500">{command.desc}</span>
+                    <span className="block truncate font-semibold text-slate-900 dark:text-zinc-100">{command.cmd}</span>
+                    <span className="block truncate text-xs font-medium text-slate-500 dark:text-zinc-400">{command.desc}</span>
                   </span>
                 </button>
               ))}
             </div>
           )}
           {mentionOpen && filteredMentions.length > 0 && (
-            <div className="mb-2 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 bg-white py-1 text-sm shadow-xl">
+            <div className="mb-2 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-1 text-sm shadow-xl">
               {filteredMentions.map((candidate, index) => (
                 <button
                   key={candidate.agentId}
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => insertMention(candidate)}
-                  className={`flex w-full items-center gap-2 px-3 py-2.5 text-left ${index === mentionIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                  className={`flex w-full items-center gap-2 px-3 py-2.5 text-left ${index === mentionIndex ? 'bg-slate-100 dark:bg-zinc-800' : 'hover:bg-slate-50'}`}
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-zinc-800 text-xs font-bold text-slate-700 dark:text-zinc-200">
                     {candidate.label.slice(0, 1).toUpperCase()}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-slate-900">@{candidate.displayLabel}</span>
-                    <span className="block truncate text-xs font-medium text-slate-500">{candidate.meta}</span>
+                    <span className="block truncate font-semibold text-slate-900 dark:text-zinc-100">@{candidate.displayLabel}</span>
+                    <span className="block truncate text-xs font-medium text-slate-500 dark:text-zinc-400">{candidate.meta}</span>
                   </span>
                 </button>
               ))}
             </div>
           )}
-          <div className="flex items-end gap-2 rounded-[1.4rem] border border-slate-300 bg-white p-2">
+          <div className="flex items-end gap-2 rounded-[1.4rem] border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 p-2">
             <div className="relative">
-              <button onClick={() => setAttachOpen((v) => !v)} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100" aria-label="添加附件">
+              <button onClick={() => setAttachOpen((v) => !v)} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 dark:text-zinc-300 hover:bg-slate-100" aria-label="添加附件">
                 <Paperclip className="h-4 w-4" />
               </button>
               {attachOpen && (
-                <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-xl">
+                <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-semibold text-slate-700 dark:text-zinc-200 shadow-xl">
                   <button type="button" onClick={() => openFilePicker('file')} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
                     <Paperclip className="h-4 w-4" /> 文件/图片
                   </button>
@@ -2503,7 +2515,7 @@ export default function MobileFeedPage() {
             <button
               onClick={() => void sendMessage()}
               disabled={(!draft.trim() && pendingAssets.length === 0) || sending || uploading || !canFetchMessages}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0d0d0d] text-white disabled:bg-slate-300"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0d0d0d] text-white dark:bg-zinc-100 dark:text-zinc-950 disabled:bg-slate-300"
               aria-label="发送消息"
             >
               <Send className="h-4 w-4" />
@@ -2567,9 +2579,9 @@ export default function MobileFeedPage() {
 
       {!fixedChatMode && selectorOpen && (
         <MobileSheet title={selectorTitle} onClose={() => closeSheet('selector')}>
-          <div className="sticky top-0 z-10 bg-white pb-2">
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-              <Search className="h-4 w-4 text-slate-400" />
+          <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 pb-2">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2">
+              <Search className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
               <input
                 value={search}
                 onPointerDown={() => {
@@ -2587,12 +2599,12 @@ export default function MobileFeedPage() {
           <div className="space-y-3">
             {selectorStep === 'hosts' && (
               <section>
-                <div className="mb-2 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-500">
+                <div className="mb-2 rounded-2xl bg-slate-50 dark:bg-zinc-900 px-3 py-2 text-xs font-medium leading-5 text-slate-500 dark:text-zinc-400">
                   先选择运行 Agent 的主机，再选择该主机下的 Agent，最后进入它的 Topic。
                 </div>
                 <div className="space-y-1.5">
                   {groupedAgents.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-400">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
+                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 p-3 text-xs font-medium text-slate-400 dark:text-zinc-500">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
                   ) : groupedAgents.map((group) => {
                     const online = group.rows.filter((a) => onlineAgents.has(a.agent_id)).length
                     const active = group.host === selectedAgentHost
@@ -2604,16 +2616,16 @@ export default function MobileFeedPage() {
                           setSearch('')
                           setSelectorStep('agents')
                         }}
-                        className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left ${active ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-white'}`}
+                        className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left ${active ? 'border-slate-900 dark:border-zinc-300 bg-slate-100 dark:bg-zinc-800' : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950'}`}
                       >
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#0d0d0d] text-white' : 'bg-slate-100 text-slate-700'}`}>
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#0d0d0d] text-white dark:bg-zinc-100 dark:text-zinc-950' : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200'}`}>
                           <Server className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-slate-900">{group.host}</span>
-                          <span className="mt-0.5 block text-xs font-medium text-slate-500">{online} 在线 · {group.rows.length} 个 Agent</span>
+                          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{group.host}</span>
+                          <span className="mt-0.5 block text-xs font-medium text-slate-500 dark:text-zinc-400">{online} 在线 · {group.rows.length} 个 Agent</span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 dark:text-zinc-500" />
                       </button>
                     )
                   })}
@@ -2628,19 +2640,19 @@ export default function MobileFeedPage() {
                     setSearch('')
                     setSelectorStep('hosts')
                   }}
-                  className="mb-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600"
+                  className="mb-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-zinc-300"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   返回主机
                 </button>
-                <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold text-slate-500">
+                <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold text-slate-500 dark:text-zinc-400">
                   <Server className="h-4 w-4" />
                   <span className="min-w-0 truncate">{activeHost || '选择主机'}</span>
-                  <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px]">{activeHostGroup?.rows.length || 0}</span>
+                  <span className="ml-auto rounded-full bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px]">{activeHostGroup?.rows.length || 0}</span>
                 </div>
                 <div className="space-y-1.5">
                   {!activeHostGroup ? (
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-400">当前主机下没有匹配的 Agent。</div>
+                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 p-3 text-xs font-medium text-slate-400 dark:text-zinc-500">当前主机下没有匹配的 Agent。</div>
                   ) : activeHostGroup.rows.map((agent) => {
                     const runtime = runtimeMap[agent.agent_id]
                     const active = agent.agent_id === selectedAgentId
@@ -2654,17 +2666,17 @@ export default function MobileFeedPage() {
                           setSearch('')
                           setSelectorStep('topics')
                         }}
-                        className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left ${active ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-white'}`}
+                        className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left ${active ? 'border-slate-900 dark:border-zinc-300 bg-slate-100 dark:bg-zinc-800' : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950'}`}
                       >
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#0d0d0d] text-white' : 'bg-slate-100 text-slate-700'}`}>
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#0d0d0d] text-white dark:bg-zinc-100 dark:text-zinc-950' : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200'}`}>
                           <Bot className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-slate-900">{labelForAgentInTopic(agent.agent_id, compactAgentName(agent))}</span>
-                          <span className="mt-0.5 block truncate text-xs font-medium text-slate-500">{runtimeLine(runtime) || compactId(agent.agent_id, 10, 4)}</span>
+                          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{labelForAgentInTopic(agent.agent_id, compactAgentName(agent))}</span>
+                          <span className="mt-0.5 block truncate text-xs font-medium text-slate-500 dark:text-zinc-400">{runtimeLine(runtime) || compactId(agent.agent_id, 10, 4)}</span>
                         </span>
                         <span className={`h-2.5 w-2.5 rounded-full ${onlineAgents.has(agent.agent_id) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
-                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 dark:text-zinc-500" />
                       </button>
                     )
                   })}
@@ -2680,30 +2692,30 @@ export default function MobileFeedPage() {
                     setSelectedHost(selectedAgentHost)
                     setSelectorStep('agents')
                   }}
-                  className="mb-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600"
+                  className="mb-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-zinc-300"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   返回 Agent
                 </button>
-                <div className="mb-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="mb-2 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <Bot className="h-4 w-4 shrink-0 text-slate-600" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
+                    <Bot className="h-4 w-4 shrink-0 text-slate-600 dark:text-zinc-300" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">
                       {selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '未选择 Agent'}
                     </span>
                     <span className={`h-2.5 w-2.5 rounded-full ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
                   </div>
-                  <div className="mt-1 truncate text-xs font-medium text-slate-500">{selectedAgentHost || '未上报主机'}</div>
+                  <div className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-zinc-400">{selectedAgentHost || '未上报主机'}</div>
                 </div>
-                <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500">
+                <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">
                   <MessageSquare className="h-4 w-4" />
                   Topics
-                  <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{filteredTopics.length}</span>
+                  <span className="ml-auto rounded-full bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400">{filteredTopics.length}</span>
                 </div>
                 <div className="space-y-2">
                   <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-1.5">
                     <div className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-sky-700">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-white/70 px-2 py-0.5">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-white/70 dark:bg-zinc-900/70 px-2 py-0.5">
                         <Clock3 className="h-3.5 w-3.5" />
                         Recent
                       </span>
@@ -2728,14 +2740,14 @@ export default function MobileFeedPage() {
                               setSelectedTopicId(id)
                               closeSheet('selector')
                             }}
-                            className={`w-full rounded-lg border px-3 py-2 text-left ${id === selectedTopicId ? 'border-sky-600 bg-white' : 'border-sky-100 bg-white/75'}`}
+                            className={`w-full rounded-lg border px-3 py-2 text-left ${id === selectedTopicId ? 'border-sky-600 bg-white dark:bg-zinc-950' : 'border-sky-100 bg-white/75 dark:bg-zinc-900/75'}`}
                           >
                             <div className="flex items-center gap-2">
                               <TopicIcon className="h-4 w-4 shrink-0 text-sky-700" />
-                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{topic.topic_name || compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
+                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{topic.topic_name || compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
                               {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
                             </div>
-                            <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500">
+                            <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500 dark:text-zinc-400">
                               {[agentLabel, topic.last_message_preview || topicKindLabel(topic)].filter(Boolean).join(' · ')}
                             </div>
                           </button>
@@ -2750,8 +2762,8 @@ export default function MobileFeedPage() {
                     const GroupIcon = meta.Icon
                     if (items.length === 0 && search.trim()) return null
                     return (
-                      <div key={groupKey} className="rounded-xl border border-slate-200 bg-white p-1.5">
-                        <div className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-slate-500">
+                      <div key={groupKey} className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-1.5">
+                        <div className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-slate-500 dark:text-zinc-400">
                           <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${meta.tone}`}>
                             <GroupIcon className="h-3.5 w-3.5" />
                             {meta.label}
@@ -2760,7 +2772,7 @@ export default function MobileFeedPage() {
                         </div>
                         <div className="space-y-1">
                           {items.length === 0 ? (
-                            <div className="px-3 py-2 text-xs font-semibold text-slate-400">暂无{meta.label}</div>
+                            <div className="px-3 py-2 text-xs font-semibold text-slate-400 dark:text-zinc-500">暂无{meta.label}</div>
                           ) : items.map((topic) => {
                             const id = topicId(topic)
                             const TopicIcon = topicIcon(topic)
@@ -2772,14 +2784,14 @@ export default function MobileFeedPage() {
                                   setSelectedTopicId(id)
                                   closeSheet('selector')
                                 }}
-                                className={`w-full rounded-lg border px-3 py-2 text-left ${id === selectedTopicId ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-slate-50'}`}
+                                className={`w-full rounded-lg border px-3 py-2 text-left ${id === selectedTopicId ? 'border-slate-900 dark:border-zinc-300 bg-slate-100 dark:bg-zinc-800' : 'border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900'}`}
                               >
                                 <div className="flex items-center gap-2">
-                                  <TopicIcon className="h-4 w-4 shrink-0 text-slate-600" />
-                                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
+                                  <TopicIcon className="h-4 w-4 shrink-0 text-slate-600 dark:text-zinc-300" />
+                                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
                                   {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
                                 </div>
-                                <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500">
+                                <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500 dark:text-zinc-400">
                                   {topic.description || topicKindLabel(topic)}
                                 </div>
                               </button>
@@ -2799,14 +2811,14 @@ export default function MobileFeedPage() {
       {!fixedChatMode && settingsOpen && (
         <MobileSheet title="设置" onClose={() => closeSheet('settings')}>
           <div className="space-y-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-400">Account</p>
-              <p className="mt-1 text-base font-semibold text-slate-900">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
-              <p className="mt-1 text-xs font-medium text-slate-500">{billing?.entitlement ? (billing.entitlement.plan === 'pro' ? 'Pro' : 'Free') : '...'} · {quotaText(billing)}</p>
-              <p className="mt-1 text-[11px] font-medium text-slate-400">网络 {browserOnline ? '在线' : '离线'} · WebSocket {wsState}</p>
+            <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 p-4">
+              <p className="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Account</p>
+              <p className="mt-1 text-base font-semibold text-slate-900 dark:text-zinc-100">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
+              <p className="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">{billing?.entitlement ? (billing.entitlement.plan === 'pro' ? 'Pro' : 'Free') : '...'} · {quotaText(billing)}</p>
+              <p className="mt-1 text-[11px] font-medium text-slate-400 dark:text-zinc-500">网络 {browserOnline ? '在线' : '离线'} · WebSocket {wsState}</p>
             </div>
-            <a href="/feed" className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-900">打开完整 Web Feed</a>
-            <a href={isAndroidWebView ? '/mobile/settings?source=android' : '/mobile/settings'} className="block rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-900">移动端设置页</a>
+            <a href="/feed" className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100">打开完整 Web Feed</a>
+            <a href={isAndroidWebView ? '/mobile/settings?source=android' : '/mobile/settings'} className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100">移动端设置页</a>
             <button onClick={() => signOut({ callbackUrl: mobileLoginCallback })} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white">
               <LogOut className="h-4 w-4" />
               退出登录
@@ -2835,12 +2847,12 @@ function EmptyCard({
   onAction?: () => void
 }) {
   return (
-    <div className="mx-auto mt-14 max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+    <div className="mx-auto mt-14 max-w-sm rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200">
         <Clock3 className="h-6 w-6" />
       </div>
-      <p className="mt-3 text-base font-semibold text-slate-900">{title}</p>
-      <p className="mt-2 text-sm font-medium leading-6 text-slate-500">{desc}</p>
+      <p className="mt-3 text-base font-semibold text-slate-900 dark:text-zinc-100">{title}</p>
+      <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-zinc-400">{desc}</p>
       {actionLabel && onAction && (
         <button
           onClick={onAction}
@@ -2858,15 +2870,15 @@ function EmptyCard({
 function MobileSheet({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-[2px]">
-      <div className="absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-hidden rounded-t-[1.25rem] bg-white shadow-2xl">
-        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200" />
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
-          <p className="text-base font-semibold text-slate-900">{title}</p>
-          <button onClick={onClose} className="rounded-full bg-slate-100 p-2 text-slate-600" aria-label="关闭">
+      <div className="absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-hidden rounded-t-[1.25rem] bg-white dark:bg-zinc-950 shadow-2xl">
+        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200 dark:bg-zinc-700" />
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-800 px-4 py-2.5">
+          <p className="text-base font-semibold text-slate-900 dark:text-zinc-100">{title}</p>
+          <button onClick={onClose} className="rounded-full bg-slate-100 dark:bg-zinc-800 p-2 text-slate-600 dark:text-zinc-300" aria-label="关闭">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[calc(92dvh-3.75rem)] overflow-y-auto bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{children}</div>
+        <div className="max-h-[calc(92dvh-3.75rem)] overflow-y-auto bg-white dark:bg-zinc-950 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{children}</div>
       </div>
     </div>
   )
