@@ -34,6 +34,7 @@ import {
   type AgentRoleTemplate,
 } from '@/lib/agent-role-templates'
 import { mergeMessageHistory } from '@/lib/chat-history'
+import { importedHistorySource } from '@/lib/desktop-history-import'
 import { getDesktopBridge } from '@/lib/desktop'
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
@@ -665,6 +666,7 @@ function normalizeFeed(raw: unknown, knownAgentIds?: Set<string>): ChatMessage[]
       exec_mode: data.exec_mode ? String(data.exec_mode) : undefined,
       reply_to: data.reply_to ? String(data.reply_to) : undefined,
       ...modelHint,
+      history_import_source: importedHistorySource(data.metadata),
     })
   }
 

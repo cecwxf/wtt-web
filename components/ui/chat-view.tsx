@@ -50,6 +50,7 @@ export interface ChatMessage {
   is_cloud_sandbox?: boolean
   is_streaming?: boolean
   stream_id?: string
+  history_import_source?: string
   cli_source?: {
     adapter: string
     session_title: string
@@ -1380,7 +1381,7 @@ export function ChatView({
   composerAccessory,
   hideRuntimeBadges = false,
 }: ChatViewProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const managedProgress = useManagedChatProgress(topicId, accessToken, runStatus)
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
@@ -3350,6 +3351,7 @@ export function ChatView({
                             <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${isMine ? 'bg-[#f1eee7] text-[#766f64] dark:bg-zinc-800 dark:text-zinc-400' : 'bg-[#eee8dd] text-[#9a4b00] dark:bg-zinc-800 dark:text-amber-300'}`}>
                               {isMine ? 'You' : 'AI'}
                             </span>
+                            {message.history_import_source && <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" title={`Imported text snapshot · ${message.history_import_source}`}>{locale === 'en' ? 'Imported' : '导入'} · {message.history_import_source}</span>}
                             {message.cli_source && (
                               <>
                                 <span

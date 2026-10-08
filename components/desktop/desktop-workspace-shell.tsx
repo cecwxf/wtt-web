@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import useSWRInfinite from 'swr/infinite'
-import { BookOpen, ChevronDown, ChevronRight, Clock3, ExternalLink, Laptop, LogOut, MessageSquare, MessageSquarePlus, PanelLeft, Plus, RefreshCw, Search, Settings2, Star, Users, X } from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronRight, Clock3, ExternalLink, FileUp, Laptop, LogOut, MessageSquare, MessageSquarePlus, PanelLeft, Plus, RefreshCw, Search, Settings2, Star, Users, X } from 'lucide-react'
 import type { WttShellV2Props } from '@/components/ui/wtt-shell-v2'
 import { WttSettingsModal } from '@/components/ui/wtt-settings-modal'
 import { DesktopHostsApi, HostRequestError } from '@/lib/desktop-hosts'
@@ -16,6 +16,7 @@ import { favoriteKey, useNavigationFavorites, type NavigationFavorite } from '@/
 import type { AgentOperationJob } from '@/components/ui/topic-column'
 
 const TopicCreationDialogs = dynamic(() => import('@/components/ui/topic-column').then(module => module.TopicColumn))
+const HistoryImport = dynamic(() => import('./desktop-history-import').then(module => module.DesktopHistoryImport))
 
 const iconButton = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
 const rowClass = 'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
@@ -53,6 +54,9 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
   const [localTeamHost, setLocalTeamHost] = useState<{ id: string; adapters: string[] }>()
   const [creationBusy, setCreationBusy] = useState(false)
   const [creationError, setCreationError] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
+  const [canImport, setCanImport] = useState(false)
+  useEffect(() => { setCanImport(Boolean(getDesktopBridge()?.fs)) }, [])
   const alive = useRef(true)
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
   const openCreation = async (kind: 'group' | 'team') => {
@@ -287,6 +291,7 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       <span className="min-w-0 flex-1 truncate text-xs text-zinc-500" title={props.currentUserName}>{props.currentUserName || 'WTT'}</span>
       <Link href={`/feed?agentId=${encodeURIComponent(props.selectedAgentId)}`} className={iconButton} title={en ? 'All WTT tools' : '全部 WTT 工具'} aria-label={en ? 'All WTT tools' : '全部 WTT 工具'}><ExternalLink size={16} /></Link>
       <button onClick={props.onLogout} className={iconButton} title={en ? 'Sign out' : '退出账号'} aria-label={en ? 'Sign out' : '退出账号'}><LogOut size={16} /></button>
+      {canImport && <button onClick={() => { setImportOpen(true); closeDrawer() }} className={iconButton} disabled={!props.userToken} title={en ? 'Import conversation' : '导入会话'} aria-label={en ? 'Import conversation' : '导入会话'}><FileUp size={16} /></button>}
     </footer>
   </>
 
@@ -317,6 +322,7 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{props.children}</main>
     </div>
     <WttSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} activePage={settingsPage} onPageChange={setSettingsPage} agents={props.agents.map(agent => ({ ...agent, id: agent.agent_id, is_primary: false }))} selectedAgentId={props.selectedAgentId} onBindingChanged={props.onBindingChanged} />
+    {importOpen && props.userToken && <HistoryImport token={props.userToken} hosts={hosts} en={en} onClose={() => setImportOpen(false)} />}
     {creationRequest && <TopicCreationDialogs creationOnly creationRequest={creationRequest}
       topics={props.topics} groupTopics={props.groupTopics} selectedTopicId={props.selectedTopicId}
       onSelectTopic={props.onTopicChange} agentOptions={props.agents} selectedAgentId={props.selectedAgentId}
