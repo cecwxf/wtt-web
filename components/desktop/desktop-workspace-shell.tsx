@@ -1,17 +1,19 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import useSWRInfinite from 'swr/infinite'
-import { ChevronDown, ChevronRight, Clock3, ExternalLink, Laptop, LogOut, MessageSquare, MessageSquarePlus, PanelLeft, Plus, RefreshCw, Search, Settings2, Users, X } from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronRight, Clock3, ExternalLink, Laptop, LogOut, MessageSquare, MessageSquarePlus, PanelLeft, Plus, RefreshCw, Search, Settings2, Users, X } from 'lucide-react'
 import type { WttShellV2Props } from '@/components/ui/wtt-shell-v2'
 import { WttSettingsModal } from '@/components/ui/wtt-settings-modal'
-import { CreateTopicModal } from '@/components/ui/create-topic-modal'
 import { DesktopHostsApi, HostRequestError } from '@/lib/desktop-hosts'
 import { getDesktopBridge } from '@/lib/desktop'
 import { useI18n } from '@/lib/i18n-provider'
 import { DesktopOnboarding } from './desktop-onboarding'
+
+const TopicCreationDialogs = dynamic(() => import('@/components/ui/topic-column').then(module => module.TopicColumn))
 
 const iconButton = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
 const rowClass = 'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
@@ -44,7 +46,11 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
   const [query, setQuery] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<NonNullable<WttShellV2Props['forceOpenSettingsPage']>>('profile')
-  const [createOpen, setCreateOpen] = useState(false)
+  const [creationRequest, setCreationRequest] = useState<{ id: number; kind: 'group' | 'team' }>()
+  const openCreation = (kind: 'group' | 'team') => {
+    setCreationRequest(previous => ({ id: (previous?.id || 0) + 1, kind }))
+    closeDrawer()
+  }
   const [collapsed, setCollapsed] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(288)
   const resizeStart = useRef<{ x: number; width: number } | null>(null)
@@ -141,8 +147,12 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       </Section>
       <Section title={en ? 'Groups & teams' : '群聊与团队'} icon={<Users size={14} />}>
         {(props.groupTopics || []).filter(topic => matches(topic.name)).map(topic => topicRow(topic.topic_id, topic.name, props.selectedAgentId, undefined, topic.unread_count))}
-        <button disabled={!props.selectedAgentId} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => { setCreateOpen(true); closeDrawer() }}><Plus size={14} />{en ? 'New group' : '新建群聊'}</button>
+        <button disabled={!props.userToken || !props.agents.length || !props.onSubmitAgentOperation} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => openCreation('group')}><Plus size={14} />{en ? 'New group' : '新建群聊'}</button>
+        <button disabled={!props.userToken || !props.onNewAgentFromHost || !props.onSubmitAgentOperation} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => openCreation('team')}><Users size={14} />{en ? 'New team' : '新建团队'}</button>
       </Section>
+      {props.onOpenKnowledgeRoot && <Section title={en ? 'Library' : '资料'} icon={<BookOpen size={14} />}>
+        <button className={`${rowClass} w-full text-zinc-600 dark:text-zinc-300`} onClick={() => { props.onOpenKnowledgeRoot?.(); closeDrawer() }}><BookOpen size={14} />{en ? 'Knowledge base' : '个人知识库'}</button>
+      </Section>}
     </nav>
     <footer className="flex h-12 shrink-0 items-center gap-1 border-t border-zinc-200 px-2 dark:border-zinc-800">
       <button className={`${iconButton} shrink-0`} title={en ? 'Account settings' : '账户设置'} aria-label={en ? 'Account settings' : '账户设置'} onClick={() => { setSettingsPage('profile'); setSettingsOpen(true); closeDrawer() }}><Settings2 size={17} /></button>
@@ -179,7 +189,14 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{props.children}</main>
     </div>
     <WttSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} activePage={settingsPage} onPageChange={setSettingsPage} agents={props.agents.map(agent => ({ ...agent, id: agent.agent_id, is_primary: false }))} selectedAgentId={props.selectedAgentId} onBindingChanged={props.onBindingChanged} />
-    <CreateTopicModal open={createOpen} onClose={() => setCreateOpen(false)} creatorAgentId={props.selectedAgentId} agentOptions={props.agents} userToken={props.userToken} onSuccess={() => props.onTopicsRefresh?.()} />
+    {creationRequest && <TopicCreationDialogs creationOnly creationRequest={creationRequest}
+      topics={props.topics} groupTopics={props.groupTopics} selectedTopicId={props.selectedTopicId}
+      onSelectTopic={props.onTopicChange} agentOptions={props.agents} selectedAgentId={props.selectedAgentId}
+      onSelectAgent={props.onAgentChange} onlineAgentIds={props.onlineAgentIds}
+      agentRuntimeMap={props.agentRuntimeMap} agentRoleMap={props.agentRoleMap} agentRoleTemplateMap={props.agentRoleTemplateMap}
+      onNewAgentFromHost={props.onNewAgentFromHost} onSubmitAgentOperation={props.onSubmitAgentOperation}
+      onBindingChanged={props.onBindingChanged} onTopicsRefresh={props.onTopicsRefresh} onTopicCreated={props.onTopicCreated}
+      userToken={props.userToken} />}
   </div>
 }
 

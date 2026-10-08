@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronDown, ChevronRight, ClipboardCopy, ClipboardList, Cloud, Crown, Feather, Flame, Hash, Loader2, Lock, MessageCircle, MoreVertical, Plus, Power, Radio, Search, Shield, Sparkles, Sun, Users, Waves, Zap } from 'lucide-react'
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   AGENT_ROLE_TEMPLATES,
   buildRoleSystemPrompt,
@@ -136,6 +136,8 @@ interface TopicColumnProps {
   localLibrarySlot?: ReactNode
   userToken?: string
   compactLayout?: boolean
+  creationOnly?: boolean
+  creationRequest?: { id: number; kind: 'group' | 'team' }
 }
 
 function agentInitial(name: string) {
@@ -738,7 +740,10 @@ export function TopicColumn(props: TopicColumnProps) {
     onStartAgentResize,
     userToken,
     compactLayout = false,
+    creationOnly = false,
+    creationRequest,
   } = props
+  const handledCreationRequest = useRef<number | null>(null)
   const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
   const [folderMenuFor, setFolderMenuFor] = useState<string | null>(null)
   const [sandboxActionFor, setSandboxActionFor] = useState<string | null>(null)
@@ -1056,7 +1061,7 @@ export function TopicColumn(props: TopicColumnProps) {
     setBindAgentOpen(true)
   }
 
-  const openGroupModal = () => {
+  const openGroupModal = useCallback(() => {
     const defaults = selectedAgentId ? [selectedAgentId] : agentOptions.slice(0, 3).map((agent) => agent.agent_id)
     setGroupName(zh ? '新的 Agent 群聊' : 'New Agent Group')
     setGroupDesc(zh ? '由多个已绑定 Agent 组成的协作群聊。' : 'A collaboration topic with selected bound agents.')
@@ -1064,9 +1069,9 @@ export function TopicColumn(props: TopicColumnProps) {
     setGroupError('')
     setGroupProgress('')
     setGroupOpen(true)
-  }
+  }, [selectedAgentId, agentOptions, zh])
 
-  const openTeamModal = () => {
+  const openTeamModal = useCallback(() => {
     const template = selectedTeamTemplate || TEAM_TEMPLATES[0]
     const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId) || newAgentHosts[0]
     setTeamTemplateId(template.id)
@@ -1076,7 +1081,16 @@ export function TopicColumn(props: TopicColumnProps) {
     setTeamProgress('')
     setTeamError('')
     setTeamOpen(true)
-  }
+  }, [selectedTeamTemplate, newAgentHosts, selectedAgentId, agentRuntimeMap, zh])
+
+  useEffect(() => {
+    if (!creationRequest || handledCreationRequest.current === creationRequest.id || groupBusy || teamBusy) return
+    handledCreationRequest.current = creationRequest.id
+    setGroupOpen(false)
+    setTeamOpen(false)
+    if (creationRequest.kind === 'group') openGroupModal()
+    else openTeamModal()
+  }, [creationRequest, groupBusy, teamBusy, openGroupModal, openTeamModal])
 
   const toggleGroupAgent = (agentId: string) => {
     setGroupAgentIds((prev) => (
@@ -1485,6 +1499,7 @@ export function TopicColumn(props: TopicColumnProps) {
 
   return (
     <>
+      {!creationOnly && <>
       <aside className="flex w-[var(--wtt-agent-rail-width)] shrink-0 flex-col border-r border-[#d9cebd] bg-[radial-gradient(circle_at_30%_0%,#ffffff_0,#f7efe2_38%,#ece4d7_100%)] text-slate-800 dark:border-zinc-800 dark:bg-[radial-gradient(circle_at_30%_0%,#27272a_0,#111113_42%,#050506_100%)] dark:text-zinc-100">
         <div className="border-b border-[#e1d6c5] px-1.5 py-2 text-center dark:border-zinc-800">
           <div className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-400">
@@ -2206,6 +2221,8 @@ export function TopicColumn(props: TopicColumnProps) {
           </div>
         </div>
       </aside>
+
+      </>}
 
       {createActionOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4">
