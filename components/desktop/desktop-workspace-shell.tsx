@@ -5,13 +5,14 @@ import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import useSWRInfinite from 'swr/infinite'
-import { BookOpen, ChevronDown, ChevronRight, Clock3, ExternalLink, Laptop, LogOut, MessageSquare, MessageSquarePlus, PanelLeft, Plus, RefreshCw, Search, Settings2, Users, X } from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronRight, Clock3, ExternalLink, Laptop, LogOut, MessageSquare, MessageSquarePlus, PanelLeft, Plus, RefreshCw, Search, Settings2, Star, Users, X } from 'lucide-react'
 import type { WttShellV2Props } from '@/components/ui/wtt-shell-v2'
 import { WttSettingsModal } from '@/components/ui/wtt-settings-modal'
 import { DesktopHostsApi, HostRequestError } from '@/lib/desktop-hosts'
 import { getDesktopBridge } from '@/lib/desktop'
 import { useI18n } from '@/lib/i18n-provider'
 import { DesktopOnboarding } from './desktop-onboarding'
+import { favoriteKey, useNavigationFavorites, type NavigationFavorite } from '@/lib/hooks/use-navigation-favorites'
 
 const TopicCreationDialogs = dynamic(() => import('@/components/ui/topic-column').then(module => module.TopicColumn))
 
@@ -43,6 +44,7 @@ export function DesktopWorkspaceShell(props: WttShellV2Props) {
 function DesktopWorkspaceShellInner(props: WttShellV2Props) {
   const { locale } = useI18n()
   const en = locale === 'en'
+  const bookmarks = useNavigationFavorites(props.currentUserId, props.userToken)
   const [query, setQuery] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<NonNullable<WttShellV2Props['forceOpenSettingsPage']>>('profile')
@@ -92,23 +94,38 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
     return () => window.removeEventListener('resize', resize)
   }, [])
 
-  const agentRow = (agent: { agent_id: string; display_name: string; adapter?: string }) => <Link
+  const favoriteButton = (kind: NavigationFavorite['kind'], id: string, agentId: string, name: string) => {
+    const key = favoriteKey(kind, id)
+    const saved = bookmarks.keys.has(key)
+    const label = `${saved ? (en ? 'Remove favorite' : '取消收藏') : (en ? 'Favorite' : '收藏')} ${kind === 'agent' ? 'Agent' : (en ? 'conversation' : '对话')} ${name}`
+    return <button type="button" className={`${iconButton} ${saved ? 'text-amber-600 dark:text-amber-400' : ''}`}
+      disabled={bookmarks.disabled || bookmarks.pending.has(key)} aria-label={label} title={label} aria-pressed={saved}
+      onClick={() => void bookmarks.toggle(kind, id, agentId)}><Star size={14} fill={saved ? 'currentColor' : 'none'} /></button>
+  }
+
+  const agentRow = (agent: { agent_id: string; display_name: string; adapter?: string }) => <div key={agent.agent_id} className="flex min-w-0 items-center">
+    <Link
     key={agent.agent_id} href={desktopHref(agent.agent_id)} onClick={() => { props.onTopicChange(null); closeDrawer() }}
     aria-current={agent.agent_id === props.selectedAgentId ? 'page' : undefined} title={`${agent.display_name} · ${agent.agent_id}`}
-    className={`${rowClass} ${agent.agent_id === props.selectedAgentId ? 'bg-white font-medium text-zinc-950 dark:bg-zinc-800 dark:text-white' : 'text-zinc-600 dark:text-zinc-300'}`}>
+    className={`${rowClass} flex-1 ${agent.agent_id === props.selectedAgentId ? 'bg-white font-medium text-zinc-950 dark:bg-zinc-800 dark:text-white' : 'text-zinc-600 dark:text-zinc-300'}`}>
     <span aria-label={props.onlineAgentIds?.has(agent.agent_id) ? (en ? 'Online' : '在线') : (en ? 'Offline' : '离线')} className={`h-1.5 w-1.5 shrink-0 rounded-full ${props.onlineAgentIds?.has(agent.agent_id) ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
     <span className="min-w-0 flex-1 truncate">{agent.display_name || agent.agent_id}</span>
     {agent.adapter && <span className="max-w-20 truncate text-[10px] text-zinc-500">{agent.adapter}</span>}
   </Link>
+    {favoriteButton('agent', agent.agent_id, agent.agent_id, agent.display_name || agent.agent_id)}
+  </div>
 
-  const topicRow = (id: string, name: string, agentId: string, secondary?: string, unread?: number) => <Link
+  const topicRow = (id: string, name: string, agentId: string, secondary?: string, unread?: number) => <div key={id} className="flex min-w-0 items-center">
+    <Link
     key={id} href={desktopHref(agentId, id)} onClick={closeDrawer} title={name}
     aria-current={id === props.selectedTopicId ? 'page' : undefined}
-    className={`${rowClass} ${id === props.selectedTopicId ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-100' : 'text-zinc-700 dark:text-zinc-300'}`}>
+    className={`${rowClass} flex-1 ${id === props.selectedTopicId ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-100' : 'text-zinc-700 dark:text-zinc-300'}`}>
     <MessageSquare size={14} className="shrink-0 text-zinc-400" />
     <span className="min-w-0 flex-1"><span className="block truncate">{name}</span>{secondary && <span className="block truncate text-[11px] text-zinc-500 dark:text-zinc-400">{secondary}</span>}</span>
     {!!unread && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{unread > 99 ? '99+' : unread}</span>}
   </Link>
+    {favoriteButton('topic', id, agentId, name)}
+  </div>
 
   const navigation = (mobile = false) => <>
     <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 px-3 dark:border-zinc-800">
@@ -123,6 +140,21 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       <label className="flex h-9 items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 dark:border-zinc-700 dark:bg-zinc-950"><Search size={15} className="shrink-0 text-zinc-400" /><input value={query} onChange={event => setQuery(event.target.value)} type="search" aria-label={en ? 'Search conversations and agents' : '搜索对话和 Agent'} placeholder={en ? 'Search' : '搜索'} className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
     </div>
     <nav aria-label={en ? 'Workspace navigation' : '工作区导航'} className="min-h-0 flex-1 overflow-y-auto px-2">
+      <Section title={en ? 'Favorites' : '收藏'} icon={<Star size={14} />}>
+        {bookmarks.failed && <div className="flex items-center gap-1 px-2 text-xs text-red-600 dark:text-red-400" role="alert">
+          <span className="min-w-0 flex-1">{en ? 'Could not sync favorites.' : '收藏同步失败。'}</span>
+          <button className={iconButton} onClick={bookmarks.retry} title={en ? 'Retry favorites' : '重试收藏'} aria-label={en ? 'Retry favorites' : '重试收藏'}><RefreshCw size={14} /></button>
+        </div>}
+        {bookmarks.favorites.filter(row => matches(row.name, row.agent_name, row.host_name)).map(row => row.available && row.agent_id
+          ? row.kind === 'agent'
+            ? agentRow({ agent_id: row.agent_id, display_name: row.name || row.agent_id, adapter: row.adapter })
+            : topicRow(row.target_id, row.name || row.target_id, row.agent_id, [row.agent_name, row.host_name].filter(Boolean).join(' · '))
+          : <div key={favoriteKey(row.kind, row.target_id)} className="flex min-w-0 items-center px-2">
+            <span className="min-w-0 flex-1 truncate text-xs text-zinc-500" title={row.target_id}>{en ? 'Unavailable favorite' : '不可访问的收藏'}</span>
+            {favoriteButton(row.kind, row.target_id, '', en ? 'unavailable item' : '不可访问项目')}
+          </div>)}
+        {!bookmarks.favorites.length && !bookmarks.failed && <p className="px-2 py-2 text-xs text-zinc-500">{bookmarks.disabled ? (en ? 'Loading favorites...' : '正在加载收藏…') : (en ? 'No favorites' : '暂无收藏')}</p>}
+      </Section>
       <Section title={en ? 'Recent' : '最近对话'} icon={<Clock3 size={14} />}>
         {(props.recentTopics || []).slice(0, 10).filter(topic => matches(topic.topic_name, topic.name, ...(topic.agent_labels || []).map(agent => agent.display_name))).map(topic => {
           const agentId = topic.primary_agent_id || topic.agent_ids?.[0] || props.selectedAgentId
@@ -146,7 +178,12 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
         {props.topics.filter(topic => matches(topic.name)).map(topic => topicRow(topic.topic_id, topic.name, props.selectedAgentId, undefined, topic.unread_count))}
       </Section>
       <Section title={en ? 'Groups & teams' : '群聊与团队'} icon={<Users size={14} />}>
-        {(props.groupTopics || []).filter(topic => matches(topic.name)).map(topic => topicRow(topic.topic_id, topic.name, props.selectedAgentId, undefined, topic.unread_count))}
+        {(props.groupTopics || []).filter(topic => matches(topic.name)).map(topic => {
+          const members = topic.member_agent_ids || []
+          const agentId = members.includes(props.selectedAgentId) ? props.selectedAgentId
+            : props.agents.find(agent => members.includes(agent.agent_id))?.agent_id || props.selectedAgentId
+          return topicRow(topic.topic_id, topic.name, agentId, undefined, topic.unread_count)
+        })}
         <button disabled={!props.userToken || !props.agents.length || !props.onSubmitAgentOperation} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => openCreation('group')}><Plus size={14} />{en ? 'New group' : '新建群聊'}</button>
         <button disabled={!props.userToken || !props.onNewAgentFromHost || !props.onSubmitAgentOperation} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => openCreation('team')}><Users size={14} />{en ? 'New team' : '新建团队'}</button>
       </Section>
