@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ExternalLink, FolderOpen, Loader2, Play, RefreshCw, Square, X } from 'lucide-react'
+import { ExternalLink, FolderOpen, Loader2, Play, RefreshCw, RotateCcw, Square, X } from 'lucide-react'
 import { getDesktopBridge, type DesktopAgentProfile, type DesktopRuntimeState, type DesktopRemoteTools } from '@/lib/desktop'
 import { RemoteToolsSelection } from './remote-tools-selection'
 import { useI18n } from '@/lib/i18n-provider'
@@ -57,7 +57,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     return () => { current = false; active.current = false; unsubscribe?.() }
   }, [bridge, supported])
 
-  const operate = useCallback(async (action: 'discover' | 'start' | 'stop') => {
+  const operate = useCallback(async (action: 'discover' | 'start' | 'stop' | 'recover') => {
     if (!bridge || busy) return
     setBusy(true); setError('')
     try {
@@ -67,6 +67,11 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
         setRuntime(state)
         setProfiles([]); setSelected([])
         automaticallyDetected.current = false
+      } else if (action === 'recover') {
+        if (!bridge.recoverAgents) return
+        const state = await bridge.recoverAgents()
+        if (!active.current) return
+        setRuntime(state)
       } else if (action === 'discover') {
         const found = await bridge.discoverAgents!()
         if (!active.current) return
@@ -136,7 +141,11 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     {busy && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={15} className="animate-spin" />{en ? 'Processing...' : '处理中…'}</p>}
     {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     {runtime.error && <p role="status" className="text-sm text-red-600 dark:text-red-400">{runtime.error === 'runtime_recovery_required'
-      ? (en ? 'Runtime recovery required. Check outstanding processes before restarting.' : '运行环境需要恢复，请先检查尚未退出的进程。')
+      ? runtime.recovery?.state === 'previous_boot'
+        ? (en ? 'The previous runtime was interrupted before the computer restarted. Recovery preserves history and never reruns unfinished tasks.' : '系统重启前的运行环境未正常退出。恢复会保留历史，不会重跑未完成任务。')
+        : runtime.recovery?.state === 'restart_computer_required'
+          ? (en ? 'The previous owner belongs to this OS boot. Quit its WTT instance or restart the computer before recovery.' : '旧运行进程属于本次开机。请退出其 WTT 程序，或重启电脑后恢复。')
+          : (en ? 'The legacy runtime owner cannot be verified. Its lock is preserved; resolve outstanding processes before recovery.' : '无法确认旧运行环境的归属，已保留锁。请先核对尚未退出的进程。')
       : runtime.error === 'runtime_selection_changed'
       ? (en ? 'Installed Agents or permissions changed. Detect and authorize them again.' : '已安装 Agent 或权限发生变化，请重新检测并授权。')
       : runtime.error === 'runtime_settings_unavailable'
@@ -144,6 +153,11 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       : runtime.error === 'runtime_auto_resume_failed'
       ? (en ? 'Agent startup failed. Detect and start Agents again.' : 'Agent 启动失败，请重新检测并启动。')
       : (en ? 'Runtime connection interrupted or authorization unavailable.' : '运行连接已中断或主机授权不可用。')}</p>}
+    {runtime.error === 'runtime_recovery_required' && runtime.recovery?.canRecover && bridge?.recoverAgents && <button
+      type="button" disabled={busy || running} onClick={() => void operate('recover')}
+      className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[var(--border)] px-3 text-sm disabled:opacity-50">
+      <RotateCcw size={15} />{en ? 'Recover local Agents' : '恢复本机 Agent'}
+    </button>}
     <ul className="space-y-2">{profiles.map(profile => <li key={profile.profile_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <label className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.includes(profile.adapter)} disabled={busy || running || !profile.available || (profile.requiresFullAccess && access !== 'full-access')} onChange={event => setSelected(previous => event.target.checked ? [...previous, profile.adapter] : previous.filter(value => value !== profile.adapter))} />{profile.display_name}</label>
       <span className="break-all text-xs text-[var(--muted-foreground)]">{!profile.available ? (en ? 'Not installed' : '未安装') : profile.requiresFullAccess && access !== 'full-access' ? (en ? 'Full access required' : '需要完整执行权限') : profile.version}</span>

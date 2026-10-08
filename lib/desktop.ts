@@ -128,6 +128,7 @@ export interface DesktopHostBridge {
   previewSupported?: boolean;
   startAgents?(selection: { adapters: string[]; workspaceAccess: 'workspace-write' | 'full-access'; remoteTools?: DesktopRemoteTools }): Promise<DesktopRuntimeState>;
   stopAgents?(): Promise<DesktopRuntimeState>;
+  recoverAgents?(): Promise<DesktopRuntimeState>;
   onRuntimeState?(callback: (state: DesktopRuntimeState) => void): () => void;
   authorize(userId: string): Promise<{
     transactionId: string;
@@ -164,6 +165,7 @@ export interface DesktopRemoteTools {
 export interface DesktopRuntimeState {
   state: string;
   error?: string | null;
+  recovery?: { state: 'none' | 'previous_boot' | 'restart_computer_required' | 'unverified_owner'; canRecover: boolean };
   autoStart?: boolean;
   configuredAdapters?: string[];
   workspaceAccess?: 'workspace-write' | 'full-access';
