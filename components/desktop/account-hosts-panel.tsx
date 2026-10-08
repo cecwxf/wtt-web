@@ -17,6 +17,7 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false, 
   const [hosts, setHosts] = useState<AccountHost[]>([])
   const [nextOffset, setNextOffset] = useState<number | null>(null)
   const [native, setNative] = useState<DesktopHostState | null>(null)
+  const [desktopVersion, setDesktopVersion] = useState('')
   const [available, setAvailable] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -65,14 +66,20 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false, 
     mounted.current = true
     setHosts([])
     setNative(null)
+    setDesktopVersion('')
     setRevoking(null)
     setAvailable(null)
     setBusy(false)
     setNextOffset(null)
     if (accessToken) void load()
-    const bridge = getDesktopBridge()?.host
+    const desktop = getDesktopBridge()
+    const bridge = desktop?.host
     let active = true
     let receivedState = false
+    void desktop?.getVersion?.().then(value => {
+      if (active && currentApi.current === api && typeof value === 'string'
+        && /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(value) && value.length <= 64) setDesktopVersion(value)
+    }).catch(() => {})
     const unsubscribe = bridge?.onState?.(state => {
       receivedState = true
       if (active && currentApi.current === api) setNative(state)
@@ -196,7 +203,9 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false, 
               <Laptop size={18} className="mt-0.5 shrink-0 text-[var(--muted-foreground)]" />
               <div className="min-w-0 flex-1">
                 <p className="break-words text-sm font-medium">{host.display_name}{host.host_id === native?.hostId ? (en ? ' (this computer)' : '（本机）') : ''}</p>
-                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{host.platform === 'darwin' ? 'macOS' : host.platform === 'win32' ? 'Windows' : host.environment === 'wsl' ? 'Linux / WSL' : 'Linux'} · {host.client_version}</p>
+                <p className="mt-0.5 break-words text-xs text-[var(--muted-foreground)]">{host.platform === 'darwin' ? 'macOS' : host.platform === 'win32' ? 'Windows' : host.environment === 'wsl' ? 'Linux / WSL' : 'Linux'} · {host.host_id === native?.hostId && desktopVersion
+                  ? `WTT Desktop ${desktopVersion}`
+                  : `${en ? 'Registered with' : '登记版本'} ${host.client_version}`}</p>
               </div>
               <span className={`shrink-0 text-xs ${host.status === 'online' ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--muted-foreground)]'}`}>
                 {host.status === 'online' ? (en ? 'Online' : '在线') : host.status === 'revoked' ? (en ? 'Revoked' : '已撤销') : (en ? 'Offline' : '离线')}
