@@ -3209,6 +3209,11 @@ function ToggleRow({
         <p className="mt-1 text-xs text-slate-400">{hint}</p>
       </div>
       <button
+        type="button"
+        role="switch"
+        aria-label={label}
+        aria-checked={enabled}
+        title={label}
         onClick={() => onToggle(!enabled)}
         className={`relative h-6 w-11 rounded-full border transition ${enabled ? "border-indigo-300 bg-indigo-100" : "border-slate-200 bg-white"}`}
       >
