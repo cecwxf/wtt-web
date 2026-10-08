@@ -874,6 +874,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
   const [invitingMember, setInvitingMember] = useState(false)
   const [forceOpenSettingsPage, setForceOpenSettingsPage] = useState<'binding' | 'profile' | 'membership' | null>(null)
   const lastReadSyncRef = useRef<{ topicId: string; ts: number } | null>(null)
+  const lastLiveReadRef = useRef<{ topicId: string; ts: number } | null>(null)
   // Track newly created task that needs rename on first message
   const pendingRenameTaskRef = useRef<{ taskId: string; topicId: string } | null>(null)
   // Track active worker session context for persona injection
@@ -1628,6 +1629,22 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
     }, false)
   }, [mutateRecentTopics])
 
+  // The existing directory refresh can report unread WS-delivered messages.
+  // Reading the latest page advances the server cursor; no additional poll.
+  useEffect(() => {
+    if (!selectedTopicId || !Array.isArray(feedRaw) || document.visibilityState !== 'visible') return
+    const recent = Array.isArray(recentTopicsRaw) ? recentTopicsRaw
+      : Array.isArray(recentTopicsRaw?.items) ? recentTopicsRaw.items : []
+    const unread = [subscribedTopicsRaw, groupTopicsRaw, recent].some(list => Array.isArray(list)
+      && list.some(row => String(row?.topic_id ?? row?.id ?? '') === selectedTopicId && Number(row?.unread_count || 0) > 0))
+    if (!unread) return
+    const now = Date.now()
+    const previous = lastLiveReadRef.current
+    if (previous?.topicId === selectedTopicId && now - previous.ts < 5000) return
+    lastLiveReadRef.current = { topicId: selectedTopicId, ts: now }
+    void mutate()
+  }, [selectedTopicId, feedRaw, subscribedTopicsRaw, groupTopicsRaw, recentTopicsRaw, mutate])
+
   // Keep ref in sync for WS handler (avoids circular dependency)
   useEffect(() => {
     subscribedTopicsRef.current = { raw: subscribedTopicsRaw ?? null, mutate: mutateTopics }
@@ -1643,6 +1660,9 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
     if (!selectedTopicId) return
     if (!Array.isArray(feedRaw) || feedRaw.length === 0) return
 
+    updateTopicUnreadCaches(selectedTopicId, row => ({ ...row, unread_count: 0 }))
+    clearRecentTopicUnread(selectedTopicId)
+
     const now = Date.now()
     const prev = lastReadSyncRef.current
     if (prev && prev.topicId === selectedTopicId && now - prev.ts < 5000) return
@@ -1651,7 +1671,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
     void mutateTopics()
     void mutateGroupTopics()
     void mutateRecentTopics()
-  }, [selectedTopicId, feedRaw, mutateGroupTopics, mutateRecentTopics, mutateTopics])
+  }, [selectedTopicId, feedRaw, clearRecentTopicUnread, updateTopicUnreadCaches, mutateGroupTopics, mutateRecentTopics, mutateTopics])
 
   // Poll pending P2P requests for notifications
   // session.userId is the WTT backend UUID; session.user.id may not be set by NextAuth

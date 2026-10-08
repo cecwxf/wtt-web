@@ -78,6 +78,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
   useEffect(() => {
     if (prompted.current || !supported || !native?.enabled || !native.accountVerified || !runtime
       || available !== true || configured || connected || runtime.state === 'restoring'
+      || native.state === 'registered'
       || (userId && native.userId !== userId)) return
     prompted.current = true
     setOpen(true)
@@ -154,7 +155,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
 
   if (!supported || !accessToken || !native?.enabled) return null
   return <>
-    {((!connected && !configured) || needsAttention) && <div className="flex min-h-11 shrink-0 items-center gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+    {runtime && runtime.state !== 'restoring' && ((!connected && !configured) || needsAttention) && <div className="flex min-h-11 shrink-0 items-center gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
       <Laptop size={16} className="shrink-0" /><span className="min-w-0 flex-1">{en ? 'Local Agents' : '本机 Agent'}</span>
       <button onClick={() => needsAttention ? router.push('/desktop/setup') : setOpen(true)} className="inline-flex min-h-8 items-center gap-1 font-medium">{needsAttention ? (en ? 'Check Agent services' : '检查 Agent 服务') : (en ? 'Connect this computer' : '接入本机')}<ChevronRight size={15} /></button>
     </div>}
