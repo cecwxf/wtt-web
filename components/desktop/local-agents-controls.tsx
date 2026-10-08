@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ExternalLink, FolderOpen, Loader2, Play, RefreshCw, RotateCcw, Square, X } from 'lucide-react'
+import { ExternalLink, FolderOpen, Loader2, Play, Plus, RefreshCw, RotateCcw, Square, X } from 'lucide-react'
 import { getDesktopBridge, type DesktopAgentProfile, type DesktopRuntimeState, type DesktopRemoteTools } from '@/lib/desktop'
 import { RemoteToolsSelection } from './remote-tools-selection'
 import { useI18n } from '@/lib/i18n-provider'
@@ -22,6 +22,10 @@ const readinessText = {
   execution_failed: ['最近执行失败', 'Last execution failed'],
 } as const
 
+function selectionKey(profile: DesktopAgentProfile, byProfile: boolean) {
+  return byProfile ? profile.profile_id : profile.adapter
+}
+
 export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   const bridge = getDesktopBridge()?.host
   const { locale } = useI18n()
@@ -38,6 +42,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   const savedAccess = useRef<DesktopRuntimeState['workspaceAccess']>()
   const running = ['restoring', 'starting', 'running', 'stopping'].includes(runtime.state)
   const supported = Boolean(bridge?.runtimeStatus && bridge?.discoverAgents && bridge?.startAgents && bridge?.stopAgents)
+  const byProfile = bridge?.profileManagementSupported === true
 
   useEffect(() => {
     if (!supported || !bridge) return
@@ -76,9 +81,11 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
         const found = await bridge.discoverAgents!()
         if (!active.current) return
         setProfiles(found)
-        setSelected(found.filter(profile => profile.available && (!profile.requiresFullAccess || access === 'full-access')).map(profile => profile.adapter))
+        const configured = found.some(profile => profile.configured)
+        setSelected(found.filter(profile => profile.available && (!profile.requiresFullAccess || access === 'full-access')
+          && (configured ? profile.configured : profile.profile_id === `desktop-${profile.adapter}`)).map(profile => selectionKey(profile, byProfile)))
       } else {
-        const state = await bridge.startAgents!({ adapters: selected, workspaceAccess: access,
+        const state = await bridge.startAgents!({ ...(byProfile ? { profileIds: selected } : { adapters: selected }), workspaceAccess: access,
           ...(bridge.remoteToolsSupported ? { remoteTools } : {}) })
         if (!active.current) return
         setRuntime(state)
@@ -93,7 +100,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
           ? (en ? 'Install a desktop build containing the Agent runtime.' : '请安装包含 Agent 运行环境的桌面版本。')
           : (en ? 'Local Agent operation failed. Check the desktop connection and retry.' : '本机 Agent 操作失败，请检查桌面连接后重试。'))
     } finally { if (active.current) setBusy(false) }
-  }, [bridge, busy, en, access, selected, remoteTools, onChanged])
+  }, [bridge, busy, en, access, selected, remoteTools, onChanged, byProfile])
 
   useEffect(() => {
     if (!supported || busy || runtime.state !== 'stopped' || profiles.length || automaticallyDetected.current) return
@@ -101,14 +108,31 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     void operate('discover')
   }, [supported, busy, runtime.state, profiles.length, operate])
 
-  async function chooseWorkspace(adapter: string, reset = false) {
+  async function chooseWorkspace(profile: DesktopAgentProfile, reset = false) {
     if (!bridge?.selectAgentWorkspace || busy || running) return
     setBusy(true); setError('')
     try {
-      const result = await bridge.selectAgentWorkspace(adapter, reset)
-      if (active.current && result) setProfiles(previous => previous.map(profile => profile.adapter === result.adapter ? { ...profile, workspaceName: result.workspaceName } : profile))
+      const result = await bridge.selectAgentWorkspace(selectionKey(profile, byProfile), reset)
+      if (active.current && result) setProfiles(previous => previous.map(value => (result.profileId
+        ? value.profile_id === result.profileId : value.adapter === result.adapter) ? { ...value, workspaceName: result.workspaceName } : value))
     } catch {
       if (active.current) setError(en ? 'Could not select the workspace. Retry.' : '工作目录选择未完成，请重试。')
+    } finally { if (active.current) setBusy(false) }
+  }
+
+  async function addProfile(profile: DesktopAgentProfile) {
+    if (!byProfile || !bridge?.addAgentProfile || busy || running) return
+    setBusy(true); setError('')
+    try {
+      const added = await bridge.addAgentProfile(profile.profile_id)
+      if (!active.current) return
+      setProfiles(previous => [...previous, added])
+      if (!added.requiresFullAccess || access === 'full-access') setSelected(previous => [...previous, added.profile_id])
+      onChanged()
+    } catch (value) {
+      if (active.current) setError(/profile limit/.test(value instanceof Error ? value.message : '')
+        ? (en ? 'Local Agent limit reached (20).' : '本机 Agent 数量已达上限（20）。')
+        : (en ? 'Could not add the Agent. Detect installed Agents and retry.' : '添加 Agent 失败，请重新检测已安装 Agent 后重试。'))
     } finally { if (active.current) setBusy(false) }
   }
 
@@ -127,7 +151,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       <select aria-label={en ? 'Execution access' : '执行权限'} value={access} disabled={busy || running} onChange={event => {
         const value = event.target.value as typeof access
         setAccess(value)
-        if (value !== 'full-access') setSelected(previous => previous.filter(adapter => !profiles.find(profile => profile.adapter === adapter)?.requiresFullAccess))
+        if (value !== 'full-access') setSelected(previous => previous.filter(id => !profiles.find(profile => selectionKey(profile, byProfile) === id)?.requiresFullAccess))
       }} className="min-w-0 max-w-full rounded border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm">
         <option value="workspace-write">{en ? 'CLI workspace editing' : 'CLI 工作区编辑'}</option>
         <option value="full-access">{en ? 'Full local execution' : '完整本机执行权限'}</option>
@@ -159,9 +183,9 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       <RotateCcw size={15} />{en ? 'Recover local Agents' : '恢复本机 Agent'}
     </button>}
     <ul className="space-y-2">{profiles.map(profile => <li key={profile.profile_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-      <label className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.includes(profile.adapter)} disabled={busy || running || !profile.available || (profile.requiresFullAccess && access !== 'full-access')} onChange={event => setSelected(previous => event.target.checked ? [...previous, profile.adapter] : previous.filter(value => value !== profile.adapter))} />{profile.display_name}</label>
+      <label className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.includes(selectionKey(profile, byProfile))} disabled={busy || running || !profile.available || (profile.requiresFullAccess && access !== 'full-access')} onChange={event => setSelected(previous => event.target.checked ? [...previous, selectionKey(profile, byProfile)] : previous.filter(value => value !== selectionKey(profile, byProfile)))} /><span className="break-words">{profile.display_name}</span></label>
       <span className="break-all text-xs text-[var(--muted-foreground)]">{!profile.available ? (en ? 'Not installed' : '未安装') : profile.requiresFullAccess && access !== 'full-access' ? (en ? 'Full access required' : '需要完整执行权限') : profile.version}</span>
-      {profile.available && bridge?.selectAgentWorkspace && <div className="flex min-w-0 items-center gap-1"><button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile.adapter)} aria-label={`${en ? 'Workspace for' : '工作目录'} ${profile.display_name}`} title={profile.workspaceName || (en ? 'Isolated WTT workspace' : '独立 WTT 工作区')} className="inline-flex min-h-9 max-w-48 items-center gap-1 rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--muted)] disabled:opacity-50"><FolderOpen size={15} className="shrink-0" /><span className="truncate">{profile.workspaceName || (en ? 'Workspace' : '工作目录')}</span></button>{profile.workspaceName && <button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile.adapter, true)} aria-label={`${en ? 'Reset workspace for' : '恢复默认工作目录'} ${profile.display_name}`} title={en ? 'Use isolated WTT workspace' : '使用独立 WTT 工作区'} className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><X size={15} /></button>}</div>}
+      {profile.available && <div className="flex min-w-0 items-center gap-1">{bridge?.selectAgentWorkspace && <><button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile)} aria-label={`${en ? 'Workspace for' : '工作目录'} ${profile.display_name}`} title={profile.workspaceName || (en ? 'Isolated WTT workspace' : '独立 WTT 工作区')} className="inline-flex min-h-9 max-w-48 items-center gap-1 rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--muted)] disabled:opacity-50"><FolderOpen size={15} className="shrink-0" /><span className="truncate">{profile.workspaceName || (en ? 'Workspace' : '工作目录')}</span></button>{profile.workspaceName && <button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile, true)} aria-label={`${en ? 'Reset workspace for' : '恢复默认工作目录'} ${profile.display_name}`} title={en ? 'Use isolated WTT workspace' : '使用独立 WTT 工作区'} className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><X size={15} /></button>}</>}{byProfile && bridge?.addAgentProfile && <button disabled={busy || running || profiles.length >= 20} type="button" onClick={() => void addProfile(profile)} title={en ? `Add another ${profile.adapter} Agent` : `新增 ${profile.adapter} Agent`} aria-label={en ? `Add another ${profile.adapter} Agent` : `新增 ${profile.adapter} Agent`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><Plus size={15} /></button>}</div>}
     </li>)}</ul>
     <ul className="space-y-2">{runtime.agents.map(agent => {
       const readiness = agent.readiness && Object.hasOwn(readinessText, agent.readiness) ? agent.readiness : 'unverified'
@@ -169,7 +193,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       const helpUrl = Object.hasOwn(authenticationHelp, agent.adapter) ? authenticationHelp[agent.adapter] : undefined
       const helpLabel = en ? `${agent.adapter} sign-in and configuration help` : `${agent.adapter} 登录与配置帮助`
       return <li key={agent.agentId} className="flex flex-wrap items-start justify-between gap-2 text-xs">
-        <span>{agent.adapter}</span>
+        <span className="min-w-0 break-words">{agent.displayName || profiles.find(profile => profile.profile_id === agent.profileId)?.display_name || agent.adapter}</span>
         <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
           <span>{agent.state === 'online' ? (en ? 'Online' : '在线') : agent.state === 'connecting' ? (en ? 'Connecting' : '连接中') : (en ? 'Offline' : '离线')}</span>
           <span className={needsHelp || readiness === 'execution_failed' ? 'text-red-600 dark:text-red-400' : 'text-[var(--muted-foreground)]'}>{readinessText[readiness][en ? 1 : 0]}</span>

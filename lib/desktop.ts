@@ -123,10 +123,12 @@ export interface DesktopHostBridge {
   onState?(callback: (state: DesktopHostState) => void): () => void;
   runtimeStatus?(): Promise<DesktopRuntimeState>;
   discoverAgents?(): Promise<DesktopAgentProfile[]>;
-  selectAgentWorkspace?(adapter: string, reset?: boolean): Promise<{ adapter: string; workspaceName: string } | null>;
+  selectAgentWorkspace?(profileOrAdapter: string, reset?: boolean): Promise<{ adapter: string; profileId?: string; workspaceName: string } | null>;
+  profileManagementSupported?: boolean;
+  addAgentProfile?(profileId: string): Promise<DesktopAgentProfile>;
   remoteToolsSupported?: boolean;
   previewSupported?: boolean;
-  startAgents?(selection: { adapters: string[]; workspaceAccess: 'workspace-write' | 'full-access'; remoteTools?: DesktopRemoteTools }): Promise<DesktopRuntimeState>;
+  startAgents?(selection: { adapters?: string[]; profileIds?: string[]; workspaceAccess: 'workspace-write' | 'full-access'; remoteTools?: DesktopRemoteTools }): Promise<DesktopRuntimeState>;
   stopAgents?(): Promise<DesktopRuntimeState>;
   recoverAgents?(): Promise<DesktopRuntimeState>;
   onRuntimeState?(callback: (state: DesktopRuntimeState) => void): () => void;
@@ -154,6 +156,7 @@ export interface DesktopAgentProfile {
   version: string;
   requiresFullAccess: boolean;
   workspaceName?: string;
+  configured?: boolean;
 }
 
 export interface DesktopRemoteTools {
@@ -168,8 +171,9 @@ export interface DesktopRuntimeState {
   recovery?: { state: 'none' | 'previous_boot' | 'restart_computer_required' | 'unverified_owner'; canRecover: boolean };
   autoStart?: boolean;
   configuredAdapters?: string[];
+  configuredProfileIds?: string[];
   workspaceAccess?: 'workspace-write' | 'full-access';
-  agents: Array<{ profileId: string; adapter: string; agentId: string; state: string;
+  agents: Array<{ profileId: string; adapter: string; displayName?: string; agentId: string; state: string;
     readiness?: 'unverified' | 'verified' | 'authentication_required' | 'configuration_required' | 'execution_failed' }>;
 }
 
