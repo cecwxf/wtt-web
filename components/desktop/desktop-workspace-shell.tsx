@@ -86,25 +86,39 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
     }
     await current()
     const roles = payload.roles as Array<{ display_name: string }>
-    const requestId = String(payload.client_operation_id || '')
+    let requestId = String(payload.client_operation_id || '')
     const adapter = String(payload.adapter || '')
+    const names = roles.map(role => role.display_name)
     const before = await bridge.runtimeStatus()
     let profileIds: string[]
     let runtime = before
     const pending = nativeTeamDraft.current
-    if (before.state === 'running' && pending?.requestId === requestId && pending.adapter === adapter && JSON.stringify(pending.names) === JSON.stringify(roles.map(role => role.display_name))
+    if (bridge.prepareTeam) {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([payload.name, payload.description, adapter, payload.roles])))
+      const draftKey = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+      progress({ phase: en ? 'Recovering local profiles' : '恢复本机配置' })
+      const prepared = await bridge.prepareTeam({ requestId, draftKey, adapter, names })
+      await current()
+      requestId = prepared.requestId
+      profileIds = prepared.profiles.map(profile => profile.profile_id)
+      if (before.state === 'stopped') runtime = await startTeam(profileIds, prepared.profiles.some(profile => profile.requiresFullAccess))
+    } else if (before.state === 'running' && pending?.requestId === requestId && pending.adapter === adapter && JSON.stringify(pending.names) === JSON.stringify(names)
         && before.agents.length === pending.profileIds.length && before.agents.every(agent => pending.profileIds.includes(agent.profileId))) {
       profileIds = pending.profileIds
     } else {
       if (before.state !== 'stopped') throw new Error(en ? 'Stop local Agents in computer settings before creating a team.' : '请先在主机设置中停止本机 Agent，再创建团队。')
       progress({ phase: en ? 'Preparing local profiles' : '准备本机配置' })
-      const drafts = await bridge.addTeamProfiles({ requestId, adapter, names: roles.map(role => role.display_name) })
+      const drafts = await bridge.addTeamProfiles({ requestId, adapter, names })
       await current()
       profileIds = drafts.map(profile => profile.profile_id)
-      nativeTeamDraft.current = { requestId, adapter, names: roles.map(role => role.display_name), profileIds }
+      nativeTeamDraft.current = { requestId, adapter, names, profileIds }
+      runtime = await startTeam(profileIds, drafts.some(profile => profile.requiresFullAccess))
+    }
+    async function startTeam(ids: string[], fullAccess: boolean) {
       progress({ phase: en ? 'Waiting for native confirmation' : '等待原生授权确认' })
+      let started
       try {
-        runtime = await bridge.startAgents({ profileIds, workspaceAccess: drafts.some(profile => profile.requiresFullAccess) ? 'full-access' : 'workspace-write',
+        started = await bridge!.startAgents!({ profileIds: ids, workspaceAccess: fullAccess ? 'full-access' : 'workspace-write',
           remoteTools: { files: 'off', terminal: false, previewPorts: [] } })
       } catch (error) {
         const cancelled = error instanceof Error && /Local Agent operation cancelled/.test(error.message)
@@ -113,10 +127,19 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
           : (en ? 'Local team startup failed. Check computer settings before retrying.' : '本机团队启动失败，请在主机设置中检查后重试。'))
       }
       await current()
+      return started
     }
     const agentIds = profileIds.map(id => runtime.agents.find(agent => agent.profileId === id)?.agentId)
     if (runtime.state !== 'running' || agentIds.some(id => !id)) throw new Error(en ? 'Local team registration did not complete.' : '本机团队 Agent 登记尚未完成。')
-    return props.onSubmitAgentOperation('team_create', { ...payload, runtime_mode: 'managed_desktop', host_id: localTeamHost.id, agent_ids: agentIds }, undefined, progress)
+    const job = await props.onSubmitAgentOperation('team_create', { ...payload, client_operation_id: requestId, runtime_mode: 'managed_desktop', host_id: localTeamHost.id, agent_ids: agentIds }, undefined, progress)
+    await current()
+    const result = job.result as { topic_id?: string; topic?: { topic_id?: string } } | undefined
+    if (job.status === 'succeeded' && (result?.topic_id || result?.topic?.topic_id)) {
+      // A failed local acknowledgement leaves the idempotent request recoverable.
+      try { await bridge.completeTeam?.({ requestId }) } catch { /* No new Agents or backend job on retry. */ }
+      nativeTeamDraft.current = undefined
+    }
+    return job
   }
   const nativeTeamDraft = useRef<{ requestId: string; adapter: string; names: string[]; profileIds: string[] }>()
   const [collapsed, setCollapsed] = useState(false)

@@ -128,6 +128,8 @@ export interface DesktopHostBridge {
   addAgentProfile?(profileId: string): Promise<DesktopAgentProfile>;
   teamProfilesSupported?: boolean;
   addTeamProfiles?(request: { requestId: string; adapter: string; names: string[] }): Promise<DesktopAgentProfile[]>;
+  prepareTeam?(request: { requestId: string; draftKey: string; adapter: string; names: string[] }): Promise<{ requestId: string; profiles: DesktopAgentProfile[] }>;
+  completeTeam?(request: { requestId: string }): Promise<void>;
   remoteToolsSupported?: boolean;
   previewSupported?: boolean;
   startAgents?(selection: { adapters?: string[]; profileIds?: string[]; workspaceAccess: 'workspace-write' | 'full-access'; remoteTools?: DesktopRemoteTools }): Promise<DesktopRuntimeState>;
