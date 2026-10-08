@@ -168,6 +168,25 @@ async function nativeCalls(page: Page) {
   return page.evaluate(() => (window as unknown as { __hostCalls: string[] }).__hostCalls)
 }
 
+test('Workspace onboarding retries failed account verification without starting Agents', async ({ page }) => {
+  const { calls } = await setup(page, { native: true, registered: true, restoreFails: true, runtime: true })
+  await page.route('**/api/wtt/workspaces**', route => route.fulfill({ json: { workspaces: [], roots: [], next_offset: null } }))
+  await page.goto('/desktop')
+  await expect.poll(() => nativeCalls(page)).toContain('resume:alice')
+  await page.getByRole('button', { name: '接入本机', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '接入本机 Agent', exact: true })
+  const retry = dialog.getByRole('button', { name: '校验账号并接入', exact: true })
+  await expect(retry).toBeEnabled()
+  expect(await nativeCalls(page)).not.toContain('discover')
+  await retry.click()
+  await expect(dialog.getByRole('button', { name: '启用所选 Agent', exact: true })).toBeEnabled()
+  const native = await nativeCalls(page)
+  expect(native.filter(call => call === 'resume:alice')).toHaveLength(2)
+  expect(native).toContain('discover')
+  expect(native.some(call => call.startsWith('start:'))).toBe(false)
+  expect(calls.some(call => call.path.endsWith('/enrollments'))).toBe(false)
+})
+
 test('global account synchronization restores the host without another enrollment', async ({ page }) => {
   const { calls } = await setup(page, { native: true, registered: true })
   await page.goto('/desktop/setup')

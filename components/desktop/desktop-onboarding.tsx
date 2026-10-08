@@ -174,7 +174,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
         {available === false && <p role="status" className="text-sm text-zinc-500">{en ? 'Computer access is not yet available for this account.' : '此账号暂未开通主机接入。'}</p>}
         {phase === 'intro' && <div className="space-y-4">
           <p className="text-sm text-zinc-600 dark:text-zinc-300">{en ? 'Use the Agents already installed on this computer with your WTT account.' : '将这台电脑上已有的 Agent 接入当前 WTT 账号。'}</p>
-          <div className="flex flex-wrap gap-2"><button disabled={!native.accountVerified} onClick={() => void detect()} className={`${button} bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900`}><Laptop size={16} />{en ? 'Connect and detect' : '接入并检测'}</button><button onClick={() => setOpen(false)} className={button}>{en ? 'Later' : '稍后'}</button></div>
+          <div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => void detect()} className={`${button} bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900`}><Laptop size={16} />{native.accountVerified ? (en ? 'Connect and detect' : '接入并检测') : (en ? 'Verify account and connect' : '校验账号并接入')}</button><button onClick={() => setOpen(false)} className={button}>{en ? 'Later' : '稍后'}</button></div>
         </div>}
         {busy && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={17} className="animate-spin" />{choosingWorkspace ? (en ? 'Choose a workspace...' : '请选择工作目录…') : phase === 'authorizing' ? (en ? 'Authorizing this computer...' : '正在登记本机，请确认系统授权…') : phase === 'detecting' ? (en ? 'Detecting installed Agents...' : '正在检测已安装的 Agent…') : (en ? 'Connecting Agents...' : '正在接入 Agent，请确认执行权限…')}</p>}
         {phase === 'selection' && <>
