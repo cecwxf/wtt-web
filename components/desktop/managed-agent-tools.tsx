@@ -18,15 +18,16 @@ type Tab = 'files' | 'terminal' | 'preview'
 
 type ManagedAgentToolsProps = {
   agentId: string; agentName?: string; token?: string
+  workspaceId?: string
   layout?: 'dialog' | 'docked'
   children?: (toolbar: ReactNode, managed: boolean) => ReactNode
 }
 
 export function ManagedAgentTools(props: ManagedAgentToolsProps) {
-  return <ManagedAgentToolsInner key={`${props.agentId}:${props.token || ''}`} {...props} />
+  return <ManagedAgentToolsInner key={`${props.workspaceId || props.agentId}:${props.token || ''}`} {...props} />
 }
 
-function ManagedAgentToolsInner({ agentId, agentName, token, layout = 'dialog', children }: ManagedAgentToolsProps) {
+function ManagedAgentToolsInner({ agentId, agentName, token, workspaceId, layout = 'dialog', children }: ManagedAgentToolsProps) {
   const { locale } = useI18n()
   const en = locale === 'en'
   const [tab, setTab] = useState<Tab | null>(null)
@@ -43,9 +44,10 @@ function ManagedAgentToolsInner({ agentId, agentName, token, layout = 'dialog', 
   const [progress, setProgress] = useState<number | null>(null)
   const [downloadError, setDownloadError] = useState('')
   const [refreshEpoch, setRefreshEpoch] = useState(0)
-  const apiBase = `${CLIENT_WTT_API_BASE}/hosts/agents/${encodeURIComponent(agentId)}/workspace`
-  const { data, error, mutate } = useSWR<Tools | null>(token && agentId ? ['managed-agent-tools', agentId, token] : null, async () => {
-    const response = await fetch(`${CLIENT_WTT_API_BASE}/hosts/agents/${encodeURIComponent(agentId)}/tools`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', redirect: 'error' })
+  const resource = workspaceId ? `workspaces/${encodeURIComponent(workspaceId)}` : `hosts/agents/${encodeURIComponent(agentId)}`
+  const apiBase = `${CLIENT_WTT_API_BASE}/${resource}/workspace`
+  const { data, error, mutate } = useSWR<Tools | null>(token && agentId ? ['managed-agent-tools', resource, token] : null, async () => {
+    const response = await fetch(`${CLIENT_WTT_API_BASE}/${resource}/tools`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', redirect: 'error' })
     if ([403, 404].includes(response.status)) return null
     if (!response.ok) throw new Error('Could not load remote tools')
     const value = await response.json()
@@ -93,7 +95,7 @@ function ManagedAgentToolsInner({ agentId, agentName, token, layout = 'dialog', 
     transfer.current = controller
     setDownloadError(''); setProgress(0)
     try {
-      if (await downloadNativeWorkspaceFile({ agentId, path, filename: name }, {
+      if (!workspaceId && await downloadNativeWorkspaceFile({ agentId, path, filename: name }, {
         signal: controller.signal,
         onProgress: value => { if (live.current) setProgress(value.total ? Math.min(100, Math.round(value.loaded / value.total * 100)) : 0) },
       })) return

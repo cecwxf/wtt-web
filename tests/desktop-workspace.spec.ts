@@ -78,7 +78,7 @@ test('desktop tree and docked tools retain the same chat and draft through tool 
   await page.setViewportSize({ width: 1600, height: 1000 })
   await setup(page, { tools: true })
   await page.route('https://wtt-ui-fixture.trycloudflare.com/**', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body><h1>Website preview</h1><button>Play</button></body></html>' }))
-  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await page.goto('/desktop?legacy=1&agentId=agent-one&topic=topic-one')
   await expect(page.getByText('The project files are ready.')).toBeVisible()
   await expect(page.getByRole('region', { name: 'Executions' }).getByText('Running')).toBeVisible()
   const tree = page.locator('#desktop-navigation').getByRole('region', { name: 'Computers & agents' })
@@ -121,7 +121,7 @@ test('desktop tree and docked tools retain the same chat and draft through tool 
 test('docked tools adapt to narrow dark screens and restore chat without losing drafts', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await setup(page, { tools: true, dark: true, locale: 'zh' })
-  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await page.goto('/desktop?legacy=1&agentId=agent-one&topic=topic-one')
   await expect(page.getByText('The project files are ready.')).toBeVisible()
   const composer = page.locator('textarea').first()
   await composer.fill('保留草稿')
@@ -140,7 +140,7 @@ test('docked tools adapt to narrow dark screens and restore chat without losing 
 test('desktop directory opens shared chat, recent cross-agent history and group deep links', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await setup(page)
-  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await page.goto('/desktop?legacy=1&agentId=agent-one&topic=topic-one')
   await expect(page.getByText('Verified history for topic-one')).toBeVisible()
   const navigation = page.locator('aside nav')
   await expect(navigation.getByText('MacBook Pro', { exact: true })).toBeVisible()
@@ -159,7 +159,7 @@ test('desktop directory opens shared chat, recent cross-agent history and group 
 test('desktop shares the original composer and posts to the selected topic', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const sent = await setup(page)
-  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await page.goto('/desktop?legacy=1&agentId=agent-one&topic=topic-one')
   await expect(page.getByText('Verified history for topic-one')).toBeVisible()
   const composer = page.locator('textarea').first()
   await composer.fill('Please inspect the project')
@@ -171,7 +171,7 @@ test('desktop shares the original composer and posts to the selected topic', asy
 test('desktop sidebar resizes with pointer and keyboard and filters without changing the selected chat', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await setup(page)
-  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await page.goto('/desktop?legacy=1&agentId=agent-one&topic=topic-one')
   await expect(page.getByText('Verified history for topic-one')).toBeVisible()
   const separator = page.getByRole('separator', { name: 'Resize navigation' })
   await expect(separator).toHaveAttribute('aria-valuenow', '288')
@@ -213,7 +213,7 @@ test('ordinary feed retains the original shell and chat appearance', async ({ pa
 test('desktop keeps existing agents usable when new host service is disabled', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await setup(page, { disabled: true })
-  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await page.goto('/desktop?legacy=1&agentId=agent-one&topic=topic-one')
   await expect(page.getByText('Verified history for topic-one')).toBeVisible()
   await expect(page.locator('aside nav').getByRole('link', { name: /Claude Writer/ }).first()).toBeVisible()
   await expect(page.locator('aside nav').getByRole('alert')).toHaveCount(0)
@@ -226,7 +226,7 @@ test('desktop keeps existing agents usable when new host service is disabled', a
 test('narrow dark workspace drawer closes with Escape and content does not overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await setup(page, { dark: true, locale: 'zh' })
-  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await page.goto('/desktop?legacy=1&agentId=agent-one&topic=topic-one')
   await expect(page.getByText('Verified history for topic-one')).toBeVisible()
   await page.getByRole('button', { name: '展开导航' }).click()
   const dialog = page.getByRole('dialog', { name: '工作区导航' })
@@ -258,7 +258,7 @@ test('packaged Electron renders the actual shared workspace and sends from its c
     application = await _electron.launch({ executablePath: process.env.WTT_TEST_ELECTRON_EXECUTABLE, args: [`--user-data-dir=${directory}`], env })
     const page = await application.firstWindow()
     const sent = await setup(page)
-    await page.goto(`${baseURL}/desktop?agentId=agent-one&topic=topic-one`)
+    await page.goto(`${baseURL}/desktop?legacy=1&agentId=agent-one&topic=topic-one`)
     await expect(page.getByText('Verified history for topic-one')).toBeVisible()
     expect(await application.evaluate(({ app }) => app.isPackaged)).toBe(true)
     expect(await application.evaluate(({ app }) => app.getPath('userData'))).toBe(directory)

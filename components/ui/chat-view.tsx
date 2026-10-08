@@ -630,6 +630,7 @@ interface ChatViewProps {
   enableCameraCapture?: boolean
   slashCommandOverrides?: Array<{ cmd: string; desc: string; icon?: string }>
   hideHeader?: boolean
+  workspaceProjectId?: string
   composerAccessory?: React.ReactNode
   hideRuntimeBadges?: boolean
 }
@@ -1356,7 +1357,7 @@ function avatarTone(seed: string, kind: 'agent' | 'human') {
 
 export function ChatView(props: ChatViewProps) {
   if (props.appearance === 'desktop' && !props.currentAgentIsCloud && !props.hideHeader) {
-    return <ManagedAgentTools agentId={props.currentAgentId} agentName={props.workspaceAgentName} token={props.accessToken} layout="docked">
+    return <ManagedAgentTools agentId={props.currentAgentId} agentName={props.workspaceAgentName} token={props.accessToken} workspaceId={props.workspaceProjectId} layout="docked">
       {(toolbar, managed) => <ChatViewContent {...props} managedToolsExternal desktopHasManagedTools={managed} extraHeaderActions={<>{props.extraHeaderActions}{toolbar}</>} />}
     </ManagedAgentTools>
   }
@@ -1403,6 +1404,7 @@ function ChatViewContent({
   enableCameraCapture = false,
   slashCommandOverrides,
   hideHeader = false,
+  workspaceProjectId,
   composerAccessory,
   hideRuntimeBadges = false,
   managedToolsExternal = false,
@@ -1880,12 +1882,12 @@ function ChatViewContent({
     if (isNonTaskDiscussTopic) {
       deduped.set(WTT_GOAL_COMMAND.cmd, WTT_GOAL_COMMAND)
     }
-    const commands = Array.from(deduped.values())
+    const commands = Array.from(deduped.values()).filter(command => !workspaceProjectId || command.mode !== 'local')
     if (!isNonTaskDiscussTopic) return commands
     // In non-task discuss topics, model switching must be blocked to avoid all
     // agents reacting to the same slash command.
     return commands.filter((c) => !isModelCommand(c.cmd))
-  }, [activeAgentAdapter, dynamicSlashCommands, isNonTaskDiscussTopic, isModelCommand, slashCommandOverrides])
+  }, [activeAgentAdapter, dynamicSlashCommands, isNonTaskDiscussTopic, isModelCommand, slashCommandOverrides, workspaceProjectId])
 
   // Slash command filtering
   const filteredCommands = slashFilter
@@ -2104,6 +2106,10 @@ function ChatViewContent({
   const executeSlashCommand = useCallback(async (cmd: string, args: string) => {
     const apiBase = CLIENT_WTT_API_BASE
     setSlashResult(null)
+    if (workspaceProjectId && ['/new task', '/new code task', '/new research task', '/new topic', '/run', '/workers', '/goal'].includes(cmd)) {
+      setSlashResult('Command is unavailable in Workspace sessions.')
+      return
+    }
     try {
       switch (cmd) {
         case '/workers': {
@@ -2238,7 +2244,7 @@ function ChatViewContent({
     } catch (e) {
       setSlashResult(`❌ Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
-  }, [currentAgentId, propTaskId, accessToken, onTaskCreated, onTopicCreated, isNonTaskDiscussTopic, topicId])
+  }, [currentAgentId, propTaskId, accessToken, onTaskCreated, onTopicCreated, isNonTaskDiscussTopic, topicId, workspaceProjectId])
 
   const sendPassthroughSlash = useCallback(async (command: string, opts?: { silent?: boolean }) => {
     setSending(true)
@@ -3033,7 +3039,7 @@ function ChatViewContent({
         <div className={`flex items-start justify-between ${compactUi ? 'gap-1.5' : 'gap-3'}`}>
           <div className="min-w-0 flex-1">
             <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
-              <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}>{appearance === 'desktop' ? '' : '# '}{topicName}</h2>
+              {!workspaceProjectId && <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}>{appearance === 'desktop' ? '' : '# '}{topicName}</h2>}
               {!compactUi && appearance !== 'desktop' && (
                 <span className="shrink-0 text-[10px] text-slate-400">
                   {t('chat.messagesLoaded', { count: messages.length })}

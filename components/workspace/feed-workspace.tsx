@@ -55,7 +55,7 @@ type TopicTypingState = {
   expiresAt: number
 }
 
-const DesktopWorkspaceShell = dynamic(() => import('@/components/desktop/desktop-workspace-shell').then(module => module.DesktopWorkspaceShell))
+const DesktopProjectShell = dynamic(() => import('@/components/desktop/desktop-project-shell').then(module => module.DesktopProjectShell))
 const DesktopWorkspaceEmpty = dynamic(() => import('@/components/desktop/desktop-workspace-shell').then(module => module.DesktopWorkspaceEmpty))
 
 const ContentEditor = dynamic(
@@ -3126,7 +3126,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
 
   if (status === 'unauthenticated') return null
 
-  const WorkspaceShell = desktopMode ? DesktopWorkspaceShell : WttShellV2
+  const WorkspaceShell = desktopMode ? DesktopProjectShell : WttShellV2
 
   return (
     <>
@@ -3223,6 +3223,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
               <div className="min-h-0 flex-1">
                 <ChatView
                 appearance={desktopMode ? 'desktop' : 'default'}
+                workspaceProjectId={desktopMode && searchParams.get('legacy') !== '1' ? searchParams.get('workspace') || undefined : undefined}
                 topicName={selectedTopic.name}
                 topicId={selectedTopic.topic_id}
                 taskId={selectedTopicTaskId}

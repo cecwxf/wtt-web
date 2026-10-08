@@ -24,6 +24,7 @@ const rowClass = 'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-2 py-1.5
 
 function desktopHref(agentId: string, topicId?: string) {
   const query = new URLSearchParams()
+  query.set('legacy', '1')
   if (agentId) query.set('agentId', agentId)
   if (topicId) query.set('topic', topicId)
   return `/desktop?${query}`

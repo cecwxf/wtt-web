@@ -1,0 +1,103 @@
+import { test, expect, type Page } from '@playwright/test'
+import { _electron } from 'playwright'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+const host = '11111111-1111-4111-8111-111111111111'
+const root = '22222222-2222-4222-8222-222222222222'
+const participants = [
+  { participant_id: 'one', label: 'Engineer', host_id: host, host_name: 'MacBook', adapter: 'codex', profile_id: 'codex', transport_agent_id: 'agent-one' },
+  { participant_id: 'two', label: 'Reviewer', host_id: 'remote', host_name: 'Linux', adapter: 'claude-code', profile_id: 'claude', transport_agent_id: 'agent-two' },
+]
+
+async function workspaceFlow(page: Page, baseURL = '') {
+  const created: Array<{ path: string; body: any }> = []
+  const projects: any[] = []
+  await page.addInitScript(() => { localStorage.setItem('wtt-web.locale', 'en'); localStorage.removeItem('wtt_selected_topic_id'); localStorage.removeItem('wtt_selected_agent_id') })
+  await page.routeWebSocket('**', socket => socket.close())
+  await page.route('**/api/auth/session', route => route.fulfill({ json: { userId: host, user: { id: host, name: 'Workspace Tester', email: 'workspace@example.test' }, accessToken: 'synthetic-user-token', expires: '2099-01-01T00:00:00Z' } }))
+  await page.route('**/api/wtt/**', async route => {
+    const path = new URL(route.request().url()).pathname.replace('/api/wtt', '')
+    let value: any = {}
+    if (path === '/hosts/my') value = { hosts: participants.map(p => ({ host_id: p.host_id, display_name: p.host_name, status: 'online', agents: [{ agent_id: p.transport_agent_id, profile_id: p.profile_id, display_name: p.label, adapter: p.adapter, capabilities: { workspace_projects: true, workspace_mcp: true } }] })), next_offset: null }
+    else if (path === '/workspaces/roots') value = { roots: [{ root_id: root, host_id: host, host_name: 'MacBook', name: 'Website source', access: 'workspace-write' }] }
+    else if (path === '/workspaces' && route.request().method() === 'GET') value = { workspaces: projects, next_offset: null }
+    else if (path === '/workspaces' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, host_id: host, access: 'workspace-write', sessions: [] }; projects.push(value)
+    } else if (/^\/workspaces\/[^/]+\/sessions$/.test(path)) {
+      const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, topic_id: 'project-topic', participants }; projects[0].sessions.push(value)
+    } else if (/^\/workspaces\/[^/]+\/tools$/.test(path)) value = { files: 'workspace-write', terminal: false, preview_ports: [] }
+    else if (/^\/workspaces\/[^/]+$/.test(path)) value = projects.find(project => path.endsWith(project.workspace_id)) || {}
+    else if (path.endsWith('/workspace/list')) value = { root: 'Workspace', path: '.', entries: [{ name: 'README.md', path: 'README.md', type: 'file', size: 27 }] }
+    else if (path.endsWith('/workspace/read')) value = { name: 'README.md', path: 'README.md', content: 'Canonical project directory', preview_kind: 'text', previewable: true, editable: true, content_type: 'text/markdown' }
+    else if (path === '/agents/my') value = participants.map(p => ({ agent_id: p.transport_agent_id, display_name: p.label }))
+    else if (path === '/agents/stats') value = { online_agents: participants.map(p => p.transport_agent_id), runtimes: {} }
+    else if (path === '/topics/subscribed') value = projects.length && projects[0].sessions.length ? [{ id: 'project-topic', topic_id: 'project-topic', name: 'Website / Team', topic_type: 'discussion' }] : []
+    else if (path === '/topics/my-groups') value = projects.length && projects[0].sessions.length ? [{ id: 'project-topic', topic_id: 'project-topic', name: 'Website / Team', topic_type: 'discussion', member_agent_ids: ['agent-one', 'agent-two'] }] : []
+    else if (path.endsWith('/messages')) {
+      if (route.request().method() === 'POST') { const body = route.request().postDataJSON(); created.push({ path, body }); value = { id: 'sent', topic_id: 'project-topic', content: body.content, sender_type: 'human', sender_id: 'workspace@example.test', timestamp: new Date().toISOString() } }
+      else value = [{ id: 'reply', topic_id: 'project-topic', content: 'Shared Workspace result', sender_type: 'agent', sender_id: 'agent-one', timestamp: '2026-10-08T00:00:00Z' }]
+    } else if (path.endsWith('/members')) value = participants.map(p => ({ agent_id: p.transport_agent_id, display_name: p.label, alias: p.label, role: 'member' }))
+    else if (path === '/topics/my-recent') value = { items: [] }
+    else if (path === '/billing/me') value = { entitlement: { plan: 'free' } }
+    else if (path.startsWith('/tasks') || path.startsWith('/p2p-requests') || path === '/hosts/chat-executions' || path.startsWith('/agent-operations')) value = []
+    await route.fulfill({ json: value })
+  })
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto(`${baseURL}/desktop`)
+  await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'New conversation', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'New Workspace', exact: true }).first().click()
+  const modal = page.getByRole('dialog')
+  await modal.getByLabel('Name', { exact: true }).fill('Website')
+  await modal.getByLabel('Engineer MacBook').check()
+  await modal.getByLabel('Reviewer Linux').check()
+  await modal.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  expect(created[0].body.name).toBe('Website')
+  expect(created[1].body.participants.map((p: any) => p.host_id)).toEqual([host, 'remote'])
+  expect(created[1].body.participants.every((p: any) => !('agent_id' in p))).toBe(true)
+  await page.locator('textarea').first().fill('Continue the project')
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(() => created.some(p => p.path.includes('/topics/') && p.body.content === 'Continue the project')).toBe(true)
+  await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
+  await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
+  await page.screenshot({ path: '/tmp/wtt-workspace-project-desktop.png', fullPage: true })
+  await page.reload()
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+  await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: '/tmp/wtt-workspace-project-mobile.png', fullPage: true })
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).not.toBeVisible()
+}
+
+test('Workspace-first desktop creates a cross-host collaboration and reuses chat and project files', async ({ page }) => {
+  await workspaceFlow(page)
+})
+
+test('packaged Mac opens the Workspace-first flow, creates a project and sends chat', async ({ baseURL }) => {
+  test.skip(!process.env.WTT_TEST_ELECTRON_EXECUTABLE, 'Requires the packaged Mac executable')
+  test.setTimeout(60000)
+  const directory = await mkdtemp(join(tmpdir(), 'wtt-project-electron-'))
+  let application: Awaited<ReturnType<typeof _electron.launch>> | undefined
+  try {
+    await writeFile(join(directory, 'config.json'), JSON.stringify({ frontendUrl: baseURL, apiUrl: baseURL, notificationsEnabled: false }))
+    const env: Record<string, string> = { WTT_DESKTOP_HOSTS_ENABLED: '0' }
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined && !['ELECTRON_RUN_AS_NODE', 'WTT_DESKTOP_HOSTS_ENABLED'].includes(key)) env[key] = value
+    }
+    application = await _electron.launch({ executablePath: process.env.WTT_TEST_ELECTRON_EXECUTABLE, args: [`--user-data-dir=${directory}`], env })
+    const page = await application.firstWindow()
+    await workspaceFlow(page, baseURL)
+    expect(await application.evaluate(({ app }) => app.isPackaged)).toBe(true)
+    expect(await page.evaluate(() => typeof window.wttDesktop?.host?.admitWorkspaceDirectory)).toBe('function')
+    expect(await page.evaluate(() => typeof (window as unknown as { require?: unknown }).require)).toBe('undefined')
+  } finally {
+    if (application) await application.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})

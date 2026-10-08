@@ -8,7 +8,7 @@ export interface AccountHost {
   client_version: string
   status: 'online' | 'offline' | 'revoked'
   last_seen_at: string | null
-  agents: Array<{ agent_id: string; profile_id: string; adapter: string; display_name: string }>
+  agents: Array<{ agent_id: string; profile_id: string; adapter: string; display_name: string; capabilities?: { workspace_projects?: boolean; workspace_mcp?: boolean } }>
 }
 
 export class HostRequestError extends Error {

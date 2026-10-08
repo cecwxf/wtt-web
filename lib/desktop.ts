@@ -123,6 +123,8 @@ export interface DesktopHostBridge {
   onState?(callback: (state: DesktopHostState) => void): () => void;
   runtimeStatus?(): Promise<DesktopRuntimeState>;
   discoverAgents?(): Promise<DesktopAgentProfile[]>;
+  workspaceProjectsSupported?: boolean;
+  admitWorkspaceDirectory?(access: 'read-only' | 'workspace-write'): Promise<{ root_id: string; host_id: string; name: string; access: string } | null>;
   selectAgentWorkspace?(profileOrAdapter: string, reset?: boolean): Promise<{ adapter: string; profileId?: string; workspaceName: string; workspaceImport?: DesktopAgentProfile['workspaceImport'] } | null>;
   workspaceImportSupported?: boolean;
   nativeContextImportSupported?: boolean;
