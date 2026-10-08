@@ -169,8 +169,9 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
   }
 
   if (!enabled || (!rows.length && !error)) return null
-  const visible = rows.filter(row => active.has(row.state) || ['interrupted', 'failed'].includes(row.state)).slice(0, 8)
-  if (!visible.length && rows[0]) visible.push(rows[0])
+  const visible = rows.filter(row => active.has(row.state) || ['interrupted', 'failed'].includes(row.state)).slice(0, 7)
+  // An earlier failure must not hide the latest successful continuation.
+  if (rows[0] && !visible.some(row => row.execution_id === rows[0].execution_id)) visible.unshift(rows[0])
   return <section aria-label={en ? 'Executions' : '执行状态'} className="mb-2 max-h-36 overflow-y-auto border-b border-zinc-200 pb-1 dark:border-zinc-800">
     {visible.map(row => {
       const pending = active.has(row.state) && !row.stale
