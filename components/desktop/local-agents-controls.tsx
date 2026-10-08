@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ExternalLink, FolderOpen, Loader2, Play, Plus, RefreshCw, RotateCcw, Square, X } from 'lucide-react'
+import { ExternalLink, FolderOpen, Import, Loader2, Play, Plus, RefreshCw, RotateCcw, Square, Undo2, X } from 'lucide-react'
 import { getDesktopBridge, type DesktopAgentProfile, type DesktopRuntimeState, type DesktopRemoteTools } from '@/lib/desktop'
 import { RemoteToolsSelection } from './remote-tools-selection'
 import { useI18n } from '@/lib/i18n-provider'
@@ -116,9 +116,33 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     try {
       const result = await bridge.selectAgentWorkspace(selectionKey(profile, byProfile), reset)
       if (active.current && result) setProfiles(previous => previous.map(value => (result.profileId
-        ? value.profile_id === result.profileId : value.adapter === result.adapter) ? { ...value, workspaceName: result.workspaceName } : value))
+        ? value.profile_id === result.profileId : value.adapter === result.adapter) ? { ...value, workspaceName: result.workspaceName,
+          ...(bridge.workspaceImportSupported ? { workspaceImport: result.workspaceImport } : {}) } : value))
     } catch {
       if (active.current) setError(en ? 'Could not select the workspace. Retry.' : '工作目录选择未完成，请重试。')
+    } finally { if (active.current) setBusy(false) }
+  }
+
+  async function migrateWorkspace(profile: DesktopAgentProfile, rollback = false) {
+    if (!bridge?.workspaceImportSupported || busy || running) return
+    setBusy(true); setError('')
+    try {
+      const result = rollback && profile.workspaceImport
+        ? await bridge.rollbackAgentWorkspace?.(profile.profile_id, profile.workspaceImport.receiptId)
+        : await bridge.importAgentWorkspace?.(profile.profile_id)
+      if (active.current && result) {
+        setProfiles(previous => previous.map(value => value.profile_id === result.profile_id ? result : value))
+        onChanged()
+      }
+    } catch (value) {
+      const message = value instanceof Error ? value.message : ''
+      if (active.current) setError(/provider does not match/.test(message)
+        ? (en ? 'Select a record for this Agent type.' : '请选择与此 Agent 类型一致的记录。')
+        : /record|JSON|256 KiB/.test(message)
+          ? (en ? 'Select one valid Agent JSON record, up to 256 KiB.' : '请选择单个有效的 Agent JSON 记录，最大 256 KiB。')
+          : /changed|receipt/.test(message)
+            ? (en ? 'The directory or receipt changed. Select the workspace explicitly.' : '目录或收据已变化，请重新选择工作目录。')
+            : (en ? 'Could not import or restore the workspace. Check that the directory exists and Agents are stopped.' : '无法导入或恢复工作目录，请检查目录存在且 Agent 已停止。'))
     } finally { if (active.current) setBusy(false) }
   }
 
@@ -189,6 +213,16 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       <label className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.includes(selectionKey(profile, byProfile))} disabled={busy || running || !profile.available || (profile.requiresFullAccess && access !== 'full-access')} onChange={event => setSelected(previous => event.target.checked ? [...previous, selectionKey(profile, byProfile)] : previous.filter(value => value !== selectionKey(profile, byProfile)))} /><span className="break-words">{profile.display_name}</span></label>
       <span className="break-all text-xs text-[var(--muted-foreground)]">{!profile.available ? (en ? 'Not installed' : '未安装') : profile.requiresFullAccess && access !== 'full-access' ? (en ? 'Full access required' : '需要完整执行权限') : profile.version}</span>
       {profile.available && <div className="flex min-w-0 items-center gap-1">{bridge?.selectAgentWorkspace && <><button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile)} aria-label={`${en ? 'Workspace for' : '工作目录'} ${profile.display_name}`} title={profile.workspaceName || (en ? 'Isolated WTT workspace' : '独立 WTT 工作区')} className="inline-flex min-h-9 max-w-48 items-center gap-1 rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--muted)] disabled:opacity-50"><FolderOpen size={15} className="shrink-0" /><span className="truncate">{profile.workspaceName || (en ? 'Workspace' : '工作目录')}</span></button>{profile.workspaceName && <button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile, true)} aria-label={`${en ? 'Reset workspace for' : '恢复默认工作目录'} ${profile.display_name}`} title={en ? 'Use isolated WTT workspace' : '使用独立 WTT 工作区'} className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><X size={15} /></button>}</>}{byProfile && bridge?.addAgentProfile && <button disabled={busy || running || profiles.length >= 20} type="button" onClick={() => void addProfile(profile)} title={en ? `Add another ${profile.adapter} Agent` : `新增 ${profile.adapter} Agent`} aria-label={en ? `Add another ${profile.adapter} Agent` : `新增 ${profile.adapter} Agent`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><Plus size={15} /></button>}</div>}
+      {profile.available && bridge?.workspaceImportSupported && <div className="flex items-center gap-1">
+        <button type="button" disabled={busy || running} onClick={() => void migrateWorkspace(profile)}
+          title={en ? `Import previous workspace for ${profile.display_name}` : `导入 ${profile.display_name} 的旧工作目录`}
+          aria-label={en ? `Import previous workspace for ${profile.display_name}` : `导入 ${profile.display_name} 的旧工作目录`}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><Import size={15} /></button>
+        {profile.workspaceImport?.canRollback && <button type="button" disabled={busy || running} onClick={() => void migrateWorkspace(profile, true)}
+          title={en ? `Restore previous workspace for ${profile.display_name}` : `恢复 ${profile.display_name} 导入前的工作目录`}
+          aria-label={en ? `Restore previous workspace for ${profile.display_name}` : `恢复 ${profile.display_name} 导入前的工作目录`}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><Undo2 size={15} /></button>}
+      </div>}
     </li>)}</ul>
     <ul className="space-y-2">{runtime.agents.map(agent => {
       const readiness = agent.readiness && Object.hasOwn(readinessText, agent.readiness) ? agent.readiness : 'unverified'

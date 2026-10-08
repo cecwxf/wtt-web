@@ -12,7 +12,7 @@ const code = ts.transpileModule(readFileSync(new URL('../components/desktop/loca
 const flush = () => new Promise(resolve => setImmediate(resolve))
 
 // Run the component's actual subscription and auto-detection effects in IPC order.
-function setup(initial, failure = false) {
+function setup(initial, failure = false, workspaceImportSupported = false) {
   const slots = []
   let index = 0, dirty = true, listener, runtime = initial, tree, discoveries = 0, starts = 0
   const effects = [], exports = {}
@@ -20,6 +20,7 @@ function setup(initial, failure = false) {
   const changed = (old, next) => !old || old.length !== next.length || next.some((value, i) => value !== old[i])
   const host = {
     profileManagementSupported: true,
+    workspaceImportSupported,
     runtimeStatus: async () => runtime,
     onRuntimeState: callback => { listener = callback; return () => { listener = undefined } },
     discoverAgents: async () => {
@@ -61,9 +62,16 @@ function setup(initial, failure = false) {
     if (Array.isArray(node)) return node.map(text).join(' ')
     return text(node.props?.children)
   }
+  function findButton(node, label) {
+    if (!node || typeof node !== 'object') return undefined
+    if (Array.isArray(node)) return node.map(value => findButton(value, label)).find(Boolean)
+    if (node.type === 'button' && node.props['aria-label'] === label) return node.props
+    return findButton(node.props?.children, label)
+  }
   return {
     get discoveries() { return discoveries }, get starts() { return starts },
     get text() { return text(tree) },
+    button: label => findButton(tree, label),
     emit(state) { runtime = state; listener?.(state) },
     async settle() {
       for (let turns = 0; dirty; turns++) {
@@ -110,4 +118,16 @@ test('older desktop shells without readiness metadata retain detection', async (
   assert.equal(f.discoveries, 1)
   assert.match(f.text, /Codex/)
   assert.equal(f.starts, 0)
+})
+
+test('workspace import entry is capability-gated and disabled while Agents execute', async () => {
+  const old = setup({ state: 'stopped', agents: [], discoveryReady: true })
+  await old.settle()
+  assert.equal(old.button('Import previous workspace for Codex'), undefined)
+  const current = setup({ state: 'stopped', agents: [], discoveryReady: true }, false, true)
+  await current.settle()
+  assert.equal(current.button('Import previous workspace for Codex').disabled, false)
+  current.emit({ state: 'running', agents: [], discoveryReady: true }); await current.settle()
+  assert.equal(current.button('Import previous workspace for Codex').disabled, true)
+  assert.equal(current.starts, 0)
 })

@@ -123,7 +123,10 @@ export interface DesktopHostBridge {
   onState?(callback: (state: DesktopHostState) => void): () => void;
   runtimeStatus?(): Promise<DesktopRuntimeState>;
   discoverAgents?(): Promise<DesktopAgentProfile[]>;
-  selectAgentWorkspace?(profileOrAdapter: string, reset?: boolean): Promise<{ adapter: string; profileId?: string; workspaceName: string } | null>;
+  selectAgentWorkspace?(profileOrAdapter: string, reset?: boolean): Promise<{ adapter: string; profileId?: string; workspaceName: string; workspaceImport?: DesktopAgentProfile['workspaceImport'] } | null>;
+  workspaceImportSupported?: boolean;
+  importAgentWorkspace?(profileId: string): Promise<DesktopAgentProfile | null>;
+  rollbackAgentWorkspace?(profileId: string, receiptId: string): Promise<DesktopAgentProfile | null>;
   profileManagementSupported?: boolean;
   addAgentProfile?(profileId: string): Promise<DesktopAgentProfile>;
   teamProfilesSupported?: boolean;
@@ -161,6 +164,7 @@ export interface DesktopAgentProfile {
   version: string;
   requiresFullAccess: boolean;
   workspaceName?: string;
+  workspaceImport?: { receiptId: string; canRollback: boolean };
   configured?: boolean;
 }
 
