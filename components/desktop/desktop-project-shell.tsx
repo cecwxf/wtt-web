@@ -64,6 +64,22 @@ function ProjectShell(props: WttShellV2Props) {
   }, [projects.data, detail.data])
   const current = directory.find(project => project.sessions.some(session => session.topic_id === props.selectedTopicId))
   const currentSession = current?.sessions.find(session => session.topic_id === props.selectedTopicId)
+  useEffect(() => {
+    if (!current || !currentSession || params.get('workspace')) return
+    const requestedTopic = params.get('topicId') || params.get('topic')
+    if (requestedTopic && requestedTopic !== currentSession.topic_id) return
+    const requestedSession = params.get('session')
+    if (requestedSession && requestedSession !== currentSession.session_id) return
+    // Restoring a Topic must also restore its project-scoped tools, not profile tools.
+    const restored = new URLSearchParams(params.toString())
+    restored.set('workspace', current.workspace_id)
+    restored.set('session', currentSession.session_id)
+    restored.set('topic', currentSession.topic_id)
+    const agentId = params.get('agentId') || props.selectedAgentId
+    const participant = currentSession.participants.find(item => item.transport_agent_id === agentId) || currentSession.participants[0]
+    if (participant) restored.set('agentId', participant.transport_agent_id)
+    router.replace(`/desktop?${restored}`, { scroll: false })
+  }, [current, currentSession, params, props.selectedAgentId, router])
   const available = (hosts.data || []).filter(host => host.status !== 'revoked').flatMap(host => host.agents.map(agent => ({ host, agent, key: `${host.host_id}/${agent.profile_id}` })))
   const chosenRoot = roots.data?.roots.find(root => root.root_id === (creation?.project?.root_id || creation?.created?.root_id || rootId))
   const refresh = () => { void projects.mutate(); void detail.mutate(); void roots.mutate(); void hosts.mutate(); props.onBindingChanged?.() }
@@ -136,8 +152,13 @@ function ProjectShell(props: WttShellV2Props) {
       {projects.isLoading && <p role="status" className="p-2 text-xs text-zinc-500">{en ? 'Loading...' : '加载中…'}</p>}
       {projects.error && <p role="alert" className="p-2 text-xs text-red-600">{en ? 'Workspace service unavailable. Update the server or retry.' : 'Workspace 服务不可用，请升级后端或重试。'}</p>}
       {directory.filter(project => !query || [project.name, ...project.sessions.map(session => session.name)].some(name => name.toLowerCase().includes(query.toLowerCase()))).map(project => <details key={project.workspace_id} open className="mb-2"><summary className="group flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md px-2 hover:bg-zinc-200/50 dark:hover:bg-zinc-800"><ChevronRight size={12} /><FolderOpen size={14} className="text-zinc-400" /><span className="min-w-0 flex-1 truncate text-sm font-medium">{project.name}</span><button className={iconButton} title={en ? 'Add Adapter session' : '添加 Adapter 会话'} aria-label={`${en ? 'Add session' : '添加会话'} ${project.name}`} onClick={event => { event.preventDefault(); start(project) }}><Plus size={14} /></button><button className={`${iconButton} hidden group-hover:flex focus:flex`} title={en ? 'Archive Workspace' : '归档工作区'} aria-label={`${en ? 'Archive' : '归档'} ${project.name}`} onClick={event => { event.preventDefault(); void archive(project) }}><Archive size={13} /></button></summary>
-        <div className="ml-4 border-l border-zinc-200 pl-2 dark:border-zinc-700">{project.sessions.map(session => <Link key={session.session_id} href={href(project, session)} onClick={() => setDrawerOpen(false)} aria-current={props.selectedTopicId === session.topic_id ? 'page' : undefined} className={`flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-200/60 dark:hover:bg-zinc-800 ${props.selectedTopicId === session.topic_id ? 'bg-white text-zinc-950 dark:bg-zinc-800 dark:text-white' : 'text-zinc-600 dark:text-zinc-300'}`}>
-          {session.participants.length > 1 ? <Users size={14} /> : <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />}<span className="min-w-0 flex-1"><span className="block truncate">{session.name}</span><span className="block truncate text-[10px] text-zinc-500">{session.participants.map(p => `${p.label} · ${p.adapter}`).join(' / ')}</span></span></Link>)}</div>
+        <div className="ml-4 border-l border-zinc-200 pl-2 dark:border-zinc-700">{project.sessions.map(session => {
+          const online = session.participants.filter(participant => props.onlineAgentIds?.has(participant.transport_agent_id)).length
+          const status = en ? `${online}/${session.participants.length} adapters online` : `${online}/${session.participants.length} 个 Adapter 在线`
+          const color = online === 0 ? 'text-zinc-400' : online === session.participants.length ? 'text-emerald-500' : 'text-amber-500'
+          return <Link key={session.session_id} href={href(project, session)} onClick={() => setDrawerOpen(false)} aria-current={props.selectedTopicId === session.topic_id ? 'page' : undefined} className={`flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-200/60 dark:hover:bg-zinc-800 ${props.selectedTopicId === session.topic_id ? 'bg-white text-zinc-950 dark:bg-zinc-800 dark:text-white' : 'text-zinc-600 dark:text-zinc-300'}`}>
+          <span role="img" aria-label={status} title={status} className={`shrink-0 ${color}`}>{session.participants.length > 1 ? <Users size={14} aria-hidden="true" /> : <span className="block h-1.5 w-1.5 rounded-full bg-current" />}</span><span className="min-w-0 flex-1"><span className="block truncate">{session.name}</span><span className="block truncate text-[10px] text-zinc-500">{session.participants.map(p => `${p.label} · ${p.adapter}`).join(' / ')}</span></span></Link>
+        })}</div>
       </details>)}
       {projects.data && !directory.length && <p className="p-2 text-xs text-zinc-500">{en ? 'No Workspaces yet' : '暂无工作区'}</p>}
       {projects.data?.at(-1)?.next_offset != null && <button className="p-2 text-xs text-emerald-700" disabled={projects.isValidating} onClick={() => void projects.setSize(projects.size + 1)}>{en ? 'Load more' : '加载更多'}</button>}

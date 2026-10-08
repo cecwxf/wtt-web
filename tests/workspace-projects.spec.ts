@@ -16,7 +16,14 @@ async function workspaceFlow(page: Page, baseURL = '') {
   const projects: any[] = []
   const terminalActions: Array<{ url: string; body: any }> = []
   let previewRunning = false
-  await page.addInitScript(() => { localStorage.setItem('wtt-web.locale', 'en'); localStorage.removeItem('wtt_selected_topic_id'); localStorage.removeItem('wtt_selected_agent_id') })
+  let adaptersOnline = true
+  await page.addInitScript(() => {
+    localStorage.setItem('wtt-web.locale', 'en')
+    if (!sessionStorage.getItem('workspace-fixture-initialized')) {
+      localStorage.removeItem('wtt_selected_topic_id'); localStorage.removeItem('wtt_selected_agent_id')
+      sessionStorage.setItem('workspace-fixture-initialized', '1')
+    }
+  })
   await page.routeWebSocket('**', socket => {
     if (!socket.url().includes('/ws/agent-root-relay')) { socket.close(); return }
     socket.onMessage(raw => {
@@ -48,7 +55,7 @@ async function workspaceFlow(page: Page, baseURL = '') {
     else if (path.endsWith('/workspace/list')) value = { root: 'Workspace', path: '.', entries: [{ name: 'README.md', path: 'README.md', type: 'file', size: 27 }] }
     else if (path.endsWith('/workspace/read')) value = { name: 'README.md', path: 'README.md', content: 'Canonical project directory', preview_kind: 'text', previewable: true, editable: true, content_type: 'text/markdown' }
     else if (path === '/agents/my') value = participants.map(p => ({ agent_id: p.transport_agent_id, display_name: p.label }))
-    else if (path === '/agents/stats') value = { online_agents: participants.map(p => p.transport_agent_id), runtimes: {} }
+    else if (path === '/agents/stats') value = { online_agents: adaptersOnline ? participants.map(p => p.transport_agent_id) : [], runtimes: {} }
     else if (path === '/topics/subscribed') value = projects.length && projects[0].sessions.length ? [{ id: 'project-topic', topic_id: 'project-topic', name: 'Website / Team', topic_type: 'discussion' }] : []
     else if (path === '/topics/my-groups') value = projects.length && projects[0].sessions.length ? [{ id: 'project-topic', topic_id: 'project-topic', name: 'Website / Team', topic_type: 'discussion', member_agent_ids: ['agent-one', 'agent-two'] }] : []
     else if (path.endsWith('/messages')) {
@@ -101,6 +108,14 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await page.screenshot({ path: '/tmp/wtt-workspace-project-desktop.png', fullPage: true })
   await page.reload()
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  adaptersOnline = false
+  await page.goto(`${baseURL}/desktop`)
+  await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
+  await expect.poll(() => new URL(page.url()).searchParams.get('session')).toBe(projects[0].sessions[0].session_id)
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  await expect(page.getByRole('img', { name: '0/2 adapters online', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
+  await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()
