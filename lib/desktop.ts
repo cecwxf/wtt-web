@@ -226,9 +226,10 @@ interface WttDesktopBridge {
   };
   notify: (title: string, body: string) => Promise<void>;
   notifications?: {
-    preferences: (userId: string) => Promise<{ enabled: boolean; sound: boolean }>;
+    preferences: (userId: string) => Promise<{ enabled: boolean; sound: boolean; delivery?: "unknown" | "shown" | "failed" | "timeout" | "unsupported" }>;
     setPreferences: (userId: string, value: { enabled: boolean; sound: boolean }) => Promise<{ enabled: boolean; sound: boolean }>;
-    show: (notice: { userId: string; messageId: string; topicId: string; agentId: string; title: string; body: string }) => Promise<{ shown: boolean }>;
+    show: (notice: { userId: string; messageId: string; topicId: string; agentId: string; title: string; body: string }) => Promise<{ shown: boolean; reason?: string }>;
+    test?: (userId: string) => Promise<{ shown: boolean; reason?: string }>;
   };
   getVersion: () => Promise<string>;
   wsPush?: {

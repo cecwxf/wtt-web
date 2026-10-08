@@ -403,7 +403,13 @@ export function WttSettingsModal({
   const [notificationBusy, setNotificationBusy] = useState(false);
   const [notificationError, setNotificationError] = useState(false);
   const [notificationRefresh, setNotificationRefresh] = useState(0);
+  const notificationGeneration = useRef(0);
+  const [notificationTesting, setNotificationTesting] = useState(false);
+  const [notificationDelivery, setNotificationDelivery] = useState<"unknown" | "shown" | "failed" | "timeout" | "unsupported">("unknown");
   useEffect(() => {
+    notificationGeneration.current++;
+    setNotificationTesting(false);
+    setNotificationDelivery("unknown");
     if (!open || activePage !== "notifications" || !notificationBridge || !session?.userId) return;
     let current = true;
     const userId = session.userId;
@@ -413,10 +419,28 @@ export function WttSettingsModal({
       if (!current || notificationOwner.current !== userId) return;
       setMessageNotify(value.enabled);
       setSoundOn(value.sound);
+      setNotificationDelivery(value.delivery ?? "unknown");
       setNotificationReady(userId);
     }).catch(() => { if (current && notificationOwner.current === userId) setNotificationError(true); });
-    return () => { current = false; };
+    return () => { current = false; notificationGeneration.current++; };
   }, [open, activePage, session?.userId, notificationBridge, notificationRefresh]);
+
+  async function testNotification() {
+    const userId = session?.userId;
+    if (!notificationBridge?.test || !userId || notificationReady !== userId || notificationTesting || notificationBusy || !messageNotify) return;
+    const generation = notificationGeneration.current;
+    setNotificationTesting(true);
+    setNotificationDelivery("unknown");
+    try {
+      const result = await notificationBridge.test(userId);
+      if (notificationOwner.current !== userId || notificationGeneration.current !== generation) return;
+      setNotificationDelivery(result.shown ? "shown" : result.reason === "timeout" ? "timeout" : result.reason === "unsupported" ? "unsupported" : "failed");
+    } catch {
+      if (notificationOwner.current === userId && notificationGeneration.current === generation) setNotificationDelivery("failed");
+    } finally {
+      if (notificationOwner.current === userId && notificationGeneration.current === generation) setNotificationTesting(false);
+    }
+  }
 
   async function saveNotificationPreferences(enabled: boolean, sound: boolean) {
     if (!notificationBridge) { setMessageNotify(enabled); setSoundOn(sound); return; }
@@ -3104,7 +3128,7 @@ export function WttSettingsModal({
             <div className="space-y-3">
               {notificationError && <p role="alert" className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">{t("settings.notificationFailed")}<button type="button" onClick={() => setNotificationRefresh(value => value + 1)} aria-label={t("settings.notificationRetry")} title={t("settings.notificationRetry")}><RefreshCw size={16} /></button></p>}
               {notificationBridge && !notificationError && notificationReady !== session?.userId && <Loader2 size={18} className="animate-spin" />}
-              <fieldset className="space-y-3 disabled:opacity-50" disabled={Boolean(notificationBridge && (notificationReady !== session?.userId || notificationBusy))}>
+              <fieldset className="space-y-3 disabled:opacity-50" disabled={Boolean(notificationBridge && (notificationReady !== session?.userId || notificationBusy || notificationTesting))}>
               <ToggleRow
                 label={t("settings.notifyMessage")}
                 hint={t("settings.notifyMessageHint")}
@@ -3124,6 +3148,13 @@ export function WttSettingsModal({
                 onToggle={value => void saveNotificationPreferences(messageNotify, value)}
               />
               </fieldset>
+              {notificationBridge?.test && <div className="space-y-2">
+                <button type="button" onClick={() => void testNotification()} disabled={notificationReady !== session?.userId || notificationBusy || notificationTesting || !messageNotify} className="flex min-h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm disabled:opacity-50 dark:border-zinc-700">
+                  {notificationTesting && <Loader2 size={16} className="animate-spin" />}
+                  {t(notificationTesting ? "settings.notificationTesting" : "settings.notificationTest")}
+                </button>
+                {notificationDelivery !== "unknown" && <p role="status" className={notificationDelivery === "shown" ? "text-sm text-slate-600 dark:text-zinc-300" : "text-sm text-red-600 dark:text-red-400"}>{t(`settings.notificationDelivery.${notificationDelivery}`)}</p>}
+              </div>}
             </div>
           )}
 
