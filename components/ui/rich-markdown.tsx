@@ -31,12 +31,6 @@ const baseClassName = [
   '[&_.katex]:text-[1.02em]',
 ].join(' ')
 
-function codeText(children: unknown): string {
-  if (Array.isArray(children)) return children.map(codeText).join('')
-  if (children == null) return ''
-  return String(children)
-}
-
 function nodeText(node: ReactNode): string {
   if (node == null || typeof node === 'boolean') return ''
   if (typeof node === 'string' || typeof node === 'number') return String(node)
@@ -93,7 +87,7 @@ function CopyablePre({ children }: { children: ReactNode }) {
           {copied ? <Check size={14} className="wtt-code-copy-icon hidden" /> : <Copy size={14} className="wtt-code-copy-icon hidden" />}<span className="wtt-code-copy-label">{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
-      <pre className="m-0 overflow-x-auto bg-transparent p-3 text-xs leading-5 text-slate-800 dark:text-zinc-100">
+      <pre className="m-0 overflow-x-auto bg-transparent p-3 text-xs leading-5 text-slate-800 dark:text-zinc-100 [&>code]:block [&>code]:min-w-full [&>code]:whitespace-pre [&>code]:rounded-none [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-xs [&>code]:font-normal [&>code]:leading-5 [&>code]:text-inherit">
         {children}
       </pre>
     </div>
@@ -193,36 +187,18 @@ export function RichMarkdown({ children, className }: RichMarkdownProps) {
           pre({ children: preChildren }) {
             return <CopyablePre>{preChildren}</CopyablePre>
           },
-          code({ inline, className: codeClassName, children: codeChildren, ...props }: {
-            inline?: boolean
-            className?: string
-            children?: ReactNode
-          }) {
-            if (inline) {
-              return (
-                <code
-                  className={joinClassName(
-                    'rounded-md bg-[#efe7d8] px-1.5 py-0.5 font-mono text-[0.86em] font-semibold text-[#4b4033] dark:bg-zinc-800 dark:text-zinc-100',
-                    codeClassName,
-                  )}
-                  {...props}
-                >
-                  {codeChildren}
-                </code>
-              )
-            }
+          code({ className: codeClassName, children: codeChildren }) {
             const match = /language-([^\s]+)/.exec(codeClassName || '')
             const lang = match?.[1]
             return (
               <code
                 className={joinClassName(
-                  'block min-w-full whitespace-pre bg-transparent p-0 font-mono text-xs font-normal leading-5 text-slate-800 dark:text-zinc-100',
+                  'inline rounded bg-zinc-100 px-1 py-0.5 font-mono text-[0.86em] text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100',
                   codeClassName,
                 )}
                 data-language={lang || undefined}
-                {...props}
               >
-                {codeText(codeChildren).replace(/\n$/, '')}
+                {codeChildren}
               </code>
             )
           },

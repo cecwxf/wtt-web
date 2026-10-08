@@ -74,6 +74,32 @@ async function setup(page: Page, { disabled = false, dark = false, locale = 'en'
   return sent
 }
 
+test('chat keeps inline code in prose, preserves code blocks and names single-adapter execution', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await setup(page, { tools: true })
+  await page.route('**/api/wtt/topics/topic-one/members', route => route.fulfill({ json: [] }))
+  await page.route('**/api/wtt/topics/topic-one/messages**', route => route.fulfill({ json: [{
+    message_id: 'markdown-message', topic_id: 'topic-one', sender_id: 'agent-one',
+    sender_display_name: 'Codex Engineer', sender_type: 'agent', timestamp: '2026-10-08T00:01:00Z',
+    content: 'Created `acceptance-result.txt` with `PASS`.\n\n```ts\nexport const result = "PASS";\n```\n\n```\nuntagged block\n```',
+  }] }))
+  await page.goto('/desktop?legacy=1&agentId=agent-one&topic=topic-one')
+  const inline = page.locator('.wtt-rich-markdown p code').filter({ hasText: 'acceptance-result.txt' })
+  await expect(inline).toBeVisible()
+  await expect(inline).toHaveCSS('display', 'inline')
+  await expect(page.locator('.wtt-rich-markdown .wtt-code-block')).toHaveCount(2)
+  const blocks = page.locator('.wtt-rich-markdown pre > code')
+  await expect(blocks.nth(0)).toHaveText('export const result = "PASS";')
+  await expect(blocks.nth(1)).toHaveText('untagged block')
+  await expect(blocks.nth(1)).toHaveCSS('display', 'block')
+  const executions = page.getByRole('region', { name: 'Executions' })
+  await expect(executions.getByText('Codex Engineer', { exact: true })).toBeVisible()
+  await expect(executions.getByText('agent-one', { exact: true })).toHaveCount(0)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(inline).toHaveCSS('display', 'inline')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
 test('desktop tree and docked tools retain the same chat and draft through tool switches', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 })
   await setup(page, { tools: true })

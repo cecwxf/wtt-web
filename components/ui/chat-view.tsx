@@ -1412,6 +1412,12 @@ function ChatViewContent({
 }: ChatViewProps & { managedToolsExternal?: boolean; desktopHasManagedTools?: boolean }) {
   const { t, locale } = useI18n()
   const managedProgress = useManagedChatProgress(topicId, accessToken, runStatus)
+  const executionAgents = useMemo(() => {
+    const names = new Map(topicMembers.map(member => [member.agent_id, member.display_name]))
+    for (const [id, label] of Object.entries(agentRoleLabelMap)) if (label) names.set(id, label)
+    if (currentAgentId && !names.has(currentAgentId)) names.set(currentAgentId, workspaceAgentName || currentAgentId)
+    return Array.from(names, ([agent_id, display_name]) => ({ agent_id, display_name }))
+  }, [topicMembers, agentRoleLabelMap, currentAgentId, workspaceAgentName])
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
@@ -3902,7 +3908,7 @@ function ChatViewContent({
 
       <div className={`${desktopStyles.composer} border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6`}>
         <ToolApprovalPanel topicId={topicId} accessToken={accessToken} activeRun={Boolean(runStatus)} enabled={activeTab === 'chat'} />
-        <ManagedChatExecutions topicId={topicId} accessToken={accessToken} activeRun={managedProgress.showProgress} enabled={activeTab === 'chat'} agents={topicMembers} onSnapshot={managedProgress.onSnapshot} />
+        <ManagedChatExecutions topicId={topicId} accessToken={accessToken} activeRun={managedProgress.showProgress} enabled={activeTab === 'chat'} agents={executionAgents} onSnapshot={managedProgress.onSnapshot} />
         {activeTab === 'chat' && managedProgress.showProgress && runStatus && !composerExpanded && (
           <div className={appearance === 'desktop' ? 'mb-2' : 'mb-2 max-w-xl'}>
             <AgentRunStatusCard status={runStatus} floating desktop={appearance === 'desktop'} />
