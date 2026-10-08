@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type WebSocketRoute } from '@playwright/test'
 import { _electron } from 'playwright'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -17,6 +17,8 @@ async function workspaceFlow(page: Page, baseURL = '') {
   const terminalActions: Array<{ url: string; body: any }> = []
   let previewRunning = false
   let adaptersOnline = true
+  let feedEnabled = false
+  let feedSocket: WebSocketRoute | undefined
   await page.addInitScript(() => {
     localStorage.setItem('wtt-web.locale', 'en')
     if (!sessionStorage.getItem('workspace-fixture-initialized')) {
@@ -25,7 +27,12 @@ async function workspaceFlow(page: Page, baseURL = '') {
     }
   })
   await page.routeWebSocket('**', socket => {
-    if (!socket.url().includes('/ws/agent-root-relay')) { socket.close(); return }
+    if (!socket.url().includes('/ws/agent-root-relay')) {
+      if (!feedEnabled) { socket.close(); return }
+      feedSocket = socket
+      socket.onMessage(raw => { if (raw === 'ping') socket.send('pong') })
+      return
+    }
     socket.onMessage(raw => {
       const body = JSON.parse(String(raw)); terminalActions.push({ url: socket.url(), body })
       if (body.request_id) socket.send(JSON.stringify({ type: 'action_result', request_id: body.request_id, ok: true, data: { session_id: 'project-terminal' } }))
@@ -109,6 +116,7 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await page.reload()
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
   adaptersOnline = false
+  feedEnabled = true
   await page.goto(`${baseURL}/desktop`)
   await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
   await expect.poll(() => new URL(page.url()).searchParams.get('session')).toBe(projects[0].sessions[0].session_id)
@@ -116,6 +124,17 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await expect(page.getByRole('img', { name: '0/2 adapters online', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
   await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
+  await expect.poll(() => Boolean(feedSocket)).toBe(true)
+  feedSocket!.send(JSON.stringify({ type: 'typing', topic_id: 'project-topic', agent_id: 'agent-two', agent_display_name: 'Reviewer', adapter: 'claude-code', model: 'claude-test-model', status_text: 'review running' }))
+  await expect(page.getByText('review running', { exact: true }).first()).toBeVisible()
+  feedSocket!.send(JSON.stringify({ type: 'new_message', message: { id: 'other-agent-progress', topic_id: 'project-topic', sender_id: 'agent-one', sender_type: 'agent', semantic_type: 'notification', content: '[TASK_STATUS] status=running action=response:engineer partial', created_at: new Date().toISOString() } }))
+  await expect(page.getByText('Claude Code 输出：engineer partial', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('review running', { exact: true }).first()).toBeVisible()
+  feedSocket!.send(JSON.stringify({ type: 'typing', topic_id: 'project-topic', agent_id: 'agent-one', agent_display_name: 'Engineer', status_text: 'codex working' }))
+  const progress = page.locator('details').filter({ hasText: 'codex working' })
+  await expect(progress).toBeVisible()
+  await expect(progress).not.toContainText('Claude Code')
+  await expect(progress).not.toContainText('claude-test-model')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()

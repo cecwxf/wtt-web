@@ -385,9 +385,10 @@ function appendTypingStatus(
   },
   now: number,
 ): TopicTypingState {
+  const previous = update.agentId && existing?.agentId && update.agentId !== existing.agentId ? undefined : existing
   const text = String(update.statusText || '').trim()
   const kind = String(update.statusKind || '').trim() || undefined
-  const lines = existing?.statusLines ? [...existing.statusLines] : []
+  const lines = previous?.statusLines ? [...previous.statusLines] : []
 
   if (text) {
     const last = lines[lines.length - 1]
@@ -404,14 +405,14 @@ function appendTypingStatus(
   }
 
   return {
-    agentId: update.agentId || existing?.agentId || '',
-    agentName: update.agentName || existing?.agentName,
-    statusText: text || existing?.statusText,
-    statusKind: kind || existing?.statusKind,
-    adapter: update.adapter || existing?.adapter,
-    model: update.model || existing?.model,
+    agentId: update.agentId || previous?.agentId || '',
+    agentName: update.agentName || previous?.agentName,
+    statusText: text || previous?.statusText,
+    statusKind: kind || previous?.statusKind,
+    adapter: update.adapter || previous?.adapter,
+    model: update.model || previous?.model,
     statusLines: lines.slice(-AGENT_STATUS_CARD_MAX_LINES),
-    startedAt: existing?.startedAt || now,
+    startedAt: previous?.startedAt || now,
     // Safety fallback only. Normal lifecycle is cleared by the agent reply.
     expiresAt: now + (update.ttlMs || AGENT_TYPING_STALE_MS),
   }
@@ -1259,6 +1260,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
           setTypingByTopic((prev) => {
             const existing = prev[incomingTopicId]
             if (!existing) return prev
+            if (existing.agentId && senderId && senderId !== existing.agentId) return prev
             const progressStatus = statusFromProgressMessage(cleanedContent, existing.adapter)
             if (!progressStatus) return prev
             return {
