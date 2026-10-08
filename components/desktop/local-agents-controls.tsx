@@ -41,6 +41,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   const automaticallyDetected = useRef(false)
   const savedAccess = useRef<DesktopRuntimeState['workspaceAccess']>()
   const running = ['restoring', 'starting', 'running', 'stopping'].includes(runtime.state)
+  const needsReset = ['error', 'authorization_required'].includes(runtime.state)
   const supported = Boolean(bridge?.runtimeStatus && bridge?.discoverAgents && bridge?.startAgents && bridge?.stopAgents)
   const byProfile = bridge?.profileManagementSupported === true
 
@@ -142,8 +143,8 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       <h4 className="text-sm font-medium">{en ? 'Local Agents' : '本机 Agent'}</h4>
       <div className="flex items-center gap-2">
         <button type="button" disabled={busy || running || runtime.state === 'loading'} onClick={() => void operate('discover')} title={en ? 'Detect installed Agents' : '检测已安装 Agent'} aria-label={en ? 'Detect installed Agents' : '检测已安装 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><RefreshCw size={16} /></button>
-        {running
-          ? <button type="button" disabled={busy || runtime.state === 'stopping'} onClick={() => void operate('stop')} title={en ? 'Stop local Agents' : '停止本机 Agent'} aria-label={en ? 'Stop local Agents' : '停止本机 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><Square size={16} /></button>
+        {running || needsReset
+          ? <button type="button" disabled={busy || runtime.state === 'stopping'} onClick={() => void operate('stop')} title={needsReset ? (en ? 'Reset local Agent service' : '重置本机 Agent 服务') : (en ? 'Stop local Agents' : '停止本机 Agent')} aria-label={needsReset ? (en ? 'Reset local Agent service' : '重置本机 Agent 服务') : (en ? 'Stop local Agents' : '停止本机 Agent')} className="rounded border border-[var(--border)] p-2 disabled:opacity-50">{needsReset ? <RotateCcw size={16} /> : <Square size={16} />}</button>
           : <button type="button" disabled={busy || !selected.length} onClick={() => void operate('start')} title={en ? 'Start local Agents' : '启动本机 Agent'} aria-label={en ? 'Start local Agents' : '启动本机 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><Play size={16} /></button>}
       </div>
     </div>
