@@ -30,6 +30,8 @@ import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
 import { ManagedChatExecutions } from '@/components/ui/managed-chat-executions'
 import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
 import { getNativeNotifications } from '@/lib/native-notifications'
+import { useI18n } from '@/lib/i18n-provider'
+import { mobileCommandDescriptions } from '@/lib/mobile-chat-copy'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
 const STATUS_MAX_LINES = 10
@@ -259,31 +261,31 @@ function topicGroup(topic: TopicRecord): TopicGroupKey {
   return 'group'
 }
 
-function topicGroupMeta(group: TopicGroupKey) {
+function topicGroupMeta(group: TopicGroupKey, translate: (key: string) => string) {
   switch (group) {
     case 'p2p':
-      return { label: 'P2P 私聊', Icon: Lock, tone: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
+      return { label: translate('mobile.p2p'), Icon: Lock, tone: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-200 dark:border-indigo-900' }
     case 'task':
-      return { label: '任务 Topic', Icon: ClipboardList, tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+      return { label: translate('mobile.tasks'), Icon: ClipboardList, tone: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-900' }
     case 'group':
-      return { label: '群聊 / 讨论', Icon: Users, tone: 'bg-sky-50 text-sky-700 border-sky-200' }
+      return { label: translate('mobile.groups'), Icon: Users, tone: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-200 dark:border-sky-900' }
     case 'subscriber':
-      return { label: '订阅 / 广播', Icon: Radio, tone: 'bg-amber-50 text-amber-700 border-amber-200' }
+      return { label: translate('mobile.broadcasts'), Icon: Radio, tone: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-900' }
   }
 }
 
-function topicKindLabel(topic?: TopicRecord | null): string {
+function topicKindLabel(topic?: TopicRecord | null, english = false): string {
   if (!topic) return 'Topic'
-  if (topic.task_id) return '任务'
+  if (topic.task_id) return english ? 'Task' : '任务'
   switch (topicKind(topic)) {
     case 'p2p':
       return 'P2P'
     case 'broadcast':
-      return '订阅'
+      return english ? 'Subscription' : '订阅'
     case 'collaborative':
-      return '协作群聊'
+      return english ? 'Team' : '协作群聊'
     default:
-      return '群聊'
+      return english ? 'Group' : '群聊'
   }
 }
 
@@ -299,11 +301,11 @@ function compactAgentName(agent?: AgentRecord | null): string {
   return name
 }
 
-function compactTopicTitle(topic?: TopicRecord | null): string {
+function compactTopicTitle(topic?: TopicRecord | null, english = false): string {
   const taskTitle = String(topic?.task_title || '').trim()
   if (topic?.task_id && taskTitle) return taskTitle
   const name = String(topic?.name || '').trim()
-  if (!name) return '选择 Topic'
+  if (!name) return english ? 'Choose Topic' : '选择 Topic'
   const taskMatch = /^TASK-[a-f0-9]{8}\s+(.+)$/i.exec(name)
   if (taskMatch?.[1]) return taskMatch[1].trim()
   if (/^TASK-[a-f0-9]{8}$/i.test(name)) return 'New Task'
@@ -391,7 +393,7 @@ function adapterDisplayName(adapterRaw?: unknown): string {
   return 'Agent'
 }
 
-function statusFromProgressMessage(contentRaw: unknown, adapterRaw?: unknown): { text: string; kind: string } | null {
+function statusFromProgressMessage(contentRaw: unknown, adapterRaw?: unknown, english = false): { text: string; kind: string } | null {
   const content = stripMobileMetaBlocks(String(contentRaw || '')).trim()
   if (!content.startsWith('[TASK_STATUS]')) return null
   const action = content.match(/\baction=([^\n\r]+)/)?.[1]?.trim() || ''
@@ -402,38 +404,48 @@ function statusFromProgressMessage(contentRaw: unknown, adapterRaw?: unknown): {
   const kind = normalizeMobileProgressStatusKind(group, detail, status)
   const actor = adapterDisplayName(adapterRaw)
   if (group === 'session') {
-    if (detail.includes('thread.started') || detail.includes('turn.started')) return { text: `${actor} 会话已启动`, kind: 'session' }
-    if (detail.includes('completed')) return { text: `${actor} 会话已完成`, kind }
-    return { text: `${actor} 会话状态：${detail || status}`, kind: 'session' }
+    if (detail.includes('thread.started') || detail.includes('turn.started')) return { text: english ? `${actor} session started` : `${actor} 会话已启动`, kind: 'session' }
+    if (detail.includes('completed')) return { text: english ? `${actor} session completed` : `${actor} 会话已完成`, kind }
+    return { text: english ? `${actor} session: ${detail || status}` : `${actor} 会话状态：${detail || status}`, kind: 'session' }
   }
   if (group === 'response') {
     const output = detail.trim()
-    return { text: output ? `${actor} 输出：${output.slice(0, 80)}` : `${actor} 正在输出`, kind: 'response' }
+    return { text: output ? `${actor} ${english ? 'output: ' : '输出：'}${output.slice(0, 80)}` : english ? `${actor} responding` : `${actor} 正在输出`, kind: 'response' }
   }
-  if (group === 'command') return { text: `${actor} 执行命令：${detail || status}`, kind: 'command' }
-  if (group === 'tool') return { text: `${actor} 调用工具：${detail || status}`, kind: 'tool' }
-  return { text: `Agent 状态：${action || status}`, kind }
+  if (group === 'command') return { text: `${actor} ${english ? 'command: ' : '执行命令：'}${detail || status}`, kind: 'command' }
+  if (group === 'tool') return { text: `${actor} ${english ? 'tool: ' : '调用工具：'}${detail || status}`, kind: 'tool' }
+  return { text: `Agent ${english ? 'status: ' : '状态：'}${action || status}`, kind }
 }
 
-function mobileStatusKindLabel(kind?: string): string {
+function mobileStatusKindLabel(kind?: string, english = false): string {
   const normalized = String(kind || '').toLowerCase()
-  if (normalized.includes('todo')) return '待执行'
-  if (normalized.includes('doing') || normalized.includes('running')) return '执行中'
-  if (normalized.includes('review')) return '待验收'
-  if (normalized.includes('blocked')) return '阻塞'
-  if (normalized.includes('queued')) return '排队'
-  if (normalized.includes('command')) return '命令'
-  if (normalized.includes('tool')) return '工具'
-  if (normalized.includes('response')) return '输出'
-  if (normalized.includes('session')) return '会话'
-  if (normalized.includes('complete') || normalized.includes('done')) return '完成'
-  if (normalized.includes('error') || normalized.includes('fail')) return '异常'
-  return '运行'
+  if (normalized.includes('todo')) return english ? 'Pending' : '待执行'
+  if (normalized.includes('doing') || normalized.includes('running')) return english ? 'Running' : '执行中'
+  if (normalized.includes('review')) return english ? 'Review' : '待验收'
+  if (normalized.includes('blocked')) return english ? 'Blocked' : '阻塞'
+  if (normalized.includes('queued')) return english ? 'Queued' : '排队'
+  if (normalized.includes('command')) return english ? 'Command' : '命令'
+  if (normalized.includes('tool')) return english ? 'Tool' : '工具'
+  if (normalized.includes('response')) return english ? 'Output' : '输出'
+  if (normalized.includes('session')) return english ? 'Session' : '会话'
+  if (normalized.includes('complete') || normalized.includes('done')) return english ? 'Complete' : '完成'
+  if (normalized.includes('error') || normalized.includes('fail')) return english ? 'Error' : '异常'
+  return english ? 'Active' : '运行'
 }
 
-function taskStatusText(status?: string, title?: string): string {
+function taskStatusText(status?: string, title?: string, english = false): string {
   const normalized = String(status || '').toLowerCase()
   const subject = title ? `「${title}」` : '当前任务'
+  if (english) {
+    const name = title ? `"${title}"` : 'Current task'
+    if (normalized === 'todo') return `${name} created, waiting for Agent`
+    if (normalized === 'doing') return `${name} running`
+    if (normalized === 'review') return `${name} executed, awaiting review`
+    if (normalized === 'done') return `${name} completed`
+    if (normalized === 'blocked') return `${name} blocked`
+    if (normalized === 'cancelled') return `${name} cancelled`
+    return normalized ? `${name}: ${normalized}` : ''
+  }
   if (normalized === 'todo') return `${subject}已创建，等待 Agent 接收`
   if (normalized === 'doing') return `${subject}执行中`
   if (normalized === 'review') return `${subject}已完成执行，等待验收`
@@ -456,6 +468,7 @@ function adapterStatusLabel(adapter?: string): string {
 }
 
 function MobileAgentRunStatusCard({ status, compact = false }: { status: MobileRunStatus; compact?: boolean }) {
+  const { locale } = useI18n()
   const terminal = isTerminalStatusKind(status.statusKind)
   const lines = status.lines.slice(compact ? -4 : -6)
   const subtitle = [adapterStatusLabel(status.adapter), status.model].filter(Boolean).join(' · ')
@@ -468,7 +481,7 @@ function MobileAgentRunStatusCard({ status, compact = false }: { status: MobileR
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-xs font-semibold text-slate-900 dark:text-zinc-100">{status.agentName}</span>
             <span className="shrink-0 rounded-full bg-white dark:bg-zinc-950 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
-              {mobileStatusKindLabel(status.statusKind)}
+              {mobileStatusKindLabel(status.statusKind, locale === 'en')}
             </span>
             {subtitle && <span className="min-w-0 truncate text-[10px] font-medium text-slate-400 dark:text-zinc-500">{subtitle}</span>}
             <span className="shrink-0 text-[10px] font-medium text-slate-400 dark:text-zinc-500">WS {status.wsState}</span>
@@ -479,8 +492,8 @@ function MobileAgentRunStatusCard({ status, compact = false }: { status: MobileR
       {lines.length > 0 && (
         <div className="mt-2 max-h-28 space-y-1 overflow-y-auto border-t border-blue-100 dark:border-blue-900 pt-2">
           {lines.map((line) => (
-            <div key={line.id} className="grid grid-cols-[44px_minmax(0,1fr)] gap-2 text-[11px] font-medium leading-4 text-slate-600 dark:text-zinc-300">
-              <span className="rounded-md bg-white dark:bg-zinc-950 px-1.5 py-0.5 text-center text-[10px] font-bold text-blue-700">{mobileStatusKindLabel(line.kind)}</span>
+            <div key={line.id} className="grid grid-cols-[64px_minmax(0,1fr)] gap-2 text-[11px] font-medium leading-4 text-slate-600 dark:text-zinc-300">
+              <span className="rounded-md bg-white dark:bg-zinc-950 px-1.5 py-0.5 text-center text-[10px] font-bold text-blue-700">{mobileStatusKindLabel(line.kind, locale === 'en')}</span>
               <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-slate-700 dark:text-zinc-200">{line.text}</span>
             </div>
           ))}
@@ -541,6 +554,7 @@ function MobileMarkdownLink({
   children?: React.ReactNode
   onImageOpen: (url: string, label: string) => void
 }) {
+  const { t } = useI18n()
   const url = String(href || '')
   const label = childText(children)
   const meta = mobileFileMeta(label, url)
@@ -553,7 +567,7 @@ function MobileMarkdownLink({
           type="button"
           onClick={() => onImageOpen(imageUrl, meta.name)}
           className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-left align-top shadow-sm"
-          aria-label={`查看原图 ${meta.name}`}
+          aria-label={t('mobile.originalImage', { name: meta.name })}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={thumbUrl} alt={meta.name} className="h-24 w-36 bg-slate-100 dark:bg-zinc-800 object-cover" loading="lazy" />
@@ -585,6 +599,7 @@ function MobileMarkdownImage({
   alt?: string
   onImageOpen: (url: string, label: string) => void
 }) {
+  const { t } = useI18n()
   const url = String(src || '')
   const imageUrl = proxyMediaUrl(url)
   const thumbUrl = toThumbnailUrl(url)
@@ -594,7 +609,7 @@ function MobileMarkdownImage({
       type="button"
       onClick={() => onImageOpen(imageUrl, label)}
       className="my-2 inline-flex max-w-[144px] flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-left align-top shadow-sm"
-      aria-label={`查看原图 ${label}`}
+      aria-label={t('mobile.originalImage', { name: label })}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={thumbUrl} alt={label} className="h-24 w-36 bg-slate-100 dark:bg-zinc-800 object-cover" loading="lazy" />
@@ -705,15 +720,15 @@ function eventString(record: Record<string, unknown>, keys: string[]): string {
   return ''
 }
 
-function statusTextFromTypingEvent(record: Record<string, unknown>): string | undefined {
+function statusTextFromTypingEvent(record: Record<string, unknown>, english = false): string | undefined {
   const direct = eventString(record, ['status_text', 'statusText', 'activity_text', 'activityText', 'message', 'detail', 'text', 'summary', 'description', 'progress'])
   if (direct) return direct
   const command = eventString(record, ['command', 'cmd', 'shell_command'])
-  if (command) return `执行命令：${command}`
+  if (command) return `${english ? 'Command: ' : '执行命令：'}${command}`
   const tool = eventString(record, ['tool', 'tool_name', 'toolName', 'name'])
-  if (tool) return `调用工具：${tool}`
+  if (tool) return `${english ? 'Tool: ' : '调用工具：'}${tool}`
   const phase = eventString(record, ['phase', 'stage', 'step', 'status'])
-  if (phase) return `阶段：${phase}`
+  if (phase) return `${english ? 'Phase: ' : '阶段：'}${phase}`
   return undefined
 }
 
@@ -750,10 +765,12 @@ function shortTime(raw: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function quotaText(billing?: BillingMe | null): string {
+function quotaText(billing?: BillingMe | null, english = false): string {
   const usage = billing?.cloud_agent_usage
   const limits = billing?.entitlement?.limits
-  return `Cloud Agent ${usage?.monthly_count || 0}/${limits?.monthly_limit || 500} 月额度 · 连续 ${usage?.window_count || 0}/${limits?.window_limit || 30}`
+  return english
+    ? `Cloud Agent ${usage?.monthly_count || 0}/${limits?.monthly_limit || 500} monthly · ${usage?.window_count || 0}/${limits?.window_limit || 30} per window`
+    : `Cloud Agent ${usage?.monthly_count || 0}/${limits?.monthly_limit || 500} 月额度 · 连续 ${usage?.window_count || 0}/${limits?.window_limit || 30}`
 }
 
 function isBrowserOnline(): boolean {
@@ -776,6 +793,7 @@ function agentFromSearch(search: string): string {
 
 export default function MobileFeedPage() {
   const router = useRouter()
+  const { t, locale } = useI18n()
   const { data: session, status } = useSession()
   const sessionToken = session?.accessToken as string | undefined
   const [nativeAccessToken, setNativeAccessToken] = useState('')
@@ -1294,7 +1312,7 @@ export default function MobileFeedPage() {
       let latestAgentMessage: { id: string; senderId: string; senderName?: string; ts: number } | null = null
       for (const item of messagesRaw) {
         const rec = item as Record<string, unknown>
-        const progress = statusFromProgressMessage(rec.content, nextState?.adapter)
+        const progress = statusFromProgressMessage(rec.content, nextState?.adapter, locale === 'en')
         const senderType = String(rec.sender_type || '').toLowerCase()
         const rowTime = new Date(String(rec.timestamp || rec.created_at || '')).getTime()
         const ts = Number.isFinite(rowTime) ? rowTime : now
@@ -1330,7 +1348,7 @@ export default function MobileFeedPage() {
         nextState = appendTypingStatus(nextState, {
           agentId: latestAgentMessage.senderId,
           agentName: latestAgentMessage.senderName || displayName(agents.find((agent) => agent.agent_id === latestAgentMessage.senderId)),
-          statusText: 'Agent 已回复',
+          statusText: t('mobile.replied'),
           statusKind: 'response',
           adapter: nextState.adapter,
           ttlMs: COMPLETE_HOLD_MS,
@@ -1340,7 +1358,7 @@ export default function MobileFeedPage() {
       if (!changed || !nextState) return prev
       return { ...prev, [selectedTopicId]: nextState }
     })
-  }, [agents, messagesRaw, selectedAgentId, selectedTopicId])
+  }, [agents, messagesRaw, selectedAgentId, selectedTopicId, t, locale])
 
   const { data: selectedTopicMembersRaw } = useSWR(
     token && selectedTopicId && isGroupTopic(selectedTopic) ? ['mobile-topic-members', token, selectedTopicId] : null,
@@ -1427,7 +1445,8 @@ export default function MobileFeedPage() {
   }, [dynamicSlashRaw])
 
   const availableSlashCommands = useMemo(() => {
-    const rows = [...MOBILE_SLASH_COMMANDS, ...dynamicSlashCommands]
+    const rows = [...MOBILE_SLASH_COMMANDS.map(command => locale === 'en'
+      ? { ...command, desc: mobileCommandDescriptions[command.cmd] || command.desc } : command), ...dynamicSlashCommands]
     const seen = new Set<string>()
     return rows.filter((command) => {
       const key = command.cmd.toLowerCase()
@@ -1435,7 +1454,7 @@ export default function MobileFeedPage() {
       seen.add(key)
       return true
     })
-  }, [dynamicSlashCommands])
+  }, [dynamicSlashCommands, locale])
 
   const roleLabelForAgent = useCallback((agentId?: string) => {
     const id = String(agentId || '').trim()
@@ -1456,7 +1475,7 @@ export default function MobileFeedPage() {
   const mentionCandidates = useMemo(() => {
     const rows = new Map<string, { agentId: string; label: string; displayLabel: string; meta: string }>()
     const canMentionAll = Boolean(selectedTopic && isGroupTopic(selectedTopic))
-    if (canMentionAll) rows.set('__all__', { agentId: '__all__', label: 'all', displayLabel: 'all(所有成员)', meta: '所有成员' })
+    if (canMentionAll) rows.set('__all__', { agentId: '__all__', label: 'all', displayLabel: `all (${t('mobile.allMembers')})`, meta: t('mobile.allMembers') })
 
     for (const member of selectedTopicMembers) {
       const agentId = String(member.agent_id || '').trim()
@@ -1487,7 +1506,7 @@ export default function MobileFeedPage() {
     }
 
     return Array.from(rows.values())
-  }, [agents, labelForAgentInTopic, runtimeMap, selectedTopic, selectedTopicMembers])
+  }, [agents, labelForAgentInTopic, runtimeMap, selectedTopic, selectedTopicMembers, t])
 
   const filteredMentions = useMemo(() => {
     const q = mentionQuery.trim().toLowerCase()
@@ -1557,7 +1576,7 @@ export default function MobileFeedPage() {
           agentName: appendRoleLabel(agentName, roleLabelForAgent(aid)),
           adapter: String(rawEvent.adapter || '').trim() || undefined,
           model: String(rawEvent.model || rawEvent.model_id || rawEvent.current_model || '').trim() || undefined,
-          statusText: statusTextFromTypingEvent(rawEvent),
+          statusText: statusTextFromTypingEvent(rawEvent, locale === 'en'),
           statusKind: statusKindFromTypingEvent(rawEvent),
           ttlMs,
         }, now),
@@ -1569,9 +1588,9 @@ export default function MobileFeedPage() {
       const tid = String(rawEvent.topic_id || rawEvent.topicId || (rawTaskId && rawTaskId === selectedTopic?.task_id ? selectedTopicId : '')).trim()
       if (!tid) return
       const aid = String(rawEvent.agent_id || rawEvent.runner_agent_id || topicActorAgentId || selectedAgentId)
-      const title = eventString(rawEvent, ['task_title', 'title', 'name']) || compactTopicTitle(selectedTopic)
+      const title = eventString(rawEvent, ['task_title', 'title', 'name']) || compactTopicTitle(selectedTopic, locale === 'en')
       const status = eventString(rawEvent, ['status', 'task_status', 'state']) || rawType
-      const statusText = statusTextFromTypingEvent(rawEvent) || taskStatusText(status, title) || 'Agent 状态更新'
+      const statusText = statusTextFromTypingEvent(rawEvent, locale === 'en') || taskStatusText(status, title, locale === 'en') || t('mobile.statusUpdate')
       setTypingByTopic((prev) => ({
         ...prev,
         [tid]: appendTypingStatus(prev[tid], {
@@ -1595,7 +1614,7 @@ export default function MobileFeedPage() {
         const senderId = String(msgRecord.sender_id || rawEvent.agent_id || selectedAgentId)
         const senderDisplayName = msgRecord.sender_display_name ? String(msgRecord.sender_display_name) : labelForAgentInTopic(senderId)
         setTypingByTopic((prev) => {
-          const progressStatus = statusFromProgressMessage(msgRecord.content, prev[progressTopicId]?.adapter)
+          const progressStatus = statusFromProgressMessage(msgRecord.content, prev[progressTopicId]?.adapter, locale === 'en')
           if (!progressStatus) return prev
           return {
             ...prev,
@@ -1650,14 +1669,14 @@ export default function MobileFeedPage() {
           ...prev,
           [incoming.topic_id || selectedTopicId]: appendTypingStatus(prev[incoming.topic_id || selectedTopicId], {
             agentId: incoming.sender_id || selectedAgentId,
-            statusText: 'Agent 已回复',
+            statusText: t('mobile.replied'),
             statusKind: 'response',
             ttlMs: COMPLETE_HOLD_MS,
           }, Date.now()),
         }))
       }
     }
-  }, [accountId, labelForAgentInTopic, mutateMessages, roleLabelForAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgentId, updateTopicUnreadCache])
+  }, [accountId, labelForAgentInTopic, mutateMessages, roleLabelForAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgentId, updateTopicUnreadCache, t, locale])
 
   const wsUrl = selectedAgentId ? `${WS_BASE_URL}/ws/${selectedAgentId}?client=mobile-web` : ''
   const { state: wsState } = useWebSocket({ url: wsUrl, enabled: Boolean(token && selectedAgentId), token, onMessage: handleWsMessage })
@@ -1675,14 +1694,14 @@ export default function MobileFeedPage() {
       return {
         ...typing,
         agentName,
-        statusText: typing.statusText || '等待 Agent 状态更新',
+        statusText: typing.statusText || t('mobile.waitStatus'),
         lines,
         wsState,
       }
     }
     if (!selectedTopic?.task_id) return null
     const status = String(selectedTopic.task_status || '').trim()
-    const text = taskStatusText(status, compactTopicTitle(selectedTopic))
+    const text = taskStatusText(status, compactTopicTitle(selectedTopic, locale === 'en'), locale === 'en')
     // Task workflow state is not evidence that a CLI execution is still active.
     // Only live execution events may display an ongoing run; keep review/results.
     if (!status || !text || !isTerminalStatusKind(status)) return null
@@ -1699,7 +1718,7 @@ export default function MobileFeedPage() {
       expiresAt: Number.MAX_SAFE_INTEGER,
       wsState,
     }
-  }, [agents, selectedAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgent, topicActorAgentId, typingByTopic, wsState])
+  }, [agents, selectedAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgent, topicActorAgentId, typingByTopic, wsState, t, locale])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -1726,8 +1745,8 @@ export default function MobileFeedPage() {
   const SelectedTopicIcon = topicIcon(selectedTopic)
   const selectedTopicMeta = selectedTopic
     ? [
-        topicKindLabel(selectedTopic),
-        isGroupTopic(selectedTopic) && selectedTopicMembers.length ? `${selectedTopicMembers.length} 成员` : '',
+        topicKindLabel(selectedTopic, locale === 'en'),
+        isGroupTopic(selectedTopic) && selectedTopicMembers.length ? t('mobile.members', { count: selectedTopicMembers.length }) : '',
       ].filter(Boolean).join(' · ')
     : ''
   const mobileLoginCallback = isAndroidWebView
@@ -1769,22 +1788,22 @@ export default function MobileFeedPage() {
   )
 
   const selectorTitle = selectorStep === 'hosts'
-    ? '选择主机'
+    ? t('mobile.chooseHost')
     : selectorStep === 'agents'
-      ? '选择 Agent'
-      : '选择 Topic'
+      ? t('mobile.chooseAgent')
+      : t('mobile.chooseTopic')
 
   const selectorSearchPlaceholder = selectorStep === 'hosts'
-    ? '搜索主机或 Agent'
+    ? t('mobile.searchHosts')
     : selectorStep === 'agents'
-      ? '搜索当前主机下的 Agent'
-      : '搜索当前 Agent 的 Topic'
+      ? t('mobile.searchAgents')
+      : t('mobile.searchTopics')
 
   const filteredTopics = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return topics
-    return topics.filter((t) => `${t.name || ''} ${topicId(t)} ${t.description || ''} ${topicKindLabel(t)} ${topicKind(t)}`.toLowerCase().includes(q))
-  }, [search, topics])
+    return topics.filter((topic) => `${topic.name || ''} ${topicId(topic)} ${topic.description || ''} ${topicKindLabel(topic, locale === 'en')} ${topicKind(topic)}`.toLowerCase().includes(q))
+  }, [search, topics, locale])
 
   const groupedTopics = useMemo(() => {
     const groups: Record<TopicGroupKey, TopicRecord[]> = {
@@ -1902,7 +1921,7 @@ export default function MobileFeedPage() {
         agentId: sourceAgentId,
         topicId: sourceTopicId,
         taskId: sourceTaskId,
-        error: '当前离线，消息已保留，恢复网络后可重试。',
+        error: t('mobile.offline'),
       })
       return
     }
@@ -1919,7 +1938,7 @@ export default function MobileFeedPage() {
       [sourceTopicId]: appendTypingStatus(prev[sourceTopicId], {
         agentId: sourceAgentId,
         agentName: labelForAgentInTopic(sourceAgentId, displayName(sourceAgent)),
-        statusText: '消息已发送，等待 Agent 接收',
+        statusText: t('mobile.queued'),
         statusKind: 'queued',
       }, now),
     }))
@@ -1971,7 +1990,7 @@ export default function MobileFeedPage() {
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        const detail = typeof data.detail === 'string' ? data.detail : `发送失败 (${res.status})`
+        const detail = typeof data.detail === 'string' ? data.detail : `${t('mobile.sendFailed')} (${res.status})`
         throw new Error(detail)
       }
       setTypingByTopic((prev) => ({
@@ -1979,7 +1998,7 @@ export default function MobileFeedPage() {
         [sourceTopicId]: appendTypingStatus(prev[sourceTopicId], {
           agentId: sourceAgentId,
           agentName: labelForAgentInTopic(sourceAgentId, displayName(sourceAgent)),
-          statusText: '消息已投递，等待 Agent 执行',
+          statusText: t('mobile.accepted'),
           statusKind: 'accepted',
           ttlMs: 120000,
         }, Date.now()),
@@ -2005,7 +2024,7 @@ export default function MobileFeedPage() {
         void mutateRecentTopics()
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : '网络异常，发送失败'
+      const message = error instanceof Error ? error.message : t('mobile.networkFailed')
       setFailedSend({
         content,
         draft: sourceDraft,
@@ -2022,7 +2041,7 @@ export default function MobileFeedPage() {
     } finally {
       setSending(false)
     }
-  }, [agents, closeComposerSuggestions, draft, dynamicSlashCommands, fixedChatMode, fixedTopicId, labelForAgentInTopic, mutateGroupTopics, mutateMessages, mutateRecentTopics, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopic, selectedTopicId, selectionReady, sending, session, token, topicActorAgent, topicActorAgentId, topics])
+  }, [agents, closeComposerSuggestions, draft, dynamicSlashCommands, fixedChatMode, fixedTopicId, labelForAgentInTopic, mutateGroupTopics, mutateMessages, mutateRecentTopics, mutateTopics, pendingAssets, selectedAgentId, selectedTaskId, selectedTopic, selectedTopicId, selectionReady, sending, session, token, topicActorAgent, topicActorAgentId, topics, t])
 
   const createDefaultTask = useCallback(async () => {
     if (!token || !selectedAgentId || creatingTask) return
@@ -2045,7 +2064,7 @@ export default function MobileFeedPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        alert(data.detail || '创建任务失败')
+        alert(data.detail || t('mobile.createFailed'))
         return
       }
       const record = data as Record<string, unknown>
@@ -2083,19 +2102,19 @@ export default function MobileFeedPage() {
       setDraft('')
       closeComposerSuggestions()
     } catch {
-      alert('网络异常，请稍后重试')
+      alert(t('mobile.networkFailed'))
     } finally {
       setCreatingTask(false)
     }
-  }, [closeComposerSuggestions, creatingTask, mutateTopics, selectedAgentId, session, token])
+  }, [closeComposerSuggestions, creatingTask, mutateTopics, selectedAgentId, session, token, t])
 
   const uploadAsset = useCallback(async (file: File) => {
     if (!token) {
-      alert('请先登录后再上传附件')
+      alert(t('mobile.loginUpload'))
       return
     }
     if (file.size > MAX_UPLOAD_BYTES) {
-      alert(`文件过大，最大 100MB，当前 ${(file.size / (1024 * 1024)).toFixed(1)}MB`)
+      alert(t('mobile.fileTooLarge', { size: (file.size / (1024 * 1024)).toFixed(1) }))
       return
     }
     setUploading(true)
@@ -2146,14 +2165,14 @@ export default function MobileFeedPage() {
       setPendingAssets((prev) => [...prev, { url: proxyMediaUrl(String(asset.url || '')), filename: file.name, kind, token: assetToken }])
       setUploadProgress(100)
     } catch (error) {
-      const message = error instanceof Error ? error.message : '上传失败'
+      const message = error instanceof Error ? error.message : t('mobile.uploadError')
       setUploadError(message)
       alert(message)
     } finally {
       setUploading(false)
       setUploadProgress(null)
     }
-  }, [token])
+  }, [token, t])
 
   const openFilePicker = useCallback((kind: 'file' | 'camera') => {
     setAttachOpen(false)
@@ -2166,7 +2185,7 @@ export default function MobileFeedPage() {
   const insertLocation = useCallback(() => {
     setAttachOpen(false)
     if (!navigator.geolocation) {
-      alert('当前设备不支持定位')
+      alert(t('mobile.noLocation'))
       return
     }
     navigator.geolocation.getCurrentPosition(
@@ -2175,10 +2194,10 @@ export default function MobileFeedPage() {
         const token = `[location](https://maps.google.com/?q=${latitude},${longitude})`
         setDraft((prev) => `${prev}${prev ? '\n\n' : ''}${token}`)
       },
-      (error) => alert(`定位失败：${error.message || 'permission denied'}`),
+      (error) => alert(t('mobile.locationFailed', { error: error.message || 'permission denied' })),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
     )
-  }, [])
+  }, [t])
 
   if (status === 'loading') {
     return <div className="flex min-h-[100dvh] items-center justify-center bg-white dark:bg-zinc-950 text-sm font-medium text-slate-500 dark:text-zinc-400">Loading WTT...</div>
@@ -2189,17 +2208,17 @@ export default function MobileFeedPage() {
       <section className="relative flex min-w-0 flex-1 flex-col">
         {!fixedChatMode && (
           <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3">
-            <button onClick={openSelector} className="rounded-xl p-2 text-slate-700 dark:text-zinc-200 hover:bg-slate-100" aria-label="选择主机 / Agent / Topic">
+            <button onClick={openSelector} className="rounded-xl p-2 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800" aria-label={t('mobile.chooseTarget')}>
               <FolderTree className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1 text-left">
               <div className="flex min-w-0 items-center gap-2">
                 <SelectedTopicIcon className="h-4 w-4 shrink-0 text-slate-500 dark:text-zinc-400" />
-                <div className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-6">{compactTopicTitle(selectedTopic)}</div>
+                <div className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-6">{compactTopicTitle(selectedTopic, locale === 'en')}</div>
               </div>
               <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] font-medium leading-4 text-slate-500 dark:text-zinc-400">
                 <span className={`h-2 w-2 shrink-0 rounded-full ring-2 ring-white ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                <span className="min-w-0 truncate">{selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '选择 Agent'}</span>
+                <span className="min-w-0 truncate">{selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : t('mobile.chooseAgent')}</span>
                 {selectedTopicMeta && <span className="shrink-0 text-slate-300">·</span>}
                 {selectedTopicMeta && <span className="min-w-0 truncate">{selectedTopicMeta}</span>}
                 <ChevronDown className="h-3 w-3 shrink-0" />
@@ -2210,11 +2229,11 @@ export default function MobileFeedPage() {
                 onClick={() => void createDefaultTask()}
                 disabled={!selectedAgentId || creatingTask}
                 className="rounded-xl p-2 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 disabled:text-slate-300"
-                aria-label="新建对话"
+                aria-label={t('mobile.newChat')}
               >
                 <SquarePen className={`h-5 w-5 ${creatingTask ? 'animate-pulse' : ''}`} />
               </button>
-              <button onClick={() => setSettingsOpen(true)} className="rounded-xl p-2 text-slate-700 dark:text-zinc-200 hover:bg-slate-100" aria-label="设置">
+              <button onClick={() => setSettingsOpen(true)} className="rounded-xl p-2 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800" aria-label={t('mobile.settings')}>
                 <Settings className="h-5 w-5" />
               </button>
             </>
@@ -2226,18 +2245,18 @@ export default function MobileFeedPage() {
         {!browserOnline && (
           <div className="mx-3 mt-2 flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-medium text-orange-800">
             <WifiOff className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1">当前网络离线，草稿和附件会保留，恢复后可继续发送。</span>
+            <span className="min-w-0 flex-1">{t('mobile.offline')}</span>
           </div>
         )}
 
         {browserOnline && (agentsError || statsError || topicsError || groupTopicsError || recentTopicsError) && (
           <div role="status" className="mx-3 mt-2 flex items-center gap-2 border-b border-slate-200 dark:border-zinc-800 px-1 py-2 text-xs text-slate-600 dark:text-zinc-300">
             <WifiOff className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1">目录暂时无法更新，当前对话已保留。</span>
+            <span className="min-w-0 flex-1">{t('mobile.directoryUnavailable')}</span>
             <button
               type="button"
-              aria-label="重新加载目录"
-              title="重新加载目录"
+              aria-label={t('mobile.reloadDirectory')}
+              title={t('mobile.reloadDirectory')}
               className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-700 dark:text-zinc-200 hover:bg-slate-100"
               onClick={() => {
                 void mutateAgents()
@@ -2255,7 +2274,7 @@ export default function MobileFeedPage() {
         {!fixedChatMode && isGroupTopic(selectedTopic) && selectedTopicMembers.length > 0 && (
           <div className="mx-3 mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-3 py-2">
             <Users className="h-4 w-4 shrink-0 text-slate-600 dark:text-zinc-300" />
-            <span className="shrink-0 text-[11px] font-semibold text-slate-700 dark:text-zinc-200">群聊</span>
+            <span className="shrink-0 text-[11px] font-semibold text-slate-700 dark:text-zinc-200">{t('mobile.group')}</span>
             {selectedTopicMembers.slice(0, 8).map((member) => {
               const label = member.display_name || compactId(member.agent_id, 9, 4)
               return (
@@ -2273,9 +2292,9 @@ export default function MobileFeedPage() {
         <div ref={scrollRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {!selectedAgentId ? (
             <EmptyCard
-              title="暂无 Agent"
-              desc="请在完整 Web Feed 中管理 Agent，移动端专注对话和 Topic 使用。"
-              actionLabel="打开完整 Web Feed"
+              title={t('mobile.noAgent')}
+              desc={t('mobile.manageAgents')}
+              actionLabel={t('mobile.fullWeb')}
               actionIcon={<Bot className="h-4 w-4" />}
               onAction={() => {
                 window.location.href = '/feed'
@@ -2283,15 +2302,15 @@ export default function MobileFeedPage() {
             />
           ) : !selectedTopicId ? (
             <EmptyCard
-              title="开始新对话"
-              desc="创建一个普通任务对话，或从左上角菜单选择已有 Topic。"
-              actionLabel="创建普通对话"
+              title={t('mobile.newChatTitle')}
+              desc={t('mobile.newChatDescription')}
+              actionLabel={t('mobile.createChat')}
               actionIcon={<SquarePen className="h-4 w-4" />}
               actionDisabled={creatingTask}
               onAction={() => void createDefaultTask()}
             />
           ) : messages.length === 0 ? (
-            <EmptyCard title="开始对话" desc="发送第一条消息，Agent 的回复会显示在这里。" />
+            <EmptyCard title={t('mobile.startChat')} desc={t('mobile.firstMessage')} />
           ) : (
             messages.map((message) => {
               const isMine = message.sender_type === 'human'
@@ -2347,11 +2366,11 @@ export default function MobileFeedPage() {
           )}
           {failedSend && (
             <div className="mb-2 flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-              <span className="min-w-0 flex-1 truncate">{failedSend.error || '发送失败'}</span>
+              <span className="min-w-0 flex-1 truncate">{failedSend.error || t('mobile.sendFailed')}</span>
               <button onClick={() => void sendMessage(failedSend)} disabled={sending} className="shrink-0 rounded-full bg-white dark:bg-zinc-950 px-3 py-1 text-rose-700 disabled:text-slate-300">
-                重试
+                {t('mobile.retry')}
               </button>
-              <button onClick={() => setFailedSend(null)} className="shrink-0 rounded-full bg-white dark:bg-zinc-950 p-1 text-rose-400" aria-label="关闭发送失败提示">
+              <button onClick={() => setFailedSend(null)} className="shrink-0 rounded-full bg-white dark:bg-zinc-950 p-1 text-rose-400" aria-label={t('mobile.dismissFailure')}>
                 <X className="h-3 w-3" />
               </button>
             </div>
@@ -2361,7 +2380,7 @@ export default function MobileFeedPage() {
               {pendingAssets.map((asset, index) => (
                 <div key={`${asset.url}-${index}`} className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-2 py-2">
                   {asset.kind === 'image' ? (
-                    <button type="button" onClick={() => openImagePreview(asset.url, asset.filename)} className="shrink-0 rounded-xl" aria-label={`查看原图 ${asset.filename}`}>
+                    <button type="button" onClick={() => openImagePreview(asset.url, asset.filename)} className="shrink-0 rounded-xl" aria-label={t('mobile.originalImage', { name: asset.filename })}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={toThumbnailUrl(asset.url)} alt={asset.filename} className="h-10 w-10 rounded-xl object-cover" />
                     </button>
@@ -2382,12 +2401,12 @@ export default function MobileFeedPage() {
           {uploading && (
             <div className="mb-2 flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-zinc-200">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>正在上传 {uploadProgress ?? 0}%</span>
+              <span>{t('mobile.uploading', { progress: uploadProgress ?? 0 })}</span>
             </div>
           )}
           {uploadError && !uploading && (
             <div className="mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-              上传失败：{uploadError}
+              {t('mobile.uploadFailed', { error: uploadError })}
             </div>
           )}
           {slashOpen && filteredSlashCommands.length > 0 && (
@@ -2432,19 +2451,19 @@ export default function MobileFeedPage() {
           )}
           <div className="flex items-end gap-2 rounded-[1.4rem] border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 p-2">
             <div className="relative">
-              <button onClick={() => setAttachOpen((v) => !v)} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 dark:text-zinc-300 hover:bg-slate-100" aria-label="添加附件">
+              <button onClick={() => setAttachOpen((v) => !v)} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800" aria-label={t('mobile.attach')}>
                 <Paperclip className="h-4 w-4" />
               </button>
               {attachOpen && (
                 <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-semibold text-slate-700 dark:text-zinc-200 shadow-xl">
                   <button type="button" onClick={() => openFilePicker('file')} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
-                    <Paperclip className="h-4 w-4" /> 文件/图片
+                    <Paperclip className="h-4 w-4" /> {t('mobile.files')}
                   </button>
                   <button type="button" onClick={() => openFilePicker('camera')} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
-                    <Camera className="h-4 w-4" /> 拍照
+                    <Camera className="h-4 w-4" /> {t('mobile.camera')}
                   </button>
                   <button onClick={insertLocation} className="flex w-full items-center gap-2 px-3 py-3 text-left hover:bg-slate-50">
-                    <LocateFixed className="h-4 w-4" /> 发送位置
+                    <LocateFixed className="h-4 w-4" /> {t('mobile.location')}
                   </button>
                 </div>
               )}
@@ -2504,7 +2523,7 @@ export default function MobileFeedPage() {
                 }
               }}
               rows={1}
-              placeholder={isGroupTopic(selectedTopic) ? '发送到群聊...' : selectedTopic?.task_id ? '给 Agent 发送任务...' : '发送消息...'}
+              placeholder={isGroupTopic(selectedTopic) ? t('mobile.sendGroup') : selectedTopic?.task_id ? t('mobile.sendTask') : t('mobile.message')}
               className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] font-medium leading-6 outline-none placeholder:text-slate-400"
             />
             <SpeechInputControl
@@ -2516,7 +2535,7 @@ export default function MobileFeedPage() {
               onClick={() => void sendMessage()}
               disabled={(!draft.trim() && pendingAssets.length === 0) || sending || uploading || !canFetchMessages}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0d0d0d] text-white dark:bg-zinc-100 dark:text-zinc-950 disabled:bg-slate-300"
-              aria-label="发送消息"
+              aria-label={t('mobile.send')}
             >
               <Send className="h-4 w-4" />
             </button>
@@ -2557,7 +2576,7 @@ export default function MobileFeedPage() {
         <div
           className="fixed inset-0 z-[80] flex flex-col bg-black/95 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-white"
           role="dialog"
-          aria-label="图片预览"
+          aria-label={t('mobile.imagePreview')}
         >
           <div className="mb-3 flex h-12 shrink-0 items-center gap-3">
             <div className="min-w-0 flex-1 truncate text-sm font-semibold">{imagePreview.label}</div>
@@ -2565,14 +2584,14 @@ export default function MobileFeedPage() {
               type="button"
               onClick={() => setImagePreview(null)}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
-              aria-label="关闭图片预览"
+              aria-label={t('mobile.closePreview')}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
           <div className="flex min-h-0 flex-1 items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imagePreview.url} alt={`${imagePreview.label} 原图`} className="max-h-full max-w-full rounded-xl object-contain" />
+            <img src={imagePreview.url} alt={imagePreview.label} className="max-h-full max-w-full rounded-xl object-contain" />
           </div>
         </div>
       )}
@@ -2599,12 +2618,9 @@ export default function MobileFeedPage() {
           <div className="space-y-3">
             {selectorStep === 'hosts' && (
               <section>
-                <div className="mb-2 rounded-2xl bg-slate-50 dark:bg-zinc-900 px-3 py-2 text-xs font-medium leading-5 text-slate-500 dark:text-zinc-400">
-                  先选择运行 Agent 的主机，再选择该主机下的 Agent，最后进入它的 Topic。
-                </div>
                 <div className="space-y-1.5">
                   {groupedAgents.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 p-3 text-xs font-medium text-slate-400 dark:text-zinc-500">暂无 Agent，请先在完整 Web Feed 绑定或创建 Agent。</div>
+                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 p-3 text-xs font-medium text-slate-400 dark:text-zinc-500">{t('mobile.noAgents')}</div>
                   ) : groupedAgents.map((group) => {
                     const online = group.rows.filter((a) => onlineAgents.has(a.agent_id)).length
                     const active = group.host === selectedAgentHost
@@ -2622,8 +2638,8 @@ export default function MobileFeedPage() {
                           <Server className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{group.host}</span>
-                          <span className="mt-0.5 block text-xs font-medium text-slate-500 dark:text-zinc-400">{online} 在线 · {group.rows.length} 个 Agent</span>
+                          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{group.host === '未上报主机' ? t('mobile.unknownHost') : group.host}</span>
+                          <span className="mt-0.5 block text-xs font-medium text-slate-500 dark:text-zinc-400">{t('mobile.hostAgents', { online, count: group.rows.length })}</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 dark:text-zinc-500" />
                       </button>
@@ -2643,16 +2659,16 @@ export default function MobileFeedPage() {
                   className="mb-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-zinc-300"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
-                  返回主机
+                  {t('mobile.backHosts')}
                 </button>
                 <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold text-slate-500 dark:text-zinc-400">
                   <Server className="h-4 w-4" />
-                  <span className="min-w-0 truncate">{activeHost || '选择主机'}</span>
+                  <span className="min-w-0 truncate">{activeHost === '未上报主机' ? t('mobile.unknownHost') : activeHost || t('mobile.chooseHost')}</span>
                   <span className="ml-auto rounded-full bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px]">{activeHostGroup?.rows.length || 0}</span>
                 </div>
                 <div className="space-y-1.5">
                   {!activeHostGroup ? (
-                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 p-3 text-xs font-medium text-slate-400 dark:text-zinc-500">当前主机下没有匹配的 Agent。</div>
+                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 p-3 text-xs font-medium text-slate-400 dark:text-zinc-500">{t('mobile.noMatchingAgent')}</div>
                   ) : activeHostGroup.rows.map((agent) => {
                     const runtime = runtimeMap[agent.agent_id]
                     const active = agent.agent_id === selectedAgentId
@@ -2695,17 +2711,17 @@ export default function MobileFeedPage() {
                   className="mb-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-zinc-300"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
-                  返回 Agent
+                  {t('mobile.backAgents')}
                 </button>
                 <div className="mb-2 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-3 py-2">
                   <div className="flex items-center gap-2">
                     <Bot className="h-4 w-4 shrink-0 text-slate-600 dark:text-zinc-300" />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">
-                      {selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : '未选择 Agent'}
+                      {selectedAgent ? labelForAgentInTopic(selectedAgent.agent_id, compactAgentName(selectedAgent)) : t('mobile.noSelectedAgent')}
                     </span>
                     <span className={`h-2.5 w-2.5 rounded-full ${onlineAgents.has(selectedAgentId) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
                   </div>
-                  <div className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-zinc-400">{selectedAgentHost || '未上报主机'}</div>
+                  <div className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-zinc-400">{selectedAgentHost && selectedAgentHost !== '未上报主机' ? selectedAgentHost : t('mobile.unknownHost')}</div>
                 </div>
                 <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">
                   <MessageSquare className="h-4 w-4" />
@@ -2713,7 +2729,7 @@ export default function MobileFeedPage() {
                   <span className="ml-auto rounded-full bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] text-slate-500 dark:text-zinc-400">{filteredTopics.length}</span>
                 </div>
                 <div className="space-y-2">
-                  <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-1.5">
+                  <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/70 dark:bg-sky-950/30 p-1.5">
                     <div className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-sky-700">
                       <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-white/70 dark:bg-zinc-900/70 px-2 py-0.5">
                         <Clock3 className="h-3.5 w-3.5" />
@@ -2723,7 +2739,7 @@ export default function MobileFeedPage() {
                     </div>
                     <div className="space-y-1">
                       {recentTopics.length === 0 ? (
-                        <div className="px-3 py-2 text-xs font-semibold text-sky-400">暂无最近对话</div>
+                        <div className="px-3 py-2 text-xs font-semibold text-sky-400">{t('mobile.noRecent')}</div>
                       ) : recentTopics.map((topic) => {
                         const id = topicId(topic)
                         const TopicIcon = topicIcon(topic)
@@ -2744,11 +2760,11 @@ export default function MobileFeedPage() {
                           >
                             <div className="flex items-center gap-2">
                               <TopicIcon className="h-4 w-4 shrink-0 text-sky-700" />
-                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{topic.topic_name || compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
+                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{topic.topic_name || compactTopicTitle(topic, locale === 'en') || compactId(id, 10, 4)}</span>
                               {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
                             </div>
                             <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500 dark:text-zinc-400">
-                              {[agentLabel, topic.last_message_preview || topicKindLabel(topic)].filter(Boolean).join(' · ')}
+                              {[agentLabel, topic.last_message_preview || topicKindLabel(topic, locale === 'en')].filter(Boolean).join(' · ')}
                             </div>
                           </button>
                         )
@@ -2758,7 +2774,7 @@ export default function MobileFeedPage() {
 
                   {(['p2p', 'task', 'group', 'subscriber'] as TopicGroupKey[]).map((groupKey) => {
                     const items = groupedTopics[groupKey]
-                    const meta = topicGroupMeta(groupKey)
+                    const meta = topicGroupMeta(groupKey, t)
                     const GroupIcon = meta.Icon
                     if (items.length === 0 && search.trim()) return null
                     return (
@@ -2772,7 +2788,7 @@ export default function MobileFeedPage() {
                         </div>
                         <div className="space-y-1">
                           {items.length === 0 ? (
-                            <div className="px-3 py-2 text-xs font-semibold text-slate-400 dark:text-zinc-500">暂无{meta.label}</div>
+                            <div className="px-3 py-2 text-xs font-semibold text-slate-400 dark:text-zinc-500">{t('mobile.noTopics', { kind: meta.label })}</div>
                           ) : items.map((topic) => {
                             const id = topicId(topic)
                             const TopicIcon = topicIcon(topic)
@@ -2788,11 +2804,11 @@ export default function MobileFeedPage() {
                               >
                                 <div className="flex items-center gap-2">
                                   <TopicIcon className="h-4 w-4 shrink-0 text-slate-600 dark:text-zinc-300" />
-                                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{compactTopicTitle(topic) || compactId(id, 10, 4)}</span>
+                                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">{compactTopicTitle(topic, locale === 'en') || compactId(id, 10, 4)}</span>
                                   {!!topic.unread_count && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{topic.unread_count}</span>}
                                 </div>
                                 <div className="mt-0.5 line-clamp-1 text-xs font-medium leading-5 text-slate-500 dark:text-zinc-400">
-                                  {topic.description || topicKindLabel(topic)}
+                                  {topic.description || topicKindLabel(topic, locale === 'en')}
                                 </div>
                               </button>
                             )
@@ -2809,19 +2825,19 @@ export default function MobileFeedPage() {
       )}
 
       {!fixedChatMode && settingsOpen && (
-        <MobileSheet title="设置" onClose={() => closeSheet('settings')}>
+        <MobileSheet title={t('mobile.settings')} onClose={() => closeSheet('settings')}>
           <div className="space-y-3">
             <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 p-4">
               <p className="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Account</p>
               <p className="mt-1 text-base font-semibold text-slate-900 dark:text-zinc-100">{session?.user?.name || session?.user?.email || 'WTT User'}</p>
-              <p className="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">{billing?.entitlement ? (billing.entitlement.plan === 'pro' ? 'Pro' : 'Free') : '...'} · {quotaText(billing)}</p>
-              <p className="mt-1 text-[11px] font-medium text-slate-400 dark:text-zinc-500">网络 {browserOnline ? '在线' : '离线'} · WebSocket {wsState}</p>
+              <p className="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">{billing?.entitlement ? (billing.entitlement.plan === 'pro' ? 'Pro' : 'Free') : '...'} · {quotaText(billing, locale === 'en')}</p>
+              <p className="mt-1 text-[11px] font-medium text-slate-400 dark:text-zinc-500">{t('mobile.network', { state: t(browserOnline ? 'mobile.online' : 'mobile.offlineState'), socket: wsState })}</p>
             </div>
-            <a href="/feed" className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100">打开完整 Web Feed</a>
-            <a href={isAndroidWebView ? '/mobile/settings?source=android' : '/mobile/settings'} className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100">移动端设置页</a>
+            <a href="/feed" className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100">{t('mobile.fullWeb')}</a>
+            <a href={isAndroidWebView ? '/mobile/settings?source=android' : '/mobile/settings'} className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100">{t('mobile.mobileSettings')}</a>
             <button onClick={() => signOut({ callbackUrl: mobileLoginCallback })} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white">
               <LogOut className="h-4 w-4" />
-              退出登录
+              {t('mobile.signOut')}
             </button>
           </div>
         </MobileSheet>
@@ -2868,13 +2884,14 @@ function EmptyCard({
 }
 
 function MobileSheet({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  const { t } = useI18n()
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-[2px]">
       <div className="absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-hidden rounded-t-[1.25rem] bg-white dark:bg-zinc-950 shadow-2xl">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200 dark:bg-zinc-700" />
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-800 px-4 py-2.5">
           <p className="text-base font-semibold text-slate-900 dark:text-zinc-100">{title}</p>
-          <button onClick={onClose} className="rounded-full bg-slate-100 dark:bg-zinc-800 p-2 text-slate-600 dark:text-zinc-300" aria-label="关闭">
+          <button onClick={onClose} className="rounded-full bg-slate-100 dark:bg-zinc-800 p-2 text-slate-600 dark:text-zinc-300" aria-label={t('mobile.close')}>
             <X className="h-4 w-4" />
           </button>
         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { mobileChatMessages } from './mobile-chat-copy'
 
 export type Locale = 'zh' | 'en'
 
@@ -15,6 +16,7 @@ const STORAGE_KEY = 'wtt-web.locale'
 
 const messages: Record<Locale, Record<string, string>> = {
   zh: {
+    ...mobileChatMessages.zh,
     'chat.toolApproval': '工具授权',
     'chat.approvalAllowOnce': '批准一次',
     'chat.approvalDeny': '拒绝',
@@ -583,6 +585,7 @@ const messages: Record<Locale, Record<string, string>> = {
     'economy.creditsBalance': '当前积分',
   },
   en: {
+    ...mobileChatMessages.en,
     'chat.toolApproval': 'Tool Approval',
     'chat.approvalAllowOnce': 'Allow Once',
     'chat.approvalDeny': 'Deny',
