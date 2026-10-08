@@ -34,6 +34,7 @@ import {
   type AgentRoleTemplate,
 } from '@/lib/agent-role-templates'
 import { mergeMessageHistory } from '@/lib/chat-history'
+import { getDesktopBridge } from '@/lib/desktop'
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
@@ -1223,6 +1224,17 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
         }
       })
 
+      if (displayable && session?.userId && selectedAgentId && String(msg.message.sender_type).toLowerCase() === 'agent') {
+        const notifications = getDesktopBridge()?.notifications
+        if (notifications) {
+          const name = agentNameMap[msg.message.sender_id] || msg.message.sender_id
+          const preview = msg.message.encrypted ? t('settings.notificationNewReply') : cleanedContent
+            .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 160)
+          void notifications.show({ userId: session.userId, messageId: msg.message.id, topicId: incomingTopicId,
+            agentId: selectedAgentId, title: `${name} · WTT`.slice(0, 200), body: preview }).catch(() => {})
+        }
+      }
+
       if (incomingTopicId !== selectedTopicId) return
       if (cleanedContent.trim().startsWith('[TASK_STATUS]')) {
         const senderId = String(msg.message.sender_id || '')
@@ -1289,7 +1301,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
         })
       })()
     },
-    [selectedTopicId, agentNameMap, knownAgentIds, decryptMessageForDisplay, updateTopicUnreadCaches],
+    [selectedTopicId, selectedAgentId, session?.userId, agentNameMap, knownAgentIds, decryptMessageForDisplay, updateTopicUnreadCaches, t],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,

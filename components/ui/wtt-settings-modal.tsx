@@ -27,6 +27,7 @@ import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from "@/lib/api/base-url";
 import { useI18n } from "@/lib/i18n-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { AccountHostsPanel } from "@/components/desktop/account-hosts-panel";
+import { getDesktopBridge } from "@/lib/desktop";
 
 type SettingsPage =
   | "profile"
@@ -392,6 +393,43 @@ export function WttSettingsModal({
   const [messageNotify, setMessageNotify] = useState(true);
   const [agentAlert, setAgentAlert] = useState(true);
   const [soundOn, setSoundOn] = useState(false);
+  const notificationBridge = getDesktopBridge()?.notifications;
+  const notificationOwner = useRef(session?.userId);
+  notificationOwner.current = session?.userId;
+  const notificationSaving = useRef(false);
+  const [notificationReady, setNotificationReady] = useState("");
+  const [notificationBusy, setNotificationBusy] = useState(false);
+  const [notificationError, setNotificationError] = useState(false);
+  const [notificationRefresh, setNotificationRefresh] = useState(0);
+  useEffect(() => {
+    if (!open || activePage !== "notifications" || !notificationBridge || !session?.userId) return;
+    let current = true;
+    const userId = session.userId;
+    setNotificationReady("");
+    setNotificationError(false);
+    void notificationBridge.preferences(userId).then(value => {
+      if (!current || notificationOwner.current !== userId) return;
+      setMessageNotify(value.enabled);
+      setSoundOn(value.sound);
+      setNotificationReady(userId);
+    }).catch(() => { if (current && notificationOwner.current === userId) setNotificationError(true); });
+    return () => { current = false; };
+  }, [open, activePage, session?.userId, notificationBridge, notificationRefresh]);
+
+  async function saveNotificationPreferences(enabled: boolean, sound: boolean) {
+    if (!notificationBridge) { setMessageNotify(enabled); setSoundOn(sound); return; }
+    const userId = session?.userId;
+    if (!userId || notificationReady !== userId || notificationSaving.current) return;
+    notificationSaving.current = true;
+    setNotificationBusy(true);
+    setNotificationError(false);
+    try {
+      const value = await notificationBridge.setPreferences(userId, { enabled, sound });
+      if (notificationOwner.current !== userId) return;
+      setMessageNotify(value.enabled); setSoundOn(value.sound);
+    } catch { if (notificationOwner.current === userId) setNotificationError(true); }
+    finally { notificationSaving.current = false; setNotificationBusy(false); }
+  }
   const [provisionDisplayName, setProvisionDisplayName] = useState("");
   const [provisioning, setProvisioning] = useState(false);
   const [provisionError, setProvisionError] = useState("");
@@ -3062,24 +3100,28 @@ export function WttSettingsModal({
 
           {activePage === "notifications" && (
             <div className="space-y-3">
+              {notificationError && <p role="alert" className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">{t("settings.notificationFailed")}<button type="button" onClick={() => setNotificationRefresh(value => value + 1)} aria-label={t("settings.notificationRetry")} title={t("settings.notificationRetry")}><RefreshCw size={16} /></button></p>}
+              {notificationBridge && !notificationError && notificationReady !== session?.userId && <Loader2 size={18} className="animate-spin" />}
+              <fieldset className="space-y-3 disabled:opacity-50" disabled={Boolean(notificationBridge && (notificationReady !== session?.userId || notificationBusy))}>
               <ToggleRow
                 label={t("settings.notifyMessage")}
                 hint={t("settings.notifyMessageHint")}
                 enabled={messageNotify}
-                onToggle={setMessageNotify}
+                onToggle={value => void saveNotificationPreferences(value, soundOn)}
               />
-              <ToggleRow
+              {!notificationBridge && <ToggleRow
                 label={t("settings.notifyAgent")}
                 hint={t("settings.notifyAgentHint")}
                 enabled={agentAlert}
                 onToggle={setAgentAlert}
-              />
+              />}
               <ToggleRow
                 label={t("settings.sound")}
                 hint={t("settings.soundHint")}
                 enabled={soundOn}
-                onToggle={setSoundOn}
+                onToggle={value => void saveNotificationPreferences(messageNotify, value)}
               />
+              </fieldset>
             </div>
           )}
 

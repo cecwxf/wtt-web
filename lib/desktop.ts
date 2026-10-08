@@ -217,6 +217,11 @@ interface WttDesktopBridge {
     onFileChanged: (callback: (data: FileChangedEvent) => void) => () => void;
   };
   notify: (title: string, body: string) => Promise<void>;
+  notifications?: {
+    preferences: (userId: string) => Promise<{ enabled: boolean; sound: boolean }>;
+    setPreferences: (userId: string, value: { enabled: boolean; sound: boolean }) => Promise<{ enabled: boolean; sound: boolean }>;
+    show: (notice: { userId: string; messageId: string; topicId: string; agentId: string; title: string; body: string }) => Promise<{ shown: boolean }>;
+  };
   getVersion: () => Promise<string>;
   wsPush?: {
     connect: (opts: { agentId: string; apiUrl?: string }) => Promise<{ ok: boolean }>;
