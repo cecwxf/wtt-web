@@ -172,6 +172,7 @@ export interface DesktopRemoteTools {
 
 export interface DesktopRuntimeState {
   state: string;
+  discoveryReady?: boolean;
   error?: string | null;
   recovery?: { state: 'none' | 'previous_boot' | 'restart_computer_required' | 'unverified_owner'; canRecover: boolean };
   autoStart?: boolean;

@@ -44,6 +44,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   const needsReset = ['error', 'authorization_required'].includes(runtime.state)
   const supported = Boolean(bridge?.runtimeStatus && bridge?.discoverAgents && bridge?.startAgents && bridge?.stopAgents)
   const byProfile = bridge?.profileManagementSupported === true
+  const waitingForAuthorization = runtime.discoveryReady === false && !running && !busy
 
   useEffect(() => {
     if (!supported || !bridge) return
@@ -64,7 +65,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
   }, [bridge, supported])
 
   const operate = useCallback(async (action: 'discover' | 'start' | 'stop' | 'recover') => {
-    if (!bridge || busy) return
+    if (!bridge || busy || (action === 'discover' && runtime.discoveryReady === false)) return
     setBusy(true); setError('')
     try {
       if (action === 'stop') {
@@ -101,13 +102,13 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
           ? (en ? 'Install a desktop build containing the Agent runtime.' : '请安装包含 Agent 运行环境的桌面版本。')
           : (en ? 'Local Agent operation failed. Check the desktop connection and retry.' : '本机 Agent 操作失败，请检查桌面连接后重试。'))
     } finally { if (active.current) setBusy(false) }
-  }, [bridge, busy, en, access, selected, remoteTools, onChanged, byProfile])
+  }, [bridge, busy, en, access, selected, remoteTools, onChanged, byProfile, runtime.discoveryReady])
 
   useEffect(() => {
-    if (!supported || busy || runtime.state !== 'stopped' || profiles.length || automaticallyDetected.current) return
+    if (!supported || busy || runtime.state !== 'stopped' || runtime.discoveryReady === false || profiles.length || automaticallyDetected.current) return
     automaticallyDetected.current = true
     void operate('discover')
-  }, [supported, busy, runtime.state, profiles.length, operate])
+  }, [supported, busy, runtime.state, runtime.discoveryReady, profiles.length, operate])
 
   async function chooseWorkspace(profile: DesktopAgentProfile, reset = false) {
     if (!bridge?.selectAgentWorkspace || busy || running) return
@@ -142,7 +143,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h4 className="text-sm font-medium">{en ? 'Local Agents' : '本机 Agent'}</h4>
       <div className="flex items-center gap-2">
-        <button type="button" disabled={busy || running || runtime.state === 'loading'} onClick={() => void operate('discover')} title={en ? 'Detect installed Agents' : '检测已安装 Agent'} aria-label={en ? 'Detect installed Agents' : '检测已安装 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><RefreshCw size={16} /></button>
+        <button type="button" disabled={busy || running || runtime.state === 'loading' || runtime.discoveryReady === false} onClick={() => void operate('discover')} title={en ? 'Detect installed Agents' : '检测已安装 Agent'} aria-label={en ? 'Detect installed Agents' : '检测已安装 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><RefreshCw size={16} /></button>
         {running || needsReset
           ? <button type="button" disabled={busy || runtime.state === 'stopping'} onClick={() => void operate('stop')} title={needsReset ? (en ? 'Reset local Agent service' : '重置本机 Agent 服务') : (en ? 'Stop local Agents' : '停止本机 Agent')} aria-label={needsReset ? (en ? 'Reset local Agent service' : '重置本机 Agent 服务') : (en ? 'Stop local Agents' : '停止本机 Agent')} className="rounded border border-[var(--border)] p-2 disabled:opacity-50">{needsReset ? <RotateCcw size={16} /> : <Square size={16} />}</button>
           : <button type="button" disabled={busy || !selected.length} onClick={() => void operate('start')} title={en ? 'Start local Agents' : '启动本机 Agent'} aria-label={en ? 'Start local Agents' : '启动本机 Agent'} className="rounded border border-[var(--border)] p-2 disabled:opacity-50"><Play size={16} /></button>}
@@ -163,6 +164,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       ? (en ? 'Automatic resume enabled' : '已启用自动恢复')
       : (en ? 'Automatic resume disabled' : '已关闭自动恢复')}</p>}
     {runtime.state === 'restoring' && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={15} className="animate-spin" />{en ? 'Restoring approved Agents...' : '正在恢复已授权 Agent…'}</p>}
+    {waitingForAuthorization && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={15} className="animate-spin" />{en ? 'Restoring computer authorization...' : '正在恢复主机授权…'}</p>}
     {busy && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={15} className="animate-spin" />{en ? 'Processing...' : '处理中…'}</p>}
     {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     {runtime.error && <p role="status" className="text-sm text-red-600 dark:text-red-400">{runtime.error === 'runtime_recovery_required'
