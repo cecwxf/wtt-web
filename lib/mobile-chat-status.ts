@@ -55,3 +55,9 @@ export function normalizeMobileProgressStatusKind(group?: string, detail?: strin
   if (combined.includes('completed') || combined.includes('complete') || combined.includes('done')) return 'complete'
   return fallback
 }
+
+export function mobileHistoryProgressTtl(kind: string, timestamp: number, latestReply: number | undefined, now: number, completeHoldMs: number): number {
+  if (!Number.isFinite(timestamp) || (latestReply !== undefined && latestReply >= timestamp)) return 0
+  const ttl = isTerminalMobileStatusKind(kind) ? completeHoldMs : 60000
+  return timestamp + ttl > now ? ttl : 0
+}

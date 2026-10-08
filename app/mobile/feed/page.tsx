@@ -10,10 +10,11 @@ import remarkGfm from 'remark-gfm'
 import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, RefreshCw, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
-import { readMobileSelection, writeMobileSelection, type MobileSelection } from '@/lib/mobile-selection'
+import { defaultMobileTopicId, mobileConversationAgentId, readMobileSelection, writeMobileSelection, type MobileSelection } from '@/lib/mobile-selection'
 import { attachmentMimeType } from '@/lib/media/mime'
 import {
   isTerminalMobileStatusKind,
+  mobileHistoryProgressTtl,
   normalizeMobileProgressStatusKind,
   shouldCloseWaitingStatusFromAgentReply,
   shouldPollMobileMessages,
@@ -104,6 +105,9 @@ type TopicRecord = {
   last_message_at?: string
   created_at?: string
   member_agent_ids?: string[]
+  primary_agent_id?: string
+  creator_agent_id?: string
+  agent_ids?: string[]
 }
 
 type RecentTopicRecord = TopicRecord & {
@@ -1190,7 +1194,8 @@ export default function MobileFeedPage() {
       return
     }
     if (!selectedTopicId && topics.length && topicsRaw !== undefined) {
-      setSelectedTopicId(topicId(topics[0]))
+      const initial = defaultMobileTopicId(topics, Array.isArray(topicsRaw) ? topicsRaw : [])
+      if (initial) setSelectedTopicId(initial)
       return
     }
     if (!selectedTopicId) return
@@ -1200,7 +1205,7 @@ export default function MobileFeedPage() {
       // Missing in one partial/failed directory is not proof the conversation vanished.
       if (topicsRaw === undefined || groupTopicsRaw === undefined || recentTopicsRaw === undefined
         || topicsError || groupTopicsError || recentTopicsError) return
-      setSelectedTopicId(topics.length ? topicId(topics[0]) : '')
+      setSelectedTopicId(defaultMobileTopicId(topics, Array.isArray(topicsRaw) ? topicsRaw : []))
       return
     }
     if (pendingCreatedTopicIdRef.current === selectedTopicId) {
@@ -1237,10 +1242,19 @@ export default function MobileFeedPage() {
   }, [fixedChatMode, selectionReady, topics])
 
   const selectedTopic = useMemo(() => topics.find((t) => topicId(t) === selectedTopicId) || null, [selectedTopicId, topics])
+  const conversationAgentId = useMemo(() => fixedChatMode ? selectedAgentId
+    : mobileConversationAgentId(selectedTopic, selectedAgentId, agents.map(agent => agent.agent_id),
+      Array.isArray(topicsRaw) ? topicsRaw.map(topicId) : []),
+  [agents, fixedChatMode, selectedAgentId, selectedTopic, topicsRaw])
   useEffect(() => {
-    if (!accountId || !selectionReady || fixedChatMode || !selectedAgent || !selectedTopic) return
+    if (!selectionReady || fixedChatMode || !conversationAgentId || conversationAgentId === selectedAgentId) return
+    pendingCreatedTopicIdRef.current = ''
+    setSelectedAgentId(conversationAgentId)
+  }, [conversationAgentId, fixedChatMode, selectedAgentId, selectionReady])
+  useEffect(() => {
+    if (!accountId || !selectionReady || fixedChatMode || !selectedAgent || !selectedTopic || selectedAgentId !== conversationAgentId) return
     writeMobileSelection(accountId, { agentId: selectedAgentId, topicId: selectedTopicId })
-  }, [accountId, fixedChatMode, selectedAgent, selectedAgentId, selectedTopic, selectedTopicId, selectionReady])
+  }, [accountId, conversationAgentId, fixedChatMode, selectedAgent, selectedAgentId, selectedTopic, selectedTopicId, selectionReady])
   const selectedTaskId = selectedTopic?.task_id
     ? String(selectedTopic.task_id)
     : (selectedTopicId ? createdTaskIdsByTopic[selectedTopicId] || '' : '')
@@ -1248,6 +1262,7 @@ export default function MobileFeedPage() {
   const pollSelectedMessages = shouldPollMobileMessages(selectedTypingState)
 
   const canFetchMessages = Boolean(token && selectionReady && selectedTopicId && (selectedAgentId || fixedChatMode)
+    && selectedAgentId === conversationAgentId
     && (fixedChatMode || selectedTopic || pendingCreatedTopicIdRef.current === selectedTopicId))
   const messageHistoryOwner = `${accountId}:${selectedAgentId || 'auto'}:${selectedTaskId || ''}:${fixedChatMode ? 'fixed' : 'feed'}`
   const messageHistoryRef = useRef<Map<string, unknown[]>>(new Map())
@@ -1310,15 +1325,20 @@ export default function MobileFeedPage() {
       let nextState = prev[selectedTopicId]
       let changed = false
       let latestAgentMessage: { id: string; senderId: string; senderName?: string; ts: number } | null = null
+      const latestReplyByAgent = new Map<string, number>()
       for (const item of messagesRaw) {
         const rec = item as Record<string, unknown>
         const progress = statusFromProgressMessage(rec.content, nextState?.adapter, locale === 'en')
         const senderType = String(rec.sender_type || '').toLowerCase()
         const rowTime = new Date(String(rec.timestamp || rec.created_at || '')).getTime()
-        const ts = Number.isFinite(rowTime) ? rowTime : now
+        const ts = rowTime
         if (senderType === 'agent' && !progress) {
           const id = String(rec.message_id || rec.id || '')
-          if (id && (!latestAgentMessage || ts >= latestAgentMessage.ts)) {
+          if (id && Number.isFinite(ts)) {
+            const senderId = String(rec.sender_id || selectedAgentId)
+            latestReplyByAgent.set(senderId, Math.max(latestReplyByAgent.get(senderId) || 0, ts))
+          }
+          if (id && Number.isFinite(ts) && (!latestAgentMessage || ts >= latestAgentMessage.ts)) {
             latestAgentMessage = {
               id,
               senderId: String(rec.sender_id || selectedAgentId),
@@ -1327,17 +1347,23 @@ export default function MobileFeedPage() {
             }
           }
         }
+      }
+      for (const item of messagesRaw) {
+        const rec = item as Record<string, unknown>
+        const progress = statusFromProgressMessage(rec.content, nextState?.adapter, locale === 'en')
         if (!progress) continue
-        if (ts + STATUS_STALE_MS < now) continue
+        const ts = new Date(String(rec.timestamp || rec.created_at || '')).getTime()
         const senderId = String(rec.sender_id || selectedAgentId)
+        const ttlMs = mobileHistoryProgressTtl(progress.kind, ts, latestReplyByAgent.get(senderId), now, COMPLETE_HOLD_MS)
+        if (!ttlMs || (nextState && ts + 2000 < nextState.startedAt)) continue
         nextState = appendTypingStatus(nextState, {
           agentId: senderId,
           agentName: rec.sender_display_name ? String(rec.sender_display_name) : displayName(agents.find((agent) => agent.agent_id === senderId)),
           statusText: progress.text,
           statusKind: progress.kind,
           adapter: nextState?.adapter,
-          ttlMs: 60000,
-        }, Math.max(now, ts))
+          ttlMs,
+        }, ts)
         changed = true
       }
       if (
@@ -1390,12 +1416,13 @@ export default function MobileFeedPage() {
   }, [selectedTopic?.member_agent_ids, selectedTopicMembers])
 
   const topicActorAgentId = useMemo(() => {
+    if (conversationAgentId !== selectedAgentId) return conversationAgentId
     if (!selectedTopic || selectedTopicMemberIdSet.size === 0) return selectedAgentId
     if (!isGroupTopic(selectedTopic) || selectedTaskId) return selectedAgentId
     if (selectedAgentId && selectedTopicMemberIdSet.has(selectedAgentId)) return selectedAgentId
     const ownedMember = agents.find((agent) => selectedTopicMemberIdSet.has(agent.agent_id))
     return ownedMember?.agent_id || selectedAgentId
-  }, [agents, selectedAgentId, selectedTaskId, selectedTopic, selectedTopicMemberIdSet])
+  }, [agents, conversationAgentId, selectedAgentId, selectedTaskId, selectedTopic, selectedTopicMemberIdSet])
 
   const topicActorAgent = useMemo(
     () => agents.find((agent) => agent.agent_id === topicActorAgentId) || selectedAgent,
