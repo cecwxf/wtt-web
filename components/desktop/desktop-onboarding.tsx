@@ -53,7 +53,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
     }
     const message = value instanceof Error ? value.message.toLowerCase() : ''
     if (/cancelled|canceled/.test(message)) return en ? 'Setup cancelled.' : '已取消设置。'
-    if (/keyring|credential storage|credentials could not/.test(message)) return en ? 'Allow WTT to access the system keyring, then retry.' : '请允许 WTT 访问系统密钥存储后重试。'
+    if (/keyring|credential storage|credentials could not/.test(message)) return en ? 'Check application data directory permissions and available disk space, then retry.' : '请检查应用数据目录的权限和剩余空间后重试。'
     if (/packaged agent runtime/.test(message)) return en ? 'The installed desktop package is missing its Agent runtime.' : '当前桌面安装包缺少 Agent 运行环境。'
     if (/recovery|shutdown|initialization/.test(message)) return en ? 'Agent services need recovery. Open Agent settings to check and stop the previous runtime before restarting.' : 'Agent 服务需要恢复。请在 Agent 设置中检查并停止此前的服务，再重新启动。'
     return en ? 'Could not connect this computer. Retry.' : '本机接入未完成，请重试。'

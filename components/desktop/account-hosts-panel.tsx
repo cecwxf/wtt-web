@@ -37,7 +37,7 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false, 
     // categories, not arbitrary backend responses or IPC implementation details.
     const message = value instanceof Error ? value.message.toLowerCase() : ''
     if (/cancelled|canceled/.test(message)) return en ? 'Authorization cancelled.' : '已取消授权。'
-    if (/keyring|credential storage|credentials could not/.test(message)) return en ? 'Unlock or configure the system keyring, then retry.' : '请解锁或配置系统密钥存储后重试。'
+    if (/keyring|credential storage|credentials could not/.test(message)) return en ? 'Check application data directory permissions and available disk space, then retry.' : '请检查应用数据目录的权限和剩余空间后重试。'
     if (/sign out before switching/.test(message)) return en ? 'Disconnect the previous local account first.' : '请先退出本机此前登录的账号。'
     return en ? 'Could not complete the request. Retry after checking your connection.' : '操作未完成，请检查网络后重试。'
   }, [en])

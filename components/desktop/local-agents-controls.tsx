@@ -149,7 +149,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       : runtime.error === 'runtime_selection_changed'
       ? (en ? 'Installed Agents or permissions changed. Detect and authorize them again.' : '已安装 Agent 或权限发生变化，请重新检测并授权。')
       : runtime.error === 'runtime_settings_unavailable'
-      ? (en ? 'Saved execution settings are unavailable. Check the OS keyring before restarting.' : '无法读取或保存执行设置，请先检查系统密钥存储。')
+      ? (en ? 'Saved execution settings are unavailable. Check local application storage before restarting.' : '无法读取或保存执行设置，请先检查本机应用数据目录。')
       : runtime.error === 'runtime_auto_resume_failed'
       ? (en ? 'Agent startup failed. Detect and start Agents again.' : 'Agent 启动失败，请重新检测并启动。')
       : (en ? 'Runtime connection interrupted or authorization unavailable.' : '运行连接已中断或主机授权不可用。')}</p>}

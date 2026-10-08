@@ -25,7 +25,7 @@ export async function signOut<R extends boolean = true>(options?: SignOutParams<
     await getDesktopBridge()?.host?.signOut()
   } catch {
     // Native sign-out drops in-memory authorization before OS vault persistence.
-    // A keyring write failure must not prevent the user from ending the Web session.
+    // A local storage write failure must not prevent ending the Web session.
   }
   return nextAuthSignOut(options)
 }
