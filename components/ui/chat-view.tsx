@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, BookOpen, Camera, Check, Download, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Sparkles, SquareTerminal, Star, Video, X } from 'lucide-react'
+import { Bell, Bot, Brain, BookOpen, Camera, Check, ChevronDown, Download, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Sparkles, SquareTerminal, Star, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
@@ -1278,13 +1278,29 @@ function formatAgentTokenUsageText(usage?: AgentTokenUsageSnapshot | null) {
   return `模型 token：今日 ${formatUsageTokens(todayTokens)} / ${todayRequests} 次，本月 ${formatUsageTokens(monthTokens)} / ${monthRequests} 次`
 }
 
-function AgentRunStatusCard({ status, floating = false }: { status: ChatRunStatus; floating?: boolean }) {
+function AgentRunStatusCard({ status, floating = false, desktop = false }: { status: ChatRunStatus; floating?: boolean; desktop?: boolean }) {
+  const { locale } = useI18n()
   const lines = status.lines.slice(floating ? -6 : -10)
   const adapter = runStatusAdapterLabel(status.adapter)
   const subtitle = [adapter, status.model].filter(Boolean).join(' · ')
   const shellClass = floating
     ? 'rounded-xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-2 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25'
     : 'mx-4 mb-2 rounded-2xl border border-[#d8cdbb] bg-[#fbf7ef]/95 p-3 shadow-lg shadow-[#6b4e2e]/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:shadow-black/25 sm:mx-6'
+
+  if (desktop) return <details className={desktopStyles.execution} open>
+    <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+      <Loader2 size={14} className="shrink-0 animate-spin text-emerald-600 dark:text-emerald-400" />
+      <span className="min-w-0 flex-1 truncate">{status.agentName} · {status.statusText || (locale === 'en' ? 'Working' : '正在执行')}</span>
+      <ChevronDown size={14} className="shrink-0" />
+    </summary>
+    <div className="max-h-28 space-y-2 overflow-y-auto border-l border-zinc-200 pl-3 dark:border-zinc-700">
+      {subtitle && <p className="text-[11px] text-zinc-500">{subtitle}</p>}
+      {lines.map(line => <div key={line.id} className="grid grid-cols-[64px_minmax(0,1fr)] gap-2 text-xs leading-5">
+        <span className="truncate text-zinc-500">{runStatusKindLabel(line.kind)}</span>
+        <span className="min-w-0 break-words whitespace-pre-wrap font-mono text-zinc-700 dark:text-zinc-300">{line.text}</span>
+      </div>)}
+    </div>
+  </details>
 
   return (
     <div className={shellClass}>
@@ -1338,7 +1354,16 @@ function avatarTone(seed: string, kind: 'agent' | 'human') {
   return { backgroundColor: bg, color: fg, borderColor: bd }
 }
 
-export function ChatView({
+export function ChatView(props: ChatViewProps) {
+  if (props.appearance === 'desktop' && !props.currentAgentIsCloud && !props.hideHeader) {
+    return <ManagedAgentTools agentId={props.currentAgentId} agentName={props.workspaceAgentName} token={props.accessToken} layout="docked">
+      {(toolbar, managed) => <ChatViewContent {...props} managedToolsExternal desktopHasManagedTools={managed} extraHeaderActions={<>{props.extraHeaderActions}{toolbar}</>} />}
+    </ManagedAgentTools>
+  }
+  return <ChatViewContent {...props} />
+}
+
+function ChatViewContent({
   appearance = 'default',
   topicName,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1380,7 +1405,9 @@ export function ChatView({
   hideHeader = false,
   composerAccessory,
   hideRuntimeBadges = false,
-}: ChatViewProps) {
+  managedToolsExternal = false,
+  desktopHasManagedTools = false,
+}: ChatViewProps & { managedToolsExternal?: boolean; desktopHasManagedTools?: boolean }) {
   const { t, locale } = useI18n()
   const managedProgress = useManagedChatProgress(topicId, accessToken, runStatus)
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
@@ -2803,7 +2830,7 @@ export function ChatView({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {!hideHeader && !currentAgentIsCloud && <ManagedAgentTools agentId={currentAgentId} agentName={workspaceAgentName} token={accessToken} />}
+      {!hideHeader && !currentAgentIsCloud && !managedToolsExternal && <ManagedAgentTools agentId={currentAgentId} agentName={workspaceAgentName} token={accessToken} />}
       <style>{`
         @keyframes wtt-cloud-billing-marquee {
           0% { transform: translateX(0); }
@@ -3006,8 +3033,8 @@ export function ChatView({
         <div className={`flex items-start justify-between ${compactUi ? 'gap-1.5' : 'gap-3'}`}>
           <div className="min-w-0 flex-1">
             <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
-              <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}># {topicName}</h2>
-              {!compactUi && (
+              <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}>{appearance === 'desktop' ? '' : '# '}{topicName}</h2>
+              {!compactUi && appearance !== 'desktop' && (
                 <span className="shrink-0 text-[10px] text-slate-400">
                   {t('chat.messagesLoaded', { count: messages.length })}
                 </span>
@@ -3057,7 +3084,7 @@ export function ChatView({
                     {conversationFiles.length}
                   </span>
                 </button>
-                <button
+                {!desktopHasManagedTools && <button
                   type="button"
                   onClick={() => setActiveTab('terminal')}
                   className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 font-semibold transition ${compactUi ? 'pb-1 text-xs' : 'pb-2 text-sm'} ${
@@ -3071,7 +3098,7 @@ export function ChatView({
                   <span className={`h-1.5 w-1.5 rounded-full ${
                     currentAgentId ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-zinc-700'
                   }`} />
-                </button>
+                </button>}
                 {canUseWorkspaceTab && (
                   <button
                     type="button"
@@ -3096,7 +3123,7 @@ export function ChatView({
                     }`}
                   >
                     <BookOpen className={compactUi ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-                    <span>知识库</span>
+                    <span>{locale === 'en' ? 'Knowledge' : '知识库'}</span>
                   </button>
                 )}
               </div>
@@ -3125,9 +3152,10 @@ export function ChatView({
               <button
                 onClick={() => setExportOpen(!exportOpen)}
                 onBlur={() => setTimeout(() => setExportOpen(false), 150)}
-                className={`flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100 ${compactUi ? 'px-1 py-0.5 text-[9px]' : 'px-1.5 py-0.5 text-[10px]'}`}
+                title={t('chat.export')} aria-label={t('chat.export')}
+                className={appearance === 'desktop' ? 'inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800' : `flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100 ${compactUi ? 'px-1 py-0.5 text-[9px]' : 'px-1.5 py-0.5 text-[10px]'}`}
               >
-                <Download size={compactUi ? 10 : 11} /> {t('chat.export')} ▾
+                <Download size={appearance === 'desktop' ? 16 : compactUi ? 10 : 11} />{appearance !== 'desktop' && <> {t('chat.export')} ▾</>}
               </button>
               {exportOpen && (
                 <div className="absolute right-0 top-full mt-1 z-30 min-w-[132px] rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
@@ -3155,7 +3183,7 @@ export function ChatView({
             : 'overflow-y-auto px-4 py-3 sm:px-6'
         }`}
       >
-        {!utilityTabActive && (
+        {!utilityTabActive && (appearance !== 'desktop' || hasOlder || loadingOlder) && (
         <div className="mb-3 flex justify-center">
           <button
             onClick={handleLoadOlder}
@@ -3312,7 +3340,7 @@ export function ChatView({
                 }
 
                 return (
-                  <div key={message.message_id} className={`${desktopStyles.messageRow} group flex justify-start border-b border-[#eee9df] last:border-b-0 transition-colors hover:bg-[#f4f1eb]/70 dark:border-zinc-900 dark:hover:bg-zinc-900/60`}>
+                  <div key={message.message_id} data-sender-type={message.sender_type} className={`${desktopStyles.messageRow} group flex justify-start border-b border-[#eee9df] last:border-b-0 transition-colors hover:bg-[#f4f1eb]/70 dark:border-zinc-900 dark:hover:bg-zinc-900/60`}>
                     <div className="flex w-full max-w-none items-start gap-2.5 px-2 py-2.5">
                       {message.sender_type === 'agent' ? (
                         <button
@@ -3348,9 +3376,9 @@ export function ChatView({
                         {!!label && (
                           <p className="mb-0.5 flex items-center gap-1.5 truncate px-1 text-[12px] font-semibold text-[#2b2f33] dark:text-zinc-100">
                             <span className="truncate">{label}</span>
-                            <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${isMine ? 'bg-[#f1eee7] text-[#766f64] dark:bg-zinc-800 dark:text-zinc-400' : 'bg-[#eee8dd] text-[#9a4b00] dark:bg-zinc-800 dark:text-amber-300'}`}>
+                            {appearance !== 'desktop' && <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${isMine ? 'bg-[#f1eee7] text-[#766f64] dark:bg-zinc-800 dark:text-zinc-400' : 'bg-[#eee8dd] text-[#9a4b00] dark:bg-zinc-800 dark:text-amber-300'}`}>
                               {isMine ? 'You' : 'AI'}
-                            </span>
+                            </span>}
                             {message.history_import_source && <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" title={`Imported text snapshot · ${message.history_import_source}`}>{locale === 'en' ? 'Imported' : '导入'} · {message.history_import_source}</span>}
                             {message.cli_source && (
                               <>
@@ -3870,8 +3898,8 @@ export function ChatView({
         <ToolApprovalPanel topicId={topicId} accessToken={accessToken} activeRun={Boolean(runStatus)} enabled={activeTab === 'chat'} />
         <ManagedChatExecutions topicId={topicId} accessToken={accessToken} activeRun={managedProgress.showProgress} enabled={activeTab === 'chat'} agents={topicMembers} onSnapshot={managedProgress.onSnapshot} />
         {activeTab === 'chat' && managedProgress.showProgress && runStatus && !composerExpanded && (
-          <div className="mb-2 max-w-xl">
-            <AgentRunStatusCard status={runStatus} floating />
+          <div className={appearance === 'desktop' ? 'mb-2' : 'mb-2 max-w-xl'}>
+            <AgentRunStatusCard status={runStatus} floating desktop={appearance === 'desktop'} />
           </div>
         )}
 
@@ -3889,7 +3917,7 @@ export function ChatView({
         )}
 
         {/* Compact status bar: actual runtime model / think / adapter-aware slash */}
-        <div className="mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap">
+        <div className={`${desktopStyles.runtimeBar} mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap`}>
           {composerAccessory}
           {!hideRuntimeBadges && (
             <>
@@ -3897,7 +3925,7 @@ export function ChatView({
                 className="flex min-w-0 max-w-[220px] shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                 title={`Current runtime model: ${displayModelId || displayModelLabel}`}
               >
-                <span>🤖</span>
+                {appearance === 'desktop' ? <Bot size={12} /> : <span>🤖</span>}
                 <span className="truncate font-medium">{displayModelLabel}</span>
               </span>
 
@@ -3905,7 +3933,7 @@ export function ChatView({
                 className="flex shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                 title={`Current think mode: ${displayEffortLabel}`}
               >
-                <span>🧠</span>
+                {appearance === 'desktop' ? <Brain size={12} /> : <span>🧠</span>}
                 <span className="font-medium">{displayEffortLabel}</span>
               </span>
             </>

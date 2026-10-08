@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-async function setup(page: Page, { disabled = false, dark = false, locale = 'en' } = {}) {
+async function setup(page: Page, { disabled = false, dark = false, locale = 'en', tools = false } = {}) {
   const sent: Array<{ path: string; body: Record<string, unknown> }> = []
   await page.addInitScript(({ dark, locale }) => {
     localStorage.setItem('theme', dark ? 'dark' : 'light')
@@ -14,7 +14,8 @@ async function setup(page: Page, { disabled = false, dark = false, locale = 'en'
   }, { dark, locale })
   await page.routeWebSocket('**', socket => socket.close())
   await page.route('**/api/auth/session', route => route.fulfill({ json: {
-    user: { name: 'Workspace Tester', email: 'workspace@example.test' }, accessToken: 'workspace-fixture-token', expires: '2099-01-01T00:00:00Z',
+    userId: '11111111-1111-4111-8111-111111111111',
+    user: { id: '11111111-1111-4111-8111-111111111111', name: 'Workspace Tester', email: 'workspace@example.test' }, accessToken: 'workspace-fixture-token', expires: '2099-01-01T00:00:00Z',
   } }))
   await page.route('**/api/wtt/**', async route => {
     const url = new URL(route.request().url())
@@ -22,7 +23,8 @@ async function setup(page: Page, { disabled = false, dark = false, locale = 'en'
     const agentId = url.searchParams.get('agent_id') || 'agent-one'
     const agent = agentId === 'agent-two' ? 'two' : 'one'
     let value: unknown = {}
-    if (path === '/agents/my') value = [
+    if (path === '/navigation/favorites') value = []
+    else if (path === '/agents/my') value = [
       { agent_id: 'agent-one', display_name: 'Codex Engineer' },
       { agent_id: 'agent-two', display_name: 'Claude Writer' },
     ]
@@ -33,7 +35,21 @@ async function setup(page: Page, { disabled = false, dark = false, locale = 'en'
         { host_id: 'host-one', display_name: 'MacBook Pro', status: 'online', platform: 'darwin', environment: 'native', client_version: 'fixture', agents: [{ agent_id: 'agent-one', display_name: 'Codex Engineer', adapter: 'codex' }] },
         { host_id: 'host-two', display_name: 'Linux Workstation', status: 'offline', platform: 'linux', environment: 'native', client_version: 'fixture', agents: [{ agent_id: 'agent-two', display_name: 'Claude Writer', adapter: 'claude-code' }] },
       ], next_offset: null }
-    } else if (path === '/topics/subscribed') value = [{ id: `topic-${agent}`, topic_id: `topic-${agent}`, name: agent === 'one' ? 'Website implementation' : 'Release notes', topic_type: 'p2p' }]
+    } else if (path === '/hosts/agents/agent-one/tools') value = tools ? { files: 'workspace-write', terminal: true, preview_ports: [38765] } : { files: 'off', terminal: false, preview_ports: [] }
+    else if (/^\/hosts\/agents\/[^/]+\/tools$/.test(path)) return route.fulfill({ status: 404, json: { detail: 'Legacy agent' } })
+    else if (path.endsWith('/workspace/list')) value = { root: 'Workspace', path: '.', entries: [{ name: 'README.md', path: 'README.md', type: 'file', size: 218 }] }
+    else if (path.endsWith('/workspace/read')) value = { name: 'README.md', path: 'README.md', size: 218, previewable: true, preview_kind: 'text', content_type: 'text/markdown', content: '# Project\n\nWorkspace file preview from the existing WTT file API.', editable: true }
+    else if (path.endsWith('/preview')) {
+      const operation = route.request().postDataJSON().operation
+      value = { state: operation === 'preview_start' ? 'ready' : 'stopped', port: 38765,
+        ...(operation === 'preview_start' ? { url: 'https://wtt-ui-fixture.trycloudflare.com', expires_at: new Date(Date.now() + 900000).toISOString() } : {}) }
+    }
+    else if (path === '/hosts/chat-executions') value = tools ? [{
+      execution_id: '22222222-2222-4222-8222-222222222222', message_id: '33333333-3333-4333-8333-333333333333',
+      topic_id: url.searchParams.get('topic_id'), agent_id: 'agent-one', state: 'running', revision: 1,
+      stale: false, can_cancel: false, created_at: '2026-10-08T00:00:00Z', updated_at: '2026-10-08T00:00:01Z',
+    }] : []
+    else if (path === '/topics/subscribed') value = [{ id: `topic-${agent}`, topic_id: `topic-${agent}`, name: agent === 'one' ? 'Website implementation' : 'Release notes', topic_type: 'p2p' }]
     else if (path === '/topics/my-groups') value = [{ id: 'topic-group', topic_id: 'topic-group', name: 'Product team', topic_type: 'discussion' }]
     else if (path === '/topics/my-recent') value = { items: [
       { topic_id: 'topic-two', topic_name: 'Release notes', primary_agent_id: 'agent-two', agent_ids: ['agent-two'] },
@@ -45,7 +61,10 @@ async function setup(page: Page, { disabled = false, dark = false, locale = 'en'
         const body = route.request().postDataJSON()
         sent.push({ path, body })
         value = { message_id: 'sent-message', topic_id: topicId, sender_id: 'workspace@example.test', sender_type: 'human', content: body.content, timestamp: new Date().toISOString() }
-      } else value = [{ message_id: `message-${topicId}`, topic_id: topicId, sender_id: topicId === 'topic-two' ? 'agent-two' : 'agent-one', sender_type: 'agent', content: `Verified history for ${topicId}`, timestamp: '2026-10-07T00:00:00Z' }]
+      } else value = [
+        ...(tools ? [{ message_id: 'human-task', topic_id: topicId, sender_id: 'workspace@example.test', sender_display_name: 'Workspace Tester', sender_type: 'human', content: 'Build a small website and inspect its preview.', timestamp: '2026-10-07T00:00:00Z' }] : []),
+        { message_id: `message-${topicId}`, topic_id: topicId, sender_id: topicId === 'topic-two' ? 'agent-two' : 'agent-one', sender_display_name: topicId === 'topic-two' ? 'Claude Writer' : 'Codex Engineer', sender_type: 'agent', content: `Verified history for ${topicId}${tools ? '\n\nThe project files are ready.\n\n```ts\nexport const project = { name: "Website", ready: true };\n```' : ''}`, timestamp: '2026-10-07T00:01:00Z' },
+      ]
     } else if (path.endsWith('/members')) value = [{ agent_id: agentId, display_name: 'Engineer', role: 'owner' }]
     else if (path === '/billing/me') value = { entitlement: { plan: 'free' } }
     else if (path.startsWith('/tasks') || path.startsWith('/p2p-requests') || path.startsWith('/agent-operations')) value = []
@@ -54,6 +73,69 @@ async function setup(page: Page, { disabled = false, dark = false, locale = 'en'
   })
   return sent
 }
+
+test('desktop tree and docked tools retain the same chat and draft through tool switches', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 })
+  await setup(page, { tools: true })
+  await page.route('https://wtt-ui-fixture.trycloudflare.com/**', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body><h1>Website preview</h1><button>Play</button></body></html>' }))
+  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await expect(page.getByText('The project files are ready.')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Executions' }).getByText('Running')).toBeVisible()
+  const tree = page.locator('#desktop-navigation').getByRole('region', { name: 'Computers & agents' })
+  await expect(tree.getByRole('link', { name: 'Website implementation' })).toBeVisible()
+  await tree.locator('summary').filter({ hasText: 'MacBook Pro' }).click()
+  await expect(tree.getByRole('link', { name: 'Website implementation' })).not.toBeVisible()
+  await tree.locator('summary').filter({ hasText: 'MacBook Pro' }).click()
+  const composer = page.locator('textarea').first()
+  await composer.fill('Preserve this draft while inspecting tools')
+  const chatHeader = page.locator('.wtt-chat-view').locator('[aria-label="Agent tools"]')
+  await chatHeader.getByRole('button', { name: 'Workspace files' }).click()
+  const toolsPane = page.getByRole('complementary', { name: 'Agent tools' })
+  await expect(toolsPane.getByText('README.md', { exact: true })).toBeVisible()
+  await expect(composer).toBeVisible()
+  const chatBox = await composer.boundingBox()
+  const toolsBox = await toolsPane.boundingBox()
+  expect(chatBox && toolsBox && chatBox.x + chatBox.width <= toolsBox.x).toBe(true)
+  await toolsPane.getByRole('tab', { name: 'Preview', exact: true }).click()
+  await toolsPane.getByRole('button', { name: 'Start preview' }).click()
+  await expect(toolsPane.getByTitle('Development preview')).toBeVisible()
+  await expect(composer).toHaveValue('Preserve this draft while inspecting tools')
+  await page.screenshot({ path: 'test-results/desktop-paseo-docked-light.png', fullPage: true })
+  await toolsPane.getByRole('button', { name: 'Stop preview' }).click()
+  const divider = page.getByRole('separator', { name: 'Resize tools' })
+  await divider.focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(divider).toHaveAttribute('aria-valuenow', '456')
+  await page.keyboard.press('Escape')
+  await expect(toolsPane).not.toBeVisible()
+  await expect(composer).toHaveValue('Preserve this draft while inspecting tools')
+  await chatHeader.getByRole('button', { name: 'Terminal', exact: true }).click()
+  await expect(toolsPane).toBeVisible()
+  await toolsPane.getByRole('tab', { name: 'Workspace files' }).click()
+  await expect(toolsPane.getByText('README.md', { exact: true })).toBeVisible()
+  await expect(toolsPane.locator('div[hidden]')).toHaveCount(1)
+  await toolsPane.getByRole('button', { name: 'Close tools' }).click()
+  await expect(composer).toHaveValue('Preserve this draft while inspecting tools')
+})
+
+test('docked tools adapt to narrow dark screens and restore chat without losing drafts', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setup(page, { tools: true, dark: true, locale: 'zh' })
+  await page.goto('/desktop?agentId=agent-one&topic=topic-one')
+  await expect(page.getByText('The project files are ready.')).toBeVisible()
+  const composer = page.locator('textarea').first()
+  await composer.fill('保留草稿')
+  await page.locator('.wtt-chat-view [aria-label="Agent 工具"]').getByRole('button', { name: '工作区文件' }).click()
+  const pane = page.getByRole('complementary', { name: 'Agent 工具' })
+  await expect(pane.getByText('README.md', { exact: true })).toBeVisible()
+  await expect(composer).not.toBeVisible()
+  await page.screenshot({ path: 'test-results/desktop-paseo-tools-narrow-dark.png', fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await pane.getByRole('button', { name: '关闭工具' }).click()
+  await expect(composer).toBeVisible()
+  await expect(composer).toHaveValue('保留草稿')
+  await page.screenshot({ path: 'test-results/desktop-paseo-chat-narrow-dark.png', fullPage: true })
+})
 
 test('desktop directory opens shared chat, recent cross-agent history and group deep links', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })

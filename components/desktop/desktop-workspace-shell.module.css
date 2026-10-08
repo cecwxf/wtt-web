@@ -1,0 +1,9 @@
+.workspace { letter-spacing: 0; }
+.section > summary::-webkit-details-marker { display: none; }
+.section > summary .chevron { transition: transform 120ms ease; }
+.section[open] > summary .chevron { transform: rotate(90deg); }
+.rowAction { flex-shrink: 0; opacity: 0; }
+.navigationRow:hover .rowAction,
+.navigationRow:focus-within .rowAction { opacity: 1; }
+@media (hover: none) { .rowAction { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }

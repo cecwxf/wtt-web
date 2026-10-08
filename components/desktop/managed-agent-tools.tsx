@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import { FolderOpen, Globe, Loader2, Terminal, Upload, X } from 'lucide-react'
@@ -9,22 +10,33 @@ import { CliWorkspaceExplorer } from '@/components/ui/cli-workspace-explorer'
 import { useI18n } from '@/lib/i18n-provider'
 import { downloadNativeWorkspaceFile } from '@/lib/native-files'
 import { ManagedLivePreview } from './managed-live-preview'
+import styles from './managed-agent-tools.module.css'
 
 const TerminalPane = dynamic(() => import('@/components/ui/agent-terminal-modal').then(module => module.AgentTerminalPane), { ssr: false })
 type Tools = { files: 'off' | 'read-only' | 'workspace-write'; terminal: boolean; preview_ports: number[] }
 type Tab = 'files' | 'terminal' | 'preview'
 
-export function ManagedAgentTools(props: { agentId: string; agentName?: string; token?: string }) {
+type ManagedAgentToolsProps = {
+  agentId: string; agentName?: string; token?: string
+  layout?: 'dialog' | 'docked'
+  children?: (toolbar: ReactNode, managed: boolean) => ReactNode
+}
+
+export function ManagedAgentTools(props: ManagedAgentToolsProps) {
   return <ManagedAgentToolsInner key={`${props.agentId}:${props.token || ''}`} {...props} />
 }
 
-function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string; agentName?: string; token?: string }) {
+function ManagedAgentToolsInner({ agentId, agentName, token, layout = 'dialog', children }: ManagedAgentToolsProps) {
   const { locale } = useI18n()
   const en = locale === 'en'
   const [tab, setTab] = useState<Tab | null>(null)
   const [terminalStarted, setTerminalStarted] = useState(false)
   const [previewMode, setPreviewMode] = useState<'live' | 'file'>('live')
   const dialog = useRef<HTMLDialogElement>(null)
+  const pane = useRef<HTMLDivElement>(null)
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const [panelWidth, setPanelWidth] = useState(440)
+  const resize = useRef<{ x: number; width: number } | null>(null)
   const transfer = useRef<AbortController | null>(null)
   const uploadInput = useRef<HTMLInputElement>(null)
   const live = useRef(true)
@@ -51,7 +63,8 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
 
   useEffect(() => {
     live.current = true
-    return () => { live.current = false; transfer.current?.abort(); dialog.current?.close() }
+    const element = dialog.current
+    return () => { live.current = false; transfer.current?.abort(); element?.close() }
   }, [])
   useEffect(() => {
     if (tab === 'terminal') setTerminalStarted(true)
@@ -60,8 +73,19 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
   useEffect(() => {
     if (tab && (data === null || error || (data && (tab === 'terminal' ? !data.terminal : tab === 'preview' ? data.files === 'off' && !data.preview_ports.length : data.files === 'off')))) { setTab(null); return }
     if (!tab) { dialog.current?.close(); transfer.current?.abort() }
-    else if (!dialog.current?.open) dialog.current?.showModal()
-  }, [tab, data, error])
+    else if (layout === 'dialog' && !dialog.current?.open) dialog.current?.showModal()
+  }, [tab, data, error, layout])
+  const opened = Boolean(tab)
+  useEffect(() => {
+    if (layout !== 'docked') return
+    if (opened) {
+      returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      pane.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    } else if (returnFocus.current?.isConnected) {
+      returnFocus.current.focus()
+      returnFocus.current = null
+    }
+  }, [opened, layout])
 
   async function download(path: string, name: string) {
     if (!token || transfer.current) return
@@ -153,23 +177,19 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
     }
   }
 
-  if (!data) return error ? <span role="status" className="text-xs text-red-600">{en ? 'Remote tools unavailable' : '远程工具暂不可用'}</span> : null
   const tabs: Array<{ key: Tab; label: string; icon: typeof FolderOpen; enabled: boolean }> = [
-    { key: 'files', label: en ? 'Files' : '文件', icon: FolderOpen, enabled: data.files !== 'off' },
-    { key: 'terminal', label: en ? 'Terminal' : '终端', icon: Terminal, enabled: data.terminal },
-    { key: 'preview', label: en ? 'Preview' : '预览', icon: Globe, enabled: data.files !== 'off' || data.preview_ports.length > 0 },
+    { key: 'files', label: layout === 'docked' ? (en ? 'Workspace files' : '工作区文件') : (en ? 'Files' : '文件'), icon: FolderOpen, enabled: Boolean(data && data.files !== 'off') },
+    { key: 'terminal', label: en ? 'Terminal' : '终端', icon: Terminal, enabled: Boolean(data?.terminal) },
+    { key: 'preview', label: en ? 'Preview' : '预览', icon: Globe, enabled: Boolean(data && (data.files !== 'off' || data.preview_ports.length > 0)) },
   ]
-  if (!tabs.some(item => item.enabled)) return null
-  return <>
-    <div className="flex shrink-0 items-center justify-end gap-1 border-b border-zinc-200 px-2 py-1 dark:border-zinc-800">
-      {tabs.filter(item => item.enabled).map(({ key, label, icon: Icon }) => <button key={key} type="button" onClick={() => setTab(key)} title={`${agentName || agentId} · ${label}`} aria-label={label} className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"><Icon size={15} /><span>{label}</span></button>)}
-    </div>
-    <dialog ref={dialog} onCancel={() => setTab(null)} onClose={() => setTab(null)} aria-label={en ? 'Agent tools' : 'Agent 工具'} className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-none border-l border-zinc-200 bg-white p-0 text-zinc-900 backdrop:bg-black/20 md:w-[min(800px,75vw)] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-      <div className="flex h-full min-h-0 flex-col" onDragOver={event => { if (tab !== 'terminal' && data.files === 'workspace-write' && event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.stopPropagation() } }} onDrop={event => {
+  const toolbar = error ? <span role="status" className="text-xs text-red-600">{en ? 'Remote tools unavailable' : '远程工具暂不可用'}</span> : <div className="flex shrink-0 items-center gap-0.5" aria-label={en ? 'Agent tools' : 'Agent 工具'}>
+    {tabs.filter(item => item.enabled).map(({ key, label, icon: Icon }) => <button key={key} type="button" onClick={() => setTab(tab === key && layout === 'docked' ? null : key)} title={`${agentName || agentId} · ${label}`} aria-label={label} aria-expanded={tab === key} className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md ${layout === 'docked' ? 'w-8' : 'px-2 text-xs'} ${tab === key ? 'bg-zinc-100 text-emerald-700 dark:bg-zinc-800 dark:text-emerald-400' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}><Icon size={16} />{layout !== 'docked' && <span>{label}</span>}</button>)}
+  </div>
+  const panel = data && <div ref={pane} className="flex h-full min-h-0 flex-col" onKeyDown={event => { if (layout === 'docked' && event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); setTab(null) } }} onDragOver={event => { if (tab !== 'terminal' && data.files === 'workspace-write' && event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.stopPropagation() } }} onDrop={event => {
         if (tab !== 'terminal' && data.files === 'workspace-write' && event.dataTransfer.files.length) { event.preventDefault(); event.stopPropagation(); void upload(event.dataTransfer.files[0]) }
       }}>
         <header className="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-200 px-3 dark:border-zinc-800">
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{agentName || agentId}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium" title={agentName || agentId}>{layout === 'docked' ? tabs.find(item => item.key === tab)?.label : agentName || agentId}</span>
           {tab !== 'terminal' && data.files === 'workspace-write' && <button type="button" disabled={progress !== null} onClick={() => uploadInput.current?.click()} title={en ? 'Upload to workspace' : '上传到工作目录'} aria-label={en ? 'Upload to workspace' : '上传到工作目录'} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-zinc-500 disabled:opacity-40"><Upload size={17} /></button>}
           <input ref={uploadInput} type="file" hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} />
           {tabs.filter(item => item.enabled).map(({ key, label, icon: Icon }) => <button type="button" key={key} role="tab" aria-selected={tab === key} title={label} aria-label={label} onClick={() => setTab(key)} className={`inline-flex h-9 w-9 items-center justify-center rounded-md ${tab === key ? 'bg-zinc-100 text-emerald-700 dark:bg-zinc-800 dark:text-emerald-400' : 'text-zinc-500'}`}><Icon size={17} /></button>)}
@@ -183,6 +203,22 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
           {tab === 'preview' && data.preview_ports.length > 0 && (previewMode === 'live' || data.files === 'off') ? <ManagedLivePreview key={data.preview_ports.join(',')} agentId={agentId} token={token} ports={data.preview_ports} en={en} /> : tab && tab !== 'terminal' && <CliWorkspaceExplorer key={refreshEpoch} sessionId={agentId} workspaceRoot="Workspace" workspaceApiBase={apiBase} online accessToken={token} workspaceAccess={data.files === 'workspace-write' ? 'workspace-write' : 'read-only'} zh={!en} previewMode={tab === 'preview'} onDownload={(path, name) => void download(path, name)} />}
         </div>
       </div>
-    </dialog>
+
+  if (layout === 'docked') return <div className={`${styles.workspace} ${opened ? styles.opened : ''}`} data-testid="desktop-chat-workspace">
+    <div className={styles.chat}>{children?.(toolbar, Boolean(data))}</div>
+    {opened && data && <aside className={styles.tools} style={{ width: panelWidth }} aria-label={en ? 'Agent tools' : 'Agent 工具'} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); setTab(null) } }}>
+      <div role="separator" tabIndex={0} aria-label={en ? 'Resize tools' : '调整工具宽度'} aria-orientation="vertical" aria-valuemin={320} aria-valuemax={800} aria-valuenow={panelWidth} className={styles.resize}
+        onDoubleClick={() => setPanelWidth(440)}
+        onPointerDown={event => { if (event.button !== 0) return; resize.current = { x: event.clientX, width: event.currentTarget.parentElement!.getBoundingClientRect().width }; event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault() }}
+        onPointerMove={event => { if (resize.current) setPanelWidth(Math.max(320, Math.min(800, resize.current.width + resize.current.x - event.clientX))) }}
+        onPointerUp={event => { resize.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
+        onLostPointerCapture={() => { resize.current = null }}
+        onKeyDown={event => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { event.preventDefault(); setPanelWidth(width => event.key === 'Home' ? 320 : event.key === 'End' ? 800 : Math.max(320, Math.min(800, width + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />
+      {panel}
+    </aside>}
+  </div>
+  return <>
+    {tabs.some(item => item.enabled) || error ? <div className="flex shrink-0 justify-end border-b border-zinc-200 px-2 py-1 dark:border-zinc-800">{toolbar}</div> : null}
+    <dialog ref={dialog} onCancel={() => setTab(null)} onClose={() => setTab(null)} aria-label={en ? 'Agent tools' : 'Agent 工具'} className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-none border-l border-zinc-200 bg-white p-0 text-zinc-900 backdrop:bg-black/20 md:w-[min(800px,75vw)] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">{panel}</dialog>
   </>
 }

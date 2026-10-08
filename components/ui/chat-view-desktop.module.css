@@ -23,20 +23,54 @@
   border-color: var(--wtt-chat-border);
 }
 
-.desktop .header { padding: 8px 16px 0; }
+.desktop .header { padding: 12px 20px 0; }
+.desktop .header > div { align-items: center; }
+.desktop .header h2 { font-size: 14px; font-weight: 500; }
+.desktop .header button { letter-spacing: 0; }
+.desktop .header h2 + span { color: var(--wtt-chat-muted); }
+.desktop .header button > span:nth-child(2) { background: transparent; color: var(--wtt-chat-muted); padding: 0; }
 
 .desktop .messageGroup {
   border: 0;
   border-radius: 0;
   background: transparent;
+  width: 100%;
+  max-width: 880px;
+  margin-inline: auto;
 }
 
 .desktop .messageRow {
   border-color: transparent;
-  margin-bottom: 12px;
+  margin-bottom: 24px;
 }
 
-.desktop .messageRow:hover { background: var(--wtt-chat-surface-mine); }
+.desktop .messageRow:hover { background: transparent; }
+.desktop .messageRow > div { padding: 0; }
+.desktop .messageRow :global(.wtt-message-bubble) {
+  box-shadow: none;
+  border: 0;
+  color: var(--wtt-chat-text);
+  background: transparent;
+  padding: 8px 4px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.desktop .messageRow[data-sender-type='human'] > div {
+  width: min(100%, 720px);
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+.desktop .messageRow[data-sender-type='human'] :global(.wtt-message-bubble) {
+  background: var(--wtt-chat-surface-mine);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.desktop .messageRow[data-sender-type='human'] > div > div > p { justify-content: flex-end; padding-right: 4px; }
+.desktop .dateDivider { width: 100%; max-width: 880px; margin: 20px auto 24px; }
+.desktop .composer { padding: 8px 20px 16px; border-top-color: transparent; }
+.desktop .composer > * { max-width: 880px; margin-inline: auto; }
+.desktop .runtimeBar { gap: 6px; }
+.desktop .runtimeBar > span { background: transparent; border-color: transparent; color: var(--wtt-chat-muted); }
 
 .desktop .dateDivider > div { background: var(--wtt-chat-border); }
 .desktop .dateDivider > span {
@@ -48,14 +82,39 @@
 
 .desktop :global(.wtt-message-bubble),
 .desktop :global(.wtt-rich-markdown) { letter-spacing: 0; }
+.desktop :global(.wtt-rich-markdown) { color: var(--wtt-chat-text); }
+.desktop :global(.wtt-rich-markdown) :is(h1, h2, h3, h4, h5, h6) { letter-spacing: 0; }
+.desktop :global(.wtt-code-block) {
+  background: var(--wtt-chat-surface-mine);
+  border-color: var(--wtt-chat-border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.desktop :global(.wtt-code-toolbar) { background: transparent; border-color: var(--wtt-chat-border); padding: 4px 8px; }
+.desktop :global(.wtt-code-toolbar) button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: transparent; border: 0; color: var(--wtt-chat-muted); box-shadow: none; }
+.desktop :global(.wtt-code-copy-icon) { display: block; }
+.desktop :global(.wtt-code-copy-label) { display: none; }
+.desktop :global(.wtt-code-block) :is(pre, code) { color: var(--wtt-chat-text); }
+.desktop :global(.wtt-rich-markdown) a { color: #0284c7; }
+.desktop :global(.wtt-rich-markdown) blockquote { background: var(--wtt-chat-surface-mine); border-color: var(--wtt-chat-border); color: var(--wtt-chat-muted); border-radius: 0; }
 
 .desktop .composerInput {
   background: var(--wtt-chat-surface-mine);
   border-color: var(--wtt-chat-border);
   border-radius: 8px;
   box-shadow: none;
+  min-height: 56px;
 }
 
 .desktop .composerInput:focus-within { border-color: #10b981; }
 .desktop .send { background: #047857; border-radius: 6px; }
 .desktop .send:hover:not(:disabled) { background: #065f46; }
+.desktop .execution { border-top: 1px solid var(--wtt-chat-border); padding-top: 4px; }
+.desktop .execution summary::-webkit-details-marker { display: none; }
+.desktop .execution:not([open]) summary > svg:last-child { transform: rotate(-90deg); }
+@media (max-width: 640px) {
+  .desktop .header { padding: 8px 12px 0; }
+  .desktop .composer { padding: 8px 12px 12px; }
+  .desktop .header > div { flex-wrap: wrap; }
+  .desktop .header > div > div:last-child { margin-left: auto; }
+}

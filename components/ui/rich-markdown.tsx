@@ -1,6 +1,7 @@
 'use client'
 
 import ReactMarkdown from 'react-markdown'
+import { Check, Copy } from 'lucide-react'
 import { isValidElement, useMemo, useState, type ReactNode } from 'react'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -80,15 +81,16 @@ function CopyablePre({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="group relative my-4 overflow-hidden rounded-xl border border-[#e4d9ca] bg-[#faf7f1] shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center justify-end border-b border-[#e9dfd2] bg-[#f5efe6] px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="wtt-code-block group relative my-4 overflow-hidden rounded-xl border border-[#e4d9ca] bg-[#faf7f1] shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="wtt-code-toolbar flex items-center justify-end border-b border-[#e9dfd2] bg-[#f5efe6] px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
         <button
           type="button"
           onClick={handleCopy}
           className="rounded-md border border-[#dfd3c3] bg-white px-2 py-1 text-[11px] font-semibold text-[#6d6256] shadow-sm transition hover:border-[#cbbca9] hover:text-[#2f342f] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-white"
           aria-label="Copy code"
+          title={copied ? 'Copied' : 'Copy code'}
         >
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? <Check size={14} className="wtt-code-copy-icon hidden" /> : <Copy size={14} className="wtt-code-copy-icon hidden" />}<span className="wtt-code-copy-label">{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
       <pre className="m-0 overflow-x-auto bg-transparent p-3 text-xs leading-5 text-slate-800 dark:text-zinc-100">

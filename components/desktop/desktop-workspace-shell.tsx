@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import useSWRInfinite from 'swr/infinite'
-import { BookOpen, ChevronDown, ChevronRight, Clock3, ExternalLink, FileUp, Laptop, LogOut, MessageSquare, MessageSquarePlus, PanelLeft, Plus, RefreshCw, Search, Settings2, Star, Users, X } from 'lucide-react'
+import { Bot, BookOpen, ChevronRight, Clock3, ExternalLink, FileUp, Laptop, LogOut, MessageSquare, MessageSquarePlus, PanelLeft, Plus, RefreshCw, Search, Settings2, Star, Users, X } from 'lucide-react'
+import styles from './desktop-workspace-shell.module.css'
 import type { WttShellV2Props } from '@/components/ui/wtt-shell-v2'
 import { WttSettingsModal } from '@/components/ui/wtt-settings-modal'
 import { DesktopHostsApi, HostRequestError } from '@/lib/desktop-hosts'
@@ -29,12 +30,16 @@ function desktopHref(agentId: string, topicId?: string) {
 }
 
 function Section({ title, icon, children, action }: { title: string; icon: ReactNode; children: ReactNode; action?: ReactNode }) {
-  return <section className="min-w-0 space-y-1 py-2" aria-label={title}>
-    <div className="flex min-h-8 items-center justify-between gap-1 px-2">
-      <h2 className="flex min-w-0 items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{icon}{title}</h2>
+  return <section className="relative min-w-0 py-1" aria-label={title}>
+    <details open className={styles.section}>
+      <summary className={`flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 ${action ? 'pr-9' : ''}`}>
+        <ChevronRight size={12} className={styles.chevron} />{icon}<span className="min-w-0 flex-1 truncate">{title}</span>
+      </summary>
+      <div className="space-y-0.5 pb-2">{children}</div>
+    </details>
+    <div className="absolute right-0 top-1">
       {action}
     </div>
-    {children}
   </section>
 }
 
@@ -164,6 +169,7 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
   const matches = (...values: Array<string | undefined>) => !query.trim() || values.some(value => value?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
   const selected = props.agents.find(agent => agent.agent_id === props.selectedAgentId)
   const selectedHost = hosts.find(host => host.agents.some(agent => agent.agent_id === props.selectedAgentId))
+  const selectedAdapter = selectedHost?.agents.find(agent => agent.agent_id === props.selectedAgentId)?.adapter
   const closeDrawer = () => drawer.current?.close()
 
   useEffect(() => {
@@ -197,19 +203,26 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       onClick={() => void bookmarks.toggle(kind, id, agentId)}><Star size={14} fill={saved ? 'currentColor' : 'none'} /></button>
   }
 
-  const agentRow = (agent: { agent_id: string; display_name: string; adapter?: string }) => <div key={agent.agent_id} className="flex min-w-0 items-center">
+  const agentRow = (agent: { agent_id: string; display_name: string; adapter?: string }, nested = false) => <div key={agent.agent_id} className="min-w-0">
+    <div className={`${styles.navigationRow} flex min-w-0 items-center`}>
     <Link
     key={agent.agent_id} href={desktopHref(agent.agent_id)} onClick={() => { props.onTopicChange(null); closeDrawer() }}
     aria-current={agent.agent_id === props.selectedAgentId ? 'page' : undefined} title={`${agent.display_name} · ${agent.agent_id}`}
     className={`${rowClass} flex-1 ${agent.agent_id === props.selectedAgentId ? 'bg-white font-medium text-zinc-950 dark:bg-zinc-800 dark:text-white' : 'text-zinc-600 dark:text-zinc-300'}`}>
+    {nested ? <ChevronRight size={12} className={`shrink-0 text-zinc-400 ${agent.agent_id === props.selectedAgentId ? 'rotate-90' : ''}`} /> : <Bot size={14} className="shrink-0 text-zinc-400" />}
     <span aria-label={props.onlineAgentIds?.has(agent.agent_id) ? (en ? 'Online' : '在线') : (en ? 'Offline' : '离线')} className={`h-1.5 w-1.5 shrink-0 rounded-full ${props.onlineAgentIds?.has(agent.agent_id) ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
     <span className="min-w-0 flex-1 truncate">{agent.display_name || agent.agent_id}</span>
     {agent.adapter && <span className="max-w-20 truncate text-[10px] text-zinc-500">{agent.adapter}</span>}
   </Link>
-    {favoriteButton('agent', agent.agent_id, agent.agent_id, agent.display_name || agent.agent_id)}
+    <span className={styles.rowAction}>{favoriteButton('agent', agent.agent_id, agent.agent_id, agent.display_name || agent.agent_id)}</span>
+    </div>
+    {nested && agent.agent_id === props.selectedAgentId && <div className="ml-5 space-y-0.5 border-l border-zinc-200 pl-2 dark:border-zinc-700" aria-label={en ? `${agent.display_name} conversations` : `${agent.display_name} 的对话`}>
+      {props.topics.filter(topic => matches(topic.name, topic.topic_id)).map(topic => topicRow(topic.topic_id, topic.name, agent.agent_id, undefined, topic.unread_count))}
+      <button type="button" className={`${rowClass} w-full text-zinc-500`} disabled={!props.onCreateGeneralTask} onClick={() => { props.onCreateGeneralTask?.(); closeDrawer() }} title={en ? 'New conversation with this agent' : '与此 Agent 新建对话'}><Plus size={14} />{en ? 'New conversation' : '新建对话'}</button>
+    </div>}
   </div>
 
-  const topicRow = (id: string, name: string, agentId: string, secondary?: string, unread?: number) => <div key={id} className="flex min-w-0 items-center">
+  const topicRow = (id: string, name: string, agentId: string, secondary?: string, unread?: number) => <div key={id} className={`${styles.navigationRow} flex min-w-0 items-center`}>
     <Link
     key={id} href={desktopHref(agentId, id)} onClick={closeDrawer} title={name}
     aria-current={id === props.selectedTopicId ? 'page' : undefined}
@@ -218,12 +231,12 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
     <span className="min-w-0 flex-1"><span className="block truncate">{name}</span>{secondary && <span className="block truncate text-[11px] text-zinc-500 dark:text-zinc-400">{secondary}</span>}</span>
     {!!unread && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{unread > 99 ? '99+' : unread}</span>}
   </Link>
-    {favoriteButton('topic', id, agentId, name)}
+    <span className={styles.rowAction}>{favoriteButton('topic', id, agentId, name)}</span>
   </div>
 
   const navigation = (mobile = false) => <>
     <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 px-3 dark:border-zinc-800">
-      <Link href="/desktop" className="text-base font-semibold" onClick={closeDrawer}>WTT</Link>
+      <Link href="/desktop" className="flex items-center gap-2 text-sm font-semibold" onClick={closeDrawer}><img src="/icon.png" width={24} height={24} alt="" className="h-6 w-6 rounded-md" />WTT</Link>
       <div className="flex items-center gap-1">
         <Link href="/desktop/setup" className={iconButton} title={en ? 'Computer settings' : '主机设置'} aria-label={en ? 'Computer settings' : '主机设置'}><Laptop size={17} /></Link>
         <button className={iconButton} title={mobile ? (en ? 'Close navigation' : '关闭导航') : (en ? 'Collapse navigation' : '收起导航')} aria-label={mobile ? (en ? 'Close navigation' : '关闭导航') : (en ? 'Collapse navigation' : '收起导航')} onClick={() => { if (!mobile) setCollapsed(true); closeDrawer() }}>{mobile ? <X size={17} /> : <PanelLeft size={17} />}</button>
@@ -261,15 +274,12 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       <Section title={en ? 'Computers & agents' : '主机与 Agent'} icon={<Laptop size={14} />} action={<button className={iconButton} disabled={isValidating} title={en ? 'Refresh computers' : '刷新主机'} aria-label={en ? 'Refresh computers' : '刷新主机'} onClick={() => { void mutate(); props.onBindingChanged?.() }}><RefreshCw size={14} className={isValidating ? 'animate-spin' : ''} /></button>}>
         {isLoading && <p role="status" className="px-2 text-xs text-zinc-500">{en ? 'Loading computers...' : '正在加载主机…'}</p>}
         {error && !(error instanceof HostRequestError && error.status === 404) && <p role="alert" className="px-2 text-xs text-red-600 dark:text-red-400">{en ? 'Could not load computers. Retry.' : '主机加载失败，请重试。'}</p>}
-        {hosts.filter(host => matches(host.display_name, ...host.agents.map(agent => agent.display_name))).map(host => <details key={host.host_id} open className="mb-1">
-          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-xs font-medium hover:bg-zinc-200/60 dark:hover:bg-zinc-800"><ChevronDown size={13} className="shrink-0" /><span className="min-w-0 flex-1 truncate" title={host.display_name}>{host.display_name}</span><span className="text-[10px] text-zinc-500">{host.status === 'online' ? (en ? 'Online' : '在线') : host.status === 'revoked' ? (en ? 'Revoked' : '已撤销') : (en ? 'Offline' : '离线')}</span></summary>
-          <div className="ml-3 border-l border-zinc-200 pl-1 dark:border-zinc-700">{host.agents.filter(agent => matches(host.display_name, agent.display_name, agent.agent_id)).map(agentRow)}</div>
+        {hosts.filter(host => matches(host.display_name, ...host.agents.flatMap(agent => [agent.display_name, agent.agent_id]), ...(host === selectedHost ? props.topics.map(topic => topic.name) : []))).map(host => <details key={host.host_id} open className={`${styles.section} mb-1`}>
+          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-xs font-medium hover:bg-zinc-200/60 dark:hover:bg-zinc-800"><ChevronRight size={12} className={styles.chevron} /><Laptop size={14} className="shrink-0 text-zinc-400" /><span className="min-w-0 flex-1 truncate" title={host.display_name}>{host.display_name}</span><span className="text-[10px] text-zinc-500">{host.status === 'online' ? (en ? 'Online' : '在线') : host.status === 'revoked' ? (en ? 'Revoked' : '已撤销') : (en ? 'Offline' : '离线')}</span></summary>
+          <div className="ml-3 border-l border-zinc-200 pl-1 dark:border-zinc-700">{host.agents.filter(agent => matches(host.display_name, agent.display_name, agent.agent_id, ...(agent.agent_id === props.selectedAgentId ? props.topics.map(topic => topic.name) : []))).map(agent => agentRow(agent, true))}</div>
         </details>)}
-        {unassigned.filter(agent => matches(agent.display_name, agent.agent_id)).map(agentRow)}
+        {unassigned.filter(agent => matches(agent.display_name, agent.agent_id, ...(agent.agent_id === props.selectedAgentId ? props.topics.map(topic => topic.name) : []))).map(agent => agentRow(agent, true))}
         {data?.at(-1)?.nextOffset != null && <button disabled={isValidating} className="px-2 py-2 text-xs text-emerald-700 dark:text-emerald-400" onClick={() => void setSize(size + 1)}>{en ? 'Load more computers' : '加载更多主机'}</button>}
-      </Section>
-      <Section title={en ? 'Conversations' : '对话'} icon={<MessageSquare size={14} />}>
-        {props.topics.filter(topic => matches(topic.name)).map(topic => topicRow(topic.topic_id, topic.name, props.selectedAgentId, undefined, topic.unread_count))}
       </Section>
       <Section title={en ? 'Groups & teams' : '群聊与团队'} icon={<Users size={14} />}>
         {(props.groupTopics || []).filter(topic => matches(topic.name)).map(topic => {
@@ -295,7 +305,7 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
     </footer>
   </>
 
-  return <div className="flex h-dvh min-w-0 overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100" data-testid="desktop-workspace">
+  return <div className={`${styles.workspace} flex h-dvh min-w-0 overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100`} data-testid="desktop-workspace">
     {!collapsed && <aside id="desktop-navigation" style={{ width: sidebarWidth }} className="relative hidden max-w-[40vw] shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 md:flex dark:border-zinc-800 dark:bg-zinc-900">
       {navigation()}
       <div role="separator" tabIndex={0} aria-label={en ? 'Resize navigation' : '调整导航宽度'} aria-orientation="vertical" aria-controls="desktop-navigation" aria-valuemin={240} aria-valuemax={400} aria-valuenow={sidebarWidth}
@@ -315,7 +325,9 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-200 px-3 dark:border-zinc-800">
         <button className={`${iconButton} ${collapsed ? '' : 'md:hidden'}`} onClick={() => { if (window.innerWidth < 768) drawer.current?.showModal(); else setCollapsed(false) }} aria-label={en ? 'Open navigation' : '展开导航'} title={en ? 'Open navigation' : '展开导航'}><PanelLeft size={17} /></button>
-        <span className="truncate text-xs text-zinc-500">{selectedHost?.display_name || 'WTT'}</span><ChevronRight size={13} className="shrink-0 text-zinc-400" /><span className="min-w-0 flex-1 truncate text-sm font-medium">{selected?.display_name || (en ? 'Conversations' : '对话')}</span>
+        <Laptop size={14} className="shrink-0 text-zinc-400" /><span className="max-w-[35%] truncate text-xs text-zinc-500">{selectedHost?.display_name || 'WTT'}</span><ChevronRight size={13} className="shrink-0 text-zinc-400" /><span className="min-w-0 flex-1 truncate text-sm font-medium">{selected?.display_name || (en ? 'Conversations' : '对话')}</span>
+        {selectedAdapter && <span className="hidden text-xs text-zinc-500 sm:block">{selectedAdapter}</span>}
+        {props.selectedAgentId && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${props.onlineAgentIds?.has(props.selectedAgentId) ? 'bg-emerald-500' : 'bg-zinc-400'}`} title={props.onlineAgentIds?.has(props.selectedAgentId) ? (en ? 'Online' : '在线') : (en ? 'Offline' : '离线')} />}
         <Link href="/desktop/setup" className={iconButton} title={en ? 'Computer settings' : '主机设置'} aria-label={en ? 'Computer settings' : '主机设置'}><Laptop size={17} /></Link>
       </header>
       <DesktopOnboarding accessToken={props.userToken} userId={props.currentUserId} onChanged={() => { void mutate(); props.onBindingChanged?.() }} onAgentReady={id => props.onAgentChange(id)} />
