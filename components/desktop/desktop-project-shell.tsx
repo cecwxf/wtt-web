@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import useSWRInfinite from 'swr/infinite'
 import useSWR from 'swr'
 import { Archive, ChevronRight, FolderOpen, History, Laptop, Loader2, LogOut, PanelLeft, Plus, RefreshCw, Search, Settings2, Users, X } from 'lucide-react'
@@ -33,6 +34,9 @@ function ProjectShell(props: WttShellV2Props) {
   const hostApi = useMemo(() => new DesktopHostsApi(props.userToken || ''), [props.userToken])
   const [query, setQuery] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(280)
+  const resizeStart = useRef<{ x: number; width: number } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<'profile' | 'membership'>('profile')
   const [creation, setCreation] = useState<{ workspaceId: string; sessionId: string; project?: WorkspaceProject; created?: WorkspaceProject } | null>(null)
@@ -145,7 +149,7 @@ function ProjectShell(props: WttShellV2Props) {
     catch (value) { setError(value instanceof Error ? value.message : 'Archive failed') }
   }
   const navigation = <>
-    <header className="flex h-12 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800"><FolderOpen size={18} /><span className="flex-1 text-sm font-semibold">WTT</span><button className={iconButton} title={en ? 'Refresh Workspaces' : '刷新工作区'} aria-label={en ? 'Refresh Workspaces' : '刷新工作区'} onClick={refresh}><RefreshCw size={15} /></button><button className={`${iconButton} md:hidden`} aria-label={en ? 'Close navigation' : '关闭导航'} onClick={() => setDrawerOpen(false)}><X size={16} /></button></header>
+    <header className="flex h-12 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800"><FolderOpen size={18} /><span className="flex-1 text-sm font-semibold">WTT</span><button className={iconButton} title={en ? 'Refresh Workspaces' : '刷新工作区'} aria-label={en ? 'Refresh Workspaces' : '刷新工作区'} onClick={refresh}><RefreshCw size={15} /></button><button className={`${iconButton} hidden md:inline-flex`} title={en ? 'Collapse navigation' : '收起导航'} aria-label={en ? 'Collapse navigation' : '收起导航'} onClick={() => { setCollapsed(true); setDrawerOpen(false) }}><PanelLeft size={16} /></button><button className={`${iconButton} md:hidden`} title={en ? 'Close navigation' : '关闭导航'} aria-label={en ? 'Close navigation' : '关闭导航'} onClick={() => setDrawerOpen(false)}><X size={16} /></button></header>
     <div className="space-y-2 p-3"><button className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-zinc-900 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900" onClick={() => start()} disabled={!props.userToken}><Plus size={16} />{en ? 'New Workspace' : '新建 Workspace'}</button><label className="flex h-9 items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 dark:border-zinc-700 dark:bg-zinc-950"><Search size={15} className="text-zinc-400" /><input type="search" value={query} onChange={event => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" aria-label={en ? 'Search Workspaces' : '搜索工作区'} placeholder={en ? 'Search Workspaces' : '搜索工作区'} /></label></div>
     <nav className="min-h-0 flex-1 overflow-y-auto px-2" aria-label="Workspaces"><div className="px-2 py-2 text-xs font-medium text-zinc-500">Workspaces</div>
       {projects.isLoading && <p role="status" className="p-2 text-xs text-zinc-500">{en ? 'Loading...' : '加载中…'}</p>}
@@ -166,8 +170,18 @@ function ProjectShell(props: WttShellV2Props) {
   </>
   return <div className="flex h-dvh min-w-0 overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100" data-testid="desktop-workspace-projects">
     {drawerOpen && <button className="fixed inset-0 z-30 bg-black/30 md:hidden" aria-label={en ? 'Close navigation' : '关闭导航'} onClick={() => setDrawerOpen(false)} />}
-    <aside className={`${drawerOpen ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden'} w-[280px] max-w-[90vw] shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 md:relative md:flex dark:border-zinc-800 dark:bg-zinc-900`}>{navigation}</aside>
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col"><header className="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800"><button className={`${iconButton} md:hidden`} aria-label={en ? 'Open navigation' : '展开导航'} onClick={() => setDrawerOpen(true)}><PanelLeft size={17} /></button><FolderOpen size={15} className="text-zinc-400" /><span className="min-w-0 truncate text-sm font-medium">{current?.name || 'Workspaces'}</span>{currentSession && <><ChevronRight size={12} className="text-zinc-400" /><span className="min-w-0 flex-1 truncate text-sm text-zinc-500">{currentSession.name}</span><span className="hidden text-xs text-zinc-500 sm:block">{currentSession.participants.length > 1 ? `${currentSession.participants.length} Adapters` : currentSession.participants[0]?.adapter}</span></>}</header>
+    <aside id="workspace-project-navigation" style={{ '--workspace-navigation-width': `${sidebarWidth}px` } as CSSProperties} className={`${drawerOpen ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden'} w-[280px] max-w-[90vw] shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 ${collapsed ? 'md:hidden' : 'md:relative md:flex'} md:w-[var(--workspace-navigation-width)] md:max-w-[40vw] dark:border-zinc-800 dark:bg-zinc-900`}>
+      {navigation}
+      <div role="separator" tabIndex={0} aria-label={en ? 'Resize navigation' : '调整导航宽度'} aria-orientation="vertical" aria-controls="workspace-project-navigation" aria-valuemin={240} aria-valuemax={400} aria-valuenow={sidebarWidth}
+        className="absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize touch-none hover:bg-emerald-500/20 focus-visible:bg-emerald-500/20 focus-visible:outline-none md:block"
+        onDoubleClick={() => setSidebarWidth(280)}
+        onPointerDown={event => { if (event.button !== 0) return; resizeStart.current = { x: event.clientX, width: sidebarWidth }; event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault() }}
+        onPointerMove={event => { const start = resizeStart.current; if (start) setSidebarWidth(Math.max(240, Math.min(400, start.width + event.clientX - start.x))) }}
+        onPointerUp={event => { resizeStart.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
+        onLostPointerCapture={() => { resizeStart.current = null }}
+        onKeyDown={event => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { event.preventDefault(); setSidebarWidth(width => event.key === 'Home' ? 240 : event.key === 'End' ? 400 : Math.max(240, Math.min(400, width + (event.key === 'ArrowRight' ? 16 : -16)))) } }} />
+    </aside>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col"><header className="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800"><button className={`${iconButton} ${collapsed ? '' : 'md:hidden'}`} title={en ? 'Open navigation' : '展开导航'} aria-label={en ? 'Open navigation' : '展开导航'} aria-controls="workspace-project-navigation" onClick={() => { if (window.innerWidth < 768) setDrawerOpen(true); else setCollapsed(false) }}><PanelLeft size={17} /></button><FolderOpen size={15} className="text-zinc-400" /><span className="min-w-0 truncate text-sm font-medium">{current?.name || 'Workspaces'}</span>{currentSession && <><ChevronRight size={12} className="text-zinc-400" /><span className="min-w-0 flex-1 truncate text-sm text-zinc-500">{currentSession.name}</span><span className="hidden text-xs text-zinc-500 sm:block">{currentSession.participants.length > 1 ? `${currentSession.participants.length} Adapters` : currentSession.participants[0]?.adapter}</span></>}</header>
       <DesktopOnboarding accessToken={props.userToken} userId={props.currentUserId} onChanged={refresh} />
       {error && !creation && <p role="alert" className="p-2 text-xs text-red-600">{error}</p>}
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{currentSession ? props.children : <div className="flex h-full flex-col items-center justify-center gap-4 p-6"><FolderOpen size={36} strokeWidth={1.25} className="text-zinc-300 dark:text-zinc-600" /><h1 className="text-lg font-medium">{en ? 'Workspaces' : '工作区'}</h1><button className="flex items-center gap-2 rounded-md border border-zinc-200 px-4 py-2 text-sm dark:border-zinc-700" onClick={() => start()}><Plus size={16} />{en ? 'New Workspace' : '新建 Workspace'}</button></div>}</main>
