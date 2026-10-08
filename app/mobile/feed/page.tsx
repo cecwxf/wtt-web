@@ -1472,7 +1472,13 @@ export default function MobileFeedPage() {
   }, [dynamicSlashRaw])
 
   const availableSlashCommands = useMemo(() => {
-    const rows = [...MOBILE_SLASH_COMMANDS.map(command => locale === 'en'
+    const adapter = slashAgentAdapter.toLowerCase()
+    const family = adapter === 'codex' ? 'Codex'
+      : ['claude-code', 'claude'].includes(adapter) ? 'Claude'
+        : adapter === 'gemini' ? 'Gemini' : ''
+    const staticCommands = MOBILE_SLASH_COMMANDS.filter(command =>
+      command.family === 'WTT' || command.family === 'Agent' || command.family === family)
+    const rows = [...staticCommands.map(command => locale === 'en'
       ? { ...command, desc: mobileCommandDescriptions[command.cmd] || command.desc } : command), ...dynamicSlashCommands]
     const seen = new Set<string>()
     return rows.filter((command) => {
@@ -1481,7 +1487,7 @@ export default function MobileFeedPage() {
       seen.add(key)
       return true
     })
-  }, [dynamicSlashCommands, locale])
+  }, [dynamicSlashCommands, locale, slashAgentAdapter])
 
   const roleLabelForAgent = useCallback((agentId?: string) => {
     const id = String(agentId || '').trim()
