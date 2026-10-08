@@ -62,3 +62,8 @@ These browser tests simulate WTT session/API responses and native IPC. They do
 not prove real OAuth, Electron Keychain, API deployment, CLI execution, Android
 or iOS installation. Production enrollment must stay disabled until the remaining
 desktop lifecycle, old IPC/path restrictions, runtime and account-switch tests pass.
+# Persistent Native Chat Status
+
+Shared ChatView and the independent mobile chat use the optional `/hosts/chat-executions` projection. Only authenticated Topic members can read it; stopping additionally requires the native host owner. The input-area status distinguishes queued, accepted, running, awaiting approval, reply awaiting delivery, completed, failed, stopped and uncertain interruption. A stop request does not immediately claim the process is stopped.
+
+Existing authenticated socket hints trigger refreshes. Active work has a bounded ten-second visible-page refresh; idle, hidden and unsupported routes do not poll. Topic/account changes abort stale reads and stop requests, and revisions fence older snapshots. No second inference or chat transport is introduced. Backend rollout must be enabled for the relevant managed host before this optional panel becomes available; old Cloud/headless chats remain unchanged.

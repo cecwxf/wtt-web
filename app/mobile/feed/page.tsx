@@ -27,6 +27,7 @@ import {
 } from '@/lib/chat-history'
 import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
 import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
+import { ManagedChatExecutions } from '@/components/ui/managed-chat-executions'
 import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
 
 const STATUS_STALE_MS = 15 * 60 * 1000
@@ -1530,6 +1531,14 @@ export default function MobileFeedPage() {
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
     const rawEvent = msg as unknown as Record<string, unknown>
+    if (rawEvent.type === 'managed_chat_state') {
+      window.dispatchEvent(new CustomEvent('wtt-chat-execution-changed', { detail: { topicId: rawEvent.topic_id } }))
+      return
+    }
+    if (rawEvent.type === 'new_message') {
+      const incoming = rawEvent.message as { topic_id?: string } | undefined
+      if (incoming?.topic_id) window.dispatchEvent(new CustomEvent('wtt-chat-execution-changed', { detail: { topicId: incoming.topic_id } }))
+    }
     const rawType = String(rawEvent.type || '').toLowerCase()
     if (rawType === 'typing') {
       const tid = String(rawEvent.topic_id || '')
@@ -2318,6 +2327,7 @@ export default function MobileFeedPage() {
 
         <footer className="shrink-0 border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <ToolApprovalPanel topicId={selectedTopicId} accessToken={token} activeRun={Boolean(selectedTopicRunStatus)} enabled={Boolean(selectedTopicId)} />
+          <ManagedChatExecutions topicId={selectedTopicId} accessToken={token} activeRun={Boolean(selectedTopicRunStatus)} enabled={Boolean(selectedTopicId)} agents={agents.map(agent => ({ agent_id: agent.agent_id, display_name: labelForAgentInTopic(agent.agent_id) }))} />
           {selectedTopicRunStatus && (
             <div className="mb-2">
               <MobileAgentRunStatusCard status={selectedTopicRunStatus} />

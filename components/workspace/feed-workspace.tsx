@@ -1112,6 +1112,14 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
   const handleWsMessage = useCallback(
     (msg: WsMessage) => {
       const rawEvent = msg as unknown as Record<string, unknown>
+      if (rawEvent.type === 'managed_chat_state') {
+        window.dispatchEvent(new CustomEvent('wtt-chat-execution-changed', { detail: { topicId: rawEvent.topic_id } }))
+        return
+      }
+      if (rawEvent.type === 'new_message') {
+        const incoming = rawEvent.message as { topic_id?: string } | undefined
+        if (incoming?.topic_id) window.dispatchEvent(new CustomEvent('wtt-chat-execution-changed', { detail: { topicId: incoming.topic_id } }))
+      }
       const streamEvent = parseMessageStreamEvent(rawEvent)
       if (streamEvent) {
         setAllMessages((prev) => applyMessageStreamEvent(prev, streamEvent, {
