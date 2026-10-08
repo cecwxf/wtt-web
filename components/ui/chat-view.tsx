@@ -3297,7 +3297,10 @@ function ChatViewContent({
             <div className={`${desktopStyles.messageGroup} overflow-hidden rounded-xl border border-[#eee9df] bg-white/55 dark:border-zinc-900 dark:bg-zinc-950`}>
               {group.messages.map((message) => {
                 const isMine = message.sender_type === 'human'
-                const baseLabel = senderLabelText(message.sender_display_name, message.sender_id)
+                const projectRole = workspaceProjectId && message.sender_type === 'agent'
+                  ? topicMembers.find(member => member.agent_id === message.sender_id)?.display_name
+                  : undefined
+                const baseLabel = projectRole || senderLabelText(message.sender_display_name, message.sender_id)
                 const label = message.sender_type === 'agent'
                   ? appendRoleLabel(baseLabel, roleLabelForAgent(message.sender_id))
                   : baseLabel

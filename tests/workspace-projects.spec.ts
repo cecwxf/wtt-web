@@ -37,7 +37,7 @@ async function workspaceFlow(page: Page, baseURL = '') {
     else if (path === '/topics/my-groups') value = projects.length && projects[0].sessions.length ? [{ id: 'project-topic', topic_id: 'project-topic', name: 'Website / Team', topic_type: 'discussion', member_agent_ids: ['agent-one', 'agent-two'] }] : []
     else if (path.endsWith('/messages')) {
       if (route.request().method() === 'POST') { const body = route.request().postDataJSON(); created.push({ path, body }); value = { id: 'sent', topic_id: 'project-topic', content: body.content, sender_type: 'human', sender_id: 'workspace@example.test', timestamp: new Date().toISOString() } }
-      else value = [{ id: 'reply', topic_id: 'project-topic', content: 'Shared Workspace result', sender_type: 'agent', sender_id: 'agent-one', timestamp: '2026-10-08T00:00:00Z' }]
+      else value = [{ id: 'reply', topic_id: 'project-topic', content: 'Shared Workspace result', sender_type: 'agent', sender_id: 'agent-one', sender_display_name: 'Global Engineer', timestamp: '2026-10-08T00:00:00Z' }]
     } else if (path.endsWith('/members')) value = participants.map(p => ({ agent_id: p.transport_agent_id, display_name: p.label, alias: p.label, role: 'member' }))
     else if (path === '/topics/my-recent') value = { items: [] }
     else if (path === '/billing/me') value = { entitlement: { plan: 'free' } }
@@ -55,6 +55,7 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await modal.getByLabel('Reviewer Linux').check()
   await modal.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  await expect(page.getByText('Global Engineer', { exact: true })).toHaveCount(0)
   expect(created[0].body.name).toBe('Website')
   expect(created[1].body.participants.map((p: any) => p.host_id)).toEqual([host, 'remote'])
   expect(created[1].body.participants.every((p: any) => !('agent_id' in p))).toBe(true)
