@@ -176,7 +176,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
         </div>}
         {busy && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={17} className="animate-spin" />{choosingWorkspace ? (en ? 'Choose a workspace...' : '请选择工作目录…') : phase === 'authorizing' ? (en ? 'Authorizing this computer...' : '正在登记本机，请确认系统授权…') : phase === 'detecting' ? (en ? 'Detecting installed Agents...' : '正在检测已安装的 Agent…') : (en ? 'Connecting Agents...' : '正在接入 Agent，请确认执行权限…')}</p>}
         {phase === 'selection' && <>
-          {bridge?.remoteToolsSupported && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy} en={en} />}
+          {bridge?.remoteToolsSupported && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy} en={en} previewSupported={bridge.previewSupported === true} />}
           <fieldset disabled={busy} className="space-y-3"><legend className="mb-2 text-sm font-medium">{en ? 'Agents' : 'Agent'}</legend>{profiles.map(profile => <div key={profile.profile_id} className="flex min-h-12 flex-wrap items-center gap-3 border-b border-zinc-100 py-2 dark:border-zinc-800">
             <label className="flex min-w-0 flex-1 basis-40 items-center gap-3">
             <input type="checkbox" disabled={!profile.available || (profile.requiresFullAccess && access !== 'full-access')} checked={selected.includes(profile.adapter)} onChange={event => setSelected(previous => event.target.checked ? [...previous, profile.adapter] : previous.filter(adapter => adapter !== profile.adapter))} className="h-4 w-4 accent-emerald-600" />

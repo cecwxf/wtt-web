@@ -128,7 +128,7 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
         <option value="full-access">{en ? 'Full local execution' : '完整本机执行权限'}</option>
       </select>
     </label>
-    {bridge?.remoteToolsSupported && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy || running} en={en} />}
+    {bridge?.remoteToolsSupported && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy || running} en={en} previewSupported={bridge.previewSupported === true} />}
     {runtime.autoStart !== undefined && <p className="text-xs text-[var(--muted-foreground)]">{runtime.autoStart
       ? (en ? 'Automatic resume enabled' : '已启用自动恢复')
       : (en ? 'Automatic resume disabled' : '已关闭自动恢复')}</p>}
