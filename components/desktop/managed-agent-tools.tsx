@@ -22,6 +22,7 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
   const { locale } = useI18n()
   const en = locale === 'en'
   const [tab, setTab] = useState<Tab | null>(null)
+  const [terminalStarted, setTerminalStarted] = useState(false)
   const [previewMode, setPreviewMode] = useState<'live' | 'file'>('live')
   const dialog = useRef<HTMLDialogElement>(null)
   const transfer = useRef<AbortController | null>(null)
@@ -52,6 +53,10 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
     live.current = true
     return () => { live.current = false; transfer.current?.abort(); dialog.current?.close() }
   }, [])
+  useEffect(() => {
+    if (tab === 'terminal') setTerminalStarted(true)
+    if (!tab) setTerminalStarted(false)
+  }, [tab])
   useEffect(() => {
     if (tab && (data === null || error || (data && (tab === 'terminal' ? !data.terminal : tab === 'preview' ? data.files === 'off' && !data.preview_ports.length : data.files === 'off')))) { setTab(null); return }
     if (!tab) { dialog.current?.close(); transfer.current?.abort() }
@@ -174,7 +179,8 @@ function ManagedAgentToolsInner({ agentId, agentName, token }: { agentId: string
         {downloadError && <p role="alert" className="px-3 py-2 text-xs text-red-600">{downloadError}</p>}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
           {tab === 'preview' && data.preview_ports.length > 0 && data.files !== 'off' && <div role="tablist" className="mb-3 flex shrink-0 gap-1 border-b border-zinc-200 dark:border-zinc-800">{(['live', 'file'] as const).map(mode => <button key={mode} role="tab" aria-selected={previewMode === mode} onClick={() => setPreviewMode(mode)} className={`px-3 py-2 text-xs ${previewMode === mode ? 'border-b-2 border-emerald-600 text-emerald-700 dark:text-emerald-400' : 'text-zinc-500'}`}>{mode === 'live' ? (en ? 'Development server' : '开发服务') : (en ? 'HTML file' : 'HTML 文件')}</button>)}</div>}
-          {tab === 'terminal' ? <TerminalPane agentId={agentId} agentName={agentName || agentId} token={token} className="min-h-0 flex-1" compact /> : tab === 'preview' && data.preview_ports.length > 0 && (previewMode === 'live' || data.files === 'off') ? <ManagedLivePreview key={data.preview_ports.join(',')} agentId={agentId} token={token} ports={data.preview_ports} en={en} /> : tab && <CliWorkspaceExplorer key={refreshEpoch} sessionId={agentId} workspaceRoot="Workspace" workspaceApiBase={apiBase} online accessToken={token} workspaceAccess={data.files === 'workspace-write' ? 'workspace-write' : 'read-only'} zh={!en} previewMode={tab === 'preview'} onDownload={(path, name) => void download(path, name)} />}
+          {tab && data.terminal && (tab === 'terminal' || terminalStarted) && <div hidden={tab !== 'terminal'} className={tab === 'terminal' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><TerminalPane agentId={agentId} agentName={agentName || agentId} token={token} className="min-h-0 flex-1" compact /></div>}
+          {tab === 'preview' && data.preview_ports.length > 0 && (previewMode === 'live' || data.files === 'off') ? <ManagedLivePreview key={data.preview_ports.join(',')} agentId={agentId} token={token} ports={data.preview_ports} en={en} /> : tab && tab !== 'terminal' && <CliWorkspaceExplorer key={refreshEpoch} sessionId={agentId} workspaceRoot="Workspace" workspaceApiBase={apiBase} online accessToken={token} workspaceAccess={data.files === 'workspace-write' ? 'workspace-write' : 'read-only'} zh={!en} previewMode={tab === 'preview'} onDownload={(path, name) => void download(path, name)} />}
         </div>
       </div>
     </dialog>
