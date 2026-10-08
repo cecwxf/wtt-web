@@ -745,6 +745,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
   }, [])
   const [composerFocusNonce, setComposerFocusNonce] = useState(0)
   const [pendingComposerFocusTopicId, setPendingComposerFocusTopicId] = useState<string | null>(null)
+  const creatingGeneralTaskRef = useRef(false)
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([])
   const [typingByTopic, setTypingByTopic] = useState<Record<string, TopicTypingState>>({})
   const typingBaselineAgentMessageIdsRef = useRef<Record<string, Set<string>>>({})
@@ -1839,13 +1840,14 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
   useEffect(() => {
     if (
       selectedTopicId &&
+      selectedTopicId !== pendingComposerFocusTopicId &&
       Array.isArray(subscribedTopicsRaw) &&
       !topics.some(t => t.topic_id === selectedTopicId) &&
       !groupTopics.some(t => t.topic_id === selectedTopicId)
     ) {
       setSelectedTopicId(null)
     }
-  }, [groupTopics, topics, selectedTopicId, setSelectedTopicId, subscribedTopicsRaw])
+  }, [groupTopics, topics, selectedTopicId, pendingComposerFocusTopicId, setSelectedTopicId, subscribedTopicsRaw])
 
   const selectedTopicTaskHint = useMemo(() => {
     const direct = selectedTopic?.task_id || (selectedTopicId ? createdTaskIdsByTopic[selectedTopicId] : '')
@@ -2494,13 +2496,17 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
   }, [pendingComposerFocusTopicId, selectedTopicId, topics])
 
   const handleCreateGeneralTask = useCallback(async () => {
-    if (!selectedAgentId || !session?.accessToken) return
+    if (!selectedAgentId || !session?.accessToken || creatingGeneralTaskRef.current) return
+    const agentId = selectedAgentId
+    const token = session.accessToken
+    const current = () => directoryOwnerRef.current === token && directorySelectionRef.current === agentId
+    creatingGeneralTaskRef.current = true
     try {
       const resp = await fetch(`${CLIENT_WTT_API_BASE}/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.accessToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           title: 'New Task',
@@ -2509,11 +2515,13 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
           status: 'todo',
           task_type: 'general',
           exec_mode: 'reasoning',
-          owner_agent_id: selectedAgentId,
-          runner_agent_id: selectedAgentId,
+          owner_agent_id: agentId,
+          runner_agent_id: agentId,
           created_by: getHumanSender(session),
         }),
       })
+
+      if (!current()) return
 
       if (!resp.ok) {
         alert(t('feed.failedCreateTask'))
@@ -2521,8 +2529,10 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
       }
 
       const real = await resp.json()
-      mutateRecentTasks()
-      mutateTopics()
+      if (!current()) return
+      void mutateRecentTasks()
+      await mutateTopics()
+      if (!current()) return
 
       const topicId = String(real?.topic_id || '')
       if (topicId) {
@@ -2531,15 +2541,18 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
           pendingRenameTaskRef.current = { taskId, topicId }
           setCreatedTaskIdsByTopic((current) => ({ ...current, [topicId]: taskId }))
         }
-        setSelectedTopicId(topicId)
         setPendingComposerFocusTopicId(topicId)
+        setSelectedTopicId(topicId)
+        if (desktopMode) router.replace(buildAgentUrl('/desktop', agentId, { topic: topicId }), { scroll: false })
       } else {
         router.push(buildAgentUrl('/tasks', selectedAgentId, { type: 'general' }))
       }
     } catch {
-      alert(t('feed.failedCreateTask'))
+      if (current()) alert(t('feed.failedCreateTask'))
+    } finally {
+      creatingGeneralTaskRef.current = false
     }
-  }, [selectedAgentId, session, mutateRecentTasks, mutateTopics, router, t, setSelectedTopicId])
+  }, [selectedAgentId, session, desktopMode, mutateRecentTasks, mutateTopics, router, t, setSelectedTopicId])
 
   const handleSendMessage = async (content: string, replyTo?: string, options?: ChatSendOptions) => {
     if (!selectedTopicId || !selectedAgentId) return
