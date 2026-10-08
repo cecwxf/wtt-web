@@ -268,28 +268,29 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   return response
 }
 
-type Ctx = { params: { path: string[] } }
+// Keep the catch-all name distinct from the workspace's ?path= query.
+type Ctx = { params: { segments: string[] } }
 
 export async function GET(request: NextRequest, ctx: Ctx) {
-  return proxy(request, ctx.params.path)
+  return proxy(request, ctx.params.segments)
 }
 
 export async function POST(request: NextRequest, ctx: Ctx) {
-  return proxy(request, ctx.params.path)
+  return proxy(request, ctx.params.segments)
 }
 
 export async function PUT(request: NextRequest, ctx: Ctx) {
-  return proxy(request, ctx.params.path)
+  return proxy(request, ctx.params.segments)
 }
 
 export async function PATCH(request: NextRequest, ctx: Ctx) {
-  return proxy(request, ctx.params.path)
+  return proxy(request, ctx.params.segments)
 }
 
 export async function DELETE(request: NextRequest, ctx: Ctx) {
-  return proxy(request, ctx.params.path)
+  return proxy(request, ctx.params.segments)
 }
 
 export async function OPTIONS(request: NextRequest, ctx: Ctx) {
-  return proxy(request, ctx.params.path)
+  return proxy(request, ctx.params.segments)
 }
