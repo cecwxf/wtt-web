@@ -49,11 +49,10 @@ function ProjectShell(props: WttShellV2Props) {
   const projects = useSWRInfinite((page, previous: { next_offset: number | null } | null) => !props.userToken || (page > 0 && previous?.next_offset == null)
     ? null : ['workspace-projects', props.userToken, page === 0 ? 0 : previous?.next_offset], ([, , offset]: [string, string, number]) => api.list(offset), { shouldRetryOnError: false })
   const roots = useSWR(props.userToken ? ['workspace-roots', props.userToken] : null, () => api.roots(), { shouldRetryOnError: false })
-  const hosts = useSWR(props.userToken ? ['workspace-executors', props.userToken] : null, async () => {
-    const all = []; let offset = 0
-    for (let page = 0; page < 4; page++) { const value = await hostApi.list(offset); all.push(...value.hosts); if (value.nextOffset == null) break; offset = value.nextOffset }
-    return all
-  }, { shouldRetryOnError: false })
+  const hosts = useSWRInfinite((page, previous: { nextOffset: number | null } | null) => !props.userToken || (page > 0 && previous?.nextOffset == null)
+    ? null : ['workspace-executors', props.userToken, page === 0 ? 0 : previous?.nextOffset],
+    ([, , offset]: [string, string, number]) => hostApi.list(offset), { shouldRetryOnError: false })
+  const hostDirectory = useMemo(() => Array.from(new Map((hosts.data || []).flatMap(page => page.hosts).map(host => [host.host_id, host])).values()), [hosts.data])
   const workspaceId = params.get('workspace')
   const detail = useSWR(props.userToken && workspaceId ? ['workspace-project', props.userToken, workspaceId] : null,
     () => api.request<WorkspaceProject>(`/${workspaceId}`), { shouldRetryOnError: false })
@@ -80,7 +79,7 @@ function ProjectShell(props: WttShellV2Props) {
     if (participant) restored.set('agentId', participant.transport_agent_id)
     router.replace(`/desktop?${restored}`, { scroll: false })
   }, [current, currentSession, params, props.selectedAgentId, router])
-  const available = (hosts.data || []).filter(host => host.status !== 'revoked').flatMap(host => host.agents.map(agent => ({ host, agent, key: `${host.host_id}/${agent.profile_id}` })))
+  const available = hostDirectory.filter(host => host.status !== 'revoked').flatMap(host => host.agents.map(agent => ({ host, agent, key: `${host.host_id}/${agent.profile_id}` })))
   const chosenRoot = roots.data?.roots.find(root => root.root_id === (creation?.project?.root_id || creation?.created?.root_id || rootId))
   const refresh = () => { void projects.mutate(); void detail.mutate(); void roots.mutate(); void hosts.mutate(); props.onBindingChanged?.() }
   useEffect(() => {
@@ -187,7 +186,9 @@ function ProjectShell(props: WttShellV2Props) {
           </div>
         </div>}
         <fieldset className="space-y-2"><legend className="mb-2 text-xs font-medium">{en ? 'Adapters' : '执行 Adapter'}</legend>{available.map(({ host, agent, key }) => { const caps = agent.capabilities; const remote = chosenRoot && chosenRoot.host_id !== host.host_id; const enabled = caps?.workspace_projects && (!remote || caps?.workspace_mcp); return <div key={key} className="flex items-center gap-2 border-b border-zinc-100 py-2 dark:border-zinc-800"><input type="checkbox" checked={selected.includes(key)} disabled={busy || !enabled || (!selected.includes(key) && selected.length >= 8)} aria-label={`${agent.display_name} ${host.display_name}`} onChange={event => setSelected(before => event.target.checked ? [...before, key] : before.filter(item => item !== key))} /><div className="min-w-0 flex-1"><span className="block truncate text-sm">{agent.display_name || agent.adapter}</span><span className="block truncate text-xs text-zinc-500">{agent.adapter} · {host.display_name} · {host.status}</span>{!enabled && <span className="block text-[11px] text-amber-700 dark:text-amber-400">{en ? 'Enable an updated runtime; remote access requires MCP support' : '需启用新版运行时；跨主机执行需支持 MCP'}</span>}</div>{selected.includes(key) && <input className={`${field} max-w-[150px]`} maxLength={80} disabled={busy} aria-label={`${en ? 'Role' : '角色'} ${agent.display_name}`} placeholder={en ? 'Role' : '角色'} value={roles[key] ?? agent.display_name ?? agent.adapter} onChange={event => setRoles(before => ({ ...before, [key]: event.target.value }))} />}</div> })}
-          {!available.length && <Link href="/desktop/setup" className="text-xs text-emerald-700">{en ? 'Enable a computer' : '接入主机'}</Link>}
+          {hosts.isLoading && <p role="status" className="text-xs text-zinc-500">{en ? 'Loading computers...' : '正在加载主机…'}</p>}
+          {hosts.data?.at(-1)?.nextOffset != null && <button type="button" disabled={busy || hosts.isValidating} className="flex items-center gap-1.5 py-2 text-xs text-emerald-700 disabled:opacity-40 dark:text-emerald-400" onClick={() => void hosts.setSize(hosts.size + 1)}>{hosts.isValidating && <Loader2 size={13} className="animate-spin" />}{en ? 'Load more computers' : '加载更多主机'}</button>}
+          {!hosts.isLoading && !hosts.error && !available.length && hosts.data?.at(-1)?.nextOffset == null && <Link href="/desktop/setup" className="text-xs text-emerald-700">{en ? 'Enable a computer' : '接入主机'}</Link>}
         </fieldset>
         {(error || roots.error || hosts.error) && <p role="alert" className="text-xs text-red-600">{error || (en ? 'Could not load directories or adapters. Retry.' : '目录或 Adapter 加载失败，请重试。')}</p>}
       </div><footer className="flex justify-end gap-2 border-t border-zinc-200 px-5 py-3 dark:border-zinc-800"><button type="button" disabled={busy} className="px-3 py-2 text-sm text-zinc-500" onClick={() => setCreation(null)}>{en ? 'Cancel' : '取消'}</button><button disabled={busy || !name.trim() || !selected.length || !chosenRoot} className="flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900">{busy ? <Loader2 size={15} className="animate-spin" /> : selected.length > 1 ? <Users size={15} /> : <Plus size={15} />}{en ? 'Create' : '创建'}</button></footer></form>}

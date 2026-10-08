@@ -19,6 +19,7 @@ async function workspaceFlow(page: Page, baseURL = '') {
   let adaptersOnline = true
   let feedEnabled = false
   let feedSocket: WebSocketRoute | undefined
+  const loadedHostOffsets: number[] = []
   await page.addInitScript(() => {
     localStorage.setItem('wtt-web.locale', 'en')
     if (!sessionStorage.getItem('workspace-fixture-initialized')) {
@@ -44,7 +45,12 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await page.route('**/api/wtt/**', async route => {
     const path = new URL(route.request().url()).pathname.replace('/api/wtt', '')
     let value: any = {}
-    if (path === '/hosts/my') value = { hosts: participants.map(p => ({ host_id: p.host_id, display_name: p.host_name, status: 'online', agents: [{ agent_id: p.transport_agent_id, profile_id: p.profile_id, display_name: p.label, adapter: p.adapter, capabilities: { workspace_projects: true, workspace_mcp: true } }] })), next_offset: null }
+    if (path === '/hosts/my') {
+      const offset = Number(new URL(route.request().url()).searchParams.get('offset') || 0)
+      loadedHostOffsets.push(offset)
+      const participant = offset === 0 ? participants[0] : offset === 200 ? participants[1] : undefined
+      value = { hosts: participant ? [{ host_id: participant.host_id, display_name: participant.host_name, status: 'online', agents: [{ agent_id: participant.transport_agent_id, profile_id: participant.profile_id, display_name: participant.label, adapter: participant.adapter, capabilities: { workspace_projects: true, workspace_mcp: true } }] }] : [{ host_id: `empty-host-${offset}`, display_name: `Computer ${offset}`, status: 'offline', agents: [] }], next_offset: offset < 200 ? offset + 50 : null }
+    }
     else if (path === '/workspaces/roots') value = { roots: [{ root_id: root, host_id: host, host_name: 'MacBook', name: 'Website source', access: 'workspace-write' }] }
     else if (path === '/workspaces' && route.request().method() === 'GET') value = { workspaces: projects, next_offset: null }
     else if (path === '/workspaces' && route.request().method() === 'POST') {
@@ -82,6 +88,12 @@ async function workspaceFlow(page: Page, baseURL = '') {
   const modal = page.getByRole('dialog')
   await modal.getByLabel('Name', { exact: true }).fill('Website')
   await modal.getByLabel('Engineer MacBook').check()
+  await modal.getByLabel('Role Engineer', { exact: true }).fill('Engineer')
+  for (let page = 0; page < 4; page++) await modal.getByRole('button', { name: 'Load more computers', exact: true }).click()
+  await expect(modal.getByLabel('Engineer MacBook')).toBeChecked()
+  await expect(modal.getByLabel('Role Engineer', { exact: true })).toHaveValue('Engineer')
+  await expect(modal.getByRole('button', { name: 'Load more computers', exact: true })).toHaveCount(0)
+  expect(loadedHostOffsets).toContain(200)
   await modal.getByLabel('Reviewer Linux').check()
   await modal.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
