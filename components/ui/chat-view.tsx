@@ -24,6 +24,7 @@ import { RichMarkdown } from '@/components/ui/rich-markdown'
 import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
 import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
 import { ManagedChatExecutions } from '@/components/ui/managed-chat-executions'
+import { useManagedChatProgress } from '@/lib/managed-chat-progress'
 import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
 import desktopStyles from './chat-view-desktop.module.css'
 
@@ -1380,6 +1381,7 @@ export function ChatView({
   hideRuntimeBadges = false,
 }: ChatViewProps) {
   const { t } = useI18n()
+  const managedProgress = useManagedChatProgress(topicId, accessToken, runStatus)
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
   const [draft, setDraft] = useState('')
   const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
@@ -3864,8 +3866,8 @@ export function ChatView({
 
       <div className={`${desktopStyles.composer} border-t border-[#e5e0d8] bg-[#fbfaf7] px-4 pb-4 pt-2 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6`}>
         <ToolApprovalPanel topicId={topicId} accessToken={accessToken} activeRun={Boolean(runStatus)} enabled={activeTab === 'chat'} />
-        <ManagedChatExecutions topicId={topicId} accessToken={accessToken} activeRun={Boolean(runStatus)} enabled={activeTab === 'chat'} agents={topicMembers} />
-        {activeTab === 'chat' && runStatus && !composerExpanded && (
+        <ManagedChatExecutions topicId={topicId} accessToken={accessToken} activeRun={managedProgress.showProgress} enabled={activeTab === 'chat'} agents={topicMembers} onSnapshot={managedProgress.onSnapshot} />
+        {activeTab === 'chat' && managedProgress.showProgress && runStatus && !composerExpanded && (
           <div className="mb-2 max-w-xl">
             <AgentRunStatusCard status={runStatus} floating />
           </div>

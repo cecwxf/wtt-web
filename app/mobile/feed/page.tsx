@@ -29,6 +29,7 @@ import {
 import { SpeechInputControl, SpeechReadButton } from '@/components/ui/speech-controls'
 import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
 import { ManagedChatExecutions } from '@/components/ui/managed-chat-executions'
+import { useManagedChatProgress } from '@/lib/managed-chat-progress'
 import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
 import { getNativeNotifications } from '@/lib/native-notifications'
 import { useI18n } from '@/lib/i18n-provider'
@@ -1752,6 +1753,7 @@ export default function MobileFeedPage() {
       wsState,
     }
   }, [agents, selectedAgent, selectedAgentId, selectedTopic, selectedTopicId, topicActorAgent, topicActorAgentId, typingByTopic, wsState, t, locale])
+  const managedProgress = useManagedChatProgress(selectedTopicId, token, selectedTopicRunStatus)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -2391,8 +2393,8 @@ export default function MobileFeedPage() {
 
         <footer className="shrink-0 border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <ToolApprovalPanel topicId={selectedTopicId} accessToken={token} activeRun={Boolean(selectedTopicRunStatus)} enabled={Boolean(selectedTopicId)} />
-          <ManagedChatExecutions topicId={selectedTopicId} accessToken={token} activeRun={Boolean(selectedTopicRunStatus)} enabled={Boolean(selectedTopicId)} agents={agents.map(agent => ({ agent_id: agent.agent_id, display_name: labelForAgentInTopic(agent.agent_id) }))} />
-          {selectedTopicRunStatus && (
+          <ManagedChatExecutions topicId={selectedTopicId} accessToken={token} activeRun={managedProgress.showProgress} enabled={Boolean(selectedTopicId)} agents={agents.map(agent => ({ agent_id: agent.agent_id, display_name: labelForAgentInTopic(agent.agent_id) }))} onSnapshot={managedProgress.onSnapshot} />
+          {managedProgress.showProgress && selectedTopicRunStatus && (
             <div className="mb-2">
               <MobileAgentRunStatusCard status={selectedTopicRunStatus} />
             </div>

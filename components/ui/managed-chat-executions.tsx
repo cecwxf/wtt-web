@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock3, Loader2, RefreshCw, Square } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 import { useI18n } from '@/lib/i18n-provider'
+import type { ManagedExecutionSummary } from '@/lib/managed-chat-progress'
 
 type Execution = {
   execution_id: string; message_id: string; topic_id: string; agent_id: string; state: string
@@ -18,6 +19,7 @@ const labels: Record<string, [string, string]> = {
   cancelled: ['已停止', 'Stopped'], interrupted: ['执行中断，结果待核对', 'Interrupted; result uncertain'],
 }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const empty: Execution[] = []
 
 function normalize(value: unknown, topicId: string): Execution[] {
   if (!Array.isArray(value) || value.length > 32) throw new Error('Invalid execution status')
@@ -30,9 +32,10 @@ function normalize(value: unknown, topicId: string): Execution[] {
   })
 }
 
-export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled, agents }: {
+export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled, agents, onSnapshot }: {
   topicId?: string; accessToken?: string; activeRun: boolean; enabled: boolean
   agents: Array<{ agent_id: string; display_name: string }>
+  onSnapshot?: (rows: ManagedExecutionSummary[]) => void
 }) {
   const { locale } = useI18n()
   const en = locale === 'en'
@@ -42,8 +45,12 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
   const [busy, setBusy] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
   const decision = useRef<AbortController | null>(null)
-  const rows = snapshot.scope === scope ? snapshot.rows : []
+  const rows = snapshot.scope === scope ? snapshot.rows : empty
   const hasActive = rows.some(row => active.has(row.state) && !row.stale)
+
+  useEffect(() => {
+    if (enabled) onSnapshot?.(rows)
+  }, [enabled, onSnapshot, rows])
 
   useEffect(() => {
     setError(''); setBusy(null)
