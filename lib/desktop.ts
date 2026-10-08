@@ -146,6 +146,7 @@ export interface DesktopHostBridge {
   }>;
   finishAuthorization(receipt: { transactionId: string; enrollmentId: string }): Promise<DesktopHostState>;
   signOut(): Promise<DesktopHostState>;
+  suspend?(): Promise<DesktopHostState>;
 }
 
 export interface DesktopAgentProfile {

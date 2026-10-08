@@ -25,10 +25,11 @@ export function DesktopSessionSync() {
         const verified = await host.resume?.(token)
         if (current && verified?.userId) await bridge?.auth?.syncAccount(verified.userId)
       } else {
+        // NextAuth also returns null after a failed session fetch. Lock access
+        // without erasing enrollment; explicit disconnect/revoke still erases it.
         // Initial login may have an external browser authorization pending.
-        // Only an actual account logout cancels that proof or erases the vault.
         if (loggedOut) void bridge?.auth?.syncAccount().catch(() => {})
-        await host.signOut()
+        await (host.suspend ? host.suspend() : host.signOut())
       }
     })().catch(() => {
       // Native state becomes unavailable; the host panel offers a retry. Do not
