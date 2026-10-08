@@ -14,8 +14,18 @@ const participants = [
 async function workspaceFlow(page: Page, baseURL = '') {
   const created: Array<{ path: string; body: any }> = []
   const projects: any[] = []
+  const terminalActions: Array<{ url: string; body: any }> = []
+  let previewRunning = false
   await page.addInitScript(() => { localStorage.setItem('wtt-web.locale', 'en'); localStorage.removeItem('wtt_selected_topic_id'); localStorage.removeItem('wtt_selected_agent_id') })
-  await page.routeWebSocket('**', socket => socket.close())
+  await page.routeWebSocket('**', socket => {
+    if (!socket.url().includes('/ws/agent-root-relay')) { socket.close(); return }
+    socket.onMessage(raw => {
+      const body = JSON.parse(String(raw)); terminalActions.push({ url: socket.url(), body })
+      if (body.request_id) socket.send(JSON.stringify({ type: 'action_result', request_id: body.request_id, ok: true, data: { session_id: 'project-terminal' } }))
+      if (body.action === 'terminal_open') socket.send(JSON.stringify({ type: 'terminal_output', session_id: 'project-terminal', data: 'Canonical Workspace terminal ready\r\n' }))
+    })
+  })
+  await page.route('https://workspace-ui.trycloudflare.com/**', route => route.fulfill({ contentType: 'text/html', body: '<main>Workspace development site</main>' }))
   await page.route('**/api/auth/session', route => route.fulfill({ json: { userId: host, user: { id: host, name: 'Workspace Tester', email: 'workspace@example.test' }, accessToken: 'synthetic-user-token', expires: '2099-01-01T00:00:00Z' } }))
   await page.route('**/api/wtt/**', async route => {
     const path = new URL(route.request().url()).pathname.replace('/api/wtt', '')
@@ -27,7 +37,13 @@ async function workspaceFlow(page: Page, baseURL = '') {
       const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, host_id: host, access: 'workspace-write', sessions: [] }; projects.push(value)
     } else if (/^\/workspaces\/[^/]+\/sessions$/.test(path)) {
       const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, topic_id: 'project-topic', participants }; projects[0].sessions.push(value)
-    } else if (/^\/workspaces\/[^/]+\/tools$/.test(path)) value = { files: 'workspace-write', terminal: false, preview_ports: [] }
+    } else if (/^\/workspaces\/[^/]+\/tools$/.test(path)) value = { files: 'workspace-write', terminal: true, terminal_agent_id: 'agent-root-relay', host_name: 'MacBook', preview_agent_id: 'agent-root-relay', preview_ports: [38765] }
+    else if (/^\/workspaces\/[^/]+\/preview$/.test(path)) {
+      const body = route.request().postDataJSON(); created.push({ path, body })
+      if (body.operation === 'preview_start') previewRunning = true
+      if (body.operation === 'preview_stop') previewRunning = false
+      value = { state: previewRunning ? 'ready' : 'stopped', port: 38765, ...(previewRunning ? { url: 'https://workspace-ui.trycloudflare.com', expires_at: new Date(Date.now() + 900000).toISOString() } : {}) }
+    }
     else if (/^\/workspaces\/[^/]+$/.test(path)) value = projects.find(project => path.endsWith(project.workspace_id)) || {}
     else if (path.endsWith('/workspace/list')) value = { root: 'Workspace', path: '.', entries: [{ name: 'README.md', path: 'README.md', type: 'file', size: 27 }] }
     else if (path.endsWith('/workspace/read')) value = { name: 'README.md', path: 'README.md', content: 'Canonical project directory', preview_kind: 'text', previewable: true, editable: true, content_type: 'text/markdown' }
@@ -70,6 +86,18 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await expect.poll(() => created.some(p => p.path.includes('/topics/') && p.body.content === '@all Continue with both adapters')).toBe(true)
   await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
   await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Terminal', exact: true }).click()
+  await expect.poll(() => terminalActions.some(item => item.body.action === 'terminal_open' && item.body.workspace_id === projects[0].workspace_id)).toBe(true)
+  await expect(page.getByText('Terminal · MacBook', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
+  await page.getByRole('button', { name: 'Start preview', exact: true }).click()
+  await expect(page.frameLocator('iframe[title="Development preview"]').getByText('Workspace development site')).toBeVisible()
+  expect(created.filter(item => item.path.endsWith('/preview')).every(item => item.body.agent_id === 'agent-root-relay')).toBe(true)
+  await page.getByRole('button', { name: 'Stop preview', exact: true }).click()
+  await expect(page.locator('iframe[title="Development preview"]')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Terminal', exact: true }).click()
+  expect(terminalActions.filter(item => item.body.action === 'terminal_open')).toHaveLength(1)
+  await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
   await page.screenshot({ path: '/tmp/wtt-workspace-project-desktop.png', fullPage: true })
   await page.reload()
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()

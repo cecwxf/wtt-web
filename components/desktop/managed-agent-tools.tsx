@@ -13,7 +13,7 @@ import { ManagedLivePreview } from './managed-live-preview'
 import styles from './managed-agent-tools.module.css'
 
 const TerminalPane = dynamic(() => import('@/components/ui/agent-terminal-modal').then(module => module.AgentTerminalPane), { ssr: false })
-type Tools = { files: 'off' | 'read-only' | 'workspace-write'; terminal: boolean; preview_ports: number[] }
+type Tools = { files: 'off' | 'read-only' | 'workspace-write'; terminal: boolean; preview_ports: number[]; terminal_agent_id?: string; preview_agent_id?: string; host_name?: string }
 type Tab = 'files' | 'terminal' | 'preview'
 
 type ManagedAgentToolsProps = {
@@ -54,6 +54,7 @@ function ManagedAgentToolsInner({ agentId, agentName, token, workspaceId, layout
     if (!['off', 'read-only', 'workspace-write'].includes(value.files) || typeof value.terminal !== 'boolean') throw new Error('Invalid tool capabilities')
     const ports = value.preview_ports || []
     if (!Array.isArray(ports) || ports.length > 5 || !ports.every(port => Number.isInteger(port) && port >= 1024 && port <= 65535)) throw new Error('Invalid preview capabilities')
+    if (workspaceId && ((value.terminal && typeof value.terminal_agent_id !== 'string') || (ports.length && typeof value.preview_agent_id !== 'string'))) throw new Error('Workspace tool runtime is missing')
     return { ...value, preview_ports: ports }
   }, { shouldRetryOnError: false, revalidateOnFocus: true })
 
@@ -201,8 +202,8 @@ function ManagedAgentToolsInner({ agentId, agentName, token, workspaceId, layout
         {downloadError && <p role="alert" className="px-3 py-2 text-xs text-red-600">{downloadError}</p>}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
           {tab === 'preview' && data.preview_ports.length > 0 && data.files !== 'off' && <div role="tablist" className="mb-3 flex shrink-0 gap-1 border-b border-zinc-200 dark:border-zinc-800">{(['live', 'file'] as const).map(mode => <button key={mode} role="tab" aria-selected={previewMode === mode} onClick={() => setPreviewMode(mode)} className={`px-3 py-2 text-xs ${previewMode === mode ? 'border-b-2 border-emerald-600 text-emerald-700 dark:text-emerald-400' : 'text-zinc-500'}`}>{mode === 'live' ? (en ? 'Development server' : '开发服务') : (en ? 'HTML file' : 'HTML 文件')}</button>)}</div>}
-          {tab && data.terminal && (tab === 'terminal' || terminalStarted) && <div hidden={tab !== 'terminal'} className={tab === 'terminal' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><TerminalPane agentId={agentId} agentName={agentName || agentId} token={token} className="min-h-0 flex-1" compact /></div>}
-          {tab === 'preview' && data.preview_ports.length > 0 && (previewMode === 'live' || data.files === 'off') ? <ManagedLivePreview key={data.preview_ports.join(',')} agentId={agentId} token={token} ports={data.preview_ports} en={en} /> : tab && tab !== 'terminal' && <CliWorkspaceExplorer key={refreshEpoch} sessionId={agentId} workspaceRoot="Workspace" workspaceApiBase={apiBase} online accessToken={token} workspaceAccess={data.files === 'workspace-write' ? 'workspace-write' : 'read-only'} zh={!en} previewMode={tab === 'preview'} onDownload={(path, name) => void download(path, name)} />}
+          {tab && data.terminal && (tab === 'terminal' || terminalStarted) && <div hidden={tab !== 'terminal'} className={tab === 'terminal' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><TerminalPane agentId={workspaceId ? data.terminal_agent_id! : agentId} workspaceId={workspaceId} agentName={workspaceId ? data.host_name || 'Workspace' : agentName || agentId} token={token} className="min-h-0 flex-1" compact /></div>}
+          {tab === 'preview' && data.preview_ports.length > 0 && (previewMode === 'live' || data.files === 'off') ? <ManagedLivePreview key={`${data.preview_agent_id || agentId}:${data.preview_ports.join(',')}`} agentId={workspaceId ? data.preview_agent_id! : agentId} workspaceId={workspaceId} token={token} ports={data.preview_ports} en={en} /> : tab && tab !== 'terminal' && <CliWorkspaceExplorer key={refreshEpoch} sessionId={agentId} workspaceRoot="Workspace" workspaceApiBase={apiBase} online accessToken={token} workspaceAccess={data.files === 'workspace-write' ? 'workspace-write' : 'read-only'} zh={!en} previewMode={tab === 'preview'} onDownload={(path, name) => void download(path, name)} />}
         </div>
       </div>
 

@@ -17,6 +17,7 @@ interface AgentTerminalPaneProps {
   agentId: string
   agentName: string
   workdir?: string
+  workspaceId?: string
   token?: string
   className?: string
   actions?: ReactNode
@@ -32,7 +33,7 @@ type Pending = {
 
 let reqCounter = 0
 
-export function AgentTerminalPane({ agentId, agentName, workdir, token, className = '', actions, compact = false, onTerminalReady }: AgentTerminalPaneProps) {
+export function AgentTerminalPane({ agentId, agentName, workdir, workspaceId, token, className = '', actions, compact = false, onTerminalReady }: AgentTerminalPaneProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -138,6 +139,7 @@ export function AgentTerminalPane({ agentId, agentName, workdir, token, classNam
           cols: term.cols,
           rows: term.rows,
           cwd: workdir || '',
+          ...(workspaceId ? { workspace_id: workspaceId } : {}),
         }) as { session_id?: string } | null
         const sid = opened?.session_id || ''
         if (!sid) throw new Error('terminal session id missing')
@@ -216,7 +218,7 @@ export function AgentTerminalPane({ agentId, agentName, workdir, token, classNam
       sessionRef.current = ''
       onTerminalReadyRef.current?.(null, null)
     }
-  }, [agentId, token, workdir, wsUrl])
+  }, [agentId, token, workdir, workspaceId, wsUrl])
 
   return (
     <div className={`flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#2b3a35] bg-[#0b0f14] shadow-2xl ${className}`}>

@@ -6,7 +6,7 @@ import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
 type Preview = { state: 'stopped' | 'starting' | 'ready' | 'expired' | 'failed'; port: number; url?: string; expires_at?: string }
 
-export function ManagedLivePreview({ agentId, token, ports, en }: { agentId: string; token?: string; ports: number[]; en: boolean }) {
+export function ManagedLivePreview({ agentId, workspaceId, token, ports, en }: { agentId: string; workspaceId?: string; token?: string; ports: number[]; en: boolean }) {
   const [port, setPort] = useState(ports[0])
   const [value, setValue] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
@@ -29,9 +29,10 @@ export function ManagedLivePreview({ agentId, token, ports, en }: { agentId: str
     const timeout = setTimeout(() => controller.abort(), 20000)
     setBusy(true); setError('')
     try {
-      const response = await fetch(`${CLIENT_WTT_API_BASE}/hosts/agents/${encodeURIComponent(agentId)}/preview`, {
+      const resource = workspaceId ? `workspaces/${encodeURIComponent(workspaceId)}` : `hosts/agents/${encodeURIComponent(agentId)}`
+      const response = await fetch(`${CLIENT_WTT_API_BASE}/${resource}/preview`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operation, port }), signal: controller.signal, cache: 'no-store', redirect: 'error',
+        body: JSON.stringify({ operation, port, ...(workspaceId ? { agent_id: agentId } : {}) }), signal: controller.signal, cache: 'no-store', redirect: 'error',
       })
       if (!response.ok) throw new Error('Preview unavailable')
       const next = await response.json() as Preview
