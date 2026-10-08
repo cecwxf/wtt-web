@@ -125,6 +125,8 @@ export interface DesktopHostBridge {
   discoverAgents?(): Promise<DesktopAgentProfile[]>;
   selectAgentWorkspace?(profileOrAdapter: string, reset?: boolean): Promise<{ adapter: string; profileId?: string; workspaceName: string; workspaceImport?: DesktopAgentProfile['workspaceImport'] } | null>;
   workspaceImportSupported?: boolean;
+  nativeContextImportSupported?: boolean;
+  importNativeContext?(request: { profileId: string; topicId: string; sourceSha256: string; rollback?: boolean }): Promise<{ topicId: string; state: string } | null>;
   importAgentWorkspace?(profileId: string): Promise<DesktopAgentProfile | null>;
   rollbackAgentWorkspace?(profileId: string, receiptId: string): Promise<DesktopAgentProfile | null>;
   profileManagementSupported?: boolean;
