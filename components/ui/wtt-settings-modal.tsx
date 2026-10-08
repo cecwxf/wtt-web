@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import { useTheme } from "next-themes";
 import {
   Activity,
   Bot,
@@ -381,7 +382,8 @@ export function WttSettingsModal({
   onBindingChanged,
 }: WttSettingsModalProps) {
   const { data: session } = useSession();
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
+  const { theme, setTheme } = useTheme();
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.agent_id === selectedAgentId),
     [agents, selectedAgentId],
@@ -3142,19 +3144,29 @@ export function WttSettingsModal({
           )}
 
           {activePage === "appearance" && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {[
-                t("settings.themeLight"),
-                t("settings.themeWarm"),
-                t("settings.themeCool"),
-              ].map((theme, i) => (
-                <button
-                  key={theme}
-                  className={`rounded-xl border px-3 py-8 text-sm transition ${i === 0 ? "border-indigo-300 bg-indigo-50 text-indigo-600 font-medium" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-300"}`}
+            <div className="space-y-4 p-4 dark:bg-zinc-950">
+              <label className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700 dark:text-zinc-200">
+                <span>{t("settings.theme")}</span>
+                <select
+                  value={theme === "dark" ? "dark" : "light"}
+                  onChange={(event) => setTheme(event.target.value)}
+                  className="min-h-10 w-40 rounded-md border border-slate-200 bg-white px-3 dark:border-zinc-700 dark:bg-zinc-900"
                 >
-                  {theme}
-                </button>
-              ))}
+                  <option value="light">{t("settings.themeLight")}</option>
+                  <option value="dark">{t("settings.themeDark")}</option>
+                </select>
+              </label>
+              <label className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700 dark:text-zinc-200">
+                <span>{t("top.languageTitle")}</span>
+                <select
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value === "en" ? "en" : "zh")}
+                  className="min-h-10 w-40 rounded-md border border-slate-200 bg-white px-3 dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  <option value="zh">中文</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
             </div>
           )}
 
