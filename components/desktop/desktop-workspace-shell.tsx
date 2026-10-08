@@ -13,6 +13,7 @@ import { getDesktopBridge } from '@/lib/desktop'
 import { useI18n } from '@/lib/i18n-provider'
 import { DesktopOnboarding } from './desktop-onboarding'
 import { favoriteKey, useNavigationFavorites, type NavigationFavorite } from '@/lib/hooks/use-navigation-favorites'
+import type { AgentOperationJob } from '@/components/ui/topic-column'
 
 const TopicCreationDialogs = dynamic(() => import('@/components/ui/topic-column').then(module => module.TopicColumn))
 
@@ -49,10 +50,68 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<NonNullable<WttShellV2Props['forceOpenSettingsPage']>>('profile')
   const [creationRequest, setCreationRequest] = useState<{ id: number; kind: 'group' | 'team' }>()
-  const openCreation = (kind: 'group' | 'team') => {
-    setCreationRequest(previous => ({ id: (previous?.id || 0) + 1, kind }))
-    closeDrawer()
+  const [localTeamHost, setLocalTeamHost] = useState<{ id: string; adapters: string[] }>()
+  const [creationBusy, setCreationBusy] = useState(false)
+  const [creationError, setCreationError] = useState('')
+  const alive = useRef(true)
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
+  const openCreation = async (kind: 'group' | 'team') => {
+    if (creationBusy) return
+    setCreationBusy(true); setCreationError('')
+    try {
+      let hostOption: typeof localTeamHost
+      const bridge = getDesktopBridge()?.host
+      if (kind === 'team' && bridge?.teamProfilesSupported && bridge.discoverAgents) {
+        const state = await bridge.status()
+        if (state.state === 'registered' && state.userId === props.currentUserId && state.hostId) {
+          const found = await bridge.discoverAgents()
+          const adapters = Array.from(new Set(found.filter(profile => profile.available && ['codex', 'claude-code', 'gemini'].includes(profile.adapter)).map(profile => profile.adapter)))
+          if (adapters.length) hostOption = { id: state.hostId, adapters }
+        }
+      }
+      if (!alive.current) return
+      setLocalTeamHost(hostOption)
+      setCreationRequest(previous => ({ id: (previous?.id || 0) + 1, kind }))
+      closeDrawer()
+    } catch (error) {
+      if (alive.current) setCreationError(error instanceof Error ? error.message : (en ? 'Could not load team settings.' : '团队设置加载失败。'))
+    } finally { if (alive.current) setCreationBusy(false) }
   }
+  const createManagedTeam = async (payload: Record<string, unknown>, progress: (job: AgentOperationJob) => void): Promise<AgentOperationJob> => {
+    const bridge = getDesktopBridge()?.host
+    if (!localTeamHost || !bridge?.addTeamProfiles || !bridge.startAgents || !bridge.runtimeStatus || !props.onSubmitAgentOperation) throw new Error(en ? 'Update WTT Desktop to create a local team.' : '请升级 WTT Desktop 后创建本机团队。')
+    const current = async () => {
+      const state = await bridge.status()
+      if (!alive.current || state.state !== 'registered' || state.userId !== props.currentUserId || state.hostId !== localTeamHost.id) throw new Error(en ? 'Local team operation cancelled.' : '本机团队操作已取消。')
+    }
+    await current()
+    const roles = payload.roles as Array<{ display_name: string }>
+    const requestId = String(payload.client_operation_id || '')
+    const adapter = String(payload.adapter || '')
+    const before = await bridge.runtimeStatus()
+    let profileIds: string[]
+    let runtime = before
+    const pending = nativeTeamDraft.current
+    if (before.state === 'running' && pending?.requestId === requestId && pending.adapter === adapter && JSON.stringify(pending.names) === JSON.stringify(roles.map(role => role.display_name))
+        && before.agents.length === pending.profileIds.length && before.agents.every(agent => pending.profileIds.includes(agent.profileId))) {
+      profileIds = pending.profileIds
+    } else {
+      if (before.state !== 'stopped') throw new Error(en ? 'Stop local Agents in computer settings before creating a team.' : '请先在主机设置中停止本机 Agent，再创建团队。')
+      progress({ phase: en ? 'Preparing local profiles' : '准备本机配置' })
+      const drafts = await bridge.addTeamProfiles({ requestId, adapter, names: roles.map(role => role.display_name) })
+      await current()
+      profileIds = drafts.map(profile => profile.profile_id)
+      nativeTeamDraft.current = { requestId, adapter, names: roles.map(role => role.display_name), profileIds }
+      progress({ phase: en ? 'Waiting for native confirmation' : '等待原生授权确认' })
+      runtime = await bridge.startAgents({ profileIds, workspaceAccess: drafts.some(profile => profile.requiresFullAccess) ? 'full-access' : 'workspace-write',
+        remoteTools: { files: 'off', terminal: false, previewPorts: [] } })
+      await current()
+    }
+    const agentIds = profileIds.map(id => runtime.agents.find(agent => agent.profileId === id)?.agentId)
+    if (runtime.state !== 'running' || agentIds.some(id => !id)) throw new Error(en ? 'Local team registration did not complete.' : '本机团队 Agent 登记尚未完成。')
+    return props.onSubmitAgentOperation('team_create', { ...payload, runtime_mode: 'managed_desktop', host_id: localTeamHost.id, agent_ids: agentIds }, undefined, progress)
+  }
+  const nativeTeamDraft = useRef<{ requestId: string; adapter: string; names: string[]; profileIds: string[] }>()
   const [collapsed, setCollapsed] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(288)
   const resizeStart = useRef<{ x: number; width: number } | null>(null)
@@ -65,6 +124,7 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
     { revalidateOnFocus: true, shouldRetryOnError: false },
   )
   const hosts = useMemo(() => Array.from(new Map((data || []).flatMap(page => page.hosts).map(host => [host.host_id, host])).values()), [data])
+  const excludedCloneAgentIds = useMemo(() => new Set(hosts.flatMap(host => host.agents.map(agent => agent.agent_id))), [hosts])
   const assigned = new Set(hosts.flatMap(host => host.agents.map(agent => agent.agent_id)))
   const unassigned = props.agents.filter(agent => !assigned.has(agent.agent_id))
   const matches = (...values: Array<string | undefined>) => !query.trim() || values.some(value => value?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
@@ -184,8 +244,9 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
             : props.agents.find(agent => members.includes(agent.agent_id))?.agent_id || props.selectedAgentId
           return topicRow(topic.topic_id, topic.name, agentId, undefined, topic.unread_count)
         })}
-        <button disabled={!props.userToken || !props.agents.length || !props.onSubmitAgentOperation} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => openCreation('group')}><Plus size={14} />{en ? 'New group' : '新建群聊'}</button>
-        <button disabled={!props.userToken || !props.onNewAgentFromHost || !props.onSubmitAgentOperation} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => openCreation('team')}><Users size={14} />{en ? 'New team' : '新建团队'}</button>
+        <button disabled={creationBusy || !props.userToken || !props.agents.length || !props.onSubmitAgentOperation} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => void openCreation('group')}><Plus size={14} />{en ? 'New group' : '新建群聊'}</button>
+        <button disabled={creationBusy || !props.userToken || !props.onNewAgentFromHost || !props.onSubmitAgentOperation} className={`${rowClass} w-full text-zinc-500 disabled:opacity-40`} onClick={() => void openCreation('team')}><Users size={14} />{en ? 'New team' : '新建团队'}</button>
+        {creationError && <p role="alert" className="px-2 py-1 text-xs text-red-600 dark:text-red-400">{creationError}</p>}
       </Section>
       {props.onOpenKnowledgeRoot && <Section title={en ? 'Library' : '资料'} icon={<BookOpen size={14} />}>
         <button className={`${rowClass} w-full text-zinc-600 dark:text-zinc-300`} onClick={() => { props.onOpenKnowledgeRoot?.(); closeDrawer() }}><BookOpen size={14} />{en ? 'Knowledge base' : '个人知识库'}</button>
@@ -232,6 +293,7 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       onSelectAgent={props.onAgentChange} onlineAgentIds={props.onlineAgentIds}
       agentRuntimeMap={props.agentRuntimeMap} agentRoleMap={props.agentRoleMap} agentRoleTemplateMap={props.agentRoleTemplateMap}
       onNewAgentFromHost={props.onNewAgentFromHost} onSubmitAgentOperation={props.onSubmitAgentOperation}
+      excludedCloneAgentIds={excludedCloneAgentIds} managedTeamHost={localTeamHost ? { ...localTeamHost, create: createManagedTeam } : undefined}
       onBindingChanged={props.onBindingChanged} onTopicsRefresh={props.onTopicsRefresh} onTopicCreated={props.onTopicCreated}
       userToken={props.userToken} />}
   </div>

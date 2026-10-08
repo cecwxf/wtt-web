@@ -138,6 +138,12 @@ interface TopicColumnProps {
   compactLayout?: boolean
   creationOnly?: boolean
   creationRequest?: { id: number; kind: 'group' | 'team' }
+  excludedCloneAgentIds?: Set<string>
+  managedTeamHost?: {
+    id: string
+    adapters: string[]
+    create: (payload: Record<string, unknown>, onProgress: (job: AgentOperationJob) => void) => Promise<AgentOperationJob>
+  }
 }
 
 function agentInitial(name: string) {
@@ -742,6 +748,8 @@ export function TopicColumn(props: TopicColumnProps) {
     compactLayout = false,
     creationOnly = false,
     creationRequest,
+    excludedCloneAgentIds,
+    managedTeamHost,
   } = props
   const handledCreationRequest = useRef<number | null>(null)
   const [agentMenuFor, setAgentMenuFor] = useState<string | null>(null)
@@ -781,6 +789,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [teamTemplateId, setTeamTemplateId] = useState(TEAM_TEMPLATES[0]?.id || '')
   const [teamName, setTeamName] = useState(TEAM_TEMPLATES[0]?.title || '')
   const [teamHostId, setTeamHostId] = useState('')
+  const teamRequestId = useRef('')
   const [teamAdapter, setTeamAdapter] = useState<'claude-code' | 'codex' | 'gemini'>('claude-code')
   const [teamBusy, setTeamBusy] = useState(false)
   const [teamProgress, setTeamProgress] = useState('')
@@ -917,11 +926,12 @@ export function TopicColumn(props: TopicColumnProps) {
   const newAgentHosts = useMemo(() => {
     if (!onNewAgentFromHost) return []
     return agentOptions.filter((agent) => {
+      if (excludedCloneAgentIds?.has(agent.agent_id)) return false
       if (!isAgentOnline(agent.agent_id)) return false
       return Boolean(normalizeNewAgentAdapter(agentRuntimeMap?.[agent.agent_id]))
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentOptions, agentRuntimeMap, onlineAgentIds, selectedAgentId, isSelectedAgentOnline, onNewAgentFromHost])
+  }, [agentOptions, agentRuntimeMap, onlineAgentIds, selectedAgentId, isSelectedAgentOnline, onNewAgentFromHost, excludedCloneAgentIds])
   const selectedTeamTemplate = useMemo(
     () => TEAM_TEMPLATES.find((template) => template.id === teamTemplateId) || TEAM_TEMPLATES[0],
     [teamTemplateId],
@@ -1076,12 +1086,13 @@ export function TopicColumn(props: TopicColumnProps) {
     const selectedHost = newAgentHosts.find((agent) => agent.agent_id === selectedAgentId) || newAgentHosts[0]
     setTeamTemplateId(template.id)
     setTeamName(zh ? template.title : template.titleEn)
-    setTeamHostId(selectedHost?.agent_id || '')
-    setTeamAdapter((normalizeNewAgentAdapter(agentRuntimeMap?.[selectedHost?.agent_id || '']) || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
+    teamRequestId.current = crypto.randomUUID()
+    setTeamHostId(managedTeamHost ? `desktop:${managedTeamHost.id}` : selectedHost?.agent_id || '')
+    setTeamAdapter((managedTeamHost?.adapters[0] || normalizeNewAgentAdapter(agentRuntimeMap?.[selectedHost?.agent_id || '']) || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
     setTeamProgress('')
     setTeamError('')
     setTeamOpen(true)
-  }, [selectedTeamTemplate, newAgentHosts, selectedAgentId, agentRuntimeMap, zh])
+  }, [selectedTeamTemplate, newAgentHosts, selectedAgentId, agentRuntimeMap, managedTeamHost, zh])
 
   useEffect(() => {
     if (!creationRequest || handledCreationRequest.current === creationRequest.id || groupBusy || teamBusy) return
@@ -1202,9 +1213,7 @@ export function TopicColumn(props: TopicColumnProps) {
       if (!onSubmitAgentOperation) {
         throw new Error(zh ? '后端异步 Action 未接入。' : 'Async operation action is unavailable.')
       }
-      const job = await onSubmitAgentOperation(
-        'team_create',
-        {
+      const payload = {
           name,
           description,
           host_agent_id: teamHostId,
@@ -1216,11 +1225,12 @@ export function TopicColumn(props: TopicColumnProps) {
             role_template_id: role.id,
             role_template: serializeAgentRoleTemplate(role),
           })),
-          client_operation_id: newClientOperationId(),
-        },
-        undefined,
-        (nextJob) => setTeamProgress(`${zh ? '正在创建团队' : 'Creating team'} · ${nextJob.phase || nextJob.status || 'running'}`),
-      )
+          client_operation_id: teamRequestId.current,
+        }
+      const progress = (nextJob: AgentOperationJob) => setTeamProgress(`${zh ? '正在创建团队' : 'Creating team'} · ${nextJob.phase || nextJob.status || 'running'}`)
+      const job = managedTeamHost && teamHostId === `desktop:${managedTeamHost.id}`
+        ? await managedTeamHost.create(payload, progress)
+        : await onSubmitAgentOperation('team_create', payload, undefined, progress)
       const result = (job.result || {}) as { topic?: TopicItem; topic_id?: string; agent_ids?: string[]; agents?: Array<{ agent_id?: string }> }
       const topicId = String(result.topic_id || result.topic?.topic_id || '').trim()
       const createdAgentIds = (Array.isArray(result.agent_ids) && result.agent_ids.length
@@ -2592,7 +2602,14 @@ export function TopicColumn(props: TopicColumnProps) {
 
                 <div>
                   <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '运行主机' : 'Host'}</div>
-                  {newAgentHostFolders.length === 0 ? (
+                  {managedTeamHost && <button type="button" disabled={teamBusy} onClick={() => {
+                    setTeamHostId(`desktop:${managedTeamHost.id}`)
+                    setTeamAdapter(managedTeamHost.adapters[0] as 'claude-code' | 'codex' | 'gemini')
+                  }} aria-pressed={teamHostId === `desktop:${managedTeamHost.id}`}
+                    className={`mb-2 w-full rounded-md border px-3 py-2 text-left text-sm ${teamHostId === `desktop:${managedTeamHost.id}` ? 'border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100' : 'border-zinc-300 dark:border-zinc-700'}`}>
+                    {zh ? '本机 · 桌面托管' : 'This computer · Desktop managed'}
+                  </button>}
+                  {newAgentHostFolders.length === 0 && !managedTeamHost ? (
                     <div className="rounded-2xl border border-dashed border-[#ded6c8] bg-white/60 px-3 py-4 text-xs font-semibold text-slate-500 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-400">
                       {zh ? '没有在线可 clone 主机。请先启动一个 Codex / Claude Code / Gemini Agent。' : 'No online clone host. Start a Codex / Claude Code / Gemini agent first.'}
                     </div>
@@ -2658,7 +2675,7 @@ export function TopicColumn(props: TopicColumnProps) {
                         <button
                           key={id}
                           type="button"
-                          disabled={teamBusy}
+                          disabled={teamBusy || (teamHostId.startsWith('desktop:') && !managedTeamHost?.adapters.includes(id))}
                           onClick={() => setTeamAdapter(id)}
                           className={`rounded-xl border px-2 py-2 text-xs font-black transition ${
                             active
