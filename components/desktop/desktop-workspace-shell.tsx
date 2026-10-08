@@ -103,8 +103,15 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
       profileIds = drafts.map(profile => profile.profile_id)
       nativeTeamDraft.current = { requestId, adapter, names: roles.map(role => role.display_name), profileIds }
       progress({ phase: en ? 'Waiting for native confirmation' : '等待原生授权确认' })
-      runtime = await bridge.startAgents({ profileIds, workspaceAccess: drafts.some(profile => profile.requiresFullAccess) ? 'full-access' : 'workspace-write',
-        remoteTools: { files: 'off', terminal: false, previewPorts: [] } })
+      try {
+        runtime = await bridge.startAgents({ profileIds, workspaceAccess: drafts.some(profile => profile.requiresFullAccess) ? 'full-access' : 'workspace-write',
+          remoteTools: { files: 'off', terminal: false, previewPorts: [] } })
+      } catch (error) {
+        const cancelled = error instanceof Error && /Local Agent operation cancelled/.test(error.message)
+        throw new Error(cancelled
+          ? (en ? 'Team startup cancelled. Local drafts are preserved; no team topic was created.' : '已取消团队启动。本机配置草稿已保留，没有创建团队会话。')
+          : (en ? 'Local team startup failed. Check computer settings before retrying.' : '本机团队启动失败，请在主机设置中检查后重试。'))
+      }
       await current()
     }
     const agentIds = profileIds.map(id => runtime.agents.find(agent => agent.profileId === id)?.agentId)
