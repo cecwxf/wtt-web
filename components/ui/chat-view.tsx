@@ -26,6 +26,7 @@ import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
 import { ManagedChatExecutions } from '@/components/ui/managed-chat-executions'
 import { useManagedChatProgress } from '@/lib/managed-chat-progress'
 import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
+import { WorkspaceExecutionControls } from '@/components/desktop/workspace-execution-settings'
 import { useWorkspaceComposerState, type WorkspaceComposerStore } from '@/lib/hooks/use-workspace-composer'
 import desktopStyles from './chat-view-desktop.module.css'
 
@@ -4054,6 +4055,9 @@ function ChatViewContent({
         {/* Compact status bar: actual runtime model / think / adapter-aware slash */}
         <div className={`${desktopStyles.runtimeBar} mb-2 flex items-center gap-1.5 text-[10px] flex-wrap sm:flex-nowrap`}>
           {composerAccessory}
+          {workspaceProjectId && topicId && accessToken && <WorkspaceExecutionControls
+            key={`${workspaceProjectId}:${topicId}:${accessToken}`} workspaceId={workspaceProjectId}
+            topicId={topicId} token={accessToken} agentId={currentAgentId} />}
           {!hideRuntimeBadges && (
             <>
               <span

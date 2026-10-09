@@ -8,6 +8,13 @@ export interface WorkspaceProject {
   workspace_id: string; name: string; root_id: string; host_id: string; access: 'read-only' | 'workspace-write'; root_revoked: boolean; sessions: ProjectSession[]
 }
 export interface ProjectRoot { root_id: string; name: string; host_id: string; host_name: string; access: string }
+export interface WorkspaceExecutionConfig { model?: string; reasoning_effort?: string; workspace_access?: string }
+export interface WorkspaceExecutionParticipant {
+  participant_id: string; label: string; adapter: string; transport_agent_id: string; revision: number;
+  config: WorkspaceExecutionConfig;
+  options: { available: boolean; permissions: string[]; reasoning_efforts: string[]; model_override?: boolean; reasoning_requires_model?: boolean; host_ceiling?: string }
+}
+export interface WorkspaceExecutionSettings { session_id: string; participants: WorkspaceExecutionParticipant[] }
 
 export class WorkspaceRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message) }
@@ -34,6 +41,12 @@ export class WorkspaceProjectsApi {
     return value
   }
   roots() { return this.request<{ roots: ProjectRoot[] }>('/roots') }
+  executionSettings(workspaceId: string, topicId: string) {
+    return this.request<WorkspaceExecutionSettings>(`/${encodeURIComponent(workspaceId)}/sessions/by-topic/${encodeURIComponent(topicId)}/settings`)
+  }
+  saveExecutionSettings(workspaceId: string, sessionId: string, participantId: string, revision: number, config: WorkspaceExecutionConfig) {
+    return this.request<{ revision: number; config: WorkspaceExecutionConfig }>(`/${encodeURIComponent(workspaceId)}/sessions/${encodeURIComponent(sessionId)}/participants/${encodeURIComponent(participantId)}/settings`, { revision, config })
+  }
   create(body: { workspace_id: string; name: string; root_id: string }) { return this.request<WorkspaceProject>('', body) }
   createSession(workspaceId: string, body: { session_id: string; name: string; participants: Array<{ host_id: string; profile_id: string; label: string }> }) {
     return this.request<ProjectSession>(`/${encodeURIComponent(workspaceId)}/sessions`, body)

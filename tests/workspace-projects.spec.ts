@@ -12,7 +12,48 @@ const participants = [
   { participant_id: 'two', label: 'Reviewer', host_id: 'remote', host_name: 'Linux', adapter: 'claude-code', profile_id: 'claude', transport_agent_id: 'agent-two' },
 ]
 
-async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', singleAgent = false, adapterEntry?: 'setup' | 'onboarding' | 'onboarding-profile') {
+for (const entryPath of ['/desktop', '/mobile/workspaces']) test(`Workspace execution settings isolate members on ${entryPath}`, async ({ page }, testInfo) => {
+  const result = await workspaceFlow(page, '', entryPath, false, undefined, true)
+  if (entryPath === '/mobile/workspaces') await page.setViewportSize({ width: 390, height: 844 })
+  const selector = page.getByRole('combobox', { name: 'Execution settings member', exact: true })
+  await expect(selector).toBeVisible()
+  await selector.selectOption('one')
+  await page.getByRole('button', { name: 'Set model', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Execution settings', exact: true })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('textbox', { name: 'Model ID', exact: true }).fill('openai/codex-test')
+  await dialog.getByRole('combobox', { name: 'Reasoning effort', exact: true }).selectOption('high')
+  await dialog.getByRole('combobox', { name: 'Execution permissions', exact: true }).selectOption('read-only')
+  await expect(dialog.getByRole('option', { name: 'Full access', exact: true })).toHaveCount(0)
+  await page.screenshot({ path: testInfo.outputPath('execution-settings.png') })
+  await dialog.getByRole('button', { name: 'Apply to next run', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await expect(page.getByRole('button', { name: 'Set model', exact: true })).toHaveText('openai/codex-test')
+  await selector.selectOption('two')
+  await page.getByRole('button', { name: 'Set model', exact: true }).click()
+  await expect(dialog.getByRole('textbox', { name: 'Model ID', exact: true })).toHaveValue('')
+  await dialog.getByRole('textbox', { name: 'Model ID', exact: true }).fill('claude-test')
+  await dialog.getByRole('button', { name: 'Apply to next run', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await selector.selectOption('one')
+  await expect(page.getByRole('button', { name: 'Set model', exact: true })).toHaveText('openai/codex-test')
+  const session = result.projects[0].sessions[0]
+  const key = `${session.session_id}:one`
+  result.executionConfigs!.set(key, { config: { model: 'another-device-model' }, revision: 2 })
+  await page.getByRole('button', { name: 'Set model', exact: true }).click()
+  await dialog.getByRole('textbox', { name: 'Model ID', exact: true }).fill('stale-device-model')
+  await dialog.getByRole('button', { name: 'Apply to next run', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('changed on another device')
+  await dialog.getByRole('button', { name: 'Reload execution settings', exact: true }).click()
+  await expect(dialog.getByRole('textbox', { name: 'Model ID', exact: true })).toHaveValue('another-device-model')
+  await page.keyboard.press('Escape')
+  await expect(dialog).not.toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Set model', exact: true })).toHaveText('another-device-model')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', singleAgent = false, adapterEntry?: 'setup' | 'onboarding' | 'onboarding-profile', settingsOnly = false) {
   const created: Array<{ path: string; body: any }> = []
   const projects: any[] = []
   const terminalActions: Array<{ url: string; body: any }> = []
@@ -24,6 +65,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
   const nativeDownloads: Array<{ workspaceId?: string; agentId?: string; path: string; accessToken?: string }> = []
   const nativeNotices: Array<{ userId: string; topicId: string; agentId: string; messageId: string }> = []
   const nativeSelections: unknown[] = []
+  const executionConfigs = new Map<string, { config: any; revision: number }>()
   if (adapterEntry?.startsWith('onboarding')) await page.exposeFunction('observeOnboardingSelection', (selection: unknown) => nativeSelections.push(selection))
   if (adapterEntry?.startsWith('onboarding')) await page.addInitScript(({ hostId, byProfile }) => {
     let runtime: any = { state: 'stopped', agents: [] }
@@ -106,6 +148,17 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
       const body = route.request().postDataJSON(); created.push({ path, body })
       value = { ...body, topic_id: projects[0].sessions.length ? `project-topic-${projects[0].sessions.length + 1}` : 'project-topic', participants: body.participants.map((item: any) => ({ ...participants.find(p => p.host_id === item.host_id && p.profile_id === item.profile_id), label: item.label })) }
       projects[0].sessions.push(value)
+    } else if (path.includes('/sessions/by-topic/') && path.endsWith('/settings')) {
+      const session = projects.flatMap(project => project.sessions).find(session => session.topic_id === path.split('/')[5])
+      value = { session_id: session?.session_id, participants: (session?.participants || []).map((p: any) => ({ ...p,
+        ...(executionConfigs.get(`${session.session_id}:${p.participant_id}`) || { config: {}, revision: 0 }),
+        options: { available: true, model_override: true, permissions: ['read-only', 'workspace-write'], reasoning_efforts: ['low', 'medium', 'high'] },
+      })) }
+    } else if (path.includes('/participants/') && path.endsWith('/settings')) {
+      const body = route.request().postDataJSON(); const key = `${path.split('/')[4]}:${path.split('/')[6]}`
+      const current = executionConfigs.get(key) || { config: {}, revision: 0 }
+      if (body.revision !== current.revision) { await route.fulfill({ status: 409, json: { detail: 'Execution settings changed on another device; reload before saving' } }); return }
+      value = { config: body.config, revision: current.revision + 1 }; executionConfigs.set(key, value); created.push({ path, body })
     } else if (/^\/workspaces\/[^/]+\/tools$/.test(path)) value = { files: 'workspace-write', terminal: true, terminal_agent_id: 'agent-root-relay', host_name: 'MacBook', preview_agent_id: 'agent-root-relay', preview_ports: [38765] }
     else if (/^\/workspaces\/[^/]+\/preview$/.test(path)) {
       const body = route.request().postDataJSON(); created.push({ path, body })
@@ -174,6 +227,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
   expect(created[0].body.name).toBe('Website')
   expect(created[1].body.participants.map((p: any) => p.host_id)).toEqual(singleAgent ? [host] : [host, 'remote'])
   expect(created[1].body.participants.every((p: any) => !('agent_id' in p))).toBe(true)
+  if (settingsOnly) return { projects, created, executionConfigs }
   if (singleAgent) {
     await expect(page.getByRole('img', { name: '1/1 adapters online', exact: true })).toBeVisible()
     await page.locator('textarea').first().fill('Build with one Codex adapter')
