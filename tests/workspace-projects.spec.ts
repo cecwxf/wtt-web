@@ -190,6 +190,16 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
     await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
     await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
     expect(new URL(page.url()).pathname).toBe(entryPath)
+    await page.route('**/api/auth/csrf', route => route.fulfill({ json: { csrfToken: 'synthetic-csrf' } }))
+    await page.route('**/api/auth/signout', route => {
+      const callback = new URLSearchParams(route.request().postData() || '').get('callbackUrl')
+      expect(callback).toBe('/mobile/login?callbackUrl=%2Fmobile%2Fworkspaces')
+      return route.fulfill({ json: { url: new URL(callback!, page.url()).toString() } })
+    })
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click()
+    await expect(page).toHaveURL(/\/mobile\/login\?callbackUrl=%2Fmobile%2Fworkspaces$/)
+    await expect(page.getByRole('button', { name: '进入 WTT', exact: true })).toBeVisible()
   }
 }
 

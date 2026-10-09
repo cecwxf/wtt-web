@@ -3157,7 +3157,7 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
         onOpenEditor={() => setEditorOpen(true)}
         onOpenKnowledgeRoot={handleOpenKnowledgeRoot}
         onCreateGeneralTask={handleCreateGeneralTask}
-        onLogout={() => signOut({ callbackUrl: desktopMode && workspaceBasePath !== '/desktop' ? '/mobile/login' : '/login' })}
+        onLogout={() => signOut({ callbackUrl: desktopMode && workspaceBasePath !== '/desktop' ? `/mobile/login?callbackUrl=${encodeURIComponent(workspaceBasePath)}` : '/login' })}
         onTopicsRefresh={handleSidebarRefresh}
         onTopicCreated={handleTopicCreated}
         onBindingChanged={loadAgents}
