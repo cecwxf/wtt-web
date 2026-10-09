@@ -75,7 +75,8 @@ function DesktopWorkspaceShellInner(props: WttShellV2Props) {
         const state = await bridge.status()
         if (state.state === 'registered' && state.userId === props.currentUserId && state.hostId) {
           const found = await bridge.discoverAgents()
-          const adapters = Array.from(new Set(found.filter(profile => profile.available && ['codex', 'claude-code', 'gemini'].includes(profile.adapter)).map(profile => profile.adapter)))
+          const supported = bridge.teamAdaptersSupported || ['codex', 'claude-code', 'gemini']
+          const adapters = Array.from(new Set(found.filter(profile => profile.available && supported.includes(profile.adapter)).map(profile => profile.adapter)))
           if (adapters.length) hostOption = { id: state.hostId, adapters }
         }
       }

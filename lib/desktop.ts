@@ -136,6 +136,7 @@ export interface DesktopHostBridge {
   profileManagementSupported?: boolean;
   addAgentProfile?(profileId: string): Promise<DesktopAgentProfile>;
   teamProfilesSupported?: boolean;
+  teamAdaptersSupported?: string[];
   addTeamProfiles?(request: { requestId: string; adapter: string; names: string[] }): Promise<DesktopAgentProfile[]>;
   prepareTeam?(request: { requestId: string; draftKey: string; adapter: string; names: string[] }): Promise<{ requestId: string; profiles: DesktopAgentProfile[] }>;
   completeTeam?(request: { requestId: string }): Promise<void>;

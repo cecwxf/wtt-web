@@ -468,6 +468,67 @@ test('Workspace download validates metadata when CDN streaming omits Content-Len
 const restoredWorkspace = '33333333-3333-4333-8333-333333333333'
 const restoredSession = '44444444-4444-4444-8444-444444444444'
 
+test('native team adapters follow desktop capabilities and preserve older clients', async ({ page }) => {
+  await restorationFixture(page)
+  const nativeCalls: Array<{ operation: string; value: any }> = []
+  const submissions: any[] = []
+  await page.exposeFunction('observeNativeTeam', (operation: string, value: unknown) => nativeCalls.push({ operation, value }))
+  await page.route('**/api/wtt/agent-operations', async route => {
+    const body = route.request().postDataJSON()
+    submissions.push(body)
+    await route.fulfill({ json: { job_id: 'native-team-job', status: 'succeeded', result: { topic_id: 'native-team-topic', agent_ids: body.payload.agent_ids } } })
+  })
+  await page.setViewportSize({ width: 1440, height: 960 })
+  for (const expanded of [false, true]) {
+    await page.addInitScript(({ hostId, expanded }) => {
+      let runtime: any = { state: 'stopped', agents: [] }
+      let prepared: any[] = []
+      ;(window as any).wttDesktop = { isDesktop: true, platform: 'darwin', host: {
+        teamProfilesSupported: true,
+        ...(expanded ? { teamAdaptersSupported: ['codex', 'claude-code', 'gemini', 'pi', 'dsh'] } : {}),
+        status: async () => ({ state: 'registered', userId: hostId, hostId }),
+        discoverAgents: async () => ['codex', 'pi', 'dsh'].map(adapter => ({
+          profile_id: `desktop-${adapter}`, adapter, display_name: adapter, available: true,
+        })),
+        runtimeStatus: async () => runtime,
+        addTeamProfiles: async () => { throw new Error('Use the persistent team draft path') },
+        prepareTeam: async (request: any) => {
+          await (window as any).observeNativeTeam('prepare', request)
+          prepared = request.names.map((name: string, index: number) => ({ profile_id: `desktop-${request.adapter}-${index}`, adapter: request.adapter, display_name: name, requiresFullAccess: true }))
+          return { requestId: request.requestId, profiles: prepared }
+        },
+        startAgents: async (selection: any) => {
+          await (window as any).observeNativeTeam('start', selection)
+          runtime = { state: 'running', agents: prepared.map((profile, index) => ({ profileId: profile.profile_id, agentId: `native-team-agent-${index}` })) }
+          return runtime
+        },
+        completeTeam: async (value: any) => { await (window as any).observeNativeTeam('complete', value) },
+      } }
+    }, { hostId: host, expanded })
+    await page.goto('/desktop?legacy=1&topic=restored-topic&agentId=agent-one')
+    await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'New team', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'New Team', exact: true })).toBeVisible()
+    for (const adapter of ['Pi', 'DSH']) {
+      const button = page.getByRole('button', { name: adapter, exact: true })
+      if (expanded) {
+        await expect(button).toBeEnabled()
+        await button.click()
+        await expect(button).toHaveClass(/border-fuchsia-300/)
+      } else await expect(button).toHaveCount(0)
+    }
+    if (expanded) {
+      await page.getByRole('button', { name: 'Create team', exact: true }).click()
+      await expect.poll(() => submissions.length).toBe(1)
+      await expect.poll(() => nativeCalls.some(call => call.operation === 'complete')).toBe(true)
+      expect(submissions[0]).toMatchObject({ operation_type: 'team_create', payload: { adapter: 'dsh', runtime_mode: 'managed_desktop', host_id: host } })
+      expect(nativeCalls.find(call => call.operation === 'start')?.value).toMatchObject({ workspaceAccess: 'full-access', remoteTools: { files: 'off', terminal: false, previewPorts: [] } })
+      expect(submissions[0].payload.agent_ids).toHaveLength(submissions[0].payload.roles.length)
+      await expect(page.getByRole('heading', { name: 'New Team', exact: true })).toHaveCount(0)
+    }
+  }
+})
+
 async function creationFixture(page: Page, failure: number, failRefresh = false) {
   const { project } = await restorationFixture(page, { legacy: true })
   const projects: any[] = []

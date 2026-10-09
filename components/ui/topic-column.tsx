@@ -790,7 +790,7 @@ export function TopicColumn(props: TopicColumnProps) {
   const [teamName, setTeamName] = useState(TEAM_TEMPLATES[0]?.title || '')
   const [teamHostId, setTeamHostId] = useState('')
   const teamRequestId = useRef('')
-  const [teamAdapter, setTeamAdapter] = useState<'claude-code' | 'codex' | 'gemini'>('claude-code')
+  const [teamAdapter, setTeamAdapter] = useState<'claude-code' | 'codex' | 'gemini' | 'pi' | 'dsh'>('claude-code')
   const [teamBusy, setTeamBusy] = useState(false)
   const [teamProgress, setTeamProgress] = useState('')
   const [teamError, setTeamError] = useState('')
@@ -1088,7 +1088,7 @@ export function TopicColumn(props: TopicColumnProps) {
     setTeamName(zh ? template.title : template.titleEn)
     teamRequestId.current = crypto.randomUUID()
     setTeamHostId(managedTeamHost ? `desktop:${managedTeamHost.id}` : selectedHost?.agent_id || '')
-    setTeamAdapter((managedTeamHost?.adapters[0] || normalizeNewAgentAdapter(agentRuntimeMap?.[selectedHost?.agent_id || '']) || 'claude-code') as 'claude-code' | 'codex' | 'gemini')
+    setTeamAdapter((managedTeamHost?.adapters[0] || normalizeNewAgentAdapter(agentRuntimeMap?.[selectedHost?.agent_id || '']) || 'claude-code') as typeof teamAdapter)
     setTeamProgress('')
     setTeamError('')
     setTeamOpen(true)
@@ -2604,7 +2604,7 @@ export function TopicColumn(props: TopicColumnProps) {
                   <div className="mb-2 text-xs font-black text-slate-500 dark:text-zinc-400">{zh ? '运行主机' : 'Host'}</div>
                   {managedTeamHost && <button type="button" disabled={teamBusy} onClick={() => {
                     setTeamHostId(`desktop:${managedTeamHost.id}`)
-                    setTeamAdapter(managedTeamHost.adapters[0] as 'claude-code' | 'codex' | 'gemini')
+                    setTeamAdapter(managedTeamHost.adapters[0] as typeof teamAdapter)
                   }} aria-pressed={teamHostId === `desktop:${managedTeamHost.id}`}
                     className={`mb-2 w-full rounded-md border px-3 py-2 text-left text-sm ${teamHostId === `desktop:${managedTeamHost.id}` ? 'border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100' : 'border-zinc-300 dark:border-zinc-700'}`}>
                     {zh ? '本机 · 桌面托管' : 'This computer · Desktop managed'}
@@ -2669,7 +2669,9 @@ export function TopicColumn(props: TopicColumnProps) {
                       ['claude-code', 'Claude'],
                       ['codex', 'Codex'],
                       ['gemini', 'Gemini'],
-                    ] as const).map(([id, label]) => {
+                      ['pi', 'Pi'],
+                      ['dsh', 'DSH'],
+                    ] as const).filter(([id]) => !['pi', 'dsh'].includes(id) || (teamHostId.startsWith('desktop:') && managedTeamHost?.adapters.includes(id))).map(([id, label]) => {
                       const active = teamAdapter === id
                       return (
                         <button
