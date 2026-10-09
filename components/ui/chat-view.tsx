@@ -4164,7 +4164,7 @@ function ChatViewContent({
                   )}
                   {c.family === 'skill' && <span className="text-[10px] text-slate-400 dark:text-zinc-500">{skillCommandOrigin(c, locale === 'en')}</span>}
                   </span>
-                  <span title={c.desc} className="mt-0.5 line-clamp-2 block break-words text-[10px] text-slate-400 dark:text-zinc-500 [overflow-wrap:anywhere]">{c.desc}</span>
+                  <span title={c.desc} className="mt-0.5 line-clamp-2 break-words text-[10px] text-slate-400 dark:text-zinc-500 [overflow-wrap:anywhere]">{c.desc}</span>
                   </span>
                 </button>
               ))}

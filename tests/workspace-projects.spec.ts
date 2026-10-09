@@ -960,6 +960,9 @@ for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} Skill
   const first = menu.getByRole('button').first()
   await expect(first.getByText('Workspace · .agents', { exact: true })).toBeVisible()
   await expect(first.getByText('Skill', { exact: true })).toBeVisible()
+  const description = await first.locator('span[title]').evaluate(element => ({ height: element.getBoundingClientRect().height,
+    lineHeight: parseFloat(getComputedStyle(element).lineHeight) }))
+  expect(description.height).toBeLessThanOrEqual(description.lineHeight * 2 + 1)
   const dimensions = await menu.evaluate(element => ({ scroll: element.scrollHeight, visible: element.clientHeight, top: element.getBoundingClientRect().top }))
   expect(dimensions.scroll).toBeGreaterThan(dimensions.visible)
   expect(dimensions.top).toBeGreaterThanOrEqual(0)
