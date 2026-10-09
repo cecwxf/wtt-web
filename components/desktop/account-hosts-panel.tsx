@@ -10,7 +10,7 @@ import { LocalAgentsControls } from './local-agents-controls'
 
 const button = 'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-[var(--muted)] disabled:cursor-not-allowed disabled:opacity-50'
 
-export function AccountHostsPanel({ accessToken, onChanged, standalone = false, agentHref }: { accessToken?: string; onChanged?: () => void; standalone?: boolean; agentHref?: (agentId: string) => string }) {
+export function AccountHostsPanel({ accessToken, onChanged, standalone = false, agentHref, workspaceMode = false }: { accessToken?: string; onChanged?: () => void; standalone?: boolean; agentHref?: (agentId: string, host: AccountHost, agent: AccountHost['agents'][number]) => string; workspaceMode?: boolean }) {
   const { locale } = useI18n()
   const en = locale === 'en'
   const api = useMemo(() => new DesktopHostsApi(accessToken || ''), [accessToken])
@@ -213,10 +213,11 @@ export function AccountHostsPanel({ accessToken, onChanged, standalone = false, 
               {host.status !== 'revoked' && <button type="button" className="shrink-0 rounded p-1 text-[var(--muted-foreground)] hover:text-red-600" disabled={busy} onClick={() => setRevoking(host.host_id)} aria-label={`${en ? 'Revoke' : '撤销授权'} ${host.display_name}`} title={en ? 'Revoke authorization' : '撤销授权'}><ShieldOff size={16} /></button>}
             </div>
             {host.agents.length > 0 && <ul className="ml-7 mt-2 space-y-1">{host.agents.map(agent => <li key={agent.agent_id} className="flex flex-wrap items-center gap-x-2 text-xs">
-              {agentHref && host.status !== 'revoked'
-                ? <Link href={agentHref(agent.agent_id)} aria-label={`${en ? 'Open' : '打开'} ${agent.display_name}`} className="inline-flex min-h-9 items-center break-all rounded px-1 underline underline-offset-4 hover:bg-[var(--muted)]">{agent.display_name}</Link>
+              {agentHref && host.status !== 'revoked' && (!workspaceMode || agent.capabilities?.workspace_projects)
+                ? <Link href={agentHref(agent.agent_id, host, agent)} aria-label={`${workspaceMode ? (en ? 'Create Workspace with' : '创建工作区使用') : (en ? 'Open' : '打开')} ${agent.display_name}`} className="inline-flex min-h-9 items-center break-all rounded px-1 underline underline-offset-4 hover:bg-[var(--muted)]">{agent.display_name}</Link>
                 : <span className="break-all">{agent.display_name}</span>}
               <span className="text-[var(--muted-foreground)]">{agent.adapter}</span>
+              {workspaceMode && !agent.capabilities?.workspace_projects && <span className="text-[var(--muted-foreground)]">{en ? 'Runtime upgrade required' : '需要升级运行时'}</span>}
             </li>)}</ul>}
             {revoking === host.host_id && <div className="ml-7 mt-3 space-y-2" role="group" aria-label={en ? 'Confirm revocation' : '确认撤销'}>
               <p className="text-sm">{en ? 'Disconnect this computer? Chat history will be kept.' : '撤销这台主机的连接授权？聊天历史将保留。'}</p>

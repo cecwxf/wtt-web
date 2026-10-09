@@ -12,7 +12,7 @@ const participants = [
   { participant_id: 'two', label: 'Reviewer', host_id: 'remote', host_name: 'Linux', adapter: 'claude-code', profile_id: 'claude', transport_agent_id: 'agent-two' },
 ]
 
-async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', singleAgent = false) {
+async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', singleAgent = false, adapterEntry?: 'setup' | 'onboarding') {
   const created: Array<{ path: string; body: any }> = []
   const projects: any[] = []
   const terminalActions: Array<{ url: string; body: any }> = []
@@ -23,6 +23,22 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
   const loadedHostOffsets: number[] = []
   const nativeDownloads: Array<{ workspaceId?: string; agentId?: string; path: string; accessToken?: string }> = []
   const nativeNotices: Array<{ userId: string; topicId: string; agentId: string; messageId: string }> = []
+  if (adapterEntry === 'onboarding') await page.addInitScript(hostId => {
+    let runtime: any = { state: 'stopped', agents: [] }
+    const listeners = new Set<(state: unknown) => void>()
+    const status = () => ({ enabled: true, accountVerified: true, state: 'registered', hostId, userId: hostId })
+    ;(window as any).wttDesktop = { isDesktop: true, platform: 'darwin', host: {
+      status: async () => status(), resume: async () => status(),
+      runtimeStatus: async () => runtime,
+      onRuntimeState: (listener: (state: unknown) => void) => { listeners.add(listener); return () => listeners.delete(listener) },
+      discoverAgents: async () => [{ profile_id: 'codex', adapter: 'codex', display_name: 'Codex', available: true, version: 'fixture', requiresFullAccess: false }],
+      startAgents: async () => {
+        runtime = { state: 'running', configuredAdapters: ['codex'], agents: [{ profileId: 'codex', adapter: 'codex', agentId: 'agent-one', state: 'online' }] }
+        listeners.forEach(listener => listener(runtime))
+        return runtime
+      },
+    } }
+  }, host)
   if (entryPath === '/mobile/workspaces') {
     await page.exposeFunction('observeNativeWorkspaceDownload', (request: typeof nativeDownloads[number]) => nativeDownloads.push(request))
     await page.exposeFunction('observeNativeWorkspaceNotice', (notice: typeof nativeNotices[number]) => nativeNotices.push(notice))
@@ -109,11 +125,25 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     await route.fulfill({ json: value })
   })
   await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto(`${baseURL}${entryPath}`)
+  if (adapterEntry === 'setup') {
+    await page.goto(`${baseURL}/desktop/setup`)
+    await page.getByRole('link', { name: 'Create Workspace with Engineer', exact: true }).click()
+  } else await page.goto(`${baseURL}${entryPath}`)
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'New conversation', exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: 'New Workspace', exact: true }).first().click()
+  if (adapterEntry === 'onboarding') {
+    await page.getByRole('button', { name: 'Connect this computer', exact: true }).click()
+    await page.getByRole('button', { name: 'Connect and detect', exact: true }).click()
+    await page.getByRole('button', { name: 'Enable selected Agents', exact: true }).click()
+    await page.getByRole('button', { name: /Codex.*Create Workspace/ }).click()
+  } else if (!adapterEntry) await page.getByRole('button', { name: 'New Workspace', exact: true }).first().click()
   const modal = page.getByRole('dialog')
+  if (adapterEntry) {
+    await expect(modal.getByLabel('Engineer MacBook')).toBeChecked()
+    await expect(modal.getByLabel('Project directory', { exact: true })).toHaveValue(root)
+    expect(created).toHaveLength(0)
+    await expect.poll(() => new URL(page.url()).searchParams.has('createProfile')).toBe(false)
+  }
   await modal.getByLabel('Name', { exact: true }).fill('Website')
   await modal.getByLabel('Engineer MacBook').check()
   await modal.getByLabel('Role Engineer', { exact: true }).fill('Engineer')
@@ -266,6 +296,38 @@ test('Workspace-first desktop creates a cross-host collaboration and reuses chat
 
 test('one Codex adapter creates a Workspace, sends chat and restores its project files', async ({ page }) => {
   await workspaceFlow(page, '', '/desktop', true)
+})
+
+test('computer Adapter selection enters Workspace creation instead of a global Agent chat', async ({ page }) => {
+  const { created } = await workspaceFlow(page, '', '/desktop', true, 'setup')
+  const before = created.length
+  await page.goto('/desktop?createHost=remote&createProfile=claude')
+  const modal = page.getByRole('dialog')
+  await expect(modal.getByLabel('Reviewer Linux')).toBeChecked()
+  await expect(modal.getByLabel('Engineer MacBook')).not.toBeChecked()
+  await expect(modal.getByLabel('Project directory', { exact: true })).toHaveValue(root)
+  await modal.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(modal).not.toBeVisible()
+  await page.reload()
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  await expect(modal).not.toBeVisible()
+  expect(created).toHaveLength(before)
+})
+
+test('native Agent onboarding enters Workspace creation with the exact enabled profile', async ({ page }) => {
+  await workspaceFlow(page, '', '/desktop', true, 'onboarding')
+})
+
+test('unavailable Adapter creation links fail explicitly without selecting a different profile', async ({ page }) => {
+  const { toolRequests } = await restorationFixture(page)
+  const writes: string[] = []
+  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()) })
+  await page.goto('/desktop?createHost=missing-computer&createProfile=missing-profile')
+  await expect(page.getByRole('alert').filter({ hasText: 'The selected Adapter is unavailable' })).toBeVisible()
+  await expect(page.getByRole('dialog')).not.toBeVisible()
+  await expect.poll(() => new URL(page.url()).searchParams.has('createProfile')).toBe(false)
+  expect(writes.filter(url => url.includes('/workspaces'))).toHaveLength(0)
+  expect(toolRequests).toHaveLength(0)
 })
 
 test('Workspace UI persists layout and switches independent Adapter sessions without leaking history', async ({ page }) => {

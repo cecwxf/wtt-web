@@ -11,8 +11,9 @@ import { useI18n } from '@/lib/i18n-provider'
 type Phase = 'intro' | 'authorizing' | 'detecting' | 'selection' | 'starting' | 'ready'
 const button = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-zinc-200 px-4 py-2 text-sm disabled:opacity-40 dark:border-zinc-700'
 
-export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady }: {
+export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady, onWorkspaceReady }: {
   accessToken?: string; userId?: string; onChanged?: () => void; onAgentReady?: (agentId: string) => void
+  onWorkspaceReady?: (hostId: string, profileId: string) => void
 }) {
   const { locale } = useI18n()
   const en = locale === 'en'
@@ -147,11 +148,16 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
     finally { operation.current = false; if (mounted.current) setChoosingWorkspace(false) }
   }
 
-  const enter = (agentId: string) => {
+  const enter = (agent: DesktopRuntimeState['agents'][number]) => {
+    if (onWorkspaceReady && !native?.hostId) {
+      setError(en ? 'Computer registration is not ready. Refresh and retry.' : '主机登记尚未就绪，请刷新后重试。')
+      return
+    }
     setOpen(false)
     onChanged?.()
-    onAgentReady?.(agentId)
-    router.push(`/desktop?agentId=${encodeURIComponent(agentId)}`)
+    if (onWorkspaceReady) { onWorkspaceReady(native!.hostId!, agent.profileId); return }
+    onAgentReady?.(agent.agentId)
+    router.push(`/desktop?legacy=1&agentId=${encodeURIComponent(agent.agentId)}`)
   }
 
   if (!supported || !accessToken || !native?.enabled) return null
@@ -197,11 +203,11 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
         </>}
         {phase === 'ready' && !needsAttention && <div className="space-y-3">
           <p role="status" className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400"><Check size={17} />{en ? 'Agent services started' : 'Agent 服务已启动'}</p>
-          {runtime?.agents.map(agent => <button key={agent.agentId} disabled={agent.state !== 'online'} onClick={() => enter(agent.agentId)} className={`${button} w-full justify-between`}>
+          {runtime?.agents.map(agent => <button key={agent.agentId} disabled={agent.state !== 'online'} onClick={() => enter(agent)} className={`${button} w-full justify-between`}>
             <span className="min-w-0 text-left"><span className="block">{profiles.find(profile => profile.profile_id === agent.profileId)?.display_name || agent.adapter}</span>
               <span className="text-xs text-zinc-500">{agent.state === 'online' ? (en ? 'Online' : '在线') : agent.state === 'offline' ? (en ? 'Offline; reconnecting' : '离线，正在重连') : (en ? 'Connecting' : '正在连接')}</span>
             </span>
-            <span className="inline-flex items-center gap-1">{en ? 'Open chat' : '进入对话'}<ChevronRight size={16} /></span>
+            <span className="inline-flex items-center gap-1">{onWorkspaceReady ? (en ? 'Create Workspace' : '创建 Workspace') : (en ? 'Open chat' : '进入对话')}<ChevronRight size={16} /></span>
           </button>)}
         </div>}
       </div>

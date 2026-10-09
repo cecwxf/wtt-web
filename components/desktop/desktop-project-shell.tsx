@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentProps, CSSProperties } from 'react'
 import useSWRInfinite from 'swr/infinite'
 import useSWR from 'swr'
@@ -145,7 +145,7 @@ function ProjectShell(props: ProjectShellProps) {
     if (participant) restored.set('agentId', participant.transport_agent_id)
     router.replace(`${basePath}?${restored}`, { scroll: false })
   }, [current, currentSession, params, props.selectedAgentId, router, basePath])
-  const available = hostDirectory.filter(host => host.status !== 'revoked').flatMap(host => host.agents.map(agent => ({ host, agent, key: `${host.host_id}/${agent.profile_id}` })))
+  const available = useMemo(() => hostDirectory.filter(host => host.status !== 'revoked').flatMap(host => host.agents.map(agent => ({ host, agent, key: `${host.host_id}/${agent.profile_id}` }))), [hostDirectory])
   const chosenRoot = roots.data?.roots.find(root => root.root_id === (creation?.project?.root_id || creation?.created?.root_id || rootId))
   const selectionSupported = selected.every(key => {
     const item = available.find(item => item.key === key)
@@ -177,12 +177,37 @@ function ProjectShell(props: ProjectShellProps) {
     return () => window.removeEventListener('keydown', close)
   }, [drawerOpen])
 
-  function start(project?: WorkspaceProject, profileKey?: string) {
+  const start = useCallback((project?: WorkspaceProject, profileKey?: string) => {
     const profile = available.find(item => item.key === profileKey)
     const root = roots.data?.roots.find(root => root.host_id === profile?.host.host_id) || roots.data?.roots[0]
     setName(''); setSelected(profileKey ? [profileKey] : []); setCollaborative(false); setRoles({}); setError(''); setRootId(project?.root_id || root?.root_id || '')
     setCreation({ workspaceId: project?.workspace_id || crypto.randomUUID(), sessionId: crypto.randomUUID(), project }); setDrawerOpen(false)
-  }
+  }, [available, roots.data])
+  const createHost = params.get('createHost')
+  const createProfile = params.get('createProfile')
+  useEffect(() => {
+    if (!createHost || !createProfile || creation || busy || hosts.isLoading || hosts.isValidating || roots.isLoading) return
+    const consume = () => {
+      const next = new URLSearchParams(params.toString())
+      next.delete('createHost'); next.delete('createProfile')
+      router.replace(`${basePath}${next.size ? `?${next}` : ''}`, { scroll: false })
+    }
+    const profile = available.find(item => item.host.host_id === createHost && item.agent.profile_id === createProfile)
+    if (profile) {
+      if (!profile.agent.capabilities?.workspace_projects) setError(en ? 'Update this Adapter runtime before creating a Workspace.' : '请升级此 Adapter 的运行时后创建 Workspace。')
+      else start(undefined, profile.key)
+      consume()
+      return
+    }
+    const nextOffset = hosts.data?.at(-1)?.nextOffset
+    if (!hosts.error && nextOffset != null && Number.isSafeInteger(nextOffset) && nextOffset > 0
+      && !hosts.data?.slice(0, -1).some(page => page.nextOffset === nextOffset)) {
+      void hosts.setSize(hosts.size + 1)
+      return
+    }
+    setError(en ? 'The selected Adapter is unavailable. Refresh your computers and retry.' : '所选 Adapter 不可用，请刷新主机后重试。')
+    consume()
+  }, [createHost, createProfile, creation, busy, hosts.isLoading, hosts.isValidating, hosts.error, hosts.data, hosts.size, hosts.setSize, roots.isLoading, available, params, router, basePath, en, start])
   function href(project: WorkspaceProject, session: ProjectSession) {
     return `${basePath}?${new URLSearchParams({ workspace: project.workspace_id, session: session.session_id, topic: session.topic_id, agentId: session.participants[0]?.transport_agent_id || '' })}`
   }
@@ -255,7 +280,7 @@ function ProjectShell(props: ProjectShellProps) {
     </aside>
     <div className="flex min-h-0 min-w-0 flex-1 flex-col"><header className={`${styles.heading} flex h-12 shrink-0 items-center gap-2 border-b px-4`}><button className={`${iconButton} ${collapsed ? '' : 'md:hidden'}`} title={en ? 'Open navigation' : '展开导航'} aria-label={en ? 'Open navigation' : '展开导航'} aria-controls="workspace-project-navigation" onClick={() => { if (window.innerWidth < 768) setDrawerOpen(true); else setCollapsed(false) }}><PanelLeft size={17} /></button><FolderOpen size={15} className="text-zinc-400" /><span className="min-w-0 flex-1 truncate text-sm font-medium">{current?.name || (en ? 'Workspaces' : '工作区')}</span>{currentOwner && <span className={styles.owner} title={`${currentRoot?.name || current?.name} · ${currentOwner}`}><Laptop size={13} /><span>{currentOwner}</span></span>}</header>
       {current && <div className={styles.sessionTabs}><nav className={styles.sessionTabList} aria-label={en ? 'Workspace sessions' : '工作区执行会话'}>{current.sessions.map(session => <Link key={session.session_id} href={href(current, session)} className={styles.sessionTab} aria-current={currentSession?.session_id === session.session_id ? 'page' : undefined} title={session.participants.map(p => `${p.label} · ${adapterLabel(p.adapter)} · ${p.host_name}`).join('\n')}>{session.participants.length > 1 ? <Users size={14} /> : <Bot size={14} />}<span>{session.name}</span></Link>)}</nav>{currentSession && <span className={styles.participantSummary} title={currentSession.participants.map(p => `${p.label} · ${adapterLabel(p.adapter)} · ${p.host_name}`).join('\n')}><Bot size={13} /><span>{currentSession.participants.map(p => adapterLabel(p.adapter)).join(' + ')}</span></span>}<button className={iconButton} title={en ? 'Add Adapter session' : '添加 Agent 执行会话'} aria-label={en ? 'Add Adapter session' : '添加 Agent 执行会话'} onClick={() => start(current)}><Plus size={16} /></button></div>}
-      <DesktopOnboarding accessToken={props.userToken} userId={props.currentUserId} onChanged={refresh} />
+      <DesktopOnboarding accessToken={props.userToken} userId={props.currentUserId} onChanged={refresh} onWorkspaceReady={(hostId, profileId) => router.push(`${basePath}?${new URLSearchParams({ createHost: hostId, createProfile: profileId })}`, { scroll: false })} />
       {error && !creation && <p role="alert" className="p-2 text-xs text-red-600">{error}</p>}
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{selectionReady ? props.children : selectionMismatch && current && currentSession ? <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"><p className="text-sm text-red-600">{en ? 'This link does not match the selected Workspace session.' : '链接与选中的 Workspace 会话不一致。'}</p><Link href={href(current, currentSession)} className="inline-flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700"><ArrowUpRight size={15} />{en ? 'Open session' : '打开会话'}</Link></div> : projects.error ? <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6"><p className="text-sm text-red-600">{en ? 'Could not load Workspaces.' : '工作区加载失败。'}</p><button className={iconButton} aria-label={en ? 'Retry Workspaces' : '重试工作区'} title={en ? 'Retry Workspaces' : '重试工作区'} onClick={() => void projects.mutate()}><RefreshCw size={16} /></button></div> : currentSession || (targetTopic && !targetFound && (projects.isLoading || projects.isValidating || canResolveNext)) ? <div role="status" className="flex h-full items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 size={16} className="animate-spin" />{en ? 'Opening session...' : '正在打开会话…'}</div> : <WorkspaceOverview projects={directory} roots={roots.data?.roots || []} hosts={hostDirectory} en={en} create={() => start()} href={href} setupPath={setupPath} />}</main>
     </div>

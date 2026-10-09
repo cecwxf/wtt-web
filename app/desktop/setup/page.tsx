@@ -17,7 +17,7 @@ export default function DesktopSetupPage() {
         <Link href="/desktop" aria-label={en ? 'Back to WTT' : '返回 WTT'} title={en ? 'Back to WTT' : '返回 WTT'} className="rounded-md p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ArrowLeft size={18} /></Link>
         <h1 className="text-lg font-semibold">WTT Desktop</h1>
       </header>
-      {status === 'loading' ? <p role="status">{en ? 'Loading account...' : '正在加载账号…'}</p> : session?.accessToken ? <AccountHostsPanel accessToken={session.accessToken} standalone agentHref={id => `/desktop?agentId=${encodeURIComponent(id)}`} /> : <Link href="/login?callbackUrl=%2Fdesktop%2Fsetup" className="inline-flex items-center gap-2 rounded-md border border-zinc-200 px-4 py-2 dark:border-zinc-700"><LogIn size={17} />{en ? 'Sign in to WTT' : '登录 WTT'}</Link>}
+      {status === 'loading' ? <p role="status">{en ? 'Loading account...' : '正在加载账号…'}</p> : session?.accessToken ? <AccountHostsPanel accessToken={session.accessToken} standalone workspaceMode agentHref={(_, host, agent) => `/desktop?${new URLSearchParams({ createHost: host.host_id, createProfile: agent.profile_id })}`} /> : <Link href="/login?callbackUrl=%2Fdesktop%2Fsetup" className="inline-flex items-center gap-2 rounded-md border border-zinc-200 px-4 py-2 dark:border-zinc-700"><LogIn size={17} />{en ? 'Sign in to WTT' : '登录 WTT'}</Link>}
       <DesktopLocalFiles />
     </div>
   </main>
