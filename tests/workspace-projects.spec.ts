@@ -462,6 +462,120 @@ test('Workspace download validates metadata when CDN streaming omits Content-Len
 const restoredWorkspace = '33333333-3333-4333-8333-333333333333'
 const restoredSession = '44444444-4444-4444-8444-444444444444'
 
+async function creationFixture(page: Page, failure: number) {
+  const { project } = await restorationFixture(page, { legacy: true })
+  const projects: any[] = []
+  const submissions: Array<{ path: string; body: any }> = []
+  const remoteHost = '55555555-5555-4555-8555-555555555555'
+  const readOnlyRoot = '66666666-6666-4666-8666-666666666666'
+  await page.route('**/api/wtt/hosts/my?**', route => route.fulfill({ json: { hosts: [
+    { host_id: host, display_name: 'MacBook', status: 'online', agents: [
+      { agent_id: 'agent-one', profile_id: 'codex', adapter: 'codex', display_name: 'Builder', capabilities: { workspace_projects: true, workspace_mcp: true } },
+      { agent_id: 'agent-pi', profile_id: 'pi', adapter: 'pi', display_name: 'Pi', capabilities: { workspace_projects: true, workspace_mcp: true } },
+    ] },
+    { host_id: remoteHost, display_name: 'Linux', status: 'online', agents: [{ agent_id: 'agent-two', profile_id: 'claude', adapter: 'claude-code', display_name: 'Builder', capabilities: { workspace_projects: true, workspace_mcp: true } }] },
+  ], next_offset: null } }))
+  await page.route('**/api/wtt/workspaces/roots', route => route.fulfill({ json: { roots: [
+    { root_id: root, host_id: host, host_name: 'MacBook', name: 'Writable project', access: 'workspace-write' },
+    { root_id: readOnlyRoot, host_id: host, host_name: 'MacBook', name: 'Read-only project', access: 'read-only' },
+  ] } }))
+  await page.route('**/api/wtt/workspaces**', async route => {
+    const path = new URL(route.request().url()).pathname.replace('/api/wtt', '')
+    if (path === '/workspaces' && route.request().method() === 'GET') return route.fulfill({ json: { workspaces: projects, next_offset: null } })
+    if (path === '/workspaces' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON(); submissions.push({ path, body })
+      projects.push({ ...project, ...body, sessions: [], root_revoked: false })
+      return route.fulfill({ json: projects[0] })
+    }
+    if (path.endsWith('/sessions')) {
+      const body = route.request().postDataJSON(); submissions.push({ path, body })
+      if (submissions.filter(item => item.path.endsWith('/sessions')).length === 1 && failure) return route.fulfill({ status: failure, json: { detail: 'Synthetic creation failure' } })
+      const session = { ...body, topic_id: 'restored-topic', participants: body.participants.map((participant: any) => ({ ...participant, transport_agent_id: participant.profile_id === 'claude' ? 'agent-two' : 'agent-one', adapter: participant.profile_id === 'claude' ? 'claude-code' : 'codex', host_name: participant.host_id === host ? 'MacBook' : 'Linux' })) }
+      projects[0].sessions.push(session)
+      return route.fulfill({ json: session })
+    }
+    const selected = projects.find(item => path === `/workspaces/${item.workspace_id}`)
+    if (selected) return route.fulfill({ json: selected })
+    return route.fallback()
+  })
+  return { projects, submissions, readOnlyRoot }
+}
+
+test('Workspace creation retries an unconfirmed session without changing its identity or team', async ({ page }) => {
+  const { submissions } = await creationFixture(page, 503)
+  await page.goto('/desktop')
+  await page.getByRole('button', { name: 'New Workspace', exact: true }).first().click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name', { exact: true }).fill('Retry project')
+  await dialog.getByLabel('Builder MacBook', { exact: true }).check()
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect(dialog.getByText('Session creation not confirmed. Retry the original request.', { exact: true })).toBeVisible()
+  await expect(dialog.getByLabel('Name', { exact: true })).toBeDisabled()
+  await expect(dialog.getByLabel('Builder MacBook', { exact: true })).toBeDisabled()
+  await expect(dialog.getByLabel('Role Builder', { exact: true })).toBeDisabled()
+  await dialog.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(submissions.filter(item => item.path === '/workspaces')).toHaveLength(1)
+  const sessions = submissions.filter(item => item.path.endsWith('/sessions'))
+  expect(sessions).toHaveLength(2)
+  expect(sessions[1]).toEqual(sessions[0])
+})
+
+for (const entry of ['/desktop', '/mobile/workspaces']) test(`partly created Workspace can continue from the project overview on ${entry}`, async ({ page }) => {
+  const { projects, submissions } = await creationFixture(page, 409)
+  await page.goto(entry)
+  await page.getByRole('button', { name: 'New Workspace', exact: true }).last().click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name', { exact: true }).fill('Saved project')
+  await dialog.getByLabel('Builder MacBook', { exact: true }).check()
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect(dialog.getByText('Synthetic creation failure', { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.getByRole('button', { name: 'Add session to Saved project', exact: true }).click()
+  await expect(dialog.getByRole('heading', { name: 'Add session', exact: true })).toBeVisible()
+  await expect(dialog.getByText('Writable project · MacBook · Directory read & write', { exact: true })).toBeVisible()
+  await dialog.getByLabel('Name', { exact: true }).fill('Continue')
+  await dialog.getByLabel('Builder MacBook', { exact: true }).check()
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(submissions.filter(item => item.path === '/workspaces')).toHaveLength(1)
+  expect(new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
+  await page.reload()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+})
+
+test('Workspace creation shows directory restrictions and assigns distinct cross-host default roles', async ({ page }) => {
+  const { submissions, readOnlyRoot } = await creationFixture(page, 0)
+  await page.goto('/desktop')
+  await page.getByRole('button', { name: 'New Workspace', exact: true }).first().click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name', { exact: true }).fill('Cross-host project')
+  await dialog.getByLabel('Pi MacBook', { exact: true }).check()
+  await dialog.getByLabel('Project directory', { exact: true }).selectOption(readOnlyRoot)
+  await expect(dialog.getByText('Read-only directory', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('This Adapter requires a writable local directory', { exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Create', exact: true })).toBeDisabled()
+  await dialog.getByLabel('Pi MacBook', { exact: true }).uncheck()
+  await expect(dialog.getByLabel('Pi MacBook', { exact: true })).toBeDisabled()
+  await dialog.getByLabel('Builder MacBook', { exact: true }).check()
+  await dialog.getByLabel('Builder Linux', { exact: true }).check()
+  const roles = dialog.getByLabel('Role Builder', { exact: true })
+  await expect(roles.nth(0)).toHaveValue('Builder / MacBook')
+  await expect(roles.nth(1)).toHaveValue('Builder / Linux')
+  await roles.nth(0).fill('Engineer')
+  await roles.nth(1).fill('Engineer')
+  await expect(dialog.getByText('Each role needs a unique, non-empty name.', { exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Create', exact: true })).toBeDisabled()
+  await roles.nth(1).fill('')
+  await expect(dialog.getByRole('button', { name: 'Create', exact: true })).toBeDisabled()
+  expect(submissions).toHaveLength(0)
+  await roles.nth(1).fill('Reviewer')
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(submissions[0].body.root_id).toBe(readOnlyRoot)
+  expect(submissions[1].body.participants.map((item: any) => item.label)).toEqual(['Engineer', 'Reviewer'])
+})
+
 async function restorationFixture(page: Page, options: { secondPage?: boolean; status?: number; legacy?: boolean } = {}) {
   const offsets: number[] = []
   const toolRequests: string[] = []
