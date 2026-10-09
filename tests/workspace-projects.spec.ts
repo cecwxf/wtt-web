@@ -941,6 +941,48 @@ test('explicit transcript import opens saved history in the legacy desktop rathe
   await expect(page.getByTestId('desktop-workspace-projects')).toHaveCount(0)
 })
 
+for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} Skill menu shows scope and stays usable with many long commands`, async ({ page }, testInfo) => {
+  await restorationFixture(page)
+  const commands = Array.from({ length: 30 }, (_, index) => ({ cmd: `/proof-${String(index).padStart(2, '0')}`,
+    skill_id: `proof-${index}`, source: 'agents-local', desc: `Proof ${index}: ${'Long skill description. '.repeat(20)}` }))
+  await page.route('**/api/wtt/workspaces/*/workspace/commands', route => route.fulfill({ json: { commands } }))
+  await page.route('**/api/wtt/agents/*/slash-commands?**', route => route.fulfill({ json: { commands: [
+    { cmd: '/global-proof', skill_id: 'global-proof', source: 'codex-local', desc: 'Global Codex skill' },
+    { cmd: '/unknown-proof', skill_id: 'unknown-proof', source: '/private/secret-path', desc: 'Unknown source metadata' },
+  ] } }))
+  await page.setViewportSize(mobile ? { width: 360, height: 740 } : { width: 1440, height: 900 })
+  await page.goto(`${mobile ? '/mobile/workspaces' : '/desktop'}?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  const input = page.locator('textarea').first()
+  await input.fill('/proof-')
+  const menu = page.getByRole('region', { name: 'Command suggestions', exact: true })
+  await expect(menu.getByRole('button')).toHaveCount(30)
+  const first = menu.getByRole('button').first()
+  await expect(first.getByText('Workspace · .agents', { exact: true })).toBeVisible()
+  await expect(first.getByText('Skill', { exact: true })).toBeVisible()
+  const dimensions = await menu.evaluate(element => ({ scroll: element.scrollHeight, visible: element.clientHeight, top: element.getBoundingClientRect().top }))
+  expect(dimensions.scroll).toBeGreaterThan(dimensions.visible)
+  expect(dimensions.top).toBeGreaterThanOrEqual(0)
+  await page.screenshot({ path: testInfo.outputPath('skill-menu.png') })
+  for (let index = 0; index < 29; index++) await input.press('ArrowDown')
+  const last = menu.getByRole('button').last()
+  await expect.poll(async () => {
+    const a = await last.boundingBox(), b = await menu.boundingBox()
+    return Boolean(a && b && a.y >= b.y && a.y + a.height <= b.y + b.height + 1)
+  }).toBe(true)
+  await expect(input).toBeFocused()
+  await input.press('Tab')
+  await expect(input).toHaveValue('/proof-29 ')
+  await expect(menu).toHaveCount(0)
+  await input.fill('/global-proof')
+  await expect(menu.getByText('Agent · .codex', { exact: true })).toBeVisible()
+  await input.fill('/unknown-proof')
+  await expect(menu.getByText('Agent · Runtime', { exact: true })).toBeVisible()
+  await expect(menu).not.toContainText('/private/secret-path')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await input.fill('')
+})
+
 test('saved English preference survives initial hydration and reload', async ({ page }) => {
   await restorationFixture(page)
   const url = `/desktop?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`

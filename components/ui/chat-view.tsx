@@ -287,6 +287,16 @@ type SlashCommandDef = {
   family?: SlashCommandFamily
   skillId?: string
   source?: string
+  scope?: 'workspace' | 'agent'
+}
+
+function skillCommandOrigin(command: SlashCommandDef, english: boolean) {
+  const source = command.source === 'codex-local' ? '.codex'
+    : command.source === 'claude-local' ? '.claude'
+      : command.source === 'agents-local' ? '.agents'
+        : command.source === 'wtt-skill-install' ? 'Skill Hub'
+          : (english ? 'Runtime' : '运行时')
+  return `${command.scope === 'workspace' ? (english ? 'Workspace' : '工作区') : 'Agent'} · ${source}`
 }
 
 const LOCAL_SLASH_COMMANDS: SlashCommandDef[] = [
@@ -1486,6 +1496,7 @@ function ChatViewContent({
   const [slashOpen, setSlashOpen] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
+  const slashMenuRef = useRef<HTMLDivElement>(null)
   const [slashResult, setSlashResult] = useState<string | null>(null)
   const [dynamicSlashCommands, setDynamicSlashCommands] = useState<SlashCommandDef[]>([])
   const [projectSlashCommands, setProjectSlashCommands] = useState<{ key: string; commands: SlashCommandDef[] }>({ key: '', commands: [] })
@@ -1917,6 +1928,16 @@ function ChatViewContent({
     ? availableSlashCommands.filter(c => c.cmd.startsWith(slashFilter.toLowerCase()))
     : availableSlashCommands
 
+  useEffect(() => {
+    const menu = slashMenuRef.current
+    const item = menu?.children[slashIndex]
+    if (!slashOpen || !menu || !(item instanceof HTMLElement)) return
+    const bounds = menu.getBoundingClientRect(), target = item.getBoundingClientRect()
+    // Scroll only the suggestions, never the surrounding chat or composer.
+    if (target.top < bounds.top) menu.scrollTop -= bounds.top - target.top
+    else if (target.bottom > bounds.bottom) menu.scrollTop += target.bottom - bounds.bottom
+  }, [slashOpen, slashIndex, slashFilter, filteredCommands.length])
+
   const quickSlashActions = useMemo(() => {
     if (slashCommandOverrides) {
       return slashCommandOverrides
@@ -1967,7 +1988,7 @@ function ChatViewContent({
         const commands: SlashCommandDef[] = (Array.isArray(data.commands) ? data.commands : [])
           .filter((item: Record<string, unknown>) => /^\/[a-z0-9_-]{1,80}$/i.test(String(item?.cmd || '')))
           .map((item: Record<string, unknown>) => ({ cmd: String(item.cmd), desc: String(item.desc || item.name || 'Workspace skill'),
-            icon: '⌘', mode: 'passthrough', family: 'skill', skillId: String(item.skill_id || ''), source: String(item.source || '') }))
+            icon: '⌘', mode: 'passthrough', family: 'skill', skillId: String(item.skill_id || ''), source: String(item.source || ''), scope: 'workspace' }))
         if (!controller.signal.aborted) setProjectSlashCommands({ key: projectCommandKey, commands })
       } catch {
         if (!controller.signal.aborted) setProjectSlashCommands({ key: projectCommandKey, commands: [] })
@@ -2005,6 +2026,7 @@ function ChatViewContent({
             family: 'skill',
             skillId: String(item?.skill_id || item?.skillId || item?.id || '').trim(),
             source: String(item?.source || '').trim(),
+            scope: 'agent',
           }
         }).filter((item) => item.cmd.startsWith('/') && item.cmd.length > 1)
         setDynamicSlashCommands(normalized)
@@ -4098,7 +4120,8 @@ function ChatViewContent({
         <div className="relative">
           {/* Slash command autocomplete */}
           {slashOpen && filteredCommands.length > 0 && (
-            <div className="absolute bottom-full left-0 mb-1 w-full max-w-md z-40 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+            <div ref={slashMenuRef} role="region" aria-label={locale === 'en' ? 'Command suggestions' : '命令建议'}
+              className="absolute bottom-full left-0 mb-1 max-h-[min(40dvh,320px)] w-full max-w-md z-40 overflow-y-auto overscroll-contain rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
               {filteredCommands.map((c, i) => (
                 <button
                   key={c.cmd}
@@ -4114,14 +4137,16 @@ function ChatViewContent({
                       setSlashOpen(false)
                     }
                   }}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
+                  className={`flex w-full min-w-0 items-start gap-2 px-3 py-2 text-left text-xs transition ${
                     i === slashIndex
                       ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400'
                       : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700'
                   }`}
                 >
-                  <span>{c.icon}</span>
-                  <span className="font-medium">{c.cmd}</span>
+                  <span className="mt-0.5 shrink-0">{c.family === 'skill' ? <BookOpen size={14} /> : c.icon}</span>
+                  <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="min-w-0 break-all font-medium">{c.cmd}</span>
                   {c.family && (
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${
                       c.family === 'wtt'
@@ -4134,10 +4159,13 @@ function ChatViewContent({
                               ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-300'
                               : 'bg-slate-100 text-slate-500 dark:bg-zinc-700 dark:text-zinc-300'
                     }`}>
-                      {c.family === 'wtt' ? 'WTT' : c.family === 'claude-code' ? 'Claude' : c.family === 'codex' ? 'Codex' : c.family === 'gemini' ? 'Gemini' : 'Agent'}
+                      {c.family === 'wtt' ? 'WTT' : c.family === 'claude-code' ? 'Claude' : c.family === 'codex' ? 'Codex' : c.family === 'gemini' ? 'Gemini' : c.family === 'skill' ? 'Skill' : 'Agent'}
                     </span>
                   )}
-                  <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500">{c.desc}</span>
+                  {c.family === 'skill' && <span className="text-[10px] text-slate-400 dark:text-zinc-500">{skillCommandOrigin(c, locale === 'en')}</span>}
+                  </span>
+                  <span title={c.desc} className="mt-0.5 line-clamp-2 block break-words text-[10px] text-slate-400 dark:text-zinc-500 [overflow-wrap:anywhere]">{c.desc}</span>
+                  </span>
                 </button>
               ))}
             </div>
