@@ -99,6 +99,7 @@ function ManagedAgentToolsInner({ agentId, agentName, token, workspaceId, layout
       const target = workspaceId ? { workspaceId } : { agentId };
       if (await downloadNativeWorkspaceFile({ ...target, path, filename: name }, {
         signal: controller.signal,
+        accessToken: token,
         onProgress: value => { if (live.current) setProgress(value.total ? Math.min(100, Math.round(value.loaded / value.total * 100)) : 0) },
       })) return
       // CDN compression may remove Content-Length or make it describe encoded bytes.

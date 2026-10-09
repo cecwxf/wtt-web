@@ -21,7 +21,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
   let feedEnabled = false
   let feedSocket: WebSocketRoute | undefined
   const loadedHostOffsets: number[] = []
-  const nativeDownloads: Array<{ workspaceId?: string; agentId?: string; path: string }> = []
+  const nativeDownloads: Array<{ workspaceId?: string; agentId?: string; path: string; accessToken?: string }> = []
   const nativeNotices: Array<{ userId: string; topicId: string; agentId: string; messageId: string }> = []
   const sessionParticipants = singleAgent ? participants.slice(0, 1) : participants
   if (entryPath === '/mobile/workspaces') {
@@ -184,6 +184,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     expect(nativeDownloads[0].workspaceId).toBe(projects[0].workspace_id)
     expect(nativeDownloads[0].agentId).toBeUndefined()
     expect(nativeDownloads[0].path).toBe('README.md')
+    expect(nativeDownloads[0].accessToken).toBeUndefined()
   }
   await page.getByRole('button', { name: 'Terminal', exact: true }).click()
   await expect.poll(() => terminalActions.some(item => item.body.action === 'terminal_open' && item.body.workspace_id === projects[0].workspace_id)).toBe(true)
@@ -263,6 +264,31 @@ test('Workspace-first desktop creates a cross-host collaboration and reuses chat
 
 test('one Codex adapter creates a Workspace, sends chat and restores its project files', async ({ page }) => {
   await workspaceFlow(page, '', '/desktop', true)
+})
+
+test('desktop native v3 downloads the selected Workspace without a renderer Blob', async ({ page }) => {
+  const downloads: any[] = []
+  await page.exposeFunction('observeDesktopDownload', (request: unknown) => downloads.push(request))
+  await page.addInitScript(() => {
+    URL.createObjectURL = () => { throw new Error('Desktop download must not allocate a renderer Blob') }
+    ;(window as any).__WTT_NATIVE_FILES__ = {
+      version: 3,
+      download: async (request: unknown, progress: (value: { loaded: number; total: number }) => void) => {
+        await (window as any).observeDesktopDownload(request)
+        progress({ loaded: 27, total: 27 })
+      },
+      cancel: () => {},
+    }
+  })
+  await workspaceFlow(page, '', '/desktop', true)
+  await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
+  await page.getByRole('complementary').getByText('README.md', { exact: true }).click()
+  await page.getByRole('button', { name: 'Download file', exact: true }).click()
+  await expect.poll(() => downloads.length).toBe(1)
+  expect(downloads[0]).toMatchObject({ workspaceId: new URL(page.url()).searchParams.get('workspace'), path: 'README.md', filename: 'README.md', accessToken: 'synthetic-user-token' })
+  expect(downloads[0].agentId).toBeUndefined()
+  expect(downloads[0].requestId).toMatch(/^[a-f0-9]{32}$/)
+  await expect(page.getByText('Download failed. Retry.', { exact: true })).toHaveCount(0)
 })
 
 test('Workspace download validates metadata when CDN streaming omits Content-Length', async ({ page }) => {
