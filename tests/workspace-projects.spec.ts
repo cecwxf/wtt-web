@@ -666,6 +666,33 @@ test('mobile Workspace settings persist native notifications and recover failed 
   await expect(notifications.getByRole('alert')).toHaveCount(0)
 })
 
+test('mobile notification settings distinguish unconfigured push from retryable registration', async ({ page }) => {
+  await restorationFixture(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.addInitScript(() => {
+    let current = { enabled: true, sound: false, preview: false, granted: true, pushStatus: 'not_configured' }
+    ;(window as any).__WTT_NATIVE_NOTIFICATIONS__ = { version: 1,
+      preferences: async () => current,
+      setPreferences: async (_user: string, value: any) => (current = { ...value, granted: true, pushStatus: 'registered' }),
+      show: async () => ({ shown: false }),
+    }
+    ;(window as any).__WTT_TEST_PUSH_UNAVAILABLE__ = () => { current.pushStatus = 'unavailable' }
+  })
+  await page.goto(`/mobile/workspaces?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+  await page.getByRole('button', { name: 'Account settings', exact: true }).click()
+  await page.getByRole('combobox').selectOption('notifications')
+  await expect(page.getByRole('status')).toHaveText('Background notifications are not configured.')
+  await page.evaluate(() => (window as any).__WTT_TEST_PUSH_UNAVAILABLE__())
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('button', { name: 'Account settings', exact: true }).click()
+  await page.getByRole('combobox').selectOption('notifications')
+  await expect(page.getByRole('status')).toContainText('Background notification registration failed.')
+  await page.getByRole('button', { name: 'Retry background notifications', exact: true }).click()
+  await expect(page.getByRole('status')).toHaveCount(0)
+  await expect(page.getByRole('checkbox', { name: 'Message notifications', exact: true })).toBeChecked()
+})
+
 for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} long chat can jump to latest without losing loaded history`, async ({ page }) => {
   await restorationFixture(page)
   await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })

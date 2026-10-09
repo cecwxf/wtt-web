@@ -1,9 +1,9 @@
-export type NativeNotificationPreferences = { enabled: boolean; sound: boolean; preview: boolean; granted: boolean }
+export type NativeNotificationPreferences = { enabled: boolean; sound: boolean; preview: boolean; granted: boolean; pushStatus?: 'off' | 'not_configured' | 'registered' | 'unavailable' }
 export type NativeChatNotice = { userId: string; messageId: string; topicId: string; agentId: string; title: string; body: string; focused: boolean }
 export type NativeNotifications = {
   version: 1
   preferences(userId: string): Promise<NativeNotificationPreferences>
-  setPreferences(userId: string, value: Omit<NativeNotificationPreferences, 'granted'>): Promise<NativeNotificationPreferences>
+  setPreferences(userId: string, value: Pick<NativeNotificationPreferences, 'enabled' | 'sound' | 'preview'>): Promise<NativeNotificationPreferences>
   show(value: NativeChatNotice): Promise<{ shown: boolean }>
 }
 

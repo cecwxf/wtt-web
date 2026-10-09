@@ -53,5 +53,10 @@ export function MobileNotificationSettings({ userId }: { userId?: string }) {
       <label className="flex items-center justify-between gap-3"><span>{en ? 'Show reply preview' : '显示回复摘要'}</span><input type="checkbox" disabled={!preferences.enabled} checked={preferences.preview} onChange={event => void save({ preview: event.target.checked })} /></label>
     </fieldset>}
     {preferences?.enabled && !preferences.granted && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">{en ? 'Allow WTT notifications in system settings.' : '请在系统设置中允许 WTT 通知。'}</p>}
+    {preferences?.enabled && preferences.granted && preferences.pushStatus === 'not_configured' && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">{en ? 'Background notifications are not configured.' : '后台通知尚未配置。'}</p>}
+    {preferences?.enabled && preferences.granted && preferences.pushStatus === 'unavailable' && <p role="status" className="mt-3 flex items-center justify-between gap-2 text-sm text-amber-700 dark:text-amber-400">
+      {en ? 'Background notification registration failed.' : '后台通知注册失败。'}
+      <button onClick={() => void save({})} title={en ? 'Retry' : '重试'} aria-label={en ? 'Retry background notifications' : '重试后台通知'} className="p-2"><RefreshCw size={16} /></button>
+    </p>}
   </section>
 }
