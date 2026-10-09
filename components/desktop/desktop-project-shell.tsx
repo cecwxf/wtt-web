@@ -99,7 +99,10 @@ function ProjectShell(props: ProjectShellProps) {
   const directory = useMemo(() => {
     const all = (projects.data || []).flatMap(page => page.workspaces)
     const selected = detail.data
-    return selected && !all.some(project => project.workspace_id === selected.workspace_id) ? [selected, ...all] : all
+    if (!selected) return all
+    return all.some(project => project.workspace_id === selected.workspace_id)
+      ? all.map(project => project.workspace_id === selected.workspace_id ? selected : project)
+      : [selected, ...all]
   }, [projects.data, detail.data])
   const current = directory.find(project => project.sessions.some(session => session.topic_id === props.selectedTopicId))
   const currentSession = current?.sessions.find(session => session.topic_id === props.selectedTopicId)
