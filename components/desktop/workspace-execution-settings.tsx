@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Bot, Brain, Check, Loader2, RefreshCw, Shield, X } from 'lucide-react'
+import { Check, ChevronDown, Loader2, RefreshCw, Settings2, X } from 'lucide-react'
 import { useI18n } from '@/lib/i18n-provider'
 import { WorkspaceProjectsApi, type WorkspaceExecutionConfig, type WorkspaceExecutionSettings } from '@/lib/workspace-projects'
 
-export function WorkspaceExecutionControls(props: { workspaceId: string; topicId: string; token: string; agentId?: string }) {
+export function WorkspaceExecutionControls(props: { workspaceId: string; topicId: string; token: string; agentId?: string; runtime?: { model?: string; label: string; effort: string } }) {
   const { locale } = useI18n()
   const zh = locale === 'zh'
   const [data, setData] = useState<WorkspaceExecutionSettings | null>(null)
@@ -19,6 +19,7 @@ export function WorkspaceExecutionControls(props: { workspaceId: string; topicId
   const dialog = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement | null>(null)
   const member = data?.participants.find(p => p.participant_id === memberId)
+  const runtime = !member || member.transport_agent_id === props.agentId ? props.runtime : undefined
   const defaultLabel = zh ? '默认' : 'Default'
   const accessLabel = (value?: string) => ({ 'read-only': zh ? '只读' : 'Read only', 'workspace-write': zh ? '工作区写入' : 'Workspace write', 'full-access': zh ? '完全访问' : 'Full access' })[value || ''] || defaultLabel
   const load = useCallback(async () => {
@@ -66,21 +67,22 @@ export function WorkspaceExecutionControls(props: { workspaceId: string; topicId
     } catch (cause) { if (alive.current) setError(cause instanceof Error ? cause.message : 'Request failed') }
     finally { if (alive.current) setBusy(false) }
   }
-  const buttonClass = 'flex min-w-0 max-w-[150px] shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
+  const buttonClass = 'flex min-h-8 min-w-0 shrink-0 items-center gap-1 rounded-md bg-transparent px-2 text-xs hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 dark:hover:bg-zinc-800'
+  const mutedClass = 'text-zinc-600 dark:text-zinc-300'
   const inputClass = 'w-full min-w-0 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900'
   return <>
-    <div role="group" aria-label={zh ? '会话执行配置' : 'Conversation execution controls'} className="flex w-full max-w-full flex-wrap items-center gap-1.5 sm:w-auto">
-    {data && data.participants.length > 1 && <select aria-label={zh ? '执行配置成员' : 'Execution settings member'} value={memberId} onChange={event => setMemberId(event.target.value)} className={`${buttonClass} max-w-[130px]`}>
-      {data.participants.map(p => <option key={p.participant_id} value={p.participant_id}>{p.label} · {p.adapter}</option>)}
+    <div role="group" aria-label={zh ? '会话执行配置' : 'Conversation execution controls'} className="flex min-w-0 max-w-full flex-wrap items-center gap-1">
+    {data && data.participants.length > 1 && <select aria-label={zh ? '执行配置成员' : 'Execution settings member'} title={member && `${member.label} · ${member.adapter}`} value={memberId} onChange={event => setMemberId(event.target.value)} className={`${buttonClass} ${mutedClass} w-[112px] truncate pr-6`}>
+      {data.participants.map(p => <option key={p.participant_id} value={p.participant_id}>{p.label}</option>)}
     </select>}
-    <button type="button" className={buttonClass} onClick={show} title={zh ? '设置模型' : 'Set model'} aria-label={zh ? '设置模型' : 'Set model'}><Bot size={12} className="shrink-0" /><span className="truncate">{member?.config.model || (zh ? '模型' : 'Model')}</span></button>
-    <button type="button" className={buttonClass} onClick={show} title={zh ? '设置思考强度' : 'Set reasoning effort'} aria-label={zh ? '设置思考强度' : 'Set reasoning effort'}><Brain size={12} className="shrink-0" /><span className="truncate">{member?.config.reasoning_effort || (zh ? '思考' : 'Reasoning')}</span></button>
-    <button type="button" className={buttonClass} onClick={show} title={zh ? '设置执行权限' : 'Set execution permissions'} aria-label={zh ? '设置执行权限' : 'Set execution permissions'}><Shield size={12} className="shrink-0" /><span className="truncate">{member?.config.workspace_access ? accessLabel(member.config.workspace_access) : (zh ? '权限' : 'Permissions')}</span></button>
+    <button type="button" className={`${buttonClass} ${mutedClass} max-w-[120px] sm:max-w-[160px]`} onClick={show} title={[zh ? '设置模型' : 'Set model', member?.config.model && `${zh ? '下次执行' : 'Next run'}: ${member.config.model}`, runtime && `Current runtime model: ${runtime.model || runtime.label}`].filter(Boolean).join('\n')} aria-label={zh ? '设置模型' : 'Set model'} aria-haspopup="dialog" aria-expanded={open}><span className="truncate">{member?.config.model || (runtime?.model ? runtime.label : (zh ? '模型' : 'Model'))}</span><ChevronDown size={12} className="shrink-0" /></button>
+    <button type="button" className={`${buttonClass} h-8 w-8 justify-center px-0 ${member?.config.workspace_access === 'full-access' ? 'text-amber-700 dark:text-amber-400' : mutedClass}`} onClick={show} title={`${zh ? '执行设置' : 'Execution settings'} · ${accessLabel(member?.config.workspace_access)} · ${member?.config.reasoning_effort || defaultLabel}`} aria-label={zh ? '执行设置' : 'Execution settings'} aria-haspopup="dialog" aria-expanded={open}><Settings2 size={15} /></button>
     </div>
     {open && createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={event => { if (event.target === event.currentTarget && !busy) setOpen(false) }}>
       <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="execution-settings-title" tabIndex={-1} className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-lg border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
         <div className="mb-4 flex items-center justify-between gap-3"><h3 id="execution-settings-title" className="text-base font-semibold">{zh ? '执行设置' : 'Execution settings'}</h3><button type="button" disabled={busy} onClick={() => setOpen(false)} title={zh ? '关闭' : 'Close'} aria-label={zh ? '关闭执行设置' : 'Close execution settings'}><X size={18} /></button></div>
         {member && <div className="mb-4 text-sm text-zinc-500"><div className="truncate">{member.label} · {member.adapter}</div>{member.options.host_ceiling && <div className="mt-1 text-xs">{zh ? '本机授权上限：' : 'Computer approval limit: '}{accessLabel(member.options.host_ceiling)}</div>}</div>}
+        {runtime && <div className="mb-4 break-words text-xs text-zinc-500" title={`Current runtime model: ${runtime.model || runtime.label}`}><div>{zh ? '当前运行模型：' : 'Current runtime model: '}{runtime.model || runtime.label}</div><div>{zh ? '当前思考强度：' : 'Current reasoning effort: '}{runtime.effort}</div></div>}
         {busy && <Loader2 size={18} className="mb-3 animate-spin" />}
         {error && <p role="alert" className="mb-3 break-words text-sm text-red-600 dark:text-red-400">{error}</p>}
         {member && !member.options.available && <p className="mb-3 text-sm text-zinc-500">{zh ? '请在此成员所在电脑更新并重启 WTT 本机服务。' : 'Update and restart WTT on this member’s computer.'}</p>}

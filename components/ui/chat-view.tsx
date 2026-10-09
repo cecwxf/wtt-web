@@ -4057,8 +4057,9 @@ function ChatViewContent({
           {composerAccessory}
           {workspaceProjectId && topicId && accessToken && <WorkspaceExecutionControls
             key={`${workspaceProjectId}:${topicId}:${accessToken}`} workspaceId={workspaceProjectId}
-            topicId={topicId} token={accessToken} agentId={currentAgentId} />}
-          {!hideRuntimeBadges && (
+            topicId={topicId} token={accessToken} agentId={currentAgentId}
+            runtime={appearance === 'desktop' && !hideRuntimeBadges ? { model: displayModelId || undefined, label: displayModelLabel, effort: displayEffortLabel } : undefined} />}
+          {!hideRuntimeBadges && !(appearance === 'desktop' && workspaceProjectId && topicId && accessToken) && (
             <>
               <span
                 className="flex min-w-0 max-w-[220px] shrink-0 items-center gap-1 rounded-md border border-[#e5e0d8] bg-white px-2 py-1 text-[#615d55] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"

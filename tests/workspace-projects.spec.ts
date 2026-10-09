@@ -18,9 +18,14 @@ for (const entryPath of ['/desktop', '/mobile/workspaces']) test(`Workspace exec
   const selector = page.getByRole('combobox', { name: 'Execution settings member', exact: true })
   await expect(selector).toBeVisible()
   await selector.selectOption('one')
+  const controls = page.getByRole('group', { name: 'Conversation execution controls', exact: true })
+  await expect(controls.getByRole('button')).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Set model', exact: true })).toHaveAttribute('title', /Current runtime model: codex-runtime-test/)
+  await expect(page.locator('span[title^="Current runtime model:"]')).toHaveCount(0)
   await page.getByRole('button', { name: 'Set model', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Execution settings', exact: true })
   await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('Current runtime model: codex-runtime-test')
   await dialog.getByRole('textbox', { name: 'Model ID', exact: true }).fill('openai/codex-test')
   await dialog.getByRole('combobox', { name: 'Reasoning effort', exact: true }).selectOption('high')
   await dialog.getByRole('combobox', { name: 'Execution permissions', exact: true }).selectOption('read-only')
@@ -30,7 +35,9 @@ for (const entryPath of ['/desktop', '/mobile/workspaces']) test(`Workspace exec
   await expect(dialog).not.toBeVisible()
   await expect(page.getByRole('button', { name: 'Set model', exact: true })).toHaveText('openai/codex-test')
   await selector.selectOption('two')
-  await page.getByRole('button', { name: 'Set model', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Set model', exact: true })).not.toHaveAttribute('title', /codex-runtime-test/)
+  await page.getByRole('button', { name: 'Execution settings', exact: true }).click()
+  await expect(dialog).not.toContainText('codex-runtime-test')
   await expect(dialog.getByRole('textbox', { name: 'Model ID', exact: true })).toHaveValue('')
   await dialog.getByRole('textbox', { name: 'Model ID', exact: true }).fill('claude-test')
   await dialog.getByRole('button', { name: 'Apply to next run', exact: true }).click()
@@ -51,6 +58,19 @@ for (const entryPath of ['/desktop', '/mobile/workspaces']) test(`Workspace exec
   await page.reload()
   await expect(page.getByRole('button', { name: 'Set model', exact: true })).toHaveText('another-device-model')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), theme === 'dark')
+    await page.screenshot({ path: testInfo.outputPath(`compact-workspace-${theme}.png`) })
+  }
+  await page.setViewportSize({ width: 320, height: 740 })
+  await expect(controls).toBeVisible()
+  expect(await controls.evaluate(element => Array.from(element.querySelectorAll('button, select')).every(child => {
+    const rect = child.getBoundingClientRect()
+    return rect.left >= 0 && rect.right <= window.innerWidth
+  }))).toBe(true)
+  const controlsBox = (await controls.boundingBox())!
+  const inputBox = (await page.locator('textarea').first().boundingBox())!
+  expect(controlsBox.y + controlsBox.height).toBeLessThanOrEqual(inputBox.y)
 })
 
 async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', singleAgent = false, adapterEntry?: 'setup' | 'onboarding' | 'onboarding-profile', settingsOnly = false) {
@@ -172,7 +192,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     else if (path.endsWith('/workspace/stat')) value = { name: 'README.md', size: 27, content_type: 'text/markdown' }
     else if (path.endsWith('/workspace/content')) { await route.fulfill({ contentType: 'text/markdown', body: 'Canonical project directory' }); return }
     else if (path === '/agents/my') value = participants.map(p => ({ agent_id: p.transport_agent_id, display_name: p.label }))
-    else if (path === '/agents/stats') value = { online_agents: adaptersOnline ? participants.map(p => p.transport_agent_id) : [], runtimes: {} }
+    else if (path === '/agents/stats') value = { online_agents: adaptersOnline ? participants.map(p => p.transport_agent_id) : [], runtimes: settingsOnly ? { 'agent-one': { adapter: 'codex', current_model: 'codex-runtime-test' } } : {} }
     else if (path === '/topics/subscribed' || path === '/topics/my-groups') value = projects.flatMap(project => project.sessions.map((session: any) => ({ id: session.topic_id, topic_id: session.topic_id, name: `${project.name} / ${session.name}`, topic_type: 'discussion', member_agent_ids: session.participants.map((p: any) => p.transport_agent_id) })))
     else if (path.endsWith('/messages')) {
       const topicId = path.split('/')[2]
