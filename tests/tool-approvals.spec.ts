@@ -25,6 +25,20 @@ test('approval response reader rejects oversized streams', async () => {
   await expect(readPrivateApprovalResponse(new Response('x'.repeat(2200001)))).rejects.toThrow(/exceeds limit/)
 })
 
+test('approval expiry uses server lifetime despite device clock skew', () => {
+  const now = Date.now()
+  for (const skew of [-600000, 600000]) {
+    const row = { ...approval, server_time: new Date(now + skew).toISOString(), expires_at: new Date(now + skew + 300000).toISOString() }
+    const normalized = normalizePrivateToolApprovals([row], topic, now)
+    expect(normalized).toHaveLength(1)
+    expect(Date.parse(normalized[0].expires_at)).toBe(now + 300000)
+    for (const lifetime of [-1, 302000]) {
+      expect(normalizePrivateToolApprovals([{ ...row, expires_at: new Date(now + skew + lifetime).toISOString() }], topic, now)).toEqual([])
+    }
+    expect(normalizePrivateToolApprovals([{ ...row, server_time: 'invalid' }], topic, now)).toEqual([])
+  }
+})
+
 async function setup(page: Page) {
   const decisions: unknown[] = []
   let handled = false
@@ -51,7 +65,8 @@ async function setup(page: Page) {
     else if (path.endsWith('/members')) value = [{ agent_id: agent, display_name: 'Claude Writer', role: 'owner' }]
     else if (path === '/hosts/approvals') {
       loads++
-      value = handled ? [] : [{ ...approval, expires_at: new Date(Date.now() + 300000).toISOString() }]
+      const serverNow = Date.now() + 600000
+      value = handled ? [] : [{ ...approval, server_time: new Date(serverNow).toISOString(), expires_at: new Date(serverNow + 300000).toISOString() }]
     } else if (path.endsWith('/decision')) {
       expect(route.request().headers().authorization).toBe('Bearer approval-fixture-token')
       decisions.push(route.request().postDataJSON())
@@ -67,7 +82,7 @@ for (const mobile of [false, true]) {
   test(`${mobile ? 'mobile' : 'desktop'} owner sees a private operation above the composer and approves once`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
     const f = await setup(page)
-    await page.goto(mobile ? `/mobile/feed?agent_id=${agent}&topic_id=${topic}` : `/desktop?agentId=${agent}&topic=${topic}`)
+    await page.goto(mobile ? `/mobile/feed?agent_id=${agent}&topic_id=${topic}` : `/desktop?legacy=1&agentId=${agent}&topic=${topic}`)
     const panel = page.getByRole('region', { name: 'Tool Approval', exact: true })
     await expect(panel).toBeVisible()
     await expect(panel.getByText('shasum -a 256 payload.bin', { exact: false })).toBeVisible()
@@ -96,9 +111,9 @@ for (const mobile of [false, true]) {
 test('private approval inputs disappear when switching to another topic', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await setup(page)
-  await page.goto(`/desktop?agentId=${agent}&topic=${topic}`)
+  await page.goto(`/desktop?legacy=1&agentId=${agent}&topic=${topic}`)
   await expect(page.getByRole('region', { name: 'Tool Approval' })).toBeVisible()
   const next = '33333333-3333-4333-8333-333333333333'
-  await page.goto(`/desktop?agentId=${agent}&topic=${next}`)
+  await page.goto(`/desktop?legacy=1&agentId=${agent}&topic=${next}`)
   await expect(page.getByRole('region', { name: 'Tool Approval' })).not.toBeVisible()
 });

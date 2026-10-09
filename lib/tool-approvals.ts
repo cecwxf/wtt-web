@@ -12,14 +12,19 @@ const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 
 export function normalizePrivateToolApprovals(value: unknown, topicId: string, now = Date.now()): PrivateToolApproval[] {
   if (!Array.isArray(value) || value.length > 32) return []
-  return value.filter((row): row is PrivateToolApproval => {
+  return value.flatMap((row): PrivateToolApproval[] => {
     if (!row || typeof row !== 'object' || !uuid.test(row.request_id) || row.topic_id !== topicId
       || row.status !== 'pending' || !/^agent-[a-f0-9]{12}$/.test(row.agent_id)
       || typeof row.tool_name !== 'string' || !/^[A-Za-z0-9_.:-]{1,256}$/.test(row.tool_name)
-      || !/^[a-f0-9]{64}$/.test(row.input_sha256) || !row.input || typeof row.input !== 'object' || Array.isArray(row.input)) return false
+      || !/^[a-f0-9]{64}$/.test(row.input_sha256) || !row.input || typeof row.input !== 'object' || Array.isArray(row.input)) return []
     const expires = Date.parse(row.expires_at)
-    if (!Number.isFinite(expires) || expires <= now || expires > now + 301000) return false
-    try { return new TextEncoder().encode(JSON.stringify(row.input)).byteLength <= 65536 } catch { return false }
+    const serverNow = row.server_time === undefined ? now : Date.parse(row.server_time)
+    const remaining = expires - serverNow
+    if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 301000) return []
+    try {
+      if (new TextEncoder().encode(JSON.stringify(row.input)).byteLength > 65536) return []
+      return [{ ...row, expires_at: new Date(now + Math.min(remaining, 300000)).toISOString() }]
+    } catch { return [] }
   })
 }
 
