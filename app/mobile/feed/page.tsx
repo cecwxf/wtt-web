@@ -2578,7 +2578,6 @@ export default function MobileFeedPage() {
               id="wtt-mobile-file-input"
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*,audio/*,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx,.xls,.xlsx,application/*"
               className="absolute bottom-0 left-0 h-px w-px opacity-0"
               tabIndex={-1}
               onChange={(event) => {

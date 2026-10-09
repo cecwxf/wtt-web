@@ -71,6 +71,7 @@ async function mockAuthenticatedMobileApi(
     onMediaCommit?: (headers: Record<string, string>, body: unknown) => void
   } = {},
 ) {
+  await page.addInitScript(() => localStorage.setItem('wtt-web.locale', 'zh'))
   await page.route('**/api/auth/session', async (route) => {
     await fulfillJson(route, {
       user: { name: 'Mobile Tester', email: 'mobile@example.com' },
@@ -345,6 +346,9 @@ test('mobile composer uploads and sends file attachments', async ({ page }) => {
   const fileChooserPromise = page.waitForEvent('filechooser')
   await page.getByRole('button', { name: '文件/图片' }).click()
   const fileChooser = await fileChooserPromise
+  expect(await fileChooser.element().getAttribute('accept')).toBeNull()
+  await expect(page.locator('#wtt-mobile-camera-input')).toHaveAttribute('accept', 'image/*')
+  await expect(page.locator('#wtt-mobile-camera-input')).toHaveAttribute('capture', 'environment')
   await fileChooser.setFiles({
     name: 'notes.md',
     mimeType: 'text/markdown',
@@ -420,7 +424,7 @@ test('mobile composer uploads image attachments with thumbnail preview', async (
   await expect(page.locator('footer img[src*="/api/wtt/media/photo.jpg?variant=thumb"]')).toBeVisible()
   await page.locator('footer img[src*="/api/wtt/media/photo.jpg?variant=thumb"]').click()
   await expect(page.getByRole('dialog', { name: '图片预览' })).toBeVisible()
-  await expect(page.locator('img[alt="photo.jpg 原图"]')).toHaveAttribute('src', /\/api\/wtt\/media\/photo\.jpg$/)
+  await expect(page.getByRole('dialog', { name: '图片预览' }).getByRole('img', { name: 'photo.jpg', exact: true })).toHaveAttribute('src', /\/api\/wtt\/media\/photo\.jpg$/)
   await page.getByRole('button', { name: '关闭图片预览' }).click()
   await page.locator('textarea').fill('with image')
   await page.getByLabel('发送消息').click()
