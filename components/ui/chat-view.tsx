@@ -3267,6 +3267,7 @@ function ChatViewContent({
 
       <div className={`${desktopStyles.surface} min-h-0 flex flex-1 overflow-hidden bg-[#fbfaf7] dark:bg-zinc-950`}>
         <div className="relative min-w-0 flex flex-1 flex-col">
+      <div className="relative min-h-0 flex flex-1 flex-col">
       <div
         ref={scrollRef}
         className={`${desktopStyles.surface} min-h-0 flex-1 bg-[#fbfaf7] dark:bg-zinc-950 ${
@@ -3858,6 +3859,7 @@ function ChatViewContent({
           <ArrowDown size={18} />
         </button>
       )}
+      </div>
 
       {agentCardOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4" onClick={() => setAgentCardOpen(false)}>
