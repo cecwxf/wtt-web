@@ -12,7 +12,7 @@ const participants = [
   { participant_id: 'two', label: 'Reviewer', host_id: 'remote', host_name: 'Linux', adapter: 'claude-code', profile_id: 'claude', transport_agent_id: 'agent-two' },
 ]
 
-async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', singleAgent = false, adapterEntry?: 'setup' | 'onboarding') {
+async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', singleAgent = false, adapterEntry?: 'setup' | 'onboarding' | 'onboarding-profile') {
   const created: Array<{ path: string; body: any }> = []
   const projects: any[] = []
   const terminalActions: Array<{ url: string; body: any }> = []
@@ -23,22 +23,29 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
   const loadedHostOffsets: number[] = []
   const nativeDownloads: Array<{ workspaceId?: string; agentId?: string; path: string; accessToken?: string }> = []
   const nativeNotices: Array<{ userId: string; topicId: string; agentId: string; messageId: string }> = []
-  if (adapterEntry === 'onboarding') await page.addInitScript(hostId => {
+  const nativeSelections: unknown[] = []
+  if (adapterEntry?.startsWith('onboarding')) await page.exposeFunction('observeOnboardingSelection', (selection: unknown) => nativeSelections.push(selection))
+  if (adapterEntry?.startsWith('onboarding')) await page.addInitScript(({ hostId, byProfile }) => {
     let runtime: any = { state: 'stopped', agents: [] }
     const listeners = new Set<(state: unknown) => void>()
     const status = () => ({ enabled: true, accountVerified: true, state: 'registered', hostId, userId: hostId })
     ;(window as any).wttDesktop = { isDesktop: true, platform: 'darwin', host: {
-      status: async () => status(), resume: async () => status(),
+      status: async () => status(), resume: async () => status(), profileManagementSupported: byProfile,
       runtimeStatus: async () => runtime,
       onRuntimeState: (listener: (state: unknown) => void) => { listeners.add(listener); return () => listeners.delete(listener) },
-      discoverAgents: async () => [{ profile_id: 'codex', adapter: 'codex', display_name: 'Codex', available: true, version: 'fixture', requiresFullAccess: false }],
-      startAgents: async () => {
+      discoverAgents: async () => [
+        { profile_id: 'codex', adapter: 'codex', display_name: 'Codex', available: true, version: 'fixture', requiresFullAccess: false },
+        ...(byProfile ? [{ profile_id: 'codex-secondary', adapter: 'codex', display_name: 'Codex 2', available: true, version: 'fixture', requiresFullAccess: false }] : []),
+      ],
+      ...(byProfile ? { selectAgentWorkspace: async (profileId: string) => ({ adapter: 'codex', profileId, workspaceName: 'Secondary directory' }) } : {}),
+      startAgents: async (selection: unknown) => {
+        await (window as any).observeOnboardingSelection(selection)
         runtime = { state: 'running', configuredAdapters: ['codex'], agents: [{ profileId: 'codex', adapter: 'codex', agentId: 'agent-one', state: 'online' }] }
         listeners.forEach(listener => listener(runtime))
         return runtime
       },
     } }
-  }, host)
+  }, { hostId: host, byProfile: adapterEntry === 'onboarding-profile' })
   if (entryPath === '/mobile/workspaces') {
     await page.exposeFunction('observeNativeWorkspaceDownload', (request: typeof nativeDownloads[number]) => nativeDownloads.push(request))
     await page.exposeFunction('observeNativeWorkspaceNotice', (notice: typeof nativeNotices[number]) => nativeNotices.push(notice))
@@ -131,9 +138,16 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
   } else await page.goto(`${baseURL}${entryPath}`)
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'New conversation', exact: true })).toHaveCount(0)
-  if (adapterEntry === 'onboarding') {
+  if (adapterEntry?.startsWith('onboarding')) {
     await page.getByRole('button', { name: 'Connect this computer', exact: true }).click()
     await page.getByRole('button', { name: 'Connect and detect', exact: true }).click()
+    if (adapterEntry === 'onboarding-profile') {
+      await page.getByRole('button', { name: 'Workspace for Codex 2', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'Workspace for Codex 2', exact: true })).toHaveAttribute('title', 'Secondary directory')
+      await expect(page.getByRole('button', { name: 'Workspace for Codex', exact: true })).toHaveAttribute('title', 'Isolated WTT workspace')
+      await page.getByRole('checkbox', { name: /Codex 2/ }).uncheck()
+      await expect(page.getByRole('checkbox', { name: /^Codex(?! 2)/ })).toBeChecked()
+    }
     await page.getByRole('button', { name: 'Enable selected Agents', exact: true }).click()
     await page.getByRole('button', { name: /Codex.*Create Workspace/ }).click()
   } else if (!adapterEntry) await page.getByRole('button', { name: 'New Workspace', exact: true }).first().click()
@@ -170,7 +184,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     await page.reload()
     await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
     expect(new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
-    return { projects, created }
+    return { projects, created, nativeSelections }
   }
   await page.locator('textarea').first().fill('Continue the project')
   const navigationSize = page.getByRole('separator', { name: 'Resize navigation', exact: true })
@@ -287,7 +301,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     await expect(page).toHaveURL(/\/mobile\/login\?callbackUrl=%2Fmobile%2Fworkspaces$/)
     await expect(page.getByRole('button', { name: '进入 WTT', exact: true })).toBeVisible()
   }
-  return { projects, created }
+  return { projects, created, nativeSelections }
 }
 
 test('Workspace-first desktop creates a cross-host collaboration and reuses chat and project files', async ({ page }) => {
@@ -316,6 +330,11 @@ test('computer Adapter selection enters Workspace creation instead of a global A
 
 test('native Agent onboarding enters Workspace creation with the exact enabled profile', async ({ page }) => {
   await workspaceFlow(page, '', '/desktop', true, 'onboarding')
+})
+
+test('native onboarding keeps duplicate Adapter profiles and directories independent', async ({ page }) => {
+  const { nativeSelections } = await workspaceFlow(page, '', '/desktop', true, 'onboarding-profile')
+  expect(nativeSelections).toEqual([{ profileIds: ['codex'], workspaceAccess: 'workspace-write' }])
 })
 
 test('unavailable Adapter creation links fail explicitly without selecting a different profile', async ({ page }) => {

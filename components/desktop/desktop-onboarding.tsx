@@ -41,6 +41,8 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
   const paused = configured && runtime?.state === 'stopped'
   const needsAttention = Boolean(runtime && ['error', 'configuration_required', 'authorization_required'].includes(runtime.state))
   const supported = Boolean(bridge?.resume && bridge.discoverAgents && bridge.startAgents && bridge.runtimeStatus)
+  const byProfile = bridge?.profileManagementSupported === true
+  const selectionKey = (profile: DesktopAgentProfile) => byProfile ? profile.profile_id : profile.adapter
 
   useEffect(() => {
     mounted.current = true
@@ -112,7 +114,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
       const found = await bridge.discoverAgents()
       if (!current()) return
       setProfiles(found)
-      setSelected(found.filter(profile => profile.available && !profile.requiresFullAccess).map(profile => profile.adapter))
+      setSelected(found.filter(profile => profile.available && !profile.requiresFullAccess).map(selectionKey))
       setAccess('workspace-write')
       setPhase('selection')
       onChanged?.()
@@ -127,7 +129,7 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
     setError(''); setPhase('starting')
     const current = () => mounted.current
     try {
-      const state = await bridge.startAgents({ adapters: selected, workspaceAccess: access,
+      const state = await bridge.startAgents({ ...(byProfile ? { profileIds: selected } : { adapters: selected }), workspaceAccess: access,
         ...(bridge.remoteToolsSupported ? { remoteTools } : {}) })
       if (!current()) return
       setRuntime(state)
@@ -138,12 +140,12 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
     } finally { operation.current = false }
   }
 
-  async function chooseWorkspace(adapter: string, reset = false) {
+  async function chooseWorkspace(profile: DesktopAgentProfile, reset = false) {
     if (!bridge?.selectAgentWorkspace || operation.current) return
     operation.current = true; setChoosingWorkspace(true); setError('')
     try {
-      const chosen = await bridge.selectAgentWorkspace(adapter, reset)
-      if (mounted.current && chosen) setProfiles(previous => previous.map(profile => profile.adapter === chosen.adapter ? { ...profile, workspaceName: chosen.workspaceName } : profile))
+      const chosen = await bridge.selectAgentWorkspace(selectionKey(profile), reset)
+      if (mounted.current && chosen) setProfiles(previous => previous.map(item => (byProfile ? item.profile_id === chosen.profileId : item.adapter === chosen.adapter) ? { ...item, workspaceName: chosen.workspaceName } : item))
     } catch (value) { if (mounted.current) setError(describeError(value)) }
     finally { operation.current = false; if (mounted.current) setChoosingWorkspace(false) }
   }
@@ -187,17 +189,17 @@ export function DesktopOnboarding({ accessToken, userId, onChanged, onAgentReady
           {bridge?.remoteToolsSupported && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy} en={en} previewSupported={bridge.previewSupported === true} />}
           <fieldset disabled={busy} className="space-y-3"><legend className="mb-2 text-sm font-medium">{en ? 'Agents' : 'Agent'}</legend>{profiles.map(profile => <div key={profile.profile_id} className="flex min-h-12 flex-wrap items-center gap-3 border-b border-zinc-100 py-2 dark:border-zinc-800">
             <label className="flex min-w-0 flex-1 basis-40 items-center gap-3">
-            <input type="checkbox" disabled={!profile.available || (profile.requiresFullAccess && access !== 'full-access')} checked={selected.includes(profile.adapter)} onChange={event => setSelected(previous => event.target.checked ? [...previous, profile.adapter] : previous.filter(adapter => adapter !== profile.adapter))} className="h-4 w-4 accent-emerald-600" />
+            <input type="checkbox" disabled={!profile.available || (profile.requiresFullAccess && access !== 'full-access')} checked={selected.includes(selectionKey(profile))} onChange={event => setSelected(previous => event.target.checked ? [...previous, selectionKey(profile)] : previous.filter(key => key !== selectionKey(profile)))} className="h-4 w-4 accent-emerald-600" />
             <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{profile.display_name}</span><span className="block break-words text-xs text-zinc-500">{profile.available ? profile.version : (en ? 'Not installed' : '未安装')}</span></span>
             </label>
-            {profile.available && bridge?.selectAgentWorkspace && <button type="button" onClick={() => void chooseWorkspace(profile.adapter)} aria-label={`${en ? 'Workspace for' : '工作目录'} ${profile.display_name}`} title={profile.workspaceName || (en ? 'Isolated WTT workspace' : '独立 WTT 工作区')} className="inline-flex max-w-36 items-center gap-1 rounded-md p-2 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><FolderOpen size={16} className="shrink-0" /><span className="truncate">{profile.workspaceName || (en ? 'Workspace' : '工作目录')}</span></button>}
-            {profile.workspaceName && <button type="button" onClick={() => void chooseWorkspace(profile.adapter, true)} aria-label={`${en ? 'Reset workspace for' : '恢复默认工作目录'} ${profile.display_name}`} title={en ? 'Use isolated WTT workspace' : '使用独立 WTT 工作区'} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X size={15} /></button>}
+            {profile.available && bridge?.selectAgentWorkspace && <button type="button" onClick={() => void chooseWorkspace(profile)} aria-label={`${en ? 'Workspace for' : '工作目录'} ${profile.display_name}`} title={profile.workspaceName || (en ? 'Isolated WTT workspace' : '独立 WTT 工作区')} className="inline-flex max-w-36 items-center gap-1 rounded-md p-2 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><FolderOpen size={16} className="shrink-0" /><span className="truncate">{profile.workspaceName || (en ? 'Workspace' : '工作目录')}</span></button>}
+            {profile.workspaceName && <button type="button" onClick={() => void chooseWorkspace(profile, true)} aria-label={`${en ? 'Reset workspace for' : '恢复默认工作目录'} ${profile.display_name}`} title={en ? 'Use isolated WTT workspace' : '使用独立 WTT 工作区'} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X size={15} /></button>}
             {profile.requiresFullAccess && <span className="max-w-20 text-right text-xs text-zinc-500">{en ? 'Full access required' : '需完整执行权限'}</span>}
           </div>)}</fieldset>
           <label className="flex flex-wrap items-center justify-between gap-2 text-sm">{en ? 'Execution access' : '执行权限'}<select value={access} onChange={event => {
             const value = event.target.value as typeof access
             setAccess(value)
-            if (value !== 'full-access') setSelected(previous => previous.filter(adapter => !profiles.find(profile => profile.adapter === adapter)?.requiresFullAccess))
+            if (value !== 'full-access') setSelected(previous => previous.filter(key => !profiles.find(profile => selectionKey(profile) === key)?.requiresFullAccess))
           }} disabled={busy} className="min-h-10 rounded-md border border-zinc-200 bg-transparent px-2 dark:border-zinc-700"><option value="workspace-write">{en ? 'Workspace editing' : '工作区编辑'}</option><option value="full-access">{en ? 'Full local execution' : '完整本机执行权限'}</option></select></label>
           <div className="flex flex-wrap gap-2"><button disabled={busy || !selected.length} onClick={() => void start()} className={`${button} bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900`}><Check size={16} />{en ? 'Enable selected Agents' : '启用所选 Agent'}</button><button disabled={busy} onClick={() => void detect()} aria-label={en ? 'Detect again' : '重新检测'} title={en ? 'Detect again' : '重新检测'} className={button}><RefreshCw size={16} /></button></div>
         </>}
