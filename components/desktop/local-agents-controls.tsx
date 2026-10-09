@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ExternalLink, FolderOpen, Import, Loader2, Play, Plus, RefreshCw, RotateCcw, Square, Undo2, X } from 'lucide-react'
+import { ExternalLink, FolderOpen, Import, KeyRound, Loader2, Play, Plus, RefreshCw, RotateCcw, Square, Undo2, X } from 'lucide-react'
 import { getDesktopBridge, type DesktopAgentProfile, type DesktopRuntimeState, type DesktopRemoteTools } from '@/lib/desktop'
 import { RemoteToolsSelection } from './remote-tools-selection'
 import { useI18n } from '@/lib/i18n-provider'
@@ -162,6 +162,17 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     } finally { if (active.current) setBusy(false) }
   }
 
+  async function importProvider(profile: DesktopAgentProfile, reset = false) {
+    if (!bridge?.providerImportSupported || !bridge.importAgentProvider || busy || running) return
+    setBusy(true); setError('')
+    try {
+      const result = await bridge.importAgentProvider(profile.profile_id, reset)
+      if (active.current && result) setProfiles(previous => previous.map(value => value.profile_id === result.profile_id ? result : value))
+    } catch {
+      if (active.current) setError(en ? 'Provider import failed. Select a Claude settings JSON file with a valid provider env object (up to 64 KiB).' : '模型配置导入失败，请选择包含有效 provider env 的 Claude settings JSON 文件（最大 64 KiB）。')
+    } finally { if (active.current) setBusy(false) }
+  }
+
   if (!supported) return null
   return <div role="group" aria-label={en ? 'Local Agents' : '本机 Agent'} className="space-y-3 border-t border-[var(--border)] pt-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -213,6 +224,16 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
       <label className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.includes(selectionKey(profile, byProfile))} disabled={busy || running || !profile.available || (profile.requiresFullAccess && access !== 'full-access')} onChange={event => setSelected(previous => event.target.checked ? [...previous, selectionKey(profile, byProfile)] : previous.filter(value => value !== selectionKey(profile, byProfile)))} /><span className="break-words">{profile.display_name}</span></label>
       <span className="break-all text-xs text-[var(--muted-foreground)]">{!profile.available ? (en ? 'Not installed' : '未安装') : profile.requiresFullAccess && access !== 'full-access' ? (en ? 'Full access required' : '需要完整执行权限') : profile.version}</span>
       {profile.available && <div className="flex min-w-0 items-center gap-1">{bridge?.selectAgentWorkspace && <><button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile)} aria-label={`${en ? 'Workspace for' : '工作目录'} ${profile.display_name}`} title={profile.workspaceName || (en ? 'Isolated WTT workspace' : '独立 WTT 工作区')} className="inline-flex min-h-9 max-w-48 items-center gap-1 rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--muted)] disabled:opacity-50"><FolderOpen size={15} className="shrink-0" /><span className="truncate">{profile.workspaceName || (en ? 'Workspace' : '工作目录')}</span></button>{profile.workspaceName && <button disabled={busy || running} type="button" onClick={() => void chooseWorkspace(profile, true)} aria-label={`${en ? 'Reset workspace for' : '恢复默认工作目录'} ${profile.display_name}`} title={en ? 'Use isolated WTT workspace' : '使用独立 WTT 工作区'} className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><X size={15} /></button>}</>}{byProfile && bridge?.addAgentProfile && <button disabled={busy || running || profiles.length >= 20} type="button" onClick={() => void addProfile(profile)} title={en ? `Add another ${profile.adapter} Agent` : `新增 ${profile.adapter} Agent`} aria-label={en ? `Add another ${profile.adapter} Agent` : `新增 ${profile.adapter} Agent`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><Plus size={15} /></button>}</div>}
+      {profile.available && profile.adapter === 'claude-code' && bridge?.providerImportSupported && <div className="flex min-w-0 items-center gap-1">
+        <button type="button" disabled={busy || running} onClick={() => void importProvider(profile)}
+          title={en ? `Import provider for ${profile.display_name}` : `导入 ${profile.display_name} 模型配置`}
+          aria-label={en ? `Import provider for ${profile.display_name}` : `导入 ${profile.display_name} 模型配置`}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><KeyRound size={15} /></button>
+        {profile.providerOrigin && <><span className="break-all text-xs text-[var(--muted-foreground)]">{profile.providerOrigin}</span>
+          <button type="button" disabled={busy || running} onClick={() => void importProvider(profile, true)}
+            title={en ? 'Use CLI provider defaults' : '使用 CLI 默认模型配置'} aria-label={en ? 'Use CLI provider defaults' : '使用 CLI 默认模型配置'}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-[var(--muted)] disabled:opacity-50"><X size={15} /></button></>}
+      </div>}
       {profile.available && bridge?.workspaceImportSupported && <div className="flex items-center gap-1">
         <button type="button" disabled={busy || running} onClick={() => void migrateWorkspace(profile)}
           title={en ? `Import previous workspace for ${profile.display_name}` : `导入 ${profile.display_name} 的旧工作目录`}
