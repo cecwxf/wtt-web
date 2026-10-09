@@ -484,13 +484,13 @@ export function CliWorkspaceExplorer({ sessionId, workspaceApiBase, previewMode 
       {error && <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] leading-4 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/25 dark:text-rose-300">{error}</div>}
       {fileLoading ? <div className="grid flex-1 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-sky-500" /></div> : selected ? (
         <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="sticky top-0 z-10 flex min-h-10 items-center justify-between gap-2 border-b border-slate-100 bg-white/95 px-2 py-1.5 text-[9px] text-slate-400 backdrop-blur dark:border-zinc-900 dark:bg-zinc-950/95">
-            <div className="flex min-w-0 items-center gap-2">
+          <div className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-white/95 px-2 py-1.5 text-[9px] text-slate-400 backdrop-blur dark:border-zinc-900 dark:bg-zinc-950/95">
+            <div className="flex min-w-0 max-w-full flex-1 basis-32 items-center gap-2">
               {selectedVisual ? <span className={`min-w-8 shrink-0 rounded px-1 py-1 text-center font-mono text-[7px] font-bold leading-none ${selectedVisual.badge}`}>{selectedVisual.label}</span> : null}
               <span className="truncate">{selected.content_type}</span>
               <span className="shrink-0 font-mono">{formatBytes(selected.size)}</span>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex max-w-full flex-wrap items-center gap-1">
               {onDownload && <button type="button" onClick={() => onDownload(selected.path, selected.name)} aria-label={zh ? '下载文件' : 'Download file'} title={zh ? '下载文件' : 'Download file'} className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 dark:border-zinc-800"><Download className="h-3.5 w-3.5" /></button>}
               {(selected.preview_kind === 'text' || selected.preview_kind === 'docx') ? <>
                 <button type="button" onClick={() => changeFontSize(-1)} className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-zinc-800 dark:hover:border-sky-800 dark:hover:bg-sky-950/40" title={zh ? '缩小字体' : 'Decrease font size'}><Minus className="h-3 w-3" /></button>

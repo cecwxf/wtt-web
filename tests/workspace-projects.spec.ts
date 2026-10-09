@@ -224,6 +224,12 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
   await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
   if (entryPath === '/mobile/workspaces') {
     await page.getByRole('complementary').getByText('README.md', { exact: true }).click()
+    const toolbar = page.getByRole('button', { name: 'Download file', exact: true }).locator('../..')
+    const sections = await toolbar.evaluate(element => Array.from(element.children).map(child => {
+      const bounds = child.getBoundingClientRect()
+      return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom }
+    }))
+    expect(sections[0].right <= sections[1].left || sections[0].bottom <= sections[1].top).toBe(true)
     await page.getByRole('button', { name: 'Download file', exact: true }).click()
     await expect.poll(() => nativeDownloads.length).toBe(1)
     expect(nativeDownloads[0].workspaceId).toBe(projects[0].workspace_id)
