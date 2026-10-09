@@ -169,33 +169,43 @@ export function ManagedChatExecutions({ topicId, accessToken, activeRun, enabled
   }
 
   if (!enabled || (!rows.length && !error)) return null
-  const visible = rows.filter(row => active.has(row.state) || ['interrupted', 'failed'].includes(row.state)).slice(0, 7)
-  // An earlier failure must not hide the latest successful continuation.
-  if (rows[0] && !visible.some(row => row.execution_id === rows[0].execution_id)) visible.unshift(rows[0])
+  const ordered = [...rows].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+  const latest = new Map<string, string>()
+  for (const row of ordered) if (!latest.has(row.agent_id)) latest.set(row.agent_id, row.execution_id)
+  // Older unresolved work still needs attention even after a newer request finishes.
+  const current = ordered.filter(row => latest.get(row.agent_id) === row.execution_id
+    || active.has(row.state) || row.stale || row.state === 'interrupted' || row.session_recovery || row.can_restart_session)
+  const currentIds = new Set(current.map(row => row.execution_id))
+  const earlier = ordered.filter(row => !currentIds.has(row.execution_id))
+  const renderExecution = (row: Execution) => {
+    const pending = active.has(row.state) && !row.stale
+    const Icon = row.stale || ['interrupted', 'failed'].includes(row.state) ? AlertTriangle : pending ? (['queued', 'accepted'].includes(row.state) ? Clock3 : Loader2) : CheckCircle2
+    const name = agents.find(agent => agent.agent_id === row.agent_id)?.display_name || row.agent_id
+    const text = row.session_recovery ? (en ? 'Native session unavailable; history preserved' : '原生会话无法恢复，历史已保留')
+      : row.stale ? (en ? 'Host disconnected; result uncertain' : '主机失联，执行结果待核对') : labels[row.state][en ? 1 : 0]
+    return <div key={row.execution_id} className="py-1 text-xs text-zinc-600 dark:text-zinc-300"><div className="flex min-h-8 min-w-0 items-center gap-2">
+      <Icon size={14} aria-hidden className={`shrink-0 ${pending && !['queued', 'accepted', 'waiting_approval'].includes(row.state) ? 'animate-spin' : ''}`} />
+      <span title={name} className="max-w-[35%] truncate font-medium">{name}</span>
+      <span className="min-w-0 flex-1 break-words">{text}</span>
+      <time className="shrink-0 text-[10px] text-zinc-400" dateTime={row.created_at}>{new Date(row.created_at).toLocaleTimeString(en ? 'en-US' : 'zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>
+      {row.can_cancel && row.state !== 'cancel_requested' && <button type="button" disabled={Boolean(busy)} onClick={() => { void stop(row) }} aria-label={en ? `Stop ${name}` : `停止 ${name}`} title={en ? 'Stop execution' : '停止执行'} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800">
+        {busy === row.execution_id ? <Loader2 size={13} className="animate-spin" /> : <Square size={12} />}
+      </button>}
+      {row.can_restart_session && <button type="button" disabled={Boolean(busy)} onClick={() => setConfirmRestart(row.execution_id)} title={en ? 'Continue in a new session' : '新会话继续'} aria-label={en ? `Continue ${name} in a new session` : `${name} 新会话继续`} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800"><RefreshCw size={13} /></button>}
+    </div>
+    {confirmRestart === row.execution_id && row.can_restart_session && <div className="flex flex-wrap items-center gap-2 border-l-2 border-amber-400 pl-2 text-xs">
+      <p className="min-w-0 flex-1 basis-52">{en ? 'Native context will reset. Chat history stays, and the failed request will not rerun. Check earlier tool results before continuing.' : '只重置原生上下文，保留聊天记录，不重跑失败请求。继续前请核对之前的工具执行结果。'}</p>
+      <button type="button" disabled={Boolean(busy)} onClick={() => { void restartSession(row) }} className="inline-flex min-h-8 items-center gap-1 rounded px-2 hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800">{busy === row.execution_id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}{en ? 'New session' : '新会话继续'}</button>
+      <button type="button" disabled={Boolean(busy)} onClick={() => setConfirmRestart(null)} className="min-h-8 rounded px-2 hover:bg-zinc-100 dark:hover:bg-zinc-800">{en ? 'Cancel' : '取消'}</button>
+    </div>}
+    </div>
+  }
   return <section aria-label={en ? 'Executions' : '执行状态'} className="mb-2 max-h-36 overflow-y-auto border-b border-zinc-200 pb-1 dark:border-zinc-800">
-    {visible.map(row => {
-      const pending = active.has(row.state) && !row.stale
-      const Icon = row.stale || ['interrupted', 'failed'].includes(row.state) ? AlertTriangle : pending ? (['queued', 'accepted'].includes(row.state) ? Clock3 : Loader2) : CheckCircle2
-      const name = agents.find(agent => agent.agent_id === row.agent_id)?.display_name || row.agent_id
-      const text = row.session_recovery ? (en ? 'Native session unavailable; history preserved' : '原生会话无法恢复，历史已保留')
-        : row.stale ? (en ? 'Host disconnected; result uncertain' : '主机失联，执行结果待核对') : labels[row.state][en ? 1 : 0]
-      return <div key={row.execution_id} className="py-1 text-xs text-zinc-600 dark:text-zinc-300"><div className="flex min-h-8 min-w-0 items-center gap-2">
-        <Icon size={14} aria-hidden className={`shrink-0 ${pending && !['queued', 'accepted', 'waiting_approval'].includes(row.state) ? 'animate-spin' : ''}`} />
-        <span title={name} className="max-w-[35%] truncate font-medium">{name}</span>
-        <span className="min-w-0 flex-1 break-words">{text}</span>
-        <time className="shrink-0 text-[10px] text-zinc-400" dateTime={row.created_at}>{new Date(row.created_at).toLocaleTimeString(en ? 'en-US' : 'zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>
-        {row.can_cancel && row.state !== 'cancel_requested' && <button type="button" disabled={Boolean(busy)} onClick={() => { void stop(row) }} aria-label={en ? `Stop ${name}` : `停止 ${name}`} title={en ? 'Stop execution' : '停止执行'} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800">
-          {busy === row.execution_id ? <Loader2 size={13} className="animate-spin" /> : <Square size={12} />}
-        </button>}
-        {row.can_restart_session && <button type="button" disabled={Boolean(busy)} onClick={() => setConfirmRestart(row.execution_id)} title={en ? 'Continue in a new session' : '新会话继续'} aria-label={en ? `Continue ${name} in a new session` : `${name} 新会话继续`} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800"><RefreshCw size={13} /></button>}
-      </div>
-      {confirmRestart === row.execution_id && row.can_restart_session && <div className="flex flex-wrap items-center gap-2 border-l-2 border-amber-400 pl-2 text-xs">
-        <p className="min-w-0 flex-1 basis-52">{en ? 'Native context will reset. Chat history stays, and the failed request will not rerun. Check earlier tool results before continuing.' : '只重置原生上下文，保留聊天记录，不重跑失败请求。继续前请核对之前的工具执行结果。'}</p>
-        <button type="button" disabled={Boolean(busy)} onClick={() => { void restartSession(row) }} className="inline-flex min-h-8 items-center gap-1 rounded px-2 hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800">{busy === row.execution_id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}{en ? 'New session' : '新会话继续'}</button>
-        <button type="button" disabled={Boolean(busy)} onClick={() => setConfirmRestart(null)} className="min-h-8 rounded px-2 hover:bg-zinc-100 dark:hover:bg-zinc-800">{en ? 'Cancel' : '取消'}</button>
-      </div>}
-      </div>
-    })}
+    <div data-testid="current-executions">{current.map(renderExecution)}</div>
+    {earlier.length > 0 && <details key={scope} className="text-xs text-zinc-500 dark:text-zinc-400">
+      <summary className="cursor-pointer py-1 hover:text-zinc-700 dark:hover:text-zinc-200">{en ? 'Earlier executions' : '之前的执行'} ({earlier.length})</summary>
+      {earlier.map(renderExecution)}
+    </details>}
     {error && <div role="alert" className="flex items-center gap-2 py-1 text-xs text-red-600 dark:text-red-400"><span>{error}</span><button type="button" onClick={() => setRevision(value => value + 1)} title={en ? 'Retry' : '重试'} aria-label={en ? 'Retry execution status' : '重试执行状态'} className="inline-flex h-7 w-7 items-center justify-center"><RefreshCw size={13} /></button></div>}
   </section>
 }
