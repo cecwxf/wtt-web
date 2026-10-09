@@ -26,6 +26,7 @@ import { ToolApprovalPanel } from '@/components/ui/tool-approval-panel'
 import { ManagedChatExecutions } from '@/components/ui/managed-chat-executions'
 import { useManagedChatProgress } from '@/lib/managed-chat-progress'
 import { ManagedAgentTools } from '@/components/desktop/managed-agent-tools'
+import { useWorkspaceComposerState, type WorkspaceComposerStore } from '@/lib/hooks/use-workspace-composer'
 import desktopStyles from './chat-view-desktop.module.css'
 
 export interface ChatMessage {
@@ -637,6 +638,7 @@ interface ChatViewProps {
   slashCommandOverrides?: Array<{ cmd: string; desc: string; icon?: string }>
   hideHeader?: boolean
   workspaceProjectId?: string
+  workspaceComposerStore?: WorkspaceComposerStore
   composerAccessory?: React.ReactNode
   hideRuntimeBadges?: boolean
 }
@@ -1411,6 +1413,7 @@ function ChatViewContent({
   slashCommandOverrides,
   hideHeader = false,
   workspaceProjectId,
+  workspaceComposerStore,
   composerAccessory,
   hideRuntimeBadges = false,
   managedToolsExternal = false,
@@ -1425,17 +1428,19 @@ function ChatViewContent({
     return Array.from(names, ([agent_id, display_name]) => ({ agent_id, display_name }))
   }, [topicMembers, agentRoleLabelMap, currentAgentId, workspaceAgentName])
   const defaultEffort = (taskType && DEFAULT_EFFORT_BY_TASK[taskType]) || 'off'
-  const [draft, setDraft] = useState('')
+  const composerStore = workspaceProjectId ? workspaceComposerStore : undefined
+  const composerScope = JSON.stringify([workspaceProjectId, topicId || topicName])
+  const [draft, setDraft] = useWorkspaceComposerState(composerStore, composerScope, 'draft', '')
   const [activeTab, setActiveTab] = useState<ChatPanelTab>('chat')
-  const [kbMode, setKbMode] = useState(false)
+  const [kbMode, setKbMode] = useWorkspaceComposerState(composerStore, composerScope, 'kbMode', false)
   const [terminalMaximized, setTerminalMaximized] = useState(false)
   const [manualPreviewFile, setManualPreviewFile] = useState<ConversationFile | null>(null)
   const [closedPreviewKeys, setClosedPreviewKeys] = useState<Set<string>>(() => new Set())
   const [closedCloudPreviewKeys, setClosedCloudPreviewKeys] = useState<Set<string>>(() => new Set())
   const lastAutoPreviewKeyRef = useRef<string | null>(null)
-  const [sending, setSending] = useState(false)
+  const [sending, setSending] = useWorkspaceComposerState(composerStore, composerScope, 'sending', false)
   const [composerExpanded, setComposerExpanded] = useState(false)
-  const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string; imageUrl?: string; replyToId?: string } | null>(null)
+  const [replyContext, setReplyContext] = useWorkspaceComposerState<{ sender: string; snippet: string; imageUrl?: string; replyToId?: string } | null>(composerStore, composerScope, 'replyContext', null)
 
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [historyLoadError, setHistoryLoadError] = useState(false)
@@ -1450,12 +1455,12 @@ function ChatViewContent({
     setHistoryLoadError(false)
     return () => { if (historyScopeRef.current === historyScope) historyScopeRef.current = null }
   }, [historyScope])
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<number | undefined>(undefined)
+  const [uploading, setUploading] = useWorkspaceComposerState(composerStore, composerScope, 'uploading', false)
+  const [uploadProgress, setUploadProgress] = useWorkspaceComposerState<number | undefined>(composerStore, composerScope, 'uploadProgress', undefined)
   const [exportOpen, setExportOpen] = useState(false)
   const attachMenuRef = useRef<HTMLDivElement>(null)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
-  const [pendingAssets, setPendingAssets] = useState<PendingAsset[]>([])
+  const [pendingAssets, setPendingAssets] = useWorkspaceComposerState<PendingAsset[]>(composerStore, composerScope, 'pendingAssets', [])
   const [previewCache, setPreviewCache] = useState<Record<string, CachedPreview>>({})
   const previewCacheRef = useRef<Record<string, CachedPreview>>({})
   const previewInflightRef = useRef<Set<string>>(new Set())
@@ -2470,9 +2475,9 @@ function ChatViewContent({
         kbQuery: content,
       } : undefined
       await onSendMessage(content, replyContext?.replyToId, kbOptions)
-      setDraft('')
-      setPendingAssets([])
-      setReplyContext(null)
+      setDraft(previous => composerStore && previous !== draft ? previous : '')
+      setPendingAssets(previous => composerStore ? previous.filter(asset => !pendingAssets.includes(asset)) : [])
+      setReplyContext(previous => composerStore && previous !== replyContext ? previous : null)
     } catch (error) {
       console.error('Failed to send message:', error)
       alert(error instanceof Error ? error.message : 'Failed to send message')

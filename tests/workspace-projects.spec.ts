@@ -355,9 +355,10 @@ test('unavailable Adapter creation links fail explicitly without selecting a dif
   expect(toolRequests).toHaveLength(0)
 })
 
-test('Workspace UI persists layout and switches independent Adapter sessions without leaking history', async ({ page }) => {
+for (const entryPath of ['/desktop', '/mobile/workspaces']) {
+test(`Workspace UI persists layout and switches independent Adapter sessions without leaking history (${entryPath})`, async ({ page }) => {
   test.setTimeout(60_000)
-  const { projects, created } = await workspaceFlow(page, '', '/desktop', true)
+  const { projects, created } = await workspaceFlow(page, '', entryPath, true)
   const project = projects[0]
   await page.locator('summary').filter({ hasText: 'Website' }).hover()
   await page.getByRole('button', { name: 'Pin Website', exact: true }).click()
@@ -383,9 +384,69 @@ test('Workspace UI persists layout and switches independent Adapter sessions wit
   expect(project.sessions[1].participants).toHaveLength(1)
   expect(project.sessions[1].participants[0]).toMatchObject({ adapter: 'claude-code', host_id: 'remote', label: 'Quality reviewer' })
   const sessions = page.getByRole('navigation', { name: 'Workspace sessions', exact: true })
+  await page.locator('textarea').first().fill('Unsent review draft')
   await sessions.getByRole('link', { name: 'Main', exact: true }).click()
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
   await expect(page.getByText('Independent review result', { exact: true })).toHaveCount(0)
+  await expect(page.locator('textarea').first()).toHaveValue('')
+  await page.locator('textarea').first().fill('Unsent engineer draft')
+  await sessions.getByRole('link', { name: 'Review', exact: true }).click()
+  await expect(page.getByText('Independent review result', { exact: true })).toBeVisible()
+  await expect(page.locator('textarea').first()).toHaveValue('Unsent review draft')
+  await sessions.getByRole('link', { name: 'Main', exact: true }).click()
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  await expect(page.locator('textarea').first()).toHaveValue('Unsent engineer draft')
+  await page.locator('textarea').first().fill('')
+  let releaseCommit!: () => void
+  let committing = false
+  const commitReady = new Promise<void>(resolve => { releaseCommit = resolve })
+  await page.route('**/api/wtt/media/sign', route => route.fulfill({ json: { upload_url: '/media/scoped-upload', upload_token: 'scoped-fixture' } }))
+  await page.route('**/api/wtt/media/scoped-upload', route => route.fulfill({ status: 200, body: '' }))
+  await page.route('**/api/wtt/media/commit', async route => {
+    committing = true
+    await commitReady
+    await route.fulfill({ json: { url: '/scoped-workspace-file.txt' } })
+  })
+  await page.locator('input[type="file"]').first().setInputFiles({ name: 'engineer-draft.txt', mimeType: 'text/plain', buffer: Buffer.from('Private to the engineer session') })
+  await expect.poll(() => committing).toBe(true)
+  await sessions.getByRole('link', { name: 'Review', exact: true }).click()
+  await expect(page.getByText('Independent review result', { exact: true })).toBeVisible()
+  await expect(page.locator('textarea').first()).toHaveValue('Unsent review draft')
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled()
+  await expect(page.getByText('engineer-draft.txt', { exact: true })).toHaveCount(0)
+  await sessions.getByRole('link', { name: 'Main', exact: true }).click()
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
+  releaseCommit()
+  await expect(page.getByText('engineer-draft.txt', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled()
+  let releaseSend!: () => void
+  let sending = false
+  const sendReady = new Promise<void>(resolve => { releaseSend = resolve })
+  await page.route('**/api/wtt/topics/project-topic/messages**', async route => {
+    if (route.request().method() !== 'POST') { await route.fallback(); return }
+    const body = route.request().postDataJSON()
+    created.push({ path: '/topics/project-topic/messages', body })
+    sending = true
+    await sendReady
+    await route.fulfill({ json: { id: 'scoped-sent', topic_id: 'project-topic', content: body.content, sender_type: 'human', sender_id: host, timestamp: new Date().toISOString() } })
+  })
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(() => sending).toBe(true)
+  await expect.poll(() => created.some(item => item.path === '/topics/project-topic/messages' && item.body.content === '[file:engineer-draft.txt](/scoped-workspace-file.txt)')).toBe(true)
+  await sessions.getByRole('link', { name: 'Review', exact: true }).click()
+  await expect(page.getByText('Independent review result', { exact: true })).toBeVisible()
+  await expect(page.locator('textarea').first()).toHaveValue('Unsent review draft')
+  await expect(page.getByText('engineer-draft.txt', { exact: true })).toHaveCount(0)
+  await sessions.getByRole('link', { name: 'Main', exact: true }).click()
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  await page.locator('textarea').first().fill('Next engineer question')
+  releaseSend()
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled()
+  await expect(page.locator('textarea').first()).toHaveValue('Next engineer question')
+  await expect(page.getByText('engineer-draft.txt', { exact: true })).toHaveCount(0)
+  await page.locator('textarea').first().fill('')
+  await page.unroute('**/api/wtt/topics/project-topic/messages**')
   await page.locator('summary[aria-label="Commands"]').click()
   await page.getByRole('button', { name: /Status.*\/status/ }).click()
   await expect.poll(() => created.some(item => item.path === '/topics/project-topic/messages' && item.body.content === '/status')).toBe(true)
@@ -408,7 +469,14 @@ test('Workspace UI persists layout and switches independent Adapter sessions wit
   await page.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(page.getByRole('button', { name: '添加 Agent 执行会话', exact: true })).toBeVisible()
   await page.screenshot({ path: '/tmp/wtt-workspace-ui-zh-20261009.png', fullPage: true })
+  await page.locator('textarea').first().fill('Private review draft before switching account')
+  const otherUser = '55555555-5555-4555-8555-555555555555'
+  await page.route('**/api/auth/session', route => route.fulfill({ json: { userId: otherUser, user: { id: otherUser, name: 'Other Composer Tester', email: 'other-composer@example.test' }, accessToken: 'other-synthetic-user-token', expires: '2099-01-01T00:00:00Z' } }))
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await expect(page.getByText('Other Composer Tester', { exact: true }).first()).toBeVisible()
+  await expect(page.locator('textarea').first()).toHaveValue('')
 })
+}
 
 test('desktop native v3 downloads the selected Workspace without a renderer Blob', async ({ page }) => {
   const downloads: any[] = []

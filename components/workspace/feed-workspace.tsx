@@ -38,6 +38,7 @@ import { mergeMessageHistory } from '@/lib/chat-history'
 import { importedHistorySource } from '@/lib/desktop-history-import'
 import { getDesktopBridge } from '@/lib/desktop'
 import { getNativeNotifications } from '@/lib/native-notifications'
+import { useWorkspaceComposerStore } from '@/lib/hooks/use-workspace-composer'
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
@@ -723,6 +724,7 @@ function MemberRow({ member, isSelf, onRequestPrivateDiscuss }: {
 
 function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolean; workspaceBasePath: '/desktop' | '/mobile/workspaces' }) {
   const { data: session, status } = useSession()
+  const workspaceComposerStore = useWorkspaceComposerStore(session?.userId)
   const [nativeSessionReady, setNativeSessionReady] = useState(false)
   const { t } = useI18n()
   const router = useRouter()
@@ -3266,6 +3268,7 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
                 <ChatView
                 appearance={desktopMode ? 'desktop' : 'default'}
                 workspaceProjectId={desktopMode && searchParams.get('legacy') !== '1' ? searchParams.get('workspace') || undefined : undefined}
+                workspaceComposerStore={workspaceComposerStore}
                 topicName={selectedTopic.name}
                 topicId={selectedTopic.topic_id}
                 taskId={selectedTopicTaskId}
