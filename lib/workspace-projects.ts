@@ -9,6 +9,10 @@ export interface WorkspaceProject {
 }
 export interface ProjectRoot { root_id: string; name: string; host_id: string; host_name: string; access: string }
 
+export class WorkspaceRequestError extends Error {
+  constructor(message: string, readonly status: number) { super(message) }
+}
+
 export class WorkspaceProjectsApi {
   constructor(private readonly token: string) {}
   async request<T>(path: string, body?: unknown): Promise<T> {
@@ -18,7 +22,7 @@ export class WorkspaceProjectsApi {
     })
     if (!response.ok) {
       const value = await response.json().catch(() => null)
-      throw new Error(typeof value?.detail === 'string' ? value.detail : `Workspace request failed (${response.status})`)
+      throw new WorkspaceRequestError(typeof value?.detail === 'string' ? value.detail : `Workspace request failed (${response.status})`, response.status)
     }
     return response.json()
   }

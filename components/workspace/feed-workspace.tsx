@@ -36,6 +36,7 @@ import {
 import { mergeMessageHistory } from '@/lib/chat-history'
 import { importedHistorySource } from '@/lib/desktop-history-import'
 import { getDesktopBridge } from '@/lib/desktop'
+import { getNativeNotifications } from '@/lib/native-notifications'
 
 const P2P_E2E_WEB_ENABLED = process.env.NEXT_PUBLIC_WTT_P2P_E2E === '1'
 const AGENT_TYPING_STALE_MS = 15 * 60 * 1000
@@ -1251,12 +1252,17 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
 
       if (displayable && session?.userId && selectedAgentId && String(msg.message.sender_type).toLowerCase() === 'agent') {
         const notifications = getDesktopBridge()?.notifications
-        if (notifications) {
+        const nativeNotifications = desktopMode && workspaceBasePath === '/mobile/workspaces' ? getNativeNotifications() : null
+        if (notifications || nativeNotifications) {
           const name = agentNameMap[msg.message.sender_id] || msg.message.sender_id
           const preview = msg.message.encrypted ? t('settings.notificationNewReply') : cleanedContent
             .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 160)
-          void notifications.show({ userId: session.userId, messageId: msg.message.id, topicId: incomingTopicId,
-            agentId: selectedAgentId, title: `${name} · WTT`.slice(0, 200), body: preview }).catch(() => {})
+          const notice = { userId: session.userId, messageId: msg.message.id, topicId: incomingTopicId,
+            agentId: selectedAgentId, title: `${name} · WTT`.slice(0, 200), body: preview }
+          if (notifications) void notifications.show(notice).catch(() => {})
+          else if (nativeNotifications) void nativeNotifications.show({ ...notice,
+            focused: incomingTopicId === selectedTopicId && document.visibilityState === 'visible' && document.hasFocus(),
+          }).catch(() => {})
         }
       }
 
@@ -1327,7 +1333,7 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
         })
       })()
     },
-    [selectedTopicId, selectedAgentId, session?.userId, agentNameMap, knownAgentIds, decryptMessageForDisplay, updateTopicUnreadCaches, t],
+    [selectedTopicId, selectedAgentId, session?.userId, agentNameMap, knownAgentIds, decryptMessageForDisplay, updateTopicUnreadCaches, t, desktopMode, workspaceBasePath],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,

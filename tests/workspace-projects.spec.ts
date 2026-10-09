@@ -11,7 +11,7 @@ const participants = [
   { participant_id: 'two', label: 'Reviewer', host_id: 'remote', host_name: 'Linux', adapter: 'claude-code', profile_id: 'claude', transport_agent_id: 'agent-two' },
 ]
 
-async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
+async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', singleAgent = false) {
   const created: Array<{ path: string; body: any }> = []
   const projects: any[] = []
   const terminalActions: Array<{ url: string; body: any }> = []
@@ -21,9 +21,19 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
   let feedSocket: WebSocketRoute | undefined
   const loadedHostOffsets: number[] = []
   const nativeDownloads: Array<{ workspaceId?: string; agentId?: string; path: string }> = []
+  const nativeNotices: Array<{ userId: string; topicId: string; agentId: string; messageId: string }> = []
+  const sessionParticipants = singleAgent ? participants.slice(0, 1) : participants
   if (entryPath === '/mobile/workspaces') {
     await page.exposeFunction('observeNativeWorkspaceDownload', (request: typeof nativeDownloads[number]) => nativeDownloads.push(request))
+    await page.exposeFunction('observeNativeWorkspaceNotice', (notice: typeof nativeNotices[number]) => nativeNotices.push(notice))
     await page.addInitScript(() => {
+      ;(window as any).__WTT_NATIVE_NOTIFICATIONS__ = {
+        version: 1,
+        show: async (notice: unknown) => {
+          await (window as any).observeNativeWorkspaceNotice(notice)
+          return { shown: true }
+        },
+      }
       ;(window as any).__WTT_NATIVE_FILES__ = {
         version: 2,
         download: async (request: unknown, progress: (value: { loaded: number; total: number }) => void) => {
@@ -70,7 +80,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
     else if (path === '/workspaces' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, host_id: host, access: 'workspace-write', sessions: [] }; projects.push(value)
     } else if (/^\/workspaces\/[^/]+\/sessions$/.test(path)) {
-      const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, topic_id: 'project-topic', participants }; projects[0].sessions.push(value)
+      const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, topic_id: 'project-topic', participants: sessionParticipants }; projects[0].sessions.push(value)
     } else if (/^\/workspaces\/[^/]+\/tools$/.test(path)) value = { files: 'workspace-write', terminal: true, terminal_agent_id: 'agent-root-relay', host_name: 'MacBook', preview_agent_id: 'agent-root-relay', preview_ports: [38765] }
     else if (/^\/workspaces\/[^/]+\/preview$/.test(path)) {
       const body = route.request().postDataJSON(); created.push({ path, body })
@@ -108,13 +118,26 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
   await expect(modal.getByLabel('Role Engineer', { exact: true })).toHaveValue('Engineer')
   await expect(modal.getByRole('button', { name: 'Load more computers', exact: true })).toHaveCount(0)
   expect(loadedHostOffsets).toContain(200)
-  await modal.getByLabel('Reviewer Linux').check()
+  await expect(modal.getByRole('button', { name: 'Create', exact: true })).toBeEnabled()
+  if (!singleAgent) await modal.getByLabel('Reviewer Linux').check()
   await modal.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
   await expect(page.getByText('Global Engineer', { exact: true })).toHaveCount(0)
   expect(created[0].body.name).toBe('Website')
-  expect(created[1].body.participants.map((p: any) => p.host_id)).toEqual([host, 'remote'])
+  expect(created[1].body.participants.map((p: any) => p.host_id)).toEqual(singleAgent ? [host] : [host, 'remote'])
   expect(created[1].body.participants.every((p: any) => !('agent_id' in p))).toBe(true)
+  if (singleAgent) {
+    await expect(page.getByRole('img', { name: '1/1 adapters online', exact: true })).toBeVisible()
+    await page.locator('textarea').first().fill('Build with one Codex adapter')
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect.poll(() => created.some(item => item.path.includes('/topics/') && item.body.content === 'Build with one Codex adapter')).toBe(true)
+    await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
+    await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
+    await page.reload()
+    await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+    expect(new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
+    return
+  }
   await page.locator('textarea').first().fill('Continue the project')
   const navigationSize = page.getByRole('separator', { name: 'Resize navigation', exact: true })
   await navigationSize.focus()
@@ -194,6 +217,12 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
   await expect(progress).toBeVisible()
   await expect(progress).not.toContainText('Claude Code')
   await expect(progress).not.toContainText('claude-test-model')
+  if (entryPath === '/mobile/workspaces') {
+    expect(nativeNotices).toHaveLength(0)
+    feedSocket!.send(JSON.stringify({ type: 'new_message', message: { id: 'completed-notice', topic_id: 'project-topic', sender_id: 'agent-one', sender_type: 'agent', semantic_type: 'text', content: 'Final native notification', created_at: new Date().toISOString() } }))
+    await expect.poll(() => nativeNotices.length).toBe(1)
+    expect(nativeNotices[0]).toMatchObject({ userId: host, topicId: 'project-topic', agentId: 'agent-one', messageId: 'completed-notice' })
+  }
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()
@@ -227,6 +256,98 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
 
 test('Workspace-first desktop creates a cross-host collaboration and reuses chat and project files', async ({ page }) => {
   await workspaceFlow(page)
+})
+
+test('one Codex adapter creates a Workspace, sends chat and restores its project files', async ({ page }) => {
+  await workspaceFlow(page, '', '/desktop', true)
+})
+
+const restoredWorkspace = '33333333-3333-4333-8333-333333333333'
+const restoredSession = '44444444-4444-4444-8444-444444444444'
+
+async function restorationFixture(page: Page, options: { secondPage?: boolean; status?: number; legacy?: boolean } = {}) {
+  const offsets: number[] = []
+  const toolRequests: string[] = []
+  const project = { workspace_id: restoredWorkspace, root_id: root, host_id: host, name: 'Restored Workspace', access: 'workspace-write', sessions: [
+    { session_id: restoredSession, topic_id: 'restored-topic', name: 'Single Codex', participants: participants.slice(0, 1) },
+  ] }
+  await page.addInitScript(() => {
+    localStorage.setItem('wtt-web.locale', 'en')
+    localStorage.removeItem('wtt_selected_topic_id'); localStorage.removeItem('wtt_selected_agent_id')
+  })
+  await page.routeWebSocket('**', socket => socket.close())
+  await page.route('**/api/auth/session', route => route.fulfill({ json: { userId: host, user: { id: host, name: 'Workspace Tester', email: 'workspace@example.test' }, accessToken: 'synthetic-user-token', expires: '2099-01-01T00:00:00Z' } }))
+  await page.route('**/api/wtt/**', async route => {
+    const url = new URL(route.request().url())
+    const path = url.pathname.replace('/api/wtt', '')
+    let value: any = {}
+    if (path === '/workspaces') {
+      offsets.push(Number(url.searchParams.get('offset') || 0))
+      if (options.status) return route.fulfill({ status: options.status, json: { detail: 'Workspace service unavailable' } })
+      value = { workspaces: options.legacy || (options.secondPage && offsets.at(-1) === 0) ? [] : [project], next_offset: options.secondPage && offsets.at(-1) === 0 ? 50 : null }
+    } else if (path === `/workspaces/${restoredWorkspace}`) value = project
+    else if (path === '/workspaces/roots') value = { roots: [] }
+    else if (path === '/hosts/my') value = { hosts: [], next_offset: null }
+    else if (path.includes('/tools') || path.includes('/workspace/')) {
+      toolRequests.push(path)
+      value = path.endsWith('/tools') ? { files: 'workspace-write', terminal: false, preview_ports: [], host_name: 'MacBook' }
+        : { root: 'Workspace', path: '.', entries: [{ name: 'README.md', path: 'README.md', type: 'file', size: 27 }] }
+    } else if (path === '/agents/my') value = [{ agent_id: 'agent-one', display_name: 'Engineer' }]
+    else if (path === '/agents/stats') value = { online_agents: ['agent-one'], runtimes: {} }
+    else if (path === '/topics/subscribed') value = [{ id: 'restored-topic', topic_id: 'restored-topic', name: 'Single Codex', topic_type: 'general' }]
+    else if (path.endsWith('/messages')) value = [{ id: 'restored-message', topic_id: 'restored-topic', sender_type: 'agent', sender_id: 'agent-one', content: 'Restored single-agent history', timestamp: '2026-10-08T00:00:00Z' }]
+    else if (path.endsWith('/members')) value = [{ agent_id: 'agent-one', display_name: 'Engineer', role: 'member' }]
+    else if (path === '/topics/my-recent') value = { items: [] }
+    else if (path === '/billing/me') value = { entitlement: { plan: 'free' } }
+    else if (path.startsWith('/tasks') || path.startsWith('/p2p-requests') || path === '/topics/my-groups' || path === '/hosts/chat-executions' || path.startsWith('/agent-operations')) value = []
+    await route.fulfill({ json: value })
+  })
+  return { offsets, toolRequests }
+}
+
+test('mobile notification Topic restores a Workspace beyond the first directory page', async ({ page }) => {
+  const fixture = await restorationFixture(page, { secondPage: true })
+  await page.goto('/mobile/workspaces?topic=restored-topic&agentId=agent-one')
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('workspace')).toBe(restoredWorkspace)
+  expect(new URL(page.url()).searchParams.get('session')).toBe(restoredSession)
+  expect(fixture.offsets).toContain(50)
+  await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
+  await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
+  expect(fixture.toolRequests.every(path => path.startsWith(`/workspaces/${restoredWorkspace}/`))).toBe(true)
+})
+
+test('mismatched session links cannot mount chat or project tools until opened canonically', async ({ page }) => {
+  const fixture = await restorationFixture(page)
+  await page.goto(`/mobile/workspaces?workspace=${restoredWorkspace}&session=wrong-session&topic=restored-topic&agentId=agent-one`)
+  await expect(page.getByText('This link does not match the selected Workspace session.', { exact: true })).toBeVisible()
+  await expect(page.locator('textarea')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Workspace files', exact: true })).toHaveCount(0)
+  expect(fixture.toolRequests).toHaveLength(0)
+  await page.getByRole('link', { name: 'Open session', exact: true }).click()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('session')).toBe(restoredSession)
+})
+
+test('old Topic notifications return to the legacy mobile chat after owned directory lookup', async ({ page }) => {
+  const fixture = await restorationFixture(page, { legacy: true })
+  await page.goto('/mobile/workspaces?topic=restored-topic&agentId=agent-one')
+  await expect(page).toHaveURL(/\/mobile\/feed\?topic_id=restored-topic&agent_id=agent-one$/)
+  expect(fixture.toolRequests).toHaveLength(0)
+})
+
+test('mobile Workspace feature gate keeps legacy users working without masking service failures', async ({ page }) => {
+  await restorationFixture(page, { status: 404 })
+  await page.goto('/mobile/workspaces')
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/mobile/feed')
+})
+
+test('mobile Workspace service errors stay visible and do not redirect into legacy chat', async ({ page }) => {
+  await restorationFixture(page, { status: 503 })
+  await page.goto('/mobile/workspaces?topic=restored-topic&agentId=agent-one')
+  await expect(page.getByText('Could not load Workspaces.', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).pathname).toBe('/mobile/workspaces')
+  await expect(page.locator('textarea')).toHaveCount(0)
 })
 
 test('mobile Remote Web reuses Workspace chat, restores history and stays on mobile routes', async ({ page }) => {

@@ -6,14 +6,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import useSWRInfinite from 'swr/infinite'
 import useSWR from 'swr'
-import { Archive, ChevronRight, FolderOpen, History, Laptop, Loader2, LogOut, PanelLeft, Plus, RefreshCw, Search, Settings2, Users, X } from 'lucide-react'
+import { Archive, ArrowUpRight, ChevronRight, FolderOpen, History, Laptop, Loader2, LogOut, PanelLeft, Plus, RefreshCw, Search, Settings2, Users, X } from 'lucide-react'
 import type { WttShellV2Props } from '@/components/ui/wtt-shell-v2'
 import { WttSettingsModal } from '@/components/ui/wtt-settings-modal'
 import { DesktopOnboarding } from './desktop-onboarding'
 import { DesktopWorkspaceShell } from './desktop-workspace-shell'
 import { DesktopHostsApi } from '@/lib/desktop-hosts'
 import { getDesktopBridge } from '@/lib/desktop'
-import { WorkspaceProjectsApi, type WorkspaceProject, type ProjectSession } from '@/lib/workspace-projects'
+import { WorkspaceProjectsApi, WorkspaceRequestError, type WorkspaceProject, type ProjectSession } from '@/lib/workspace-projects'
 import { useI18n } from '@/lib/i18n-provider'
 
 const iconButton = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 disabled:opacity-40'
@@ -71,6 +71,39 @@ function ProjectShell(props: ProjectShellProps) {
   }, [projects.data, detail.data])
   const current = directory.find(project => project.sessions.some(session => session.topic_id === props.selectedTopicId))
   const currentSession = current?.sessions.find(session => session.topic_id === props.selectedTopicId)
+  const requestedTopic = params.get('topicId') || params.get('topic')
+  const requestedSession = params.get('session')
+  const targetTopic = requestedTopic || props.selectedTopicId
+  const targetFound = directory.some(project => project.sessions.some(session => session.topic_id === targetTopic))
+  const nextOffset = projects.data?.at(-1)?.next_offset
+  const canResolveNext = nextOffset != null && Number.isSafeInteger(nextOffset) && nextOffset > 0
+    && !projects.data?.slice(0, -1).some(page => page.next_offset === nextOffset)
+  const selectionMismatch = Boolean(current && currentSession && (
+    (workspaceId && workspaceId !== current.workspace_id)
+    || (requestedSession && requestedSession !== currentSession.session_id)
+    || (requestedTopic && requestedTopic !== currentSession.topic_id)
+  ))
+  const selectionReady = Boolean(current && currentSession && workspaceId === current.workspace_id
+    && requestedSession === currentSession.session_id && requestedTopic === currentSession.topic_id)
+  useEffect(() => {
+    if (targetTopic && !targetFound && !workspaceId && !projects.error && !projects.isValidating && canResolveNext) {
+      void projects.setSize(projects.size + 1)
+    }
+  }, [targetTopic, targetFound, workspaceId, projects.error, projects.isValidating, canResolveNext, projects.setSize, projects.size])
+  useEffect(() => {
+    if (basePath !== '/mobile/workspaces' || workspaceId || requestedSession) return
+    const unavailable = projects.error instanceof WorkspaceRequestError && projects.error.status === 404
+    const legacyTopic = requestedTopic && projects.data && !projects.error && !projects.isValidating
+      && nextOffset == null && !targetFound
+    if (!unavailable && !legacyTopic) return
+    const legacy = new URLSearchParams()
+    if (requestedTopic) legacy.set('topic_id', requestedTopic)
+    const agentId = params.get('agentId') || props.selectedAgentId
+    if (agentId) legacy.set('agent_id', agentId)
+    const source = params.get('source')
+    if (source) legacy.set('source', source)
+    router.replace(`/mobile/feed${legacy.size ? `?${legacy}` : ''}`, { scroll: false })
+  }, [basePath, workspaceId, requestedSession, requestedTopic, projects.error, projects.data, projects.isValidating, nextOffset, targetFound, params, props.selectedAgentId, router])
   useEffect(() => {
     if (!current || !currentSession || params.get('workspace')) return
     const requestedTopic = params.get('topicId') || params.get('topic')
@@ -188,7 +221,7 @@ function ProjectShell(props: ProjectShellProps) {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col"><header className="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800"><button className={`${iconButton} ${collapsed ? '' : 'md:hidden'}`} title={en ? 'Open navigation' : '展开导航'} aria-label={en ? 'Open navigation' : '展开导航'} aria-controls="workspace-project-navigation" onClick={() => { if (window.innerWidth < 768) setDrawerOpen(true); else setCollapsed(false) }}><PanelLeft size={17} /></button><FolderOpen size={15} className="text-zinc-400" /><span className="min-w-0 truncate text-sm font-medium">{current?.name || 'Workspaces'}</span>{currentSession && <><ChevronRight size={12} className="text-zinc-400" /><span className="min-w-0 flex-1 truncate text-sm text-zinc-500">{currentSession.name}</span><span className="hidden text-xs text-zinc-500 sm:block">{currentSession.participants.length > 1 ? `${currentSession.participants.length} Adapters` : currentSession.participants[0]?.adapter}</span></>}</header>
       <DesktopOnboarding accessToken={props.userToken} userId={props.currentUserId} onChanged={refresh} />
       {error && !creation && <p role="alert" className="p-2 text-xs text-red-600">{error}</p>}
-      <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{currentSession ? props.children : <div className="flex h-full flex-col items-center justify-center gap-4 p-6"><FolderOpen size={36} strokeWidth={1.25} className="text-zinc-300 dark:text-zinc-600" /><h1 className="text-lg font-medium">{en ? 'Workspaces' : '工作区'}</h1><button className="flex items-center gap-2 rounded-md border border-zinc-200 px-4 py-2 text-sm dark:border-zinc-700" onClick={() => start()}><Plus size={16} />{en ? 'New Workspace' : '新建 Workspace'}</button></div>}</main>
+      <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{selectionReady ? props.children : selectionMismatch && current && currentSession ? <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"><p className="text-sm text-red-600">{en ? 'This link does not match the selected Workspace session.' : '链接与选中的 Workspace 会话不一致。'}</p><Link href={href(current, currentSession)} className="inline-flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700"><ArrowUpRight size={15} />{en ? 'Open session' : '打开会话'}</Link></div> : projects.error ? <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6"><p className="text-sm text-red-600">{en ? 'Could not load Workspaces.' : '工作区加载失败。'}</p><button className={iconButton} aria-label={en ? 'Retry Workspaces' : '重试工作区'} title={en ? 'Retry Workspaces' : '重试工作区'} onClick={() => void projects.mutate()}><RefreshCw size={16} /></button></div> : currentSession || (targetTopic && !targetFound && (projects.isLoading || projects.isValidating || canResolveNext)) ? <div role="status" className="flex h-full items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 size={16} className="animate-spin" />{en ? 'Opening session...' : '正在打开会话…'}</div> : <div className="flex h-full flex-col items-center justify-center gap-4 p-6"><FolderOpen size={36} strokeWidth={1.25} className="text-zinc-300 dark:text-zinc-600" /><h1 className="text-lg font-medium">{en ? 'Workspaces' : '工作区'}</h1><button className="flex items-center gap-2 rounded-md border border-zinc-200 px-4 py-2 text-sm dark:border-zinc-700" onClick={() => start()}><Plus size={16} />{en ? 'New Workspace' : '新建 Workspace'}</button></div>}</main>
     </div>
     <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else setCreation(null) }} className="m-auto w-[min(560px,94vw)] max-h-[90dvh] rounded-lg border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/35 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
       {creation && <form onSubmit={submit} className="flex max-h-[90dvh] flex-col"><header className="flex items-center gap-2 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800"><FolderOpen size={17} /><h2 className="flex-1 text-sm font-semibold">{creation.project ? (en ? 'Add session' : '添加执行会话') : (en ? 'New Workspace' : '新建 Workspace')}</h2><button type="button" className={iconButton} disabled={busy} aria-label={en ? 'Close' : '关闭'} onClick={() => setCreation(null)}><X size={17} /></button></header><div className="space-y-4 overflow-y-auto p-5">
