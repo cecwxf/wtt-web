@@ -1479,13 +1479,14 @@ function ChatViewContent({
   const resizeComposerTextarea = useCallback(() => {
     const textarea = textareaRef.current
     if (!textarea) return
-    const lineHeight = compactUi ? 20 : 22
     const minHeight = composerExpanded ? Math.round(window.innerHeight * 0.34) : compactUi ? 30 : 34
-    const maxHeight = composerExpanded ? Math.round(window.innerHeight * 0.5) : compactUi ? lineHeight * 8 : lineHeight * 10
+    const maxHeight = composerExpanded ? Math.round(window.innerHeight * 0.5) : compactUi ? 80 : 96
     textarea.style.height = 'auto'
-    const nextHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
+    // Placeholder wrapping must not grow an empty composer; match its CSS height cap.
+    const contentHeight = textarea.value ? textarea.scrollHeight : minHeight
+    const nextHeight = Math.max(minHeight, Math.min(contentHeight, maxHeight))
     textarea.style.height = `${nextHeight}px`
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+    textarea.style.overflowY = contentHeight > maxHeight ? 'auto' : 'hidden'
   }, [compactUi, composerExpanded])
 
   useEffect(() => {
@@ -4286,9 +4287,10 @@ function ChatViewContent({
             value={draft}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
+            aria-label={topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
+            placeholder={workspaceProjectId ? t('chat.messagePlaceholder') : topicType === 'discussion' ? t('chat.discussionHint', { topic: topicName }) : t('chat.topicHint', { topic: topicName })}
             rows={1}
-            className={`flex-1 resize-none rounded-xl border border-transparent bg-transparent text-[#1f2328] outline-none placeholder:text-[#aaa298] dark:text-zinc-200 ${compactUi ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1.5 text-sm'} ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : compactUi ? 'max-h-20 min-h-[30px]' : 'max-h-24 min-h-8'}`}
+            className={`min-w-0 flex-1 resize-none rounded-xl border border-transparent bg-transparent text-[#1f2328] outline-none placeholder:text-[#aaa298] dark:text-zinc-200 ${compactUi ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1.5 text-sm'} ${composerExpanded ? 'min-h-[34vh] max-h-[50vh]' : compactUi ? 'max-h-20 min-h-[30px]' : 'max-h-24 min-h-8'}`}
             style={{ overflowY: 'hidden' }}
           />
           <button

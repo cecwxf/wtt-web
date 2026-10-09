@@ -5,6 +5,7 @@ const workspace = '22222222-2222-4222-8222-222222222222'
 const session = '33333333-3333-4333-8333-333333333333'
 const host = '44444444-4444-4444-8444-444444444444'
 const root = '55555555-5555-4555-8555-555555555555'
+const topicName = 'Workspace product acceptance across multiple Agent adapters with a long project name / Independent execution session 20261009'
 const agents = [{ agent_id: 'agent-one', display_name: 'Engineer' }, { agent_id: 'agent-two', display_name: 'Reviewer' }]
 const participants = agents.map((agent, index) => ({
   participant_id: String(index), label: agent.display_name, host_id: host, host_name: 'Test Mac',
@@ -54,7 +55,7 @@ for (const mobile of [false, true]) {
       else if (path === '/workspaces/roots') value = { roots: [] }
       else if (path === '/agents/my') value = agents
       else if (path === '/agents/stats') value = { online_agents: agents.map(a => a.agent_id), runtimes: {} }
-      else if (path === '/topics/subscribed' || path === '/topics/my-groups') value = [{ id: topic, topic_id: topic, name: 'Collaboration', topic_type: 'discussion', member_agent_ids: agents.map(a => a.agent_id) }]
+      else if (path === '/topics/subscribed' || path === '/topics/my-groups') value = [{ id: topic, topic_id: topic, name: topicName, topic_type: 'discussion', member_agent_ids: agents.map(a => a.agent_id) }]
       else if (path.endsWith('/members')) value = agents.map(a => ({ ...a, role: 'member' }))
       else if (path.endsWith('/messages')) value = [{ id: 'history', topic_id: topic, sender_id: 'agent-one', sender_type: 'agent', content: 'Stored conversation unchanged', timestamp: '2026-10-09T10:00:00Z' }]
       else if (path === '/topics/my-recent') value = { items: [] }
@@ -80,6 +81,15 @@ for (const mobile of [false, true]) {
     const stops = current.getByRole('button', { name: mobile ? '停止 Engineer' : 'Stop Engineer', exact: true })
     await expect(stops).toHaveCount(8)
     const composer = page.locator('textarea').first()
+    await expect(composer).toHaveValue('')
+    await expect.poll(async () => (await composer.boundingBox())!.height).toBeLessThanOrEqual(40)
+    await expect(composer).toHaveAttribute('placeholder', mobile ? '发送消息' : 'Message')
+    await expect(composer).toHaveAttribute('aria-label', new RegExp(topicName))
+    await composer.fill('A multiline draft\nSecond line\nThird line\nFourth line\nFifth line\nSixth line')
+    await expect(composer).toHaveCSS('overflow-y', 'auto')
+    await expect.poll(async () => (await composer.boundingBox())!.height).toBeLessThanOrEqual(80)
+    await composer.fill('')
+    await expect.poll(async () => (await composer.boundingBox())!.height).toBeLessThanOrEqual(40)
     await composer.fill('Keep this unsent draft')
     await panel.locator('summary').click()
     await expect(panel.getByText(mobile ? '失败' : 'Failed', { exact: true })).toBeVisible()
