@@ -1479,6 +1479,12 @@ function ChatViewContent({
   const [slashIndex, setSlashIndex] = useState(0)
   const [slashResult, setSlashResult] = useState<string | null>(null)
   const [dynamicSlashCommands, setDynamicSlashCommands] = useState<SlashCommandDef[]>([])
+  const [projectSlashCommands, setProjectSlashCommands] = useState<{ key: string; commands: SlashCommandDef[] }>({ key: '', commands: [] })
+  const projectCommandKey = `${accessToken || ''}:${workspaceProjectId || ''}`
+  const scopedSlashCommands = useMemo(() => [
+    ...(projectSlashCommands.key === projectCommandKey ? projectSlashCommands.commands : []),
+    ...dynamicSlashCommands,
+  ], [dynamicSlashCommands, projectSlashCommands, projectCommandKey])
   const [skillModalOpen, setSkillModalOpen] = useState(false)
   const [skillSearch, setSkillSearch] = useState('')
   const [skillCompatibleOnly, setSkillCompatibleOnly] = useState(true)
@@ -1881,7 +1887,7 @@ function ChatViewContent({
     for (const command of [...LOCAL_SLASH_COMMANDS, ...runtimeCommands]) {
       deduped.set(command.cmd, command)
     }
-    for (const command of dynamicSlashCommands) {
+    for (const command of scopedSlashCommands) {
       if (!command.cmd || deduped.has(command.cmd)) continue
       deduped.set(command.cmd, command)
     }
@@ -1893,7 +1899,7 @@ function ChatViewContent({
     // In non-task discuss topics, model switching must be blocked to avoid all
     // agents reacting to the same slash command.
     return commands.filter((c) => !isModelCommand(c.cmd))
-  }, [activeAgentAdapter, dynamicSlashCommands, isNonTaskDiscussTopic, isModelCommand, slashCommandOverrides])
+  }, [activeAgentAdapter, scopedSlashCommands, isNonTaskDiscussTopic, isModelCommand, slashCommandOverrides])
 
   // Slash command filtering
   const filteredCommands = slashFilter
@@ -1936,6 +1942,29 @@ function ChatViewContent({
           ]
     return commands.filter((action) => !(isNonTaskDiscussTopic && isModelCommand(action.cmd)))
   }, [activeAgentAdapter, isModelCommand, isNonTaskDiscussTopic, slashCommandOverrides])
+
+  useEffect(() => {
+    if (!slashOpen || !workspaceProjectId || !accessToken || slashCommandOverrides) return
+    const controller = new AbortController()
+    const load = async () => {
+      try {
+        const response = await fetch(`${CLIENT_WTT_API_BASE}/workspaces/${encodeURIComponent(workspaceProjectId)}/workspace/commands`, {
+          headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal, cache: 'no-store',
+        })
+        if (!response.ok) throw new Error('Workspace commands unavailable')
+        const data = await response.json()
+        const commands: SlashCommandDef[] = (Array.isArray(data.commands) ? data.commands : [])
+          .filter((item: Record<string, unknown>) => /^\/[a-z0-9_-]{1,80}$/i.test(String(item?.cmd || '')))
+          .map((item: Record<string, unknown>) => ({ cmd: String(item.cmd), desc: String(item.desc || item.name || 'Workspace skill'),
+            icon: '⌘', mode: 'passthrough', family: 'skill', skillId: String(item.skill_id || ''), source: String(item.source || '') }))
+        if (!controller.signal.aborted) setProjectSlashCommands({ key: projectCommandKey, commands })
+      } catch {
+        if (!controller.signal.aborted) setProjectSlashCommands({ key: projectCommandKey, commands: [] })
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [slashOpen, workspaceProjectId, accessToken, slashCommandOverrides, projectCommandKey])
 
   useEffect(() => {
     if (slashCommandOverrides || !accessToken || !currentAgentId) {
@@ -2253,7 +2282,7 @@ function ChatViewContent({
     setSending(true)
     try {
       const slashCommand = command.trim().split(/\s+/, 1)[0] || command.trim()
-      const dynamicCommand = dynamicSlashCommands.find((item) => item.cmd.toLowerCase() === slashCommand.toLowerCase())
+      const dynamicCommand = scopedSlashCommands.find((item) => item.cmd.toLowerCase() === slashCommand.toLowerCase())
       await onSendMessage(command, undefined, {
         slashType: 'agent_passthrough',
         slashCommand,
@@ -2269,7 +2298,7 @@ function ChatViewContent({
     } finally {
       setSending(false)
     }
-  }, [dynamicSlashCommands, onSendMessage])
+  }, [scopedSlashCommands, onSendMessage])
 
   // Scroll to bottom on initial load and topic change
   useEffect(() => {
