@@ -220,20 +220,12 @@ function buildAgentSkillInstallPrompt(skill: AgentSkillCandidate, adapter: strin
   ].filter(Boolean).join('\n')
 }
 
-const DEFAULT_MODEL_ID = 'deepseek-v4-pro[1m]'
 type RuntimeEffort = 'off' | 'low' | 'medium' | 'high'
 type RuntimeModelPref = { model: string; effort: RuntimeEffort }
 
 function normalizeRuntimeModelId(raw: unknown): string {
-  const value = String(raw || '').trim()
-  if (!value) return ''
-  if (value === 'deepseek-v4-pro') return DEFAULT_MODEL_ID
-  if (value === 'deepseek-v4-pro[1m]') return value
-  if (value.startsWith('anthropic/') || value.startsWith('openai-codex/') || value.startsWith('openai/')) return value
-  if (value.startsWith('google/') || value.startsWith('gemini-')) return value
-  if (value.startsWith('claude-')) return `anthropic/${value}`
-  if (value.startsWith('gpt-')) return `openai-codex/${value}`
-  return value
+  // Runtime reports are observations, not model-selection defaults or aliases.
+  return String(raw || '').trim()
 }
 
 function normalizeRuntimeEffort(runtime?: CurrentAgentRuntimeInfo): RuntimeEffort | undefined {
@@ -258,11 +250,13 @@ function runtimeModelPref(runtime?: CurrentAgentRuntimeInfo): Partial<RuntimeMod
   }
 }
 
-function normalizeAgentAdapter(runtime?: CurrentAgentRuntimeInfo): 'claude-code' | 'codex' | 'gemini' | 'generic' {
+function normalizeAgentAdapter(runtime?: CurrentAgentRuntimeInfo): 'claude-code' | 'codex' | 'gemini' | 'pi' | 'dsh' | 'generic' {
   const raw = String(runtime?.adapter || '').trim().toLowerCase()
+  if (raw === 'pi' || raw === 'dsh') return raw
   if (raw === 'codex' || raw.includes('codex')) return 'codex'
   if (raw === 'claude-code' || raw === 'claude' || raw.includes('claude')) return 'claude-code'
   if (raw === 'gemini' || raw.includes('gemini')) return 'gemini'
+  if (raw) return 'generic'
   const model = normalizeRuntimeModelId(runtime?.current_model || runtime?.model_id || runtime?.model).toLowerCase()
   if (model.startsWith('google/') || model.startsWith('gemini-') || model.includes('gemini')) return 'gemini'
   if (model.startsWith('openai-codex/') || model.startsWith('openai/') || model.includes('gpt')) return 'codex'
@@ -274,6 +268,8 @@ function labelForRuntimeModel(modelId: string, adapter: ReturnType<typeof normal
   const raw = String(modelId || '').trim()
   if (!raw) return ''
   const short = raw.replace(/^anthropic\//, '').replace(/^openai-codex\//, '').replace(/^openai\//, '').replace(/^google\//, '')
+  if (adapter === 'pi') return `Pi ${short}`
+  if (adapter === 'dsh') return `DSH ${short}`
   if (adapter === 'gemini' || short.toLowerCase().includes('gemini')) return `Gemini ${short.replace(/^gemini[-_]?/i, '')}`
   if (adapter === 'codex') return short.toLowerCase().includes('gpt') ? short.toUpperCase() : `Codex ${short}`
   if (adapter === 'claude-code') return short.toLowerCase().includes('claude') ? short : `Claude ${short}`
@@ -1691,6 +1687,8 @@ function ChatViewContent({
   const activeAgentLabel = activeAgentAdapter === 'codex' ? 'Codex'
     : activeAgentAdapter === 'claude-code' ? 'Claude Code'
       : activeAgentAdapter === 'gemini' ? 'Gemini'
+      : activeAgentAdapter === 'pi' ? 'Pi'
+      : activeAgentAdapter === 'dsh' ? 'DSH'
       : 'Agent'
   const displayModelId = normalizeRuntimeModelId(
     runStatus?.model
