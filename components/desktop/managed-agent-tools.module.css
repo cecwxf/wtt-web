@@ -15,10 +15,16 @@
   max-width: 55%;
   height: 100%;
   border-left: 1px solid #e4e4e7;
-  background: #fafafa;
-  color: #27272a;
+  background: #f6f7f8;
+  color: #24272e;
 }
-:global(.dark) .tools { border-color: #27272a; background: #09090b; color: #e4e4e7; }
+:global(.dark) .tools { border-color: #303236; background: #1c1d20; color: #e5e7eb; }
+.panelHeader { background: #ffffff; }
+:global(.dark) .panelHeader { background: #141517; }
+.panelTitle { min-width: 0; flex: 1; }
+.panelTitle strong { display: block; font-size: 12px; font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.panelTitle small { display: block; font-size: 10px; color: #747983; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+:global(.dark) .panelTitle small { color: #959ba5; }
 .resize { position: absolute; inset: 0 auto 0 -4px; width: 8px; z-index: 10; cursor: col-resize; touch-action: none; }
 .resize:hover, .resize:focus-visible { background: #10b98133; outline: none; }
 @container (max-width: 760px) {

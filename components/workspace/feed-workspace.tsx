@@ -5,6 +5,7 @@ import { signOut } from '@/lib/sign-out'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { Users } from 'lucide-react'
 import useSWR from 'swr'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { wttApi } from '@/lib/api/wtt-client'
@@ -3287,10 +3288,11 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
                     <div className="relative">
                       <button
                         onClick={() => setMembersOpen((v) => !v)}
-                        className="flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100"
+                        className={desktopMode ? 'inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800' : 'flex items-center gap-1 rounded border border-slate-200 dark:border-zinc-600 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-700 dark:hover:text-zinc-100'}
                         title={t('feed.members')}
+                        aria-label={t('feed.members')}
                       >
-                        👥 {t('feed.members')} ({discussMemberCount}) ▾
+                        {desktopMode ? <Users size={16} /> : <>👥 {t('feed.members')} ({discussMemberCount}) ▾</>}
                       </button>
                       {membersOpen && (
                         <>

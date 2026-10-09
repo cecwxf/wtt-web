@@ -1,19 +1,19 @@
 /* Only the opt-in desktop route changes appearance; chat behavior stays shared. */
 .desktop[data-appearance='desktop'] {
-  --wtt-chat-text: #27272a;
-  --wtt-chat-muted: #71717a;
+  --wtt-chat-text: #24272e;
+  --wtt-chat-muted: #747983;
   --wtt-chat-surface: #ffffff;
-  --wtt-chat-surface-mine: #f4f4f5;
-  --wtt-chat-border: #e4e4e7;
+  --wtt-chat-surface-mine: #f2f4f6;
+  --wtt-chat-border: #e7e9ec;
   letter-spacing: 0;
 }
 
 :global(.dark) .desktop[data-appearance='desktop'] {
   --wtt-chat-text: #e4e4e7;
   --wtt-chat-muted: #a1a1aa;
-  --wtt-chat-surface: #09090b;
-  --wtt-chat-surface-mine: #18181b;
-  --wtt-chat-border: #27272a;
+  --wtt-chat-surface: #141517;
+  --wtt-chat-surface-mine: #212327;
+  --wtt-chat-border: #303236;
 }
 
 .desktop .surface,
@@ -23,25 +23,32 @@
   border-color: var(--wtt-chat-border);
 }
 
-.desktop .header { padding: 12px 20px 0; }
+.desktop .header { padding: 0 16px; min-height: 42px; }
 .desktop .header > div { align-items: center; }
 .desktop .header h2 { font-size: 14px; font-weight: 500; }
 .desktop .header button { letter-spacing: 0; }
 .desktop .header h2 + span { color: var(--wtt-chat-muted); }
 .desktop .header button > span:nth-child(2) { background: transparent; color: var(--wtt-chat-muted); padding: 0; }
+.desktop .tabs { display: flex; align-items: center; gap: 16px; min-height: 42px; overflow-x: auto; }
+.desktop .tabs > button { display: inline-flex; align-items: center; gap: 5px; min-height: 42px; padding: 0 1px; flex-shrink: 0; border-bottom: 2px solid transparent; font-size: 11px; color: var(--wtt-chat-muted); }
+.desktop .tabs > button[aria-selected='true'] { color: var(--wtt-chat-text); border-bottom-color: var(--wtt-chat-text); }
+.desktop .tabs > button > span { font-size: 10px; color: var(--wtt-chat-muted); }
+.desktop .tabs > button > .tabLabel { font-size: 11px; color: inherit; }
+.desktop .live { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--wtt-chat-muted); white-space: nowrap; }
+.desktop .live > span { display: block; width: 5px; height: 5px; border-radius: 50%; background: #089b84; }
 
 .desktop .messageGroup {
   border: 0;
   border-radius: 0;
   background: transparent;
   width: 100%;
-  max-width: 880px;
+  max-width: 920px;
   margin-inline: auto;
 }
 
 .desktop .messageRow {
   border-color: transparent;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .desktop .messageRow:hover { background: transparent; }
@@ -52,7 +59,8 @@
   color: var(--wtt-chat-text);
   background: transparent;
   padding: 8px 4px;
-  line-height: 1.75;
+  line-height: 1.7;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .desktop .messageRow[data-sender-type='human'] > div {
@@ -66,11 +74,22 @@
   padding: 12px 16px;
 }
 .desktop .messageRow[data-sender-type='human'] > div > div > p { justify-content: flex-end; padding-right: 4px; }
-.desktop .dateDivider { width: 100%; max-width: 880px; margin: 20px auto 24px; }
-.desktop .composer { padding: 8px 20px 16px; border-top-color: transparent; }
-.desktop .composer > * { max-width: 880px; margin-inline: auto; }
+.desktop .dateDivider { width: 100%; max-width: 920px; margin: 12px auto 24px; }
+.desktop .composer { padding: 8px 24px 18px; border-top-color: transparent; }
+.desktop .composer > * { max-width: 920px; margin-inline: auto; }
 .desktop .runtimeBar { gap: 6px; }
 .desktop .runtimeBar > span { background: transparent; border-color: transparent; color: var(--wtt-chat-muted); }
+.desktop .runtimeBar > button { display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 27px; height: 27px; border: 0; border-radius: 5px; background: transparent; color: var(--wtt-chat-muted); }
+.desktop .runtimeBar > button:hover { background: var(--wtt-chat-surface-mine); }
+.desktop .runtimeBar > button[aria-pressed='true'] { background: #089b8418; color: #089b84; }
+.desktop .commandMenu { position: relative; }
+.desktop .commandMenu summary { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 27px; padding: 0 6px; cursor: pointer; color: var(--wtt-chat-muted); list-style: none; border-radius: 5px; }
+.desktop .commandMenu summary::-webkit-details-marker { display: none; }
+.desktop .commandMenu summary:hover { background: var(--wtt-chat-surface-mine); }
+.desktop .commandMenu > div { position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 40; min-width: 200px; padding: 4px; border: 1px solid var(--wtt-chat-border); border-radius: 6px; background: var(--wtt-chat-surface); box-shadow: 0 4px 16px #00000012; }
+.desktop .commandMenu button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 18px; padding: 9px 8px; font-size: 12px; color: var(--wtt-chat-text); border-radius: 4px; }
+.desktop .commandMenu button:hover { background: var(--wtt-chat-surface-mine); }
+.desktop .commandMenu code { font-size: 10px; color: var(--wtt-chat-muted); }
 
 .desktop .dateDivider > div { background: var(--wtt-chat-border); }
 .desktop .dateDivider > span {
@@ -103,18 +122,21 @@
   border-color: var(--wtt-chat-border);
   border-radius: 8px;
   box-shadow: none;
-  min-height: 56px;
+  min-height: 62px;
+  padding: 10px 12px;
 }
 
 .desktop .composerInput:focus-within { border-color: #10b981; }
-.desktop .send { background: #047857; border-radius: 6px; }
-.desktop .send:hover:not(:disabled) { background: #065f46; }
+.desktop .send { background: #078672; border-radius: 6px; width: 34px; height: 34px; }
+.desktop .send:hover:not(:disabled) { background: #096759; }
 .desktop .execution { border-top: 1px solid var(--wtt-chat-border); padding-top: 4px; }
 .desktop .execution summary::-webkit-details-marker { display: none; }
 .desktop .execution:not([open]) summary > svg:last-child { transform: rotate(-90deg); }
 @media (max-width: 640px) {
-  .desktop .header { padding: 8px 12px 0; }
+  .desktop .header { padding: 0 10px; }
   .desktop .composer { padding: 8px 12px 12px; }
-  .desktop .header > div { flex-wrap: wrap; }
-  .desktop .header > div > div:last-child { margin-left: auto; }
+  .desktop .header > div { flex-wrap: nowrap; gap: 4px; }
+  .desktop .tabs { gap: 10px; }
+  .desktop .tabs .tabLabel { display: none; }
+  .desktop .live { display: none; }
 }

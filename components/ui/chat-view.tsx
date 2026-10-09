@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Bot, Brain, BookOpen, Camera, Check, ChevronDown, Download, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Sparkles, SquareTerminal, Star, Video, X } from 'lucide-react'
+import { Bell, Bot, Brain, BookOpen, Camera, Check, ChevronDown, Download, FolderOpen, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Slash, Sparkles, SquareTerminal, Star, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
@@ -3041,9 +3041,17 @@ function ChatViewContent({
       {!hideHeader && <div className={`${desktopStyles.header} border-b border-[#e5e0d8] bg-[#fbfaf7] dark:border-zinc-800 dark:bg-zinc-950 ${compactUi ? 'px-2 pt-1' : 'px-4 pt-2'}`}>
         <div className={`flex items-start justify-between ${compactUi ? 'gap-1.5' : 'gap-3'}`}>
           <div className="min-w-0 flex-1">
+            {appearance === 'desktop' ? <div className={desktopStyles.tabs} role="tablist" aria-label={locale === 'en' ? 'Conversation views' : '对话视图'}>
+              <button role="tab" aria-selected={activeTab === 'chat'} onClick={() => setActiveTab('chat')}>Chat</button>
+              <button role="tab" title={locale === 'en' ? 'Attachments' : '附件'} aria-label={locale === 'en' ? 'Attachments' : '附件'} aria-selected={activeTab === 'files'} onClick={() => setActiveTab('files')}><Paperclip size={13} /><span className={desktopStyles.tabLabel}>{locale === 'en' ? 'Attachments' : '附件'}</span>{conversationFiles.length > 0 && <span>{conversationFiles.length}</span>}</button>
+              {canUseKnowledgeTab && <button role="tab" title={locale === 'en' ? 'Knowledge' : '知识库'} aria-label={locale === 'en' ? 'Knowledge' : '知识库'} aria-selected={activeTab === 'knowledge'} onClick={() => setActiveTab('knowledge')}><BookOpen size={13} /><span className={desktopStyles.tabLabel}>{locale === 'en' ? 'Knowledge' : '知识库'}</span></button>}
+              {!desktopHasManagedTools && <button role="tab" aria-selected={activeTab === 'terminal'} onClick={() => setActiveTab('terminal')} title={locale === 'en' ? 'Terminal' : '终端'}><SquareTerminal size={14} /></button>}
+              {canUseWorkspaceTab && <button role="tab" aria-selected={activeTab === 'workspace'} onClick={() => setActiveTab('workspace')} title="Workspace"><FolderOpen size={14} /></button>}
+              {wsConnected && <span className={desktopStyles.live} title={t('chat.live')}><span />{t('chat.live')}</span>}
+            </div> : <>
             <div className={`flex flex-wrap items-center ${compactUi ? 'gap-1.5' : 'gap-2'}`}>
-              {!workspaceProjectId && <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}>{appearance === 'desktop' ? '' : '# '}{topicName}</h2>}
-              {!compactUi && appearance !== 'desktop' && (
+              {!workspaceProjectId && <h2 className={`truncate font-semibold text-[#1f2328] dark:text-zinc-100 ${compactUi ? 'text-[13px] leading-4' : 'text-[15px] leading-5'}`}># {topicName}</h2>}
+              {!compactUi && (
                 <span className="shrink-0 text-[10px] text-slate-400">
                   {t('chat.messagesLoaded', { count: messages.length })}
                 </span>
@@ -3137,6 +3145,7 @@ function ChatViewContent({
                 )}
               </div>
             </div>
+            </>}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {showCloudBilling && (
@@ -3951,9 +3960,9 @@ function ChatViewContent({
             </>
           )}
 
-          <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          {(!workspaceProjectId || appearance !== 'desktop') && <span className="shrink-0 rounded-md border border-[#e5e0d8] bg-[#f4f1eb] px-2 py-1 font-medium text-[#615d55] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {activeAgentLabel}
-          </span>
+          </span>}
           <button
             type="button"
             onClick={() => {
@@ -3963,9 +3972,10 @@ function ChatViewContent({
             disabled={!accessToken || !currentAgentId}
             className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/20"
             title={`Search ${skillAdapterLabel} compatible skills`}
+            aria-label="Skill"
           >
             <Sparkles className="h-3 w-3" />
-            Skill
+            {appearance !== 'desktop' && 'Skill'}
           </button>
           {canUseKnowledgeMode && (
             <button
@@ -3977,12 +3987,17 @@ function ChatViewContent({
                   : 'border-[#e5e0d8] bg-white text-[#615d55] hover:bg-[#f4f1eb] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
               }`}
               title="启用后，本条消息会让 Agent 按需检索你的个人知识库。"
+              aria-label={locale === 'en' ? 'Knowledge mode' : '知识库模式'}
+              aria-pressed={kbMode}
             >
               <BookOpen className="h-3 w-3" />
-              知识库
+              {appearance !== 'desktop' && '知识库'}
             </button>
           )}
-          {quickSlashActions.map((action) => (
+          {appearance === 'desktop' ? <details className={desktopStyles.commandMenu}>
+            <summary title={locale === 'en' ? 'Commands' : '命令'} aria-label={locale === 'en' ? 'Commands' : '命令'}><Slash size={14} /><ChevronDown size={11} /></summary>
+            <div>{quickSlashActions.map(action => <button key={action.cmd} type="button" onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void sendPassthroughSlash(action.cmd, { silent: true }) }}><span>{action.label}</span><code>{action.cmd}</code></button>)}</div>
+          </details> : quickSlashActions.map((action) => (
             <button
               key={action.cmd}
               type="button"

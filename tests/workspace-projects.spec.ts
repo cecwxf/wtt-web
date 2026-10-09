@@ -23,7 +23,6 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
   const loadedHostOffsets: number[] = []
   const nativeDownloads: Array<{ workspaceId?: string; agentId?: string; path: string; accessToken?: string }> = []
   const nativeNotices: Array<{ userId: string; topicId: string; agentId: string; messageId: string }> = []
-  const sessionParticipants = singleAgent ? participants.slice(0, 1) : participants
   if (entryPath === '/mobile/workspaces') {
     await page.exposeFunction('observeNativeWorkspaceDownload', (request: typeof nativeDownloads[number]) => nativeDownloads.push(request))
     await page.exposeFunction('observeNativeWorkspaceNotice', (notice: typeof nativeNotices[number]) => nativeNotices.push(notice))
@@ -81,7 +80,9 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     else if (path === '/workspaces' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, host_id: host, access: 'workspace-write', sessions: [] }; projects.push(value)
     } else if (/^\/workspaces\/[^/]+\/sessions$/.test(path)) {
-      const body = route.request().postDataJSON(); created.push({ path, body }); value = { ...body, topic_id: 'project-topic', participants: sessionParticipants }; projects[0].sessions.push(value)
+      const body = route.request().postDataJSON(); created.push({ path, body })
+      value = { ...body, topic_id: projects[0].sessions.length ? `project-topic-${projects[0].sessions.length + 1}` : 'project-topic', participants: body.participants.map((item: any) => ({ ...participants.find(p => p.host_id === item.host_id && p.profile_id === item.profile_id), label: item.label })) }
+      projects[0].sessions.push(value)
     } else if (/^\/workspaces\/[^/]+\/tools$/.test(path)) value = { files: 'workspace-write', terminal: true, terminal_agent_id: 'agent-root-relay', host_name: 'MacBook', preview_agent_id: 'agent-root-relay', preview_ports: [38765] }
     else if (/^\/workspaces\/[^/]+\/preview$/.test(path)) {
       const body = route.request().postDataJSON(); created.push({ path, body })
@@ -96,11 +97,11 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     else if (path.endsWith('/workspace/content')) { await route.fulfill({ contentType: 'text/markdown', body: 'Canonical project directory' }); return }
     else if (path === '/agents/my') value = participants.map(p => ({ agent_id: p.transport_agent_id, display_name: p.label }))
     else if (path === '/agents/stats') value = { online_agents: adaptersOnline ? participants.map(p => p.transport_agent_id) : [], runtimes: {} }
-    else if (path === '/topics/subscribed') value = projects.length && projects[0].sessions.length ? [{ id: 'project-topic', topic_id: 'project-topic', name: 'Website / Team', topic_type: 'discussion' }] : []
-    else if (path === '/topics/my-groups') value = projects.length && projects[0].sessions.length ? [{ id: 'project-topic', topic_id: 'project-topic', name: 'Website / Team', topic_type: 'discussion', member_agent_ids: ['agent-one', 'agent-two'] }] : []
+    else if (path === '/topics/subscribed' || path === '/topics/my-groups') value = projects.flatMap(project => project.sessions.map((session: any) => ({ id: session.topic_id, topic_id: session.topic_id, name: `${project.name} / ${session.name}`, topic_type: 'discussion', member_agent_ids: session.participants.map((p: any) => p.transport_agent_id) })))
     else if (path.endsWith('/messages')) {
-      if (route.request().method() === 'POST') { const body = route.request().postDataJSON(); created.push({ path, body }); value = { id: 'sent', topic_id: 'project-topic', content: body.content, sender_type: 'human', sender_id: 'workspace@example.test', timestamp: new Date().toISOString() } }
-      else value = [{ id: 'reply', topic_id: 'project-topic', content: 'Shared Workspace result', sender_type: 'agent', sender_id: 'agent-one', sender_display_name: 'Global Engineer', timestamp: '2026-10-08T00:00:00Z' }]
+      const topicId = path.split('/')[2]
+      if (route.request().method() === 'POST') { const body = route.request().postDataJSON(); created.push({ path, body }); value = { id: 'sent', topic_id: topicId, content: body.content, sender_type: 'human', sender_id: 'workspace@example.test', timestamp: new Date().toISOString() } }
+      else value = [{ id: `reply-${topicId}`, topic_id: topicId, content: topicId === 'project-topic' ? 'Shared Workspace result' : 'Independent review result', sender_type: 'agent', sender_id: topicId === 'project-topic' ? 'agent-one' : 'agent-two', sender_display_name: 'Global Engineer', timestamp: '2026-10-08T00:00:00Z' }]
     } else if (path.endsWith('/members')) value = participants.map(p => ({ agent_id: p.transport_agent_id, display_name: p.label, alias: p.label, role: 'member' }))
     else if (path === '/topics/my-recent') value = { items: [] }
     else if (path === '/billing/me') value = { entitlement: { plan: 'free' } }
@@ -139,7 +140,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     await page.reload()
     await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
     expect(new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
-    return
+    return { projects, created }
   }
   await page.locator('textarea').first().fill('Continue the project')
   const navigationSize = page.getByRole('separator', { name: 'Resize navigation', exact: true })
@@ -256,6 +257,7 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     await expect(page).toHaveURL(/\/mobile\/login\?callbackUrl=%2Fmobile%2Fworkspaces$/)
     await expect(page.getByRole('button', { name: '进入 WTT', exact: true })).toBeVisible()
   }
+  return { projects, created }
 }
 
 test('Workspace-first desktop creates a cross-host collaboration and reuses chat and project files', async ({ page }) => {
@@ -264,6 +266,61 @@ test('Workspace-first desktop creates a cross-host collaboration and reuses chat
 
 test('one Codex adapter creates a Workspace, sends chat and restores its project files', async ({ page }) => {
   await workspaceFlow(page, '', '/desktop', true)
+})
+
+test('Workspace UI persists layout and switches independent Adapter sessions without leaking history', async ({ page }) => {
+  test.setTimeout(60_000)
+  const { projects, created } = await workspaceFlow(page, '', '/desktop', true)
+  const project = projects[0]
+  await page.locator('summary').filter({ hasText: 'Website' }).hover()
+  await page.getByRole('button', { name: 'Pin Website', exact: true }).click()
+  const resize = page.getByRole('separator', { name: 'Resize navigation', exact: true })
+  await resize.focus()
+  await page.keyboard.press('End')
+  await expect.poll(() => page.evaluate(id => JSON.parse(localStorage.getItem(`wtt-workspace-layout:${id}`) || '{}').width, host)).toBe(400)
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Unpin Website', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(resize).toHaveAttribute('aria-valuenow', '400')
+  await page.getByRole('button', { name: 'Add Adapter session', exact: true }).click()
+  const modal = page.getByRole('dialog')
+  await modal.getByLabel('Name', { exact: true }).fill('Review')
+  for (let offset = 0; offset < 4; offset++) {
+    await modal.getByRole('button', { name: 'Load more computers', exact: true }).click()
+  }
+  await modal.getByLabel('Reviewer Linux', { exact: true }).check()
+  await modal.getByLabel('Role Reviewer', { exact: true }).fill('Quality reviewer')
+  await modal.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect(page.getByText('Independent review result', { exact: true })).toBeVisible()
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toHaveCount(0)
+  expect(new URL(page.url()).searchParams.get('topic')).toBe('project-topic-2')
+  expect(project.sessions[1].participants).toHaveLength(1)
+  expect(project.sessions[1].participants[0]).toMatchObject({ adapter: 'claude-code', host_id: 'remote', label: 'Quality reviewer' })
+  const sessions = page.getByRole('navigation', { name: 'Workspace sessions', exact: true })
+  await sessions.getByRole('link', { name: 'Main', exact: true }).click()
+  await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+  await expect(page.getByText('Independent review result', { exact: true })).toHaveCount(0)
+  await page.locator('summary[aria-label="Commands"]').click()
+  await page.getByRole('button', { name: /Status.*\/status/ }).click()
+  await expect.poll(() => created.some(item => item.path === '/topics/project-topic/messages' && item.body.content === '/status')).toBe(true)
+  await page.screenshot({ path: '/tmp/wtt-workspace-ui-light-20261009.png', fullPage: true })
+  await page.getByRole('button', { name: 'Account settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('dark')
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.screenshot({ path: '/tmp/wtt-workspace-ui-dark-20261009.png', fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.locator('textarea')).toHaveCount(1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await sessions.getByRole('link', { name: 'Review', exact: true }).click()
+  await expect(page.getByText('Independent review result', { exact: true })).toBeVisible()
+  await page.screenshot({ path: '/tmp/wtt-workspace-ui-narrow-20261009.png', fullPage: true })
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.getByRole('button', { name: 'Account settings', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('zh')
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(page.getByRole('button', { name: '添加 Agent 执行会话', exact: true })).toBeVisible()
+  await page.screenshot({ path: '/tmp/wtt-workspace-ui-zh-20261009.png', fullPage: true })
 })
 
 test('desktop native v3 downloads the selected Workspace without a renderer Blob', async ({ page }) => {
