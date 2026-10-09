@@ -124,6 +124,7 @@ export interface DesktopHostBridge {
   runtimeStatus?(): Promise<DesktopRuntimeState>;
   discoverAgents?(): Promise<DesktopAgentProfile[]>;
   providerImportSupported?: boolean;
+  providerImportAdapters?: string[];
   importAgentProvider?(profileId: string, reset?: boolean): Promise<DesktopAgentProfile | null>;
   workspaceProjectsSupported?: boolean;
   admitWorkspaceDirectory?(access: 'read-only' | 'workspace-write'): Promise<{ root_id: string; host_id: string; name: string; access: string } | null>;

@@ -268,8 +268,8 @@ test('local Agent controls detect adapters, respect access requirements and star
   await setup(page, { native: true, registered: true, runtime: true })
   await page.goto('/desktop/setup')
   const controls = page.getByRole('group', { name: '本机 Agent', exact: true })
-  await expect(controls.getByRole('button', { name: '启动本机 Agent' })).toBeDisabled()
-  await controls.getByRole('button', { name: '检测已安装 Agent' }).click()
+  // Installed profiles are automatically discovered after authorization.
+  await expect(controls.getByRole('checkbox', { name: 'Codex', exact: true })).toBeVisible()
   await expect(controls.getByRole('checkbox', { name: 'Codex', exact: true })).toBeChecked()
   await expect(controls.getByRole('checkbox', { name: 'Pi', exact: true })).toBeDisabled()
   await expect(controls.getByRole('checkbox', { name: 'Claude Code', exact: true })).toBeDisabled()
@@ -288,6 +288,38 @@ test('local Agent controls detect adapters, respect access requirements and star
   expect(calls).toContain('start:{"adapters":["codex"],"workspaceAccess":"workspace-write"}')
   expect(calls).toContain('start:{"adapters":["codex","pi"],"workspaceAccess":"full-access"}')
   await page.screenshot({ path: 'test-results/desktop-local-agents-mobile.png', fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('provider imports follow native Adapter capabilities and retain per-profile public metadata', async ({ page }) => {
+  await setup(page, { native: true, registered: true, runtime: true })
+  await page.goto('/desktop/setup')
+  const controls = page.getByRole('group', { name: '本机 Agent', exact: true })
+  await controls.getByRole('button', { name: '检测已安装 Agent' }).click()
+  await expect(controls.getByRole('button', { name: '导入 Pi 模型配置', exact: true })).toHaveCount(0)
+  await page.evaluate(() => {
+    const bridge = window.wttDesktop!.host!
+    bridge.providerImportSupported = true
+    bridge.providerImportAdapters = ['claude-code', 'pi', 'dsh']
+    const discover = bridge.discoverAgents!
+    bridge.discoverAgents = async () => [...await discover(), {
+      profile_id: 'desktop-dsh', adapter: 'dsh', display_name: 'DSH', available: true, version: 'fixture', requiresFullAccess: false,
+    }]
+    bridge.importAgentProvider = async (profileId, reset) => {
+      const calls = (window as unknown as { __hostCalls: string[] }).__hostCalls
+      calls.push(`provider:${profileId}:${reset === true}`)
+      return { profile_id: profileId, adapter: profileId === 'desktop-pi' ? 'pi' : 'dsh',
+        display_name: profileId === 'desktop-pi' ? 'Pi' : 'DSH', available: true, version: 'fixture',
+        requiresFullAccess: profileId === 'desktop-pi', ...(reset ? {} : { providerOrigin: 'https://api.deepseek.com' }) }
+    }
+  })
+  await controls.getByRole('button', { name: '检测已安装 Agent' }).click()
+  for (const name of ['Pi', 'DSH']) await controls.getByRole('button', { name: `导入 ${name} 模型配置`, exact: true }).click()
+  await expect(controls.getByText('https://api.deepseek.com', { exact: true })).toHaveCount(2)
+  await controls.getByRole('button', { name: '使用 CLI 默认模型配置', exact: true }).first().click()
+  await expect(controls.getByText('https://api.deepseek.com', { exact: true })).toHaveCount(1)
+  expect(await nativeCalls(page)).toEqual(expect.arrayContaining(['provider:desktop-pi:false', 'provider:desktop-dsh:false', 'provider:desktop-pi:true']))
+  await page.screenshot({ path: 'test-results/desktop-provider-imports.png', fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
