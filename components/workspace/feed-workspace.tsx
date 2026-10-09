@@ -726,6 +726,8 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
   const [nativeSessionReady, setNativeSessionReady] = useState(false)
   const { t } = useI18n()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const workspaceFirst = desktopMode && (workspaceBasePath === '/mobile/workspaces' || searchParams.get('legacy') !== '1')
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentsLoaded, setAgentsLoaded] = useState(false)
   const [selectedAgentId, setSelectedAgentId] = useAgentId()
@@ -2446,7 +2448,7 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
   // Auto-create P2P topic for each claimed agent (if not exists)
   const p2pInitRef = useRef(new Set<string>())
   useEffect(() => {
-    if (!selectedAgentId || !session?.accessToken || !topics) return
+    if (workspaceFirst || !selectedAgentId || !session?.accessToken || !topics) return
     const humanSender = getHumanSender(session)
     for (const agent of agents) {
       const aid = agent.agent_id
@@ -2477,18 +2479,16 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
       }).catch(() => {})
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agents, topics, selectedAgentId, session?.accessToken, p2pTopicByAgentId])
+  }, [agents, topics, selectedAgentId, session?.accessToken, p2pTopicByAgentId, workspaceFirst])
 
   useEffect(() => {
-    if (!selectedAgentId || selectedTopicId) return
+    if (workspaceFirst || !selectedAgentId || selectedTopicId) return
     const topicId = p2pTopicByAgentId[selectedAgentId]
     if (!topicId) return
     if (topics.some((topic) => topic.topic_id === topicId)) {
       setSelectedTopicId(topicId)
     }
-  }, [p2pTopicByAgentId, selectedAgentId, selectedTopicId, setSelectedTopicId, topics])
-
-  const searchParams = useSearchParams()
+  }, [p2pTopicByAgentId, selectedAgentId, selectedTopicId, setSelectedTopicId, topics, workspaceFirst])
 
   useEffect(() => {
     const settingsFromUrl = (searchParams.get('settings') || '').toLowerCase()

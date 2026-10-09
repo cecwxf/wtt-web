@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, RefreshCw, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
+import { ArrowLeft, Bot, Camera, ChevronDown, ChevronRight, ClipboardList, Clock3, FolderOpen, FolderTree, Hash, Loader2, LocateFixed, Lock, LogOut, MessageSquare, Paperclip, Radio, RefreshCw, Search, Send, Server, Settings, SquarePen, Users, WifiOff, X } from 'lucide-react'
 import { CLIENT_WTT_API_BASE, WS_BASE_URL, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { shouldHideFeedTopic } from '@/lib/feed-topic-filter'
 import { defaultMobileTopicId, mobileConversationAgentId, readMobileSelection, writeMobileSelection, type MobileSelection } from '@/lib/mobile-selection'
@@ -2868,6 +2868,7 @@ export default function MobileFeedPage() {
               <p className="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">{billing?.entitlement ? (billing.entitlement.plan === 'pro' ? 'Pro' : 'Free') : '...'} · {quotaText(billing, locale === 'en')}</p>
               <p className="mt-1 text-[11px] font-medium text-slate-400 dark:text-zinc-500">{t('mobile.network', { state: t(browserOnline ? 'mobile.online' : 'mobile.offlineState'), socket: wsState })}</p>
             </div>
+            <a href={isAndroidWebView ? '/mobile/workspaces?source=android' : '/mobile/workspaces'} className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100"><FolderOpen className="h-4 w-4 shrink-0" />{locale === 'en' ? 'Workspaces' : '工作区'}</a>
             <a href="/feed" className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100">{t('mobile.fullWeb')}</a>
             <a href={isAndroidWebView ? '/mobile/settings?source=android' : '/mobile/settings'} className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-sm font-semibold text-slate-900 dark:text-zinc-100">{t('mobile.mobileSettings')}</a>
             <button onClick={() => signOut({ callbackUrl: mobileLoginCallback })} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0d0d0d] p-4 text-sm font-semibold text-white">

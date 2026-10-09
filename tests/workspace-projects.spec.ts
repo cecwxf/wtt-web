@@ -624,6 +624,45 @@ async function restorationFixture(page: Page, options: { secondPage?: boolean; s
   return { offsets, toolRequests }
 }
 
+test('mobile Workspace and legacy chat have a round-trip account navigation without creating conversations', async ({ page }) => {
+  await restorationFixture(page)
+  const writes: string[] = []
+  page.on('request', request => {
+    if (request.url().includes('/api/wtt/') && request.method() !== 'GET') writes.push(request.url())
+  })
+  await page.goto(`/mobile/workspaces?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+  await page.getByRole('link', { name: 'Legacy conversations', exact: true }).click()
+  await expect(page).toHaveURL(/\/mobile\/feed/)
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('link', { name: 'Workspaces', exact: true }).click()
+  await expect(page).toHaveURL(/\/mobile\/workspaces/)
+  await expect(page.getByRole('region', { name: 'Workspace overview', exact: true })).toBeVisible()
+  await page.getByRole('region', { name: 'Workspace overview', exact: true }).getByRole('link').filter({ hasText: 'Restored Workspace' }).click()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('topic')).toBe('restored-topic')
+  expect(writes).toEqual([])
+})
+
+test('desktop Workspace does not auto-create P2P while the explicit legacy entry retains its existing initializer', async ({ page }) => {
+  await restorationFixture(page)
+  const initialized: unknown[] = []
+  await page.route('**/api/wtt/messages/p2p**', route => {
+    initialized.push(route.request().postDataJSON())
+    return route.fulfill({ json: { topic_id: 'legacy-p2p' } })
+  })
+  await page.goto(`/desktop?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+  expect(initialized).toEqual([])
+  await page.getByRole('link', { name: 'Legacy conversations', exact: true }).click()
+  await expect(page).toHaveURL(/legacy=1/)
+  await expect.poll(() => initialized.length).toBeGreaterThan(0)
+  expect(initialized.every(body => (body as { content: string }).content === '[system:p2p_init]')).toBe(true)
+})
+
 test('mobile notification Topic restores a Workspace beyond the first directory page', async ({ page }) => {
   const fixture = await restorationFixture(page, { secondPage: true })
   await page.goto('/mobile/workspaces?topic=restored-topic&agentId=agent-one')
