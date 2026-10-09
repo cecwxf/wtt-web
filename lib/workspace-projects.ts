@@ -26,7 +26,13 @@ export class WorkspaceProjectsApi {
     }
     return response.json()
   }
-  list(offset = 0) { return this.request<{ workspaces: WorkspaceProject[]; next_offset: number | null }>(`?offset=${offset}`) }
+  async list(offset = 0) {
+    const value = await this.request<{ workspaces: WorkspaceProject[]; next_offset: number | null }>(`?offset=${offset}`)
+    if (!value || !Array.isArray(value.workspaces) || !(value.next_offset === null || (Number.isSafeInteger(value.next_offset) && value.next_offset > offset))) {
+      throw new WorkspaceRequestError('Invalid Workspace directory response', 502)
+    }
+    return value
+  }
   roots() { return this.request<{ roots: ProjectRoot[] }>('/roots') }
   create(body: { workspace_id: string; name: string; root_id: string }) { return this.request<WorkspaceProject>('', body) }
   createSession(workspaceId: string, body: { session_id: string; name: string; participants: Array<{ host_id: string; profile_id: string; label: string }> }) {

@@ -514,6 +514,107 @@ test('mobile notification Topic restores a Workspace beyond the first directory 
   expect(fixture.toolRequests.every(path => path.startsWith(`/workspaces/${restoredWorkspace}/`))).toBe(true)
 })
 
+test('desktop notification restores project-scoped chat and files from a later Workspace page', async ({ page }) => {
+  const fixture = await restorationFixture(page, { secondPage: true })
+  await page.goto('/desktop?topicId=restored-topic&agentId=agent-one')
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('workspace')).toBe(restoredWorkspace)
+  expect(new URL(page.url()).searchParams.get('session')).toBe(restoredSession)
+  expect(fixture.offsets).toContain(50)
+  await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
+  await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
+  expect(fixture.toolRequests.every(path => path.startsWith(`/workspaces/${restoredWorkspace}/`))).toBe(true)
+})
+
+test('desktop old Topic notifications preserve history after exhaustive Workspace lookup', async ({ page }) => {
+  const fixture = await restorationFixture(page, { legacy: true, secondPage: true })
+  await page.goto('/desktop?topicId=restored-topic&agentId=agent-one')
+  await expect(page.getByTestId('desktop-workspace')).toBeVisible()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('legacy')).toBe('1')
+  expect(new URL(page.url()).searchParams.get('topic')).toBe('restored-topic')
+  expect(new URL(page.url()).searchParams.get('agentId')).toBe('agent-one')
+  expect(fixture.offsets).toContain(50)
+  expect(fixture.toolRequests.filter(path => path.startsWith('/workspaces/'))).toHaveLength(0)
+  await page.reload()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+})
+
+test('desktop accounts without the Workspace feature retain their legacy chat', async ({ page }) => {
+  await restorationFixture(page, { status: 404 })
+  await page.goto('/desktop?topic=restored-topic&agentId=agent-one')
+  await expect(page.getByTestId('desktop-workspace')).toBeVisible()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('legacy')).toBe('1')
+})
+
+for (const status of [401, 403, 503]) test(`desktop Workspace error ${status} never silently switches to legacy chat`, async ({ page }) => {
+  await restorationFixture(page, { status })
+  await page.goto('/desktop?topic=restored-topic&agentId=agent-one')
+  await expect(page.getByText('Could not load Workspaces.', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.has('legacy')).toBe(false)
+  await expect(page.locator('textarea')).toHaveCount(0)
+})
+
+test('explicit desktop Workspace links are not downgraded on missing project service', async ({ page }) => {
+  await restorationFixture(page, { status: 404 })
+  await page.route(`**/api/wtt/workspaces/${restoredWorkspace}`, route => route.fulfill({ status: 404, json: { detail: 'Workspace service unavailable' } }))
+  await page.goto(`/desktop?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  await expect(page.getByText('Could not load Workspaces.', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('workspace')).toBe(restoredWorkspace)
+  expect(new URL(page.url()).searchParams.has('legacy')).toBe(false)
+  await expect(page.locator('textarea')).toHaveCount(0)
+})
+
+test('non-advancing Workspace cursors fail without looping or hiding history behind a fallback', async ({ page }) => {
+  await restorationFixture(page)
+  const offsets: number[] = []
+  await page.route('**/api/wtt/workspaces?**', route => {
+    offsets.push(Number(new URL(route.request().url()).searchParams.get('offset')))
+    return route.fulfill({ json: { workspaces: [], next_offset: 50 } })
+  })
+  await page.goto('/desktop?topic=restored-topic&agentId=agent-one')
+  await expect(page.getByText('Could not load Workspaces.', { exact: true })).toBeVisible()
+  expect(offsets.at(-1)).toBe(50)
+  expect(offsets.filter(offset => offset === 50)).toHaveLength(1)
+  expect(offsets.every(offset => offset === 0 || offset === 50)).toBe(true)
+  expect(offsets.length).toBeLessThanOrEqual(3)
+  expect(new URL(page.url()).searchParams.has('legacy')).toBe(false)
+  await expect(page.locator('textarea')).toHaveCount(0)
+})
+
+test('explicit transcript import opens saved history in the legacy desktop rather than an empty Workspace', async ({ page }) => {
+  await restorationFixture(page, { legacy: true })
+  const transcript = JSON.stringify({ messages: [{ role: 'user', content: 'Imported question' }, { role: 'assistant', content: 'Imported answer' }] })
+  await page.addInitScript(raw => {
+    ;(window as any).wttDesktop = { isDesktop: true, platform: 'darwin', fs: {
+      openFileDialog: async () => ({ canceled: false, files: [{ path: '/synthetic/transcript.json', name: 'transcript.json', size: raw.length }] }),
+      readFile: async () => ({ ok: true, content: raw }),
+    } }
+  }, transcript)
+  await page.route('**/api/wtt/hosts/my?**', route => route.fulfill({ json: { hosts: [{ host_id: host, display_name: 'MacBook', platform: 'darwin', environment: 'native', client_version: 'fixture', status: 'online', last_seen_at: null, agents: [{ agent_id: 'agent-one', profile_id: 'codex', adapter: 'codex', display_name: 'Engineer' }] }], next_offset: null } }))
+  let imported: any
+  await page.route('**/api/wtt/hosts/history-import', route => {
+    expect(route.request().headers().authorization).toBe('Bearer synthetic-user-token')
+    imported = route.request().postDataJSON()
+    return route.fulfill({ json: { topic_id: 'restored-topic', agent_id: 'agent-one' } })
+  })
+  await page.route('**/api/wtt/topics/restored-topic/messages?**', route => route.fulfill({ json: imported ? imported.messages.map((message: any, index: number) => ({ id: `import-${index}`, topic_id: 'restored-topic', sender_type: message.role === 'user' ? 'human' : 'agent', sender_id: message.role === 'user' ? host : 'agent-one', content: message.content, timestamp: `2026-10-09T00:00:0${index}Z` })) : [] }))
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/desktop?legacy=1&agentId=agent-one')
+  await page.getByRole('button', { name: 'Import conversation', exact: true }).click()
+  const modal = page.getByRole('dialog', { name: 'Import conversation', exact: true })
+  await modal.getByRole('button', { name: 'Select transcript', exact: true }).click()
+  await modal.getByRole('combobox').selectOption('agent-one')
+  await modal.getByRole('checkbox').check()
+  await modal.getByRole('button', { name: 'Import', exact: true }).click()
+  expect(imported).toMatchObject({ agent_id: 'agent-one', source_format: 'chat-json', confirmed: true, messages: [{ role: 'user', content: 'Imported question' }, { role: 'assistant', content: 'Imported answer' }] })
+  await modal.getByRole('link', { name: 'Open imported conversation', exact: true }).click()
+  await expect(page.getByText('Imported answer', { exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('legacy')).toBe('1')
+  await expect(page.getByTestId('desktop-workspace-projects')).toHaveCount(0)
+})
+
 test('mismatched session links cannot mount chat or project tools until opened canonically', async ({ page }) => {
   const fixture = await restorationFixture(page)
   await page.goto(`/mobile/workspaces?workspace=${restoredWorkspace}&session=wrong-session&topic=restored-topic&agentId=agent-one`)

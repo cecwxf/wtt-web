@@ -116,19 +116,21 @@ function ProjectShell(props: ProjectShellProps) {
     }
   }, [targetTopic, targetFound, workspaceId, projects.error, projects.isValidating, canResolveNext, projects.setSize, projects.size])
   useEffect(() => {
-    if (basePath !== '/mobile/workspaces' || workspaceId || requestedSession) return
+    if (workspaceId || requestedSession || params.get('createHost') || params.get('createProfile') || creation) return
     const unavailable = projects.error instanceof WorkspaceRequestError && projects.error.status === 404
     const legacyTopic = requestedTopic && projects.data && !projects.error && !projects.isValidating
       && nextOffset == null && !targetFound
-    if (!unavailable && !legacyTopic) return
+    if ((!unavailable && !legacyTopic) || (unavailable && error)) return
     const legacy = new URLSearchParams()
-    if (requestedTopic) legacy.set('topic_id', requestedTopic)
+    const mobile = basePath === '/mobile/workspaces'
+    if (!mobile) legacy.set('legacy', '1')
+    if (requestedTopic) legacy.set(mobile ? 'topic_id' : 'topic', requestedTopic)
     const agentId = params.get('agentId') || props.selectedAgentId
-    if (agentId) legacy.set('agent_id', agentId)
+    if (agentId) legacy.set(mobile ? 'agent_id' : 'agentId', agentId)
     const source = params.get('source')
     if (source) legacy.set('source', source)
-    router.replace(`/mobile/feed${legacy.size ? `?${legacy}` : ''}`, { scroll: false })
-  }, [basePath, workspaceId, requestedSession, requestedTopic, projects.error, projects.data, projects.isValidating, nextOffset, targetFound, params, props.selectedAgentId, router])
+    router.replace(`${mobile ? '/mobile/feed' : '/desktop'}${legacy.size ? `?${legacy}` : ''}`, { scroll: false })
+  }, [basePath, workspaceId, requestedSession, requestedTopic, projects.error, projects.data, projects.isValidating, nextOffset, targetFound, params, props.selectedAgentId, router, creation, error])
   useEffect(() => {
     if (!current || !currentSession || params.get('workspace')) return
     const requestedTopic = params.get('topicId') || params.get('topic')
