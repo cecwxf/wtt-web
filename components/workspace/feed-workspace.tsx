@@ -721,6 +721,7 @@ function MemberRow({ member, isSelf, onRequestPrivateDiscuss }: {
 
 function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolean; workspaceBasePath: '/desktop' | '/mobile/workspaces' }) {
   const { data: session, status } = useSession()
+  const [nativeSessionReady, setNativeSessionReady] = useState(false)
   const { t } = useI18n()
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
@@ -1023,7 +1024,16 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
   }, [agents, agentRoleMap, agentRoleTemplateMap])
 
   useEffect(() => {
+    if (workspaceBasePath !== '/mobile/workspaces') return
+    const ready = () => setNativeSessionReady(true)
+    window.addEventListener('wtt-native-session-ready', ready)
+    return () => window.removeEventListener('wtt-native-session-ready', ready)
+  }, [workspaceBasePath])
+
+  useEffect(() => {
     if (status === 'unauthenticated') {
+      if (desktopMode && workspaceBasePath === '/mobile/workspaces' && !nativeSessionReady
+        && (window as Window & { __WTT_NATIVE_SESSION_PENDING__?: boolean }).__WTT_NATIVE_SESSION_PENDING__) return
       router.push(desktopMode ? `${workspaceBasePath === '/desktop' ? '/login' : '/mobile/login'}?callbackUrl=${encodeURIComponent(workspaceBasePath)}` : '/login')
       return
     }
@@ -1033,7 +1043,7 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
     }
 
     loadAgents()
-  }, [status, router, loadAgents, desktopMode, workspaceBasePath])
+  }, [status, router, loadAgents, desktopMode, workspaceBasePath, nativeSessionReady])
 
   useEffect(() => {
     const selected = agents.find((agent) => agent.agent_id === selectedAgentId)

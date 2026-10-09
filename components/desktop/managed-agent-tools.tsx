@@ -96,7 +96,8 @@ function ManagedAgentToolsInner({ agentId, agentName, token, workspaceId, layout
     transfer.current = controller
     setDownloadError(''); setProgress(0)
     try {
-      if (!workspaceId && await downloadNativeWorkspaceFile({ agentId, path, filename: name }, {
+      const target = workspaceId ? { workspaceId } : { agentId };
+      if (await downloadNativeWorkspaceFile({ ...target, path, filename: name }, {
         signal: controller.signal,
         onProgress: value => { if (live.current) setProgress(value.total ? Math.min(100, Math.round(value.loaded / value.total * 100)) : 0) },
       })) return

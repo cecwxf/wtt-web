@@ -20,6 +20,20 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
   let feedEnabled = false
   let feedSocket: WebSocketRoute | undefined
   const loadedHostOffsets: number[] = []
+  const nativeDownloads: Array<{ workspaceId?: string; agentId?: string; path: string }> = []
+  if (entryPath === '/mobile/workspaces') {
+    await page.exposeFunction('observeNativeWorkspaceDownload', (request: typeof nativeDownloads[number]) => nativeDownloads.push(request))
+    await page.addInitScript(() => {
+      ;(window as any).__WTT_NATIVE_FILES__ = {
+        version: 2,
+        download: async (request: unknown, progress: (value: { loaded: number; total: number }) => void) => {
+          await (window as any).observeNativeWorkspaceDownload(request)
+          progress({ loaded: 27, total: 27 })
+        },
+        cancel: () => {},
+      }
+    })
+  }
   await page.addInitScript(() => {
     localStorage.setItem('wtt-web.locale', 'en')
     if (!sessionStorage.getItem('workspace-fixture-initialized')) {
@@ -137,6 +151,14 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
   await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Workspace files', exact: true })).toHaveAttribute('title', 'MacBook · Workspace files')
   await expect(page.getByRole('complementary').getByText('README.md', { exact: true })).toBeVisible()
+  if (entryPath === '/mobile/workspaces') {
+    await page.getByRole('complementary').getByText('README.md', { exact: true }).click()
+    await page.getByRole('button', { name: 'Download file', exact: true }).click()
+    await expect.poll(() => nativeDownloads.length).toBe(1)
+    expect(nativeDownloads[0].workspaceId).toBe(projects[0].workspace_id)
+    expect(nativeDownloads[0].agentId).toBeUndefined()
+    expect(nativeDownloads[0].path).toBe('README.md')
+  }
   await page.getByRole('button', { name: 'Terminal', exact: true }).click()
   await expect.poll(() => terminalActions.some(item => item.body.action === 'terminal_open' && item.body.workspace_id === projects[0].workspace_id)).toBe(true)
   await expect(page.getByText('Terminal · MacBook', { exact: true })).toBeVisible()
@@ -219,6 +241,21 @@ test('signed-out mobile Workspace returns to its own route after account login',
   await page.goto('/mobile/workspaces')
   await expect(page).toHaveURL(/\/mobile\/login\?callbackUrl=%2Fmobile%2Fworkspaces$/)
   await expect(page.getByRole('button', { name: '进入 WTT', exact: true })).toBeVisible()
+})
+
+test('native mobile Workspace waits for cookie handoff before redirecting unauthenticated users', async ({ page }) => {
+  await page.addInitScript(() => { (window as any).__WTT_NATIVE_SESSION_PENDING__ = true })
+  await page.route('**/api/auth/session', route => route.fulfill({ json: {} }))
+  await page.routeWebSocket('**', socket => socket.close())
+  await page.route('**/api/wtt/**', route => route.fulfill({ json: {} }))
+  await page.goto('/mobile/workspaces')
+  await page.waitForLoadState('networkidle')
+  await expect(page).toHaveURL(/\/mobile\/workspaces$/)
+  await page.evaluate(() => {
+    ;(window as any).__WTT_NATIVE_SESSION_PENDING__ = false
+    window.dispatchEvent(new Event('wtt-native-session-ready'))
+  })
+  await expect(page).toHaveURL(/\/mobile\/login\?callbackUrl=%2Fmobile%2Fworkspaces$/)
 })
 
 test('packaged Mac opens the Workspace-first flow, creates a project and sends chat', async ({ baseURL }) => {
