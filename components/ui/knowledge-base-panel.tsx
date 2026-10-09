@@ -1,9 +1,10 @@
 'use client'
 
-import { Database, Download, FileText, RefreshCcw, Search, Trash2, Upload } from 'lucide-react'
+import { Database, Download, FileText, RefreshCcw, Search, Trash2, Upload, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
+import { downloadNativeKnowledgeFile } from '@/lib/native-files'
 
 const MAX_KB_UPLOAD_BYTES = 100 * 1024 * 1024
 
@@ -72,6 +73,8 @@ export function KnowledgeBasePanel({ accessToken, compact = false }: KnowledgeBa
   const [uploading, setUploading] = useState(false)
   const [uploadName, setUploadName] = useState('')
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState<{ filename: string; loaded: number; total: number } | null>(null)
+  const downloadRef = useRef<AbortController | null>(null)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [results, setResults] = useState<KnowledgeSearchResult[]>([])
@@ -102,6 +105,13 @@ export function KnowledgeBasePanel({ accessToken, compact = false }: KnowledgeBa
   useEffect(() => {
     void loadSources()
   }, [loadSources])
+
+  useEffect(() => {
+    downloadRef.current?.abort()
+    downloadRef.current = null
+    setDownloadProgress(null)
+    return () => { downloadRef.current?.abort(); downloadRef.current = null }
+  }, [accessToken])
 
   useEffect(() => {
     const hasActive = sources.some((source) => ['uploaded', 'extracting', 'chunking'].includes(String(source.status || '').toLowerCase()))
@@ -222,23 +232,35 @@ export function KnowledgeBasePanel({ accessToken, compact = false }: KnowledgeBa
   }, [accessToken, headers, loadSources])
 
   const downloadSource = useCallback(async (source: KnowledgeSource) => {
-    if (!accessToken) return
+    if (!accessToken || downloadRef.current) return
     const id = sourceId(source)
     if (!id) return
-    const resp = await fetch(`${CLIENT_WTT_API_BASE}/kb/personal/sources/${encodeURIComponent(id)}/download`, { headers })
-    if (!resp.ok) {
-      setError(await resp.text().catch(() => '下载失败'))
-      return
+    const controller = new AbortController()
+    downloadRef.current = controller
+    const filename = source.filename || source.title || 'knowledge-file'
+    setError(null)
+    setDownloadProgress({ filename, loaded: 0, total: 0 })
+    try {
+      if (await downloadNativeKnowledgeFile({ knowledgeSourceId: id, filename }, {
+        accessToken, signal: controller.signal,
+        onProgress: value => { if (downloadRef.current === controller && !controller.signal.aborted) setDownloadProgress({ filename, ...value }) },
+      })) return
+      const resp = await fetch(`${CLIENT_WTT_API_BASE}/kb/personal/sources/${encodeURIComponent(id)}/download`, { headers, signal: controller.signal })
+      if (!resp.ok) throw new Error(await resp.text().catch(() => '下载失败'))
+      const blob = await resp.blob()
+      controller.signal.throwIfAborted()
+      if (blob.size > MAX_KB_UPLOAD_BYTES) throw new Error('文件过大，最大 100MB')
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      try { a.click() } finally { a.remove(); URL.revokeObjectURL(url) }
+    } catch (err) {
+      if (!controller.signal.aborted && downloadRef.current === controller) setError(err instanceof Error ? err.message : '下载失败')
+    } finally {
+      if (downloadRef.current === controller) { downloadRef.current = null; setDownloadProgress(null) }
     }
-    const blob = await resp.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = source.filename || source.title || 'knowledge-file'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
   }, [accessToken, headers])
 
   const runSearch = useCallback(async () => {
@@ -325,6 +347,15 @@ export function KnowledgeBasePanel({ accessToken, compact = false }: KnowledgeBa
         </div>
       )}
 
+      {downloadProgress && (
+        <div role="status" className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+          <Download className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{downloadProgress.filename}</span>
+          <span>{downloadProgress.total ? `${Math.min(100, Math.round(downloadProgress.loaded / downloadProgress.total * 100))}%` : '下载中'}</span>
+          <button type="button" aria-label="取消下载" title="取消下载" onClick={() => downloadRef.current?.abort()} className="p-1"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 rounded-lg border border-[#eee9df] bg-white/70 p-2 dark:border-zinc-800 dark:bg-zinc-900/70">
         <Search className="h-4 w-4 shrink-0 text-[#8a8378]" />
         <input
@@ -397,7 +428,7 @@ export function KnowledgeBasePanel({ accessToken, compact = false }: KnowledgeBa
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <button type="button" onClick={() => void downloadSource(source)} className="rounded-md p-1.5 text-[#8a8378] hover:bg-[#f4f1eb] hover:text-[#1f2328] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100" title="下载">
+                    <button type="button" disabled={Boolean(downloadProgress)} onClick={() => void downloadSource(source)} className="rounded-md p-1.5 text-[#8a8378] hover:bg-[#f4f1eb] hover:text-[#1f2328] disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100" title="下载">
                       <Download className="h-3.5 w-3.5" />
                     </button>
                     <button type="button" onClick={() => void reindexSource(source)} className="rounded-md p-1.5 text-[#8a8378] hover:bg-[#f4f1eb] hover:text-[#1f2328] dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100" title="重建索引">

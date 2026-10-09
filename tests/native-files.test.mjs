@@ -10,7 +10,7 @@ const module = { exports: {} }, window = {}
 runInNewContext(ts.transpileModule(readFileSync(new URL('../lib/native-files.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, { module, exports: module.exports, window, crypto: webcrypto, Uint8Array })
-const { downloadNativeWorkspaceFile } = module.exports
+const { downloadNativeWorkspaceFile, downloadNativeKnowledgeFile } = module.exports
 
 test('legacy native bridge keeps Agent downloads and never receives project requests', async () => {
   const requests = []
@@ -40,4 +40,20 @@ test('v2 routes project downloads without Agent fallback and forwards cancellati
   assert.equal(requests[0].agentId, undefined)
   finish()
   await assert.rejects(operation, { name: 'AbortError' })
+})
+
+test('knowledge capability gates old clients and routes only source IDs to capable native clients', async () => {
+  const input = { knowledgeSourceId: '11111111-1111-4111-8111-111111111111', filename: 'knowledge.txt' }
+  const options = { signal: new AbortController().signal, onProgress: () => {}, accessToken: 'synthetic-token' }
+  for (const version of [2, 3]) {
+    const requests = []
+    window.__WTT_NATIVE_FILES__ = { version, download: async request => requests.push(request), cancel: () => {} }
+    await assert.rejects(downloadNativeKnowledgeFile(input, options), /Update WTT/)
+    assert.equal(requests.length, 0)
+    window.__WTT_NATIVE_FILES__.knowledgeFiles = true
+    assert.equal(await downloadNativeKnowledgeFile(input, options), true)
+    assert.equal(requests[0].knowledgeSourceId, input.knowledgeSourceId)
+    assert.equal(requests[0].path, undefined)
+    assert.equal(requests[0].accessToken, version === 3 ? options.accessToken : undefined)
+  }
 })
