@@ -29,6 +29,8 @@ import { useI18n } from "@/lib/i18n-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { AccountHostsPanel } from "@/components/desktop/account-hosts-panel";
 import { getDesktopBridge } from "@/lib/desktop";
+import { getNativeNotifications } from "@/lib/native-notifications";
+import { MobileNotificationSettings } from "@/components/ui/mobile-notification-settings";
 
 type SettingsPage =
   | "profile"
@@ -395,6 +397,14 @@ export function WttSettingsModal({
   const [messageNotify, setMessageNotify] = useState(true);
   const [agentAlert, setAgentAlert] = useState(true);
   const [soundOn, setSoundOn] = useState(false);
+  const [mobileNotificationBridge, setMobileNotificationBridge] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const refresh = () => setMobileNotificationBridge(Boolean(getNativeNotifications()));
+    refresh();
+    window.addEventListener("wtt-native-notifications-ready", refresh);
+    return () => window.removeEventListener("wtt-native-notifications-ready", refresh);
+  }, [open]);
   const notificationBridge = getDesktopBridge()?.notifications;
   const notificationOwner = useRef(session?.userId);
   notificationOwner.current = session?.userId;
@@ -3125,7 +3135,7 @@ export function WttSettingsModal({
           )}
 
           {activePage === "notifications" && (
-            <div className="space-y-3">
+            mobileNotificationBridge ? <MobileNotificationSettings userId={session?.userId} /> : <div className="space-y-3">
               {notificationError && <p role="alert" className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">{t("settings.notificationFailed")}<button type="button" onClick={() => setNotificationRefresh(value => value + 1)} aria-label={t("settings.notificationRetry")} title={t("settings.notificationRetry")}><RefreshCw size={16} /></button></p>}
               {notificationBridge && !notificationError && notificationReady !== session?.userId && <Loader2 size={18} className="animate-spin" />}
               <fieldset className="space-y-3 disabled:opacity-50" disabled={Boolean(notificationBridge && (notificationReady !== session?.userId || notificationBusy || notificationTesting))}>

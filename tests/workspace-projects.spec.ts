@@ -624,6 +624,48 @@ async function restorationFixture(page: Page, options: { secondPage?: boolean; s
   return { offsets, toolRequests, project }
 }
 
+test('mobile Workspace settings persist native notifications and recover failed saves', async ({ page }) => {
+  await restorationFixture(page)
+  const changes: unknown[] = []
+  await page.exposeFunction('observeNotificationSave', (value: unknown) => changes.push(value))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/mobile/workspaces?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+  await page.getByRole('button', { name: 'Account settings', exact: true }).click()
+  await page.getByRole('combobox').selectOption('notifications')
+  await page.evaluate(() => {
+    let preferences = { enabled: false, sound: false, preview: false, granted: false }
+    let fail = true
+    ;(window as any).__WTT_NATIVE_NOTIFICATIONS__ = {
+      version: 1, preferences: async () => preferences,
+      setPreferences: async (userId: string, value: any) => {
+        await (window as any).observeNotificationSave({ userId, ...value })
+        if (fail) { fail = false; throw new Error('Synthetic save failure') }
+        preferences = { ...value, granted: true }
+        return preferences
+      },
+      show: async () => ({ shown: false }),
+    }
+    window.dispatchEvent(new Event('wtt-native-notifications-ready'))
+  })
+  const notifications = page.getByRole('region', { name: 'Notifications', exact: true })
+  const enabled = notifications.getByRole('checkbox', { name: 'Message notifications', exact: true })
+  await expect(enabled).not.toBeChecked()
+  await expect(page.getByRole('switch', { name: 'Agent status alerts', exact: true })).toHaveCount(0)
+  await enabled.click()
+  await expect(notifications.getByRole('alert')).toHaveText(/Notification settings unavailable/)
+  await expect(enabled).not.toBeChecked()
+  await notifications.getByRole('button', { name: 'Retry', exact: true }).click()
+  await enabled.click()
+  await expect(enabled).toBeChecked()
+  expect(changes).toEqual(Array(2).fill({ userId: host, enabled: true, sound: false, preview: false }))
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('button', { name: 'Account settings', exact: true }).click()
+  await page.getByRole('combobox').selectOption('notifications')
+  await expect(enabled).toBeChecked()
+  await expect(notifications.getByRole('alert')).toHaveCount(0)
+})
+
 for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} long chat can jump to latest without losing loaded history`, async ({ page }) => {
   await restorationFixture(page)
   await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
