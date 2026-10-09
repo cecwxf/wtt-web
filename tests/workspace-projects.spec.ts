@@ -11,7 +11,7 @@ const participants = [
   { participant_id: 'two', label: 'Reviewer', host_id: 'remote', host_name: 'Linux', adapter: 'claude-code', profile_id: 'claude', transport_agent_id: 'agent-two' },
 ]
 
-async function workspaceFlow(page: Page, baseURL = '') {
+async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop') {
   const created: Array<{ path: string; body: any }> = []
   const projects: any[] = []
   const terminalActions: Array<{ url: string; body: any }> = []
@@ -81,7 +81,7 @@ async function workspaceFlow(page: Page, baseURL = '') {
     await route.fulfill({ json: value })
   })
   await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto(`${baseURL}/desktop`)
+  await page.goto(`${baseURL}${entryPath}`)
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'New conversation', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'New Workspace', exact: true }).first().click()
@@ -118,6 +118,7 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await page.mouse.up()
   await expect(navigationSize).toHaveAttribute('aria-valuenow', '328')
   const selectedUrl = page.url()
+  expect(new URL(selectedUrl).pathname).toBe(entryPath)
   await page.getByRole('button', { name: 'Collapse navigation', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).not.toBeVisible()
   await expect(page.locator('textarea').first()).toHaveValue('Continue the project')
@@ -148,12 +149,12 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await page.getByRole('button', { name: 'Terminal', exact: true }).click()
   expect(terminalActions.filter(item => item.body.action === 'terminal_open')).toHaveLength(1)
   await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
-  await page.screenshot({ path: '/tmp/wtt-workspace-project-desktop.png', fullPage: true })
+  await page.screenshot({ path: entryPath === '/desktop' ? '/tmp/wtt-workspace-project-desktop.png' : '/tmp/wtt-workspace-remote-web-wide.png', fullPage: true })
   await page.reload()
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
   adaptersOnline = false
   feedEnabled = true
-  await page.goto(`${baseURL}/desktop`)
+  await page.goto(`${baseURL}${entryPath}`)
   await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
   await expect.poll(() => new URL(page.url()).searchParams.get('session')).toBe(projects[0].sessions[0].session_id)
   await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
@@ -175,13 +176,39 @@ async function workspaceFlow(page: Page, baseURL = '') {
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: '/tmp/wtt-workspace-project-mobile.png', fullPage: true })
+  await page.screenshot({ path: entryPath === '/desktop' ? '/tmp/wtt-workspace-project-mobile.png' : '/tmp/wtt-workspace-remote-web-mobile.png', fullPage: true })
   await page.keyboard.press('Escape')
   await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true })).not.toBeVisible()
+  if (entryPath === '/mobile/workspaces') {
+    await expect(page.locator('textarea')).toHaveCount(1)
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+    await expect(page.getByRole('link', { name: 'Legacy conversations', exact: true })).toHaveAttribute('href', '/mobile/feed')
+    await page.getByRole('link', { name: 'Computers & adapters', exact: true }).click()
+    await expect(page).toHaveURL(/\/mobile\/workspaces\/hosts$/)
+    await expect(page.getByRole('heading', { name: 'Computers & adapters', exact: true })).toBeVisible()
+    await page.getByRole('link', { name: 'Back to Workspaces', exact: true }).click()
+    await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe(projects[0].workspace_id)
+    await expect(page.getByText('Shared Workspace result', { exact: true })).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe(entryPath)
+  }
 }
 
 test('Workspace-first desktop creates a cross-host collaboration and reuses chat and project files', async ({ page }) => {
   await workspaceFlow(page)
+})
+
+test('mobile Remote Web reuses Workspace chat, restores history and stays on mobile routes', async ({ page }) => {
+  test.setTimeout(60000)
+  await workspaceFlow(page, '', '/mobile/workspaces')
+})
+
+test('signed-out mobile Workspace returns to its own route after account login', async ({ page }) => {
+  await page.route('**/api/auth/session', route => route.fulfill({ json: {} }))
+  await page.routeWebSocket('**', socket => socket.close())
+  await page.route('**/api/wtt/**', route => route.fulfill({ json: {} }))
+  await page.goto('/mobile/workspaces')
+  await expect(page).toHaveURL(/\/mobile\/login\?callbackUrl=%2Fmobile%2Fworkspaces$/)
+  await expect(page.getByRole('button', { name: '进入 WTT', exact: true })).toBeVisible()
 })
 
 test('packaged Mac opens the Workspace-first flow, creates a project and sends chat', async ({ baseURL }) => {

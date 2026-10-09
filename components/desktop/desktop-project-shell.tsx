@@ -19,17 +19,21 @@ import { useI18n } from '@/lib/i18n-provider'
 const iconButton = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 disabled:opacity-40'
 const field = 'min-h-9 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600 dark:border-zinc-700 dark:bg-zinc-950'
 
-export function DesktopProjectShell(props: WttShellV2Props) {
+type ProjectShellProps = WttShellV2Props & { workspaceBasePath?: '/desktop' | '/mobile/workspaces' }
+
+export function DesktopProjectShell(props: ProjectShellProps) {
   const params = useSearchParams()
-  if (params.get('legacy') === '1') return <DesktopWorkspaceShell {...props} />
+  if (props.workspaceBasePath !== '/mobile/workspaces' && params.get('legacy') === '1') return <DesktopWorkspaceShell {...props} />
   return <ProjectShell key={props.currentUserId || props.userToken || 'signed-out'} {...props} />
 }
 
-function ProjectShell(props: WttShellV2Props) {
+function ProjectShell(props: ProjectShellProps) {
   const { locale } = useI18n()
   const en = locale === 'en'
   const router = useRouter()
   const params = useSearchParams()
+  const basePath = props.workspaceBasePath || '/desktop'
+  const setupPath = basePath === '/desktop' ? '/desktop/setup' : '/mobile/workspaces/hosts'
   const api = useMemo(() => new WorkspaceProjectsApi(props.userToken || ''), [props.userToken])
   const hostApi = useMemo(() => new DesktopHostsApi(props.userToken || ''), [props.userToken])
   const [query, setQuery] = useState('')
@@ -81,8 +85,8 @@ function ProjectShell(props: WttShellV2Props) {
     const agentId = params.get('agentId') || props.selectedAgentId
     const participant = currentSession.participants.find(item => item.transport_agent_id === agentId) || currentSession.participants[0]
     if (participant) restored.set('agentId', participant.transport_agent_id)
-    router.replace(`/desktop?${restored}`, { scroll: false })
-  }, [current, currentSession, params, props.selectedAgentId, router])
+    router.replace(`${basePath}?${restored}`, { scroll: false })
+  }, [current, currentSession, params, props.selectedAgentId, router, basePath])
   const available = hostDirectory.filter(host => host.status !== 'revoked').flatMap(host => host.agents.map(agent => ({ host, agent, key: `${host.host_id}/${agent.profile_id}` })))
   const chosenRoot = roots.data?.roots.find(root => root.root_id === (creation?.project?.root_id || creation?.created?.root_id || rootId))
   const refresh = () => { void projects.mutate(); void detail.mutate(); void roots.mutate(); void hosts.mutate(); props.onBindingChanged?.() }
@@ -116,7 +120,7 @@ function ProjectShell(props: WttShellV2Props) {
     setCreation({ workspaceId: project?.workspace_id || crypto.randomUUID(), sessionId: crypto.randomUUID(), project }); setDrawerOpen(false)
   }
   function href(project: WorkspaceProject, session: ProjectSession) {
-    return `/desktop?${new URLSearchParams({ workspace: project.workspace_id, session: session.session_id, topic: session.topic_id, agentId: session.participants[0]?.transport_agent_id || '' })}`
+    return `${basePath}?${new URLSearchParams({ workspace: project.workspace_id, session: session.session_id, topic: session.topic_id, agentId: session.participants[0]?.transport_agent_id || '' })}`
   }
   async function admit() {
     setBusy(true); setError('')
@@ -145,7 +149,7 @@ function ProjectShell(props: WttShellV2Props) {
   }
   async function archive(project: WorkspaceProject) {
     if (!window.confirm(en ? `Archive ${project.name}? Running Workspace tools will be revoked; history is preserved.` : `归档 ${project.name}？Workspace 工具权限将撤销，历史保留。`)) return
-    try { await api.request(`/${project.workspace_id}/archive`, {}); await projects.mutate(); if (current === project) router.push('/desktop') }
+    try { await api.request(`/${project.workspace_id}/archive`, {}); await projects.mutate(); if (current === project) router.push(basePath) }
     catch (value) { setError(value instanceof Error ? value.message : 'Archive failed') }
   }
   const navigation = <>
@@ -166,7 +170,7 @@ function ProjectShell(props: WttShellV2Props) {
       {projects.data && !directory.length && <p className="p-2 text-xs text-zinc-500">{en ? 'No Workspaces yet' : '暂无工作区'}</p>}
       {projects.data?.at(-1)?.next_offset != null && <button className="p-2 text-xs text-emerald-700" disabled={projects.isValidating} onClick={() => void projects.setSize(projects.size + 1)}>{en ? 'Load more' : '加载更多'}</button>}
     </nav>
-    <footer className="space-y-1 border-t border-zinc-200 p-2 dark:border-zinc-800"><Link href="/desktop/setup" className="flex h-8 items-center gap-2 px-2 text-xs text-zinc-500"><Laptop size={15} />{en ? 'Computers & adapters' : '主机与 Adapter'}</Link><Link href="/desktop?legacy=1" className="flex h-8 items-center gap-2 px-2 text-xs text-zinc-500"><History size={15} />{en ? 'Legacy conversations' : '旧版会话'}</Link><div className="flex items-center gap-2"><button className={iconButton} title={en ? 'Account settings' : '账户设置'} aria-label={en ? 'Account settings' : '账户设置'} onClick={() => setSettingsOpen(true)}><Settings2 size={16} /></button><span className="min-w-0 flex-1 truncate text-xs text-zinc-500">{props.currentUserName}</span><button className={iconButton} aria-label={en ? 'Sign out' : '退出账号'} title={en ? 'Sign out' : '退出账号'} onClick={props.onLogout}><LogOut size={15} /></button></div></footer>
+    <footer className="space-y-1 border-t border-zinc-200 p-2 dark:border-zinc-800"><Link href={setupPath} className="flex h-8 items-center gap-2 px-2 text-xs text-zinc-500"><Laptop size={15} />{en ? 'Computers & adapters' : '主机与 Adapter'}</Link><Link href={basePath === '/desktop' ? '/desktop?legacy=1' : '/mobile/feed'} className="flex h-8 items-center gap-2 px-2 text-xs text-zinc-500"><History size={15} />{en ? 'Legacy conversations' : '旧版会话'}</Link><div className="flex items-center gap-2"><button className={iconButton} title={en ? 'Account settings' : '账户设置'} aria-label={en ? 'Account settings' : '账户设置'} onClick={() => setSettingsOpen(true)}><Settings2 size={16} /></button><span className="min-w-0 flex-1 truncate text-xs text-zinc-500">{props.currentUserName}</span><button className={iconButton} aria-label={en ? 'Sign out' : '退出账号'} title={en ? 'Sign out' : '退出账号'} onClick={props.onLogout}><LogOut size={15} /></button></div></footer>
   </>
   return <div className="flex h-dvh min-w-0 overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100" data-testid="desktop-workspace-projects">
     {drawerOpen && <button className="fixed inset-0 z-30 bg-black/30 md:hidden" aria-label={en ? 'Close navigation' : '关闭导航'} onClick={() => setDrawerOpen(false)} />}
@@ -202,7 +206,7 @@ function ProjectShell(props: WttShellV2Props) {
         <fieldset className="space-y-2"><legend className="mb-2 text-xs font-medium">{en ? 'Adapters' : '执行 Adapter'}</legend>{available.map(({ host, agent, key }) => { const caps = agent.capabilities; const remote = chosenRoot && chosenRoot.host_id !== host.host_id; const enabled = caps?.workspace_projects && (!remote || caps?.workspace_mcp); return <div key={key} className="flex items-center gap-2 border-b border-zinc-100 py-2 dark:border-zinc-800"><input type="checkbox" checked={selected.includes(key)} disabled={busy || !enabled || (!selected.includes(key) && selected.length >= 8)} aria-label={`${agent.display_name} ${host.display_name}`} onChange={event => setSelected(before => event.target.checked ? [...before, key] : before.filter(item => item !== key))} /><div className="min-w-0 flex-1"><span className="block truncate text-sm">{agent.display_name || agent.adapter}</span><span className="block truncate text-xs text-zinc-500">{agent.adapter} · {host.display_name} · {host.status}</span>{!enabled && <span className="block text-[11px] text-amber-700 dark:text-amber-400">{en ? 'Enable an updated runtime; remote access requires MCP support' : '需启用新版运行时；跨主机执行需支持 MCP'}</span>}</div>{selected.includes(key) && <input className={`${field} max-w-[150px]`} maxLength={80} disabled={busy} aria-label={`${en ? 'Role' : '角色'} ${agent.display_name}`} placeholder={en ? 'Role' : '角色'} value={roles[key] ?? agent.display_name ?? agent.adapter} onChange={event => setRoles(before => ({ ...before, [key]: event.target.value }))} />}</div> })}
           {hosts.isLoading && <p role="status" className="text-xs text-zinc-500">{en ? 'Loading computers...' : '正在加载主机…'}</p>}
           {hosts.data?.at(-1)?.nextOffset != null && <button type="button" disabled={busy || hosts.isValidating} className="flex items-center gap-1.5 py-2 text-xs text-emerald-700 disabled:opacity-40 dark:text-emerald-400" onClick={() => void hosts.setSize(hosts.size + 1)}>{hosts.isValidating && <Loader2 size={13} className="animate-spin" />}{en ? 'Load more computers' : '加载更多主机'}</button>}
-          {!hosts.isLoading && !hosts.error && !available.length && hosts.data?.at(-1)?.nextOffset == null && <Link href="/desktop/setup" className="text-xs text-emerald-700">{en ? 'Enable a computer' : '接入主机'}</Link>}
+          {!hosts.isLoading && !hosts.error && !available.length && hosts.data?.at(-1)?.nextOffset == null && <Link href={setupPath} className="text-xs text-emerald-700">{en ? 'Enable a computer' : '接入主机'}</Link>}
         </fieldset>
         {(error || roots.error || hosts.error) && <p role="alert" className="text-xs text-red-600">{error || (en ? 'Could not load directories or adapters. Retry.' : '目录或 Adapter 加载失败，请重试。')}</p>}
       </div><footer className="flex justify-end gap-2 border-t border-zinc-200 px-5 py-3 dark:border-zinc-800"><button type="button" disabled={busy} className="px-3 py-2 text-sm text-zinc-500" onClick={() => setCreation(null)}>{en ? 'Cancel' : '取消'}</button><button disabled={busy || !name.trim() || !selected.length || !chosenRoot} className="flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900">{busy ? <Loader2 size={15} className="animate-spin" /> : selected.length > 1 ? <Users size={15} /> : <Plus size={15} />}{en ? 'Create' : '创建'}</button></footer></form>}

@@ -684,10 +684,12 @@ function feedRows(raw: unknown): Record<string, unknown>[] {
   return rows.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === 'object'))
 }
 
-export default function FeedWorkspace({ desktopMode = false }: { desktopMode?: boolean }) {
+type WorkspacePageProps = { desktopMode?: boolean; workspaceBasePath?: '/desktop' | '/mobile/workspaces' }
+
+export default function FeedWorkspace({ desktopMode = false, workspaceBasePath = '/desktop' }: WorkspacePageProps) {
   return (
     <Suspense fallback={null}>
-      <FeedPageInner desktopMode={desktopMode} />
+      <FeedPageInner desktopMode={desktopMode} workspaceBasePath={workspaceBasePath} />
     </Suspense>
   )
 }
@@ -717,7 +719,7 @@ function MemberRow({ member, isSelf, onRequestPrivateDiscuss }: {
   )
 }
 
-function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
+function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolean; workspaceBasePath: '/desktop' | '/mobile/workspaces' }) {
   const { data: session, status } = useSession()
   const { t } = useI18n()
   const router = useRouter()
@@ -1022,7 +1024,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push(desktopMode ? '/login?callbackUrl=%2Fdesktop' : '/login')
+      router.push(desktopMode ? `${workspaceBasePath === '/desktop' ? '/login' : '/mobile/login'}?callbackUrl=${encodeURIComponent(workspaceBasePath)}` : '/login')
       return
     }
 
@@ -1031,7 +1033,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
     }
 
     loadAgents()
-  }, [status, router, loadAgents, desktopMode])
+  }, [status, router, loadAgents, desktopMode, workspaceBasePath])
 
   useEffect(() => {
     const selected = agents.find((agent) => agent.agent_id === selectedAgentId)
@@ -2547,7 +2549,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
         }
         setPendingComposerFocusTopicId(topicId)
         setSelectedTopicId(topicId)
-        if (desktopMode) router.replace(buildAgentUrl('/desktop', agentId, { topic: topicId }), { scroll: false })
+        if (desktopMode) router.replace(buildAgentUrl(workspaceBasePath, agentId, { topic: topicId }), { scroll: false })
       } else {
         router.push(buildAgentUrl('/tasks', selectedAgentId, { type: 'general' }))
       }
@@ -2556,7 +2558,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
     } finally {
       creatingGeneralTaskRef.current = false
     }
-  }, [selectedAgentId, session, desktopMode, mutateRecentTasks, mutateTopics, router, t, setSelectedTopicId])
+  }, [selectedAgentId, session, desktopMode, workspaceBasePath, mutateRecentTasks, mutateTopics, router, t, setSelectedTopicId])
 
   const handleSendMessage = async (content: string, replyTo?: string, options?: ChatSendOptions) => {
     if (!selectedTopicId || !selectedAgentId) return
@@ -3135,6 +3137,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
       <KeyboardShortcuts onDiscover={() => router.push(buildAgentUrl('/discover', selectedAgentId))} />
 
       <WorkspaceShell
+        workspaceBasePath={workspaceBasePath}
         agents={agentItems}
         selectedAgentId={selectedAgentId}
         onAgentChange={(id) => { setSelectedAgentId(id); setSelectedTopicId(null) }}
@@ -3154,7 +3157,7 @@ function FeedPageInner({ desktopMode }: { desktopMode: boolean }) {
         onOpenEditor={() => setEditorOpen(true)}
         onOpenKnowledgeRoot={handleOpenKnowledgeRoot}
         onCreateGeneralTask={handleCreateGeneralTask}
-        onLogout={() => signOut({ callbackUrl: '/login' })}
+        onLogout={() => signOut({ callbackUrl: desktopMode && workspaceBasePath !== '/desktop' ? '/mobile/login' : '/login' })}
         onTopicsRefresh={handleSidebarRefresh}
         onTopicCreated={handleTopicCreated}
         onBindingChanged={loadAgents}
