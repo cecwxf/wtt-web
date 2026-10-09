@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Bot, Brain, BookOpen, Camera, Check, ChevronDown, Download, FolderOpen, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Slash, Sparkles, SquareTerminal, Star, Video, X } from 'lucide-react'
+import { ArrowDown, Bell, Bot, Brain, BookOpen, Camera, Check, ChevronDown, Download, FolderOpen, HardDriveDownload, Image as ImageIcon, Loader2, MapPin, Maximize2, Minimize2, Paperclip, Reply, Search, Send, Slash, Sparkles, SquareTerminal, Star, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLIENT_WTT_API_BASE, resolveWttUploadUrl } from '@/lib/api/base-url'
 import { attachmentMimeType } from '@/lib/media/mime'
@@ -1451,6 +1451,7 @@ function ChatViewContent({
   const previewInflightRef = useRef<Set<string>>(new Set())
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [awayFromLatest, setAwayFromLatest] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const cameraVideoRef = useRef<HTMLVideoElement>(null)
@@ -2309,6 +2310,22 @@ function ChatViewContent({
       setSending(false)
     }
   }, [scopedSlashCommands, onSendMessage])
+
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container) return
+    const update = () => setAwayFromLatest(container.scrollHeight - container.scrollTop - container.clientHeight > 150)
+    container.addEventListener('scroll', update, { passive: true })
+    const observer = new ResizeObserver(update)
+    observer.observe(container)
+    for (const child of Array.from(container.children)) observer.observe(child)
+    const frame = requestAnimationFrame(update)
+    return () => {
+      cancelAnimationFrame(frame)
+      container.removeEventListener('scroll', update)
+      observer.disconnect()
+    }
+  }, [messages.length, activeTab, historyScope])
 
   // Scroll to bottom on initial load and topic change
   useEffect(() => {
@@ -3833,6 +3850,14 @@ function ChatViewContent({
           </div>
         ))}
       </div>
+
+      {!utilityTabActive && awayFromLatest && (
+        <button type="button" aria-label={t('chat.latestMessages')} title={t('chat.latestMessages')}
+          className="absolute bottom-3 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-600 shadow-sm hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          onClick={() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); setAwayFromLatest(false) }}>
+          <ArrowDown size={18} />
+        </button>
+      )}
 
       {agentCardOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4" onClick={() => setAgentCardOpen(false)}>

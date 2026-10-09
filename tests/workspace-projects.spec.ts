@@ -624,6 +624,28 @@ async function restorationFixture(page: Page, options: { secondPage?: boolean; s
   return { offsets, toolRequests, project }
 }
 
+for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} long chat can jump to latest without losing loaded history`, async ({ page }) => {
+  await restorationFixture(page)
+  await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+  const records = Array.from({ length: 60 }, (_, index) => ({ id: `jump-${index}`, topic_id: 'restored-topic', sender_id: 'agent-one', sender_type: 'agent',
+    content: `Jump history ${index}: ${'Synthetic message content. '.repeat(10)}`, timestamp: new Date(Date.UTC(2026, 9, 8) + index * 1000).toISOString() }))
+  await page.route('**/api/wtt/topics/*/messages**', route => route.fulfill({ json: records }))
+  await page.goto(`${mobile ? '/mobile/workspaces' : '/desktop'}?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  const rows = page.locator('[data-message-id^="jump-"]')
+  await expect(rows).toHaveCount(60)
+  const scroller = page.locator('div.overflow-y-auto').filter({ has: rows }).last()
+  await scroller.evaluate(element => { element.scrollTop = 0; element.dispatchEvent(new Event('scroll')) })
+  const latest = page.getByRole('button', { name: 'Latest messages', exact: true })
+  await expect(latest).toBeVisible()
+  await expect(rows.first()).toBeInViewport()
+  await latest.click()
+  await expect(rows.last()).toBeInViewport()
+  await expect(latest).toHaveCount(0)
+  await expect(rows).toHaveCount(60)
+  await expect(page.locator('textarea').first()).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
 for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} paged history retains live replies and rejects late pages after changing sessions`, async ({ page }) => {
   const { project } = await restorationFixture(page)
   project.sessions.push({ session_id: 'other-session', topic_id: 'other-topic', name: 'Other Codex', participants: participants.slice(0, 1) })
