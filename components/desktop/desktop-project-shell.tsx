@@ -98,7 +98,7 @@ function ProjectShell(props: ProjectShellProps) {
     () => api.request<WorkspaceProject>(`/${workspaceId}`), { shouldRetryOnError: false })
   const detailDenied = detail.error instanceof WorkspaceRequestError && [401, 403, 404].includes(detail.error.status)
   const detailFailed = Boolean(workspaceId && detail.error && (!detail.data || detailDenied))
-  const detailPending = Boolean(workspaceId && !detail.data && !detail.error)
+  const detailLoading = Boolean(workspaceId && !detail.data && !detail.error)
   const detailWarning = Boolean(workspaceId && detail.error && detail.data && !detailDenied)
   const directory = useMemo(() => {
     const all = (projects.data || []).flatMap(page => page.workspaces)
@@ -126,6 +126,10 @@ function ProjectShell(props: ProjectShellProps) {
   ))
   const selectionReady = Boolean(current && currentSession && workspaceId === current.workspace_id
     && requestedSession === currentSession.session_id && requestedTopic === currentSession.topic_id)
+  // The route updates before the shared Topic selection; only known canonical targets may wait.
+  const detailPending = detailLoading || Boolean(props.selectedTopicId !== requestedTopic && directory.some(project =>
+    project.workspace_id === workspaceId && project.sessions.some(session =>
+      session.session_id === requestedSession && session.topic_id === requestedTopic)))
   useEffect(() => {
     if (targetTopic && !targetFound && !workspaceId && !projects.error && !projects.isValidating && canResolveNext) {
       void projects.setSize(projects.size + 1)

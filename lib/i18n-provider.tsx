@@ -1184,25 +1184,24 @@ function formatMessage(template: string, vars?: Record<string, string | number>)
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>('zh')
+  const [localeReady, setLocaleReady] = useState(false)
 
   useEffect(() => {
+    let initialLocale: Locale = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved === 'zh' || saved === 'en') {
-        setLocaleState(saved)
-        return
+        initialLocale = saved
       }
     } catch {
       // ignore
     }
-
-    if (typeof navigator !== 'undefined') {
-      const language = (navigator.language || '').toLowerCase()
-      setLocaleState(language.startsWith('zh') ? 'zh' : 'en')
-    }
+    setLocaleState(initialLocale)
+    setLocaleReady(true)
   }, [])
 
   useEffect(() => {
+    if (!localeReady) return
     try {
       localStorage.setItem(STORAGE_KEY, locale)
     } catch {
@@ -1211,7 +1210,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     if (typeof document !== 'undefined') {
       document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
     }
-  }, [locale])
+  }, [locale, localeReady])
 
   const setLocale = useCallback((nextLocale: Locale) => {
     setLocaleState(nextLocale)

@@ -941,6 +941,50 @@ test('explicit transcript import opens saved history in the legacy desktop rathe
   await expect(page.getByTestId('desktop-workspace-projects')).toHaveCount(0)
 })
 
+test('saved English preference survives initial hydration and reload', async ({ page }) => {
+  await restorationFixture(page)
+  const url = `/desktop?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`
+  await page.goto(url)
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  expect(await page.evaluate(() => localStorage.getItem('wtt-web.locale'))).toBe('en')
+  await page.reload()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+})
+
+for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} valid session navigation never flashes a mismatched-link alert`, async ({ page }) => {
+  const { project } = await restorationFixture(page)
+  project.sessions.push({ session_id: 'other-session', topic_id: 'other-topic', name: 'Other Codex', participants: participants.slice(0, 1) })
+  await page.route('**/api/wtt/topics/*/messages**', route => {
+    const topic = new URL(route.request().url()).pathname.split('/')[4]
+    return route.fulfill({ json: [{ id: `${topic}-history`, topic_id: topic, sender_type: 'agent', sender_id: 'agent-one',
+      content: `${topic} history`, timestamp: '2026-10-08T00:00:00Z' }] })
+  })
+  await page.addInitScript(() => {
+    const messages: string[] = []
+    ;(window as any).__workspaceNavigationAlerts = messages
+    new MutationObserver(() => {
+      for (const alert of Array.from(document.querySelectorAll('[role="alert"]'))) {
+        if (/This link does not match|链接与选中的 Workspace 会话不一致/.test(alert.textContent || '')) messages.push(alert.textContent || '')
+      }
+    }).observe(document, { childList: true, subtree: true, characterData: true })
+  })
+  await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+  const base = mobile ? '/mobile/workspaces' : '/desktop'
+  await page.goto(`${base}?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  await expect(page.getByText('restored-topic history', { exact: true })).toBeVisible()
+  const sessions = page.getByRole('navigation', { name: /^(Workspace sessions|工作区执行会话)$/ })
+  await sessions.getByRole('link', { name: 'Other Codex', exact: true }).click()
+  await expect(page.getByText('other-topic history', { exact: true })).toBeVisible()
+  await expect(page.getByText('restored-topic history', { exact: true })).toHaveCount(0)
+  await sessions.getByRole('link', { name: 'Single Codex', exact: true }).click()
+  await expect(page.getByText('restored-topic history', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).__workspaceNavigationAlerts)).toEqual([])
+  await page.locator('textarea').first().fill('/model')
+  await expect(page.getByRole('button', { name: /\/model .*Show runtime model \(read-only\)/ })).toBeVisible()
+})
+
 test('mismatched session links cannot mount chat or project tools until opened canonically', async ({ page }) => {
   const fixture = await restorationFixture(page)
   await page.goto(`/mobile/workspaces?workspace=${restoredWorkspace}&session=wrong-session&topic=restored-topic&agentId=agent-one`)
