@@ -66,15 +66,17 @@ export function WorkspaceExecutionControls(props: { workspaceId: string; topicId
     } catch (cause) { if (alive.current) setError(cause instanceof Error ? cause.message : 'Request failed') }
     finally { if (alive.current) setBusy(false) }
   }
-  const buttonClass = 'flex min-w-0 max-w-[150px] items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
+  const buttonClass = 'flex min-w-0 max-w-[150px] shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
   const inputClass = 'w-full min-w-0 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900'
   return <>
+    <div role="group" aria-label={zh ? '会话执行配置' : 'Conversation execution controls'} className="flex w-full max-w-full flex-wrap items-center gap-1.5 sm:w-auto">
     {data && data.participants.length > 1 && <select aria-label={zh ? '执行配置成员' : 'Execution settings member'} value={memberId} onChange={event => setMemberId(event.target.value)} className={`${buttonClass} max-w-[130px]`}>
       {data.participants.map(p => <option key={p.participant_id} value={p.participant_id}>{p.label} · {p.adapter}</option>)}
     </select>}
     <button type="button" className={buttonClass} onClick={show} title={zh ? '设置模型' : 'Set model'} aria-label={zh ? '设置模型' : 'Set model'}><Bot size={12} className="shrink-0" /><span className="truncate">{member?.config.model || (zh ? '模型' : 'Model')}</span></button>
     <button type="button" className={buttonClass} onClick={show} title={zh ? '设置思考强度' : 'Set reasoning effort'} aria-label={zh ? '设置思考强度' : 'Set reasoning effort'}><Brain size={12} className="shrink-0" /><span className="truncate">{member?.config.reasoning_effort || (zh ? '思考' : 'Reasoning')}</span></button>
     <button type="button" className={buttonClass} onClick={show} title={zh ? '设置执行权限' : 'Set execution permissions'} aria-label={zh ? '设置执行权限' : 'Set execution permissions'}><Shield size={12} className="shrink-0" /><span className="truncate">{member?.config.workspace_access ? accessLabel(member.config.workspace_access) : (zh ? '权限' : 'Permissions')}</span></button>
+    </div>
     {open && createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={event => { if (event.target === event.currentTarget && !busy) setOpen(false) }}>
       <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="execution-settings-title" tabIndex={-1} className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-lg border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
         <div className="mb-4 flex items-center justify-between gap-3"><h3 id="execution-settings-title" className="text-base font-semibold">{zh ? '执行设置' : 'Execution settings'}</h3><button type="button" disabled={busy} onClick={() => setOpen(false)} title={zh ? '关闭' : 'Close'} aria-label={zh ? '关闭执行设置' : 'Close execution settings'}><X size={18} /></button></div>
