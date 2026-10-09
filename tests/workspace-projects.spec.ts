@@ -462,7 +462,7 @@ test('Workspace download validates metadata when CDN streaming omits Content-Len
 const restoredWorkspace = '33333333-3333-4333-8333-333333333333'
 const restoredSession = '44444444-4444-4444-8444-444444444444'
 
-async function creationFixture(page: Page, failure: number) {
+async function creationFixture(page: Page, failure: number, failRefresh = false) {
   const { project } = await restorationFixture(page, { legacy: true })
   const projects: any[] = []
   const submissions: Array<{ path: string; body: any }> = []
@@ -481,7 +481,9 @@ async function creationFixture(page: Page, failure: number) {
   ] } }))
   await page.route('**/api/wtt/workspaces**', async route => {
     const path = new URL(route.request().url()).pathname.replace('/api/wtt', '')
-    if (path === '/workspaces' && route.request().method() === 'GET') return route.fulfill({ json: { workspaces: projects, next_offset: null } })
+    if (path === '/workspaces' && route.request().method() === 'GET') return failRefresh && projects[0]?.sessions.length
+      ? route.fulfill({ status: 503, json: { detail: 'Synthetic directory refresh failure' } })
+      : route.fulfill({ json: { workspaces: projects, next_offset: null } })
     if (path === '/workspaces' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); submissions.push({ path, body })
       projects.push({ ...project, ...body, sessions: [], root_revoked: false })
@@ -502,7 +504,7 @@ async function creationFixture(page: Page, failure: number) {
 }
 
 test('Workspace creation retries an unconfirmed session without changing its identity or team', async ({ page }) => {
-  const { submissions } = await creationFixture(page, 503)
+  const { submissions } = await creationFixture(page, 503, true)
   await page.goto('/desktop')
   await page.getByRole('button', { name: 'New Workspace', exact: true }).first().click()
   const dialog = page.getByRole('dialog')

@@ -269,7 +269,9 @@ function ProjectShell(props: ProjectShellProps) {
       setCreation(before => before && { ...before, request })
       const session = await api.createSession(project.workspace_id, request)
       if (!live.current) return
-      await projects.mutate(); await detail.mutate(); props.onTopicsRefresh?.(); props.onBindingChanged?.()
+      // A directory refresh failure must not turn an acknowledged creation into a retry.
+      void projects.mutate().catch(() => {}); void detail.mutate().catch(() => {})
+      props.onTopicsRefresh?.(); props.onBindingChanged?.()
       router.push(href(project, session)); setCreation(null)
     } catch (value) {
       if (live.current) {
