@@ -54,6 +54,10 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
     const receive = (state: DesktopRuntimeState) => {
       if (!current) return
       setRuntime(state)
+      if (['restoring', 'starting', 'running', 'stopping'].includes(state.state) && state.approvedRemoteTools?.length) {
+        const tools = state.approvedRemoteTools[0]
+        setRemoteTools({ files: tools.files, terminal: tools.terminal, previewPorts: tools.previewPorts || [] })
+      }
       if (state.workspaceAccess && savedAccess.current !== state.workspaceAccess) {
         savedAccess.current = state.workspaceAccess
         setAccess(state.workspaceAccess)
@@ -194,7 +198,15 @@ export function LocalAgentsControls({ onChanged }: { onChanged: () => void }) {
         <option value="full-access">{en ? 'Full local execution' : '完整本机执行权限'}</option>
       </select>
     </label>
-    {bridge?.remoteToolsSupported && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy || running} en={en} previewSupported={bridge.previewSupported === true} />}
+    {bridge?.remoteToolsSupported && !running && <RemoteToolsSelection value={remoteTools} onChange={setRemoteTools} disabled={busy} en={en} previewSupported={bridge.previewSupported === true} />}
+    {bridge?.remoteToolsSupported && running && <ul aria-label={en ? 'Approved remote tools' : '已授权远程工具'} className="space-y-1 text-xs text-[var(--muted-foreground)]">
+      {runtime.approvedRemoteTools?.length ? runtime.approvedRemoteTools.map(tools => <li key={tools.profileId} className="break-words">
+        {runtime.agents.find(agent => agent.profileId === tools.profileId)?.displayName || profiles.find(profile => profile.profile_id === tools.profileId)?.display_name || tools.profileId}:
+        {' '}{en ? 'Files' : '文件'} {tools.files === 'off' ? (en ? 'off' : '关闭') : tools.files === 'read-only' ? (en ? 'read only' : '只读') : (en ? 'read/write' : '读写')};
+        {' '}{en ? 'Terminal' : '终端'} {tools.terminal ? (en ? 'on' : '开启') : (en ? 'off' : '关闭')};
+        {' '}{en ? 'Preview' : '预览'} {tools.previewPorts?.length ? tools.previewPorts.join(', ') : (en ? 'off' : '关闭')}
+      </li>) : <li>{en ? 'Tool permissions follow the native execution approval. Update the desktop app to view them here.' : '工具权限以原生执行授权为准，升级桌面版本后可查看。'}</li>}
+    </ul>}
     {runtime.autoStart !== undefined && <p className="text-xs text-[var(--muted-foreground)]">{runtime.autoStart
       ? (en ? 'Automatic resume enabled' : '已启用自动恢复')
       : (en ? 'Automatic resume disabled' : '已关闭自动恢复')}</p>}

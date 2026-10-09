@@ -4,7 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Copy, Loader2, Play, RefreshCw, Square } from 'lucide-react'
 import { CLIENT_WTT_API_BASE } from '@/lib/api/base-url'
 
-type Preview = { state: 'stopped' | 'starting' | 'ready' | 'expired' | 'failed'; port: number; url?: string; expires_at?: string }
+type Preview = { state: 'stopped' | 'starting' | 'ready' | 'expired' | 'failed'; port: number; url?: string; expires_at?: string; error?: string }
+
+const failures: Record<string, [string, string]> = {
+  preview_connection_timeout: ['Cloudflare 隧道连接超时，请检查主机网络后重试。', 'Cloudflare tunnel connection timed out. Check the host network before retrying.'],
+  preview_tunnel_start_failed: ['无法启动内置隧道程序，请检查桌面安装包。', 'The bundled tunnel could not start. Check the desktop installation.'],
+  preview_tunnel_closed: ['Cloudflare 隧道进程已退出，请检查主机网络。', 'The Cloudflare tunnel exited. Check the host network.'],
+  preview_guardian_start_failed: ['无法启动预览管理进程，请检查桌面运行环境。', 'The preview manager could not start. Check the desktop runtime.'],
+  preview_guardian_closed: ['预览管理进程已退出，请检查桌面运行环境。', 'The preview manager exited. Check the desktop runtime.'],
+}
 
 export function ManagedLivePreview({ agentId, workspaceId, token, ports, en }: { agentId: string; workspaceId?: string; token?: string; ports: number[]; en: boolean }) {
   const [port, setPort] = useState(ports[0])
@@ -73,6 +81,7 @@ export function ManagedLivePreview({ agentId, workspaceId, token, ports, en }: {
     </div>
     <p className="shrink-0 text-xs text-amber-700 dark:text-amber-400">{en ? 'Anyone with this link can access the service. Development preview only.' : '持有链接即可访问该服务，仅用于开发预览。'}</p>
     {error && <p role="alert" className="shrink-0 text-xs text-red-600">{error}</p>}
+    {value?.state === 'failed' && value.error && Object.hasOwn(failures, value.error) && <p role="alert" className="shrink-0 text-xs text-red-600">{failures[value.error][en ? 1 : 0]}</p>}
     {url && <iframe key={`${url}:${epoch}`} src={url} title={en ? 'Development preview' : '开发预览'} sandbox="allow-scripts allow-same-origin allow-forms" referrerPolicy="no-referrer" className="min-h-0 w-full flex-1 border border-zinc-200 bg-white dark:border-zinc-800" />}
   </section>
 }

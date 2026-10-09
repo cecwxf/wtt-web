@@ -140,6 +140,7 @@ export interface DesktopHostBridge {
   prepareTeam?(request: { requestId: string; draftKey: string; adapter: string; names: string[] }): Promise<{ requestId: string; profiles: DesktopAgentProfile[] }>;
   completeTeam?(request: { requestId: string }): Promise<void>;
   remoteToolsSupported?: boolean;
+  remoteToolsStatusSupported?: boolean;
   previewSupported?: boolean;
   startAgents?(selection: { adapters?: string[]; profileIds?: string[]; workspaceAccess: 'workspace-write' | 'full-access'; remoteTools?: DesktopRemoteTools }): Promise<DesktopRuntimeState>;
   stopAgents?(): Promise<DesktopRuntimeState>;
@@ -190,6 +191,7 @@ export interface DesktopRuntimeState {
   configuredAdapters?: string[];
   configuredProfileIds?: string[];
   workspaceAccess?: 'workspace-write' | 'full-access';
+  approvedRemoteTools?: Array<DesktopRemoteTools & { profileId: string }>;
   agents: Array<{ profileId: string; adapter: string; displayName?: string; agentId: string; state: string;
     readiness?: 'unverified' | 'verified' | 'authentication_required' | 'configuration_required' | 'execution_failed' }>;
 }
