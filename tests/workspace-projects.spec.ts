@@ -613,7 +613,7 @@ async function restorationFixture(page: Page, options: { secondPage?: boolean; s
         : { root: 'Workspace', path: '.', entries: [{ name: 'README.md', path: 'README.md', type: 'file', size: 27 }] }
     } else if (path === '/agents/my') value = [{ agent_id: 'agent-one', display_name: 'Engineer' }]
     else if (path === '/agents/stats') value = { online_agents: ['agent-one'], runtimes: {} }
-    else if (path === '/topics/subscribed') value = [{ id: 'restored-topic', topic_id: 'restored-topic', name: 'Single Codex', topic_type: 'general' }]
+    else if (path === '/topics/subscribed') value = project.sessions.map(session => ({ id: session.topic_id, topic_id: session.topic_id, name: session.name, topic_type: 'general' }))
     else if (path.endsWith('/messages')) value = [{ id: 'restored-message', topic_id: 'restored-topic', sender_type: 'agent', sender_id: 'agent-one', content: 'Restored single-agent history', timestamp: '2026-10-08T00:00:00Z' }]
     else if (path.endsWith('/members')) value = [{ agent_id: 'agent-one', display_name: 'Engineer', role: 'member' }]
     else if (path === '/topics/my-recent') value = { items: [] }
@@ -621,8 +621,105 @@ async function restorationFixture(page: Page, options: { secondPage?: boolean; s
     else if (path.startsWith('/tasks') || path.startsWith('/p2p-requests') || path === '/topics/my-groups' || path === '/hosts/chat-executions' || path.startsWith('/agent-operations')) value = []
     await route.fulfill({ json: value })
   })
-  return { offsets, toolRequests }
+  return { offsets, toolRequests, project }
 }
+
+for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} paged history retains live replies and rejects late pages after changing sessions`, async ({ page }) => {
+  const { project } = await restorationFixture(page)
+  project.sessions.push({ session_id: 'other-session', topic_id: 'other-topic', name: 'Other Codex', participants: participants.slice(0, 1) })
+  await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+  const records = Array.from({ length: 1000 }, (_, index) => ({
+    id: `history-${index}`, topic_id: 'restored-topic', sender_id: 'agent-one', sender_type: 'agent',
+    content: `History item ${String(index).padStart(4, '0')}`, timestamp: new Date(Date.UTC(2026, 9, 8) + index * 1000).toISOString(),
+  }))
+  let socket: WebSocketRoute | undefined
+  await page.routeWebSocket('**', connection => { socket = connection; connection.onMessage(raw => { if (raw === 'ping') connection.send('pong') }) })
+  let releaseFirst!: () => void
+  const firstPage = new Promise<void>(resolve => { releaseFirst = resolve })
+  let releaseLate!: () => void
+  const latePage = new Promise<void>(resolve => { releaseLate = resolve })
+  let completeLate!: () => void
+  const lateComplete = new Promise<void>(resolve => { completeLate = resolve })
+  let phase: 'first' | 'normal' | 'late' | 'fail' = 'first'
+  const requested: string[] = []
+  await page.route('**/api/wtt/topics/*/messages**', async route => {
+    const url = new URL(route.request().url())
+    if (url.pathname.includes('/other-topic/')) {
+      await route.fulfill({ json: [{ id: 'other-message', topic_id: 'other-topic', sender_type: 'agent', sender_id: 'agent-one', content: 'Other session history', timestamp: '2026-10-08T00:00:00Z' }] })
+      return
+    }
+    const before = url.searchParams.get('before')
+    if (!before) { await route.fulfill({ json: records.slice(-100) }); return }
+    requested.push(before)
+    if (phase === 'first') await firstPage
+    const isLate = phase === 'late'
+    if (isLate) await latePage
+    if (phase === 'fail') { await route.fulfill({ status: 503, json: { detail: 'Synthetic history service outage' } }); return }
+    const older = records.filter(row => row.timestamp < before).slice(-100)
+    await route.fulfill({ json: older })
+    if (isLate) completeLate()
+  })
+  const base = mobile ? '/mobile/workspaces' : '/desktop'
+  await page.goto(`${base}?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  const olderButton = page.getByRole('button', { name: 'Load older messages', exact: true })
+  const message = (index: number) => page.getByText(`History item ${String(index).padStart(4, '0')}`, { exact: true })
+  await expect(message(999)).toBeVisible()
+  await expect.poll(() => Boolean(socket)).toBe(true)
+  const composer = page.locator('textarea').first()
+  await composer.fill('Unsent long-history draft')
+  await olderButton.click()
+  await expect.poll(() => requested.length).toBe(1)
+  const anchorTop = (await page.locator('[data-message-id="history-900"]').boundingBox())!.y
+  socket!.send(JSON.stringify({ type: 'new_message', message: {
+    id: 'live-during-page', topic_id: 'restored-topic', sender_id: 'agent-one', sender_type: 'agent',
+    semantic_type: 'post', content: 'Live reply while older page is pending', created_at: new Date(Date.UTC(2026, 9, 8) + 1000000).toISOString(),
+  } }))
+  await expect(page.getByText('Live reply while older page is pending', { exact: true })).toHaveCount(1)
+  await expect.poll(async () => Math.abs((await page.locator('[data-message-id="history-900"]').boundingBox())!.y - anchorTop)).toBeLessThan(2)
+  phase = 'normal'; releaseFirst()
+  await expect(message(800)).toHaveCount(1)
+  await expect(olderButton).toBeEnabled()
+  await expect(page.getByText('Live reply while older page is pending', { exact: true })).toHaveCount(1)
+  await expect.poll(async () => Math.abs((await page.locator('[data-message-id="history-900"]').boundingBox())!.y - anchorTop)).toBeLessThan(2)
+  await expect(composer).toHaveValue('Unsent long-history draft')
+  phase = 'fail'
+  await olderButton.click()
+  await expect.poll(() => requested.length).toBe(2)
+  await expect(olderButton).toBeEnabled()
+  await expect(page.getByRole('alert').filter({ hasText: 'Could not load earlier messages. Try again.' })).toBeVisible()
+  await expect(message(800)).toHaveCount(1)
+  phase = 'normal'
+  for (let first = 700; first >= 0; first -= 100) {
+    await olderButton.click()
+    await expect(message(first)).toHaveCount(1)
+    await expect(olderButton).toBeEnabled()
+  }
+  expect(await page.locator('[data-sender-type="agent"]').count()).toBe(1001)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await expect(composer).toHaveValue('Unsent long-history draft')
+  await page.screenshot({ path: `test-results/history-1000-${mobile ? 'mobile' : 'desktop'}.png` })
+  const sessions = page.getByRole('navigation', { name: 'Workspace sessions', exact: true })
+  await sessions.getByRole('link', { name: 'Other Codex', exact: true }).click()
+  await expect(page.getByText('Other session history', { exact: true })).toBeVisible()
+  await sessions.getByRole('link', { name: 'Single Codex', exact: true }).click()
+  await expect(message(999)).toBeVisible()
+  phase = 'late'
+  await olderButton.click()
+  await expect.poll(() => requested.length).toBe(11)
+  await sessions.getByRole('link', { name: 'Other Codex', exact: true }).click()
+  await expect(page.getByText('Other session history', { exact: true })).toBeVisible()
+  phase = 'normal'; releaseLate()
+  await lateComplete
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+  await expect(message(800)).toHaveCount(0)
+  await expect(message(999)).toHaveCount(0)
+  await expect(page.getByText('Other session history', { exact: true })).toHaveCount(1)
+  await sessions.getByRole('link', { name: 'Single Codex', exact: true }).click()
+  await expect(message(999)).toBeVisible()
+  await olderButton.click()
+  await expect(message(800)).toHaveCount(1)
+  await expect(olderButton).toBeEnabled()
+})
 
 test('mobile Workspace and legacy chat have a round-trip account navigation without creating conversations', async ({ page }) => {
   await restorationFixture(page)

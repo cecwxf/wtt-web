@@ -765,6 +765,18 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
   const [wsConnectedForPoll, setWsConnectedForPoll] = useState(false)
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const historyScope = useMemo(() => ({ topicId: selectedTopicId, agentId: selectedAgentId, token: session?.accessToken }), [selectedTopicId, selectedAgentId, session?.accessToken])
+  const historyScopeRef = useRef<typeof historyScope | null>(historyScope)
+  const olderRequestRef = useRef<AbortController | null>(null)
+  historyScopeRef.current = historyScope
+  useEffect(() => {
+    setLoadingOlder(false)
+    return () => {
+      if (historyScopeRef.current === historyScope) historyScopeRef.current = null
+      olderRequestRef.current?.abort()
+      olderRequestRef.current = null
+    }
+  }, [historyScope])
   const [editorOpen, setEditorOpen] = useState(false)
   const [optimisticTaskTitles, setOptimisticTaskTitles] = useState<Record<string, OptimisticTaskTitle>>({})
   const [createdTaskIdsByTopic, setCreatedTaskIdsByTopic] = useState<Record<string, string>>({})
@@ -1327,16 +1339,19 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
         setTypingByTopic((prev) => clearTypingAfterAgentReply(prev, incomingTopicId, senderId, incomingBase.timestamp))
       }
 
+      const incomingScope = historyScope
       void (async () => {
         const incoming = await decryptMessageForDisplay(incomingBase)
+        if (historyScopeRef.current !== incomingScope) return
         setAllMessages((prev) => {
+          if (historyScopeRef.current !== incomingScope) return prev
           const withoutStream = removeStreamPlaceholderForFinalMessage(prev, msg.message)
           if (withoutStream.some((m) => m.message_id === incoming.message_id)) return withoutStream
           return [...withoutStream, incoming]
         })
       })()
     },
-    [selectedTopicId, selectedAgentId, session?.userId, agentNameMap, knownAgentIds, decryptMessageForDisplay, updateTopicUnreadCaches, t, desktopMode, workspaceBasePath],
+    [selectedTopicId, selectedAgentId, session?.userId, agentNameMap, knownAgentIds, decryptMessageForDisplay, updateTopicUnreadCaches, t, desktopMode, workspaceBasePath, historyScope],
   )
   const { state: wsState, sendAction } = useWebSocket({
     url: wsUrl,
@@ -1544,32 +1559,37 @@ function FeedPageInner({ desktopMode, workspaceBasePath }: { desktopMode: boolea
   }, [allMessages, agentNameMap, cloudSandboxAgentIds])
 
   const loadOlderMessages = useCallback(async () => {
-    if (!selectedTopicId || loadingOlder || allMessages.length === 0) return
+    if (!selectedTopicId || olderRequestRef.current || allMessages.length === 0) return
+    const scope = historyScope
+    const request = new AbortController()
+    olderRequestRef.current = request
     setLoadingOlder(true)
     try {
       const oldest = allMessages[0]
       const older = await wttApi.getTopicMessages(selectedTopicId, 100, {
         before: oldest.timestamp,
         agentId: selectedAgentId,
+        signal: request.signal,
       })
-
+      if (historyScopeRef.current !== scope) return
       const normalizedOlderRaw = normalizeFeed(older, knownAgentIds)
       const normalizedOlder = await decryptMessagesForDisplay(normalizedOlderRaw)
+      if (historyScopeRef.current !== scope) return
       if (normalizedOlder.length === 0) {
         setHasOlder(false)
       } else {
-        const merged = [...normalizedOlder, ...allMessages]
-        const dedup = Array.from(new Map(merged.map((m) => [m.message_id, m])).values())
-          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-        setAllMessages(dedup)
+        setAllMessages((prev) => historyScopeRef.current === scope ? mergeMessageHistory(prev, normalizedOlder) : prev)
         setHasOlder(normalizedOlder.length >= 100)
       }
-    } catch {
-      setHasOlder(false)
+    } catch (error) {
+      if (historyScopeRef.current === scope && !request.signal.aborted) throw error
     } finally {
-      setLoadingOlder(false)
+      if (olderRequestRef.current === request) {
+        olderRequestRef.current = null
+        setLoadingOlder(false)
+      }
     }
-  }, [selectedTopicId, loadingOlder, allMessages, knownAgentIds, decryptMessagesForDisplay, selectedAgentId])
+  }, [selectedTopicId, allMessages, knownAgentIds, decryptMessagesForDisplay, selectedAgentId, historyScope])
 
   const { data: subscribedTopicsRaw, mutate: mutateTopics } = useSWR(
     selectedAgentId && session?.accessToken ? ['subscribed', selectedAgentId, session.accessToken] : null,

@@ -1432,6 +1432,18 @@ function ChatViewContent({
   const [replyContext, setReplyContext] = useState<{ sender: string; snippet: string; imageUrl?: string; replyToId?: string } | null>(null)
 
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const [historyLoadError, setHistoryLoadError] = useState(false)
+  const historyTopic = topicId || topicName
+  const historyScope = useMemo(() => ({ topicId: historyTopic, currentAgentId, accessToken }), [historyTopic, currentAgentId, accessToken])
+  const historyScopeRef = useRef<typeof historyScope | null>(historyScope)
+  const historyLoadingRef = useRef(false)
+  historyScopeRef.current = historyScope
+  useEffect(() => {
+    historyLoadingRef.current = false
+    setLoadingOlder(false)
+    setHistoryLoadError(false)
+    return () => { if (historyScopeRef.current === historyScope) historyScopeRef.current = null }
+  }, [historyScope])
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | undefined>(undefined)
   const [exportOpen, setExportOpen] = useState(false)
@@ -2304,7 +2316,7 @@ function ChatViewContent({
   useEffect(() => {
     initialScrollDoneRef.current = false
     prevMsgCountRef.current = 0
-  }, [topicName])
+  }, [historyScope])
 
   useEffect(() => {
     if (!initialScrollDoneRef.current && messages.length > 0 && scrollRef.current) {
@@ -2582,17 +2594,35 @@ function ChatViewContent({
   }
 
   const handleLoadOlder = async () => {
-    if (!onLoadOlder || loadingOlder || !hasOlder) return
+    if (!onLoadOlder || historyLoadingRef.current || !hasOlder) return
+    const scope = historyScope
+    historyLoadingRef.current = true
     setLoadingOlder(true)
+    setHistoryLoadError(false)
+    const container = scrollRef.current
     const prevHeight = scrollRef.current?.scrollHeight ?? 0
-    await onLoadOlder()
-    requestAnimationFrame(() => {
-      if (scrollRef.current) {
-        const nextHeight = scrollRef.current.scrollHeight
-        scrollRef.current.scrollTop = nextHeight - prevHeight
+    const prevTop = container?.scrollTop ?? 0
+    const anchor = container && Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]')).find(row => row.getBoundingClientRect().bottom > container.getBoundingClientRect().top)
+    const anchorTop = anchor?.getBoundingClientRect().top
+    try {
+      await onLoadOlder()
+      requestAnimationFrame(() => {
+        if (historyScopeRef.current !== scope || !scrollRef.current) return
+        const current = scrollRef.current
+        if (anchor?.isConnected && anchorTop !== undefined) {
+          current.scrollTop += anchor.getBoundingClientRect().top - anchorTop
+        } else {
+          current.scrollTop = prevTop + current.scrollHeight - prevHeight
+        }
+      })
+    } catch {
+      if (historyScopeRef.current === scope) setHistoryLoadError(true)
+    } finally {
+      if (historyScopeRef.current === scope) {
+        historyLoadingRef.current = false
+        setLoadingOlder(false)
       }
-    })
-    setLoadingOlder(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -3230,8 +3260,8 @@ function ChatViewContent({
             : 'overflow-y-auto px-4 py-3 sm:px-6'
         }`}
       >
-        {!utilityTabActive && (appearance !== 'desktop' || hasOlder || loadingOlder) && (
-        <div className="mb-3 flex justify-center">
+        {!utilityTabActive && (appearance !== 'desktop' || hasOlder || loadingOlder || historyLoadError) && (
+        <div className="mb-3 flex flex-col items-center gap-2">
           <button
             onClick={handleLoadOlder}
             disabled={!hasOlder || loadingOlder}
@@ -3239,6 +3269,7 @@ function ChatViewContent({
           >
             {loadingOlder ? t('chat.loadingHistory') : hasOlder ? t('chat.loadOlder') : t('chat.noOlder')}
           </button>
+          {historyLoadError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{t('chat.historyLoadFailed')}</p>}
         </div>
         )}
 
@@ -3390,7 +3421,7 @@ function ChatViewContent({
                 }
 
                 return (
-                  <div key={message.message_id} data-sender-type={message.sender_type} className={`${desktopStyles.messageRow} group flex justify-start border-b border-[#eee9df] last:border-b-0 transition-colors hover:bg-[#f4f1eb]/70 dark:border-zinc-900 dark:hover:bg-zinc-900/60`}>
+                  <div key={message.message_id} data-message-id={message.message_id} data-sender-type={message.sender_type} className={`${desktopStyles.messageRow} group flex justify-start border-b border-[#eee9df] last:border-b-0 transition-colors hover:bg-[#f4f1eb]/70 dark:border-zinc-900 dark:hover:bg-zinc-900/60`}>
                     <div className="flex w-full max-w-none items-start gap-2.5 px-2 py-2.5">
                       {message.sender_type === 'agent' ? (
                         <button
