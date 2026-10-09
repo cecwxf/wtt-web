@@ -454,6 +454,11 @@ test('packaged Mac opens the Workspace-first flow, creates a project and sends c
     await workspaceFlow(page, baseURL)
     expect(await application.evaluate(({ app }) => app.isPackaged)).toBe(true)
     expect(await page.evaluate(() => typeof window.wttDesktop?.host?.admitWorkspaceDirectory)).toBe('function')
+    expect(await page.evaluate(() => (window as any).__WTT_NATIVE_FILES__?.version)).toBe(3)
+    await expect(page.evaluate(() => (window as any).__WTT_NATIVE_FILES__.download({
+      workspaceId: 'synthetic-workspace', path: 'README.md', filename: 'README.md',
+      requestId: 'b'.repeat(32), accessToken: 'synthetic-user-token',
+    }, () => {}))).rejects.toThrow(/Verify the signed-in WTT account/)
     expect(await page.evaluate(() => typeof (window as unknown as { require?: unknown }).require)).toBe('undefined')
   } finally {
     if (application) await application.close()
