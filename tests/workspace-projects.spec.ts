@@ -818,10 +818,51 @@ test('explicit desktop Workspace links are not downgraded on missing project ser
   await restorationFixture(page, { status: 404 })
   await page.route(`**/api/wtt/workspaces/${restoredWorkspace}`, route => route.fulfill({ status: 404, json: { detail: 'Workspace service unavailable' } }))
   await page.goto(`/desktop?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
-  await expect(page.getByText('Could not load Workspaces.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Could not open this Workspace.', { exact: true })).toBeVisible()
   expect(new URL(page.url()).searchParams.get('workspace')).toBe(restoredWorkspace)
   expect(new URL(page.url()).searchParams.has('legacy')).toBe(false)
   await expect(page.locator('textarea')).toHaveCount(0)
+})
+
+for (const mobile of [false, true]) for (const status of [404, 503]) test(`${mobile ? 'mobile' : 'desktop'} explicit Workspace detail failures ${status} block chat and allow exact-link retry`, async ({ page }) => {
+  const fixture = await restorationFixture(page)
+  let failed = true
+  let details = 0
+  const writes: string[] = []
+  page.on('request', request => { if (request.method() === 'POST') writes.push(new URL(request.url()).pathname) })
+  await page.route(`**/api/wtt/workspaces/${restoredWorkspace}`, route => {
+    details++
+    return failed ? route.fulfill({ status, json: { detail: 'Synthetic project detail failure' } }) : route.fulfill({ json: fixture.project })
+  })
+  const entry = mobile ? '/mobile/workspaces' : '/desktop'
+  await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+  await page.goto(`${entry}?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  await expect(page.getByText('Could not open this Workspace.', { exact: true })).toBeVisible()
+  await expect(page.locator('textarea')).toHaveCount(0)
+  expect(fixture.toolRequests).toHaveLength(0)
+  expect(new URL(page.url()).searchParams.get('workspace')).toBe(restoredWorkspace)
+  failed = false
+  const before = details
+  await page.getByRole('button', { name: 'Retry Workspace', exact: true }).click()
+  await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+  expect(details).toBeGreaterThan(before)
+  expect(new URL(page.url()).pathname).toBe(entry)
+  expect(new URL(page.url()).searchParams.get('session')).toBe(restoredSession)
+  if (status === 503) {
+    await page.locator('textarea').fill('Synthetic unsent draft preserved during refresh')
+    failed = true
+    if (mobile) await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+    await page.getByRole('button', { name: 'Refresh Workspaces', exact: true }).click()
+    if (mobile) await page.getByRole('complementary').getByRole('button', { name: 'Close navigation', exact: true }).click()
+    await expect(page.getByText('Workspace refresh failed. Your conversation is preserved.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Restored single-agent history', { exact: true })).toBeVisible()
+    await expect(page.locator('textarea')).toHaveValue('Synthetic unsent draft preserved during refresh')
+    failed = false
+    await page.getByRole('button', { name: 'Retry Workspace', exact: true }).click()
+    await expect(page.getByText('Workspace refresh failed. Your conversation is preserved.', { exact: true })).toHaveCount(0)
+    await expect(page.locator('textarea')).toHaveValue('Synthetic unsent draft preserved during refresh')
+  }
+  expect(writes).toEqual([])
 })
 
 test('non-advancing Workspace cursors fail without looping or hiding history behind a fallback', async ({ page }) => {
