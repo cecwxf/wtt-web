@@ -1498,13 +1498,9 @@ function ChatViewContent({
   const [slashIndex, setSlashIndex] = useState(0)
   const slashMenuRef = useRef<HTMLDivElement>(null)
   const [slashResult, setSlashResult] = useState<string | null>(null)
-  const [dynamicSlashCommands, setDynamicSlashCommands] = useState<SlashCommandDef[]>([])
+  const [dynamicSlashCommands, setDynamicSlashCommands] = useState<{ key: string; commands: SlashCommandDef[] }>({ key: '', commands: [] })
   const [projectSlashCommands, setProjectSlashCommands] = useState<{ key: string; commands: SlashCommandDef[] }>({ key: '', commands: [] })
   const projectCommandKey = `${accessToken || ''}:${workspaceProjectId || ''}`
-  const scopedSlashCommands = useMemo(() => [
-    ...(projectSlashCommands.key === projectCommandKey ? projectSlashCommands.commands : []),
-    ...dynamicSlashCommands,
-  ], [dynamicSlashCommands, projectSlashCommands, projectCommandKey])
   const [skillModalOpen, setSkillModalOpen] = useState(false)
   const [skillSearch, setSkillSearch] = useState('')
   const [skillCompatibleOnly, setSkillCompatibleOnly] = useState(true)
@@ -1696,6 +1692,11 @@ function ChatViewContent({
 
   const currentRuntimePref = runtimeModelPref(currentAgentRuntime)
   const activeAgentAdapter = normalizeAgentAdapter(currentAgentRuntime)
+  const agentCommandKey = `${accessToken || ''}:${currentAgentId || ''}:${activeAgentAdapter}`
+  const scopedSlashCommands = useMemo(() => [
+    ...(projectSlashCommands.key === projectCommandKey ? projectSlashCommands.commands : []),
+    ...(dynamicSlashCommands.key === agentCommandKey ? dynamicSlashCommands.commands : []),
+  ], [dynamicSlashCommands, agentCommandKey, projectSlashCommands, projectCommandKey])
   const activeAgentLabel = activeAgentAdapter === 'codex' ? 'Codex'
     : activeAgentAdapter === 'claude-code' ? 'Claude Code'
       : activeAgentAdapter === 'gemini' ? 'Gemini'
@@ -2000,7 +2001,7 @@ function ChatViewContent({
 
   useEffect(() => {
     if (slashCommandOverrides || !accessToken || !currentAgentId) {
-      setDynamicSlashCommands([])
+      setDynamicSlashCommands({ key: agentCommandKey, commands: [] })
       return
     }
     const controller = new AbortController()
@@ -2029,14 +2030,14 @@ function ChatViewContent({
             scope: 'agent',
           }
         }).filter((item) => item.cmd.startsWith('/') && item.cmd.length > 1)
-        setDynamicSlashCommands(normalized)
+        if (!controller.signal.aborted) setDynamicSlashCommands({ key: agentCommandKey, commands: normalized })
       } catch {
-        if (!controller.signal.aborted) setDynamicSlashCommands([])
+        if (!controller.signal.aborted) setDynamicSlashCommands({ key: agentCommandKey, commands: [] })
       }
     }
     load()
     return () => controller.abort()
-  }, [accessToken, activeAgentAdapter, currentAgentId, slashCommandOverrides])
+  }, [accessToken, activeAgentAdapter, currentAgentId, slashCommandOverrides, agentCommandKey])
 
   useEffect(() => {
     if (!skillModalOpen || !accessToken || !currentAgentId) return

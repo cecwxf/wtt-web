@@ -986,6 +986,38 @@ for (const mobile of [false, true]) test(`${mobile ? 'mobile' : 'desktop'} Skill
   await input.fill('')
 })
 
+test('changing Workspace executors hides old Agent skills while new discovery is pending', async ({ page }) => {
+  const { project } = await restorationFixture(page)
+  project.sessions.push({ session_id: 'other-session', topic_id: 'other-topic', name: 'Other Codex', participants: [{ ...participants[0], transport_agent_id: 'agent-three' }] })
+  await page.route('**/api/wtt/agents/my**', route => route.fulfill({ json: ['one', 'three'].map(id => ({ agent_id: `agent-${id}`, display_name: id, adapter: 'codex' })) }))
+  await page.route('**/api/wtt/topics/*/messages**', route => {
+    const topic = new URL(route.request().url()).pathname.split('/')[4]
+    return route.fulfill({ json: [{ id: `${topic}-history`, topic_id: topic, sender_type: 'agent', sender_id: topic === 'restored-topic' ? 'agent-one' : 'agent-three',
+      content: `${topic} history`, timestamp: '2026-10-08T00:00:00Z' }] })
+  })
+  let finishDiscovery!: () => void
+  const pending = new Promise<void>(resolve => { finishDiscovery = resolve })
+  await page.route('**/api/wtt/agents/*/slash-commands?**', async route => {
+    const first = route.request().url().includes('/agent-one/')
+    if (!first) await pending
+    await route.fulfill({ json: { commands: [{ cmd: first ? '/first-proof' : '/second-proof', source: 'codex-local', desc: 'Executor-scoped skill' }] } })
+  })
+  await page.goto(`/desktop?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`)
+  const input = page.locator('textarea').first()
+  await expect(page.getByText('restored-topic history', { exact: true })).toBeVisible()
+  await input.fill('/first-proof')
+  await expect(page.getByRole('region', { name: 'Command suggestions' }).getByText('/first-proof', { exact: true })).toBeVisible()
+  await input.fill('')
+  await page.getByRole('navigation', { name: 'Workspace sessions' }).getByRole('link', { name: 'Other Codex', exact: true }).click()
+  await expect(page.getByText('other-topic history', { exact: true })).toBeVisible()
+  await input.fill('/first-proof')
+  await expect(page.getByRole('region', { name: 'Command suggestions' })).toHaveCount(0)
+  finishDiscovery()
+  await input.fill('/second-proof')
+  await expect(page.getByRole('region', { name: 'Command suggestions' }).getByText('/second-proof', { exact: true })).toBeVisible()
+  await input.fill('')
+})
+
 test('saved English preference survives initial hydration and reload', async ({ page }) => {
   await restorationFixture(page)
   const url = `/desktop?workspace=${restoredWorkspace}&session=${restoredSession}&topic=restored-topic&agentId=agent-one`
