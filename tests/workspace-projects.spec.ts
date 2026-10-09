@@ -3,6 +3,7 @@ import { _electron } from 'playwright'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { createReadStream } from 'node:fs'
 
 const host = '11111111-1111-4111-8111-111111111111'
 const root = '22222222-2222-4222-8222-222222222222'
@@ -91,6 +92,8 @@ async function workspaceFlow(page: Page, baseURL = '', entryPath = '/desktop', s
     else if (/^\/workspaces\/[^/]+$/.test(path)) value = projects.find(project => path.endsWith(project.workspace_id)) || {}
     else if (path.endsWith('/workspace/list')) value = { root: 'Workspace', path: '.', entries: [{ name: 'README.md', path: 'README.md', type: 'file', size: 27 }] }
     else if (path.endsWith('/workspace/read')) value = { name: 'README.md', path: 'README.md', content: 'Canonical project directory', preview_kind: 'text', previewable: true, editable: true, content_type: 'text/markdown' }
+    else if (path.endsWith('/workspace/stat')) value = { name: 'README.md', size: 27, content_type: 'text/markdown' }
+    else if (path.endsWith('/workspace/content')) { await route.fulfill({ contentType: 'text/markdown', body: 'Canonical project directory' }); return }
     else if (path === '/agents/my') value = participants.map(p => ({ agent_id: p.transport_agent_id, display_name: p.label }))
     else if (path === '/agents/stats') value = { online_agents: adaptersOnline ? participants.map(p => p.transport_agent_id) : [], runtimes: {} }
     else if (path === '/topics/subscribed') value = projects.length && projects[0].sessions.length ? [{ id: 'project-topic', topic_id: 'project-topic', name: 'Website / Team', topic_type: 'discussion' }] : []
@@ -260,6 +263,36 @@ test('Workspace-first desktop creates a cross-host collaboration and reuses chat
 
 test('one Codex adapter creates a Workspace, sends chat and restores its project files', async ({ page }) => {
   await workspaceFlow(page, '', '/desktop', true)
+})
+
+test('Workspace download validates metadata when CDN streaming omits Content-Length', async ({ page }) => {
+  await page.addInitScript(() => {
+    const fetch = window.fetch.bind(window)
+    window.fetch = async (...args) => {
+      const response = await fetch(...args)
+      if (new URL(response.url).pathname.endsWith('/workspace/content')) {
+        return new Response(response.body, { status: response.status, headers: { 'Content-Type': 'text/markdown' } })
+      }
+      return response
+    }
+  })
+  await workspaceFlow(page, '', '/desktop', true)
+  await page.getByRole('button', { name: 'Workspace files', exact: true }).click()
+  await page.getByRole('complementary').getByText('README.md', { exact: true }).click()
+  const downloaded = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download file', exact: true }).click()
+  const download = await downloaded
+  expect(download.suggestedFilename()).toBe('README.md')
+  const chunks: Buffer[] = []
+  for await (const chunk of createReadStream((await download.path())!)) chunks.push(chunk)
+  expect(Buffer.concat(chunks).toString()).toBe('Canonical project directory')
+  await expect(page.getByText('Download failed. Retry.', { exact: true })).toHaveCount(0)
+  let unexpectedDownloads = 0
+  page.on('download', () => { unexpectedDownloads++ })
+  await page.route('**/workspace/stat?**', route => route.fulfill({ json: { size: 10 } }))
+  await page.getByRole('button', { name: 'Download file', exact: true }).click()
+  await expect(page.getByText('Download failed. Retry.', { exact: true })).toBeVisible()
+  expect(unexpectedDownloads).toBe(0)
 })
 
 const restoredWorkspace = '33333333-3333-4333-8333-333333333333'

@@ -101,12 +101,18 @@ function ManagedAgentToolsInner({ agentId, agentName, token, workspaceId, layout
         signal: controller.signal,
         onProgress: value => { if (live.current) setProgress(value.total ? Math.min(100, Math.round(value.loaded / value.total * 100)) : 0) },
       })) return
+      // CDN compression may remove Content-Length or make it describe encoded bytes.
+      const metadataResponse = await fetch(`${apiBase}/stat?${new URLSearchParams({ path })}`, {
+        headers: { Authorization: `Bearer ${token}` }, signal: controller.signal, cache: 'no-store', redirect: 'error',
+      })
+      if (!metadataResponse.ok) throw new Error(`File metadata unavailable (${metadataResponse.status})`)
+      const metadata = await metadataResponse.json()
+      const total = metadata.size
+      if (!Number.isSafeInteger(total) || total < 0 || total > 100 * 1024 * 1024) throw new Error('File exceeds 100 MiB')
       const response = await fetch(`${apiBase}/content?${new URLSearchParams({ path, download: 'true' })}`, {
         headers: { Authorization: `Bearer ${token}` }, signal: controller.signal, cache: 'no-store', redirect: 'error',
       })
       if (!response.ok || !response.body) throw new Error(`Download failed (${response.status})`)
-      const total = Number(response.headers.get('Content-Length'))
-      if (!Number.isSafeInteger(total) || total < 0 || total > 100 * 1024 * 1024) throw new Error('File exceeds 100 MiB')
       const chunks: Uint8Array<ArrayBuffer>[] = []
       let loaded = 0
       const reader = response.body.getReader()
